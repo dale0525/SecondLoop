@@ -37,6 +37,53 @@ class Conversation {
           updatedAtMs == other.updatedAtMs;
 }
 
+class LlmProfile {
+  final String id;
+  final String name;
+  final String providerType;
+  final String? baseUrl;
+  final String modelName;
+  final bool isActive;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const LlmProfile({
+    required this.id,
+    required this.name,
+    required this.providerType,
+    this.baseUrl,
+    required this.modelName,
+    required this.isActive,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      providerType.hashCode ^
+      baseUrl.hashCode ^
+      modelName.hashCode ^
+      isActive.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LlmProfile &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          providerType == other.providerType &&
+          baseUrl == other.baseUrl &&
+          modelName == other.modelName &&
+          isActive == other.isActive &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class Message {
   final String id;
   final String conversationId;

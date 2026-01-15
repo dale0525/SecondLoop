@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use zerocopy::IntoBytes;
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -32,6 +32,26 @@ pub struct Message {
 pub struct SimilarMessage {
     pub message: Message,
     pub distance: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct LlmProfile {
+    pub id: String,
+    pub name: String,
+    pub provider_type: String,
+    pub base_url: Option<String>,
+    pub model_name: String,
+    pub is_active: bool,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct LlmProfileConfig {
+    pub provider_type: String,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model_name: String,
 }
 
 fn db_path(app_dir: &Path) -> PathBuf {
@@ -151,6 +171,28 @@ UPDATE messages SET needs_embedding = 1;
 PRAGMA user_version = 3;
 "#,
         )?;
+        user_version = 3;
+    }
+
+    if user_version < 4 {
+        // v4: LLM provider profiles (encrypted at rest).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS llm_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  provider_type TEXT NOT NULL,
+  base_url TEXT,
+  api_key BLOB,
+  model_name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_llm_profiles_active ON llm_profiles(is_active);
+PRAGMA user_version = 4;
+"#,
+        )?;
     }
 
     Ok(())
@@ -239,6 +281,202 @@ pub fn insert_message(
         content: content.to_string(),
         created_at_ms: now,
     })
+}
+
+pub fn append_message_content(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    text_delta: &str,
+) -> Result<()> {
+    if text_delta.is_empty() {
+        return Ok(());
+    }
+
+    let content_blob: Vec<u8> = conn.query_row(
+        r#"SELECT content FROM messages WHERE id = ?1"#,
+        params![message_id],
+        |row| row.get(0),
+    )?;
+    let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+    let mut content =
+        String::from_utf8(content_bytes).map_err(|_| anyhow!("message content is not valid utf-8"))?;
+    content.push_str(text_delta);
+
+    let new_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
+    conn.execute(
+        r#"UPDATE messages SET content = ?2 WHERE id = ?1"#,
+        params![message_id, new_blob],
+    )?;
+
+    Ok(())
+}
+
+pub fn create_llm_profile(
+    conn: &Connection,
+    key: &[u8; 32],
+    name: &str,
+    provider_type: &str,
+    base_url: Option<&str>,
+    api_key: Option<&str>,
+    model_name: &str,
+    set_active: bool,
+) -> Result<LlmProfile> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms();
+
+    let api_key_blob: Option<Vec<u8>> = api_key.map(|v| {
+        encrypt_bytes(
+            key,
+            v.as_bytes(),
+            format!("llm.api_key:{id}").as_bytes(),
+        )
+    })
+    .transpose()?;
+
+    if set_active {
+        conn.execute_batch("UPDATE llm_profiles SET is_active = 0;")?;
+    }
+
+    conn.execute(
+        r#"INSERT INTO llm_profiles
+           (id, name, provider_type, base_url, api_key, model_name, is_active, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+        params![
+            id,
+            name,
+            provider_type,
+            base_url,
+            api_key_blob,
+            model_name,
+            if set_active { 1 } else { 0 },
+            now,
+            now
+        ],
+    )?;
+
+    Ok(LlmProfile {
+        id,
+        name: name.to_string(),
+        provider_type: provider_type.to_string(),
+        base_url: base_url.map(|v| v.to_string()),
+        model_name: model_name.to_string(),
+        is_active: set_active,
+        created_at_ms: now,
+        updated_at_ms: now,
+    })
+}
+
+pub fn list_llm_profiles(conn: &Connection) -> Result<Vec<LlmProfile>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT id, name, provider_type, base_url, model_name, is_active, created_at, updated_at
+           FROM llm_profiles
+           ORDER BY updated_at DESC"#,
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut out: Vec<LlmProfile> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        out.push(LlmProfile {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            provider_type: row.get(2)?,
+            base_url: row.get(3)?,
+            model_name: row.get(4)?,
+            is_active: row.get::<_, i64>(5)? != 0,
+            created_at_ms: row.get(6)?,
+            updated_at_ms: row.get(7)?,
+        });
+    }
+
+    Ok(out)
+}
+
+pub fn set_active_llm_profile(conn: &Connection, profile_id: &str) -> Result<()> {
+    let now = now_ms();
+
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<()> = (|| {
+        let updated = conn.execute(
+            r#"UPDATE llm_profiles
+               SET is_active = 1, updated_at = ?2
+               WHERE id = ?1"#,
+            params![profile_id, now],
+        )?;
+
+        if updated == 0 {
+            return Err(anyhow!("llm profile not found: {profile_id}"));
+        }
+
+        conn.execute(
+            r#"UPDATE llm_profiles SET is_active = 0 WHERE id != ?1"#,
+            params![profile_id],
+        )?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+pub fn load_active_llm_profile_config(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<Option<LlmProfileConfig>> {
+    let row = conn
+        .query_row(
+            r#"SELECT id, provider_type, base_url, api_key, model_name
+               FROM llm_profiles
+               WHERE is_active = 1
+               ORDER BY updated_at DESC
+               LIMIT 1"#,
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<Vec<u8>>>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    let Some((id, provider_type, base_url, api_key_blob, model_name)) = row else {
+        return Ok(None);
+    };
+
+    let api_key = match api_key_blob {
+        Some(blob) => {
+            let api_key_bytes =
+                decrypt_bytes(key, &blob, format!("llm.api_key:{id}").as_bytes())?;
+
+            Some(
+                String::from_utf8(api_key_bytes)
+                    .map_err(|_| anyhow!("llm api_key is not valid utf-8"))?,
+            )
+        }
+        None => None,
+    };
+
+    Ok(Some(LlmProfileConfig {
+        provider_type,
+        base_url,
+        api_key,
+        model_name,
+    }))
 }
 
 pub fn process_pending_message_embeddings(
@@ -564,4 +802,25 @@ pub fn search_similar_messages_default(
     }
 
     Ok(result)
+}
+
+pub fn search_similar_messages_in_conversation_default(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
+    // `sqlite-vec` KNN queries currently restrict additional WHERE constraints in ways that make
+    // joins/IN filters brittle. For Focus scoping, we over-fetch candidates globally and then
+    // filter in Rust.
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(50)).min(1000);
+
+    let candidates = search_similar_messages_default(conn, key, query, candidate_k)?;
+    Ok(candidates
+        .into_iter()
+        .filter(|sm| sm.message.conversation_id == conversation_id)
+        .take(top_k)
+        .collect())
 }

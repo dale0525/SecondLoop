@@ -100,4 +100,32 @@ class FakeBackend implements AppBackend {
     int batchLimit = 256,
   }) async =>
       0;
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+
+  @override
+  Future<LlmProfile> createLlmProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {}
+
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) =>
+      const Stream<String>.empty();
 }

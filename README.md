@@ -17,6 +17,7 @@ pixi run setup-flutter
 ```bash
 pixi run analyze
 pixi run test
+pixi run frb-generate
 pixi run run-macos
 pixi run run-android
 pixi run run-windows

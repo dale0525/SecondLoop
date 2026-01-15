@@ -52,3 +52,48 @@ fn api_core_smoke_happy_path() {
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].content, "hello");
 }
+
+#[test]
+fn api_core_llm_profiles_smoke() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let app_dir = app_dir.to_string_lossy().to_string();
+
+    let key = core::auth_init_master_password(app_dir.clone(), "pw".to_string())
+        .expect("init master password");
+
+    let p1 = core::db_create_llm_profile(
+        app_dir.clone(),
+        key.clone(),
+        "P1".to_string(),
+        "openai-compatible".to_string(),
+        Some("https://example.com/v1".to_string()),
+        Some("sk-p1".to_string()),
+        "gpt-4o-mini".to_string(),
+        true,
+    )
+    .expect("create p1");
+    assert!(p1.is_active);
+
+    let p2 = core::db_create_llm_profile(
+        app_dir.clone(),
+        key.clone(),
+        "P2".to_string(),
+        "openai-compatible".to_string(),
+        Some("https://example.com/v1".to_string()),
+        Some("sk-p2".to_string()),
+        "gpt-4o-mini".to_string(),
+        false,
+    )
+    .expect("create p2");
+    assert!(!p2.is_active);
+
+    let profiles = core::db_list_llm_profiles(app_dir.clone(), key.clone()).expect("list");
+    assert_eq!(profiles.len(), 2);
+
+    core::db_set_active_llm_profile(app_dir.clone(), key.clone(), p2.id.clone()).expect("activate");
+
+    let profiles2 = core::db_list_llm_profiles(app_dir.clone(), key.clone()).expect("list2");
+    assert!(profiles2.iter().any(|p| p.id == p1.id && !p.is_active));
+    assert!(profiles2.iter().any(|p| p.id == p2.id && p.is_active));
+}

@@ -8,6 +8,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `key_from_bytes`
+// These types are ignored because they are not used by any `pub` functions: `StreamClosed`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -58,6 +59,37 @@ Future<Message> dbInsertMessage(
         role: role,
         content: content);
 
+Future<LlmProfile> dbCreateLlmProfile(
+        {required String appDir,
+        required List<int> key,
+        required String name,
+        required String providerType,
+        String? baseUrl,
+        String? apiKey,
+        required String modelName,
+        required bool setActive}) =>
+    RustLib.instance.api.crateApiCoreDbCreateLlmProfile(
+        appDir: appDir,
+        key: key,
+        name: name,
+        providerType: providerType,
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        modelName: modelName,
+        setActive: setActive);
+
+Future<List<LlmProfile>> dbListLlmProfiles(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbListLlmProfiles(appDir: appDir, key: key);
+
+Future<void> dbSetActiveLlmProfile(
+        {required String appDir,
+        required List<int> key,
+        required String profileId}) =>
+    RustLib.instance.api.crateApiCoreDbSetActiveLlmProfile(
+        appDir: appDir, key: key, profileId: profileId);
+
 Future<int> dbProcessPendingMessageEmbeddings(
         {required String appDir, required List<int> key, required int limit}) =>
     RustLib.instance.api.crateApiCoreDbProcessPendingMessageEmbeddings(
@@ -77,3 +109,18 @@ Future<int> dbRebuildMessageEmbeddings(
         required int batchLimit}) =>
     RustLib.instance.api.crateApiCoreDbRebuildMessageEmbeddings(
         appDir: appDir, key: key, batchLimit: batchLimit);
+
+Stream<String> ragAskAiStream(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStream(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly);

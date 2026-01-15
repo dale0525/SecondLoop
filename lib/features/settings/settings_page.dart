@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import 'llm_profiles_page.dart';
 import 'semantic_search_debug_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -64,6 +65,18 @@ class _SettingsPageState extends State<SettingsPage> {
           title: const Text('Lock now'),
           subtitle: const Text('Return to the unlock screen'),
           onTap: _busy ? null : SessionScope.of(context).lock,
+        ),
+        const SizedBox(height: 12),
+        ListTile(
+          title: const Text('LLM profiles'),
+          subtitle: const Text('Configure BYOK for Ask AI'),
+          onTap: _busy
+              ? null
+              : () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
+                  );
+                },
         ),
         if (kDebugMode) ...[
           const Divider(height: 24),

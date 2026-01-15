@@ -59,7 +59,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -364250712;
+  int get rustContentHash => 965862527;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -84,6 +84,16 @@ abstract class RustLibApi extends BaseApi {
   Future<Conversation> crateApiCoreDbCreateConversation(
       {required String appDir, required List<int> key, required String title});
 
+  Future<LlmProfile> crateApiCoreDbCreateLlmProfile(
+      {required String appDir,
+      required List<int> key,
+      required String name,
+      required String providerType,
+      String? baseUrl,
+      String? apiKey,
+      required String modelName,
+      required bool setActive});
+
   Future<Message> crateApiCoreDbInsertMessage(
       {required String appDir,
       required List<int> key,
@@ -92,6 +102,9 @@ abstract class RustLibApi extends BaseApi {
       required String content});
 
   Future<List<Conversation>> crateApiCoreDbListConversations(
+      {required String appDir, required List<int> key});
+
+  Future<List<LlmProfile>> crateApiCoreDbListLlmProfiles(
       {required String appDir, required List<int> key});
 
   Future<List<Message>> crateApiCoreDbListMessages(
@@ -112,6 +125,19 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required String query,
       required int topK});
+
+  Future<void> crateApiCoreDbSetActiveLlmProfile(
+      {required String appDir,
+      required List<int> key,
+      required String profileId});
+
+  Stream<String> crateApiCoreRagAskAiStream(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly});
 
   String crateApiSimpleGreet({required String name});
 
@@ -261,6 +287,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<LlmProfile> crateApiCoreDbCreateLlmProfile(
+      {required String appDir,
+      required List<int> key,
+      required String name,
+      required String providerType,
+      String? baseUrl,
+      String? apiKey,
+      required String modelName,
+      required bool setActive}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(name, serializer);
+        sse_encode_String(providerType, serializer);
+        sse_encode_opt_String(baseUrl, serializer);
+        sse_encode_opt_String(apiKey, serializer);
+        sse_encode_String(modelName, serializer);
+        sse_encode_bool(setActive, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 6, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_llm_profile,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbCreateLlmProfileConstMeta,
+      argValues: [
+        appDir,
+        key,
+        name,
+        providerType,
+        baseUrl,
+        apiKey,
+        modelName,
+        setActive
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbCreateLlmProfileConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_create_llm_profile",
+        argNames: [
+          "appDir",
+          "key",
+          "name",
+          "providerType",
+          "baseUrl",
+          "apiKey",
+          "modelName",
+          "setActive"
+        ],
+      );
+
+  @override
   Future<Message> crateApiCoreDbInsertMessage(
       {required String appDir,
       required List<int> key,
@@ -276,7 +360,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(role, serializer);
         sse_encode_String(content, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 6, port: port_);
+            funcId: 7, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_message,
@@ -303,7 +387,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 7, port: port_);
+            funcId: 8, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_conversation,
@@ -322,6 +406,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<LlmProfile>> crateApiCoreDbListLlmProfiles(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 9, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_llm_profile,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbListLlmProfilesConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbListLlmProfilesConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_list_llm_profiles",
+        argNames: ["appDir", "key"],
+      );
+
+  @override
   Future<List<Message>> crateApiCoreDbListMessages(
       {required String appDir,
       required List<int> key,
@@ -333,7 +444,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(conversationId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 8, port: port_);
+            funcId: 10, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_message,
@@ -360,7 +471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -390,7 +501,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(batchLimit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 10, port: port_);
+            funcId: 12, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -422,7 +533,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 11, port: port_);
+            funcId: 13, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_message,
@@ -441,12 +552,96 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCoreDbSetActiveLlmProfile(
+      {required String appDir,
+      required List<int> key,
+      required String profileId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(profileId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 14, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbSetActiveLlmProfileConstMeta,
+      argValues: [appDir, key, profileId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbSetActiveLlmProfileConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_set_active_llm_profile",
+        argNames: ["appDir", "key", "profileId"],
+      );
+
+  @override
+  Stream<String> crateApiCoreRagAskAiStream(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(conversationId, serializer);
+        sse_encode_String(question, serializer);
+        sse_encode_u_32(topK, serializer);
+        sse_encode_bool(thisThreadOnly, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 15, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreRagAskAiStreamConstMeta,
+      argValues: [
+        appDir,
+        key,
+        conversationId,
+        question,
+        topK,
+        thisThreadOnly,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiCoreRagAskAiStreamConstMeta => const TaskConstMeta(
+        debugName: "rag_ask_ai_stream",
+        argNames: [
+          "appDir",
+          "key",
+          "conversationId",
+          "question",
+          "topK",
+          "thisThreadOnly",
+          "sink"
+        ],
+      );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -469,7 +664,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 13, port: port_);
+            funcId: 17, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -490,6 +685,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return AnyhowException(raw as String);
+  }
+
+  @protected
+  RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
   }
 
   @protected
@@ -537,6 +738,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<LlmProfile> dco_decode_list_llm_profile(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_llm_profile).toList();
+  }
+
+  @protected
   List<Message> dco_decode_list_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_message).toList();
@@ -561,6 +768,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  LlmProfile dco_decode_llm_profile(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return LlmProfile(
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      providerType: dco_decode_String(arr[2]),
+      baseUrl: dco_decode_opt_String(arr[3]),
+      modelName: dco_decode_String(arr[4]),
+      isActive: dco_decode_bool(arr[5]),
+      createdAtMs: dco_decode_i_64(arr[6]),
+      updatedAtMs: dco_decode_i_64(arr[7]),
+    );
+  }
+
+  @protected
   Message dco_decode_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -573,6 +798,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       content: dco_decode_String(arr[3]),
       createdAtMs: dco_decode_i_64(arr[4]),
     );
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
   }
 
   @protected
@@ -610,6 +841,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
     return AnyhowException(inner);
+  }
+
+  @protected
+  RustStreamSink<String> sse_decode_StreamSink_String_Sse(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
   }
 
   @protected
@@ -665,6 +903,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <LlmProfile>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_llm_profile(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<Message> sse_decode_list_message(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -704,6 +954,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  LlmProfile sse_decode_llm_profile(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_providerType = sse_decode_String(deserializer);
+    var var_baseUrl = sse_decode_opt_String(deserializer);
+    var var_modelName = sse_decode_String(deserializer);
+    var var_isActive = sse_decode_bool(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    return LlmProfile(
+        id: var_id,
+        name: var_name,
+        providerType: var_providerType,
+        baseUrl: var_baseUrl,
+        modelName: var_modelName,
+        isActive: var_isActive,
+        createdAtMs: var_createdAtMs,
+        updatedAtMs: var_updatedAtMs);
+  }
+
+  @protected
   Message sse_decode_message(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -717,6 +989,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         role: var_role,
         content: var_content,
         createdAtMs: var_createdAtMs);
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -755,6 +1038,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       AnyhowException self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_StreamSink_String_Sse(
+      RustStreamSink<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+        self.setupAndSerialize(
+            codec: SseCodec(
+                decodeSuccessData: sse_decode_String, decodeErrorData: null)),
+        serializer);
   }
 
   @protected
@@ -801,6 +1095,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_llm_profile(
+      List<LlmProfile> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_llm_profile(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_message(List<Message> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -837,6 +1141,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.providerType, serializer);
+    sse_encode_opt_String(self.baseUrl, serializer);
+    sse_encode_String(self.modelName, serializer);
+    sse_encode_bool(self.isActive, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+  }
+
+  @protected
   void sse_encode_message(Message self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
@@ -844,6 +1161,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.role, serializer);
     sse_encode_String(self.content, serializer);
     sse_encode_i_64(self.createdAtMs, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
   }
 
   @protected

@@ -39,13 +39,13 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
     .expect("create v1 schema");
     drop(conn);
 
-    // Opening via our API should migrate to v3.
+    // Opening via our API should migrate to the latest schema.
     let conn = secondloop_rust::db::open(&app_dir).expect("open via db::open");
 
     let user_version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("user_version");
-    assert_eq!(user_version, 3);
+    assert_eq!(user_version, 4);
 
     // Verify messages table has needs_embedding.
     let mut stmt = conn

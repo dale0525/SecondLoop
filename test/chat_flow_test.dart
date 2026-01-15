@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -31,6 +32,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('Ask AI -> Stop should return to idle even if cancel hangs', (tester) async {
+    final backend = StuckCancelBackend();
+
+    await tester.pumpWidget(MyApp(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(MemoryBackend.kSetupPassword), 'pw');
+    await tester.enterText(find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
+    await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('conversation_c1')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
+    await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat_stop')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat_stop')));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
+    expect(find.text('Stopping…'), findsNothing);
   });
 }
 
@@ -143,4 +171,49 @@ class MemoryBackend implements AppBackend {
     int batchLimit = 256,
   }) async =>
       0;
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+
+  @override
+  Future<LlmProfile> createLlmProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {}
+
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) =>
+      const Stream<String>.empty();
+}
+
+class StuckCancelBackend extends MemoryBackend {
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) {
+    final never = Completer<void>();
+    final controller = StreamController<String>(
+      onCancel: () => never.future,
+    );
+    return controller.stream;
+  }
 }

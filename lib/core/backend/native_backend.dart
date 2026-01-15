@@ -198,4 +198,62 @@ class NativeAppBackend implements AppBackend {
       batchLimit: batchLimit,
     );
   }
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListLlmProfiles(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<LlmProfile> createLlmProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCreateLlmProfile(
+      appDir: appDir,
+      key: key,
+      name: name,
+      providerType: providerType,
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      modelName: modelName,
+      setActive: setActive,
+    );
+  }
+
+  @override
+  Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSetActiveLlmProfile(
+      appDir: appDir,
+      key: key,
+      profileId: profileId,
+    );
+  }
+
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_core.ragAskAiStream(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+    );
+  }
 }

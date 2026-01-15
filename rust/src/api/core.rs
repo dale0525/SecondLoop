@@ -1,9 +1,10 @@
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-
 use crate::{auth, db};
 use crate::crypto::KdfParams;
+use crate::{llm, rag};
+use crate::frb_generated::StreamSink;
 
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     if bytes.len() != 32 {
@@ -85,6 +86,49 @@ pub fn db_insert_message(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_create_llm_profile(
+    app_dir: String,
+    key: Vec<u8>,
+    name: String,
+    provider_type: String,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    model_name: String,
+    set_active: bool,
+) -> Result<db::LlmProfile> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::create_llm_profile(
+        &conn,
+        &key,
+        &name,
+        &provider_type,
+        base_url.as_deref(),
+        api_key.as_deref(),
+        &model_name,
+        set_active,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<Vec<db::LlmProfile>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_llm_profiles(&conn)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_set_active_llm_profile(
+    app_dir: String,
+    key: Vec<u8>,
+    profile_id: String,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::set_active_llm_profile(&conn, &profile_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_process_pending_message_embeddings(
     app_dir: String,
     key: Vec<u8>,
@@ -118,4 +162,75 @@ pub fn db_rebuild_message_embeddings(
     let conn = db::open(Path::new(&app_dir))?;
     let rebuilt = db::rebuild_message_embeddings_default(&conn, &key, batch_limit as usize)?;
     Ok(rebuilt as u32)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn rag_ask_ai_stream(
+    app_dir: String,
+    key: Vec<u8>,
+    conversation_id: String,
+    question: String,
+    top_k: u32,
+    this_thread_only: bool,
+    sink: StreamSink<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let profile = db::load_active_llm_profile_config(&conn, &key)?
+        .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
+
+    let focus = if this_thread_only {
+        rag::Focus::ThisThread
+    } else {
+        rag::Focus::AllMemories
+    };
+
+    let provider_type = profile.provider_type.as_str();
+    let base_url = profile
+        .base_url
+        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+    let model_name = profile.model_name;
+
+    let result = match provider_type {
+        "openai-compatible" => {
+            let api_key = profile
+                .api_key
+                .ok_or_else(|| anyhow!("missing api_key for openai-compatible provider"))?;
+            let provider =
+                llm::openai::OpenAiCompatibleProvider::new(base_url, api_key, model_name, None);
+            rag::ask_ai_with_provider(
+                &conn,
+                &key,
+                &conversation_id,
+                &question,
+                top_k as usize,
+                focus,
+                &provider,
+                &mut |ev| {
+                    if ev.done {
+                        if sink.add(String::new()).is_err() {
+                            return Err(rag::StreamCancelled.into());
+                        }
+                        return Ok(());
+                    }
+                    if ev.text_delta.is_empty() {
+                        return Ok(());
+                    }
+                    if sink.add(ev.text_delta).is_err() {
+                        return Err(rag::StreamCancelled.into());
+                    }
+                    Ok(())
+                },
+            )
+            .map(|_| ())
+        }
+        _ => Err(anyhow!("unsupported provider_type: {provider_type}")),
+    };
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) if e.is::<rag::StreamCancelled>() => Ok(()),
+        Err(e) => Err(e),
+    }
 }

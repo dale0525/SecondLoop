@@ -47,6 +47,26 @@ abstract class AppBackend {
     Uint8List key, {
     int batchLimit = 256,
   });
+
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key);
+  Future<LlmProfile> createLlmProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  });
+  Future<void> setActiveLlmProfile(Uint8List key, String profileId);
+
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  });
 }
 
 class AppBackendScope extends InheritedWidget {

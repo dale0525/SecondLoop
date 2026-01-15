@@ -26,6 +26,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -44,6 +47,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Conversation> dco_decode_list_conversation(dynamic raw);
 
   @protected
+  List<LlmProfile> dco_decode_list_llm_profile(dynamic raw);
+
+  @protected
   List<Message> dco_decode_list_message(dynamic raw);
 
   @protected
@@ -56,7 +62,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SimilarMessage> dco_decode_list_similar_message(dynamic raw);
 
   @protected
+  LlmProfile dco_decode_llm_profile(dynamic raw);
+
+  @protected
   Message dco_decode_message(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
   SimilarMessage dco_decode_similar_message(dynamic raw);
@@ -72,6 +84,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<String> sse_decode_StreamSink_String_Sse(
+      SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -92,6 +108,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Conversation> sse_decode_list_conversation(SseDeserializer deserializer);
 
   @protected
+  List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer);
+
+  @protected
   List<Message> sse_decode_list_message(SseDeserializer deserializer);
 
   @protected
@@ -105,7 +124,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
+
+  @protected
   Message sse_decode_message(SseDeserializer deserializer);
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
   SimilarMessage sse_decode_similar_message(SseDeserializer deserializer);
@@ -127,6 +152,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AnyhowException self, SseSerializer serializer);
 
   @protected
+  void sse_encode_StreamSink_String_Sse(
+      RustStreamSink<String> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -146,6 +175,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<Conversation> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_llm_profile(
+      List<LlmProfile> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_message(List<Message> self, SseSerializer serializer);
 
   @protected
@@ -160,7 +193,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<SimilarMessage> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
+
+  @protected
   void sse_encode_message(Message self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
   void sse_encode_similar_message(
