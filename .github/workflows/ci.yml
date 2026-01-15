@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.6"
+          channel: stable
+          cache: true
+      - name: Pub get
+        run: flutter pub get
+      - name: Format check
+        run: dart format . --set-exit-if-changed
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+
+  rust:
+    if: ${{ hashFiles('rust/Cargo.toml') != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Rust fmt
+        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+      - name: Rust clippy
+        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Rust test
+        run: cargo test --manifest-path rust/Cargo.toml --all

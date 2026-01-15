@@ -1,0 +1,30 @@
+# Docs
+docs
+
+# Pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# FVM (Flutter Version Management)
+.fvm/flutter_sdk
+.fvm/versions
+
+# Flutter/Dart/Pub
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Local tools/cache
+.tool/

@@ -1,0 +1,35 @@
+[workspace]
+authors = ["Logic Tan <logictan89@gmail.com>"]
+channels = ["conda-forge"]
+name = "SecondLoop"
+platforms = ["osx-arm64", "linux-64", "win-64"]
+version = "0.1.0"
+
+[tasks]
+setup-flutter = "dart pub global activate fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
+doctor = "dart pub global run fvm:main flutter doctor -v"
+analyze = "dart pub global run fvm:main flutter analyze"
+test = "dart pub global run fvm:main flutter test"
+format = "dart pub global run fvm:main dart format . --set-exit-if-changed"
+run-android = "dart pub global run fvm:main flutter run -d android"
+run-windows = "dart pub global run fvm:main flutter pub get && dart pub global run fvm:main flutter run -d windows"
+rust-build-release = "cargo build --manifest-path rust/Cargo.toml --release"
+rust-test = "cargo test --manifest-path rust/Cargo.toml"
+rust-fmt = "cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
+rust-clippy = "cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings"
+
+[dependencies]
+rust = "1.85.*"
+python = "3.11.*"
+cmake = ">=4.2.1,<5"
+ninja = ">=1.13.2,<2"
+dart-sdk = "2.18.2.*"
+
+[target.osx-arm64.dependencies]
+ruby = ">=3.4.8,<4"
+clang_osx-arm64 = ">=21.1.8,<22"
+clangxx_osx-arm64 = ">=21.1.8,<22"
+
+[target.osx-arm64.tasks]
+setup-cocoapods = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2"
+run-macos = { cmd = "env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 dart pub global run fvm:main flutter run -d macos", depends-on = ["setup-cocoapods"] }
