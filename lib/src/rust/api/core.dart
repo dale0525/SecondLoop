@@ -7,8 +7,7 @@ import '../db.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `key_from_bytes`
-// These types are ignored because they are not used by any `pub` functions: `StreamClosed`
+// These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -124,3 +123,51 @@ Stream<String> ragAskAiStream(
         question: question,
         topK: topK,
         thisThreadOnly: thisThreadOnly);
+
+Future<Uint8List> syncDeriveKey({required String passphrase}) =>
+    RustLib.instance.api.crateApiCoreSyncDeriveKey(passphrase: passphrase);
+
+Future<void> syncWebdavTestConnection(
+        {required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavTestConnection(
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot);
+
+Future<BigInt> syncWebdavPush(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavPush(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot);
+
+Future<BigInt> syncWebdavPull(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavPull(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot);

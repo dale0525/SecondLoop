@@ -59,7 +59,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 965862527;
+  int get rustContentHash => -853053769;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -138,6 +138,32 @@ abstract class RustLibApi extends BaseApi {
       required String question,
       required int topK,
       required bool thisThreadOnly});
+
+  Future<Uint8List> crateApiCoreSyncDeriveKey({required String passphrase});
+
+  Future<BigInt> crateApiCoreSyncWebdavPull(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot});
+
+  Future<BigInt> crateApiCoreSyncWebdavPush(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot});
+
+  Future<void> crateApiCoreSyncWebdavTestConnection(
+      {required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot});
 
   String crateApiSimpleGreet({required String name});
 
@@ -636,12 +662,174 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List> crateApiCoreSyncDeriveKey({required String passphrase}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(passphrase, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 16, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_prim_u_8_strict,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncDeriveKeyConstMeta,
+      argValues: [passphrase],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncDeriveKeyConstMeta => const TaskConstMeta(
+        debugName: "sync_derive_key",
+        argNames: ["passphrase"],
+      );
+
+  @override
+  Future<BigInt> crateApiCoreSyncWebdavPull(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_opt_String(username, serializer);
+        sse_encode_opt_String(password, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 17, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncWebdavPullConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        username,
+        password,
+        remoteRoot
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncWebdavPullConstMeta => const TaskConstMeta(
+        debugName: "sync_webdav_pull",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "username",
+          "password",
+          "remoteRoot"
+        ],
+      );
+
+  @override
+  Future<BigInt> crateApiCoreSyncWebdavPush(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_opt_String(username, serializer);
+        sse_encode_opt_String(password, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 18, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncWebdavPushConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        username,
+        password,
+        remoteRoot
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncWebdavPushConstMeta => const TaskConstMeta(
+        debugName: "sync_webdav_push",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "username",
+          "password",
+          "remoteRoot"
+        ],
+      );
+
+  @override
+  Future<void> crateApiCoreSyncWebdavTestConnection(
+      {required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_opt_String(username, serializer);
+        sse_encode_opt_String(password, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 19, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncWebdavTestConnectionConstMeta,
+      argValues: [baseUrl, username, password, remoteRoot],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncWebdavTestConnectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_webdav_test_connection",
+        argNames: ["baseUrl", "username", "password", "remoteRoot"],
+      );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -664,7 +852,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 17, port: port_);
+            funcId: 21, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -822,6 +1010,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -1017,6 +1211,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8();
@@ -1185,6 +1385,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected

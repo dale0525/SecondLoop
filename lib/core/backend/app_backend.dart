@@ -67,6 +67,33 @@ abstract class AppBackend {
     int topK = 10,
     bool thisThreadOnly = false,
   });
+
+  Future<Uint8List> deriveSyncKey(String passphrase);
+
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  });
+
+  Future<int> syncWebdavPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  });
+
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  });
 }
 
 class AppBackendScope extends InheritedWidget {

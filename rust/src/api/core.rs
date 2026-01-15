@@ -2,9 +2,11 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use crate::{auth, db};
-use crate::crypto::KdfParams;
+use crate::crypto::{derive_root_key, KdfParams};
 use crate::{llm, rag};
 use crate::frb_generated::StreamSink;
+use crate::sync;
+use crate::sync::RemoteStore;
 
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     if bytes.len() != 32 {
@@ -13,6 +15,10 @@ fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     let mut key = [0u8; 32];
     key.copy_from_slice(&bytes);
     Ok(key)
+}
+
+fn sync_key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
+    key_from_bytes(bytes)
 }
 
 #[flutter_rust_bridge::frb]
@@ -233,4 +239,62 @@ pub fn rag_ask_ai_stream(
         Err(e) if e.is::<rag::StreamCancelled>() => Ok(()),
         Err(e) => Err(e),
     }
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_derive_key(passphrase: String) -> Result<Vec<u8>> {
+    let kdf = KdfParams {
+        m_cost_kib: 8 * 1024,
+        t_cost: 2,
+        p_cost: 1,
+    };
+    let key = derive_root_key(&passphrase, b"secondloop-sync1", &kdf)?;
+    Ok(key.to_vec())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_webdav_test_connection(
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+) -> Result<()> {
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    remote.mkdir_all(&remote_root)?;
+    let _ = remote.list(&remote_root)?;
+    Ok(())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_webdav_push(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::push(&conn, &key, &sync_key, &remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_webdav_pull(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::pull(&conn, &key, &sync_key, &remote, &remote_root)
 }

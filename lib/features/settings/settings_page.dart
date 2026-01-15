@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import 'llm_profiles_page.dart';
+import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -75,6 +76,18 @@ class _SettingsPageState extends State<SettingsPage> {
               : () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
+                  );
+                },
+        ),
+        const SizedBox(height: 12),
+        ListTile(
+          title: const Text('Sync'),
+          subtitle: const Text('WebDAV encrypted sync settings'),
+          onTap: _busy
+              ? null
+              : () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SyncSettingsPage()),
                   );
                 },
         ),

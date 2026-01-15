@@ -69,6 +69,60 @@ fn now_ms() -> i64 {
         .unwrap_or(i64::MAX)
 }
 
+fn get_or_create_device_id(conn: &Connection) -> Result<String> {
+    let existing: Option<String> = conn
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if let Some(device_id) = existing {
+        return Ok(device_id);
+    }
+
+    let device_id = uuid::Uuid::new_v4().to_string();
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', ?1)"#,
+        params![device_id],
+    )?;
+    Ok(device_id)
+}
+
+fn next_device_seq(conn: &Connection, device_id: &str) -> Result<i64> {
+    let max_seq: Option<i64> = conn.query_row(
+        r#"SELECT MAX(seq) FROM oplog WHERE device_id = ?1"#,
+        params![device_id],
+        |row| row.get(0),
+    )?;
+    Ok(max_seq.unwrap_or(0) + 1)
+}
+
+fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) -> Result<()> {
+    let op_id = op_json["op_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("oplog missing op_id"))?;
+    let device_id = op_json["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("oplog missing device_id"))?;
+    let seq = op_json["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("oplog missing seq"))?;
+    let created_at = op_json["ts_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("oplog missing ts_ms"))?;
+
+    let plaintext = serde_json::to_vec(op_json)?;
+    let blob = encrypt_bytes(key, &plaintext, format!("oplog.op_json:{op_id}").as_bytes())?;
+    conn.execute(
+        r#"INSERT INTO oplog(op_id, device_id, seq, op_json, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5)"#,
+        params![op_id, device_id, seq, blob, created_at],
+    )?;
+    Ok(())
+}
+
 fn default_embed_text(text: &str) -> Vec<f32> {
     let mut v = vec![0.0f32; MESSAGE_EMBEDDING_DIM];
     let t = text.to_lowercase();
@@ -195,6 +249,30 @@ PRAGMA user_version = 4;
         )?;
     }
 
+    if user_version < 5 {
+        // v5: key-value config + operation log for sync.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS kv (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS oplog (
+  op_id TEXT PRIMARY KEY,
+  device_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  op_json BLOB NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_oplog_device_seq ON oplog(device_id, seq);
+
+PRAGMA user_version = 5;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -215,6 +293,23 @@ pub fn create_conversation(conn: &Connection, key: &[u8; 32], title: &str) -> Re
         r#"INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)"#,
         params![id, title_blob, now, now],
     )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "conversation.upsert.v1",
+        "payload": {
+            "conversation_id": id.clone(),
+            "title": title,
+            "created_at_ms": now,
+            "updated_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
 
     Ok(Conversation {
         id,
@@ -273,6 +368,24 @@ pub fn insert_message(
         r#"UPDATE conversations SET updated_at = ?2 WHERE id = ?1"#,
         params![conversation_id, now],
     )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "message.insert.v1",
+        "payload": {
+            "message_id": id.clone(),
+            "conversation_id": conversation_id,
+            "role": role,
+            "content": content,
+            "created_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
 
     Ok(Message {
         id,

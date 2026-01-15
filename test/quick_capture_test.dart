@@ -154,4 +154,37 @@ final class _UnlockedBackend implements AppBackend {
     bool thisThreadOnly = false,
   }) =>
       const Stream<String>.empty();
+
+  @override
+  Future<Uint8List> deriveSyncKey(String passphrase) async => _key;
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<int> syncWebdavPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
 }

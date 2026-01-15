@@ -1,8 +1,11 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -12,6 +15,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Set master password'), findsOneWidget);
+  });
+
+  testWidgets('Settings shows Sync entry', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: FakeBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Sync'), findsOneWidget);
   });
 }
 
@@ -128,4 +146,38 @@ class FakeBackend implements AppBackend {
     bool thisThreadOnly = false,
   }) =>
       const Stream<String>.empty();
+
+  @override
+  Future<Uint8List> deriveSyncKey(String passphrase) async =>
+      Uint8List.fromList(List<int>.filled(32, 1));
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<int> syncWebdavPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
 }
