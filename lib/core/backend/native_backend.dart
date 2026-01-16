@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -23,10 +24,92 @@ class NativeAppBackend implements AppBackend {
   static FlutterSecureStorage _createDefaultSecureStorage() {
     if (defaultTargetPlatform == TargetPlatform.macOS) {
       return const FlutterSecureStorage(
-        mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+        mOptions: MacOsOptions(),
       );
     }
     return const FlutterSecureStorage();
+  }
+
+  Future<String?> _readSecureString(String key) async {
+    try {
+      final v = await _secureStorage.read(key: key);
+      if (v != null || defaultTargetPlatform != TargetPlatform.macOS) return v;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      // Fall through and try legacy storage below.
+    }
+
+    if (defaultTargetPlatform != TargetPlatform.macOS) return null;
+
+    try {
+      final legacy = await _secureStorage.read(
+        key: key,
+        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+      );
+      if (legacy == null) return null;
+
+      try {
+        await _secureStorage.write(key: key, value: legacy);
+        await _secureStorage.delete(
+          key: key,
+          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+        );
+      } catch (_) {
+        // Best-effort migration.
+      }
+
+      return legacy;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  Future<void> _writeSecureString(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        await _secureStorage.delete(
+          key: key,
+          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+        );
+      }
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      if (defaultTargetPlatform != TargetPlatform.macOS) return;
+      try {
+        await _secureStorage.write(
+          key: key,
+          value: value,
+          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+        );
+      } catch (_) {
+        return;
+      }
+    }
+  }
+
+  Future<void> _deleteSecureString(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      // Ignore and try legacy as well.
+    }
+
+    if (defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      await _secureStorage.delete(
+        key: key,
+        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+      );
+    } catch (_) {
+      return;
+    }
   }
 
   Future<String> _getAppDir() async {
@@ -52,14 +135,14 @@ class NativeAppBackend implements AppBackend {
 
   @override
   Future<bool> readAutoUnlockEnabled() async {
-    final value = await _secureStorage.read(key: _kAutoUnlockEnabled);
+    final value = await _readSecureString(_kAutoUnlockEnabled);
     if (value == null) return true;
     return value == '1';
   }
 
   @override
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {
-    await _secureStorage.write(key: _kAutoUnlockEnabled, value: enabled ? '1' : '0');
+    await _writeSecureString(_kAutoUnlockEnabled, enabled ? '1' : '0');
     if (!enabled) {
       await clearSavedSessionKey();
     }
@@ -70,7 +153,7 @@ class NativeAppBackend implements AppBackend {
     final autoUnlockEnabled = await readAutoUnlockEnabled();
     if (!autoUnlockEnabled) return null;
 
-    final b64 = await _secureStorage.read(key: _kSessionKeyB64);
+    final b64 = await _readSecureString(_kSessionKeyB64);
     if (b64 == null) return null;
 
     try {
@@ -84,13 +167,13 @@ class NativeAppBackend implements AppBackend {
 
   @override
   Future<void> saveSessionKey(Uint8List key) async {
-    await _secureStorage.write(key: _kSessionKeyB64, value: base64Encode(key));
-    await _secureStorage.write(key: _kAutoUnlockEnabled, value: '1');
+    await _writeSecureString(_kSessionKeyB64, base64Encode(key));
+    await _writeSecureString(_kAutoUnlockEnabled, '1');
   }
 
   @override
   Future<void> clearSavedSessionKey() async {
-    await _secureStorage.delete(key: _kSessionKeyB64);
+    await _deleteSecureString(_kSessionKeyB64);
   }
 
   @override

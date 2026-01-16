@@ -11,7 +11,7 @@ void main() {
     if (!Platform.isMacOS) return;
 
     const storage = FlutterSecureStorage(
-      mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+      mOptions: MacOsOptions(),
     );
     const key = 'secondloop_secure_storage_probe';
 

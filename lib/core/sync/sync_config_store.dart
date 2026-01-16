@@ -12,6 +12,17 @@ final class SyncConfigStore {
 
   final FlutterSecureStorage _storage;
 
+  static const List<String> _knownKeys = [
+    kBackendType,
+    kAutoEnabled,
+    kLocalDir,
+    kWebdavBaseUrl,
+    kWebdavUsername,
+    kWebdavPassword,
+    kRemoteRoot,
+    kSyncKeyB64,
+  ];
+
   static const kBackendType = 'sync_backend_type'; // webdav | localdir
   static const kAutoEnabled = 'sync_auto_enabled'; // 1 | 0
   static const kLocalDir = 'sync_localdir_path';
@@ -25,7 +36,7 @@ final class SyncConfigStore {
   static FlutterSecureStorage _createDefaultSecureStorage() {
     if (defaultTargetPlatform == TargetPlatform.macOS) {
       return const FlutterSecureStorage(
-        mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+        mOptions: MacOsOptions(),
       );
     }
     return const FlutterSecureStorage();
@@ -104,19 +115,33 @@ final class SyncConfigStore {
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {
-    final syncKey = await readSyncKey();
+    final all = await _safeReadAll();
+    if (all == null || all.isEmpty) return null;
+
+    final b64 = all[kSyncKeyB64];
+    if (b64 == null || b64.isEmpty) return null;
+
+    Uint8List? syncKey;
+    try {
+      syncKey = Uint8List.fromList(base64Decode(b64));
+    } catch (_) {
+      syncKey = null;
+    }
     if (syncKey == null || syncKey.length != 32) return null;
 
-    final remoteRoot = (await readRemoteRoot())?.trim();
+    final remoteRoot = all[kRemoteRoot]?.trim();
     if (remoteRoot == null || remoteRoot.isEmpty) return null;
 
-    final backendType = await readBackendType();
+    final backendType = switch (all[kBackendType]) {
+      'localdir' => SyncBackendType.localDir,
+      _ => SyncBackendType.webdav,
+    };
     switch (backendType) {
       case SyncBackendType.webdav:
-        final baseUrl = (await readWebdavBaseUrl())?.trim();
+        final baseUrl = all[kWebdavBaseUrl]?.trim();
         if (baseUrl == null || baseUrl.isEmpty) return null;
-        final username = (await readWebdavUsername())?.trim();
-        final password = await readWebdavPassword();
+        final username = all[kWebdavUsername]?.trim();
+        final password = all[kWebdavPassword];
         return SyncConfig.webdav(
           syncKey: syncKey,
           remoteRoot: remoteRoot,
@@ -125,7 +150,7 @@ final class SyncConfigStore {
           password: password == null || password.isEmpty ? null : password,
         );
       case SyncBackendType.localDir:
-        final localDir = (await readLocalDir())?.trim();
+        final localDir = all[kLocalDir]?.trim();
         if (localDir == null || localDir.isEmpty) return null;
         return SyncConfig.localDir(
           syncKey: syncKey,
@@ -137,7 +162,51 @@ final class SyncConfigStore {
 
   Future<String?> _safeRead(String key) async {
     try {
-      return await _storage.read(key: key);
+      final v = await _storage.read(key: key);
+      if (v != null || defaultTargetPlatform != TargetPlatform.macOS) return v;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      // Fall through and try legacy storage below.
+    }
+
+    if (defaultTargetPlatform != TargetPlatform.macOS) return null;
+    try {
+      final legacy = await _storage.read(
+        key: key,
+        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+      );
+      if (legacy == null) return null;
+
+      await _safeWrite(key, legacy);
+      return legacy;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  Future<Map<String, String>?> _safeReadAll() async {
+    try {
+      final primary = await _storage.readAll();
+      if (defaultTargetPlatform != TargetPlatform.macOS) return primary;
+
+      final legacy = await _storage.readAll(
+        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+      );
+      if (legacy.isEmpty) return primary;
+
+      final merged = <String, String>{...primary};
+      for (final key in _knownKeys) {
+        if (merged.containsKey(key)) continue;
+        final legacyValue = legacy[key];
+        if (legacyValue == null) continue;
+        merged[key] = legacyValue;
+        await _safeWrite(key, legacyValue);
+      }
+
+      return merged;
     } on MissingPluginException {
       return null;
     } on PlatformException {
@@ -148,10 +217,25 @@ final class SyncConfigStore {
   Future<void> _safeWrite(String key, String value) async {
     try {
       await _storage.write(key: key, value: value);
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        await _storage.delete(
+          key: key,
+          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+        );
+      }
     } on MissingPluginException {
       return;
     } on PlatformException {
-      return;
+      if (defaultTargetPlatform != TargetPlatform.macOS) return;
+      try {
+        await _storage.write(
+          key: key,
+          value: value,
+          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+        );
+      } catch (_) {
+        return;
+      }
     }
   }
 
@@ -161,6 +245,16 @@ final class SyncConfigStore {
     } on MissingPluginException {
       return;
     } on PlatformException {
+      // Fall through and try legacy storage below.
+    }
+
+    if (defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      await _storage.delete(
+        key: key,
+        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+      );
+    } catch (_) {
       return;
     }
   }

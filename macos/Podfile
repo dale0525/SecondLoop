@@ -40,4 +40,31 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end
+
+  hotkey_file = File.join(
+    installer.sandbox.root.to_s,
+    'HotKey',
+    'Sources',
+    'HotKey',
+    'NSEventModifierFlags+HotKey.swift',
+  )
+  if File.exist?(hotkey_file)
+    begin
+      contents = File.read(hotkey_file)
+      updated = contents.gsub(
+        'extension NSEvent.ModifierFlags: CustomStringConvertible {',
+        'extension NSEvent.ModifierFlags: @retroactive CustomStringConvertible {',
+      )
+      if updated != contents
+        begin
+          File.chmod(0o644, hotkey_file)
+        rescue StandardError
+          # Best-effort: keep going even if chmod fails.
+        end
+        File.write(hotkey_file, updated)
+      end
+    rescue StandardError
+      # Best-effort: never fail pod install due to a warning-only patch.
+    end
+  end
 end
