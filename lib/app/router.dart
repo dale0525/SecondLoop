@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../features/inbox/inbox_page.dart';
+import '../core/backend/app_backend.dart';
+import '../core/session/session_scope.dart';
+import '../features/chat/chat_page.dart';
 import '../features/settings/settings_page.dart';
+import '../src/rust/db.dart';
 
 enum AppTab {
-  inbox('Inbox', Icons.inbox_outlined, Icons.inbox),
+  mainStream('Main', Icons.chat_bubble_outline, Icons.chat_bubble),
   settings('Settings', Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.label, this.icon, this.selectedIcon);
@@ -26,15 +29,12 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final tab = AppTab.values[_selectedIndex];
-
     return Scaffold(
-      appBar: AppBar(title: Text(tab.label)),
       body: IndexedStack(
         index: _selectedIndex,
-        children: const [
-          InboxPage(),
-          SettingsPage(),
+        children: const <Widget>[
+          _MainStreamTab(),
+          _SettingsTab(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -51,6 +51,62 @@ class _AppShellState extends State<AppShell> {
           setState(() => _selectedIndex = index);
         },
       ),
+    );
+  }
+}
+
+final class _MainStreamTab extends StatefulWidget {
+  const _MainStreamTab();
+
+  @override
+  State<_MainStreamTab> createState() => _MainStreamTabState();
+}
+
+final class _MainStreamTabState extends State<_MainStreamTab> {
+  Future<Conversation>? _conversationFuture;
+
+  Future<Conversation> _load() async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    return backend.getOrCreateMainStreamConversation(sessionKey);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _conversationFuture ??= _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Conversation>(
+      future: _conversationFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError) {
+          return Scaffold(body: Center(child: Text('Load failed: ${snapshot.error}')));
+        }
+
+        final conversation = snapshot.data;
+        if (conversation == null) {
+          return const Scaffold(body: Center(child: Text('Missing Main Stream')));
+        }
+        return ChatPage(conversation: conversation);
+      },
+    );
+  }
+}
+
+final class _SettingsTab extends StatelessWidget {
+  const _SettingsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: const SettingsPage(),
     );
   }
 }

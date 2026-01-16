@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/background_sync.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
@@ -36,6 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (enabled) {
         await backend.saveSessionKey(sessionKey);
       }
+      await BackgroundSync.refreshSchedule(backend: backend);
       if (mounted) setState(() => _autoUnlockEnabled = enabled);
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -82,7 +84,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 12),
         ListTile(
           title: const Text('Sync'),
-          subtitle: const Text('WebDAV encrypted sync settings'),
+          subtitle: const Text('Vault backends + auto sync settings'),
           onTap: _busy
               ? null
               : () {

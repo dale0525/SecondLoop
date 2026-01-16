@@ -24,6 +24,8 @@ abstract class AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key);
   Future<Conversation> createConversation(Uint8List key, String title);
 
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key);
+
   Future<List<Message>> listMessages(Uint8List key, String conversationId);
   Future<Message> insertMessage(
     Uint8List key,
@@ -31,6 +33,8 @@ abstract class AppBackend {
     required String role,
     required String content,
   });
+  Future<void> editMessage(Uint8List key, String messageId, String content);
+  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted);
 
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
@@ -92,6 +96,25 @@ abstract class AppBackend {
     required String baseUrl,
     String? username,
     String? password,
+    required String remoteRoot,
+  });
+
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  });
+
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  });
+
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
     required String remoteRoot,
   });
 }

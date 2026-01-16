@@ -70,6 +70,10 @@ class FakeBackend implements AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async => const [];
 
   @override
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+      createConversation(key, 'Main Stream');
+
+  @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
       Conversation(
         id: 'c1',
@@ -96,6 +100,12 @@ class FakeBackend implements AppBackend {
         content: content,
         createdAtMs: 0,
       );
+
+  @override
+  Future<void> editMessage(Uint8List key, String messageId, String content) async {}
+
+  @override
+  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {}
 
   @override
   Future<int> processPendingMessageEmbeddings(
@@ -177,6 +187,30 @@ class FakeBackend implements AppBackend {
     required String baseUrl,
     String? username,
     String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
     required String remoteRoot,
   }) async =>
       0;

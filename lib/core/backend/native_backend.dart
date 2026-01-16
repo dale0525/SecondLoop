@@ -118,6 +118,12 @@ class NativeAppBackend implements AppBackend {
   }
 
   @override
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetOrCreateMainStreamConversation(appDir: appDir, key: key);
+  }
+
+  @override
   Future<Conversation> createConversation(Uint8List key, String title) async {
     final appDir = await _getAppDir();
     return rust_core.dbCreateConversation(appDir: appDir, key: key, title: title);
@@ -156,6 +162,28 @@ class NativeAppBackend implements AppBackend {
     );
 
     return message;
+  }
+
+  @override
+  Future<void> editMessage(Uint8List key, String messageId, String content) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbEditMessage(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      content: content,
+    );
+  }
+
+  @override
+  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbSetMessageDeleted(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      isDeleted: isDeleted,
+    );
   }
 
   @override
@@ -316,6 +344,53 @@ class NativeAppBackend implements AppBackend {
       baseUrl: baseUrl,
       username: username,
       password: password,
+      remoteRoot: remoteRoot,
+    );
+    return pulled.toInt();
+  }
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    await rust_core.syncLocaldirTestConnection(
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
+  }
+
+  @override
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    final appDir = await _getAppDir();
+    final pushed = await rust_core.syncLocaldirPush(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
+    return pushed.toInt();
+  }
+
+  @override
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    final appDir = await _getAppDir();
+    final pulled = await rust_core.syncLocaldirPull(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      localDir: localDir,
       remoteRoot: remoteRoot,
     );
     return pulled.toInt();

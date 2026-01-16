@@ -10,6 +10,7 @@ import 'router.dart';
 import 'theme.dart';
 import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
+import '../core/sync/sync_engine_gate.dart';
 
 class SecondLoopApp extends StatefulWidget {
   SecondLoopApp({
@@ -50,16 +51,18 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
           home: const AppShell(),
           builder: (context, child) {
             return AppBootstrap(
-              child: DesktopQuickCaptureService(
-                child: LockGate(
-                  child: QuickCaptureOverlay(
-                    navigatorKey: _navigatorKey,
-                    child: child ?? const SizedBox.shrink(),
+                child: DesktopQuickCaptureService(
+                  child: LockGate(
+                    child: SyncEngineGate(
+                      child: QuickCaptureOverlay(
+                        navigatorKey: _navigatorKey,
+                        child: child ?? const SizedBox.shrink(),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
         ),
       ),
     );

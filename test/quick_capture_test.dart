@@ -8,7 +8,7 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Quick capture inserts into Inbox and hides', (tester) async {
+  testWidgets('Quick capture inserts into Main Stream and hides', (tester) async {
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
@@ -27,7 +27,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.insertedMessages, hasLength(1));
-    expect(backend.insertedMessages.single.conversationId, 'c_inbox');
+    expect(backend.insertedMessages.single.conversationId, 'main_stream');
     expect(backend.insertedMessages.single.role, 'user');
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
@@ -38,7 +38,12 @@ final class _UnlockedBackend implements AppBackend {
   final Uint8List _key = Uint8List.fromList(List<int>.filled(32, 1));
 
   final List<Conversation> _conversations = [
-    const Conversation(id: 'c_inbox', title: 'Inbox', createdAtMs: 0, updatedAtMs: 0),
+    const Conversation(
+      id: 'main_stream',
+      title: 'Main Stream',
+      createdAtMs: 0,
+      updatedAtMs: 0,
+    ),
   ];
 
   final List<Message> insertedMessages = [];
@@ -78,6 +83,10 @@ final class _UnlockedBackend implements AppBackend {
       List<Conversation>.from(_conversations);
 
   @override
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+      _conversations.single;
+
+  @override
   Future<Conversation> createConversation(Uint8List key, String title) async {
     final conversation = Conversation(id: 'c_${_conversations.length + 1}', title: title, createdAtMs: 0, updatedAtMs: 0);
     _conversations.add(conversation);
@@ -104,6 +113,12 @@ final class _UnlockedBackend implements AppBackend {
     insertedMessages.add(message);
     return message;
   }
+
+  @override
+  Future<void> editMessage(Uint8List key, String messageId, String content) async {}
+
+  @override
+  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {}
 
   @override
   Future<int> processPendingMessageEmbeddings(
@@ -184,6 +199,30 @@ final class _UnlockedBackend implements AppBackend {
     required String baseUrl,
     String? username,
     String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
     required String remoteRoot,
   }) async =>
       0;

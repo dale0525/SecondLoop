@@ -10,6 +10,7 @@ use crate::embedding::Embedder;
 use crate::vector;
 
 const MESSAGE_EMBEDDING_DIM: usize = 384;
+const MAIN_STREAM_CONVERSATION_ID: &str = "main_stream";
 
 #[derive(Clone, Debug)]
 pub struct Conversation {
@@ -247,6 +248,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_profiles_active ON llm_profiles(is_active);
 PRAGMA user_version = 4;
 "#,
         )?;
+        user_version = 4;
     }
 
     if user_version < 5 {
@@ -269,6 +271,48 @@ CREATE TABLE IF NOT EXISTS oplog (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_oplog_device_seq ON oplog(device_id, seq);
 
 PRAGMA user_version = 5;
+"#,
+        )?;
+        user_version = 5;
+    }
+
+    if user_version < 6 {
+        // v6: message LWW metadata + soft delete for cross-device edit/delete.
+        let (mut has_updated_at, mut has_updated_by_device_id, mut has_updated_by_seq, mut has_is_deleted) =
+            (false, false, false, false);
+        let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let name: String = row.get(1)?;
+            match name.as_str() {
+                "updated_at" => has_updated_at = true,
+                "updated_by_device_id" => has_updated_by_device_id = true,
+                "updated_by_seq" => has_updated_by_seq = true,
+                "is_deleted" => has_is_deleted = true,
+                _ => {}
+            }
+        }
+
+        if !has_updated_at {
+            conn.execute_batch("ALTER TABLE messages ADD COLUMN updated_at INTEGER;")?;
+        }
+        if !has_updated_by_device_id {
+            conn.execute_batch("ALTER TABLE messages ADD COLUMN updated_by_device_id TEXT;")?;
+        }
+        if !has_updated_by_seq {
+            conn.execute_batch("ALTER TABLE messages ADD COLUMN updated_by_seq INTEGER;")?;
+        }
+        if !has_is_deleted {
+            conn.execute_batch("ALTER TABLE messages ADD COLUMN is_deleted INTEGER;")?;
+        }
+
+        conn.execute_batch(
+            r#"
+UPDATE messages SET updated_at = created_at WHERE updated_at IS NULL;
+UPDATE messages SET updated_by_device_id = '' WHERE updated_by_device_id IS NULL;
+UPDATE messages SET updated_by_seq = 0 WHERE updated_by_seq IS NULL;
+UPDATE messages SET is_deleted = 0 WHERE is_deleted IS NULL;
+PRAGMA user_version = 6;
 "#,
         )?;
     }
@@ -319,6 +363,64 @@ pub fn create_conversation(conn: &Connection, key: &[u8; 32], title: &str) -> Re
     })
 }
 
+pub fn get_or_create_main_stream_conversation(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<Conversation> {
+    let existing: Option<(Vec<u8>, i64, i64)> = conn
+        .query_row(
+            r#"SELECT title, created_at, updated_at FROM conversations WHERE id = ?1"#,
+            params![MAIN_STREAM_CONVERSATION_ID],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    if let Some((title_blob, created_at_ms, updated_at_ms)) = existing {
+        let title_bytes = decrypt_bytes(key, &title_blob, b"conversation.title")?;
+        let title = String::from_utf8(title_bytes)
+            .map_err(|_| anyhow!("conversation title is not valid utf-8"))?;
+        return Ok(Conversation {
+            id: MAIN_STREAM_CONVERSATION_ID.to_string(),
+            title,
+            created_at_ms,
+            updated_at_ms,
+        });
+    }
+
+    let now = now_ms();
+    let title = "Main Stream";
+
+    let title_blob = encrypt_bytes(key, title.as_bytes(), b"conversation.title")?;
+    conn.execute(
+        r#"INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)"#,
+        params![MAIN_STREAM_CONVERSATION_ID, title_blob, now, now],
+    )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "conversation.upsert.v1",
+        "payload": {
+            "conversation_id": MAIN_STREAM_CONVERSATION_ID,
+            "title": title,
+            "created_at_ms": now,
+            "updated_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(Conversation {
+        id: MAIN_STREAM_CONVERSATION_ID.to_string(),
+        title: title.to_string(),
+        created_at_ms: now,
+        updated_at_ms: now,
+    })
+}
+
 pub fn list_conversations(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Conversation>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC"#,
@@ -357,11 +459,15 @@ pub fn insert_message(
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
 
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+
     let content_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
     conn.execute(
-        r#"INSERT INTO messages (id, conversation_id, role, content, created_at, needs_embedding)
-           VALUES (?1, ?2, ?3, ?4, ?5, 1)"#,
-        params![id, conversation_id, role, content_blob, now],
+        r#"INSERT INTO messages
+           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, 1)"#,
+        params![id, conversation_id, role, content_blob, now, now, device_id, seq],
     )?;
 
     conn.execute(
@@ -369,8 +475,6 @@ pub fn insert_message(
         params![conversation_id, now],
     )?;
 
-    let device_id = get_or_create_device_id(conn)?;
-    let seq = next_device_seq(conn, &device_id)?;
     let op = serde_json::json!({
         "op_id": uuid::Uuid::new_v4().to_string(),
         "device_id": device_id,
@@ -394,6 +498,124 @@ pub fn insert_message(
         content: content.to_string(),
         created_at_ms: now,
     })
+}
+
+pub fn edit_message(conn: &Connection, key: &[u8; 32], message_id: &str, content: &str) -> Result<()> {
+    let existing = get_message_by_id(conn, key, message_id)?;
+    let conversation_id = existing.conversation_id.clone();
+    let role = existing.role.clone();
+    let created_at_ms = existing.created_at_ms;
+    let now = now_ms();
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "message.set.v2",
+        "payload": {
+            "message_id": message_id,
+            "conversation_id": conversation_id.as_str(),
+            "role": role.as_str(),
+            "content": content,
+            "created_at_ms": created_at_ms,
+            "updated_at_ms": now,
+            "is_deleted": false,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    let content_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
+    let updated = conn.execute(
+        r#"UPDATE messages
+           SET content = ?2,
+               updated_at = ?3,
+               updated_by_device_id = ?4,
+               updated_by_seq = ?5,
+               is_deleted = 0,
+               needs_embedding = 1
+           WHERE id = ?1"#,
+        params![message_id, content_blob, now, device_id, seq],
+    )?;
+    if updated == 0 {
+        return Err(anyhow!("message not found: {message_id}"));
+    }
+
+    conn.execute(
+        r#"UPDATE conversations
+           SET updated_at = CASE WHEN updated_at < ?2 THEN ?2 ELSE updated_at END
+           WHERE id = ?1"#,
+        params![conversation_id, now],
+    )?;
+
+    Ok(())
+}
+
+pub fn set_message_deleted(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    is_deleted: bool,
+) -> Result<()> {
+    let existing = get_message_by_id(conn, key, message_id)?;
+    let conversation_id = existing.conversation_id.clone();
+    let role = existing.role.clone();
+    let content = existing.content.clone();
+    let created_at_ms = existing.created_at_ms;
+    let now = now_ms();
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "message.set.v2",
+        "payload": {
+            "message_id": message_id,
+            "conversation_id": conversation_id.as_str(),
+            "role": role.as_str(),
+            "content": content.as_str(),
+            "created_at_ms": created_at_ms,
+            "updated_at_ms": now,
+            "is_deleted": is_deleted,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    let updated = conn.execute(
+        r#"UPDATE messages
+           SET updated_at = ?2,
+               updated_by_device_id = ?3,
+               updated_by_seq = ?4,
+               is_deleted = ?5,
+               needs_embedding = CASE WHEN ?5 = 0 THEN 1 ELSE needs_embedding END
+           WHERE id = ?1"#,
+        params![
+            message_id,
+            now,
+            device_id,
+            seq,
+            if is_deleted { 1 } else { 0 }
+        ],
+    )?;
+    if updated == 0 {
+        return Err(anyhow!("message not found: {message_id}"));
+    }
+
+    conn.execute(
+        r#"UPDATE conversations
+           SET updated_at = CASE WHEN updated_at < ?2 THEN ?2 ELSE updated_at END
+           WHERE id = ?1"#,
+        params![conversation_id, now],
+    )?;
+
+    Ok(())
 }
 
 pub fn append_message_content(
@@ -785,7 +1007,7 @@ pub fn list_messages(
     let mut stmt = conn.prepare(
         r#"SELECT id, role, content, created_at
            FROM messages
-           WHERE conversation_id = ?1
+           WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
            ORDER BY created_at ASC"#,
     )?;
 

@@ -9,7 +9,7 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Setup -> open chat -> send message', (tester) async {
+  testWidgets('Setup -> main stream -> send message', (tester) async {
     final backend = MemoryBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));
@@ -22,10 +22,7 @@ void main() {
     await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
     await tester.pumpAndSettle();
 
-    expect(find.text('Inbox'), findsWidgets);
-
-    await tester.tap(find.byKey(const ValueKey('conversation_c1')));
-    await tester.pumpAndSettle();
+    expect(find.text('Main Stream'), findsWidgets);
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
     await tester.tap(find.byKey(MemoryBackend.kChatSend));
@@ -43,9 +40,6 @@ void main() {
     await tester.enterText(find.byKey(MemoryBackend.kSetupPassword), 'pw');
     await tester.enterText(find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
     await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('conversation_c1')));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
@@ -74,9 +68,14 @@ class MemoryBackend implements AppBackend {
   Uint8List? _savedKey;
 
   final List<Conversation> _conversations = [
-    const Conversation(id: 'c1', title: 'Inbox', createdAtMs: 0, updatedAtMs: 0),
+    const Conversation(
+      id: 'main_stream',
+      title: 'Main Stream',
+      createdAtMs: 0,
+      updatedAtMs: 0,
+    ),
   ];
-  final Map<String, List<Message>> _messages = {'c1': []};
+  final Map<String, List<Message>> _messages = {'main_stream': []};
 
   @override
   Future<void> init() async {}
@@ -124,6 +123,10 @@ class MemoryBackend implements AppBackend {
       List<Conversation>.from(_conversations);
 
   @override
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+      _conversations.first;
+
+  @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
       throw UnimplementedError();
 
@@ -148,6 +151,32 @@ class MemoryBackend implements AppBackend {
     _messages.putIfAbsent(conversationId, () => []);
     _messages[conversationId]!.add(message);
     return message;
+  }
+
+  @override
+  Future<void> editMessage(Uint8List key, String messageId, String content) async {
+    for (final entry in _messages.entries) {
+      final list = entry.value;
+      for (var i = 0; i < list.length; i++) {
+        final msg = list[i];
+        if (msg.id != messageId) continue;
+        list[i] = Message(
+          id: msg.id,
+          conversationId: msg.conversationId,
+          role: msg.role,
+          content: content,
+          createdAtMs: msg.createdAtMs,
+        );
+        return;
+      }
+    }
+  }
+
+  @override
+  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {
+    for (final list in _messages.values) {
+      list.removeWhere((msg) => msg.id == messageId);
+    }
   }
 
   @override
@@ -230,6 +259,30 @@ class MemoryBackend implements AppBackend {
     required String baseUrl,
     String? username,
     String? password,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
     required String remoteRoot,
   }) async =>
       0;

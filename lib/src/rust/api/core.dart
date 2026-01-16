@@ -38,6 +38,11 @@ Future<Conversation> dbCreateConversation(
     RustLib.instance.api.crateApiCoreDbCreateConversation(
         appDir: appDir, key: key, title: title);
 
+Future<Conversation> dbGetOrCreateMainStreamConversation(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api.crateApiCoreDbGetOrCreateMainStreamConversation(
+        appDir: appDir, key: key);
+
 Future<List<Message>> dbListMessages(
         {required String appDir,
         required List<int> key,
@@ -57,6 +62,22 @@ Future<Message> dbInsertMessage(
         conversationId: conversationId,
         role: role,
         content: content);
+
+Future<void> dbEditMessage(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required String content}) =>
+    RustLib.instance.api.crateApiCoreDbEditMessage(
+        appDir: appDir, key: key, messageId: messageId, content: content);
+
+Future<void> dbSetMessageDeleted(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required bool isDeleted}) =>
+    RustLib.instance.api.crateApiCoreDbSetMessageDeleted(
+        appDir: appDir, key: key, messageId: messageId, isDeleted: isDeleted);
 
 Future<LlmProfile> dbCreateLlmProfile(
         {required String appDir,
@@ -170,4 +191,35 @@ Future<BigInt> syncWebdavPull(
         baseUrl: baseUrl,
         username: username,
         password: password,
+        remoteRoot: remoteRoot);
+
+Future<void> syncLocaldirTestConnection(
+        {required String localDir, required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirTestConnection(
+        localDir: localDir, remoteRoot: remoteRoot);
+
+Future<BigInt> syncLocaldirPush(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String localDir,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirPush(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        localDir: localDir,
+        remoteRoot: remoteRoot);
+
+Future<BigInt> syncLocaldirPull(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String localDir,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirPull(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        localDir: localDir,
         remoteRoot: remoteRoot);

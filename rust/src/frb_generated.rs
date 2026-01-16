@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -853053769;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1180762137;
 
 // Section: executor
 
@@ -248,6 +248,82 @@ fn wire__crate__api__core__db_create_llm_profile_impl(
                         api_api_key,
                         api_model_name,
                         api_set_active,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_edit_message_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_edit_message",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_content = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_edit_message(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_content,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_get_or_create_main_stream_conversation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_get_or_create_main_stream_conversation(
+                        api_app_dir,
+                        api_key,
                     )
                 })())
             }
@@ -550,6 +626,46 @@ fn wire__crate__api__core__db_set_active_llm_profile_impl(
         },
     )
 }
+fn wire__crate__api__core__db_set_message_deleted_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_set_message_deleted",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_is_deleted = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_set_message_deleted(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_is_deleted,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__rag_ask_ai_stream_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -625,6 +741,123 @@ fn wire__crate__api__core__sync_derive_key_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse((move || crate::api::core::sync_derive_key(api_passphrase))())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__sync_localdir_pull_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_localdir_pull",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_local_dir = <String>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_localdir_pull(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_local_dir,
+                        api_remote_root,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__sync_localdir_push_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_localdir_push",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_local_dir = <String>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_localdir_push(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_local_dir,
+                        api_remote_root,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__sync_localdir_test_connection_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_localdir_test_connection",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_local_dir = <String>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_localdir_test_connection(api_local_dir, api_remote_root)
+                })())
             }
         },
     )
@@ -1070,45 +1303,63 @@ fn pde_ffi_dispatcher_primary_impl(
         4 => wire__crate__api__core__auth_validate_key_impl(port, ptr, rust_vec_len, data_len),
         5 => wire__crate__api__core__db_create_conversation_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__core__db_create_llm_profile_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__db_insert_message_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__core__db_list_conversations_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__core__db_list_llm_profiles_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__db_list_messages_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__db_process_pending_message_embeddings_impl(
+        7 => wire__crate__api__core__db_edit_message_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__core__db_rebuild_message_embeddings_impl(
+        9 => wire__crate__api__core__db_insert_message_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__db_list_conversations_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__db_list_llm_profiles_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__db_list_messages_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__db_process_pending_message_embeddings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__core__db_search_similar_messages_impl(
+        14 => wire__crate__api__core__db_rebuild_message_embeddings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__core__db_set_active_llm_profile_impl(
+        15 => wire__crate__api__core__db_search_similar_messages_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__core__rag_ask_ai_stream_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__sync_derive_key_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__sync_webdav_pull_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__sync_webdav_push_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__core__sync_webdav_test_connection_impl(
+        16 => wire__crate__api__core__db_set_active_llm_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        17 => {
+            wire__crate__api__core__db_set_message_deleted_impl(port, ptr, rust_vec_len, data_len)
+        }
+        18 => wire__crate__api__core__rag_ask_ai_stream_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__sync_derive_key_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__sync_localdir_pull_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__sync_localdir_push_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__sync_localdir_test_connection_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        23 => wire__crate__api__core__sync_webdav_pull_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__sync_webdav_push_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__sync_webdav_test_connection_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        27 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1121,7 +1372,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        20 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

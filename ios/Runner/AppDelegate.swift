@@ -1,5 +1,6 @@
 import UIKit
 import Flutter
+import workmanager
 
 @UIApplicationMain
 @objc class AppDelegate: FlutterAppDelegate {
@@ -8,6 +9,12 @@ import Flutter
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+
+    WorkmanagerPlugin.setPluginRegistrantCallback { registry in
+      GeneratedPluginRegistrant.register(with: registry)
+    }
+    WorkmanagerPlugin.registerTask(withIdentifier: "com.secondloop.secondloop.backgroundSync")
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }

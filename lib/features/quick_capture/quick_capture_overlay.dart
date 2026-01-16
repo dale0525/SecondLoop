@@ -7,6 +7,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_engine_gate.dart';
 
 class QuickCaptureOverlay extends StatefulWidget {
   const QuickCaptureOverlay({
@@ -120,16 +121,6 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
 
   void _dismiss() => QuickCaptureScope.of(context).hide();
 
-  Future<String> _resolveInboxConversationId(AppBackend backend, Uint8List key) async {
-    final conversations = await backend.listConversations(key);
-    for (final c in conversations) {
-      if (c.title == 'Inbox') return c.id;
-    }
-
-    if (conversations.isNotEmpty) return conversations.first.id;
-    return (await backend.createConversation(key, 'Inbox')).id;
-  }
-
   Future<void> _submit() async {
     if (_busy) return;
 
@@ -140,14 +131,17 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
-      final conversationId = await _resolveInboxConversationId(backend, sessionKey);
+      final syncEngine = SyncEngineScope.maybeOf(context);
+      final conversation = await backend.getOrCreateMainStreamConversation(sessionKey);
 
       await backend.insertMessage(
         sessionKey,
-        conversationId,
+        conversation.id,
         role: 'user',
         content: text,
       );
+      if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
 
       _dismiss();
     } finally {

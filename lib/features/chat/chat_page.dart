@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_engine_gate.dart';
 import '../../src/rust/db.dart';
 
 class ChatPage extends StatefulWidget {
@@ -26,6 +27,114 @@ class _ChatPageState extends State<ChatPage> {
   String _streamingAnswer = '';
   String? _askError;
   StreamSubscription<String>? _askSub;
+
+  Future<void> _showMessageActions(Message message) async {
+    if (message.id.startsWith('pending_')) return;
+
+    final action = await showModalBottomSheet<_MessageAction>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const ValueKey('message_action_edit'),
+                leading: const Icon(Icons.edit),
+                title: const Text('Edit'),
+                onTap: () => Navigator.of(context).pop(_MessageAction.edit),
+              ),
+              ListTile(
+                key: const ValueKey('message_action_delete'),
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete'),
+                onTap: () => Navigator.of(context).pop(_MessageAction.delete),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    switch (action) {
+      case _MessageAction.edit:
+        await _editMessage(message);
+        break;
+      case _MessageAction.delete:
+        await _deleteMessage(message);
+        break;
+      case null:
+        break;
+    }
+  }
+
+  Future<void> _editMessage(Message message) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    var draft = message.content;
+    try {
+      final newContent = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Edit message'),
+            content: TextFormField(
+              key: const ValueKey('edit_message_content'),
+              initialValue: draft,
+              autofocus: true,
+              maxLines: null,
+              onChanged: (value) => draft = value,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const ValueKey('edit_message_save'),
+                onPressed: () => Navigator.of(context).pop(draft),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      final trimmed = newContent?.trim();
+      if (trimmed == null) return;
+
+      await backend.editMessage(sessionKey, message.id, trimmed);
+      if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
+      _refresh();
+      messenger.showSnackBar(const SnackBar(content: Text('Message updated')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Edit failed: $e')));
+    }
+  }
+
+  Future<void> _deleteMessage(Message message) async {
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
+      final messenger = ScaffoldMessenger.of(context);
+
+      await backend.setMessageDeleted(sessionKey, message.id, true);
+      if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
+      _refresh();
+      messenger.showSnackBar(const SnackBar(content: Text('Message deleted')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+    }
+  }
 
   @override
   void dispose() {
@@ -57,12 +166,15 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
       await backend.insertMessage(
         sessionKey,
         widget.conversation.id,
         role: 'user',
         content: text,
       );
+      if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
       _controller.clear();
       _refresh();
     } finally {
@@ -135,6 +247,7 @@ class _ChatPageState extends State<ChatPage> {
           _streamingAnswer = '';
         });
         _refresh();
+        SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
       },
       onDone: () {
         if (!mounted) return;
@@ -146,6 +259,7 @@ class _ChatPageState extends State<ChatPage> {
           _streamingAnswer = '';
         });
         _refresh();
+        SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
       },
       cancelOnError: true,
     );
@@ -238,29 +352,33 @@ class _ChatPageState extends State<ChatPage> {
                       }
                     }
 
-                    if (msg == null) return const SizedBox.shrink();
-                    final isUser = msg.role == 'user';
+                    final stableMsg = msg;
+                    if (stableMsg == null) return const SizedBox.shrink();
+                    final isUser = stableMsg.role == 'user';
                     return Align(
                       alignment:
                           isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
+                      child: GestureDetector(
+                        onLongPress: () => _showMessageActions(stableMsg),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isUser
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(textOverride ?? stableMsg.content),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .secondaryContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(textOverride ?? msg.content),
                       ),
                     );
                   },
@@ -320,4 +438,9 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
+}
+
+enum _MessageAction {
+  edit,
+  delete,
 }

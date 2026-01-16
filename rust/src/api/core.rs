@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use crate::{auth, db};
@@ -68,6 +68,16 @@ pub fn db_create_conversation(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_get_or_create_main_stream_conversation(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<db::Conversation> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::get_or_create_main_stream_conversation(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_messages(
     app_dir: String,
     key: Vec<u8>,
@@ -89,6 +99,25 @@ pub fn db_insert_message(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::insert_message(&conn, &key, &conversation_id, &role, &content)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_edit_message(app_dir: String, key: Vec<u8>, message_id: String, content: String) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::edit_message(&conn, &key, &message_id, &content)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_set_message_deleted(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    is_deleted: bool,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::set_message_deleted(&conn, &key, &message_id, is_deleted)
 }
 
 #[flutter_rust_bridge::frb]
@@ -296,5 +325,43 @@ pub fn sync_webdav_pull(
     let sync_key = sync_key_from_bytes(sync_key)?;
     let conn = db::open(Path::new(&app_dir))?;
     let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::pull(&conn, &key, &sync_key, &remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_localdir_test_connection(local_dir: String, remote_root: String) -> Result<()> {
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
+    remote.mkdir_all(&remote_root)?;
+    let _ = remote.list(&remote_root)?;
+    Ok(())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_localdir_push(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    local_dir: String,
+    remote_root: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
+    sync::push(&conn, &key, &sync_key, &remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_localdir_pull(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    local_dir: String,
+    remote_root: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     sync::pull(&conn, &key, &sync_key, &remote, &remote_root)
 }

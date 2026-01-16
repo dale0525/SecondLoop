@@ -83,6 +83,7 @@ pub fn ask_ai_with_provider(
     let assistant_message = db::insert_message(conn, key, conversation_id, "assistant", "")?;
 
     let mut has_text = false;
+    let mut assistant_text = String::new();
     let result = provider.stream_answer(&prompt, &mut |ev| {
         let done = ev.done;
         let text_delta = ev.text_delta.clone();
@@ -90,7 +91,7 @@ pub fn ask_ai_with_provider(
 
         if !done && !text_delta.is_empty() {
             has_text = true;
-            db::append_message_content(conn, key, &assistant_message.id, &text_delta)?;
+            assistant_text.push_str(&text_delta);
         }
 
         Ok(())
@@ -105,6 +106,7 @@ pub fn ask_ai_with_provider(
                 )?;
                 return Err(anyhow!("empty response from LLM"));
             }
+            db::edit_message(conn, key, &assistant_message.id, &assistant_text)?;
         }
         Err(e) => {
             if e.is::<StreamCancelled>() {
@@ -132,6 +134,8 @@ pub fn ask_ai_with_provider(
                     r#"DELETE FROM messages WHERE id = ?1"#,
                     params![assistant_message.id.as_str()],
                 );
+            } else {
+                let _ = db::edit_message(conn, key, &assistant_message.id, &assistant_text);
             }
             return Err(e);
         }

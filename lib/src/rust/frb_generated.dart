@@ -59,7 +59,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -853053769;
+  int get rustContentHash => -1180762137;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -93,6 +93,15 @@ abstract class RustLibApi extends BaseApi {
       String? apiKey,
       required String modelName,
       required bool setActive});
+
+  Future<void> crateApiCoreDbEditMessage(
+      {required String appDir,
+      required List<int> key,
+      required String messageId,
+      required String content});
+
+  Future<Conversation> crateApiCoreDbGetOrCreateMainStreamConversation(
+      {required String appDir, required List<int> key});
 
   Future<Message> crateApiCoreDbInsertMessage(
       {required String appDir,
@@ -131,6 +140,12 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required String profileId});
 
+  Future<void> crateApiCoreDbSetMessageDeleted(
+      {required String appDir,
+      required List<int> key,
+      required String messageId,
+      required bool isDeleted});
+
   Stream<String> crateApiCoreRagAskAiStream(
       {required String appDir,
       required List<int> key,
@@ -140,6 +155,23 @@ abstract class RustLibApi extends BaseApi {
       required bool thisThreadOnly});
 
   Future<Uint8List> crateApiCoreSyncDeriveKey({required String passphrase});
+
+  Future<BigInt> crateApiCoreSyncLocaldirPull(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot});
+
+  Future<BigInt> crateApiCoreSyncLocaldirPush(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot});
+
+  Future<void> crateApiCoreSyncLocaldirTestConnection(
+      {required String localDir, required String remoteRoot});
 
   Future<BigInt> crateApiCoreSyncWebdavPull(
       {required String appDir,
@@ -371,6 +403,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCoreDbEditMessage(
+      {required String appDir,
+      required List<int> key,
+      required String messageId,
+      required String content}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(messageId, serializer);
+        sse_encode_String(content, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 7, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbEditMessageConstMeta,
+      argValues: [appDir, key, messageId, content],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbEditMessageConstMeta => const TaskConstMeta(
+        debugName: "db_edit_message",
+        argNames: ["appDir", "key", "messageId", "content"],
+      );
+
+  @override
+  Future<Conversation> crateApiCoreDbGetOrCreateMainStreamConversation(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 8, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_conversation,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbGetOrCreateMainStreamConversationConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbGetOrCreateMainStreamConversationConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_get_or_create_main_stream_conversation",
+        argNames: ["appDir", "key"],
+      );
+
+  @override
   Future<Message> crateApiCoreDbInsertMessage(
       {required String appDir,
       required List<int> key,
@@ -386,7 +476,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(role, serializer);
         sse_encode_String(content, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 7, port: port_);
+            funcId: 9, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_message,
@@ -413,7 +503,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 8, port: port_);
+            funcId: 10, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_conversation,
@@ -440,7 +530,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_llm_profile,
@@ -470,7 +560,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(conversationId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 10, port: port_);
+            funcId: 12, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_message,
@@ -497,7 +587,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 11, port: port_);
+            funcId: 13, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -527,7 +617,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(batchLimit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 12, port: port_);
+            funcId: 14, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -559,7 +649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 13, port: port_);
+            funcId: 15, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_message,
@@ -589,7 +679,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(profileId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 14, port: port_);
+            funcId: 16, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -605,6 +695,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "db_set_active_llm_profile",
         argNames: ["appDir", "key", "profileId"],
+      );
+
+  @override
+  Future<void> crateApiCoreDbSetMessageDeleted(
+      {required String appDir,
+      required List<int> key,
+      required String messageId,
+      required bool isDeleted}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(messageId, serializer);
+        sse_encode_bool(isDeleted, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 17, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbSetMessageDeletedConstMeta,
+      argValues: [appDir, key, messageId, isDeleted],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbSetMessageDeletedConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_set_message_deleted",
+        argNames: ["appDir", "key", "messageId", "isDeleted"],
       );
 
   @override
@@ -627,7 +749,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_bool(thisThreadOnly, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 15, port: port_);
+            funcId: 18, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -668,7 +790,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(passphrase, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 16, port: port_);
+            funcId: 19, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -683,6 +805,101 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCoreSyncDeriveKeyConstMeta => const TaskConstMeta(
         debugName: "sync_derive_key",
         argNames: ["passphrase"],
+      );
+
+  @override
+  Future<BigInt> crateApiCoreSyncLocaldirPull(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(localDir, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 20, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncLocaldirPullConstMeta,
+      argValues: [appDir, key, syncKey, localDir, remoteRoot],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncLocaldirPullConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_localdir_pull",
+        argNames: ["appDir", "key", "syncKey", "localDir", "remoteRoot"],
+      );
+
+  @override
+  Future<BigInt> crateApiCoreSyncLocaldirPush(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(localDir, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 21, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncLocaldirPushConstMeta,
+      argValues: [appDir, key, syncKey, localDir, remoteRoot],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncLocaldirPushConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_localdir_push",
+        argNames: ["appDir", "key", "syncKey", "localDir", "remoteRoot"],
+      );
+
+  @override
+  Future<void> crateApiCoreSyncLocaldirTestConnection(
+      {required String localDir, required String remoteRoot}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(localDir, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 22, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncLocaldirTestConnectionConstMeta,
+      argValues: [localDir, remoteRoot],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncLocaldirTestConnectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_localdir_test_connection",
+        argNames: ["localDir", "remoteRoot"],
       );
 
   @override
@@ -705,7 +922,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 17, port: port_);
+            funcId: 23, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -758,7 +975,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 18, port: port_);
+            funcId: 24, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -805,7 +1022,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 19, port: port_);
+            funcId: 25, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -829,7 +1046,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -852,7 +1069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 21, port: port_);
+            funcId: 27, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,

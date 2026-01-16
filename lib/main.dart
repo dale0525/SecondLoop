@@ -3,8 +3,12 @@ import 'package:flutter/widgets.dart';
 import 'app/app.dart';
 import 'core/backend/app_backend.dart';
 import 'core/quick_capture/quick_capture_controller.dart';
+import 'core/sync/background_sync.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await BackgroundSync.init();
+  await BackgroundSync.refreshSchedule();
   runApp(const MyApp());
 }
 

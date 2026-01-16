@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
 pub mod webdav;
+pub mod localdir;
 
 #[derive(Debug)]
 pub struct NotFound {
@@ -346,7 +347,8 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         .ok_or_else(|| anyhow!("sync op missing type"))?;
     match op_type {
         "conversation.upsert.v1" => apply_conversation_upsert(conn, db_key, &op["payload"]),
-        "message.insert.v1" => apply_message_insert(conn, db_key, &op["payload"]),
+        "message.insert.v1" => apply_message_insert(conn, db_key, op),
+        "message.set.v2" => apply_message_set_v2(conn, db_key, op),
         other => Err(anyhow!("unsupported sync op type: {other}")),
     }
 }
@@ -397,7 +399,14 @@ fn apply_conversation_upsert(conn: &Connection, db_key: &[u8; 32], payload: &ser
     Ok(())
 }
 
-fn apply_message_insert(conn: &Connection, db_key: &[u8; 32], payload: &serde_json::Value) -> Result<()> {
+fn apply_message_insert(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Result<()> {
+    let device_id = op["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message op missing device_id"))?;
+    let seq = op["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("message op missing seq"))?;
+    let payload = &op["payload"];
     let message_id = payload["message_id"]
         .as_str()
         .ok_or_else(|| anyhow!("message op missing message_id"))?;
@@ -428,9 +437,17 @@ fn apply_message_insert(conn: &Connection, db_key: &[u8; 32], payload: &serde_js
     let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
     conn.execute(
         r#"INSERT OR IGNORE INTO messages
-           (id, conversation_id, role, content, created_at, needs_embedding)
-           VALUES (?1, ?2, ?3, ?4, ?5, 1)"#,
-        params![message_id, conversation_id, role, content_blob, created_at_ms],
+           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, 1)"#,
+        params![
+            message_id,
+            conversation_id,
+            role,
+            content_blob,
+            created_at_ms,
+            device_id,
+            seq
+        ],
     )?;
 
     conn.execute(
@@ -438,6 +455,154 @@ fn apply_message_insert(conn: &Connection, db_key: &[u8; 32], payload: &serde_js
            SET updated_at = CASE WHEN updated_at < ?2 THEN ?2 ELSE updated_at END
            WHERE id = ?1"#,
         params![conversation_id, created_at_ms],
+    )?;
+
+    Ok(())
+}
+
+fn message_version_newer(
+    incoming_updated_at: i64,
+    incoming_device_id: &str,
+    incoming_seq: i64,
+    existing_updated_at: i64,
+    existing_device_id: &str,
+    existing_seq: i64,
+) -> bool {
+    if incoming_updated_at != existing_updated_at {
+        return incoming_updated_at > existing_updated_at;
+    }
+    if incoming_device_id != existing_device_id {
+        return incoming_device_id > existing_device_id;
+    }
+    incoming_seq > existing_seq
+}
+
+fn apply_message_set_v2(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Result<()> {
+    let device_id = op["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message.set.v2 missing device_id"))?;
+    let seq = op["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("message.set.v2 missing seq"))?;
+    let payload = &op["payload"];
+
+    let message_id = payload["message_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message.set.v2 missing message_id"))?;
+    let role = payload["role"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message.set.v2 missing role"))?;
+    let content = payload["content"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message.set.v2 missing content"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("message.set.v2 missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("message.set.v2 missing updated_at_ms"))?;
+    let is_deleted = payload["is_deleted"]
+        .as_bool()
+        .ok_or_else(|| anyhow!("message.set.v2 missing is_deleted"))?;
+
+    let payload_conversation_id = payload["conversation_id"].as_str();
+    let existing_conversation_id: Option<String> = conn
+        .query_row(
+            r#"SELECT conversation_id FROM messages WHERE id = ?1"#,
+            params![message_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let conversation_id = match (payload_conversation_id, existing_conversation_id) {
+        (Some(id), _) => id.to_string(),
+        (None, Some(id)) => id,
+        (None, None) => {
+            return Err(anyhow!(
+                "message.set.v2 missing conversation_id for unknown message: {message_id}"
+            ))
+        }
+    };
+
+    let existing: Option<(i64, String, i64)> = conn
+        .query_row(
+            r#"SELECT updated_at, updated_by_device_id, updated_by_seq
+               FROM messages
+               WHERE id = ?1"#,
+            params![message_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    if let Some((existing_updated_at, existing_device_id, existing_seq)) = existing {
+        if !message_version_newer(
+            updated_at_ms,
+            device_id,
+            seq,
+            existing_updated_at,
+            &existing_device_id,
+            existing_seq,
+        ) {
+            return Ok(());
+        }
+
+        let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
+        conn.execute(
+            r#"UPDATE messages
+               SET role = ?2,
+                   content = ?3,
+                   updated_at = ?4,
+                   updated_by_device_id = ?5,
+                   updated_by_seq = ?6,
+                   is_deleted = ?7,
+                   needs_embedding = CASE WHEN ?7 = 0 THEN 1 ELSE needs_embedding END
+               WHERE id = ?1"#,
+            params![
+                message_id,
+                role,
+                content_blob,
+                updated_at_ms,
+                device_id,
+                seq,
+                if is_deleted { 1 } else { 0 }
+            ],
+        )?;
+    } else {
+        let conversation_exists: Option<i64> = conn
+            .query_row(
+                r#"SELECT 1 FROM conversations WHERE id = ?1"#,
+                params![conversation_id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if conversation_exists.is_none() {
+            return Err(anyhow!("missing conversation for message: {conversation_id}"));
+        }
+
+        let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
+        conn.execute(
+            r#"INSERT INTO messages
+               (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+            params![
+                message_id,
+                conversation_id.as_str(),
+                role,
+                content_blob,
+                created_at_ms,
+                updated_at_ms,
+                device_id,
+                seq,
+                if is_deleted { 1 } else { 0 },
+                if is_deleted { 0 } else { 1 }
+            ],
+        )?;
+    }
+
+    conn.execute(
+        r#"UPDATE conversations
+           SET updated_at = CASE WHEN updated_at < ?2 THEN ?2 ELSE updated_at END
+           WHERE id = ?1"#,
+        params![conversation_id.as_str(), updated_at_ms],
     )?;
 
     Ok(())
