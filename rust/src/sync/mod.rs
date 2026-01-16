@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use anyhow::{anyhow, Result};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
+use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -23,21 +26,29 @@ impl std::fmt::Display for NotFound {
 impl std::error::Error for NotFound {}
 
 pub trait RemoteStore: Send + Sync {
+    fn target_id(&self) -> &str;
     fn mkdir_all(&self, path: &str) -> Result<()>;
     fn list(&self, dir: &str) -> Result<Vec<String>>;
     fn get(&self, path: &str) -> Result<Vec<u8>>;
     fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()>;
 }
 
-#[derive(Default)]
+static INMEM_NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
 pub struct InMemoryRemoteStore {
+    target_id: String,
     dirs: Mutex<BTreeSet<String>>,
     files: Mutex<BTreeMap<String, Vec<u8>>>,
 }
 
 impl InMemoryRemoteStore {
     pub fn new() -> Self {
-        Self::default()
+        let id = INMEM_NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        Self {
+            target_id: format!("inmem:{id}"),
+            dirs: Mutex::new(BTreeSet::new()),
+            files: Mutex::new(BTreeMap::new()),
+        }
     }
 }
 
@@ -54,7 +65,16 @@ fn normalize_file(path: &str) -> String {
     format!("/{trimmed}")
 }
 
+fn sync_scope_id(remote: &impl RemoteStore, remote_root_dir: &str) -> String {
+    let scope = format!("{}|{remote_root_dir}", remote.target_id());
+    B64_URL.encode(scope.as_bytes())
+}
+
 impl RemoteStore for InMemoryRemoteStore {
+    fn target_id(&self) -> &str {
+        &self.target_id
+    }
+
     fn mkdir_all(&self, path: &str) -> Result<()> {
         let dir = normalize_dir(path);
         let mut dirs = self.dirs.lock().map_err(|_| anyhow!("poisoned lock"))?;
@@ -143,49 +163,95 @@ pub fn push(
 ) -> Result<u64> {
     let device_id = get_or_create_device_id(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
+    let scope_id = sync_scope_id(remote, &remote_root_dir);
     let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
     remote.mkdir_all(&ops_dir)?;
 
-    let last_pushed_seq = kv_get_i64(conn, "sync.last_pushed_seq")?.unwrap_or(0);
+    let last_pushed_key = format!("sync.last_pushed_seq:{scope_id}");
+    let last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
 
-    let mut stmt = conn.prepare(
-        r#"SELECT op_id, seq, op_json
-           FROM oplog
-           WHERE device_id = ?1 AND seq > ?2
-           ORDER BY seq ASC"#,
-    )?;
-
-    let mut rows = stmt.query(params![device_id.as_str(), last_pushed_seq])?;
-    let mut pushed: u64 = 0;
-    let mut max_seq = last_pushed_seq;
-
-    while let Some(row) = rows.next()? {
-        let op_id: String = row.get(0)?;
-        let seq: i64 = row.get(1)?;
-        let op_json_blob: Vec<u8> = row.get(2)?;
-
-        let plaintext =
-            decrypt_bytes(db_key, &op_json_blob, format!("oplog.op_json:{op_id}").as_bytes())?;
-        let file_blob = encrypt_bytes(
-            sync_key,
-            &plaintext,
-            format!("sync.ops:{device_id}:{seq}").as_bytes(),
+    fn push_ops_after(
+        conn: &Connection,
+        db_key: &[u8; 32],
+        sync_key: &[u8; 32],
+        remote: &impl RemoteStore,
+        device_id: &str,
+        ops_dir: &str,
+        after_seq: i64,
+    ) -> Result<(u64, i64)> {
+        let mut stmt = conn.prepare(
+            r#"SELECT op_id, seq, op_json
+               FROM oplog
+               WHERE device_id = ?1 AND seq > ?2
+               ORDER BY seq ASC"#,
         )?;
 
-        let file_path = format!("{ops_dir}op_{seq}.json");
-        remote.put(&file_path, file_blob)?;
+        let mut rows = stmt.query(params![device_id, after_seq])?;
+        let mut pushed: u64 = 0;
+        let mut max_seq = after_seq;
 
-        pushed += 1;
-        if seq > max_seq {
-            max_seq = seq;
+        while let Some(row) = rows.next()? {
+            let op_id: String = row.get(0)?;
+            let seq: i64 = row.get(1)?;
+            let op_json_blob: Vec<u8> = row.get(2)?;
+
+            let plaintext = decrypt_bytes(
+                db_key,
+                &op_json_blob,
+                format!("oplog.op_json:{op_id}").as_bytes(),
+            )?;
+            let file_blob = encrypt_bytes(
+                sync_key,
+                &plaintext,
+                format!("sync.ops:{device_id}:{seq}").as_bytes(),
+            )?;
+
+            let file_path = format!("{ops_dir}op_{seq}.json");
+            remote.put(&file_path, file_blob)?;
+
+            pushed += 1;
+            if seq > max_seq {
+                max_seq = seq;
+            }
+        }
+
+        Ok((pushed, max_seq))
+    }
+
+    let (pushed, max_seq) = push_ops_after(
+        conn,
+        db_key,
+        sync_key,
+        remote,
+        &device_id,
+        &ops_dir,
+        last_pushed_seq,
+    )?;
+
+    if pushed > 0 {
+        kv_set_i64(conn, &last_pushed_key, max_seq)?;
+        return Ok(pushed);
+    }
+
+    // If the remote target was cleared/reset (e.g. user switches directories then comes back),
+    // our cursor may say "up to date" while the remote no longer has the last pushed file.
+    if last_pushed_seq > 0 {
+        let last_path = format!("{ops_dir}op_{last_pushed_seq}.json");
+        match remote.get(&last_path) {
+            Ok(_) => {}
+            Err(e) if e.is::<NotFound>() => {
+                let (re_pushed, re_max_seq) =
+                    push_ops_after(conn, db_key, sync_key, remote, &device_id, &ops_dir, 0)?;
+                if re_pushed > 0 {
+                    kv_set_i64(conn, &last_pushed_key, re_max_seq)?;
+                }
+                return Ok(re_pushed);
+            }
+            Err(e) => return Err(e),
         }
     }
 
-    if pushed > 0 {
-        kv_set_i64(conn, "sync.last_pushed_seq", max_seq)?;
-    }
-
-    Ok(pushed)
+    Ok(0)
 }
 
 pub fn pull(
@@ -197,6 +263,7 @@ pub fn pull(
 ) -> Result<u64> {
     let local_device_id = get_or_create_device_id(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
+    let scope_id = sync_scope_id(remote, &remote_root_dir);
 
     let mut applied: u64 = 0;
 
@@ -214,7 +281,7 @@ pub fn pull(
 
         let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
 
-        let last_pulled_key = format!("sync.last_pulled_seq:{device_id}");
+        let last_pulled_key = format!("sync.last_pulled_seq:{scope_id}:{device_id}");
         let last_pulled_seq = kv_get_i64(conn, &last_pulled_key)?.unwrap_or(0);
 
         let mut new_last_pulled = last_pulled_seq;

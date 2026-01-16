@@ -1,43 +1,39 @@
-import 'dart:typed_data';
-
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('loadConfiguredSync uses a single secure read (no readAll)', () async {
-    final storage = _CountingSecureStorage({});
+  test('macOS: falls back to legacy keychain when primary secure storage fails', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final storage = _MacOsSplitSecureStorage();
     final store = SyncConfigStore(storage: storage);
 
-    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
-    await store.writeRemoteRoot('SecondLoop');
     await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeAutoEnabled(true);
+    await store.writeRemoteRoot('SecondLoop');
     await store.writeWebdavBaseUrl('https://example.com/dav');
-
-    storage.readCalls = 0;
-    storage.readAllCalls = 0;
+    await store.writeWebdavUsername('u');
+    await store.writeWebdavPassword('p');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
 
     final config = await store.loadConfiguredSync();
-
     expect(config, isNotNull);
     expect(config!.backendType, SyncBackendType.webdav);
     expect(config.baseUrl, 'https://example.com/dav');
     expect(config.remoteRoot, 'SecondLoop');
-
-    expect(storage.readCalls, 1);
-    expect(storage.readAllCalls, 0);
   });
 }
 
-final class _CountingSecureStorage extends FlutterSecureStorage {
-  _CountingSecureStorage(this._values);
+final class _MacOsSplitSecureStorage extends FlutterSecureStorage {
+  final Map<String, String> _legacy = {};
 
-  final Map<String, String> _values;
-
-  int readCalls = 0;
-  int readAllCalls = 0;
+  bool _isLegacy(MacOsOptions? mOptions) => mOptions != null;
 
   @override
   Future<String?> read({
@@ -49,8 +45,8 @@ final class _CountingSecureStorage extends FlutterSecureStorage {
     MacOsOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    readCalls += 1;
-    return _values[key];
+    if (_isLegacy(mOptions)) return _legacy[key];
+    return null;
   }
 
   @override
@@ -64,11 +60,16 @@ final class _CountingSecureStorage extends FlutterSecureStorage {
     MacOsOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    if (value == null) {
-      _values.remove(key);
+    if (_isLegacy(mOptions)) {
+      final v = value;
+      if (v == null) {
+        _legacy.remove(key);
+        return;
+      }
+      _legacy[key] = v;
       return;
     }
-    _values[key] = value;
+    throw PlatformException(code: 'secure_storage_failed');
   }
 
   @override
@@ -81,19 +82,8 @@ final class _CountingSecureStorage extends FlutterSecureStorage {
     MacOsOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
-    _values.remove(key);
-  }
-
-  @override
-  Future<Map<String, String>> readAll({
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    readAllCalls += 1;
-    return Map<String, String>.from(_values);
+    if (_isLegacy(mOptions)) {
+      _legacy.remove(key);
+    }
   }
 }

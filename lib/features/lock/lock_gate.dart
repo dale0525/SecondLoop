@@ -33,9 +33,6 @@ class _LockGateState extends State<LockGate> {
     final isSet = await backend.isMasterPasswordSet();
     if (!isSet) return const _GateBootstrapResult.needsSetup();
 
-    final autoUnlock = await backend.readAutoUnlockEnabled();
-    if (!autoUnlock) return const _GateBootstrapResult.needsUnlock();
-
     final savedKey = await backend.loadSavedSessionKey();
     if (savedKey == null) return const _GateBootstrapResult.needsUnlock();
 

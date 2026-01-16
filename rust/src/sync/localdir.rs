@@ -26,16 +26,23 @@ fn virtual_to_local(root: &Path, virtual_path: &str) -> PathBuf {
 #[derive(Clone, Debug)]
 pub struct LocalDirRemoteStore {
     root: PathBuf,
+    target_id: String,
 }
 
 impl LocalDirRemoteStore {
     pub fn new(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root)?;
-        Ok(Self { root })
+        let canonical = root.canonicalize().unwrap_or_else(|_| root.clone());
+        let target_id = format!("localdir:{}", canonical.to_string_lossy());
+        Ok(Self { root, target_id })
     }
 }
 
 impl super::RemoteStore for LocalDirRemoteStore {
+    fn target_id(&self) -> &str {
+        &self.target_id
+    }
+
     fn mkdir_all(&self, path: &str) -> Result<()> {
         let dir = normalize_dir(path);
         if dir == "/" {
@@ -102,4 +109,3 @@ impl super::RemoteStore for LocalDirRemoteStore {
         Ok(())
     }
 }
-

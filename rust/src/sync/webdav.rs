@@ -143,6 +143,7 @@ pub fn parse_propfind_multistatus(
 
 pub struct WebDavRemoteStore {
     client: Client,
+    target_id: String,
     base_url: String,
     base_path: String,
     username: Option<String>,
@@ -161,8 +162,17 @@ impl WebDavRemoteStore {
             base_path.push('/');
         }
 
+        let mut sanitized = parsed;
+        let _ = sanitized.set_username("");
+        let _ = sanitized.set_password(None);
+        sanitized.set_query(None);
+        sanitized.set_fragment(None);
+        sanitized.set_path(&base_path);
+        let target_id = format!("webdav:{sanitized}");
+
         Ok(Self {
             client: Client::new(),
+            target_id,
             base_url,
             base_path,
             username,
@@ -186,9 +196,47 @@ impl WebDavRemoteStore {
     pub fn base_path(&self) -> &str {
         &self.base_path
     }
+
+    pub fn ensure_dir_exists(&self, dir: &str) -> Result<()> {
+        let dir = normalize_dir(dir);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("Depth", HeaderValue::from_static("0"));
+        headers.insert("Content-Type", HeaderValue::from_static("application/xml"));
+
+        let body = r#"
+<?xml version="1.0" encoding="utf-8" ?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:resourcetype/>
+  </d:prop>
+</d:propfind>
+"#;
+
+        let req = self
+            .request(Method::from_bytes(b"PROPFIND")?, &dir)?
+            .headers(headers)
+            .body(body);
+        let resp = req.send()?;
+
+        if resp.status().as_u16() == 404 {
+            return Err(anyhow!("remote folder not found: {dir}"));
+        }
+        if !resp.status().is_success() && resp.status().as_u16() != 207 {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            return Err(anyhow!("PROPFIND failed: HTTP {status} {body}"));
+        }
+
+        Ok(())
+    }
 }
 
 impl super::RemoteStore for WebDavRemoteStore {
+    fn target_id(&self) -> &str {
+        &self.target_id
+    }
+
     fn mkdir_all(&self, path: &str) -> Result<()> {
         let dir = normalize_dir(path);
         if dir == "/" {

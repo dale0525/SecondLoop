@@ -290,6 +290,7 @@ pub fn sync_webdav_test_connection(
 ) -> Result<()> {
     let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
     remote.mkdir_all(&remote_root)?;
+    remote.ensure_dir_exists(&remote_root)?;
     let _ = remote.list(&remote_root)?;
     Ok(())
 }

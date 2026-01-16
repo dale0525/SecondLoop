@@ -79,16 +79,18 @@ class NativeAppBackend implements AppBackend {
     } on MissingPluginException {
       return;
     } on PlatformException {
-      if (defaultTargetPlatform != TargetPlatform.macOS) return;
-      try {
-        await _secureStorage.write(
-          key: key,
-          value: value,
-          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
-        );
-      } catch (_) {
-        return;
-      }
+      // Fall through and try legacy storage below.
+    }
+
+    if (defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      await _secureStorage.write(
+        key: key,
+        value: value,
+        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
+      );
+    } catch (_) {
+      return;
     }
   }
 
@@ -98,7 +100,7 @@ class NativeAppBackend implements AppBackend {
     } on MissingPluginException {
       return;
     } on PlatformException {
-      // Ignore and try legacy as well.
+      // Fall through and try legacy storage below.
     }
 
     if (defaultTargetPlatform != TargetPlatform.macOS) return;

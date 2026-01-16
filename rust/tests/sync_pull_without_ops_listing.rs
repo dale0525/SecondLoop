@@ -20,6 +20,10 @@ impl CachedListingRemote {
 }
 
 impl sync::RemoteStore for CachedListingRemote {
+    fn target_id(&self) -> &str {
+        self.inner.target_id()
+    }
+
     fn mkdir_all(&self, path: &str) -> anyhow::Result<()> {
         self.inner.mkdir_all(path)
     }

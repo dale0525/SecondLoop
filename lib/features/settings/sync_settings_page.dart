@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,15 +8,23 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/sync/sync_engine_gate.dart';
 
 class SyncSettingsPage extends StatefulWidget {
-  const SyncSettingsPage({super.key});
+  const SyncSettingsPage({
+    super.key,
+    this.configStore,
+  });
+
+  final SyncConfigStore? configStore;
 
   @override
   State<SyncSettingsPage> createState() => _SyncSettingsPageState();
 }
 
 class _SyncSettingsPageState extends State<SyncSettingsPage> {
+  static const _kPassphrasePlaceholder = '********';
+
   final _baseUrlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -24,8 +33,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   final _syncPassphraseController = TextEditingController();
 
   bool _busy = false;
+  bool _passphraseIsPlaceholder = false;
 
-  final SyncConfigStore _store = SyncConfigStore();
+  late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
@@ -48,13 +58,19 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   }
 
   Future<void> _load() async {
-    final backendType = await _store.readBackendType();
-    final autoEnabled = await _store.readAutoEnabled();
-    final baseUrl = await _store.readWebdavBaseUrl();
-    final username = await _store.readWebdavUsername();
-    final password = await _store.readWebdavPassword();
-    final remoteRoot = await _store.readRemoteRoot();
-    final localDir = await _store.readLocalDir();
+    final all = await _store.readAll();
+    final backendType = switch (all[SyncConfigStore.kBackendType]) {
+      'localdir' => SyncBackendType.localDir,
+      _ => SyncBackendType.webdav,
+    };
+    final autoValue = all[SyncConfigStore.kAutoEnabled];
+    final autoEnabled = autoValue == null ? true : autoValue == '1';
+    final baseUrl = all[SyncConfigStore.kWebdavBaseUrl];
+    final username = all[SyncConfigStore.kWebdavUsername];
+    final password = all[SyncConfigStore.kWebdavPassword];
+    final remoteRoot = all[SyncConfigStore.kRemoteRoot];
+    final localDir = all[SyncConfigStore.kLocalDir];
+    final hasSyncKey = (all[SyncConfigStore.kSyncKeyB64] ?? '').isNotEmpty;
 
     if (!mounted) return;
     setState(() {
@@ -65,6 +81,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       _passwordController.text = password ?? '';
       _remoteRootController.text = remoteRoot ?? _remoteRootController.text;
       _localDirController.text = localDir ?? '';
+      if (hasSyncKey) {
+        _syncPassphraseController.text = _kPassphrasePlaceholder;
+        _passphraseIsPlaceholder = true;
+      }
     });
   }
 
@@ -79,8 +99,65 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     return v.isEmpty ? null : v;
   }
 
+  Future<bool> _persistBackendConfig() async {
+    final remoteRoot = _requiredTrimmed(_remoteRootController);
+    if (remoteRoot.isEmpty) {
+      _showSnack('Remote root is required');
+      return false;
+    }
+
+    await _store.writeBackendType(_backendType);
+    await _store.writeAutoEnabled(_autoEnabled);
+    await _store.writeRemoteRoot(remoteRoot);
+
+    switch (_backendType) {
+      case SyncBackendType.webdav:
+        final baseUrl = _requiredTrimmed(_baseUrlController);
+        if (baseUrl.isEmpty) {
+          _showSnack('Base URL is required');
+          return false;
+        }
+        await _store.writeWebdavBaseUrl(baseUrl);
+        await _store.writeWebdavUsername(_optionalTrimmed(_usernameController));
+        await _store.writeWebdavPassword(_optionalTrimmed(_passwordController));
+        break;
+      case SyncBackendType.localDir:
+        final localDir = _requiredTrimmed(_localDirController);
+        if (localDir.isEmpty) {
+          _showSnack('Local directory is required');
+          return false;
+        }
+        await _store.writeLocalDir(localDir);
+        break;
+    }
+
+    return true;
+  }
+
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _runConnectionTest() async {
+    final backend = AppBackendScope.of(context);
+    final remoteRoot = _requiredTrimmed(_remoteRootController);
+
+    switch (_backendType) {
+      case SyncBackendType.webdav:
+        await backend.syncWebdavTestConnection(
+          baseUrl: _requiredTrimmed(_baseUrlController),
+          username: _optionalTrimmed(_usernameController),
+          password: _optionalTrimmed(_passwordController),
+          remoteRoot: remoteRoot,
+        );
+        break;
+      case SyncBackendType.localDir:
+        await backend.syncLocaldirTestConnection(
+          localDir: _requiredTrimmed(_localDirController),
+          remoteRoot: remoteRoot,
+        );
+        break;
+    }
   }
 
   Future<void> _save() async {
@@ -90,80 +167,33 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     try {
       final backend = AppBackendScope.of(context);
 
-      final remoteRoot = _requiredTrimmed(_remoteRootController);
-      if (remoteRoot.isEmpty) {
-        _showSnack('Remote root is required');
-        return;
-      }
-
-      await _store.writeBackendType(_backendType);
-      await _store.writeAutoEnabled(_autoEnabled);
-      await _store.writeRemoteRoot(remoteRoot);
-
-      switch (_backendType) {
-        case SyncBackendType.webdav:
-          final baseUrl = _requiredTrimmed(_baseUrlController);
-          if (baseUrl.isEmpty) {
-            _showSnack('Base URL is required');
-            return;
-          }
-          await _store.writeWebdavBaseUrl(baseUrl);
-          await _store.writeWebdavUsername(_optionalTrimmed(_usernameController));
-          await _store.writeWebdavPassword(_optionalTrimmed(_passwordController));
-          break;
-        case SyncBackendType.localDir:
-          final localDir = _requiredTrimmed(_localDirController);
-          if (localDir.isEmpty) {
-            _showSnack('Local directory is required');
-            return;
-          }
-          await _store.writeLocalDir(localDir);
-          break;
-      }
+      final persisted = await _persistBackendConfig();
+      if (!persisted) return;
 
       final passphrase = _optionalTrimmed(_syncPassphraseController);
-      if (passphrase != null) {
+      if (passphrase != null && !_passphraseIsPlaceholder) {
         final derived = await backend.deriveSyncKey(passphrase);
         await _store.writeSyncKey(derived);
-        _syncPassphraseController.clear();
+        _syncPassphraseController.text = _kPassphrasePlaceholder;
+        _passphraseIsPlaceholder = true;
       }
 
-      await BackgroundSync.refreshSchedule(backend: backend);
-      _showSnack('Saved');
+      unawaited(BackgroundSync.refreshSchedule(backend: backend, configStore: _store));
+
+      try {
+        await _runConnectionTest();
+        if (!mounted) return;
+        _showSnack('Connection OK');
+        final engine = SyncEngineScope.maybeOf(context);
+        engine?.start();
+        engine?.triggerPullNow();
+        engine?.triggerPushNow();
+      } catch (e) {
+        if (!mounted) return;
+        _showSnack('Connection failed: $e');
+      }
     } catch (e) {
       _showSnack('Save failed: $e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _testConnection() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-
-    try {
-      final backend = AppBackendScope.of(context);
-      final remoteRoot = _requiredTrimmed(_remoteRootController);
-
-      switch (_backendType) {
-        case SyncBackendType.webdav:
-          await backend.syncWebdavTestConnection(
-            baseUrl: _requiredTrimmed(_baseUrlController),
-            username: _optionalTrimmed(_usernameController),
-            password: _optionalTrimmed(_passwordController),
-            remoteRoot: remoteRoot,
-          );
-          break;
-        case SyncBackendType.localDir:
-          await backend.syncLocaldirTestConnection(
-            localDir: _requiredTrimmed(_localDirController),
-            remoteRoot: remoteRoot,
-          );
-          break;
-      }
-      _showSnack('Connection OK');
-    } catch (e) {
-      _showSnack('Connection failed: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -177,13 +207,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
 
+      final persisted = await _persistBackendConfig();
+      if (!persisted) return;
+
       final syncKey = await _loadSyncKey();
       if (syncKey == null || syncKey.length != 32) {
         _showSnack('Missing sync key. Enter a passphrase and Save first.');
         return;
       }
 
-      final pushed = switch (_backendType) {
+      final pushed = await (switch (_backendType) {
         SyncBackendType.webdav => backend.syncWebdavPush(
             sessionKey,
             syncKey,
@@ -198,7 +231,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             localDir: _requiredTrimmed(_localDirController),
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
-      };
+      });
       _showSnack('Pushed $pushed ops');
     } catch (e) {
       _showSnack('Push failed: $e');
@@ -215,13 +248,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
 
+      final persisted = await _persistBackendConfig();
+      if (!persisted) return;
+
       final syncKey = await _loadSyncKey();
       if (syncKey == null || syncKey.length != 32) {
         _showSnack('Missing sync key. Enter a passphrase and Save first.');
         return;
       }
 
-      final pulled = switch (_backendType) {
+      final pulled = await (switch (_backendType) {
         SyncBackendType.webdav => backend.syncWebdavPull(
             sessionKey,
             syncKey,
@@ -236,7 +272,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             localDir: _requiredTrimmed(_localDirController),
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
-      };
+      });
       _showSnack('Pulled $pulled ops');
     } catch (e) {
       _showSnack('Pull failed: $e');
@@ -316,6 +352,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
             enabled: !_busy && _backendType == SyncBackendType.webdav,
             obscureText: true,
+            obscuringCharacter: '*',
           ),
           const SizedBox(height: 12),
           TextField(
@@ -345,16 +382,22 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
             enabled: !_busy,
             obscureText: true,
+            obscuringCharacter: '*',
+            onTap: _passphraseIsPlaceholder
+                ? () {
+                    _syncPassphraseController.clear();
+                    setState(() => _passphraseIsPlaceholder = false);
+                  }
+                : null,
+            onChanged: (_) {
+              if (!_passphraseIsPlaceholder) return;
+              setState(() => _passphraseIsPlaceholder = false);
+            },
           ),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: _busy ? null : _save,
             child: const Text('Save'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: _busy ? null : _testConnection,
-            child: const Text('Test connection'),
           ),
           const SizedBox(height: 12),
           Row(

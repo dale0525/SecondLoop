@@ -45,13 +45,15 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
       case AppLifecycleState.resumed:
         engine.start();
         engine.triggerPullNow();
+        engine.triggerPushNow();
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
-        // Best-effort: keep the engine running in background; on mobile the OS may suspend
-        // timers anyway. Real background scheduling is handled separately.
+        // Best-effort: try a last-minute push before we lose foreground time; on mobile the OS
+        // may suspend timers anyway. Real background scheduling is handled separately.
+        engine.triggerPushNow();
         break;
     }
   }
@@ -72,17 +74,15 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     final runner = _AppBackendSyncRunner(backend: backend, sessionKey: sessionKey);
     final engine = SyncEngine(
       syncRunner: runner,
-      loadConfig: () async {
-        final enabled = await _configStore.readAutoEnabled();
-        if (!enabled) return null;
-        return _configStore.loadConfiguredSync();
-      },
+      loadConfig: _configStore.loadConfiguredSyncIfAutoEnabled,
       pushDebounce: const Duration(seconds: 2),
       pullInterval: const Duration(seconds: 20),
       pullJitter: const Duration(seconds: 5),
       pullOnStart: true,
     );
     engine.start();
+    engine.triggerPullNow();
+    engine.triggerPushNow();
 
     _backendIdentity = backend;
     _sessionKey = Uint8List.fromList(sessionKey);
