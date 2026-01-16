@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../src/rust/db.dart';
 
@@ -27,6 +28,33 @@ class _ChatPageState extends State<ChatPage> {
   String _streamingAnswer = '';
   String? _askError;
   StreamSubscription<String>? _askSub;
+  SyncEngine? _syncEngine;
+  VoidCallback? _syncListener;
+
+  void _attachSyncEngine() {
+    final engine = SyncEngineScope.maybeOf(context);
+    if (identical(engine, _syncEngine)) return;
+
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
+
+    _syncEngine = engine;
+    if (engine == null) {
+      _syncListener = null;
+      return;
+    }
+
+    void onSyncChange() {
+      if (!mounted) return;
+      _refresh();
+    }
+
+    _syncListener = onSyncChange;
+    engine.changes.addListener(onSyncChange);
+  }
 
   Future<void> _showMessageActions(Message message) async {
     if (message.id.startsWith('pending_')) return;
@@ -139,6 +167,11 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
     _askSub?.cancel();
     _controller.dispose();
     super.dispose();
@@ -272,6 +305,7 @@ class _ChatPageState extends State<ChatPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
+    _attachSyncEngine();
   }
 
   @override

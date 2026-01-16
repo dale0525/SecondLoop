@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
+
 enum SyncBackendType {
   webdav,
   localDir,
@@ -86,6 +88,9 @@ final class SyncEngine {
   final bool pullOnStart;
   final Random _random;
 
+  final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
+  Listenable get changes => _changeCounter;
+
   bool get isRunning => _running;
 
   bool _running = false;
@@ -118,6 +123,10 @@ final class SyncEngine {
 
     _pushQueued = false;
     _pullQueued = false;
+  }
+
+  void _notifyChange() {
+    _changeCounter.value++;
   }
 
   void notifyLocalMutation() {
@@ -199,7 +208,10 @@ final class SyncEngine {
     try {
       final config = await loadConfig();
       if (!_running || config == null) return;
-      await syncRunner.pull(config);
+      final applied = await syncRunner.pull(config);
+      if (applied > 0) {
+        _notifyChange();
+      }
     } catch (_) {
       // Best-effort: avoid crashing the app on transient sync errors.
     }
