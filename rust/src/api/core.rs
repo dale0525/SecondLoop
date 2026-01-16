@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
-use crate::{auth, db};
 use crate::crypto::{derive_root_key, KdfParams};
-use crate::{llm, rag};
 use crate::frb_generated::StreamSink;
 use crate::sync;
 use crate::sync::RemoteStore;
+use crate::{auth, db};
+use crate::{llm, rag};
+use anyhow::{anyhow, Result};
 
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     if bytes.len() != 32 {
@@ -102,7 +102,12 @@ pub fn db_insert_message(
 }
 
 #[flutter_rust_bridge::frb]
-pub fn db_edit_message(app_dir: String, key: Vec<u8>, message_id: String, content: String) -> Result<()> {
+pub fn db_edit_message(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    content: String,
+) -> Result<()> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::edit_message(&conn, &key, &message_id, &content)
@@ -153,11 +158,7 @@ pub fn db_list_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Llm
 }
 
 #[flutter_rust_bridge::frb]
-pub fn db_set_active_llm_profile(
-    app_dir: String,
-    key: Vec<u8>,
-    profile_id: String,
-) -> Result<()> {
+pub fn db_set_active_llm_profile(app_dir: String, key: Vec<u8>, profile_id: String) -> Result<()> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::set_active_llm_profile(&conn, &profile_id)

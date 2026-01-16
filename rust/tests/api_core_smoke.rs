@@ -12,12 +12,12 @@ fn api_core_smoke_happy_path() {
         .expect("init master password");
     assert_eq!(key.len(), 32);
 
-    let key2 = core::auth_unlock_with_password(app_dir.clone(), "pw".to_string())
-        .expect("unlock");
+    let key2 = core::auth_unlock_with_password(app_dir.clone(), "pw".to_string()).expect("unlock");
     assert_eq!(key, key2);
 
-    let conversation = core::db_create_conversation(app_dir.clone(), key.clone(), "Inbox".to_string())
-        .expect("create conversation");
+    let conversation =
+        core::db_create_conversation(app_dir.clone(), key.clone(), "Inbox".to_string())
+            .expect("create conversation");
     let _message = core::db_insert_message(
         app_dir.clone(),
         key.clone(),
@@ -37,8 +37,8 @@ fn api_core_smoke_happy_path() {
     assert_eq!(similar.len(), 1);
     assert_eq!(similar[0].message.content, "hello");
 
-    let rebuilt = core::db_rebuild_message_embeddings(app_dir.clone(), key.clone(), 100)
-        .expect("rebuild");
+    let rebuilt =
+        core::db_rebuild_message_embeddings(app_dir.clone(), key.clone(), 100).expect("rebuild");
     assert_eq!(rebuilt, 1);
 
     let similar_after =

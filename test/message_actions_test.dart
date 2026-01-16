@@ -61,7 +61,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_edit')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('edit_message_content')), 'updated');
+    await tester.enterText(
+        find.byKey(const ValueKey('edit_message_content')), 'updated');
     await tester.tap(find.byKey(const ValueKey('edit_message_save')));
     await tester.pumpAndSettle();
 
@@ -144,7 +145,8 @@ class MessageActionsBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       List<Message>.from(_messages);
 
   @override
@@ -157,7 +159,8 @@ class MessageActionsBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async {
+  Future<void> editMessage(
+      Uint8List key, String messageId, String content) async {
     editedMessageIds.add(messageId);
     for (var i = 0; i < _messages.length; i++) {
       if (_messages[i].id == messageId) {
@@ -174,7 +177,8 @@ class MessageActionsBackend implements AppBackend {
   }
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted) async {
     deletedMessageIds.add(messageId);
     _messages.removeWhere((m) => m.id == messageId);
   }
@@ -202,7 +206,8 @@ class MessageActionsBackend implements AppBackend {
       0;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(

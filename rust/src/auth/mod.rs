@@ -25,7 +25,11 @@ pub fn is_initialized(app_dir: &Path) -> bool {
     auth_file_path(app_dir).exists()
 }
 
-pub fn init_master_password(app_dir: &Path, password: &str, kdf_params: KdfParams) -> Result<[u8; 32]> {
+pub fn init_master_password(
+    app_dir: &Path,
+    password: &str,
+    kdf_params: KdfParams,
+) -> Result<[u8; 32]> {
     if is_initialized(app_dir) {
         return Err(anyhow!("master password already initialized"));
     }
@@ -90,4 +94,3 @@ pub fn validate_key(app_dir: &Path, key: &[u8; 32]) -> Result<()> {
 
     Ok(())
 }
-

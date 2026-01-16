@@ -1,7 +1,7 @@
 use anyhow::Result;
-use secondloop_rust::{auth, db};
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::embedding::{Embedder, DEFAULT_EMBED_DIM};
+use secondloop_rust::{auth, db};
 use zerocopy::IntoBytes;
 
 #[derive(Clone, Debug, Default)]
@@ -49,11 +49,10 @@ fn vector_search_topk() {
     let _m2 = db::insert_message(&conn, &key, &conversation.id, "user", "apple pie").expect("m2");
     let _m3 = db::insert_message(&conn, &key, &conversation.id, "user", "banana").expect("m3");
 
-    let embedder = TestEmbedder::default();
+    let embedder = TestEmbedder;
     db::process_pending_message_embeddings(&conn, &key, &embedder, 100).expect("index");
 
-    let results = db::search_similar_messages(&conn, &key, &embedder, "apple", 2)
-        .expect("search");
+    let results = db::search_similar_messages(&conn, &key, &embedder, "apple", 2).expect("search");
     assert_eq!(results.len(), 2);
     assert_eq!(results[0].message.content, "apple");
     assert_eq!(results[1].message.content, "apple pie");
@@ -73,7 +72,7 @@ fn vector_search_ignores_other_model() {
     let _m2 = db::insert_message(&conn, &key, &conversation.id, "user", "apple pie").expect("m2");
     let m3 = db::insert_message(&conn, &key, &conversation.id, "user", "banana").expect("m3");
 
-    let embedder = TestEmbedder::default();
+    let embedder = TestEmbedder;
     db::process_pending_message_embeddings(&conn, &key, &embedder, 100).expect("index");
 
     // Poison one row with a different model_name to simulate another embedding space.
@@ -93,8 +92,7 @@ fn vector_search_ignores_other_model() {
     )
     .expect("insert other-model row");
 
-    let results = db::search_similar_messages(&conn, &key, &embedder, "apple", 2)
-        .expect("search");
+    let results = db::search_similar_messages(&conn, &key, &embedder, "apple", 2).expect("search");
     assert_eq!(results.len(), 2);
     assert_eq!(results[0].message.content, "apple");
     assert_eq!(results[1].message.content, "apple pie");

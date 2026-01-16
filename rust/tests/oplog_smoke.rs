@@ -13,8 +13,8 @@ fn oplog_records_local_writes_and_is_encrypted_at_rest() {
     let conn = db::open(&app_dir).expect("open db");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
-    let message = db::insert_message(&conn, &key, &conversation.id, "user", "hello")
-        .expect("insert message");
+    let message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
 
     let device_id: String = conn
         .query_row(
@@ -57,13 +57,22 @@ fn oplog_records_local_writes_and_is_encrypted_at_rest() {
 
         match value["type"].as_str().unwrap_or_default() {
             "conversation.upsert.v1" => {
-                assert_eq!(value["payload"]["conversation_id"].as_str(), Some(conversation.id.as_str()));
+                assert_eq!(
+                    value["payload"]["conversation_id"].as_str(),
+                    Some(conversation.id.as_str())
+                );
                 assert_eq!(value["payload"]["title"].as_str(), Some("Inbox"));
                 seen_conversation_op = true;
             }
             "message.insert.v1" => {
-                assert_eq!(value["payload"]["message_id"].as_str(), Some(message.id.as_str()));
-                assert_eq!(value["payload"]["conversation_id"].as_str(), Some(conversation.id.as_str()));
+                assert_eq!(
+                    value["payload"]["message_id"].as_str(),
+                    Some(message.id.as_str())
+                );
+                assert_eq!(
+                    value["payload"]["conversation_id"].as_str(),
+                    Some(conversation.id.as_str())
+                );
                 assert_eq!(value["payload"]["role"].as_str(), Some("user"));
                 assert_eq!(value["payload"]["content"].as_str(), Some("hello"));
                 seen_message_op = true;
@@ -83,6 +92,10 @@ fn oplog_records_local_writes_and_is_encrypted_at_rest() {
             |row| row.get(0),
         )
         .expect("select stored oplog payload");
-    assert!(!stored.windows(b"\"hello\"".len()).any(|w| w == b"\"hello\""));
-    assert!(!stored.windows(b"\"Inbox\"".len()).any(|w| w == b"\"Inbox\""));
+    assert!(!stored
+        .windows(b"\"hello\"".len())
+        .any(|w| w == b"\"hello\""));
+    assert!(!stored
+        .windows(b"\"Inbox\"".len())
+        .any(|w| w == b"\"Inbox\""));
 }

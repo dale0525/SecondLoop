@@ -8,7 +8,8 @@ class SemanticSearchDebugPage extends StatefulWidget {
   const SemanticSearchDebugPage({super.key});
 
   @override
-  State<SemanticSearchDebugPage> createState() => _SemanticSearchDebugPageState();
+  State<SemanticSearchDebugPage> createState() =>
+      _SemanticSearchDebugPageState();
 }
 
 class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
@@ -35,7 +36,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     try {
       final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
-      final processed = await backend.processPendingMessageEmbeddings(key, limit: 1024);
+      final processed =
+          await backend.processPendingMessageEmbeddings(key, limit: 1024);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Processed $processed pending embeddings')),
@@ -58,7 +60,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     try {
       final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
-      final rebuilt = await backend.rebuildMessageEmbeddings(key, batchLimit: 1024);
+      final rebuilt =
+          await backend.rebuildMessageEmbeddings(key, batchLimit: 1024);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Rebuilt embeddings for $rebuilt messages')),
@@ -83,7 +86,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     try {
       final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
-      final results = await backend.searchSimilarMessages(key, query, topK: _topK);
+      final results =
+          await backend.searchSimilarMessages(key, query, topK: _topK);
       if (!mounted) return;
       setState(() => _results = results);
     } catch (e) {
@@ -126,7 +130,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                         DropdownMenuItem(value: 10, child: Text('10')),
                         DropdownMenuItem(value: 20, child: Text('20')),
                       ],
-                      onChanged: _busy ? null : (v) => setState(() => _topK = v ?? 10),
+                      onChanged:
+                          _busy ? null : (v) => setState(() => _topK = v ?? 10),
                     ),
                     const Spacer(),
                     FilledButton(
@@ -153,7 +158,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ],
               ],
@@ -185,4 +191,3 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     );
   }
 }
-

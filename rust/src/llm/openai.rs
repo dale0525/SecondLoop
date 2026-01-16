@@ -3,8 +3,8 @@ use std::io::{BufRead, BufReader, Read};
 use anyhow::{anyhow, Result};
 use reqwest::blocking::Client;
 use reqwest::header;
-use serde::Serialize;
 use serde::Deserialize;
+use serde::Serialize;
 
 use super::ChatDelta;
 
@@ -72,7 +72,12 @@ pub struct OpenAiCompatibleProvider {
 }
 
 impl OpenAiCompatibleProvider {
-    pub fn new(base_url: String, api_key: String, model_name: String, temperature: Option<f32>) -> Self {
+    pub fn new(
+        base_url: String,
+        api_key: String,
+        model_name: String,
+        temperature: Option<f32>,
+    ) -> Self {
         Self {
             client: Client::new(),
             base_url,
@@ -124,9 +129,9 @@ impl crate::rag::AnswerProvider for OpenAiCompatibleProvider {
             .to_ascii_lowercase();
 
         if content_type.contains("text/event-stream") {
-            read_chat_completions_sse(&mut resp, |ev| on_event(ev))?;
+            read_chat_completions_sse(&mut resp, on_event)?;
         } else {
-            read_chat_completions_json(&mut resp, |ev| on_event(ev))?;
+            read_chat_completions_json(&mut resp, on_event)?;
         }
         Ok(())
     }

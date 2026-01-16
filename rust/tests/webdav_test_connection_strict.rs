@@ -24,9 +24,7 @@ fn read_http_headers(stream: &mut std::net::TcpStream) -> String {
 }
 
 fn respond(stream: &mut std::net::TcpStream, status_line: &str) {
-    let resp = format!(
-        "{status_line}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-    );
+    let resp = format!("{status_line}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
     let _ = stream.write_all(resp.as_bytes());
 }
 
@@ -65,4 +63,3 @@ fn webdav_test_connection_fails_if_root_still_missing_after_mkdir() {
 
     let _ = server.join();
 }
-

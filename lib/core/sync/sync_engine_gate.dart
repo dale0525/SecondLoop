@@ -71,7 +71,8 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
 
     _engine?.stop();
 
-    final runner = _AppBackendSyncRunner(backend: backend, sessionKey: sessionKey);
+    final runner =
+        _AppBackendSyncRunner(backend: backend, sessionKey: sessionKey);
     final engine = SyncEngine(
       syncRunner: runner,
       loadConfig: _configStore.loadConfiguredSyncIfAutoEnabled,
@@ -117,11 +118,14 @@ final class SyncEngineScope extends InheritedWidget {
   final SyncEngine? engine;
 
   static SyncEngine? maybeOf(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType<SyncEngineScope>()?.engine;
+    return context
+        .dependOnInheritedWidgetOfExactType<SyncEngineScope>()
+        ?.engine;
   }
 
   @override
-  bool updateShouldNotify(SyncEngineScope oldWidget) => engine != oldWidget.engine;
+  bool updateShouldNotify(SyncEngineScope oldWidget) =>
+      engine != oldWidget.engine;
 }
 
 final class _AppBackendSyncRunner implements SyncRunner {

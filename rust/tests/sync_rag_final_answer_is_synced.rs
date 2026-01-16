@@ -39,8 +39,8 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     let key_a =
         auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
     let conn_a = db::open(&app_dir_a).expect("open A db");
-    let conversation = db::get_or_create_main_stream_conversation(&conn_a, &key_a)
-        .expect("main stream");
+    let conversation =
+        db::get_or_create_main_stream_conversation(&conn_a, &key_a).expect("main stream");
 
     let provider = OkProvider;
     rag::ask_ai_with_provider(
@@ -60,8 +60,12 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     assert_eq!(assistant_a.role, "assistant");
     assert_eq!(assistant_a.content, "OK");
 
-    let sync_key = derive_root_key("sync-passphrase", b"secondloop-sync1", &KdfParams::for_test())
-        .expect("derive sync key");
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
 
     sync::push(&conn_a, &key_a, &sync_key, &remote, remote_root).expect("push A");
 
@@ -78,4 +82,3 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     assert_eq!(assistant_b.id, assistant_a.id);
     assert_eq!(assistant_b.content, "OK");
 }
-

@@ -132,7 +132,8 @@ class _ChatPageState extends State<ChatPage> {
       messenger.showSnackBar(const SnackBar(content: Text('Message deleted')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     }
   }
 
@@ -312,8 +313,8 @@ class _ChatPageState extends State<ChatPage> {
 
                 final messages = snapshot.data ?? const <Message>[];
                 final pendingQuestion = _pendingQuestion;
-                final extraCount =
-                    (pendingQuestion == null ? 0 : 1) + (_asking && !_stopRequested ? 1 : 0);
+                final extraCount = (pendingQuestion == null ? 0 : 1) +
+                    (_asking && !_stopRequested ? 1 : 0);
                 if (messages.isEmpty && extraCount == 0) {
                   return const Center(child: Text('No messages yet'));
                 }
@@ -340,7 +341,10 @@ class _ChatPageState extends State<ChatPage> {
                         }
                         extraIndex -= 1;
                       }
-                      if (msg == null && _asking && !_stopRequested && extraIndex == 0) {
+                      if (msg == null &&
+                          _asking &&
+                          !_stopRequested &&
+                          extraIndex == 0) {
                         msg = Message(
                           id: 'pending_assistant',
                           conversationId: widget.conversation.id,
@@ -348,7 +352,8 @@ class _ChatPageState extends State<ChatPage> {
                           content: '',
                           createdAtMs: 0,
                         );
-                        textOverride = _streamingAnswer.isEmpty ? '…' : _streamingAnswer;
+                        textOverride =
+                            _streamingAnswer.isEmpty ? '…' : _streamingAnswer;
                       }
                     }
 

@@ -83,15 +83,18 @@ final class _MainStreamTabState extends State<_MainStreamTab> {
       future: _conversationFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
         }
         if (snapshot.hasError) {
-          return Scaffold(body: Center(child: Text('Load failed: ${snapshot.error}')));
+          return Scaffold(
+              body: Center(child: Text('Load failed: ${snapshot.error}')));
         }
 
         final conversation = snapshot.data;
         if (conversation == null) {
-          return const Scaffold(body: Center(child: Text('Missing Main Stream')));
+          return const Scaffold(
+              body: Center(child: Text('Missing Main Stream')));
         }
         return ChatPage(conversation: conversation);
       },

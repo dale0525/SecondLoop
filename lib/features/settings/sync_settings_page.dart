@@ -92,7 +92,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     return _store.readSyncKey();
   }
 
-  String _requiredTrimmed(TextEditingController controller) => controller.text.trim();
+  String _requiredTrimmed(TextEditingController controller) =>
+      controller.text.trim();
 
   String? _optionalTrimmed(TextEditingController controller) {
     final v = controller.text.trim();
@@ -135,7 +136,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _runConnectionTest() async {
@@ -178,7 +180,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         _passphraseIsPlaceholder = true;
       }
 
-      unawaited(BackgroundSync.refreshSchedule(backend: backend, configStore: _store));
+      unawaited(BackgroundSync.refreshSchedule(
+          backend: backend, configStore: _store));
 
       try {
         await _runConnectionTest();
@@ -292,7 +295,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         children: [
           SwitchListTile(
             title: const Text('Auto sync'),
-            subtitle: const Text('Foreground debounced push + background periodic sync (mobile)'),
+            subtitle: const Text(
+                'Foreground debounced push + background periodic sync (mobile)'),
             value: _autoEnabled,
             onChanged: _busy
                 ? null
@@ -360,7 +364,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             decoration: const InputDecoration(
               labelText: 'Local directory path',
               hintText: '/Users/me/SecondLoopVault',
-              helperText: 'Best for desktop; mobile platforms may not support this path.',
+              helperText:
+                  'Best for desktop; mobile platforms may not support this path.',
             ),
             enabled: !_busy && _backendType == SyncBackendType.localDir,
           ),

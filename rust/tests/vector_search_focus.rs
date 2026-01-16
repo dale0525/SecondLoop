@@ -1,5 +1,5 @@
-use secondloop_rust::{auth, db};
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::{auth, db};
 
 #[test]
 fn vector_search_can_be_scoped_to_conversation() {
@@ -21,16 +21,10 @@ fn vector_search_can_be_scoped_to_conversation() {
     assert_eq!(global[0].message.conversation_id, c2.id);
     assert_eq!(global[0].message.content, "apple pie");
 
-    let scoped = db::search_similar_messages_in_conversation_default(
-        &conn,
-        &key,
-        &c1.id,
-        "apple pie",
-        1,
-    )
-    .expect("scoped");
+    let scoped =
+        db::search_similar_messages_in_conversation_default(&conn, &key, &c1.id, "apple pie", 1)
+            .expect("scoped");
     assert_eq!(scoped.len(), 1);
     assert_eq!(scoped[0].message.conversation_id, c1.id);
     assert_eq!(scoped[0].message.content, "apple");
 }
-

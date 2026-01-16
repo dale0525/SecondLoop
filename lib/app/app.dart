@@ -34,7 +34,9 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
 
   @override
   void dispose() {
-    if (widget._quickCaptureController == null) _quickCaptureController.dispose();
+    if (widget._quickCaptureController == null) {
+      _quickCaptureController.dispose();
+    }
     super.dispose();
   }
 
@@ -51,18 +53,18 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
           home: const AppShell(),
           builder: (context, child) {
             return AppBootstrap(
-                child: DesktopQuickCaptureService(
-                  child: LockGate(
-                    child: SyncEngineGate(
-                      child: QuickCaptureOverlay(
-                        navigatorKey: _navigatorKey,
-                        child: child ?? const SizedBox.shrink(),
-                      ),
+              child: DesktopQuickCaptureService(
+                child: LockGate(
+                  child: SyncEngineGate(
+                    child: QuickCaptureOverlay(
+                      navigatorKey: _navigatorKey,
+                      child: child ?? const SizedBox.shrink(),
                     ),
                   ),
                 ),
-              );
-            },
+              ),
+            );
+          },
         ),
       ),
     );

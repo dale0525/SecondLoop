@@ -46,7 +46,9 @@ pub fn build_prompt(question: &str, contexts: &[String]) -> String {
         }
     }
 
-    out.push_str("\nAnswer the user's question. If the memories are irrelevant, answer normally.\n");
+    out.push_str(
+        "\nAnswer the user's question. If the memories are irrelevant, answer normally.\n",
+    );
     out.push_str("\nQuestion: ");
     out.push_str(question);
     out.push('\n');

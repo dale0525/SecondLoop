@@ -15,4 +15,3 @@ fn openai_chat_completions_url_is_joined_safely() {
         "https://example.com/chat/completions"
     );
 }
-

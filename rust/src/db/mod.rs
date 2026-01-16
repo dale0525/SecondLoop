@@ -193,7 +193,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
         if !has_needs_embedding {
             conn.execute_batch("ALTER TABLE messages ADD COLUMN needs_embedding INTEGER;")?;
         }
-        conn.execute_batch("UPDATE messages SET needs_embedding = 1 WHERE needs_embedding IS NULL;")?;
+        conn.execute_batch(
+            "UPDATE messages SET needs_embedding = 1 WHERE needs_embedding IS NULL;",
+        )?;
 
         conn.execute_batch(
             r#"
@@ -278,8 +280,12 @@ PRAGMA user_version = 5;
 
     if user_version < 6 {
         // v6: message LWW metadata + soft delete for cross-device edit/delete.
-        let (mut has_updated_at, mut has_updated_by_device_id, mut has_updated_by_seq, mut has_is_deleted) =
-            (false, false, false, false);
+        let (
+            mut has_updated_at,
+            mut has_updated_by_device_id,
+            mut has_updated_by_seq,
+            mut has_is_deleted,
+        ) = (false, false, false, false);
         let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
         let mut rows = stmt.query([])?;
         while let Some(row) = rows.next()? {
@@ -500,7 +506,12 @@ pub fn insert_message(
     })
 }
 
-pub fn edit_message(conn: &Connection, key: &[u8; 32], message_id: &str, content: &str) -> Result<()> {
+pub fn edit_message(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    content: &str,
+) -> Result<()> {
     let existing = get_message_by_id(conn, key, message_id)?;
     let conversation_id = existing.conversation_id.clone();
     let role = existing.role.clone();
@@ -634,8 +645,8 @@ pub fn append_message_content(
         |row| row.get(0),
     )?;
     let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
-    let mut content =
-        String::from_utf8(content_bytes).map_err(|_| anyhow!("message content is not valid utf-8"))?;
+    let mut content = String::from_utf8(content_bytes)
+        .map_err(|_| anyhow!("message content is not valid utf-8"))?;
     content.push_str(text_delta);
 
     let new_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
@@ -660,14 +671,9 @@ pub fn create_llm_profile(
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
 
-    let api_key_blob: Option<Vec<u8>> = api_key.map(|v| {
-        encrypt_bytes(
-            key,
-            v.as_bytes(),
-            format!("llm.api_key:{id}").as_bytes(),
-        )
-    })
-    .transpose()?;
+    let api_key_blob: Option<Vec<u8>> = api_key
+        .map(|v| encrypt_bytes(key, v.as_bytes(), format!("llm.api_key:{id}").as_bytes()))
+        .transpose()?;
 
     if set_active {
         conn.execute_batch("UPDATE llm_profiles SET is_active = 0;")?;
@@ -795,8 +801,7 @@ pub fn load_active_llm_profile_config(
 
     let api_key = match api_key_blob {
         Some(blob) => {
-            let api_key_bytes =
-                decrypt_bytes(key, &blob, format!("llm.api_key:{id}").as_bytes())?;
+            let api_key_bytes = decrypt_bytes(key, &blob, format!("llm.api_key:{id}").as_bytes())?;
 
             Some(
                 String::from_utf8(api_key_bytes)
@@ -1036,15 +1041,13 @@ pub fn list_messages(
 }
 
 fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Message> {
-    let (conversation_id, role, content_blob, created_at_ms): (String, String, Vec<u8>, i64) =
-        conn.query_row(
-        r#"SELECT conversation_id, role, content, created_at FROM messages WHERE id = ?1"#,
-        params![id],
-        |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-        },
-    )
-    .map_err(|e| anyhow!("get message failed: {e}"))?;
+    let (conversation_id, role, content_blob, created_at_ms): (String, String, Vec<u8>, i64) = conn
+        .query_row(
+            r#"SELECT conversation_id, role, content, created_at FROM messages WHERE id = ?1"#,
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|e| anyhow!("get message failed: {e}"))?;
 
     let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
     let content = String::from_utf8(content_bytes)

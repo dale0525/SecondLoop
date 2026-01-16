@@ -1,5 +1,5 @@
-use secondloop_rust::{auth, db};
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::{auth, db};
 
 #[test]
 fn vector_rebuild_index_preserves_search_results() {
@@ -36,7 +36,9 @@ fn vector_rebuild_index_preserves_search_results() {
     assert_eq!(pending, 0);
 
     let embedding_rows: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
+            row.get(0)
+        })
         .expect("embedding rows");
     assert_eq!(embedding_rows, 3);
 
@@ -46,4 +48,3 @@ fn vector_rebuild_index_preserves_search_results() {
     assert_eq!(after[1].message.content, "apple pie");
     assert!(after[0].distance <= after[1].distance);
 }
-

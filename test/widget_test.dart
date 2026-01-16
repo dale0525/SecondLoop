@@ -83,7 +83,8 @@ class FakeBackend implements AppBackend {
       );
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       const [];
 
   @override
@@ -102,10 +103,12 @@ class FakeBackend implements AppBackend {
       );
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async {}
+  Future<void> editMessage(
+      Uint8List key, String messageId, String content) async {}
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {}
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted) async {}
 
   @override
   Future<int> processPendingMessageEmbeddings(
@@ -130,7 +133,8 @@ class FakeBackend implements AppBackend {
       0;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(

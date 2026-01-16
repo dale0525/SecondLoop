@@ -42,7 +42,13 @@ pub fn encrypt_bytes(key: &[u8; 32], plaintext: &[u8], aad: &[u8]) -> Result<Vec
     let nonce = XNonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
-        .encrypt(nonce, Payload { msg: plaintext, aad })
+        .encrypt(
+            nonce,
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
         .map_err(|_| anyhow!("encrypt failed"))?;
 
     let mut blob = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
@@ -61,6 +67,12 @@ pub fn decrypt_bytes(key: &[u8; 32], blob: &[u8], aad: &[u8]) -> Result<Vec<u8>>
     let nonce = XNonce::from_slice(nonce_bytes);
 
     cipher
-        .decrypt(nonce, Payload { msg: ciphertext, aad })
+        .decrypt(
+            nonce,
+            Payload {
+                msg: ciphertext,
+                aad,
+            },
+        )
         .map_err(|_| anyhow!("decrypt failed"))
 }

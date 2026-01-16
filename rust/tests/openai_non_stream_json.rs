@@ -37,4 +37,3 @@ fn openai_non_stream_json_parses_message_content() {
         ]
     );
 }
-

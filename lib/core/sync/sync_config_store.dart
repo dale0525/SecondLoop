@@ -86,10 +86,14 @@ final class SyncConfigStore {
     await _writeConfigUpdates({kSyncKeyB64: base64Encode(key)});
   }
 
-  Future<String?> readWebdavBaseUrl() async => (await _loadConfigMap())[kWebdavBaseUrl];
-  Future<String?> readWebdavUsername() async => (await _loadConfigMap())[kWebdavUsername];
-  Future<String?> readWebdavPassword() async => (await _loadConfigMap())[kWebdavPassword];
-  Future<String?> readRemoteRoot() async => (await _loadConfigMap())[kRemoteRoot];
+  Future<String?> readWebdavBaseUrl() async =>
+      (await _loadConfigMap())[kWebdavBaseUrl];
+  Future<String?> readWebdavUsername() async =>
+      (await _loadConfigMap())[kWebdavUsername];
+  Future<String?> readWebdavPassword() async =>
+      (await _loadConfigMap())[kWebdavPassword];
+  Future<String?> readRemoteRoot() async =>
+      (await _loadConfigMap())[kRemoteRoot];
   Future<String?> readLocalDir() async => (await _loadConfigMap())[kLocalDir];
 
   Future<void> writeWebdavBaseUrl(String baseUrl) async =>

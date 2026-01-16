@@ -12,7 +12,8 @@ class QuickCaptureScope extends InheritedWidget {
   final QuickCaptureController controller;
 
   static QuickCaptureController of(BuildContext context) {
-    final scope = context.dependOnInheritedWidgetOfExactType<QuickCaptureScope>();
+    final scope =
+        context.dependOnInheritedWidgetOfExactType<QuickCaptureScope>();
     assert(scope != null, 'No QuickCaptureScope found in widget tree');
     return scope!.controller;
   }
@@ -21,4 +22,3 @@ class QuickCaptureScope extends InheritedWidget {
   bool updateShouldNotify(QuickCaptureScope oldWidget) =>
       oldWidget.controller != controller;
 }
-

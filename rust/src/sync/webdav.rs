@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue, CACHE_CONTROL, PRAGMA};
 use reqwest::Method;
-use quick_xml::events::Event;
-use quick_xml::Reader;
 
 pub fn join_base_url_and_path(base_url: &str, path: &str) -> String {
     format!(
@@ -113,7 +113,10 @@ pub fn parse_propfind_multistatus(
                         if current_is_collection && !virtual_path.ends_with('/') {
                             virtual_path.push('/');
                         }
-                        if !current_is_collection && virtual_path.ends_with('/') && virtual_path != "/" {
+                        if !current_is_collection
+                            && virtual_path.ends_with('/')
+                            && virtual_path != "/"
+                        {
                             virtual_path.pop();
                         }
 
@@ -180,7 +183,11 @@ impl WebDavRemoteStore {
         })
     }
 
-    fn request(&self, method: Method, virtual_path: &str) -> Result<reqwest::blocking::RequestBuilder> {
+    fn request(
+        &self,
+        method: Method,
+        virtual_path: &str,
+    ) -> Result<reqwest::blocking::RequestBuilder> {
         let url = join_base_url_and_path(&self.base_url, virtual_path);
         let mut builder = self
             .client
@@ -324,10 +331,7 @@ impl super::RemoteStore for WebDavRemoteStore {
             return Err(anyhow!("PUT expects file path, got dir: {path}"));
         }
 
-        let resp = self
-            .request(Method::PUT, path)?
-            .body(bytes)
-            .send()?;
+        let resp = self.request(Method::PUT, path)?.body(bytes).send()?;
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();

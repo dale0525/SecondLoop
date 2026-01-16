@@ -59,7 +59,8 @@ final class BackgroundSync {
     final orchestrator = BackgroundSyncOrchestrator(
       readAutoEnabled: store.readAutoEnabled,
       loadConfig: store.loadConfiguredSync,
-      hasSavedSessionKey: () async => (await backendForKey.loadSavedSessionKey()) != null,
+      hasSavedSessionKey: () async =>
+          (await backendForKey.loadSavedSessionKey()) != null,
       scheduler: sched,
     );
 
@@ -160,12 +161,14 @@ final class BackgroundSync {
   }
 }
 
-final class WorkmanagerBackgroundSyncScheduler implements BackgroundSyncScheduler {
+final class WorkmanagerBackgroundSyncScheduler
+    implements BackgroundSyncScheduler {
   @override
   Future<void> schedulePeriodicSync({required Duration frequency}) async {
     try {
       if (defaultTargetPlatform == TargetPlatform.iOS) {
-        await Workmanager().cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
+        await Workmanager()
+            .cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
         await Workmanager().registerOneOffTask(
           BackgroundSync.workmanagerUniqueName,
           BackgroundSync.workmanagerTaskName,
@@ -195,7 +198,8 @@ final class WorkmanagerBackgroundSyncScheduler implements BackgroundSyncSchedule
   @override
   Future<void> cancelPeriodicSync() async {
     try {
-      await Workmanager().cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
+      await Workmanager()
+          .cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
     } catch (_) {
       return;
     }

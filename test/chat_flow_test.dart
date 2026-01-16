@@ -18,7 +18,8 @@ void main() {
     expect(find.text('Set master password'), findsOneWidget);
 
     await tester.enterText(find.byKey(MemoryBackend.kSetupPassword), 'pw');
-    await tester.enterText(find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
+    await tester.enterText(
+        find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
     await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
     await tester.pumpAndSettle();
 
@@ -31,14 +32,16 @@ void main() {
     expect(find.text('hello'), findsOneWidget);
   });
 
-  testWidgets('Ask AI -> Stop should return to idle even if cancel hangs', (tester) async {
+  testWidgets('Ask AI -> Stop should return to idle even if cancel hangs',
+      (tester) async {
     final backend = StuckCancelBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(MemoryBackend.kSetupPassword), 'pw');
-    await tester.enterText(find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
+    await tester.enterText(
+        find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
     await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
     await tester.pumpAndSettle();
 
@@ -131,7 +134,8 @@ class MemoryBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       List<Message>.from(_messages[conversationId] ?? const []);
 
   @override
@@ -154,7 +158,8 @@ class MemoryBackend implements AppBackend {
   }
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async {
+  Future<void> editMessage(
+      Uint8List key, String messageId, String content) async {
     for (final entry in _messages.entries) {
       final list = entry.value;
       for (var i = 0; i < list.length; i++) {
@@ -173,7 +178,8 @@ class MemoryBackend implements AppBackend {
   }
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted) async {
     for (final list in _messages.values) {
       list.removeWhere((msg) => msg.id == messageId);
     }
@@ -202,7 +208,8 @@ class MemoryBackend implements AppBackend {
       0;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(

@@ -56,7 +56,8 @@ class _LockGateState extends State<LockGate> {
       future: _bootstrapFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
         }
 
         if (snapshot.hasError) {

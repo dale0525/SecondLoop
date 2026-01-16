@@ -52,9 +52,12 @@ fn push_reuploads_ops_if_remote_target_lost_cursor_file() {
     let conv = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
     db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
 
-    let sync_key =
-        derive_root_key("sync-passphrase", b"secondloop-sync1", &KdfParams::for_test())
-            .expect("derive sync key");
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
 
     let remote = FixedTargetRemote::new(target_id.clone());
     let pushed = sync::push(&conn, &key, &sync_key, &remote, remote_root).expect("push");
@@ -70,4 +73,3 @@ fn push_reuploads_ops_if_remote_target_lost_cursor_file() {
         "expected re-upload after remote reset, got {pushed_after_reset}"
     );
 }
-

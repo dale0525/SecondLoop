@@ -23,4 +23,3 @@ class SessionScope extends InheritedWidget {
   bool updateShouldNotify(SessionScope oldWidget) =>
       oldWidget.sessionKey != sessionKey;
 }
-

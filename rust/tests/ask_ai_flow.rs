@@ -1,7 +1,7 @@
 use anyhow::Result;
-use secondloop_rust::{auth, db, rag};
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::llm::ChatDelta;
+use secondloop_rust::{auth, db, rag};
 
 #[derive(Default)]
 struct FakeProvider {
@@ -102,7 +102,12 @@ fn ask_ai_stream_updates_db_and_uses_rag_context() {
     assert_eq!(events[0].text_delta, "OK");
     assert!(events[1].done);
 
-    let prompt = provider.last_prompt.lock().unwrap().clone().expect("prompt");
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
     assert!(prompt.contains("apple pie"));
     assert!(prompt.contains("Question: apple"));
 

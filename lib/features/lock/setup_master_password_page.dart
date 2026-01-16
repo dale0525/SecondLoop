@@ -10,7 +10,8 @@ class SetupMasterPasswordPage extends StatefulWidget {
   final void Function(Uint8List sessionKey) onUnlocked;
 
   @override
-  State<SetupMasterPasswordPage> createState() => _SetupMasterPasswordPageState();
+  State<SetupMasterPasswordPage> createState() =>
+      _SetupMasterPasswordPageState();
 }
 
 class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
@@ -96,7 +97,8 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
             const SizedBox(height: 20),
             FilledButton(

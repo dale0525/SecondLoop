@@ -17,9 +17,12 @@ fn sync_push_to_new_target_reuploads_ops() {
     let conv = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
     db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
 
-    let sync_key =
-        derive_root_key("sync-passphrase", b"secondloop-sync1", &KdfParams::for_test())
-            .expect("derive sync key");
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
 
     let pushed_a = sync::push(&conn, &key, &sync_key, &remote_a, remote_root).expect("push A");
     assert!(pushed_a > 0);
@@ -31,4 +34,3 @@ fn sync_push_to_new_target_reuploads_ops() {
         "expected ops to be uploaded to the new target, got {pushed_b}"
     );
 }
-

@@ -12,7 +12,8 @@ import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Push persists WebDAV config for auto sync', (WidgetTester tester) async {
+  testWidgets('Push persists WebDAV config for auto sync',
+      (WidgetTester tester) async {
     final storage = _InMemorySecureStorage({});
     final store = SyncConfigStore(storage: storage);
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
@@ -50,7 +51,8 @@ void main() {
     expect(configured.remoteRoot, 'SecondLoop');
   });
 
-  testWidgets('Save persists WebDAV config for auto sync', (WidgetTester tester) async {
+  testWidgets('Save persists WebDAV config for auto sync',
+      (WidgetTester tester) async {
     final storage = _InMemorySecureStorage({});
     final store = SyncConfigStore(storage: storage);
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
@@ -89,7 +91,8 @@ void main() {
     expect(configured.remoteRoot, 'SecondLoop');
   });
 
-  testWidgets('Push awaits backend so UI stays busy', (WidgetTester tester) async {
+  testWidgets('Push awaits backend so UI stays busy',
+      (WidgetTester tester) async {
     final storage = _InMemorySecureStorage({});
     final store = SyncConfigStore(storage: storage);
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
@@ -256,7 +259,8 @@ class _FakeBackend implements AppBackend {
       );
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       const [];
 
   @override
@@ -275,23 +279,32 @@ class _FakeBackend implements AppBackend {
       );
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async {}
+  Future<void> editMessage(
+      Uint8List key, String messageId, String content) async {}
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {}
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key, {int limit = 32}) async => 0;
+  Future<int> processPendingMessageEmbeddings(Uint8List key,
+          {int limit = 32}) async =>
+      0;
 
   @override
-  Future<List<SimilarMessage>> searchSimilarMessages(Uint8List key, String query, {int topK = 10}) async =>
+  Future<List<SimilarMessage>> searchSimilarMessages(
+          Uint8List key, String query,
+          {int topK = 10}) async =>
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key, {int batchLimit = 256}) async => 0;
+  Future<int> rebuildMessageEmbeddings(Uint8List key,
+          {int batchLimit = 256}) async =>
+      0;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -356,7 +369,8 @@ class _FakeBackend implements AppBackend {
       0;
 
   @override
-  Future<void> syncLocaldirTestConnection({required String localDir, required String remoteRoot}) async {}
+  Future<void> syncLocaldirTestConnection(
+      {required String localDir, required String remoteRoot}) async {}
 
   @override
   Future<int> syncLocaldirPush(

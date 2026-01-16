@@ -6,4 +6,3 @@ pub struct ChatDelta {
     pub text_delta: String,
     pub done: bool,
 }
-

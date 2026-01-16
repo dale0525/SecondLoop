@@ -205,17 +205,20 @@ class NativeAppBackend implements AppBackend {
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetOrCreateMainStreamConversation(appDir: appDir, key: key);
+    return rust_core.dbGetOrCreateMainStreamConversation(
+        appDir: appDir, key: key);
   }
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async {
     final appDir = await _getAppDir();
-    return rust_core.dbCreateConversation(appDir: appDir, key: key, title: title);
+    return rust_core.dbCreateConversation(
+        appDir: appDir, key: key, title: title);
   }
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async {
+  Future<List<Message>> listMessages(
+      Uint8List key, String conversationId) async {
     final appDir = await _getAppDir();
     return rust_core.dbListMessages(
       appDir: appDir,
@@ -250,7 +253,8 @@ class NativeAppBackend implements AppBackend {
   }
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async {
+  Future<void> editMessage(
+      Uint8List key, String messageId, String content) async {
     final appDir = await _getAppDir();
     await rust_core.dbEditMessage(
       appDir: appDir,
@@ -261,7 +265,8 @@ class NativeAppBackend implements AppBackend {
   }
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted) async {
     final appDir = await _getAppDir();
     await rust_core.dbSetMessageDeleted(
       appDir: appDir,

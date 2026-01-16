@@ -13,7 +13,8 @@ class LlmProfilesPage extends StatefulWidget {
 
 class _LlmProfilesPageState extends State<LlmProfilesPage> {
   final _nameController = TextEditingController(text: 'OpenAI');
-  final _baseUrlController = TextEditingController(text: 'https://api.openai.com/v1');
+  final _baseUrlController =
+      TextEditingController(text: 'https://api.openai.com/v1');
   final _apiKeyController = TextEditingController();
   final _modelController = TextEditingController(text: 'gpt-4o-mini');
 
@@ -161,7 +162,9 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
               (p) => RadioListTile<String>(
                 value: p.id,
                 groupValue: activeId,
-                onChanged: _busy ? null : (v) => v == null ? null : _activateProfile(v),
+                onChanged: _busy
+                    ? null
+                    : (v) => v == null ? null : _activateProfile(v),
                 title: Text(p.name),
                 subtitle: Text(
                   '${p.providerType} • ${p.modelName}${p.baseUrl == null ? '' : ' • ${p.baseUrl}'}',

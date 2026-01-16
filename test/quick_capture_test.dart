@@ -8,11 +8,13 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Quick capture inserts into Main Stream and hides', (tester) async {
+  testWidgets('Quick capture inserts into Main Stream and hides',
+      (tester) async {
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
-    await tester.pumpWidget(MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpWidget(
+        MyApp(backend: backend, quickCaptureController: controller));
     await tester.pumpAndSettle();
 
     controller.show();
@@ -22,7 +24,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('quick_capture_input')));
     await tester.pump();
-    await tester.enterText(find.byKey(const ValueKey('quick_capture_input')), 'hello');
+    await tester.enterText(
+        find.byKey(const ValueKey('quick_capture_input')), 'hello');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
@@ -88,13 +91,19 @@ final class _UnlockedBackend implements AppBackend {
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async {
-    final conversation = Conversation(id: 'c_${_conversations.length + 1}', title: title, createdAtMs: 0, updatedAtMs: 0);
+    final conversation = Conversation(
+        id: 'c_${_conversations.length + 1}',
+        title: title,
+        createdAtMs: 0,
+        updatedAtMs: 0);
     _conversations.add(conversation);
     return conversation;
   }
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async => const [];
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
+      const [];
 
   @override
   Future<Message> insertMessage(
@@ -115,10 +124,12 @@ final class _UnlockedBackend implements AppBackend {
   }
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async {}
+  Future<void> editMessage(
+      Uint8List key, String messageId, String content) async {}
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async {}
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted) async {}
 
   @override
   Future<int> processPendingMessageEmbeddings(
@@ -143,7 +154,8 @@ final class _UnlockedBackend implements AppBackend {
       0;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(

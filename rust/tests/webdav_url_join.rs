@@ -11,4 +11,3 @@ fn webdav_url_join_preserves_base_path() {
         "https://example.com/dav/SecondLoopTest/deviceA/ops/"
     );
 }
-

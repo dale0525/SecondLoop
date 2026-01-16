@@ -43,4 +43,3 @@ final class BackgroundSyncOrchestrator {
     await scheduler.schedulePeriodicSync(frequency: frequency);
   }
 }
-

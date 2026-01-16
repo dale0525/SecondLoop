@@ -9,8 +9,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
-pub mod webdav;
 pub mod localdir;
+pub mod webdav;
 
 #[derive(Debug)]
 pub struct NotFound {
@@ -49,6 +49,12 @@ impl InMemoryRemoteStore {
             dirs: Mutex::new(BTreeSet::new()),
             files: Mutex::new(BTreeMap::new()),
         }
+    }
+}
+
+impl Default for InMemoryRemoteStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -398,8 +404,11 @@ fn insert_remote_oplog(
         .as_i64()
         .ok_or_else(|| anyhow!("oplog missing ts_ms"))?;
 
-    let blob =
-        encrypt_bytes(db_key, op_plaintext_json, format!("oplog.op_json:{op_id}").as_bytes())?;
+    let blob = encrypt_bytes(
+        db_key,
+        op_plaintext_json,
+        format!("oplog.op_json:{op_id}").as_bytes(),
+    )?;
     conn.execute(
         r#"INSERT OR IGNORE INTO oplog(op_id, device_id, seq, op_json, created_at)
            VALUES (?1, ?2, ?3, ?4, ?5)"#,
@@ -420,7 +429,11 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
     }
 }
 
-fn apply_conversation_upsert(conn: &Connection, db_key: &[u8; 32], payload: &serde_json::Value) -> Result<()> {
+fn apply_conversation_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
     let conversation_id = payload["conversation_id"]
         .as_str()
         .ok_or_else(|| anyhow!("conversation op missing conversation_id"))?;
@@ -466,7 +479,11 @@ fn apply_conversation_upsert(conn: &Connection, db_key: &[u8; 32], payload: &ser
     Ok(())
 }
 
-fn apply_message_insert(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Result<()> {
+fn apply_message_insert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    op: &serde_json::Value,
+) -> Result<()> {
     let device_id = op["device_id"]
         .as_str()
         .ok_or_else(|| anyhow!("message op missing device_id"))?;
@@ -498,7 +515,9 @@ fn apply_message_insert(conn: &Connection, db_key: &[u8; 32], op: &serde_json::V
         )
         .optional()?;
     if conversation_exists.is_none() {
-        return Err(anyhow!("missing conversation for message: {conversation_id}"));
+        return Err(anyhow!(
+            "missing conversation for message: {conversation_id}"
+        ));
     }
 
     let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
@@ -544,7 +563,11 @@ fn message_version_newer(
     incoming_seq > existing_seq
 }
 
-fn apply_message_set_v2(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Result<()> {
+fn apply_message_set_v2(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    op: &serde_json::Value,
+) -> Result<()> {
     let device_id = op["device_id"]
         .as_str()
         .ok_or_else(|| anyhow!("message.set.v2 missing device_id"))?;
@@ -642,7 +665,9 @@ fn apply_message_set_v2(conn: &Connection, db_key: &[u8; 32], op: &serde_json::V
             )
             .optional()?;
         if conversation_exists.is_none() {
-            return Err(anyhow!("missing conversation for message: {conversation_id}"));
+            return Err(anyhow!(
+                "missing conversation for message: {conversation_id}"
+            ));
         }
 
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;

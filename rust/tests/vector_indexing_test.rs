@@ -1,7 +1,7 @@
 use anyhow::Result;
-use secondloop_rust::{auth, db};
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::embedding::{Embedder, DEFAULT_EMBED_DIM};
+use secondloop_rust::{auth, db};
 
 #[derive(Clone, Debug, Default)]
 struct TestEmbedder;
@@ -56,7 +56,7 @@ fn vector_indexing_test() {
         .expect("pending count");
     assert_eq!(pending, 2);
 
-    let embedder = TestEmbedder::default();
+    let embedder = TestEmbedder;
     let processed =
         db::process_pending_message_embeddings(&conn, &key, &embedder, 100).expect("process");
     assert_eq!(processed, 2);
@@ -71,7 +71,9 @@ fn vector_indexing_test() {
     assert_eq!(pending_after, 0);
 
     let embedding_rows: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
+            row.get(0)
+        })
         .expect("embedding rows");
     assert_eq!(embedding_rows, 2);
 }

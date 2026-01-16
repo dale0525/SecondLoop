@@ -7,7 +7,8 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('macOS: falls back to legacy keychain when primary secure storage fails', () async {
+  test('macOS: falls back to legacy keychain when primary secure storage fails',
+      () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
 

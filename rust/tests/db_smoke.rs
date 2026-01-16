@@ -11,10 +11,8 @@ fn db_smoke_insert_list_persists_across_restart() {
         .expect("init master password");
 
     let conn = db::open(&app_dir).expect("open db");
-    let conversation =
-        db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
-    db::insert_message(&conn, &key, &conversation.id, "user", "hello")
-        .expect("insert message");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
+    db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
     let messages = db::list_messages(&conn, &key, &conversation.id).expect("list messages");
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].content, "hello");
@@ -35,10 +33,8 @@ fn db_smoke_wrong_key_cannot_decrypt() {
     let wrong_key = [0u8; 32];
 
     let conn = db::open(&app_dir).expect("open db");
-    let conversation =
-        db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
-    db::insert_message(&conn, &key, &conversation.id, "user", "hello")
-        .expect("insert message");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
+    db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
 
     let result = db::list_messages(&conn, &wrong_key, &conversation.id);
     assert!(result.is_err());

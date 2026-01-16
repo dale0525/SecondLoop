@@ -11,13 +11,11 @@ fn main_stream_conversation_id_is_stable_and_deterministic() {
         .expect("init master password");
     let conn = db::open(&app_dir).expect("open db");
 
-    let conv1 = db::get_or_create_main_stream_conversation(&conn, &key)
-        .expect("get main stream");
+    let conv1 = db::get_or_create_main_stream_conversation(&conn, &key).expect("get main stream");
     assert_eq!(conv1.id, "main_stream");
     assert_eq!(conv1.title, "Main Stream");
 
-    let conv2 = db::get_or_create_main_stream_conversation(&conn, &key)
-        .expect("get main stream again");
+    let conv2 =
+        db::get_or_create_main_stream_conversation(&conn, &key).expect("get main stream again");
     assert_eq!(conv2.id, "main_stream");
 }
-

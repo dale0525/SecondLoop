@@ -52,13 +52,15 @@ void main() {
     final passphraseField = find.byWidgetPredicate(
       (w) =>
           w is TextField &&
-          w.decoration?.labelText == 'Sync passphrase (not stored; derives a key)',
+          w.decoration?.labelText ==
+              'Sync passphrase (not stored; derives a key)',
     );
     final field = tester.widget<TextField>(passphraseField);
     expect(field.controller?.text, isNotEmpty);
   });
 
-  testWidgets('Save runs connection test and triggers sync on success', (tester) async {
+  testWidgets('Save runs connection test and triggers sync on success',
+      (tester) async {
     final storage = _InMemorySecureStorage();
     final store = SyncConfigStore(storage: storage);
     final backend = _SyncSettingsBackend();
@@ -95,7 +97,8 @@ void main() {
       find.byWidgetPredicate(
         (w) =>
             w is TextField &&
-            w.decoration?.labelText == 'Sync passphrase (not stored; derives a key)',
+            w.decoration?.labelText ==
+                'Sync passphrase (not stored; derives a key)',
       ),
       'passphrase',
     );
@@ -267,7 +270,8 @@ class _SyncSettingsBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       const <Message>[];
 
   @override
@@ -280,11 +284,13 @@ class _SyncSettingsBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async =>
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async =>
+  Future<void> setMessageDeleted(
+          Uint8List key, String messageId, bool isDeleted) async =>
       throw UnimplementedError();
 
   @override
@@ -310,7 +316,8 @@ class _SyncSettingsBackend implements AppBackend {
       0;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(

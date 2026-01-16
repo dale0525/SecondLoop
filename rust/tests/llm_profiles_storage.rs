@@ -1,6 +1,6 @@
 use rusqlite::params;
-use secondloop_rust::{auth, db};
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::{auth, db};
 
 #[test]
 fn llm_profiles_are_encrypted_and_loadable() {

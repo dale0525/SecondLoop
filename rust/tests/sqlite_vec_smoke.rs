@@ -11,4 +11,3 @@ fn sqlite_vec_is_available() {
 
     assert!(version.starts_with('v'));
 }
-

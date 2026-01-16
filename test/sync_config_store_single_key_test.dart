@@ -7,7 +7,8 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('SyncConfigStore stores config in a single secure storage entry', () async {
+  test('SyncConfigStore stores config in a single secure storage entry',
+      () async {
     final storage = _InMemorySecureStorage({});
     final store = SyncConfigStore(storage: storage);
 
@@ -72,4 +73,3 @@ final class _InMemorySecureStorage extends FlutterSecureStorage {
     values.remove(key);
   }
 }
-

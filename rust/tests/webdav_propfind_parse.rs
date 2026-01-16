@@ -35,11 +35,10 @@ fn webdav_propfind_parses_children_and_strips_base_path() {
 </d:multistatus>
 "#;
 
-    let entries = parse_propfind_multistatus("/dav/", "/SecondLoopTest/", xml.as_bytes())
-        .expect("parse");
+    let entries =
+        parse_propfind_multistatus("/dav/", "/SecondLoopTest/", xml.as_bytes()).expect("parse");
 
     assert!(entries.contains(&"/SecondLoopTest/deviceA/".to_string()));
     assert!(entries.contains(&"/SecondLoopTest/readme.txt".to_string()));
     assert_eq!(entries.len(), 2);
 }
-

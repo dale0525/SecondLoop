@@ -19,6 +19,6 @@ class MyApp extends StatelessWidget {
   final QuickCaptureController? quickCaptureController;
 
   @override
-  Widget build(BuildContext context) =>
-      SecondLoopApp(backend: backend, quickCaptureController: quickCaptureController);
+  Widget build(BuildContext context) => SecondLoopApp(
+      backend: backend, quickCaptureController: quickCaptureController);
 }

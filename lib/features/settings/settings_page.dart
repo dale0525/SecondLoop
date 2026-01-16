@@ -154,16 +154,19 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(height: 24),
           ListTile(
             title: const Text('Debug: Reset local data'),
-            subtitle: const Text('Delete local DB + clear sync/auto-unlock storage'),
+            subtitle:
+                const Text('Delete local DB + clear sync/auto-unlock storage'),
             onTap: _busy ? null : _resetLocalData,
           ),
           const SizedBox(height: 12),
           ListTile(
             title: const Text('Debug: Semantic search'),
-            subtitle: const Text('Search similar messages + rebuild embeddings index'),
+            subtitle: const Text(
+                'Search similar messages + rebuild embeddings index'),
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SemanticSearchDebugPage()),
+                MaterialPageRoute(
+                    builder: (_) => const SemanticSearchDebugPage()),
               );
             },
           ),

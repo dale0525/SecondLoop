@@ -34,7 +34,8 @@ abstract class AppBackend {
     required String content,
   });
   Future<void> editMessage(Uint8List key, String messageId, String content);
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted);
+  Future<void> setMessageDeleted(
+      Uint8List key, String messageId, bool isDeleted);
 
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
@@ -135,5 +136,6 @@ class AppBackendScope extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(AppBackendScope oldWidget) => backend != oldWidget.backend;
+  bool updateShouldNotify(AppBackendScope oldWidget) =>
+      backend != oldWidget.backend;
 }
