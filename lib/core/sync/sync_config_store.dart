@@ -268,17 +268,24 @@ final class SyncConfigStore {
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return <String, String>{};
+    }
+
     final isMac =
         Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
     final allowKeychainRead = !isMac;
-    final secure = SecureBlobStore(storage: _unusedLegacySecureStorage);
+    final secure = SecureBlobStore(
+      storage: _unusedLegacySecureStorage ?? const FlutterSecureStorage(),
+    );
     if (!allowKeychainRead && !secure.isLoaded) {
       return <String, String>{};
     }
 
     Map<String, String> legacy;
     try {
-      legacy = await secure.readAll();
+      legacy = await secure.readAll().timeout(const Duration(seconds: 1),
+          onTimeout: () => <String, String>{});
     } catch (_) {
       return <String, String>{};
     }
