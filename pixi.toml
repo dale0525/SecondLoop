@@ -36,7 +36,7 @@ setup-cocoapods = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1
 run-macos = { cmd = "env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 dart pub global run fvm:main flutter run -d macos", depends-on = ["setup-cocoapods"] }
 
 [target.win-64.tasks]
-frb-generate = "set RUST_LOG=info && set PATH=%CD%\\.fvm\\flutter_sdk\\bin;%USERPROFILE%\\.cargo\\bin;%PATH% && flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml"
-setup-nuget = "if exist .tool\\nuget\\nuget.exe (echo nuget ok) else (powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $nugetDir = Join-Path $PWD '.tool\\\\nuget'; $nugetExe = Join-Path $nugetDir 'nuget.exe'; New-Item -ItemType Directory -Force -Path $nugetDir | Out-Null; Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $nugetExe\")"
+frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
+setup-nuget = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_nuget.ps1"
 setup-windows = { cmd = "echo setup-windows ok", depends-on = ["setup-flutter", "setup-nuget"] }
-run-windows = { cmd = "set PATH=%CD%\\.tool\\nuget;%PATH% && dart pub global run fvm:main flutter pub get && dart pub global run fvm:main flutter run -d windows", depends-on = ["setup-nuget"] }
+run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["setup-windows"] }

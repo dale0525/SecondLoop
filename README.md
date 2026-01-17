@@ -23,6 +23,10 @@ pixi run run-android
 pixi run run-windows
 ```
 
+Notes:
+- `run-macos` is only available on macOS.
+- `run-windows` is only available on Windows (it depends on `setup-windows`) and will download `nuget.exe` into `.tool/nuget/` so Flutter won't auto-download it.
+
 To run arbitrary Flutter commands through FVM:
 
 ```bash

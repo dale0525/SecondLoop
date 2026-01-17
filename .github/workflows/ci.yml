@@ -2,50 +2,98 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  flutter:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      flutter: ${{ steps.filter.outputs.flutter }}
+      rust: ${{ steps.filter.outputs.rust }}
     steps:
       - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            flutter:
+              - ".fvm/fvm_config.json"
+              - "analysis_options.yaml"
+              - "pubspec.yaml"
+              - "pubspec.lock"
+              - "flutter_rust_bridge.yaml"
+              - "lib/**"
+              - "test/**"
+              - "integration_test/**"
+              - "test_driver/**"
+              - "rust_builder/**"
+              - "android/**"
+              - "ios/**"
+              - "linux/**"
+              - "macos/**"
+              - "windows/**"
+            rust:
+              - "rust/**"
+
+  flutter:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip (no Flutter changes)
+        if: needs.changes.outputs.flutter != 'true'
+        run: echo "No Flutter-related changes detected; skipping Flutter CI."
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.flutter == 'true'
       - uses: subosito/flutter-action@v2
+        if: needs.changes.outputs.flutter == 'true'
         with:
           flutter-version: "3.19.6"
           channel: stable
           cache: true
       - name: Pub get
+        if: needs.changes.outputs.flutter == 'true'
         run: flutter pub get
       - name: Format check
+        if: needs.changes.outputs.flutter == 'true'
         run: dart format lib test rust_builder integration_test test_driver --set-exit-if-changed
       - name: Analyze
+        if: needs.changes.outputs.flutter == 'true'
         run: flutter analyze
       - name: Test
+        if: needs.changes.outputs.flutter == 'true'
         run: flutter test
 
   rust:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
+      - name: Skip (no Rust changes)
+        if: needs.changes.outputs.rust != 'true'
+        run: echo "No Rust-related changes detected; skipping Rust CI."
       - uses: actions/checkout@v4
-      - name: Detect Rust workspace
-        id: rust
-        run: |
-          if [ -f rust/Cargo.toml ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
+        if: needs.changes.outputs.rust == 'true'
       - uses: dtolnay/rust-toolchain@stable
-        if: ${{ steps.rust.outputs.present == 'true' }}
+        if: needs.changes.outputs.rust == 'true'
         with:
           components: rustfmt, clippy
       - name: Rust fmt
-        if: ${{ steps.rust.outputs.present == 'true' }}
+        if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
       - name: Rust clippy
-        if: ${{ steps.rust.outputs.present == 'true' }}
+        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
       - name: Rust test
-        if: ${{ steps.rust.outputs.present == 'true' }}
+        if: needs.changes.outputs.rust == 'true'
         run: cargo test --manifest-path rust/Cargo.toml --all
