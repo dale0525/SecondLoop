@@ -8,7 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 
 void main() {
-  test('macOS: migrates legacy prefs session key into secure storage', () async {
+  test('macOS: migrates legacy prefs session key into secure storage',
+      () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
 

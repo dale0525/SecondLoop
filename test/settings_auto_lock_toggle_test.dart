@@ -182,11 +182,13 @@ final class _CountingBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key, {int limit = 32}) =>
+  Future<int> processPendingMessageEmbeddings(Uint8List key,
+          {int limit = 32}) =>
       throw UnimplementedError();
 
   @override
-  Future<List<SimilarMessage>> searchSimilarMessages(Uint8List key, String query,
+  Future<List<SimilarMessage>> searchSimilarMessages(
+          Uint8List key, String query,
           {int topK = 10}) =>
       throw UnimplementedError();
 

@@ -268,7 +268,8 @@ final class SyncConfigStore {
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
-    final isMac = Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
+    final isMac =
+        Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
     final allowKeychainRead = !isMac;
     final secure = SecureBlobStore(storage: _unusedLegacySecureStorage);
     if (!allowKeychainRead && !secure.isLoaded) {

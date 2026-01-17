@@ -76,8 +76,9 @@ class _UnlockPageState extends State<UnlockPage> {
       final prefs = await SharedPreferences.getInstance();
       final appLockEnabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
 
-      final systemUnlockEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
-          _defaultSystemUnlockEnabled();
+      final systemUnlockEnabled =
+          prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
+              _defaultSystemUnlockEnabled();
       final shouldPersist = !appLockEnabled || systemUnlockEnabled;
 
       if (shouldPersist) {
@@ -96,7 +97,7 @@ class _UnlockPageState extends State<UnlockPage> {
 
   Future<void> _submitBiometricUnlock() async {
     if (_busy) return;
-      final authenticate = widget.authenticateBiometrics ??
+    final authenticate = widget.authenticateBiometrics ??
         () async {
           final auth = LocalAuthentication();
           final canCheck = await auth.canCheckBiometrics;
@@ -126,8 +127,8 @@ class _UnlockPageState extends State<UnlockPage> {
       final savedKey = await backend.loadSavedSessionKey();
       if (savedKey == null || savedKey.length != 32) {
         if (!mounted) return;
-        setState(() =>
-            _error = 'Missing saved session key. Unlock with master password once.');
+        setState(() => _error =
+            'Missing saved session key. Unlock with master password once.');
         return;
       }
 
@@ -150,8 +151,7 @@ class _UnlockPageState extends State<UnlockPage> {
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows);
     final showSystemUnlock = biometricEnabled && (isMobile || isDesktop);
-    final systemUnlockLabel =
-        isMobile ? 'Use biometrics' : 'Use system unlock';
+    final systemUnlockLabel = isMobile ? 'Use biometrics' : 'Use system unlock';
     return Scaffold(
       appBar: AppBar(title: const Text('Unlock')),
       body: Padding(

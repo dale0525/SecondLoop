@@ -7,8 +7,7 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('SyncConfigStore stores config in a single preferences entry',
-      () async {
+  test('SyncConfigStore stores config in a single preferences entry', () async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
 

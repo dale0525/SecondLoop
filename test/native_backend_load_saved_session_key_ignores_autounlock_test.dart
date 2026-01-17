@@ -8,7 +8,8 @@ import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/storage/secure_blob_store.dart';
 
 void main() {
-  test('loadSavedSessionKey returns key even if auto-unlock disabled', () async {
+  test('loadSavedSessionKey returns key even if auto-unlock disabled',
+      () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
 
@@ -59,4 +60,3 @@ final class _InMemorySecureStorage extends FlutterSecureStorage {
     return Map<String, String>.from(_values);
   }
 }
-

@@ -18,7 +18,7 @@ jobs:
       - name: Pub get
         run: flutter pub get
       - name: Format check
-        run: dart format . --set-exit-if-changed
+        run: dart format lib test rust_builder integration_test test_driver --set-exit-if-changed
       - name: Analyze
         run: flutter analyze
       - name: Test

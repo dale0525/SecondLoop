@@ -41,7 +41,8 @@ final class _SavedKeyBackend implements AppBackend {
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
 
   @override
-  Future<Uint8List?> loadSavedSessionKey() async => Uint8List.fromList(_savedKey);
+  Future<Uint8List?> loadSavedSessionKey() async =>
+      Uint8List.fromList(_savedKey);
 
   @override
   Future<void> saveSessionKey(Uint8List key) async {}
@@ -95,11 +96,13 @@ final class _SavedKeyBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key, {int limit = 32}) =>
+  Future<int> processPendingMessageEmbeddings(Uint8List key,
+          {int limit = 32}) =>
       throw UnimplementedError();
 
   @override
-  Future<List<SimilarMessage>> searchSimilarMessages(Uint8List key, String query,
+  Future<List<SimilarMessage>> searchSimilarMessages(
+          Uint8List key, String query,
           {int topK = 10}) =>
       throw UnimplementedError();
 
