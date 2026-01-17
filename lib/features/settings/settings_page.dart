@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
@@ -20,8 +21,18 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool? _autoUnlockEnabled;
+  bool? _appLockEnabled;
+  bool? _biometricUnlockEnabled;
   bool _busy = false;
+
+  static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
+  static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
+
+  bool _defaultSystemUnlockEnabled() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
+  }
 
   Future<void> _resetLocalData() async {
     if (_busy) return;
@@ -56,7 +67,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
     setState(() => _busy = true);
     try {
-      await backend.persistAutoUnlockEnabled(enabled: false);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kAppLockEnabledPrefsKey);
+      await prefs.remove(_kBiometricUnlockEnabledPrefsKey);
+      await backend.clearSavedSessionKey();
 
       final store = SyncConfigStore();
       await store.clearAll();
@@ -77,25 +91,59 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _load() async {
-    final backend = AppBackendScope.of(context);
-    final enabled = await backend.readAutoUnlockEnabled();
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
+    final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
+        _defaultSystemUnlockEnabled();
     if (!mounted) return;
-    setState(() => _autoUnlockEnabled = enabled);
+    setState(() {
+      _appLockEnabled = enabled;
+      _biometricUnlockEnabled = biometricEnabled;
+    });
   }
 
-  Future<void> _setAutoUnlock(bool enabled) async {
+  Future<void> _setAppLock(bool enabled) async {
     if (_busy) return;
     setState(() => _busy = true);
 
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
-      await backend.persistAutoUnlockEnabled(enabled: enabled);
-      if (enabled) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kAppLockEnabledPrefsKey, enabled);
+      final biometricEnabled =
+          _biometricUnlockEnabled ?? _defaultSystemUnlockEnabled();
+      final shouldPersist = !enabled || biometricEnabled;
+      if (shouldPersist) {
         await backend.saveSessionKey(sessionKey);
+      } else {
+        await backend.clearSavedSessionKey();
       }
       await BackgroundSync.refreshSchedule(backend: backend);
-      if (mounted) setState(() => _autoUnlockEnabled = enabled);
+      if (mounted) setState(() => _appLockEnabled = enabled);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setBiometricUnlock(bool enabled) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kBiometricUnlockEnabledPrefsKey, enabled);
+
+      if (enabled) {
+        await backend.saveSessionKey(sessionKey);
+      } else {
+        await backend.clearSavedSessionKey();
+      }
+
+      await BackgroundSync.refreshSchedule(backend: backend);
+      if (mounted) setState(() => _biometricUnlockEnabled = enabled);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -104,22 +152,43 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _autoUnlockEnabled ??= true;
+    _appLockEnabled ??= false;
+    _biometricUnlockEnabled ??= _defaultSystemUnlockEnabled();
     _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final enabled = _autoUnlockEnabled;
+    final enabled = _appLockEnabled;
+    final biometricEnabled = _biometricUnlockEnabled;
+    final isMobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android);
+    final isDesktop = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         SwitchListTile(
-          title: const Text('Auto unlock'),
-          subtitle: const Text('Store a session key in secure storage'),
-          value: enabled ?? true,
-          onChanged: (_busy || enabled == null) ? null : _setAutoUnlock,
+          title: const Text('Auto lock'),
+          subtitle: const Text('Require unlock to access the app'),
+          value: enabled ?? false,
+          onChanged: (_busy || enabled == null) ? null : _setAppLock,
         ),
+        if ((enabled ?? false) && (isMobile || isDesktop)) ...[
+          const SizedBox(height: 12),
+          SwitchListTile(
+            title: Text(isMobile ? 'Use biometrics' : 'Use system unlock'),
+            subtitle: Text(isMobile
+                ? 'Unlock with biometrics instead of master password'
+                : 'Unlock with Touch ID / Windows Hello instead of master password'),
+            value: biometricEnabled ?? false,
+            onChanged: (_busy || biometricEnabled == null)
+                ? null
+                : _setBiometricUnlock,
+          ),
+        ],
         const SizedBox(height: 12),
         ListTile(
           title: const Text('Lock now'),

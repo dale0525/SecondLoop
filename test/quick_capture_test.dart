@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
@@ -10,6 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 void main() {
   testWidgets('Quick capture inserts into Main Stream and hides',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 

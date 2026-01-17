@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/main.dart';
@@ -10,6 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('Setup -> main stream -> send message', (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final backend = MemoryBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));
@@ -34,6 +36,7 @@ void main() {
 
   testWidgets('Ask AI -> Stop should return to idle even if cancel hangs',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final backend = StuckCancelBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));

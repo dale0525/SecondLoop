@@ -1,99 +1,31 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('loadConfiguredSync uses a single secure read (no readAll)', () async {
-    final storage = _CountingSecureStorage({});
-    final store = SyncConfigStore(storage: storage);
+  test('loadConfiguredSync reads config from preferences blob', () async {
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kAutoEnabled: '1',
+        SyncConfigStore.kRemoteRoot: 'SecondLoop',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/dav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(syncKey),
+      }),
+    });
 
-    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
-    await store.writeRemoteRoot('SecondLoop');
-    await store.writeBackendType(SyncBackendType.webdav);
-    await store.writeWebdavBaseUrl('https://example.com/dav');
-
-    storage.readCalls = 0;
-    storage.readAllCalls = 0;
-
+    final store = SyncConfigStore();
     final config = await store.loadConfiguredSync();
 
     expect(config, isNotNull);
     expect(config!.backendType, SyncBackendType.webdav);
     expect(config.baseUrl, 'https://example.com/dav');
     expect(config.remoteRoot, 'SecondLoop');
-
-    expect(storage.readCalls, 1);
-    expect(storage.readAllCalls, 0);
   });
-}
-
-final class _CountingSecureStorage extends FlutterSecureStorage {
-  _CountingSecureStorage(this._values);
-
-  final Map<String, String> _values;
-
-  int readCalls = 0;
-  int readAllCalls = 0;
-
-  @override
-  Future<String?> read({
-    required String key,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    readCalls += 1;
-    return _values[key];
-  }
-
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    if (value == null) {
-      _values.remove(key);
-      return;
-    }
-    _values[key] = value;
-  }
-
-  @override
-  Future<void> delete({
-    required String key,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    _values.remove(key);
-  }
-
-  @override
-  Future<Map<String, String>> readAll({
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    readAllCalls += 1;
-    return Map<String, String>.from(_values);
-  }
 }

@@ -1,6 +1,6 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 
@@ -15,6 +15,9 @@ class SetupMasterPasswordPage extends StatefulWidget {
 }
 
 class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
+  static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
+  static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
+
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
@@ -26,6 +29,12 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
+  }
+
+  bool _defaultSystemUnlockEnabled() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
   }
 
   Future<void> _submit() async {
@@ -52,8 +61,15 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
       final backend = AppBackendScope.of(context);
       final key = await backend.initMasterPassword(password);
 
-      final autoUnlock = await backend.readAutoUnlockEnabled();
-      if (autoUnlock) {
+      final prefs = await SharedPreferences.getInstance();
+      final appLockEnabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
+
+      final systemUnlockEnabled =
+          prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
+              _defaultSystemUnlockEnabled();
+      final shouldPersist = !appLockEnabled || systemUnlockEnabled;
+
+      if (shouldPersist) {
         await backend.saveSessionKey(key);
       } else {
         await backend.clearSavedSessionKey();

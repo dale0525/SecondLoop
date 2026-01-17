@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
@@ -13,8 +13,8 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('removes Test connection button', (tester) async {
-    final storage = _InMemorySecureStorage();
-    final store = SyncConfigStore(storage: storage);
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
     final backend = _SyncSettingsBackend();
 
     await tester.pumpWidget(_wrap(
@@ -31,8 +31,8 @@ void main() {
   });
 
   testWidgets('configured passphrase shows masked placeholder', (tester) async {
-    final storage = _InMemorySecureStorage();
-    final store = SyncConfigStore(storage: storage);
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
     await store.writeRemoteRoot('SecondLoop');
     await store.writeWebdavBaseUrl('https://example.com/dav');
@@ -61,8 +61,8 @@ void main() {
 
   testWidgets('Save runs connection test and triggers sync on success',
       (tester) async {
-    final storage = _InMemorySecureStorage();
-    final store = SyncConfigStore(storage: storage);
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
     final backend = _SyncSettingsBackend();
 
     final runner = _FakeRunner();
@@ -156,70 +156,6 @@ final class _FakeRunner implements SyncRunner {
   Future<int> pull(SyncConfig config) async {
     pullCalls++;
     return 0;
-  }
-}
-
-final class _InMemorySecureStorage extends FlutterSecureStorage {
-  _InMemorySecureStorage([Map<String, String>? initial])
-      : _values = Map<String, String>.from(initial ?? {});
-
-  final Map<String, String> _values;
-
-  @override
-  Future<String?> read({
-    required String key,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    return _values[key];
-  }
-
-  @override
-  Future<Map<String, String>> readAll({
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    return Map<String, String>.from(_values);
-  }
-
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    final v = value;
-    if (v == null) {
-      _values.remove(key);
-      return;
-    }
-    _values[key] = v;
-  }
-
-  @override
-  Future<void> delete({
-    required String key,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    _values.remove(key);
   }
 }
 

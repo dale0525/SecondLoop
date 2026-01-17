@@ -1,30 +1,27 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../storage/secure_blob_store.dart';
 import 'sync_engine.dart';
 
 final class SyncConfigStore {
-  SyncConfigStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? _createDefaultSecureStorage();
+  SyncConfigStore({
+    FlutterSecureStorage? storage,
+  }) : _unusedLegacySecureStorage = storage;
 
-  final FlutterSecureStorage _storage;
+  final FlutterSecureStorage? _unusedLegacySecureStorage;
 
-  static const _kConfigBlobKey = 'sync_config_blob_json_v1';
+  static const _kPrefsBlobKey = 'sync_config_plain_json_v1';
 
-  static const List<String> _knownKeys = [
-    _kConfigBlobKey,
-    kBackendType,
-    kAutoEnabled,
-    kLocalDir,
-    kWebdavBaseUrl,
-    kWebdavUsername,
-    kWebdavPassword,
-    kRemoteRoot,
-    kSyncKeyB64,
-  ];
+  Future<void> _tail = Future<void>.value();
+  Future<SharedPreferences>? _prefsFuture;
+
+  bool _loaded = false;
+  Map<String, String> _cache = <String, String>{};
 
   static const kBackendType = 'sync_backend_type'; // webdav | localdir
   static const kAutoEnabled = 'sync_auto_enabled'; // 1 | 0
@@ -36,13 +33,14 @@ final class SyncConfigStore {
   static const kRemoteRoot = 'sync_webdav_remote_root';
   static const kSyncKeyB64 = 'sync_webdav_sync_key_b64';
 
-  static FlutterSecureStorage _createDefaultSecureStorage() {
-    if (defaultTargetPlatform == TargetPlatform.macOS) {
-      return const FlutterSecureStorage(
-        mOptions: MacOsOptions(),
-      );
-    }
-    return const FlutterSecureStorage();
+  Future<T> _serial<T>(Future<T> Function() action) {
+    final next = _tail.then((_) => action());
+    _tail = next.then((_) {}).catchError((_) {});
+    return next;
+  }
+
+  Future<SharedPreferences> _prefs() {
+    return _prefsFuture ??= SharedPreferences.getInstance();
   }
 
   Future<Map<String, String>> readAll() async {
@@ -184,49 +182,72 @@ final class SyncConfigStore {
     }
   }
 
-  Future<String?> _safeRead(String key) async {
-    try {
-      final v = await _storage.read(key: key);
-      if (v != null || defaultTargetPlatform != TargetPlatform.macOS) return v;
-    } on MissingPluginException {
-      return null;
-    } on PlatformException {
-      // Fall through and try legacy storage below.
-    }
-
-    if (defaultTargetPlatform != TargetPlatform.macOS) return null;
-
-    try {
-      final legacy = await _storage.read(
-        key: key,
-        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
-      );
-      if (legacy == null) return null;
-
-      try {
-        await _storage.write(key: key, value: legacy);
-        await _storage.delete(
-          key: key,
-          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
-        );
-      } catch (_) {
-        // Best-effort migration.
-      }
-
-      return legacy;
-    } on MissingPluginException {
-      return null;
-    } on PlatformException {
-      return null;
-    }
+  Future<Map<String, String>> _loadConfigMap() async {
+    return _serial(() async {
+      await _ensureLoaded();
+      return Map<String, String>.from(_cache);
+    });
   }
 
-  Future<Map<String, String>> _loadConfigMap() async {
-    final raw = await _safeRead(_kConfigBlobKey);
-    if (raw == null || raw.trim().isEmpty) return <String, String>{};
+  Future<void> _writeConfigUpdates(Map<String, String?> updates) async {
+    await _serial(() async {
+      await _ensureLoaded();
+
+      var changed = false;
+      for (final entry in updates.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value == null || value.isEmpty) {
+          changed = _cache.remove(key) != null || changed;
+          continue;
+        }
+        if (_cache[key] != value) {
+          _cache[key] = value;
+          changed = true;
+        }
+      }
+
+      if (!changed) return;
+      await _persistCache();
+    });
+  }
+
+  Future<void> clearAll() async {
+    await _serial(() async {
+      final prefs = await _prefs();
+      await prefs.remove(_kPrefsBlobKey);
+      _cache = <String, String>{};
+      _loaded = true;
+    });
+  }
+
+  Future<void> _ensureLoaded() async {
+    if (_loaded) return;
+
+    final prefs = await _prefs();
+    final raw = prefs.getString(_kPrefsBlobKey);
+    if (raw == null || raw.trim().isEmpty) {
+      final migrated = await _tryMigrateFromSecureStore();
+      if (migrated.isNotEmpty) {
+        _cache = migrated;
+        _loaded = true;
+        await _persistCache();
+        return;
+      }
+
+      _cache = <String, String>{};
+      _loaded = true;
+      return;
+    }
+
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return <String, String>{};
+      if (decoded is! Map<String, dynamic>) {
+        _cache = <String, String>{};
+        _loaded = true;
+        return;
+      }
+
       final result = <String, String>{};
       for (final entry in decoded.entries) {
         final key = entry.key;
@@ -238,89 +259,54 @@ final class SyncConfigStore {
         if (value == null) continue;
         result[key] = value.toString();
       }
-      return result;
+      _cache = result;
+    } catch (_) {
+      _cache = <String, String>{};
+    }
+
+    _loaded = true;
+  }
+
+  Future<Map<String, String>> _tryMigrateFromSecureStore() async {
+    final isMac = Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
+    final allowKeychainRead = !isMac;
+    final secure = SecureBlobStore(storage: _unusedLegacySecureStorage);
+    if (!allowKeychainRead && !secure.isLoaded) {
+      return <String, String>{};
+    }
+
+    Map<String, String> legacy;
+    try {
+      legacy = await secure.readAll();
     } catch (_) {
       return <String, String>{};
     }
-  }
 
-  Future<void> _writeConfigMap(Map<String, String> config) async {
-    if (config.isEmpty) {
-      await _safeDelete(_kConfigBlobKey);
-      return;
-    }
-    await _safeWrite(_kConfigBlobKey, jsonEncode(config));
-  }
-
-  Future<void> _writeConfigUpdates(Map<String, String?> updates) async {
-    final config = await _loadConfigMap();
-    var changed = false;
-    for (final entry in updates.entries) {
-      final key = entry.key;
-      final value = entry.value;
-      if (value == null || value.isEmpty) {
-        changed = config.remove(key) != null || changed;
-        continue;
-      }
-      if (config[key] != value) {
-        config[key] = value;
-        changed = true;
+    final migrated = <String, String>{};
+    for (final key in <String>[
+      kBackendType,
+      kAutoEnabled,
+      kLocalDir,
+      kWebdavBaseUrl,
+      kWebdavUsername,
+      kWebdavPassword,
+      kRemoteRoot,
+      kSyncKeyB64,
+    ]) {
+      final v = legacy[key];
+      if (v != null && v.isNotEmpty) {
+        migrated[key] = v;
       }
     }
-    if (!changed) return;
-    await _writeConfigMap(config);
+    return migrated;
   }
 
-  Future<void> _safeWrite(String key, String value) async {
-    try {
-      await _storage.write(key: key, value: value);
-      if (defaultTargetPlatform == TargetPlatform.macOS) {
-        await _storage.delete(
-          key: key,
-          mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
-        );
-      }
-    } on MissingPluginException {
-      return;
-    } on PlatformException {
-      // Fall through and try legacy storage below.
-    }
-
-    if (defaultTargetPlatform != TargetPlatform.macOS) return;
-    try {
-      await _storage.write(
-        key: key,
-        value: value,
-        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
-      );
-    } catch (_) {
+  Future<void> _persistCache() async {
+    final prefs = await _prefs();
+    if (_cache.isEmpty) {
+      await prefs.remove(_kPrefsBlobKey);
       return;
     }
-  }
-
-  Future<void> _safeDelete(String key) async {
-    try {
-      await _storage.delete(key: key);
-    } on MissingPluginException {
-      return;
-    } on PlatformException {
-      // Fall through and try legacy storage below.
-    }
-
-    if (defaultTargetPlatform != TargetPlatform.macOS) return;
-    try {
-      await _storage.delete(
-        key: key,
-        mOptions: const MacOsOptions(useDataProtectionKeyChain: false),
-      );
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<void> clearAll() async {
-    for (final key in _knownKeys) {
-      await _safeDelete(key);
-    }
+    await prefs.setString(_kPrefsBlobKey, jsonEncode(_cache));
   }
 }

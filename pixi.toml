@@ -10,6 +10,7 @@ setup-flutter = "dart pub global activate fvm 2.4.1 && dart pub global run fvm:m
 doctor = "dart pub global run fvm:main flutter doctor -v"
 analyze = "dart pub global run fvm:main flutter analyze"
 test = "dart pub global run fvm:main flutter test"
+clean = "dart pub global run fvm:main flutter clean"
 format = "dart pub global run fvm:main dart format . --set-exit-if-changed"
 run-android = "dart pub global run fvm:main flutter run -d android"
 run-windows = "dart pub global run fvm:main flutter pub get && dart pub global run fvm:main flutter run -d windows"

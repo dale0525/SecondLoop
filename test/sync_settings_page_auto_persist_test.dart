@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -14,8 +14,8 @@ import 'package:secondloop/src/rust/db.dart';
 void main() {
   testWidgets('Push persists WebDAV config for auto sync',
       (WidgetTester tester) async {
-    final storage = _InMemorySecureStorage({});
-    final store = SyncConfigStore(storage: storage);
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
 
     await tester.pumpWidget(
@@ -53,8 +53,8 @@ void main() {
 
   testWidgets('Save persists WebDAV config for auto sync',
       (WidgetTester tester) async {
-    final storage = _InMemorySecureStorage({});
-    final store = SyncConfigStore(storage: storage);
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
 
     await tester.pumpWidget(
@@ -93,8 +93,8 @@ void main() {
 
   testWidgets('Push awaits backend so UI stays busy',
       (WidgetTester tester) async {
-    final storage = _InMemorySecureStorage({});
-    final store = SyncConfigStore(storage: storage);
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
 
     final pushCompleter = Completer<int>();
@@ -141,68 +141,6 @@ void main() {
     );
     expect(pushButtonAfter.onPressed, isNotNull);
   });
-}
-
-final class _InMemorySecureStorage extends FlutterSecureStorage {
-  _InMemorySecureStorage(this._values);
-
-  final Map<String, String> _values;
-
-  @override
-  Future<String?> read({
-    required String key,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    return _values[key];
-  }
-
-  @override
-  Future<Map<String, String>> readAll({
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    return Map<String, String>.from(_values);
-  }
-
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    if (value == null) {
-      _values.remove(key);
-      return;
-    }
-    _values[key] = value;
-  }
-
-  @override
-  Future<void> delete({
-    required String key,
-    IOSOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    MacOsOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) async {
-    _values.remove(key);
-  }
 }
 
 class _FakeBackend implements AppBackend {

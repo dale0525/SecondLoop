@@ -9,6 +9,32 @@ BASEDIR=$(cd "$BASEDIR" ; pwd -P)
 # Remove XCode SDK from path. Otherwise this breaks tool compilation when building iOS project
 NEW_PATH=`echo $PATH | tr ":" "\n" | grep -v "Contents/Developer/" | tr "\n" ":"`
 
+# Xcode GUI builds often run with a minimal PATH (e.g. missing Homebrew),
+# which can make `cargo` unavailable and break the Rust build phase.
+# Prefer common Rust install locations when present.
+if [[ -n "${HOME:-}" ]]; then
+  if [[ -d "$HOME/.cargo/bin" ]]; then
+    NEW_PATH="$HOME/.cargo/bin:$NEW_PATH"
+  fi
+fi
+if [[ -d "/opt/homebrew/bin" ]]; then
+  NEW_PATH="/opt/homebrew/bin:$NEW_PATH"
+fi
+if [[ -d "/usr/local/bin" ]]; then
+  NEW_PATH="/usr/local/bin:$NEW_PATH"
+fi
+
+# Prefer Pixi-managed toolchain for macOS builds when available.
+# This avoids Homebrew Rust stdlibs being built with a newer macOS minimum version
+# than the app's deployment target (which causes noisy ld warnings).
+if [[ "${PLATFORM_NAME:-}" == "macosx" ]]; then
+  PROJECT_ROOT=$(cd "$BASEDIR/../.." ; pwd -P)
+  PIXI_BIN="$PROJECT_ROOT/.pixi/envs/default/bin"
+  if [[ -d "$PIXI_BIN" ]]; then
+    NEW_PATH="$PIXI_BIN:$NEW_PATH"
+  fi
+fi
+
 export PATH=${NEW_PATH%?} # remove trailing :
 
 env

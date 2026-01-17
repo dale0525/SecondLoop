@@ -40,6 +40,10 @@ A new Flutter FFI plugin project.
     'DEFINES_MODULE' => 'YES',
     # Flutter.framework does not contain a i386 slice.
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
+    # Build only for the current machine arch to avoid requiring rustup-installed
+    # cross targets (e.g. x86_64-apple-darwin on Apple Silicon) during dev runs.
+    'ARCHS' => '$(NATIVE_ARCH_ACTUAL)',
+    'ONLY_ACTIVE_ARCH' => 'YES',
     'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/libsecondloop_rust.a',
   }
 end

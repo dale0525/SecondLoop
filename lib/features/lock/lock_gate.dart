@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
@@ -20,6 +21,8 @@ class _LockGateState extends State<LockGate> {
   Future<_GateBootstrapResult>? _bootstrapFuture;
   Uint8List? _sessionKey;
 
+  static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
+
   void _lock() {
     setState(() {
       _sessionKey = null;
@@ -32,6 +35,10 @@ class _LockGateState extends State<LockGate> {
 
     final isSet = await backend.isMasterPasswordSet();
     if (!isSet) return const _GateBootstrapResult.needsSetup();
+
+    final prefs = await SharedPreferences.getInstance();
+    final appLockEnabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
+    if (appLockEnabled) return const _GateBootstrapResult.needsUnlock();
 
     final savedKey = await backend.loadSavedSessionKey();
     if (savedKey == null) return const _GateBootstrapResult.needsUnlock();
