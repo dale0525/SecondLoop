@@ -80,9 +80,7 @@ fn clear_remote_root_deletes_localdir_data() {
         .expect("create localdir remote");
     let remote_root = "SecondLoopTest";
 
-    remote
-        .mkdir_all(remote_root)
-        .expect("mkdir remote root");
+    remote.mkdir_all(remote_root).expect("mkdir remote root");
     remote
         .put(
             &format!("{remote_root}/deviceA/ops/op_1.json"),

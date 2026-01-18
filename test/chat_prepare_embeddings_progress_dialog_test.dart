@@ -5,20 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/semantic_search_debug_page.dart';
+import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Semantic search prepares embeddings before searching',
-      (tester) async {
-    tester.view.physicalSize = const Size(1200, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    final backend = _SemanticSearchPrepBackend();
+  testWidgets('Ask AI preparation dialog shows elapsed time', (tester) async {
+    final backend = _SlowPrepareBackend();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -27,29 +19,36 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: const SemanticSearchDebugPage(),
+            child: const ChatPage(
+              conversation: Conversation(
+                id: 'main_stream',
+                title: 'Main Stream',
+                createdAtMs: 0,
+                updatedAtMs: 0,
+              ),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'hello');
-    await tester.tap(find.text('Search'));
-    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
+    await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
 
-    expect(backend.calls, contains('processPending'));
-    expect(backend.calls, contains('searchSimilarMessages'));
-    expect(
-      backend.calls.indexOf('processPending'),
-      lessThan(backend.calls.indexOf('searchSimilarMessages')),
-    );
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Elapsed: 0s'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Elapsed: 1s'), findsOneWidget);
+
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+    expect(find.byType(AlertDialog), findsNothing);
   });
 }
 
-final class _SemanticSearchPrepBackend implements AppBackend {
-  final List<String> calls = <String>[];
-
+final class _SlowPrepareBackend implements AppBackend {
   @override
   Future<void> init() async {}
 
@@ -92,7 +91,12 @@ final class _SemanticSearchPrepBackend implements AppBackend {
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      throw UnimplementedError();
+      const Conversation(
+        id: 'main_stream',
+        title: 'Main Stream',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      );
 
   @override
   Future<List<Message>> listMessages(
@@ -126,7 +130,7 @@ final class _SemanticSearchPrepBackend implements AppBackend {
     Uint8List key, {
     int limit = 32,
   }) async {
-    calls.add('processPending');
+    await Future<void>.delayed(const Duration(seconds: 2));
     return 0;
   }
 
@@ -135,10 +139,8 @@ final class _SemanticSearchPrepBackend implements AppBackend {
     Uint8List key,
     String query, {
     int topK = 10,
-  }) async {
-    calls.add('searchSimilarMessages');
-    return const <SimilarMessage>[];
-  }
+  }) async =>
+      const <SimilarMessage>[];
 
   @override
   Future<int> rebuildMessageEmbeddings(
@@ -149,14 +151,11 @@ final class _SemanticSearchPrepBackend implements AppBackend {
 
   @override
   Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
-      const <String>[
-        'secondloop-default-embed-v0',
-        'fastembed:intfloat/multilingual-e5-small',
-      ];
+      const <String>[];
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
-      'fastembed:intfloat/multilingual-e5-small';
+      'secondloop-default-embed-v0';
 
   @override
   Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>

@@ -250,7 +250,7 @@ final class _AskAiPreparationBackend implements AppBackend {
   Future<int> syncLocaldirPush(
     Uint8List key,
     Uint8List syncKey, {
-      required String localDir,
+    required String localDir,
     required String remoteRoot,
   }) async =>
       0;

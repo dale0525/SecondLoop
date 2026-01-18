@@ -28,7 +28,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final tempAppSupport =
         Directory.systemTemp.createTempSync('secondloop_appsupport_');
-    final tempRemote = Directory.systemTemp.createTempSync('secondloop_remote_');
+    final tempRemote =
+        Directory.systemTemp.createTempSync('secondloop_remote_');
     addTearDown(() async {
       try {
         if (tempAppSupport.existsSync()) {
@@ -45,16 +46,17 @@ void main() {
     PathProviderPlatform.instance =
         _FakePathProviderPlatform(applicationSupportPath: tempAppSupport.path);
 
-    final authFile = File('${tempAppSupport.path}${Platform.pathSeparator}auth.json');
+    final authFile =
+        File('${tempAppSupport.path}${Platform.pathSeparator}auth.json');
     authFile.createSync(recursive: true);
     authFile.writeAsStringSync('{"version":1}');
 
-    final dbFile =
-        File('${tempAppSupport.path}${Platform.pathSeparator}secondloop.sqlite3');
+    final dbFile = File(
+        '${tempAppSupport.path}${Platform.pathSeparator}secondloop.sqlite3');
     dbFile.createSync(recursive: true);
     dbFile.writeAsStringSync('sentinel-db');
 
-    final remoteRoot = 'SecondLoopTest';
+    const remoteRoot = 'SecondLoopTest';
     final remoteData = File(
       '${tempRemote.path}${Platform.pathSeparator}$remoteRoot'
       '${Platform.pathSeparator}deviceA${Platform.pathSeparator}ops'
@@ -195,18 +197,21 @@ final class _FakeBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) =>
+  Future<void> setMessageDeleted(
+          Uint8List key, String messageId, bool isDeleted) =>
       throw UnimplementedError();
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key, {int limit = 32}) =>
+  Future<int> processPendingMessageEmbeddings(Uint8List key,
+          {int limit = 32}) =>
       throw UnimplementedError();
 
   @override
-  Future<List<SimilarMessage>> searchSimilarMessages(Uint8List key, String query,
+  Future<List<SimilarMessage>> searchSimilarMessages(
+          Uint8List key, String query,
           {int topK = 10}) =>
       throw UnimplementedError();
 

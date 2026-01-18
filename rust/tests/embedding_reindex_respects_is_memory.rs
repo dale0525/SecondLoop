@@ -50,4 +50,3 @@ fn rebuild_message_embeddings_default_does_not_leave_non_memory_pending() {
         .expect("pending count");
     assert_eq!(pending, 0);
 }
-

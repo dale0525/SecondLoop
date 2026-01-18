@@ -35,8 +35,14 @@ fn ask_ai_inserts_non_memory_messages() {
     let conn = db::open(&app_dir).expect("open db");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
-    db::insert_message(&conn, &key, &conversation.id, "user", "老婆 3 月 1 号回台湾")
-        .expect("memory message");
+    db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "老婆 3 月 1 号回台湾",
+    )
+    .expect("memory message");
 
     let provider = FakeProvider;
     let mut on_event = |_ev: ChatDelta| Ok(());
@@ -85,4 +91,3 @@ fn ask_ai_inserts_non_memory_messages() {
         .expect("pending count");
     assert_eq!(pending, 0);
 }
-

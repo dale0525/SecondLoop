@@ -152,6 +152,7 @@ pub fn ask_ai_with_provider(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     conn: &Connection,
     key: &[u8; 32],
@@ -250,6 +251,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn ask_ai_with_provider_using_active_embeddings(
     conn: &Connection,
     key: &[u8; 32],
@@ -264,7 +266,9 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
 
     let similar = match focus {
-        Focus::AllMemories => db::search_similar_messages_active(conn, key, app_dir, question, top_k)?,
+        Focus::AllMemories => {
+            db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
+        }
         Focus::ThisThread => db::search_similar_messages_in_conversation_active(
             conn,
             key,

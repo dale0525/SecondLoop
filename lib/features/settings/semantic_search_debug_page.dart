@@ -49,8 +49,9 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
       setState(() {
         _embeddingModels = models;
         _activeEmbeddingModel = active;
-        _selectedEmbeddingModel =
-            models.contains(active) ? active : (models.isEmpty ? null : models.first);
+        _selectedEmbeddingModel = models.contains(active)
+            ? active
+            : (models.isEmpty ? null : models.first);
       });
     } catch (e) {
       if (mounted) setState(() => _modelStatus = '$e');
@@ -167,7 +168,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     Uint8List sessionKey,
   ) async {
     final status = ValueNotifier<String>('Preparing semantic search…');
+    final elapsedSeconds = ValueNotifier<int>(0);
     var dialogShown = false;
+
+    final elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      elapsedSeconds.value += 1;
+    });
 
     final showTimer = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;
@@ -177,21 +183,37 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
         barrierDismissible: false,
         builder: (context) {
           return AlertDialog(
-            content: ValueListenableBuilder<String>(
-              valueListenable: status,
-              builder: (context, value, child) {
-                return Row(
-                  children: [
-                    const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(value)),
-                  ],
-                );
-              },
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: status,
+                  builder: (context, value, child) {
+                    return Row(
+                      children: [
+                        const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(value)),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                ValueListenableBuilder<int>(
+                  valueListenable: elapsedSeconds,
+                  builder: (context, value, child) {
+                    return Text(
+                      'Elapsed: ${value}s',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    );
+                  },
+                ),
+              ],
             ),
           );
         },
@@ -211,10 +233,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
       }
     } finally {
       showTimer.cancel();
+      elapsedTimer.cancel();
       if (dialogShown && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       status.dispose();
+      elapsedSeconds.dispose();
     }
   }
 
@@ -250,7 +274,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                             .toList(),
                         onChanged: _busy
                             ? null
-                            : (v) => setState(() => _selectedEmbeddingModel = v),
+                            : (v) =>
+                                setState(() => _selectedEmbeddingModel = v),
                       ),
                       const SizedBox(width: 12),
                       OutlinedButton(

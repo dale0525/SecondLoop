@@ -53,4 +53,3 @@ fn active_embeddings_dont_downgrade_on_fastembed_init_failure() {
         "should not silently fall back to default embeddings"
     );
 }
-

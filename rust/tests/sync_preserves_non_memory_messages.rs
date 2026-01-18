@@ -105,4 +105,3 @@ fn sync_preserves_non_memory_messages() {
         .expect("pending count");
     assert_eq!(pending, 0);
 }
-

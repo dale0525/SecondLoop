@@ -57,19 +57,23 @@ fn switching_embedding_model_triggers_full_reindex() {
     db::insert_message(&conn, &key, &conversation.id, "user", "banana").expect("m2");
 
     let embedder_v1 = FakeEmbedder::new("fake-embed-v1", 0.0);
-    let processed = db::process_pending_message_embeddings(&conn, &key, &embedder_v1, 100)
-        .expect("process v1");
+    let processed =
+        db::process_pending_message_embeddings(&conn, &key, &embedder_v1, 100).expect("process v1");
     assert_eq!(processed, 2);
 
     let pending: i64 = conn
-        .query_row("SELECT COUNT(*) FROM messages WHERE needs_embedding = 1", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE needs_embedding = 1",
+            [],
+            |row| row.get(0),
+        )
         .expect("pending count");
     assert_eq!(pending, 0);
 
     let rows_v1: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
+            row.get(0)
+        })
         .expect("embeddings count v1");
     assert_eq!(rows_v1, 2);
 
@@ -82,19 +86,23 @@ fn switching_embedding_model_triggers_full_reindex() {
     assert!(changed);
 
     let rows_after_switch: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
+            row.get(0)
+        })
         .expect("embeddings after switch");
     assert_eq!(rows_after_switch, 0);
 
     let pending_after_switch: i64 = conn
-        .query_row("SELECT COUNT(*) FROM messages WHERE needs_embedding = 1", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM messages WHERE needs_embedding = 1",
+            [],
+            |row| row.get(0),
+        )
         .expect("pending after switch");
     assert_eq!(pending_after_switch, 2);
 
-    let processed_v2 = db::process_pending_message_embeddings(&conn, &key, &embedder_v2, 100)
-        .expect("process v2");
+    let processed_v2 =
+        db::process_pending_message_embeddings(&conn, &key, &embedder_v2, 100).expect("process v2");
     assert_eq!(processed_v2, 2);
 
     let bad_rows: i64 = conn
@@ -111,8 +119,9 @@ fn switching_embedding_model_triggers_full_reindex() {
     assert!(!changed_again);
 
     let rows_after_noop: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
+            row.get(0)
+        })
         .expect("embeddings after noop");
     assert_eq!(rows_after_noop, 2);
 }
-

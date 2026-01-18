@@ -581,7 +581,14 @@ pub fn insert_message(
     role: &str,
     content: &str,
 ) -> Result<Message> {
-    insert_message_with_is_memory(conn, key, conversation_id, role, content, role != "assistant")
+    insert_message_with_is_memory(
+        conn,
+        key,
+        conversation_id,
+        role,
+        content,
+        role != "assistant",
+    )
 }
 
 pub fn insert_message_non_memory(
@@ -974,7 +981,11 @@ pub fn load_active_llm_profile_config(
 }
 
 fn default_embedding_model_name_for_platform() -> &'static str {
-    if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+    if cfg!(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux"
+    )) {
         crate::embedding::PRODUCTION_MODEL_NAME
     } else {
         crate::embedding::DEFAULT_MODEL_NAME
@@ -1153,7 +1164,13 @@ pub fn search_similar_messages_in_conversation_active(
 
     if desired == crate::embedding::DEFAULT_MODEL_NAME {
         set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
-        return search_similar_messages_in_conversation_default(conn, key, conversation_id, query, top_k);
+        return search_similar_messages_in_conversation_default(
+            conn,
+            key,
+            conversation_id,
+            query,
+            top_k,
+        );
     }
 
     if desired == crate::embedding::PRODUCTION_MODEL_NAME {
@@ -1184,7 +1201,13 @@ pub fn search_similar_messages_in_conversation_active(
         )))]
         {
             set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
-            return search_similar_messages_in_conversation_default(conn, key, conversation_id, query, top_k);
+            return search_similar_messages_in_conversation_default(
+                conn,
+                key,
+                conversation_id,
+                query,
+                top_k,
+            );
         }
     }
 
@@ -1487,19 +1510,27 @@ fn get_message_by_id_with_is_memory(
     key: &[u8; 32],
     id: &str,
 ) -> Result<(Message, bool)> {
-    let (
-        conversation_id,
-        role,
-        content_blob,
-        created_at_ms,
-        is_memory_i64,
-    ): (String, String, Vec<u8>, i64, i64) = conn
+    let (conversation_id, role, content_blob, created_at_ms, is_memory_i64): (
+        String,
+        String,
+        Vec<u8>,
+        i64,
+        i64,
+    ) = conn
         .query_row(
             r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
                FROM messages
                WHERE id = ?1"#,
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .map_err(|e| anyhow!("get message failed: {e}"))?;
 

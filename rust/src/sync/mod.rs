@@ -183,7 +183,11 @@ impl RemoteStore for InMemoryRemoteStore {
                 files.remove(&key);
             }
 
-            let dirs_to_remove: Vec<String> = dirs.iter().filter(|d| d.starts_with(&dir)).cloned().collect();
+            let dirs_to_remove: Vec<String> = dirs
+                .iter()
+                .filter(|d| d.starts_with(&dir))
+                .cloned()
+                .collect();
             for d in dirs_to_remove {
                 dirs.remove(&d);
             }

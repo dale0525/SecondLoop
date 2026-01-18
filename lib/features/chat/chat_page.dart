@@ -323,10 +323,14 @@ class _ChatPageState extends State<ChatPage> {
     Uint8List sessionKey,
   ) async {
     final status = ValueNotifier<String>('Preparing semantic search…');
-    Timer? showTimer;
+    final elapsedSeconds = ValueNotifier<int>(0);
     var dialogShown = false;
 
-    showTimer = Timer(const Duration(milliseconds: 200), () {
+    final elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      elapsedSeconds.value += 1;
+    });
+
+    final showTimer = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;
       dialogShown = true;
       showDialog<void>(
@@ -334,21 +338,37 @@ class _ChatPageState extends State<ChatPage> {
         barrierDismissible: false,
         builder: (context) {
           return AlertDialog(
-            content: ValueListenableBuilder<String>(
-              valueListenable: status,
-              builder: (context, value, child) {
-                return Row(
-                  children: [
-                    const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(value)),
-                  ],
-                );
-              },
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: status,
+                  builder: (context, value, child) {
+                    return Row(
+                      children: [
+                        const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(value)),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                ValueListenableBuilder<int>(
+                  valueListenable: elapsedSeconds,
+                  builder: (context, value, child) {
+                    return Text(
+                      'Elapsed: ${value}s',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    );
+                  },
+                ),
+              ],
             ),
           );
         },
@@ -358,18 +378,20 @@ class _ChatPageState extends State<ChatPage> {
     try {
       var totalProcessed = 0;
       while (true) {
-        final processed =
-            await backend.processPendingMessageEmbeddings(sessionKey, limit: 256);
+        final processed = await backend
+            .processPendingMessageEmbeddings(sessionKey, limit: 256);
         if (processed <= 0) break;
         totalProcessed += processed;
         status.value = 'Indexing messages… ($totalProcessed indexed)';
       }
     } finally {
       showTimer.cancel();
+      elapsedTimer.cancel();
       if (dialogShown && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       status.dispose();
+      elapsedSeconds.dispose();
     }
   }
 

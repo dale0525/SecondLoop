@@ -52,4 +52,3 @@ fn vector_search_excludes_non_memory_messages() {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].message.content, "apple pie");
 }
-

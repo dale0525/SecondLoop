@@ -36,8 +36,11 @@ impl FastEmbedder {
             }
         }
 
-        let embedder = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Self::try_new(app_dir)))
-            .map_err(|p| anyhow!("fastembed init panicked: {}", panic_payload_to_string(&p)))??;
+        let embedder =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Self::try_new(app_dir)))
+                .map_err(|p| {
+                    anyhow!("fastembed init panicked: {}", panic_payload_to_string(&p))
+                })??;
 
         let mut guard = match cache.lock() {
             Ok(g) => g,
@@ -53,9 +56,10 @@ impl FastEmbedder {
         let cache_dir = app_dir.join("models").join("fastembed");
         fs::create_dir_all(&cache_dir)?;
 
-        let options = fastembed::TextInitOptions::new(fastembed::EmbeddingModel::MultilingualE5Small)
-            .with_cache_dir(cache_dir)
-            .with_show_download_progress(false);
+        let options =
+            fastembed::TextInitOptions::new(fastembed::EmbeddingModel::MultilingualE5Small)
+                .with_cache_dir(cache_dir)
+                .with_show_download_progress(false);
 
         let mut model =
             fastembed::TextEmbedding::try_new(options).context("fastembed: init model")?;
@@ -63,10 +67,7 @@ impl FastEmbedder {
         let sanity = model
             .embed(vec!["query: hello"], Some(1))
             .context("fastembed: sanity embed")?;
-        let dim = sanity
-            .first()
-            .map(|v| v.len())
-            .unwrap_or_default();
+        let dim = sanity.first().map(|v| v.len()).unwrap_or_default();
         if dim != DEFAULT_EMBED_DIM {
             return Err(anyhow!(
                 "fastembed dim mismatch: expected {}, got {}",
@@ -98,15 +99,13 @@ impl Embedder for FastEmbedder {
             Err(poisoned) => poisoned.into_inner(),
         };
         let inputs: Vec<&str> = texts.iter().map(|t| t.as_str()).collect();
-        let embeddings = model
-            .embed(inputs, None)
-            .context("fastembed: embed")?;
+        let embeddings = model.embed(inputs, None).context("fastembed: embed")?;
 
         if embeddings.iter().any(|v| v.len() != DEFAULT_EMBED_DIM) {
             return Err(anyhow!("fastembed returned unexpected embedding dimension"));
         }
 
-    Ok(embeddings)
+        Ok(embeddings)
     }
 }
 
@@ -161,9 +160,7 @@ fn ensure_onnxruntime_loaded(app_dir: &Path) -> Result<()> {
 
         let dylib_path = ensure_onnxruntime_dylib(app_dir)?;
         let dylib_path = dylib_path.to_string_lossy().to_string();
-        ort::init_from(dylib_path)
-            .commit()
-            .context("ort: commit")?;
+        ort::init_from(dylib_path).commit().context("ort: commit")?;
         Ok(())
     }));
 
@@ -212,24 +209,6 @@ fn test_force_panic_onnxruntime_init() -> bool {
 #[cfg(test)]
 fn set_test_force_panic_onnxruntime_init(enabled: bool) {
     FORCE_PANIC_ONNXRUNTIME_INIT.store(enabled, Ordering::SeqCst);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ensure_onnxruntime_loaded_does_not_panic_or_poison_on_panic() {
-        let temp_dir = tempfile::tempdir().expect("tempdir");
-        set_test_force_panic_onnxruntime_init(true);
-
-        let _ = ensure_onnxruntime_loaded(temp_dir.path())
-            .expect_err("forced panic should be caught as error");
-        let _ = ensure_onnxruntime_loaded(temp_dir.path())
-            .expect_err("forced panic should be caught as error again");
-
-        set_test_force_panic_onnxruntime_init(false);
-    }
 }
 
 fn ensure_onnxruntime_dylib(app_dir: &Path) -> Result<PathBuf> {
@@ -385,7 +364,11 @@ fn ensure_main_dylib_fallbacks(runtime_dir: &Path, main_path: &Path) -> Result<(
 
     let Some(best) = candidates
         .iter()
-        .find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.contains(ONNXRUNTIME_VERSION)))
+        .find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.contains(ONNXRUNTIME_VERSION))
+        })
         .or_else(|| candidates.first())
         .cloned()
     else {
@@ -406,9 +389,7 @@ fn onnxruntime_archive_name() -> Result<String> {
     }
 
     if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        return Ok(format!(
-            "onnxruntime-osx-x86_64-{ONNXRUNTIME_VERSION}.tgz"
-        ));
+        return Ok(format!("onnxruntime-osx-x86_64-{ONNXRUNTIME_VERSION}.tgz"));
     }
 
     if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
@@ -440,4 +421,22 @@ fn onnxruntime_main_dylib_name() -> Result<&'static str> {
     }
 
     Err(anyhow!("unsupported target_os for onnxruntime dylib"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_onnxruntime_loaded_does_not_panic_or_poison_on_panic() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        set_test_force_panic_onnxruntime_init(true);
+
+        let _ = ensure_onnxruntime_loaded(temp_dir.path())
+            .expect_err("forced panic should be caught as error");
+        let _ = ensure_onnxruntime_loaded(temp_dir.path())
+            .expect_err("forced panic should be caught as error again");
+
+        set_test_force_panic_onnxruntime_init(false);
+    }
 }

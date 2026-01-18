@@ -42,10 +42,8 @@ fn vector_search_dedupes_duplicate_message_contents() {
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
     let _m1 = db::insert_message(&conn, &key, &conversation.id, "user", "apple").expect("m1");
-    let _m2 =
-        db::insert_message(&conn, &key, &conversation.id, "user", "apple").expect("m2");
-    let _m3 =
-        db::insert_message(&conn, &key, &conversation.id, "user", "apple pie").expect("m3");
+    let _m2 = db::insert_message(&conn, &key, &conversation.id, "user", "apple").expect("m2");
+    let _m3 = db::insert_message(&conn, &key, &conversation.id, "user", "apple pie").expect("m3");
 
     let embedder = TestEmbedder;
     db::process_pending_message_embeddings(&conn, &key, &embedder, 100).expect("index");
@@ -56,4 +54,3 @@ fn vector_search_dedupes_duplicate_message_contents() {
     assert_eq!(results[1].message.content, "apple pie");
     assert!(results[0].distance <= results[1].distance);
 }
-

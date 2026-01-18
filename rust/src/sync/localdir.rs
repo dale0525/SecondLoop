@@ -119,7 +119,9 @@ impl super::RemoteStore for LocalDirRemoteStore {
             let local = virtual_to_local(&self.root, dir.trim_end_matches('/'));
             match fs::remove_dir_all(local) {
                 Ok(()) => Ok(()),
-                Err(e) if e.kind() == ErrorKind::NotFound => Err(super::NotFound { path: dir }.into()),
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    Err(super::NotFound { path: dir }.into())
+                }
                 Err(e) => Err(e.into()),
             }
         } else {

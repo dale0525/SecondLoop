@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use crate::crypto::{derive_root_key, KdfParams};
+use crate::embedding;
 use crate::frb_generated::StreamSink;
 use crate::sync;
 use crate::sync::RemoteStore;
 use crate::{auth, db};
-use crate::embedding;
 use crate::{llm, rag};
 use anyhow::{anyhow, Result};
 
@@ -23,7 +23,11 @@ fn sync_key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
 }
 
 fn default_embedding_model_name_for_platform() -> &'static str {
-    if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+    if cfg!(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux"
+    )) {
         embedding::PRODUCTION_MODEL_NAME
     } else {
         embedding::DEFAULT_MODEL_NAME
@@ -197,8 +201,12 @@ pub fn db_process_pending_message_embeddings(
 ) -> Result<u32> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let processed =
-        db::process_pending_message_embeddings_active(&conn, &key, Path::new(&app_dir), limit as usize)?;
+    let processed = db::process_pending_message_embeddings_active(
+        &conn,
+        &key,
+        Path::new(&app_dir),
+        limit as usize,
+    )?;
     Ok(processed as u32)
 }
 
@@ -237,7 +245,11 @@ pub fn db_list_embedding_model_names(app_dir: String, key: Vec<u8>) -> Result<Ve
     let _conn = db::open(Path::new(&app_dir))?;
 
     let mut models = vec![embedding::DEFAULT_MODEL_NAME.to_string()];
-    if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+    if cfg!(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux"
+    )) {
         models.push(embedding::PRODUCTION_MODEL_NAME.to_string());
     }
     Ok(models)
@@ -268,7 +280,11 @@ pub fn db_set_active_embedding_model_name(
     let desired = match model_name.as_str() {
         embedding::DEFAULT_MODEL_NAME => embedding::DEFAULT_MODEL_NAME,
         embedding::PRODUCTION_MODEL_NAME => {
-            if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+            if cfg!(any(
+                target_os = "windows",
+                target_os = "macos",
+                target_os = "linux"
+            )) {
                 embedding::PRODUCTION_MODEL_NAME
             } else {
                 return Err(anyhow!(
