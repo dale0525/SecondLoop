@@ -60,13 +60,14 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
         child: TranslationProvider(
           child: Builder(
             builder: (context) {
+              final locale = TranslationProvider.of(context).flutterLocale;
               return MaterialApp(
                 locale: TranslationProvider.of(context).flutterLocale,
                 supportedLocales: AppLocaleUtils.supportedLocales,
                 localizationsDelegates: GlobalMaterialLocalizations.delegates,
                 onGenerateTitle: (context) => context.t.app.title,
-                theme: AppTheme.light(),
-                darkTheme: AppTheme.dark(),
+                theme: AppTheme.light(locale: locale),
+                darkTheme: AppTheme.dark(locale: locale),
                 themeMode: ThemeMode.system,
                 navigatorKey: _navigatorKey,
                 home: const AppShell(),
