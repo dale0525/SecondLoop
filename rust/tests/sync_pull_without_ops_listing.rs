@@ -43,6 +43,10 @@ impl sync::RemoteStore for CachedListingRemote {
     fn put(&self, path: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
         self.inner.put(path, bytes)
     }
+
+    fn delete(&self, path: &str) -> anyhow::Result<()> {
+        self.inner.delete(path)
+    }
 }
 
 #[test]

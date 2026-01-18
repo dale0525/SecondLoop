@@ -205,6 +205,10 @@ final class _CountingBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) =>
+      throw UnimplementedError();
+
+  @override
   Future<int> processPendingMessageEmbeddings(Uint8List key,
           {int limit = 32}) =>
       throw UnimplementedError();
@@ -217,6 +221,18 @@ final class _CountingBackend implements AppBackend {
 
   @override
   Future<int> rebuildMessageEmbeddings(Uint8List key, {int batchLimit = 256}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<String>> listEmbeddingModelNames(Uint8List key) =>
+      throw UnimplementedError();
+
+  @override
+  Future<String> getActiveEmbeddingModelName(Uint8List key) =>
+      throw UnimplementedError();
+
+  @override
+  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
       throw UnimplementedError();
 
   @override
@@ -259,6 +275,14 @@ final class _CountingBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
+  Future<void> syncWebdavClearRemoteRoot(
+          {required String baseUrl,
+          String? username,
+          String? password,
+          required String remoteRoot}) =>
+      throw UnimplementedError();
+
+  @override
   Future<int> syncWebdavPush(Uint8List key, Uint8List syncKey,
           {required String baseUrl,
           String? username,
@@ -276,6 +300,11 @@ final class _CountingBackend implements AppBackend {
 
   @override
   Future<void> syncLocaldirTestConnection(
+          {required String localDir, required String remoteRoot}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> syncLocaldirClearRemoteRoot(
           {required String localDir, required String remoteRoot}) =>
       throw UnimplementedError();
 

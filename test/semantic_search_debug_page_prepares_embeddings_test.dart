@@ -1,39 +1,54 @@
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/main.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/settings/semantic_search_debug_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Boots directly into Main Stream with saved session key',
+  testWidgets('Semantic search prepares embeddings before searching',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final backend = _AutoUnlockedBackend();
+    tester.binding.window.physicalSizeTestValue = const Size(1200, 1600);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(() {
+      tester.binding.window.clearPhysicalSizeTestValue();
+      tester.binding.window.clearDevicePixelRatioTestValue();
+    });
 
-    await tester.pumpWidget(MyApp(backend: backend));
+    final backend = _SemanticSearchPrepBackend();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const SemanticSearchDebugPage(),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Main Stream'), findsWidgets);
-    expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, contains('processPending'));
+    expect(backend.calls, contains('searchSimilarMessages'));
+    expect(
+      backend.calls.indexOf('processPending'),
+      lessThan(backend.calls.indexOf('searchSimilarMessages')),
+    );
   });
 }
 
-final class _AutoUnlockedBackend implements AppBackend {
-  Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
-
-  static const _mainStream = Conversation(
-    id: 'main_stream',
-    title: 'Main Stream',
-    createdAtMs: 0,
-    updatedAtMs: 0,
-  );
-
-  final List<Message> _messages = <Message>[];
+final class _SemanticSearchPrepBackend implements AppBackend {
+  final List<String> calls = <String>[];
 
   @override
   Future<void> init() async {}
@@ -48,17 +63,13 @@ final class _AutoUnlockedBackend implements AppBackend {
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
 
   @override
-  Future<Uint8List?> loadSavedSessionKey() async => _savedKey;
+  Future<Uint8List?> loadSavedSessionKey() async => null;
 
   @override
-  Future<void> saveSessionKey(Uint8List key) async {
-    _savedKey = Uint8List.fromList(key);
-  }
+  Future<void> saveSessionKey(Uint8List key) async {}
 
   @override
-  Future<void> clearSavedSessionKey() async {
-    _savedKey = null;
-  }
+  Future<void> clearSavedSessionKey() async {}
 
   @override
   Future<void> validateKey(Uint8List key) async {}
@@ -73,7 +84,7 @@ final class _AutoUnlockedBackend implements AppBackend {
 
   @override
   Future<List<Conversation>> listConversations(Uint8List key) async =>
-      const <Conversation>[_mainStream];
+      const <Conversation>[];
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
@@ -81,12 +92,12 @@ final class _AutoUnlockedBackend implements AppBackend {
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      _mainStream;
+      throw UnimplementedError();
 
   @override
   Future<List<Message>> listMessages(
           Uint8List key, String conversationId) async =>
-      List<Message>.from(_messages);
+      const <Message>[];
 
   @override
   Future<Message> insertMessage(
@@ -94,40 +105,18 @@ final class _AutoUnlockedBackend implements AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) async {
-    final message = Message(
-      id: 'm${_messages.length + 1}',
-      conversationId: conversationId,
-      role: role,
-      content: content,
-      createdAtMs: 0,
-    );
-    _messages.add(message);
-    return message;
-  }
+  }) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> editMessage(
-      Uint8List key, String messageId, String content) async {
-    for (var i = 0; i < _messages.length; i++) {
-      final msg = _messages[i];
-      if (msg.id != messageId) continue;
-      _messages[i] = Message(
-        id: msg.id,
-        conversationId: msg.conversationId,
-        role: msg.role,
-        content: content,
-        createdAtMs: msg.createdAtMs,
-      );
-      return;
-    }
-  }
+          Uint8List key, String messageId, String content) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> setMessageDeleted(
-      Uint8List key, String messageId, bool isDeleted) async {
-    _messages.removeWhere((m) => m.id == messageId);
-  }
+          Uint8List key, String messageId, bool isDeleted) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
@@ -136,16 +125,20 @@ final class _AutoUnlockedBackend implements AppBackend {
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,
-  }) async =>
-      0;
+  }) async {
+    calls.add('processPending');
+    return 0;
+  }
 
   @override
   Future<List<SimilarMessage>> searchSimilarMessages(
     Uint8List key,
     String query, {
     int topK = 10,
-  }) async =>
-      const <SimilarMessage>[];
+  }) async {
+    calls.add('searchSimilarMessages');
+    return const <SimilarMessage>[];
+  }
 
   @override
   Future<int> rebuildMessageEmbeddings(
@@ -156,15 +149,18 @@ final class _AutoUnlockedBackend implements AppBackend {
 
   @override
   Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
-      const <String>['secondloop-default-embed-v0'];
+      const <String>[
+        'secondloop-default-embed-v0',
+        'fastembed:intfloat/multilingual-e5-small',
+      ];
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
-      'secondloop-default-embed-v0';
+      'fastembed:intfloat/multilingual-e5-small';
 
   @override
   Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
-      Future<bool>.value(modelName != 'secondloop-default-embed-v0');
+      Future<bool>.value(false);
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>

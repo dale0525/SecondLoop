@@ -5,6 +5,7 @@ use crate::frb_generated::StreamSink;
 use crate::sync;
 use crate::sync::RemoteStore;
 use crate::{auth, db};
+use crate::embedding;
 use crate::{llm, rag};
 use anyhow::{anyhow, Result};
 
@@ -19,6 +20,22 @@ fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
 
 fn sync_key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     key_from_bytes(bytes)
+}
+
+fn default_embedding_model_name_for_platform() -> &'static str {
+    if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+        embedding::PRODUCTION_MODEL_NAME
+    } else {
+        embedding::DEFAULT_MODEL_NAME
+    }
+}
+
+fn normalize_embedding_model_name(name: &str) -> &'static str {
+    match name {
+        embedding::DEFAULT_MODEL_NAME => embedding::DEFAULT_MODEL_NAME,
+        embedding::PRODUCTION_MODEL_NAME => embedding::PRODUCTION_MODEL_NAME,
+        _ => default_embedding_model_name_for_platform(),
+    }
 }
 
 #[flutter_rust_bridge::frb]
@@ -126,6 +143,14 @@ pub fn db_set_message_deleted(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_reset_vault_data_preserving_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    auth::validate_key(Path::new(&app_dir), &key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::reset_vault_data_preserving_llm_profiles(&conn)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_create_llm_profile(
     app_dir: String,
     key: Vec<u8>,
@@ -172,7 +197,8 @@ pub fn db_process_pending_message_embeddings(
 ) -> Result<u32> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let processed = db::process_pending_message_embeddings_default(&conn, &key, limit as usize)?;
+    let processed =
+        db::process_pending_message_embeddings_active(&conn, &key, Path::new(&app_dir), limit as usize)?;
     Ok(processed as u32)
 }
 
@@ -185,7 +211,7 @@ pub fn db_search_similar_messages(
 ) -> Result<Vec<db::SimilarMessage>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::search_similar_messages_default(&conn, &key, &query, top_k as usize)
+    db::search_similar_messages_active(&conn, &key, Path::new(&app_dir), &query, top_k as usize)
 }
 
 #[flutter_rust_bridge::frb]
@@ -196,8 +222,64 @@ pub fn db_rebuild_message_embeddings(
 ) -> Result<u32> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let rebuilt = db::rebuild_message_embeddings_default(&conn, &key, batch_limit as usize)?;
+    let rebuilt = db::rebuild_message_embeddings_active(
+        &conn,
+        &key,
+        Path::new(&app_dir),
+        batch_limit as usize,
+    )?;
     Ok(rebuilt as u32)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_embedding_model_names(app_dir: String, key: Vec<u8>) -> Result<Vec<String>> {
+    let _key = key_from_bytes(key)?;
+    let _conn = db::open(Path::new(&app_dir))?;
+
+    let mut models = vec![embedding::DEFAULT_MODEL_NAME.to_string()];
+    if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+        models.push(embedding::PRODUCTION_MODEL_NAME.to_string());
+    }
+    Ok(models)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_active_embedding_model_name(app_dir: String, key: Vec<u8>) -> Result<String> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let stored = db::get_active_embedding_model_name(&conn)?;
+    let model_name = stored
+        .as_deref()
+        .map(normalize_embedding_model_name)
+        .unwrap_or_else(default_embedding_model_name_for_platform);
+    Ok(model_name.to_string())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_set_active_embedding_model_name(
+    app_dir: String,
+    key: Vec<u8>,
+    model_name: String,
+) -> Result<bool> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let desired = match model_name.as_str() {
+        embedding::DEFAULT_MODEL_NAME => embedding::DEFAULT_MODEL_NAME,
+        embedding::PRODUCTION_MODEL_NAME => {
+            if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+                embedding::PRODUCTION_MODEL_NAME
+            } else {
+                return Err(anyhow!(
+                    "production embeddings are not supported on this platform"
+                ));
+            }
+        }
+        _ => return Err(anyhow!("unknown embedding model: {model_name}")),
+    };
+
+    db::set_active_embedding_model_name(&conn, desired)
 }
 
 #[flutter_rust_bridge::frb]
@@ -235,9 +317,10 @@ pub fn rag_ask_ai_stream(
                 .ok_or_else(|| anyhow!("missing api_key for openai-compatible provider"))?;
             let provider =
                 llm::openai::OpenAiCompatibleProvider::new(base_url, api_key, model_name, None);
-            rag::ask_ai_with_provider(
+            rag::ask_ai_with_provider_using_active_embeddings(
                 &conn,
                 &key,
+                Path::new(&app_dir),
                 &conversation_id,
                 &question,
                 top_k as usize,
@@ -331,6 +414,17 @@ pub fn sync_webdav_pull(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn sync_webdav_clear_remote_root(
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+) -> Result<()> {
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::clear_remote_root(&remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn sync_localdir_test_connection(local_dir: String, remote_root: String) -> Result<()> {
     let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     remote.mkdir_all(&remote_root)?;
@@ -366,4 +460,10 @@ pub fn sync_localdir_pull(
     let conn = db::open(Path::new(&app_dir))?;
     let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     sync::pull(&conn, &key, &sync_key, &remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_localdir_clear_remote_root(local_dir: String, remote_root: String) -> Result<()> {
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
+    sync::clear_remote_root(&remote, &remote_root)
 }

@@ -1,14 +1,13 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
+import '../../core/sync/sync_engine.dart';
+import '../../core/sync/sync_engine_gate.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
@@ -43,8 +42,9 @@ class _SettingsPageState extends State<SettingsPage> {
         return AlertDialog(
           title: const Text('Reset local data?'),
           content: const Text(
-            'This will delete local database + auth file and clear sync/auto-unlock secure storage. '
-            'You will need to set a new master password afterwards.',
+            'This will delete local messages and clear synced remote data. '
+            'It will NOT delete your master password or local LLM/sync config. '
+            'You will need to unlock again.',
           ),
           actions: [
             TextButton(
@@ -64,21 +64,36 @@ class _SettingsPageState extends State<SettingsPage> {
     final backend = AppBackendScope.of(context);
     final lock = SessionScope.of(context).lock;
     final messenger = ScaffoldMessenger.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    SyncEngineScope.maybeOf(context)?.stop();
 
     setState(() => _busy = true);
     try {
+      final store = SyncConfigStore();
+      final sync = await store.loadConfiguredSync();
+      if (sync != null) {
+        await switch (sync.backendType) {
+          SyncBackendType.webdav => backend.syncWebdavClearRemoteRoot(
+              baseUrl: sync.baseUrl ?? '',
+              username: sync.username,
+              password: sync.password,
+              remoteRoot: sync.remoteRoot,
+            ),
+          SyncBackendType.localDir => backend.syncLocaldirClearRemoteRoot(
+              localDir: sync.localDir ?? '',
+              remoteRoot: sync.remoteRoot,
+            ),
+        };
+      }
+
+      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kAppLockEnabledPrefsKey);
       await prefs.remove(_kBiometricUnlockEnabledPrefsKey);
       await backend.clearSavedSessionKey();
 
-      final store = SyncConfigStore();
-      await store.clearAll();
-
       await BackgroundSync.refreshSchedule(backend: backend);
-
-      final appDir = await getApplicationSupportDirectory();
-      await Directory(appDir.path).delete(recursive: true);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Reset failed: $e')));
       return;
@@ -224,7 +239,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             title: const Text('Debug: Reset local data'),
             subtitle:
-                const Text('Delete local DB + clear sync/auto-unlock storage'),
+                const Text('Delete local messages + clear synced remote data'),
             onTap: _busy ? null : _resetLocalData,
           ),
           const SizedBox(height: 12),

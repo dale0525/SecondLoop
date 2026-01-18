@@ -339,4 +339,27 @@ impl super::RemoteStore for WebDavRemoteStore {
         }
         Ok(())
     }
+
+    fn delete(&self, path: &str) -> Result<()> {
+        let path = if path.ends_with('/') {
+            normalize_dir(path)
+        } else {
+            path.to_string()
+        };
+
+        if path == "/" {
+            return Err(anyhow!("refusing to delete root dir"));
+        }
+
+        let resp = self.request(Method::DELETE, &path)?.send()?;
+        if resp.status().as_u16() == 404 {
+            return Err(super::NotFound { path }.into());
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            return Err(anyhow!("DELETE failed: HTTP {status} {body}"));
+        }
+        Ok(())
+    }
 }

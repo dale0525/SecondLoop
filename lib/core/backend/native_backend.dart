@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -11,11 +12,39 @@ import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
 import 'app_backend.dart';
 
+typedef AppDirProvider = Future<String> Function();
+
+typedef DbInsertMessageFn = Future<Message> Function({
+  required String appDir,
+  required List<int> key,
+  required String conversationId,
+  required String role,
+  required String content,
+});
+
+typedef DbProcessPendingMessageEmbeddingsFn = Future<int> Function({
+  required String appDir,
+  required List<int> key,
+  required int limit,
+});
+
 class NativeAppBackend implements AppBackend {
-  NativeAppBackend({FlutterSecureStorage? secureStorage})
-      : _secureBlobStore = SecureBlobStore(storage: secureStorage);
+  NativeAppBackend({
+    FlutterSecureStorage? secureStorage,
+    AppDirProvider? appDirProvider,
+    DbInsertMessageFn? dbInsertMessage,
+    DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
+  })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
+        _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
+        _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
+        _dbProcessPendingMessageEmbeddings =
+            dbProcessPendingMessageEmbeddings ??
+                rust_core.dbProcessPendingMessageEmbeddings;
 
   final SecureBlobStore _secureBlobStore;
+  final AppDirProvider _appDirProvider;
+  final DbInsertMessageFn _dbInsertMessage;
+  final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
 
   String? _appDir;
 
@@ -25,12 +54,16 @@ class NativeAppBackend implements AppBackend {
   static const _kLegacyPrefsAutoUnlockEnabled = 'auto_unlock_enabled_v1';
   static const _kLegacyPrefsSessionKeyB64 = 'session_key_b64_v1';
 
+  static Future<String> _defaultAppDirProvider() async {
+    final dir = await getApplicationSupportDirectory();
+    return dir.path;
+  }
+
   Future<String> _getAppDir() async {
     final cached = _appDir;
     if (cached != null) return cached;
 
-    final dir = await getApplicationSupportDirectory();
-    _appDir = dir.path;
+    _appDir = await _appDirProvider();
     return _appDir!;
   }
 
@@ -191,18 +224,12 @@ class NativeAppBackend implements AppBackend {
     required String content,
   }) async {
     final appDir = await _getAppDir();
-    final message = await rust_core.dbInsertMessage(
+    final message = await _dbInsertMessage(
       appDir: appDir,
       key: key,
       conversationId: conversationId,
       role: role,
       content: content,
-    );
-
-    await rust_core.dbProcessPendingMessageEmbeddings(
-      appDir: appDir,
-      key: key,
-      limit: 32,
     );
 
     return message;
@@ -233,12 +260,21 @@ class NativeAppBackend implements AppBackend {
   }
 
   @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbResetVaultDataPreservingLlmProfiles(
+      appDir: appDir,
+      key: key,
+    );
+  }
+
+  @override
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbProcessPendingMessageEmbeddings(
+    return _dbProcessPendingMessageEmbeddings(
       appDir: appDir,
       key: key,
       limit: limit,
@@ -270,6 +306,31 @@ class NativeAppBackend implements AppBackend {
       appDir: appDir,
       key: key,
       batchLimit: batchLimit,
+    );
+  }
+
+  @override
+  Future<List<String>> listEmbeddingModelNames(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListEmbeddingModelNames(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<String> getActiveEmbeddingModelName(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetActiveEmbeddingModelName(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<bool> setActiveEmbeddingModelName(
+    Uint8List key,
+    String modelName,
+  ) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSetActiveEmbeddingModelName(
+      appDir: appDir,
+      key: key,
+      modelName: modelName,
     );
   }
 
@@ -352,6 +413,21 @@ class NativeAppBackend implements AppBackend {
   }
 
   @override
+  Future<void> syncWebdavClearRemoteRoot({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    await rust_core.syncWebdavClearRemoteRoot(
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
+  }
+
+  @override
   Future<int> syncWebdavPush(
     Uint8List key,
     Uint8List syncKey, {
@@ -401,6 +477,17 @@ class NativeAppBackend implements AppBackend {
     required String remoteRoot,
   }) async {
     await rust_core.syncLocaldirTestConnection(
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
+  }
+
+  @override
+  Future<void> syncLocaldirClearRemoteRoot({
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    await rust_core.syncLocaldirClearRemoteRoot(
       localDir: localDir,
       remoteRoot: remoteRoot,
     );

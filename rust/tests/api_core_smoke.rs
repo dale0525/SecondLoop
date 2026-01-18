@@ -1,4 +1,5 @@
 use secondloop_rust::api::core;
+use secondloop_rust::{db, embedding};
 
 #[test]
 fn api_core_smoke_happy_path() {
@@ -26,6 +27,10 @@ fn api_core_smoke_happy_path() {
         "hello".to_string(),
     )
     .expect("insert message");
+
+    let conn = db::open(std::path::Path::new(&app_dir)).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME)
+        .expect("set embedding model");
 
     let processed = core::db_process_pending_message_embeddings(app_dir.clone(), key.clone(), 100)
         .expect("process embeddings");

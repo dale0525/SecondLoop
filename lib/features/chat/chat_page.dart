@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -255,6 +256,22 @@ class _ChatPageState extends State<ChatPage> {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
 
+    try {
+      await _prepareEmbeddingsForAskAi(backend, sessionKey);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _askError = '$e';
+        _askSub = null;
+        _asking = false;
+        _pendingQuestion = null;
+        _streamingAnswer = '';
+      });
+      _refresh();
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      return;
+    }
+
     final stream = backend.askAiStream(
       sessionKey,
       widget.conversation.id,
@@ -299,6 +316,61 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     setState(() => _askSub = sub);
+  }
+
+  Future<void> _prepareEmbeddingsForAskAi(
+    AppBackend backend,
+    Uint8List sessionKey,
+  ) async {
+    final status = ValueNotifier<String>('Preparing semantic search…');
+    Timer? showTimer;
+    var dialogShown = false;
+
+    showTimer = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      dialogShown = true;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            content: ValueListenableBuilder<String>(
+              valueListenable: status,
+              builder: (context, value, child) {
+                return Row(
+                  children: [
+                    const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(value)),
+                  ],
+                );
+              },
+            ),
+          );
+        },
+      );
+    });
+
+    try {
+      var totalProcessed = 0;
+      while (true) {
+        final processed =
+            await backend.processPendingMessageEmbeddings(sessionKey, limit: 256);
+        if (processed <= 0) break;
+        totalProcessed += processed;
+        status.value = 'Indexing messages… ($totalProcessed indexed)';
+      }
+    } finally {
+      showTimer.cancel();
+      if (dialogShown && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      status.dispose();
+    }
   }
 
   @override

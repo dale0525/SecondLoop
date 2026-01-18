@@ -22,5 +22,12 @@ sqlite-vec = "0.1.7-alpha.2"
 uuid = { version = "1", features = ["v4"] }
 zerocopy = { version = "0.8", features = ["alloc"] }
 
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+fastembed = { version = "=5.8.0", default-features = false, features = ["hf-hub-rustls-tls", "ort-load-dynamic"] }
+flate2 = "1"
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic"] }
+tar = "0.4"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
 [dev-dependencies]
 tempfile = "3"

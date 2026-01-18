@@ -108,4 +108,34 @@ impl super::RemoteStore for LocalDirRemoteStore {
         fs::write(local, bytes)?;
         Ok(())
     }
+
+    fn delete(&self, path: &str) -> Result<()> {
+        if path.ends_with('/') {
+            let dir = normalize_dir(path);
+            if dir == "/" {
+                return Err(anyhow!("refusing to delete root dir"));
+            }
+
+            let local = virtual_to_local(&self.root, dir.trim_end_matches('/'));
+            match fs::remove_dir_all(local) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == ErrorKind::NotFound => Err(super::NotFound { path: dir }.into()),
+                Err(e) => Err(e.into()),
+            }
+        } else {
+            let file = normalize_file(path);
+            if file.ends_with('/') {
+                return Err(anyhow!("DELETE expects file path, got dir: {file}"));
+            }
+
+            let local = virtual_to_local(&self.root, file.trim_start_matches('/'));
+            match fs::remove_file(local) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    Err(super::NotFound { path: file }.into())
+                }
+                Err(e) => Err(e.into()),
+            }
+        }
+    }
 }

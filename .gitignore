@@ -1,6 +1,9 @@
 # Docs
 docs
 
+# Agents
+.codex/
+
 # Pixi environments
 .pixi/*
 !.pixi/config.toml

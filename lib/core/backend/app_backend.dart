@@ -37,6 +37,8 @@ abstract class AppBackend {
   Future<void> setMessageDeleted(
       Uint8List key, String messageId, bool isDeleted);
 
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key);
+
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,
@@ -52,6 +54,10 @@ abstract class AppBackend {
     Uint8List key, {
     int batchLimit = 256,
   });
+
+  Future<List<String>> listEmbeddingModelNames(Uint8List key);
+  Future<String> getActiveEmbeddingModelName(Uint8List key);
+  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName);
 
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key);
   Future<LlmProfile> createLlmProfile(
@@ -82,6 +88,13 @@ abstract class AppBackend {
     required String remoteRoot,
   });
 
+  Future<void> syncWebdavClearRemoteRoot({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  });
+
   Future<int> syncWebdavPush(
     Uint8List key,
     Uint8List syncKey, {
@@ -101,6 +114,11 @@ abstract class AppBackend {
   });
 
   Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  });
+
+  Future<void> syncLocaldirClearRemoteRoot({
     required String localDir,
     required String remoteRoot,
   });

@@ -11,6 +11,7 @@ use crate::vector;
 
 const MESSAGE_EMBEDDING_DIM: usize = 384;
 const MAIN_STREAM_CONVERSATION_ID: &str = "main_stream";
+const KV_ACTIVE_EMBEDDING_MODEL_NAME: &str = "embedding.active_model_name";
 
 #[derive(Clone, Debug)]
 pub struct Conversation {
@@ -91,6 +92,59 @@ fn get_or_create_device_id(conn: &Connection) -> Result<String> {
     Ok(device_id)
 }
 
+pub fn get_active_embedding_model_name(conn: &Connection) -> Result<Option<String>> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            params![KV_ACTIVE_EMBEDDING_MODEL_NAME],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(existing)
+}
+
+pub fn set_active_embedding_model_name(conn: &Connection, model_name: &str) -> Result<bool> {
+    let existing = get_active_embedding_model_name(conn)?;
+    if existing.as_deref() == Some(model_name) {
+        return Ok(false);
+    }
+
+    conn.execute_batch("BEGIN;")?;
+
+    let result = (|| -> Result<bool> {
+        conn.execute(
+            r#"INSERT INTO kv(key, value)
+               VALUES (?1, ?2)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            params![KV_ACTIVE_EMBEDDING_MODEL_NAME, model_name],
+        )?;
+
+        conn.execute_batch(
+            r#"
+DELETE FROM message_embeddings;
+UPDATE messages
+SET needs_embedding = CASE
+  WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
+  ELSE 0
+END;
+"#,
+        )?;
+
+        Ok(true)
+    })();
+
+    match result {
+        Ok(changed) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(changed)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
 fn next_device_seq(conn: &Connection, device_id: &str) -> Result<i64> {
     let max_seq: Option<i64> = conn.query_row(
         r#"SELECT MAX(seq) FROM oplog WHERE device_id = ?1"#,
@@ -122,23 +176,6 @@ fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) 
         params![op_id, device_id, seq, blob, created_at],
     )?;
     Ok(())
-}
-
-fn default_embed_text(text: &str) -> Vec<f32> {
-    let mut v = vec![0.0f32; MESSAGE_EMBEDDING_DIM];
-    let t = text.to_lowercase();
-
-    if t.contains("apple") {
-        v[0] += 1.0;
-    }
-    if t.contains("pie") {
-        v[0] += 1.0;
-    }
-    if t.contains("banana") {
-        v[1] += 1.0;
-    }
-
-    v
 }
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -323,6 +360,60 @@ PRAGMA user_version = 6;
         )?;
     }
 
+    if user_version < 7 {
+        // v7: classify which messages should be indexed for semantic search.
+        let has_is_memory: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
+            let mut rows = stmt.query([])?;
+            let mut found = false;
+            while let Some(row) = rows.next()? {
+                let name: String = row.get(1)?;
+                if name == "is_memory" {
+                    found = true;
+                    break;
+                }
+            }
+            found
+        };
+        if !has_is_memory {
+            conn.execute_batch("ALTER TABLE messages ADD COLUMN is_memory INTEGER;")?;
+        }
+
+        conn.execute_batch(
+            r#"
+UPDATE messages
+SET is_memory = CASE WHEN role = 'assistant' THEN 0 ELSE 1 END
+WHERE is_memory IS NULL;
+
+-- Heuristic: for legacy Ask AI flows, mark the user question message (seq-1) as non-memory when
+-- it is immediately followed by an assistant message (same device_id/seq ordering).
+UPDATE messages
+SET is_memory = 0
+WHERE role = 'user'
+  AND is_memory != 0
+  AND EXISTS (
+    SELECT 1
+    FROM messages a
+    WHERE a.conversation_id = messages.conversation_id
+      AND a.role = 'assistant'
+      AND a.updated_by_device_id = messages.updated_by_device_id
+      AND a.updated_by_seq = messages.updated_by_seq + 1
+  );
+
+BEGIN;
+DELETE FROM message_embeddings;
+UPDATE messages
+SET needs_embedding = CASE
+  WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
+  ELSE 0
+END;
+COMMIT;
+
+PRAGMA user_version = 7;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -332,6 +423,34 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     let conn = Connection::open(db_path(app_dir))?;
     migrate(&conn)?;
     Ok(conn)
+}
+
+pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<()> = (|| {
+        conn.execute_batch(
+            r#"
+DELETE FROM message_embeddings;
+DELETE FROM messages;
+DELETE FROM conversations;
+DELETE FROM oplog;
+DELETE FROM kv WHERE key != 'embedding.active_model_name';
+"#,
+        )?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
 }
 
 pub fn create_conversation(conn: &Connection, key: &[u8; 32], title: &str) -> Result<Conversation> {
@@ -462,6 +581,27 @@ pub fn insert_message(
     role: &str,
     content: &str,
 ) -> Result<Message> {
+    insert_message_with_is_memory(conn, key, conversation_id, role, content, role != "assistant")
+}
+
+pub fn insert_message_non_memory(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    role: &str,
+    content: &str,
+) -> Result<Message> {
+    insert_message_with_is_memory(conn, key, conversation_id, role, content, false)
+}
+
+fn insert_message_with_is_memory(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    role: &str,
+    content: &str,
+    is_memory: bool,
+) -> Result<Message> {
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
 
@@ -471,9 +611,20 @@ pub fn insert_message(
     let content_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
     conn.execute(
         r#"INSERT INTO messages
-           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, 1)"#,
-        params![id, conversation_id, role, content_blob, now, now, device_id, seq],
+           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10)"#,
+        params![
+            id,
+            conversation_id,
+            role,
+            content_blob,
+            now,
+            now,
+            device_id,
+            seq,
+            if is_memory { 1 } else { 0 },
+            if is_memory { 1 } else { 0 }
+        ],
     )?;
 
     conn.execute(
@@ -493,6 +644,7 @@ pub fn insert_message(
             "role": role,
             "content": content,
             "created_at_ms": now,
+            "is_memory": is_memory,
         }
     });
     insert_oplog(conn, key, &op)?;
@@ -512,7 +664,7 @@ pub fn edit_message(
     message_id: &str,
     content: &str,
 ) -> Result<()> {
-    let existing = get_message_by_id(conn, key, message_id)?;
+    let (existing, is_memory) = get_message_by_id_with_is_memory(conn, key, message_id)?;
     let conversation_id = existing.conversation_id.clone();
     let role = existing.role.clone();
     let created_at_ms = existing.created_at_ms;
@@ -535,6 +687,7 @@ pub fn edit_message(
             "created_at_ms": created_at_ms,
             "updated_at_ms": now,
             "is_deleted": false,
+            "is_memory": is_memory,
         }
     });
     insert_oplog(conn, key, &op)?;
@@ -547,7 +700,7 @@ pub fn edit_message(
                updated_by_device_id = ?4,
                updated_by_seq = ?5,
                is_deleted = 0,
-               needs_embedding = 1
+               needs_embedding = CASE WHEN COALESCE(is_memory, 1) = 1 THEN 1 ELSE 0 END
            WHERE id = ?1"#,
         params![message_id, content_blob, now, device_id, seq],
     )?;
@@ -571,7 +724,7 @@ pub fn set_message_deleted(
     message_id: &str,
     is_deleted: bool,
 ) -> Result<()> {
-    let existing = get_message_by_id(conn, key, message_id)?;
+    let (existing, is_memory) = get_message_by_id_with_is_memory(conn, key, message_id)?;
     let conversation_id = existing.conversation_id.clone();
     let role = existing.role.clone();
     let content = existing.content.clone();
@@ -595,6 +748,7 @@ pub fn set_message_deleted(
             "created_at_ms": created_at_ms,
             "updated_at_ms": now,
             "is_deleted": is_deleted,
+            "is_memory": is_memory,
         }
     });
     insert_oplog(conn, key, &op)?;
@@ -605,7 +759,7 @@ pub fn set_message_deleted(
                updated_by_device_id = ?3,
                updated_by_seq = ?4,
                is_deleted = ?5,
-               needs_embedding = CASE WHEN ?5 = 0 THEN 1 ELSE needs_embedding END
+               needs_embedding = CASE WHEN ?5 = 0 AND COALESCE(is_memory, 1) = 1 THEN 1 ELSE 0 END
            WHERE id = ?1"#,
         params![
             message_id,
@@ -819,10 +973,229 @@ pub fn load_active_llm_profile_config(
     }))
 }
 
-pub fn process_pending_message_embeddings(
+fn default_embedding_model_name_for_platform() -> &'static str {
+    if cfg!(any(target_os = "windows", target_os = "macos", target_os = "linux")) {
+        crate::embedding::PRODUCTION_MODEL_NAME
+    } else {
+        crate::embedding::DEFAULT_MODEL_NAME
+    }
+}
+
+fn normalize_embedding_model_name(name: &str) -> &'static str {
+    match name {
+        crate::embedding::DEFAULT_MODEL_NAME => crate::embedding::DEFAULT_MODEL_NAME,
+        crate::embedding::PRODUCTION_MODEL_NAME => crate::embedding::PRODUCTION_MODEL_NAME,
+        _ => default_embedding_model_name_for_platform(),
+    }
+}
+
+fn desired_embedding_model_name(conn: &Connection) -> Result<&'static str> {
+    let stored = get_active_embedding_model_name(conn)?;
+    Ok(stored
+        .as_deref()
+        .map(normalize_embedding_model_name)
+        .unwrap_or_else(default_embedding_model_name_for_platform))
+}
+
+fn default_embed_text(text: &str) -> Vec<f32> {
+    let mut v = vec![0.0f32; MESSAGE_EMBEDDING_DIM];
+    let t = text.to_lowercase();
+
+    if t.contains("apple") {
+        v[0] += 1.0;
+    }
+    if t.contains("pie") {
+        v[0] += 1.0;
+    }
+    if t.contains("banana") {
+        v[1] += 1.0;
+    }
+
+    v
+}
+
+pub fn process_pending_message_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
-    embedder: &impl Embedder,
+    app_dir: &Path,
+    limit: usize,
+) -> Result<usize> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return process_pending_message_embeddings_default(conn, key, limit);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return process_pending_message_embeddings(conn, key, &embedder, limit);
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return process_pending_message_embeddings_default(conn, key, limit);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    process_pending_message_embeddings_default(conn, key, limit)
+}
+
+pub fn rebuild_message_embeddings_active(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    batch_limit: usize,
+) -> Result<usize> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return rebuild_message_embeddings_default(conn, key, batch_limit);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return rebuild_message_embeddings(conn, key, &embedder, batch_limit);
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return rebuild_message_embeddings_default(conn, key, batch_limit);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    rebuild_message_embeddings_default(conn, key, batch_limit)
+}
+
+pub fn search_similar_messages_active(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return search_similar_messages_default(conn, key, query, top_k);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return search_similar_messages(conn, key, &embedder, query, top_k);
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return search_similar_messages_default(conn, key, query, top_k);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    search_similar_messages_default(conn, key, query, top_k)
+}
+
+pub fn search_similar_messages_in_conversation_active(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    conversation_id: &str,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return search_similar_messages_in_conversation_default(conn, key, conversation_id, query, top_k);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return search_similar_messages_in_conversation(
+                        conn,
+                        key,
+                        &embedder,
+                        conversation_id,
+                        query,
+                        top_k,
+                    );
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return search_similar_messages_in_conversation_default(conn, key, conversation_id, query, top_k);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    search_similar_messages_in_conversation_default(conn, key, conversation_id, query, top_k)
+}
+
+pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
+    conn: &Connection,
+    key: &[u8; 32],
+    embedder: &E,
     limit: usize,
 ) -> Result<usize> {
     if embedder.dim() != MESSAGE_EMBEDDING_DIM {
@@ -837,6 +1210,8 @@ pub fn process_pending_message_embeddings(
         r#"SELECT rowid, id, content
            FROM messages
            WHERE COALESCE(needs_embedding, 1) = 1
+             AND COALESCE(is_deleted, 0) = 0
+             AND COALESCE(is_memory, 1) = 1
            ORDER BY created_at ASC
            LIMIT ?1"#,
     )?;
@@ -857,7 +1232,7 @@ pub fn process_pending_message_embeddings(
 
         message_rowids.push(rowid);
         message_ids.push(id);
-        plaintexts.push(content);
+        plaintexts.push(format!("passage: {content}"));
     }
 
     if plaintexts.is_empty() {
@@ -915,6 +1290,8 @@ pub fn process_pending_message_embeddings_default(
         r#"SELECT rowid, id, content
            FROM messages
            WHERE COALESCE(needs_embedding, 1) = 1
+             AND COALESCE(is_deleted, 0) = 0
+             AND COALESCE(is_memory, 1) = 1
            ORDER BY created_at ASC
            LIMIT ?1"#,
     )?;
@@ -935,23 +1312,30 @@ pub fn process_pending_message_embeddings_default(
 
         message_rowids.push(rowid);
         message_ids.push(id);
-        plaintexts.push(content);
+        plaintexts.push(format!("passage: {content}"));
     }
 
     if plaintexts.is_empty() {
         return Ok(0);
     }
 
-    let embeddings: Vec<Vec<f32>> = plaintexts.iter().map(|t| default_embed_text(t)).collect();
-
     for i in 0..message_ids.len() {
+        let embedding = default_embed_text(&plaintexts[i]);
+        if embedding.len() != MESSAGE_EMBEDDING_DIM {
+            return Err(anyhow!(
+                "default embed dim mismatch: expected {}, got {}",
+                MESSAGE_EMBEDDING_DIM,
+                embedding.len()
+            ));
+        }
+
         let updated = conn.execute(
             r#"UPDATE message_embeddings
                SET embedding = ?2, message_id = ?3, model_name = ?4
                WHERE rowid = ?1"#,
             params![
                 message_rowids[i],
-                embeddings[i].as_bytes(),
+                embedding.as_bytes(),
                 message_ids[i],
                 crate::embedding::DEFAULT_MODEL_NAME
             ],
@@ -962,7 +1346,7 @@ pub fn process_pending_message_embeddings_default(
                    VALUES (?1, ?2, ?3, ?4)"#,
                 params![
                     message_rowids[i],
-                    embeddings[i].as_bytes(),
+                    embedding.as_bytes(),
                     message_ids[i],
                     crate::embedding::DEFAULT_MODEL_NAME
                 ],
@@ -977,6 +1361,38 @@ pub fn process_pending_message_embeddings_default(
     Ok(message_ids.len())
 }
 
+pub fn rebuild_message_embeddings<E: Embedder + ?Sized>(
+    conn: &Connection,
+    key: &[u8; 32],
+    embedder: &E,
+    batch_limit: usize,
+) -> Result<usize> {
+    conn.execute_batch(
+        r#"
+BEGIN;
+DELETE FROM message_embeddings;
+UPDATE messages
+SET needs_embedding = CASE
+  WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
+  ELSE 0
+END;
+COMMIT;
+"#,
+    )?;
+
+    let batch_limit = batch_limit.max(1);
+    let mut total = 0usize;
+    loop {
+        let processed = process_pending_message_embeddings(conn, key, embedder, batch_limit)?;
+        total += processed;
+        if processed == 0 {
+            break;
+        }
+    }
+
+    Ok(total)
+}
+
 pub fn rebuild_message_embeddings_default(
     conn: &Connection,
     key: &[u8; 32],
@@ -986,7 +1402,11 @@ pub fn rebuild_message_embeddings_default(
         r#"
 BEGIN;
 DELETE FROM message_embeddings;
-UPDATE messages SET needs_embedding = 1;
+UPDATE messages
+SET needs_embedding = CASE
+  WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
+  ELSE 0
+END;
 COMMIT;
 "#,
     )?;
@@ -1062,10 +1482,47 @@ fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Mess
     })
 }
 
-pub fn search_similar_messages(
+fn get_message_by_id_with_is_memory(
     conn: &Connection,
     key: &[u8; 32],
-    embedder: &impl Embedder,
+    id: &str,
+) -> Result<(Message, bool)> {
+    let (
+        conversation_id,
+        role,
+        content_blob,
+        created_at_ms,
+        is_memory_i64,
+    ): (String, String, Vec<u8>, i64, i64) = conn
+        .query_row(
+            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
+               FROM messages
+               WHERE id = ?1"#,
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
+        .map_err(|e| anyhow!("get message failed: {e}"))?;
+
+    let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+    let content = String::from_utf8(content_bytes)
+        .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+    Ok((
+        Message {
+            id: id.to_string(),
+            conversation_id,
+            role,
+            content,
+            created_at_ms,
+        },
+        is_memory_i64 != 0,
+    ))
+}
+
+pub fn search_similar_messages<E: Embedder + ?Sized>(
+    conn: &Connection,
+    key: &[u8; 32],
+    embedder: &E,
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
@@ -1077,7 +1534,11 @@ pub fn search_similar_messages(
         ));
     }
 
-    let mut vectors = embedder.embed(&[query.to_string()])?;
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(10)).min(1000);
+
+    let query = format!("query: {query}");
+    let mut vectors = embedder.embed(&[query])?;
     if vectors.len() != 1 {
         return Err(anyhow!(
             "embedder output length mismatch: expected 1, got {}",
@@ -1095,16 +1556,23 @@ pub fn search_similar_messages(
 
     let mut rows = stmt.query(params![
         query_vector.as_bytes(),
-        i64::try_from(top_k).unwrap_or(i64::MAX),
+        i64::try_from(candidate_k).unwrap_or(i64::MAX),
         embedder.model_name()
     ])?;
 
     let mut result = Vec::new();
+    let mut seen_contents = std::collections::HashSet::new();
     while let Some(row) = rows.next()? {
         let message_id: String = row.get(0)?;
         let distance: f64 = row.get(1)?;
         let message = get_message_by_id(conn, key, &message_id)?;
+        if !seen_contents.insert(message.content.clone()) {
+            continue;
+        }
         result.push(SimilarMessage { message, distance });
+        if result.len() >= top_k {
+            break;
+        }
     }
 
     Ok(result)
@@ -1116,7 +1584,18 @@ pub fn search_similar_messages_default(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
-    let query_vector = default_embed_text(query);
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(10)).min(1000);
+
+    let query = format!("query: {query}");
+    let query_vector = default_embed_text(&query);
+    if query_vector.len() != MESSAGE_EMBEDDING_DIM {
+        return Err(anyhow!(
+            "default embed dim mismatch: expected {}, got {}",
+            MESSAGE_EMBEDDING_DIM,
+            query_vector.len()
+        ));
+    }
 
     let mut stmt = conn.prepare(
         r#"SELECT message_id, distance
@@ -1127,16 +1606,23 @@ pub fn search_similar_messages_default(
 
     let mut rows = stmt.query(params![
         query_vector.as_bytes(),
-        i64::try_from(top_k).unwrap_or(i64::MAX),
+        i64::try_from(candidate_k).unwrap_or(i64::MAX),
         crate::embedding::DEFAULT_MODEL_NAME
     ])?;
 
     let mut result = Vec::new();
+    let mut seen_contents = std::collections::HashSet::new();
     while let Some(row) = rows.next()? {
         let message_id: String = row.get(0)?;
         let distance: f64 = row.get(1)?;
         let message = get_message_by_id(conn, key, &message_id)?;
+        if !seen_contents.insert(message.content.clone()) {
+            continue;
+        }
         result.push(SimilarMessage { message, distance });
+        if result.len() >= top_k {
+            break;
+        }
     }
 
     Ok(result)
@@ -1149,13 +1635,32 @@ pub fn search_similar_messages_in_conversation_default(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(50)).min(1000);
+
+    let candidates = search_similar_messages_default(conn, key, query, candidate_k)?;
+    Ok(candidates
+        .into_iter()
+        .filter(|sm| sm.message.conversation_id == conversation_id)
+        .take(top_k)
+        .collect())
+}
+
+pub fn search_similar_messages_in_conversation<E: Embedder + ?Sized>(
+    conn: &Connection,
+    key: &[u8; 32],
+    embedder: &E,
+    conversation_id: &str,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
     // `sqlite-vec` KNN queries currently restrict additional WHERE constraints in ways that make
     // joins/IN filters brittle. For Focus scoping, we over-fetch candidates globally and then
     // filter in Rust.
     let top_k = top_k.max(1);
     let candidate_k = (top_k.saturating_mul(50)).min(1000);
 
-    let candidates = search_similar_messages_default(conn, key, query, candidate_k)?;
+    let candidates = search_similar_messages(conn, key, embedder, query, candidate_k)?;
     Ok(candidates
         .into_iter()
         .filter(|sm| sm.message.conversation_id == conversation_id)

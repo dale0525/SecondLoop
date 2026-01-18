@@ -31,6 +31,7 @@ pub trait RemoteStore: Send + Sync {
     fn list(&self, dir: &str) -> Result<Vec<String>>;
     fn get(&self, path: &str) -> Result<Vec<u8>>;
     fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()>;
+    fn delete(&self, path: &str) -> Result<()>;
 }
 
 static INMEM_NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -157,6 +158,58 @@ impl RemoteStore for InMemoryRemoteStore {
         let mut files = self.files.lock().map_err(|_| anyhow!("poisoned lock"))?;
         files.insert(path, bytes);
         Ok(())
+    }
+
+    fn delete(&self, path: &str) -> Result<()> {
+        if path.ends_with('/') {
+            let dir = normalize_dir(path);
+            if dir == "/" {
+                return Err(anyhow!("refusing to delete root dir"));
+            }
+
+            let mut dirs = self.dirs.lock().map_err(|_| anyhow!("poisoned lock"))?;
+            let mut files = self.files.lock().map_err(|_| anyhow!("poisoned lock"))?;
+
+            if !dirs.contains(&dir) {
+                return Err(NotFound { path: dir }.into());
+            }
+
+            let to_remove: Vec<String> = files
+                .keys()
+                .filter(|k| k.starts_with(&dir))
+                .cloned()
+                .collect();
+            for key in to_remove {
+                files.remove(&key);
+            }
+
+            let dirs_to_remove: Vec<String> = dirs.iter().filter(|d| d.starts_with(&dir)).cloned().collect();
+            for d in dirs_to_remove {
+                dirs.remove(&d);
+            }
+
+            Ok(())
+        } else {
+            let file = normalize_file(path);
+            let mut files = self.files.lock().map_err(|_| anyhow!("poisoned lock"))?;
+            if files.remove(&file).is_none() {
+                return Err(NotFound { path: file }.into());
+            }
+            Ok(())
+        }
+    }
+}
+
+pub fn clear_remote_root(remote: &impl RemoteStore, remote_root: &str) -> Result<()> {
+    let remote_root_dir = normalize_dir(remote_root);
+    if remote_root_dir == "/" {
+        return Err(anyhow!("refusing to clear remote root '/'"));
+    }
+
+    match remote.delete(&remote_root_dir) {
+        Ok(()) => Ok(()),
+        Err(e) if e.is::<NotFound>() => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
@@ -506,6 +559,9 @@ fn apply_message_insert(
     let created_at_ms = payload["created_at_ms"]
         .as_i64()
         .ok_or_else(|| anyhow!("message op missing created_at_ms"))?;
+    let is_memory = payload["is_memory"]
+        .as_bool()
+        .unwrap_or_else(|| role != "assistant");
 
     let conversation_exists: Option<i64> = conn
         .query_row(
@@ -523,8 +579,8 @@ fn apply_message_insert(
     let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
     conn.execute(
         r#"INSERT OR IGNORE INTO messages
-           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, 1)"#,
+           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9)"#,
         params![
             message_id,
             conversation_id,
@@ -532,9 +588,29 @@ fn apply_message_insert(
             content_blob,
             created_at_ms,
             device_id,
-            seq
+            seq,
+            if is_memory { 1 } else { 0 },
+            if is_memory { 1 } else { 0 }
         ],
     )?;
+
+    // Heuristic for legacy Ask AI flows: when an assistant message is marked non-memory, treat the
+    // immediately preceding user message (same device/seq ordering) as non-memory too.
+    if role == "assistant" && !is_memory {
+        if let Some(prev_seq) = seq.checked_sub(1) {
+            let _ = conn.execute(
+                r#"UPDATE messages
+                   SET is_memory = 0,
+                       needs_embedding = 0
+                   WHERE conversation_id = ?1
+                     AND role = 'user'
+                     AND updated_by_device_id = ?2
+                     AND updated_by_seq = ?3
+                     AND COALESCE(is_memory, 1) != 0"#,
+                params![conversation_id, device_id, prev_seq],
+            )?;
+        }
+    }
 
     conn.execute(
         r#"UPDATE conversations
@@ -594,6 +670,7 @@ fn apply_message_set_v2(
     let is_deleted = payload["is_deleted"]
         .as_bool()
         .ok_or_else(|| anyhow!("message.set.v2 missing is_deleted"))?;
+    let incoming_is_memory = payload["is_memory"].as_bool();
 
     let payload_conversation_id = payload["conversation_id"].as_str();
     let existing_conversation_id: Option<String> = conn
@@ -613,17 +690,19 @@ fn apply_message_set_v2(
         }
     };
 
-    let existing: Option<(i64, String, i64)> = conn
+    let existing: Option<(i64, String, i64, i64)> = conn
         .query_row(
-            r#"SELECT updated_at, updated_by_device_id, updated_by_seq
+            r#"SELECT updated_at, updated_by_device_id, updated_by_seq, COALESCE(is_memory, 1)
                FROM messages
                WHERE id = ?1"#,
             params![message_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?;
 
-    if let Some((existing_updated_at, existing_device_id, existing_seq)) = existing {
+    if let Some((existing_updated_at, existing_device_id, existing_seq, existing_is_memory_i64)) =
+        existing
+    {
         if !message_version_newer(
             updated_at_ms,
             device_id,
@@ -635,6 +714,7 @@ fn apply_message_set_v2(
             return Ok(());
         }
 
+        let is_memory = incoming_is_memory.unwrap_or(existing_is_memory_i64 != 0);
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
         conn.execute(
             r#"UPDATE messages
@@ -644,7 +724,8 @@ fn apply_message_set_v2(
                    updated_by_device_id = ?5,
                    updated_by_seq = ?6,
                    is_deleted = ?7,
-                   needs_embedding = CASE WHEN ?7 = 0 THEN 1 ELSE needs_embedding END
+                   is_memory = ?8,
+                   needs_embedding = CASE WHEN ?7 = 0 AND ?8 = 1 THEN 1 ELSE 0 END
                WHERE id = ?1"#,
             params![
                 message_id,
@@ -653,7 +734,8 @@ fn apply_message_set_v2(
                 updated_at_ms,
                 device_id,
                 seq,
-                if is_deleted { 1 } else { 0 }
+                if is_deleted { 1 } else { 0 },
+                if is_memory { 1 } else { 0 }
             ],
         )?;
     } else {
@@ -671,10 +753,12 @@ fn apply_message_set_v2(
         }
 
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
+        let is_memory = incoming_is_memory.unwrap_or_else(|| role != "assistant");
+        let needs_embedding = !is_deleted && is_memory;
         conn.execute(
             r#"INSERT INTO messages
-               (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+               (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
             params![
                 message_id,
                 conversation_id.as_str(),
@@ -685,7 +769,8 @@ fn apply_message_set_v2(
                 device_id,
                 seq,
                 if is_deleted { 1 } else { 0 },
-                if is_deleted { 0 } else { 1 }
+                if needs_embedding { 1 } else { 0 },
+                if is_memory { 1 } else { 0 }
             ],
         )?;
     }

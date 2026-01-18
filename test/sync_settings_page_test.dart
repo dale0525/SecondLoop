@@ -230,6 +230,9 @@ class _SyncSettingsBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
+
+  @override
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,
@@ -250,6 +253,18 @@ class _SyncSettingsBackend implements AppBackend {
     int batchLimit = 256,
   }) async =>
       0;
+
+  @override
+  Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
+      const <String>['secondloop-default-embed-v0'];
+
+  @override
+  Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
+      'secondloop-default-embed-v0';
+
+  @override
+  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
+      Future<bool>.value(modelName != 'secondloop-default-embed-v0');
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
@@ -295,6 +310,14 @@ class _SyncSettingsBackend implements AppBackend {
   }
 
   @override
+  Future<void> syncWebdavClearRemoteRoot({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {}
+
+  @override
   Future<int> syncWebdavPush(
     Uint8List key,
     Uint8List syncKey, {
@@ -318,6 +341,12 @@ class _SyncSettingsBackend implements AppBackend {
 
   @override
   Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<void> syncLocaldirClearRemoteRoot({
     required String localDir,
     required String remoteRoot,
   }) async {}

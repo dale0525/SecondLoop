@@ -7,7 +7,7 @@ import '../db.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `sync_key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `default_embedding_model_name_for_platform`, `key_from_bytes`, `normalize_embedding_model_name`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -79,6 +79,11 @@ Future<void> dbSetMessageDeleted(
     RustLib.instance.api.crateApiCoreDbSetMessageDeleted(
         appDir: appDir, key: key, messageId: messageId, isDeleted: isDeleted);
 
+Future<void> dbResetVaultDataPreservingLlmProfiles(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api.crateApiCoreDbResetVaultDataPreservingLlmProfiles(
+        appDir: appDir, key: key);
+
 Future<LlmProfile> dbCreateLlmProfile(
         {required String appDir,
         required List<int> key,
@@ -129,6 +134,23 @@ Future<int> dbRebuildMessageEmbeddings(
         required int batchLimit}) =>
     RustLib.instance.api.crateApiCoreDbRebuildMessageEmbeddings(
         appDir: appDir, key: key, batchLimit: batchLimit);
+
+Future<List<String>> dbListEmbeddingModelNames(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbListEmbeddingModelNames(appDir: appDir, key: key);
+
+Future<String> dbGetActiveEmbeddingModelName(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbGetActiveEmbeddingModelName(appDir: appDir, key: key);
+
+Future<bool> dbSetActiveEmbeddingModelName(
+        {required String appDir,
+        required List<int> key,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreDbSetActiveEmbeddingModelName(
+        appDir: appDir, key: key, modelName: modelName);
 
 Stream<String> ragAskAiStream(
         {required String appDir,
@@ -193,6 +215,17 @@ Future<BigInt> syncWebdavPull(
         password: password,
         remoteRoot: remoteRoot);
 
+Future<void> syncWebdavClearRemoteRoot(
+        {required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavClearRemoteRoot(
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot);
+
 Future<void> syncLocaldirTestConnection(
         {required String localDir, required String remoteRoot}) =>
     RustLib.instance.api.crateApiCoreSyncLocaldirTestConnection(
@@ -223,3 +256,8 @@ Future<BigInt> syncLocaldirPull(
         syncKey: syncKey,
         localDir: localDir,
         remoteRoot: remoteRoot);
+
+Future<void> syncLocaldirClearRemoteRoot(
+        {required String localDir, required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirClearRemoteRoot(
+        localDir: localDir, remoteRoot: remoteRoot);

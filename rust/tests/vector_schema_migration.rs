@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
     let user_version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("user_version");
-    assert_eq!(user_version, 6);
+    assert_eq!(user_version, 7);
 
     // Verify messages table has needs_embedding.
     let mut stmt = conn
@@ -57,6 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
         .map(|r| r.expect("row"))
         .collect();
     assert!(cols.iter().any(|c| c == "needs_embedding"));
+    assert!(cols.iter().any(|c| c == "is_memory"));
 
     // Verify vec0 table exists and is usable.
     let embedding = vec![0.0f32; 384];
