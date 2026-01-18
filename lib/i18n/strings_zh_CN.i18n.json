@@ -1,0 +1,216 @@
+{
+  "app": {
+    "title": "SecondLoop",
+    "tabs": {
+      "main": "主线",
+      "settings": "设置"
+    }
+  },
+  "common": {
+    "actions": {
+      "cancel": "取消",
+      "save": "保存",
+      "reset": "重置",
+      "continueLabel": "继续",
+      "send": "发送",
+      "askAi": "问 AI",
+      "stop": "停止",
+      "stopping": "正在停止…",
+      "edit": "编辑",
+      "delete": "删除",
+      "refresh": "刷新",
+      "search": "搜索",
+      "useModel": "使用模型",
+      "processPending": "处理待处理",
+      "rebuildEmbeddings": "重建向量索引",
+      "push": "推送",
+      "pull": "拉取",
+      "lockNow": "立即锁定"
+    },
+    "fields": {
+      "masterPassword": "主密码",
+      "confirm": "确认",
+      "message": "消息",
+      "quickCapture": "快速记录",
+      "query": "查询"
+    },
+    "labels": {
+      "elapsedSeconds": "耗时：${seconds}s",
+      "topK": "Top‑K："
+    }
+  },
+  "errors": {
+    "initFailed": "初始化失败：$error",
+    "loadFailed": "加载失败：$error",
+    "lockGateError": "锁定流程错误：$error",
+    "missingMainStream": "缺少主线对话"
+  },
+  "settings": {
+    "title": "设置",
+    "sections": {
+      "general": "通用",
+      "security": "安全",
+      "connections": "连接",
+      "debug": "调试"
+    },
+    "language": {
+      "title": "语言",
+      "subtitle": "跟随系统或手动选择语言",
+      "dialogTitle": "语言",
+      "options": {
+        "system": "系统",
+        "systemWithValue": "系统（$value）",
+        "en": "English",
+        "zhCn": "简体中文"
+      }
+    },
+    "autoLock": {
+      "title": "自动锁定",
+      "subtitle": "需要解锁才能访问应用"
+    },
+    "systemUnlock": {
+      "titleMobile": "使用生物识别",
+      "titleDesktop": "使用系统解锁",
+      "subtitleMobile": "使用生物识别解锁，而不是主密码",
+      "subtitleDesktop": "使用 Touch ID / Windows Hello 解锁，而不是主密码"
+    },
+    "lockNow": {
+      "title": "立即锁定",
+      "subtitle": "返回解锁页面"
+    },
+    "llmProfiles": {
+      "title": "LLM Profiles",
+      "subtitle": "为 Ask AI 配置 BYOK"
+    },
+    "sync": {
+      "title": "同步",
+      "subtitle": "Vault 后端 + 自动同步设置"
+    },
+    "resetLocalData": {
+      "dialogTitle": "重置本地数据？",
+      "dialogBody": "这将删除本地消息并清空已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。",
+      "failed": "重置失败：$error"
+    },
+    "debugResetLocalData": {
+      "title": "调试：重置本地数据",
+      "subtitle": "删除本地消息 + 清空已同步的远端数据"
+    },
+    "debugSemanticSearch": {
+      "title": "调试：语义检索",
+      "subtitle": "搜索相似消息 + 重建向量索引"
+    }
+  },
+  "lock": {
+    "masterPasswordRequired": "需要主密码",
+    "passwordsDoNotMatch": "两次输入的密码不一致",
+    "setupTitle": "设置主密码",
+    "unlockTitle": "解锁",
+    "unlockReason": "解锁 SecondLoop",
+    "missingSavedSessionKey": "缺少已保存的会话密钥。请先用主密码解锁一次。",
+    "creating": "正在创建…",
+    "unlocking": "正在解锁…"
+  },
+  "chat": {
+    "mainStreamTitle": "主线",
+    "editMessageTitle": "编辑消息",
+    "messageUpdated": "消息已更新",
+    "messageDeleted": "消息已删除",
+    "editFailed": "编辑失败：$error",
+    "deleteFailed": "删除失败：$error",
+    "noMessagesYet": "暂无消息",
+    "focus": {
+      "tooltip": "聚焦",
+      "allMemories": "聚焦：所有记忆",
+      "thisThread": "聚焦：当前对话"
+    }
+  },
+  "semanticSearch": {
+    "preparing": "正在准备语义检索…",
+    "indexingMessages": "正在索引消息…（已索引 $count 条）"
+  },
+  "semanticSearchDebug": {
+    "title": "语义检索（调试）",
+    "embeddingModelLoading": "向量模型：（加载中…）",
+    "embeddingModel": "向量模型：$model",
+    "switchedModelReindex": "已切换向量模型；待重新索引",
+    "modelAlreadyActive": "向量模型已处于激活状态",
+    "processedPending": "已处理 $count 条待处理向量",
+    "rebuilt": "已为 $count 条消息重建向量",
+    "runSearchToSeeResults": "运行一次搜索以查看结果",
+    "noResults": "没有结果",
+    "resultSubtitle": "distance=$distance • role=$role • convo=$conversationId"
+  },
+  "sync": {
+    "title": "Vault 同步",
+    "sections": {
+      "automation": "自动化",
+      "backend": "后端",
+      "securityActions": "安全与操作"
+    },
+    "autoSync": {
+      "title": "自动同步",
+      "subtitle": "前台防抖推送 + 后台周期同步（移动端）"
+    },
+    "backendLabel": "Vault 后端",
+    "backendWebdav": "WebDAV",
+    "backendLocalDir": "本地目录（桌面端）",
+    "remoteRootRequired": "必须填写远端根目录",
+    "baseUrlRequired": "必须填写 Base URL",
+    "localDirRequired": "必须填写本地目录",
+    "connectionOk": "连接正常",
+    "connectionFailed": "连接失败：$error",
+    "saveFailed": "保存失败：$error",
+    "missingSyncKey": "缺少同步密钥。请先输入 passphrase 并点击保存。",
+    "pushedOps": "已推送 $count 条操作",
+    "pulledOps": "已拉取 $count 条操作",
+    "pushFailed": "推送失败：$error",
+    "pullFailed": "拉取失败：$error",
+    "fields": {
+      "baseUrl": {
+        "label": "Base URL",
+        "hint": "https://example.com/dav"
+      },
+      "username": {
+        "label": "用户名（可选）"
+      },
+      "password": {
+        "label": "密码（可选）"
+      },
+      "localDir": {
+        "label": "本地目录路径",
+        "hint": "/Users/me/SecondLoopVault",
+        "helper": "更适合桌面端；移动端可能不支持该路径。"
+      },
+      "remoteRoot": {
+        "label": "远端根目录",
+        "hint": "SecondLoop"
+      },
+      "passphrase": {
+        "label": "同步口令（不会存储；用于派生密钥）",
+        "helper": "所有设备请使用同一口令。"
+      }
+    }
+  },
+  "llmProfiles": {
+    "title": "LLM Profiles",
+    "refreshTooltip": "刷新",
+    "activeProfileHelp": "当前激活的 profile 用于 Ask AI。",
+    "noProfilesYet": "暂无 profile。",
+    "addProfile": "添加 profile",
+    "validationError": "Name、API key、Model name 为必填项。",
+    "fields": {
+      "name": "名称",
+      "baseUrlOptional": "Base URL（可选）",
+      "modelName": "Model name",
+      "apiKey": "API key"
+    },
+    "savedActivated": "LLM profile 已保存并激活",
+    "actions": {
+      "saveActivate": "保存并激活"
+    }
+  },
+  "inbox": {
+    "defaultTitle": "收件箱",
+    "noConversationsYet": "暂无会话"
+  }
+}

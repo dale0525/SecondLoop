@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../i18n/strings.g.dart';
 import '../chat/chat_page.dart';
 import '../../src/rust/db.dart';
 
@@ -18,11 +19,12 @@ class _InboxPageState extends State<InboxPage> {
   Future<List<Conversation>> _loadConversations() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final defaultTitle = context.t.inbox.defaultTitle;
 
     final conversations = await backend.listConversations(sessionKey);
     if (conversations.isNotEmpty) return conversations;
 
-    await backend.createConversation(sessionKey, 'Inbox');
+    await backend.createConversation(sessionKey, defaultTitle);
     return backend.listConversations(sessionKey);
   }
 
@@ -42,12 +44,16 @@ class _InboxPageState extends State<InboxPage> {
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Load failed: ${snapshot.error}'));
+          return Center(
+            child: Text(
+              context.t.errors.loadFailed(error: '${snapshot.error}'),
+            ),
+          );
         }
 
         final conversations = snapshot.data ?? const <Conversation>[];
         if (conversations.isEmpty) {
-          return const Center(child: Text('No conversations yet'));
+          return Center(child: Text(context.t.inbox.noConversationsYet));
         }
 
         return ListView.separated(

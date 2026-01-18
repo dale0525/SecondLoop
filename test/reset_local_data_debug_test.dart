@@ -13,6 +13,8 @@ import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets(
       'Debug reset clears local+remote synced data but preserves master password and local config',
@@ -81,8 +83,10 @@ void main() {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () => locked = true,
-          child: const MaterialApp(
-            home: Scaffold(body: SettingsPage()),
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: Scaffold(body: SettingsPage()),
+            ),
           ),
         ),
       ),

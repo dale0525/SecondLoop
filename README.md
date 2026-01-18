@@ -36,6 +36,7 @@ pixi run dart pub global run fvm:main flutter <args...>
 ## Troubleshooting
 
 - If you see build errors referencing macOS paths like `/Users/.../fvm/versions/...` on Windows, delete generated Flutter artifacts (or run `dart pub global run fvm:main flutter clean`) and then run `pixi run setup-flutter` again.
+- If `flutter pub get` fails with a TLS error to `https://pub.dev`, try `export PUB_HOSTED_URL=https://pub.flutter-io.cn` and re-run.
 
 ## Platform Prerequisites
 

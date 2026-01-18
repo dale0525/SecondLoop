@@ -1,63 +1,63 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
-import 'test_i18n.dart';
-
 void main() {
-  testWidgets('First launch shows setup page', (WidgetTester tester) async {
-    await tester.pumpWidget(MyApp(backend: FakeBackend()));
+  testWidgets('Uses device locale for navigation labels', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.binding.platformDispatcher.localeTestValue =
+        const Locale('zh', 'CN');
+    addTearDown(tester.binding.platformDispatcher.clearLocaleTestValue);
+
+    final backend = _AutoUnlockedBackend();
+
+    await tester.pumpWidget(MyApp(backend: backend));
     await tester.pumpAndSettle();
 
-    expect(find.text('Set master password'), findsOneWidget);
-  });
-
-  testWidgets('Settings shows Sync entry', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      AppBackendScope(
-        backend: FakeBackend(),
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: wrapWithI18n(
-            const MaterialApp(home: Scaffold(body: SettingsPage())),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Sync'), findsOneWidget);
+    expect(find.text('设置'), findsWidgets);
   });
 }
 
-class FakeBackend implements AppBackend {
+final class _AutoUnlockedBackend implements AppBackend {
+  Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
+
+  static const _mainStream = Conversation(
+    id: 'main_stream',
+    title: 'Main Stream',
+    createdAtMs: 0,
+    updatedAtMs: 0,
+  );
+
   @override
   Future<void> init() async {}
 
   @override
-  Future<bool> isMasterPasswordSet() async => false;
-
-  @override
-  Future<Uint8List?> loadSavedSessionKey() async => null;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
+  Future<bool> isMasterPasswordSet() async => true;
 
   @override
   Future<bool> readAutoUnlockEnabled() async => true;
 
   @override
-  Future<void> clearSavedSessionKey() async {}
+  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
 
   @override
-  Future<void> saveSessionKey(Uint8List key) async {}
+  Future<Uint8List?> loadSavedSessionKey() async => _savedKey;
+
+  @override
+  Future<void> saveSessionKey(Uint8List key) async {
+    _savedKey = Uint8List.fromList(key);
+  }
+
+  @override
+  Future<void> clearSavedSessionKey() async {
+    _savedKey = null;
+  }
 
   @override
   Future<void> validateKey(Uint8List key) async {}
@@ -71,25 +71,21 @@ class FakeBackend implements AppBackend {
       Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
-  Future<List<Conversation>> listConversations(Uint8List key) async => const [];
-
-  @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      createConversation(key, 'Main Stream');
+  Future<List<Conversation>> listConversations(Uint8List key) async =>
+      const <Conversation>[_mainStream];
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
-      Conversation(
-        id: 'c1',
-        title: title,
-        createdAtMs: 0,
-        updatedAtMs: 0,
-      );
+      throw UnimplementedError();
+
+  @override
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+      _mainStream;
 
   @override
   Future<List<Message>> listMessages(
           Uint8List key, String conversationId) async =>
-      const [];
+      const <Message>[];
 
   @override
   Future<Message> insertMessage(
@@ -98,21 +94,17 @@ class FakeBackend implements AppBackend {
     required String role,
     required String content,
   }) async =>
-      Message(
-        id: 'm1',
-        conversationId: conversationId,
-        role: role,
-        content: content,
-        createdAtMs: 0,
-      );
+      throw UnimplementedError();
 
   @override
   Future<void> editMessage(
-      Uint8List key, String messageId, String content) async {}
+          Uint8List key, String messageId, String content) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> setMessageDeleted(
-      Uint8List key, String messageId, bool isDeleted) async {}
+          Uint8List key, String messageId, bool isDeleted) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
@@ -182,7 +174,7 @@ class FakeBackend implements AppBackend {
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 1));
+      Uint8List.fromList(List<int>.filled(32, 2));
 
   @override
   Future<void> syncWebdavTestConnection({
@@ -223,18 +215,6 @@ class FakeBackend implements AppBackend {
       0;
 
   @override
-  Future<void> syncLocaldirTestConnection({
-    required String localDir,
-    required String remoteRoot,
-  }) async {}
-
-  @override
-  Future<void> syncLocaldirClearRemoteRoot({
-    required String localDir,
-    required String remoteRoot,
-  }) async {}
-
-  @override
   Future<int> syncLocaldirPush(
     Uint8List key,
     Uint8List syncKey, {
@@ -251,4 +231,16 @@ class FakeBackend implements AppBackend {
     required String remoteRoot,
   }) async =>
       0;
+
+  @override
+  Future<void> syncLocaldirClearRemoteRoot({
+    required String localDir,
+    required String remoteRoot,
+  }) async {}
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {}
 }

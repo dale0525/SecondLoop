@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 
 class LlmProfilesPage extends StatefulWidget {
@@ -83,7 +84,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     final modelName = _modelController.text.trim();
 
     if (name.isEmpty || modelName.isEmpty || apiKey.isEmpty) {
-      setState(() => _error = 'Name, API key, and model name are required.');
+      setState(() => _error = context.t.llmProfiles.validationError);
       return;
     }
 
@@ -108,7 +109,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
       await _loadProfiles();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('LLM profile saved and activated')),
+        SnackBar(content: Text(context.t.llmProfiles.savedActivated)),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -139,12 +140,12 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LLM Profiles'),
+        title: Text(context.t.llmProfiles.title),
         actions: [
           IconButton(
             onPressed: _busy ? null : _reload,
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: context.t.llmProfiles.refreshTooltip,
           ),
         ],
       ),
@@ -152,7 +153,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Active profile is used for Ask AI.',
+            context.t.llmProfiles.activeProfileHelp,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -162,7 +163,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
               child: profiles == null
                   ? const Center(child: CircularProgressIndicator())
                   : profiles.isEmpty
-                      ? const Text('No profiles yet.')
+                      ? Text(context.t.llmProfiles.noProfilesYet)
                       : Column(
                           children: [
                             for (var i = 0; i < profiles.length; i++) ...[
@@ -176,7 +177,13 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                                         v == null ? null : _activateProfile(v),
                                 title: Text(profiles[i].name),
                                 subtitle: Text(
-                                  '${profiles[i].providerType} • ${profiles[i].modelName}${profiles[i].baseUrl == null ? '' : ' • ${profiles[i].baseUrl}'}',
+                                  [
+                                    profiles[i].providerType,
+                                    profiles[i].modelName,
+                                    if (profiles[i].baseUrl != null &&
+                                        profiles[i].baseUrl!.isNotEmpty)
+                                      profiles[i].baseUrl!,
+                                  ].join(' • '),
                                 ),
                               ),
                             ],
@@ -186,7 +193,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Add profile',
+            context.t.llmProfiles.addProfile,
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
@@ -201,29 +208,36 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                 children: [
                   TextField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Name'),
+                    decoration: InputDecoration(
+                      labelText: context.t.llmProfiles.fields.name,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _baseUrlController,
-                    decoration:
-                        const InputDecoration(labelText: 'Base URL (optional)'),
+                    decoration: InputDecoration(
+                      labelText: context.t.llmProfiles.fields.baseUrlOptional,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _modelController,
-                    decoration: const InputDecoration(labelText: 'Model name'),
+                    decoration: InputDecoration(
+                      labelText: context.t.llmProfiles.fields.modelName,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _apiKeyController,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: 'API key'),
+                    decoration: InputDecoration(
+                      labelText: context.t.llmProfiles.fields.apiKey,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _busy ? null : _createProfile,
-                    child: const Text('Save & Activate'),
+                    child: Text(context.t.llmProfiles.actions.saveActivate),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),

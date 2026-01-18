@@ -4,11 +4,13 @@ import 'app/app.dart';
 import 'core/backend/app_backend.dart';
 import 'core/quick_capture/quick_capture_controller.dart';
 import 'core/sync/background_sync.dart';
+import 'i18n/locale_prefs.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await BackgroundSync.init();
   await BackgroundSync.refreshSchedule();
+  await AppLocaleBootstrap.ensureInitialized();
   runApp(const MyApp());
 }
 

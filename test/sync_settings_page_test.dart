@@ -11,6 +11,8 @@ import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('removes Test connection button', (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -121,13 +123,15 @@ Widget _wrap({
   required SyncConfigStore store,
   required SyncEngine? engine,
 }) {
-  return MaterialApp(
-    home: AppBackendScope(
-      backend: backend,
-      child: SyncEngineScope(
-        engine: engine,
-        child: Scaffold(
-          body: SyncSettingsPage(configStore: store),
+  return wrapWithI18n(
+    MaterialApp(
+      home: AppBackendScope(
+        backend: backend,
+        child: SyncEngineScope(
+          engine: engine,
+          child: Scaffold(
+            body: SyncSettingsPage(configStore: store),
+          ),
         ),
       ),
     ),

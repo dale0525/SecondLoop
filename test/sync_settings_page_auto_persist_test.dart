@@ -11,6 +11,8 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('Push persists WebDAV config for auto sync',
       (WidgetTester tester) async {
@@ -24,8 +26,10 @@ void main() {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: MaterialApp(
-            home: SyncSettingsPage(configStore: store),
+          child: wrapWithI18n(
+            MaterialApp(
+              home: SyncSettingsPage(configStore: store),
+            ),
           ),
         ),
       ),
@@ -63,8 +67,10 @@ void main() {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: MaterialApp(
-            home: SyncSettingsPage(configStore: store),
+          child: wrapWithI18n(
+            MaterialApp(
+              home: SyncSettingsPage(configStore: store),
+            ),
           ),
         ),
       ),
@@ -106,8 +112,10 @@ void main() {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: MaterialApp(
-            home: SyncSettingsPage(configStore: store),
+          child: wrapWithI18n(
+            MaterialApp(
+              home: SyncSettingsPage(configStore: store),
+            ),
           ),
         ),
       ),

@@ -8,6 +8,8 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/semantic_search_debug_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('Semantic search prepares embeddings before searching',
       (tester) async {
@@ -21,13 +23,15 @@ void main() {
     final backend = _SemanticSearchPrepBackend();
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const SemanticSearchDebugPage(),
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const SemanticSearchDebugPage(),
+            ),
           ),
         ),
       ),

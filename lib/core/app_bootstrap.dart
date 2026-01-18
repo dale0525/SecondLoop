@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'backend/app_backend.dart';
+import '../i18n/strings.g.dart';
 
 class AppBootstrap extends StatefulWidget {
   const AppBootstrap({required this.child, super.key});
@@ -34,7 +35,9 @@ class _AppBootstrapState extends State<AppBootstrap> {
         if (snapshot.hasError) {
           return Scaffold(
             body: Center(
-              child: Text('Init failed: ${snapshot.error}'),
+              child: Text(
+                context.t.errors.initFailed(error: '${snapshot.error}'),
+              ),
             ),
           );
         }

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../i18n/strings.g.dart';
 import 'setup_master_password_page.dart';
 import 'unlock_page.dart';
 
@@ -69,7 +70,11 @@ class _LockGateState extends State<LockGate> {
 
         if (snapshot.hasError) {
           return Scaffold(
-            body: Center(child: Text('LockGate error: ${snapshot.error}')),
+            body: Center(
+              child: Text(
+                context.t.errors.lockGateError(error: '${snapshot.error}'),
+              ),
+            ),
           );
         }
 

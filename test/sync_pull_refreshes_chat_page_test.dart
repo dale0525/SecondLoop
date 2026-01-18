@@ -10,6 +10,8 @@ import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('ChatPage refreshes after sync pull applies ops', (tester) async {
     final backend = _MutableBackend();
@@ -39,8 +41,10 @@ void main() {
           lock: () {},
           child: SyncEngineScope(
             engine: engine,
-            child: const MaterialApp(
-              home: ChatPage(conversation: conversation),
+            child: wrapWithI18n(
+              const MaterialApp(
+                home: ChatPage(conversation: conversation),
+              ),
             ),
           ),
         ),

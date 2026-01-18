@@ -8,6 +8,8 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('Settings: toggling Auto lock persists and clears saved key',
       (tester) async {
@@ -23,7 +25,9 @@ void main() {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
         ),
       ),
     );
@@ -54,7 +58,9 @@ void main() {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
         ),
       ),
     );
@@ -88,7 +94,9 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+            child: wrapWithI18n(
+              const MaterialApp(home: Scaffold(body: SettingsPage())),
+            ),
           ),
         ),
       );

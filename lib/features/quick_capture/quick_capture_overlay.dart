@@ -9,6 +9,7 @@ import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../i18n/strings.g.dart';
 
 class QuickCaptureOverlay extends StatefulWidget {
   const QuickCaptureOverlay({
@@ -189,8 +190,9 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                                 controller: _textController,
                                 autofocus: true,
                                 textInputAction: TextInputAction.done,
-                                decoration: const InputDecoration(
-                                  hintText: 'Quick capture',
+                                decoration: InputDecoration(
+                                  hintText:
+                                      context.t.common.fields.quickCapture,
                                   border: InputBorder.none,
                                   filled: false,
                                 ),
@@ -201,7 +203,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                             FilledButton(
                               key: const ValueKey('quick_capture_submit'),
                               onPressed: _busy ? null : _submit,
-                              child: const Text('Save'),
+                              child: Text(context.t.common.actions.save),
                             ),
                           ],
                         ),

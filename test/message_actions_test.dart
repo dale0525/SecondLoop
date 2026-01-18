@@ -8,6 +8,8 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('Long press message -> delete removes it', (tester) async {
     final backend = MessageActionsBackend(
@@ -73,18 +75,20 @@ void main() {
 }
 
 Widget _wrapChat({required AppBackend backend}) {
-  return MaterialApp(
-    home: AppBackendScope(
-      backend: backend,
-      child: SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: const ChatPage(
-          conversation: Conversation(
-            id: 'main_stream',
-            title: 'Main Stream',
-            createdAtMs: 0,
-            updatedAtMs: 0,
+  return wrapWithI18n(
+    MaterialApp(
+      home: AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: const ChatPage(
+            conversation: Conversation(
+              id: 'main_stream',
+              title: 'Main Stream',
+              createdAtMs: 0,
+              updatedAtMs: 0,
+            ),
           ),
         ),
       ),

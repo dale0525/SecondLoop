@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 
 class SemanticSearchDebugPage extends StatefulWidget {
@@ -79,8 +80,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
         SnackBar(
           content: Text(
             changed
-                ? 'Switched embedding model; re-index pending'
-                : 'Embedding model already active',
+                ? context.t.semanticSearchDebug.switchedModelReindex
+                : context.t.semanticSearchDebug.modelAlreadyActive,
           ),
         ),
       );
@@ -105,7 +106,11 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
           await backend.processPendingMessageEmbeddings(key, limit: 1024);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Processed $processed pending embeddings')),
+        SnackBar(
+          content: Text(
+            context.t.semanticSearchDebug.processedPending(count: processed),
+          ),
+        ),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -129,7 +134,9 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
           await backend.rebuildMessageEmbeddings(key, batchLimit: 1024);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Rebuilt embeddings for $rebuilt messages')),
+        SnackBar(
+          content: Text(context.t.semanticSearchDebug.rebuilt(count: rebuilt)),
+        ),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -167,7 +174,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     AppBackend backend,
     Uint8List sessionKey,
   ) async {
-    final status = ValueNotifier<String>('Preparing semantic search…');
+    final t = context.t;
+    final status = ValueNotifier<String>(t.semanticSearch.preparing);
     final elapsedSeconds = ValueNotifier<int>(0);
     var dialogShown = false;
 
@@ -208,7 +216,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                   valueListenable: elapsedSeconds,
                   builder: (context, value, child) {
                     return Text(
-                      'Elapsed: ${value}s',
+                      context.t.common.labels.elapsedSeconds(seconds: value),
                       style: Theme.of(context).textTheme.bodySmall,
                     );
                   },
@@ -229,7 +237,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
         );
         if (processed <= 0) break;
         totalProcessed += processed;
-        status.value = 'Indexing messages… ($totalProcessed indexed)';
+        status.value = t.semanticSearch.indexingMessages(count: totalProcessed);
       }
     } finally {
       showTimer.cancel();
@@ -248,7 +256,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     final models = _embeddingModels;
     final activeModel = _activeEmbeddingModel;
     return Scaffold(
-      appBar: AppBar(title: const Text('Semantic Search (Debug)')),
+      appBar: AppBar(title: Text(context.t.semanticSearchDebug.title)),
       body: Column(
         children: [
           Padding(
@@ -261,8 +269,10 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                     Expanded(
                       child: Text(
                         activeModel == null
-                            ? 'Embedding model: (loading...)'
-                            : 'Embedding model: $activeModel',
+                            ? context
+                                .t.semanticSearchDebug.embeddingModelLoading
+                            : context.t.semanticSearchDebug
+                                .embeddingModel(model: activeModel),
                       ),
                     ),
                     if (models != null && models.isNotEmpty) ...[
@@ -280,7 +290,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                       const SizedBox(width: 12),
                       OutlinedButton(
                         onPressed: _busy ? null : _applySelectedModel,
-                        child: const Text('Use model'),
+                        child: Text(context.t.common.actions.useModel),
                       ),
                     ],
                   ],
@@ -296,32 +306,34 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _queryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Query',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: context.t.common.fields.query,
+                    border: const OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _search(),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Text('Top‑K:'),
+                    Text(context.t.common.labels.topK),
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: _topK,
-                      items: const [
-                        DropdownMenuItem(value: 3, child: Text('3')),
-                        DropdownMenuItem(value: 5, child: Text('5')),
-                        DropdownMenuItem(value: 10, child: Text('10')),
-                        DropdownMenuItem(value: 20, child: Text('20')),
-                      ],
+                      items: const [3, 5, 10, 20]
+                          .map(
+                            (v) => DropdownMenuItem(
+                              value: v,
+                              child: Text(v.toString()),
+                            ),
+                          )
+                          .toList(),
                       onChanged:
                           _busy ? null : (v) => setState(() => _topK = v ?? 10),
                     ),
                     const Spacer(),
                     FilledButton(
                       onPressed: _busy ? null : _search,
-                      child: const Text('Search'),
+                      child: Text(context.t.common.actions.search),
                     ),
                   ],
                 ),
@@ -330,12 +342,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                   children: [
                     OutlinedButton(
                       onPressed: _busy ? null : _processPending,
-                      child: const Text('Process pending'),
+                      child: Text(context.t.common.actions.processPending),
                     ),
                     const SizedBox(width: 12),
                     OutlinedButton(
                       onPressed: _busy ? null : _rebuildIndex,
-                      child: const Text('Rebuild embeddings'),
+                      child: Text(context.t.common.actions.rebuildEmbeddings),
                     ),
                   ],
                 ),
@@ -353,9 +365,13 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
           const Divider(height: 1),
           Expanded(
             child: results == null
-                ? const Center(child: Text('Run a search to see results'))
+                ? Center(
+                    child: Text(
+                        context.t.semanticSearchDebug.runSearchToSeeResults),
+                  )
                 : results.isEmpty
-                    ? const Center(child: Text('No results'))
+                    ? Center(
+                        child: Text(context.t.semanticSearchDebug.noResults))
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         itemCount: results.length,
@@ -365,7 +381,11 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                           return ListTile(
                             title: Text(item.message.content),
                             subtitle: Text(
-                              'distance=${item.distance.toStringAsFixed(4)} • role=${item.message.role} • convo=${item.message.conversationId}',
+                              context.t.semanticSearchDebug.resultSubtitle(
+                                distance: item.distance.toStringAsFixed(4),
+                                role: item.message.role,
+                                conversationId: item.message.conversationId,
+                              ),
                             ),
                           );
                         },

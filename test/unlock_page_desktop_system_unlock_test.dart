@@ -7,6 +7,8 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/features/lock/unlock_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets(
       'UnlockPage (desktop): defaults to system unlock and uses saved session key',
@@ -23,10 +25,12 @@ void main() {
       await tester.pumpWidget(
         AppBackendScope(
           backend: backend,
-          child: MaterialApp(
-            home: UnlockPage(
-              onUnlocked: (key) => unlockedKey = key,
-              authenticateBiometrics: () async => true,
+          child: wrapWithI18n(
+            MaterialApp(
+              home: UnlockPage(
+                onUnlocked: (key) => unlockedKey = key,
+                authenticateBiometrics: () async => true,
+              ),
             ),
           ),
         ),

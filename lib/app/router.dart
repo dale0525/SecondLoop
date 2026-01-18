@@ -4,17 +4,22 @@ import '../core/backend/app_backend.dart';
 import '../core/session/session_scope.dart';
 import '../features/chat/chat_page.dart';
 import '../features/settings/settings_page.dart';
+import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
 
 enum AppTab {
-  mainStream('Main', Icons.chat_bubble_outline, Icons.chat_bubble),
-  settings('Settings', Icons.settings_outlined, Icons.settings);
+  mainStream(Icons.chat_bubble_outline, Icons.chat_bubble),
+  settings(Icons.settings_outlined, Icons.settings);
 
-  const AppTab(this.label, this.icon, this.selectedIcon);
+  const AppTab(this.icon, this.selectedIcon);
 
-  final String label;
   final IconData icon;
   final IconData selectedIcon;
+
+  String label(BuildContext context) => switch (this) {
+        AppTab.mainStream => context.t.app.tabs.main,
+        AppTab.settings => context.t.app.tabs.settings,
+      };
 }
 
 class AppShell extends StatefulWidget {
@@ -54,7 +59,7 @@ class _AppShellState extends State<AppShell> {
                           NavigationRailDestination(
                             icon: Icon(t.icon),
                             selectedIcon: Icon(t.selectedIcon),
-                            label: Text(t.label),
+                            label: Text(t.label(context)),
                           ),
                       ],
                     ),
@@ -72,7 +77,7 @@ class _AppShellState extends State<AppShell> {
                       NavigationDestination(
                         icon: Icon(t.icon),
                         selectedIcon: Icon(t.selectedIcon),
-                        label: t.label,
+                        label: t.label(context),
                       ),
                   ],
                   onDestinationSelected: (index) {
@@ -118,13 +123,17 @@ final class _MainStreamTabState extends State<_MainStreamTab> {
         }
         if (snapshot.hasError) {
           return Scaffold(
-              body: Center(child: Text('Load failed: ${snapshot.error}')));
+              body: Center(
+                  child: Text(
+            context.t.errors.loadFailed(error: '${snapshot.error}'),
+          )));
         }
 
         final conversation = snapshot.data;
         if (conversation == null) {
-          return const Scaffold(
-              body: Center(child: Text('Missing Main Stream')));
+          return Scaffold(
+            body: Center(child: Text(context.t.errors.missingMainStream)),
+          );
         }
         return ChatPage(conversation: conversation);
       },
@@ -138,7 +147,7 @@ final class _SettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(context.t.settings.title)),
       body: const SettingsPage(),
     );
   }

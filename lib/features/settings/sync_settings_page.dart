@@ -9,6 +9,7 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../i18n/strings.g.dart';
 
 class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
@@ -101,9 +102,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   }
 
   Future<bool> _persistBackendConfig() async {
+    final t = context.t;
     final remoteRoot = _requiredTrimmed(_remoteRootController);
     if (remoteRoot.isEmpty) {
-      _showSnack('Remote root is required');
+      _showSnack(t.sync.remoteRootRequired);
       return false;
     }
 
@@ -115,7 +117,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       case SyncBackendType.webdav:
         final baseUrl = _requiredTrimmed(_baseUrlController);
         if (baseUrl.isEmpty) {
-          _showSnack('Base URL is required');
+          _showSnack(t.sync.baseUrlRequired);
           return false;
         }
         await _store.writeWebdavBaseUrl(baseUrl);
@@ -125,7 +127,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       case SyncBackendType.localDir:
         final localDir = _requiredTrimmed(_localDirController);
         if (localDir.isEmpty) {
-          _showSnack('Local directory is required');
+          _showSnack(t.sync.localDirRequired);
           return false;
         }
         await _store.writeLocalDir(localDir);
@@ -136,6 +138,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   }
 
   void _showSnack(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
   }
@@ -166,6 +169,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     if (_busy) return;
     setState(() => _busy = true);
 
+    final t = context.t;
     try {
       final backend = AppBackendScope.of(context);
 
@@ -186,17 +190,17 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       try {
         await _runConnectionTest();
         if (!mounted) return;
-        _showSnack('Connection OK');
+        _showSnack(t.sync.connectionOk);
         final engine = SyncEngineScope.maybeOf(context);
         engine?.start();
         engine?.triggerPullNow();
         engine?.triggerPushNow();
       } catch (e) {
         if (!mounted) return;
-        _showSnack('Connection failed: $e');
+        _showSnack(t.sync.connectionFailed(error: '$e'));
       }
     } catch (e) {
-      _showSnack('Save failed: $e');
+      _showSnack(t.sync.saveFailed(error: '$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -206,6 +210,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     if (_busy) return;
     setState(() => _busy = true);
 
+    final t = context.t;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -215,7 +220,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
       final syncKey = await _loadSyncKey();
       if (syncKey == null || syncKey.length != 32) {
-        _showSnack('Missing sync key. Enter a passphrase and Save first.');
+        _showSnack(t.sync.missingSyncKey);
         return;
       }
 
@@ -235,9 +240,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
       });
-      _showSnack('Pushed $pushed ops');
+      _showSnack(t.sync.pushedOps(count: pushed));
     } catch (e) {
-      _showSnack('Push failed: $e');
+      _showSnack(t.sync.pushFailed(error: '$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -247,6 +252,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     if (_busy) return;
     setState(() => _busy = true);
 
+    final t = context.t;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -256,7 +262,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
       final syncKey = await _loadSyncKey();
       if (syncKey == null || syncKey.length != 32) {
-        _showSnack('Missing sync key. Enter a passphrase and Save first.');
+        _showSnack(t.sync.missingSyncKey);
         return;
       }
 
@@ -276,9 +282,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
       });
-      _showSnack('Pulled $pulled ops');
+      _showSnack(t.sync.pulledOps(count: pulled));
     } catch (e) {
-      _showSnack('Pull failed: $e');
+      _showSnack(t.sync.pullFailed(error: '$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -310,19 +316,17 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vault Sync'),
+        title: Text(context.t.sync.title),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          sectionTitle('Automation'),
+          sectionTitle(context.t.sync.sections.automation),
           sectionCard(
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Auto sync'),
-              subtitle: const Text(
-                'Foreground debounced push + background periodic sync (mobile)',
-              ),
+              title: Text(context.t.sync.autoSync.title),
+              subtitle: Text(context.t.sync.autoSync.subtitle),
               value: _autoEnabled,
               onChanged: _busy
                   ? null
@@ -335,24 +339,24 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          sectionTitle('Backend'),
+          sectionTitle(context.t.sync.sections.backend),
           sectionCard(
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DropdownButtonFormField<SyncBackendType>(
                   value: _backendType,
-                  decoration: const InputDecoration(
-                    labelText: 'Vault backend',
+                  decoration: InputDecoration(
+                    labelText: context.t.sync.backendLabel,
                   ),
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: SyncBackendType.webdav,
-                      child: Text('WebDAV'),
+                      child: Text(context.t.sync.backendWebdav),
                     ),
                     DropdownMenuItem(
                       value: SyncBackendType.localDir,
-                      child: Text('Local directory (desktop)'),
+                      child: Text(context.t.sync.backendLocalDir),
                     ),
                   ],
                   onChanged: _busy
@@ -366,9 +370,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 if (_backendType == SyncBackendType.webdav) ...[
                   TextField(
                     controller: _baseUrlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Base URL',
-                      hintText: 'https://example.com/dav',
+                    decoration: InputDecoration(
+                      labelText: context.t.sync.fields.baseUrl.label,
+                      hintText: context.t.sync.fields.baseUrl.hint,
                     ),
                     enabled: !_busy,
                     keyboardType: TextInputType.url,
@@ -376,16 +380,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Username (optional)',
+                    decoration: InputDecoration(
+                      labelText: context.t.sync.fields.username.label,
                     ),
                     enabled: !_busy,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _passwordController,
-                    decoration: const InputDecoration(
-                      labelText: 'Password (optional)',
+                    decoration: InputDecoration(
+                      labelText: context.t.sync.fields.password.label,
                     ),
                     enabled: !_busy,
                     obscureText: true,
@@ -396,11 +400,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 if (_backendType == SyncBackendType.localDir) ...[
                   TextField(
                     controller: _localDirController,
-                    decoration: const InputDecoration(
-                      labelText: 'Local directory path',
-                      hintText: '/Users/me/SecondLoopVault',
-                      helperText:
-                          'Best for desktop; mobile platforms may not support this path.',
+                    decoration: InputDecoration(
+                      labelText: context.t.sync.fields.localDir.label,
+                      hintText: context.t.sync.fields.localDir.hint,
+                      helperText: context.t.sync.fields.localDir.helper,
                     ),
                     enabled: !_busy,
                   ),
@@ -408,9 +411,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 ],
                 TextField(
                   controller: _remoteRootController,
-                  decoration: const InputDecoration(
-                    labelText: 'Remote root folder',
-                    hintText: 'SecondLoop',
+                  decoration: InputDecoration(
+                    labelText: context.t.sync.fields.remoteRoot.label,
+                    hintText: context.t.sync.fields.remoteRoot.hint,
                   ),
                   enabled: !_busy,
                 ),
@@ -418,16 +421,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          sectionTitle('Security & Actions'),
+          sectionTitle(context.t.sync.sections.securityActions),
           sectionCard(
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextField(
                   controller: _syncPassphraseController,
-                  decoration: const InputDecoration(
-                    labelText: 'Sync passphrase (not stored; derives a key)',
-                    helperText: 'Use the same passphrase on all devices.',
+                  decoration: InputDecoration(
+                    labelText: context.t.sync.fields.passphrase.label,
+                    helperText: context.t.sync.fields.passphrase.helper,
                   ),
                   enabled: !_busy,
                   obscureText: true,
@@ -446,7 +449,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: _busy ? null : _save,
-                  child: const Text('Save'),
+                  child: Text(context.t.common.actions.save),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -454,14 +457,14 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _busy ? null : _push,
-                        child: const Text('Push'),
+                        child: Text(context.t.common.actions.push),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _busy ? null : _pull,
-                        child: const Text('Pull'),
+                        child: Text(context.t.common.actions.pull),
                       ),
                     ),
                   ],

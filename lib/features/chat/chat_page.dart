@@ -7,6 +7,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 
 class ChatPage extends StatefulWidget {
@@ -70,13 +71,13 @@ class _ChatPageState extends State<ChatPage> {
               ListTile(
                 key: const ValueKey('message_action_edit'),
                 leading: const Icon(Icons.edit),
-                title: const Text('Edit'),
+                title: Text(context.t.common.actions.edit),
                 onTap: () => Navigator.of(context).pop(_MessageAction.edit),
               ),
               ListTile(
                 key: const ValueKey('message_action_delete'),
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete'),
+                title: Text(context.t.common.actions.delete),
                 onTap: () => Navigator.of(context).pop(_MessageAction.delete),
               ),
             ],
@@ -111,7 +112,7 @@ class _ChatPageState extends State<ChatPage> {
         context: context,
         builder: (context) {
           return AlertDialog(
-            title: const Text('Edit message'),
+            title: Text(context.t.chat.editMessageTitle),
             content: TextFormField(
               key: const ValueKey('edit_message_content'),
               initialValue: draft,
@@ -122,12 +123,12 @@ class _ChatPageState extends State<ChatPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: Text(context.t.common.actions.cancel),
               ),
               FilledButton(
                 key: const ValueKey('edit_message_save'),
                 onPressed: () => Navigator.of(context).pop(draft),
-                child: const Text('Save'),
+                child: Text(context.t.common.actions.save),
               ),
             ],
           );
@@ -141,9 +142,13 @@ class _ChatPageState extends State<ChatPage> {
       if (!mounted) return;
       syncEngine?.notifyLocalMutation();
       _refresh();
-      messenger.showSnackBar(const SnackBar(content: Text('Message updated')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.t.chat.messageUpdated)),
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Edit failed: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.t.chat.editFailed(error: '$e'))),
+      );
     }
   }
 
@@ -158,11 +163,14 @@ class _ChatPageState extends State<ChatPage> {
       if (!mounted) return;
       syncEngine?.notifyLocalMutation();
       _refresh();
-      messenger.showSnackBar(const SnackBar(content: Text('Message deleted')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.t.chat.messageDeleted)),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.chat.deleteFailed(error: '$e'))),
+      );
     }
   }
 
@@ -322,7 +330,8 @@ class _ChatPageState extends State<ChatPage> {
     AppBackend backend,
     Uint8List sessionKey,
   ) async {
-    final status = ValueNotifier<String>('Preparing semantic search…');
+    final t = context.t;
+    final status = ValueNotifier<String>(t.semanticSearch.preparing);
     final elapsedSeconds = ValueNotifier<int>(0);
     var dialogShown = false;
 
@@ -363,7 +372,7 @@ class _ChatPageState extends State<ChatPage> {
                   valueListenable: elapsedSeconds,
                   builder: (context, value, child) {
                     return Text(
-                      'Elapsed: ${value}s',
+                      context.t.common.labels.elapsedSeconds(seconds: value),
                       style: Theme.of(context).textTheme.bodySmall,
                     );
                   },
@@ -382,7 +391,7 @@ class _ChatPageState extends State<ChatPage> {
             .processPendingMessageEmbeddings(sessionKey, limit: 256);
         if (processed <= 0) break;
         totalProcessed += processed;
-        status.value = 'Indexing messages… ($totalProcessed indexed)';
+        status.value = t.semanticSearch.indexingMessages(count: totalProcessed);
       }
     } finally {
       showTimer.cancel();
@@ -405,25 +414,28 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final title = widget.conversation.id == 'main_stream'
+        ? context.t.chat.mainStreamTitle
+        : widget.conversation.title;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.conversation.title),
+        title: Text(title),
         actions: [
           PopupMenuButton<bool>(
             initialValue: _thisThreadOnly,
             onSelected: (value) => setState(() => _thisThreadOnly = value),
-            itemBuilder: (context) => const [
+            itemBuilder: (context) => [
               PopupMenuItem(
                 value: false,
-                child: Text('Focus: All memories'),
+                child: Text(context.t.chat.focus.allMemories),
               ),
               PopupMenuItem(
                 value: true,
-                child: Text('Focus: This thread'),
+                child: Text(context.t.chat.focus.thisThread),
               ),
             ],
             icon: const Icon(Icons.filter_alt),
-            tooltip: 'Focus',
+            tooltip: context.t.chat.focus.tooltip,
           ),
         ],
       ),
@@ -455,7 +467,11 @@ class _ChatPageState extends State<ChatPage> {
                       }
                       if (snapshot.hasError) {
                         return Center(
-                            child: Text('Load failed: ${snapshot.error}'));
+                          child: Text(
+                            context.t.errors
+                                .loadFailed(error: '${snapshot.error}'),
+                          ),
+                        );
                       }
 
                       final messages = snapshot.data ?? const <Message>[];
@@ -463,7 +479,9 @@ class _ChatPageState extends State<ChatPage> {
                       final extraCount = (pendingQuestion == null ? 0 : 1) +
                           (_asking && !_stopRequested ? 1 : 0);
                       if (messages.isEmpty && extraCount == 0) {
-                        return const Center(child: Text('No messages yet'));
+                        return Center(
+                          child: Text(context.t.chat.noMessagesYet),
+                        );
                       }
 
                       return ListView.builder(
@@ -592,8 +610,8 @@ class _ChatPageState extends State<ChatPage> {
                               child: TextField(
                                 key: const ValueKey('chat_input'),
                                 controller: _controller,
-                                decoration: const InputDecoration(
-                                  hintText: 'Message',
+                                decoration: InputDecoration(
+                                  hintText: context.t.common.fields.message,
                                   border: InputBorder.none,
                                   filled: false,
                                 ),
@@ -604,22 +622,25 @@ class _ChatPageState extends State<ChatPage> {
                             FilledButton(
                               key: const ValueKey('chat_send'),
                               onPressed: (_sending || _asking) ? null : _send,
-                              child: const Text('Send'),
+                              child: Text(context.t.common.actions.send),
                             ),
                             const SizedBox(width: 8),
                             if (_asking)
                               OutlinedButton(
                                 key: const ValueKey('chat_stop'),
                                 onPressed: _stopRequested ? null : _stopAsk,
-                                child:
-                                    Text(_stopRequested ? 'Stopping…' : 'Stop'),
+                                child: Text(
+                                  _stopRequested
+                                      ? context.t.common.actions.stopping
+                                      : context.t.common.actions.stop,
+                                ),
                               )
                             else
                               FilledButton.tonal(
                                 key: const ValueKey('chat_ask_ai'),
                                 onPressed:
                                     (_sending || _asking) ? null : _askAi,
-                                child: const Text('Ask AI'),
+                                child: Text(context.t.common.actions.askAi),
                               ),
                           ],
                         ),

@@ -1,0 +1,216 @@
+{
+  "app": {
+    "title": "SecondLoop",
+    "tabs": {
+      "main": "Main",
+      "settings": "Settings"
+    }
+  },
+  "common": {
+    "actions": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "reset": "Reset",
+      "continueLabel": "Continue",
+      "send": "Send",
+      "askAi": "Ask AI",
+      "stop": "Stop",
+      "stopping": "Stopping…",
+      "edit": "Edit",
+      "delete": "Delete",
+      "refresh": "Refresh",
+      "search": "Search",
+      "useModel": "Use model",
+      "processPending": "Process pending",
+      "rebuildEmbeddings": "Rebuild embeddings",
+      "push": "Push",
+      "pull": "Pull",
+      "lockNow": "Lock now"
+    },
+    "fields": {
+      "masterPassword": "Master password",
+      "confirm": "Confirm",
+      "message": "Message",
+      "quickCapture": "Quick capture",
+      "query": "Query"
+    },
+    "labels": {
+      "elapsedSeconds": "Elapsed: ${seconds}s",
+      "topK": "Top‑K:"
+    }
+  },
+  "errors": {
+    "initFailed": "Init failed: $error",
+    "loadFailed": "Load failed: $error",
+    "lockGateError": "LockGate error: $error",
+    "missingMainStream": "Missing Main Stream"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "general": "General",
+      "security": "Security",
+      "connections": "Connections",
+      "debug": "Debug"
+    },
+    "language": {
+      "title": "Language",
+      "subtitle": "Follow system or choose a language",
+      "dialogTitle": "Language",
+      "options": {
+        "system": "System",
+        "systemWithValue": "System ($value)",
+        "en": "English",
+        "zhCn": "Simplified Chinese"
+      }
+    },
+    "autoLock": {
+      "title": "Auto lock",
+      "subtitle": "Require unlock to access the app"
+    },
+    "systemUnlock": {
+      "titleMobile": "Use biometrics",
+      "titleDesktop": "Use system unlock",
+      "subtitleMobile": "Unlock with biometrics instead of master password",
+      "subtitleDesktop": "Unlock with Touch ID / Windows Hello instead of master password"
+    },
+    "lockNow": {
+      "title": "Lock now",
+      "subtitle": "Return to the unlock screen"
+    },
+    "llmProfiles": {
+      "title": "LLM profiles",
+      "subtitle": "Configure BYOK for Ask AI"
+    },
+    "sync": {
+      "title": "Sync",
+      "subtitle": "Vault backends + auto sync settings"
+    },
+    "resetLocalData": {
+      "dialogTitle": "Reset local data?",
+      "dialogBody": "This will delete local messages and clear synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.",
+      "failed": "Reset failed: $error"
+    },
+    "debugResetLocalData": {
+      "title": "Debug: Reset local data",
+      "subtitle": "Delete local messages + clear synced remote data"
+    },
+    "debugSemanticSearch": {
+      "title": "Debug: Semantic search",
+      "subtitle": "Search similar messages + rebuild embeddings index"
+    }
+  },
+  "lock": {
+    "masterPasswordRequired": "Master password required",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "setupTitle": "Set master password",
+    "unlockTitle": "Unlock",
+    "unlockReason": "Unlock SecondLoop",
+    "missingSavedSessionKey": "Missing saved session key. Unlock with master password once.",
+    "creating": "Creating…",
+    "unlocking": "Unlocking…"
+  },
+  "chat": {
+    "mainStreamTitle": "Main Stream",
+    "editMessageTitle": "Edit message",
+    "messageUpdated": "Message updated",
+    "messageDeleted": "Message deleted",
+    "editFailed": "Edit failed: $error",
+    "deleteFailed": "Delete failed: $error",
+    "noMessagesYet": "No messages yet",
+    "focus": {
+      "tooltip": "Focus",
+      "allMemories": "Focus: All memories",
+      "thisThread": "Focus: This thread"
+    }
+  },
+  "semanticSearch": {
+    "preparing": "Preparing semantic search…",
+    "indexingMessages": "Indexing messages… ($count indexed)"
+  },
+  "semanticSearchDebug": {
+    "title": "Semantic Search (Debug)",
+    "embeddingModelLoading": "Embedding model: (loading...)",
+    "embeddingModel": "Embedding model: $model",
+    "switchedModelReindex": "Switched embedding model; re-index pending",
+    "modelAlreadyActive": "Embedding model already active",
+    "processedPending": "Processed $count pending embeddings",
+    "rebuilt": "Rebuilt embeddings for $count messages",
+    "runSearchToSeeResults": "Run a search to see results",
+    "noResults": "No results",
+    "resultSubtitle": "distance=$distance • role=$role • convo=$conversationId"
+  },
+  "sync": {
+    "title": "Vault Sync",
+    "sections": {
+      "automation": "Automation",
+      "backend": "Backend",
+      "securityActions": "Security & Actions"
+    },
+    "autoSync": {
+      "title": "Auto sync",
+      "subtitle": "Foreground debounced push + background periodic sync (mobile)"
+    },
+    "backendLabel": "Vault backend",
+    "backendWebdav": "WebDAV",
+    "backendLocalDir": "Local directory (desktop)",
+    "remoteRootRequired": "Remote root is required",
+    "baseUrlRequired": "Base URL is required",
+    "localDirRequired": "Local directory is required",
+    "connectionOk": "Connection OK",
+    "connectionFailed": "Connection failed: $error",
+    "saveFailed": "Save failed: $error",
+    "missingSyncKey": "Missing sync key. Enter a passphrase and Save first.",
+    "pushedOps": "Pushed $count ops",
+    "pulledOps": "Pulled $count ops",
+    "pushFailed": "Push failed: $error",
+    "pullFailed": "Pull failed: $error",
+    "fields": {
+      "baseUrl": {
+        "label": "Base URL",
+        "hint": "https://example.com/dav"
+      },
+      "username": {
+        "label": "Username (optional)"
+      },
+      "password": {
+        "label": "Password (optional)"
+      },
+      "localDir": {
+        "label": "Local directory path",
+        "hint": "/Users/me/SecondLoopVault",
+        "helper": "Best for desktop; mobile platforms may not support this path."
+      },
+      "remoteRoot": {
+        "label": "Remote root folder",
+        "hint": "SecondLoop"
+      },
+      "passphrase": {
+        "label": "Sync passphrase (not stored; derives a key)",
+        "helper": "Use the same passphrase on all devices."
+      }
+    }
+  },
+  "llmProfiles": {
+    "title": "LLM Profiles",
+    "refreshTooltip": "Refresh",
+    "activeProfileHelp": "Active profile is used for Ask AI.",
+    "noProfilesYet": "No profiles yet.",
+    "addProfile": "Add profile",
+    "validationError": "Name, API key, and model name are required.",
+    "fields": {
+      "name": "Name",
+      "baseUrlOptional": "Base URL (optional)",
+      "modelName": "Model name",
+      "apiKey": "API key"
+    },
+    "savedActivated": "LLM profile saved and activated",
+    "actions": {
+      "saveActivate": "Save & Activate"
+    }
+  },
+  "inbox": {
+    "defaultTitle": "Inbox",
+    "noConversationsYet": "No conversations yet"
+  }
+}

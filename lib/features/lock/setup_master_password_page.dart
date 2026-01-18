@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../i18n/strings.g.dart';
 
 class SetupMasterPasswordPage extends StatefulWidget {
   const SetupMasterPasswordPage({required this.onUnlocked, super.key});
@@ -44,11 +45,11 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
     final confirm = _confirmController.text;
 
     if (password.isEmpty) {
-      setState(() => _error = 'Master password required');
+      setState(() => _error = context.t.lock.masterPasswordRequired);
       return;
     }
     if (password != confirm) {
-      setState(() => _error = 'Passwords do not match');
+      setState(() => _error = context.t.lock.passwordsDoNotMatch);
       return;
     }
 
@@ -86,7 +87,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Set master password')),
+      appBar: AppBar(title: Text(context.t.lock.setupTitle)),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
@@ -100,7 +101,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Master password required',
+                      context.t.lock.masterPasswordRequired,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
@@ -108,8 +109,8 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
                       key: const ValueKey('setup_password'),
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Master password',
+                      decoration: InputDecoration(
+                        labelText: context.t.common.fields.masterPassword,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -117,8 +118,8 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
                       key: const ValueKey('setup_confirm_password'),
                       controller: _confirmController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm',
+                      decoration: InputDecoration(
+                        labelText: context.t.common.fields.confirm,
                       ),
                     ),
                     if (_error != null) ...[
@@ -136,7 +137,11 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
                       child: FilledButton(
                         key: const ValueKey('setup_continue'),
                         onPressed: _busy ? null : _submit,
-                        child: Text(_busy ? 'Creating…' : 'Continue'),
+                        child: Text(
+                          _busy
+                              ? context.t.lock.creating
+                              : context.t.common.actions.continueLabel,
+                        ),
                       ),
                     ),
                   ],

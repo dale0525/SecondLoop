@@ -4,6 +4,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../i18n/strings.g.dart';
 
 class UnlockPage extends StatefulWidget {
   const UnlockPage({
@@ -60,7 +61,7 @@ class _UnlockPageState extends State<UnlockPage> {
 
     final password = _passwordController.text;
     if (password.isEmpty) {
-      setState(() => _error = 'Master password required');
+      setState(() => _error = context.t.lock.masterPasswordRequired);
       return;
     }
 
@@ -97,6 +98,7 @@ class _UnlockPageState extends State<UnlockPage> {
 
   Future<void> _submitBiometricUnlock() async {
     if (_busy) return;
+    final unlockReason = context.t.lock.unlockReason;
     final authenticate = widget.authenticateBiometrics ??
         () async {
           final auth = LocalAuthentication();
@@ -106,7 +108,7 @@ class _UnlockPageState extends State<UnlockPage> {
           final isMobile = defaultTargetPlatform == TargetPlatform.iOS ||
               defaultTargetPlatform == TargetPlatform.android;
           return auth.authenticate(
-            localizedReason: 'Unlock SecondLoop',
+            localizedReason: unlockReason,
             options: AuthenticationOptions(
               biometricOnly: isMobile,
               stickyAuth: true,
@@ -127,8 +129,7 @@ class _UnlockPageState extends State<UnlockPage> {
       final savedKey = await backend.loadSavedSessionKey();
       if (savedKey == null || savedKey.length != 32) {
         if (!mounted) return;
-        setState(() => _error =
-            'Missing saved session key. Unlock with master password once.');
+        setState(() => _error = context.t.lock.missingSavedSessionKey);
         return;
       }
 
@@ -151,9 +152,11 @@ class _UnlockPageState extends State<UnlockPage> {
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows);
     final showSystemUnlock = biometricEnabled && (isMobile || isDesktop);
-    final systemUnlockLabel = isMobile ? 'Use biometrics' : 'Use system unlock';
+    final systemUnlockLabel = isMobile
+        ? context.t.settings.systemUnlock.titleMobile
+        : context.t.settings.systemUnlock.titleDesktop;
     return Scaffold(
-      appBar: AppBar(title: const Text('Unlock')),
+      appBar: AppBar(title: Text(context.t.lock.unlockTitle)),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
@@ -170,8 +173,8 @@ class _UnlockPageState extends State<UnlockPage> {
                       key: const ValueKey('unlock_password'),
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Master password',
+                      decoration: InputDecoration(
+                        labelText: context.t.common.fields.masterPassword,
                       ),
                     ),
                     if (showSystemUnlock) ...[
@@ -196,7 +199,11 @@ class _UnlockPageState extends State<UnlockPage> {
                       child: FilledButton(
                         key: const ValueKey('unlock_continue'),
                         onPressed: _busy ? null : _submit,
-                        child: Text(_busy ? 'Unlocking…' : 'Continue'),
+                        child: Text(
+                          _busy
+                              ? context.t.lock.unlocking
+                              : context.t.common.actions.continueLabel,
+                        ),
                       ),
                     ),
                   ],

@@ -8,6 +8,8 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../i18n/locale_prefs.dart';
+import '../../i18n/strings.g.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
@@ -22,6 +24,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool? _appLockEnabled;
   bool? _biometricUnlockEnabled;
+  AppLocale? _localeOverride;
   bool _busy = false;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
@@ -40,20 +43,16 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Reset local data?'),
-          content: const Text(
-            'This will delete local messages and clear synced remote data. '
-            'It will NOT delete your master password or local LLM/sync config. '
-            'You will need to unlock again.',
-          ),
+          title: Text(context.t.settings.resetLocalData.dialogTitle),
+          content: Text(context.t.settings.resetLocalData.dialogBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.t.common.actions.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Reset'),
+              child: Text(context.t.common.actions.reset),
             ),
           ],
         );
@@ -61,6 +60,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (confirmed != true || !mounted) return;
 
+    final t = context.t;
     final backend = AppBackendScope.of(context);
     final lock = SessionScope.of(context).lock;
     final messenger = ScaffoldMessenger.of(context);
@@ -95,7 +95,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
       await BackgroundSync.refreshSchedule(backend: backend);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Reset failed: $e')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(t.settings.resetLocalData.failed(error: '$e')),
+        ),
+      );
       return;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -110,11 +114,87 @@ class _SettingsPageState extends State<SettingsPage> {
     final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
     final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
         _defaultSystemUnlockEnabled();
+    final rawLocaleOverride = prefs.getString(kAppLocaleOverridePrefsKey);
+    AppLocale? localeOverride;
+    if (rawLocaleOverride != null && rawLocaleOverride.trim().isNotEmpty) {
+      try {
+        localeOverride = AppLocaleUtils.parse(rawLocaleOverride);
+      } catch (_) {
+        localeOverride = null;
+      }
+    }
     if (!mounted) return;
     setState(() {
       _appLockEnabled = enabled;
       _biometricUnlockEnabled = biometricEnabled;
+      _localeOverride = localeOverride;
     });
+  }
+
+  String _localeLabel(BuildContext context, AppLocale locale) {
+    return switch (locale) {
+      AppLocale.en => context.t.settings.language.options.en,
+      AppLocale.zhCn => context.t.settings.language.options.zhCn,
+    };
+  }
+
+  String _currentLanguageLabel(BuildContext context) {
+    final override = _localeOverride;
+    if (override == null) {
+      final deviceLocale = AppLocaleUtils.findDeviceLocale();
+      return context.t.settings.language.options.systemWithValue(
+        value: _localeLabel(context, deviceLocale),
+      );
+    }
+    return _localeLabel(context, override);
+  }
+
+  Future<void> _selectLanguage() async {
+    if (_busy) return;
+
+    final selected = await showDialog<AppLocale?>(
+      context: context,
+      builder: (context) {
+        final t = context.t;
+        final current = _localeOverride;
+        return AlertDialog(
+          title: Text(t.settings.language.dialogTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<AppLocale?>(
+                title: Text(t.settings.language.options.system),
+                value: null,
+                groupValue: current,
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+              RadioListTile<AppLocale?>(
+                title: Text(t.settings.language.options.en),
+                value: AppLocale.en,
+                groupValue: current,
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+              RadioListTile<AppLocale?>(
+                title: Text(t.settings.language.options.zhCn),
+                value: AppLocale.zhCn,
+                groupValue: current,
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(current),
+              child: Text(t.common.actions.cancel),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || selected == _localeOverride) return;
+    setState(() => _localeOverride = selected);
+    await setLocaleOverride(selected);
   }
 
   Future<void> _setAppLock(bool enabled) async {
@@ -201,7 +281,31 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          'Security',
+          context.t.settings.sections.general,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        sectionCard([
+          ListTile(
+            title: Text(context.t.settings.language.title),
+            subtitle: Text(context.t.settings.language.subtitle),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_currentLanguageLabel(context)),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+            onTap: _busy ? null : _selectLanguage,
+          ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          context.t.settings.sections.security,
           style: Theme.of(context)
               .textTheme
               .titleSmall
@@ -210,18 +314,22 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 8),
         sectionCard([
           SwitchListTile(
-            title: const Text('Auto lock'),
-            subtitle: const Text('Require unlock to access the app'),
+            title: Text(context.t.settings.autoLock.title),
+            subtitle: Text(context.t.settings.autoLock.subtitle),
             value: enabled ?? false,
             onChanged: (_busy || enabled == null) ? null : _setAppLock,
           ),
           if ((enabled ?? false) && (isMobile || isDesktop))
             SwitchListTile(
-              title: Text(isMobile ? 'Use biometrics' : 'Use system unlock'),
+              title: Text(
+                isMobile
+                    ? context.t.settings.systemUnlock.titleMobile
+                    : context.t.settings.systemUnlock.titleDesktop,
+              ),
               subtitle: Text(
                 isMobile
-                    ? 'Unlock with biometrics instead of master password'
-                    : 'Unlock with Touch ID / Windows Hello instead of master password',
+                    ? context.t.settings.systemUnlock.subtitleMobile
+                    : context.t.settings.systemUnlock.subtitleDesktop,
               ),
               value: biometricEnabled ?? false,
               onChanged: (_busy || biometricEnabled == null)
@@ -229,14 +337,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   : _setBiometricUnlock,
             ),
           ListTile(
-            title: const Text('Lock now'),
-            subtitle: const Text('Return to the unlock screen'),
+            title: Text(context.t.settings.lockNow.title),
+            subtitle: Text(context.t.settings.lockNow.subtitle),
             onTap: _busy ? null : SessionScope.of(context).lock,
           ),
         ]),
         const SizedBox(height: 16),
         Text(
-          'Connections',
+          context.t.settings.sections.connections,
           style: Theme.of(context)
               .textTheme
               .titleSmall
@@ -245,8 +353,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 8),
         sectionCard([
           ListTile(
-            title: const Text('LLM profiles'),
-            subtitle: const Text('Configure BYOK for Ask AI'),
+            title: Text(context.t.settings.llmProfiles.title),
+            subtitle: Text(context.t.settings.llmProfiles.subtitle),
             onTap: _busy
                 ? null
                 : () {
@@ -258,8 +366,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
           ),
           ListTile(
-            title: const Text('Sync'),
-            subtitle: const Text('Vault backends + auto sync settings'),
+            title: Text(context.t.settings.sync.title),
+            subtitle: Text(context.t.settings.sync.subtitle),
             onTap: _busy
                 ? null
                 : () {
@@ -274,7 +382,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (kDebugMode) ...[
           const SizedBox(height: 16),
           Text(
-            'Debug',
+            context.t.settings.sections.debug,
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
@@ -283,17 +391,13 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 8),
           sectionCard([
             ListTile(
-              title: const Text('Debug: Reset local data'),
-              subtitle: const Text(
-                'Delete local messages + clear synced remote data',
-              ),
+              title: Text(context.t.settings.debugResetLocalData.title),
+              subtitle: Text(context.t.settings.debugResetLocalData.subtitle),
               onTap: _busy ? null : _resetLocalData,
             ),
             ListTile(
-              title: const Text('Debug: Semantic search'),
-              subtitle: const Text(
-                'Search similar messages + rebuild embeddings index',
-              ),
+              title: Text(context.t.settings.debugSemanticSearch.title),
+              subtitle: Text(context.t.settings.debugSemanticSearch.subtitle),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(

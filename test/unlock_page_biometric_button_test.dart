@@ -8,6 +8,8 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/features/lock/unlock_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('UnlockPage shows biometric button when enabled', (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -18,8 +20,10 @@ void main() {
     await tester.pumpWidget(
       AppBackendScope(
         backend: _NoopBackend(),
-        child: const MaterialApp(
-          home: UnlockPage(onUnlocked: _noop),
+        child: wrapWithI18n(
+          const MaterialApp(
+            home: UnlockPage(onUnlocked: _noop),
+          ),
         ),
       ),
     );
