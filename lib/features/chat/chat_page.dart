@@ -404,6 +404,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.conversation.title),
@@ -426,148 +427,210 @@ class _ChatPageState extends State<ChatPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: FutureBuilder(
-              future: _messagesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Load failed: ${snapshot.error}'));
-                }
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).scaffoldBackgroundColor,
+              Color.alphaBlend(
+                colorScheme.primary.withOpacity(0.04),
+                Theme.of(context).scaffoldBackgroundColor,
+              ),
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: FutureBuilder(
+                    future: _messagesFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                            child: Text('Load failed: ${snapshot.error}'));
+                      }
 
-                final messages = snapshot.data ?? const <Message>[];
-                final pendingQuestion = _pendingQuestion;
-                final extraCount = (pendingQuestion == null ? 0 : 1) +
-                    (_asking && !_stopRequested ? 1 : 0);
-                if (messages.isEmpty && extraCount == 0) {
-                  return const Center(child: Text('No messages yet'));
-                }
+                      final messages = snapshot.data ?? const <Message>[];
+                      final pendingQuestion = _pendingQuestion;
+                      final extraCount = (pendingQuestion == null ? 0 : 1) +
+                          (_asking && !_stopRequested ? 1 : 0);
+                      if (messages.isEmpty && extraCount == 0) {
+                        return const Center(child: Text('No messages yet'));
+                      }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  itemCount: messages.length + extraCount,
-                  itemBuilder: (context, index) {
-                    Message? msg;
-                    String? textOverride;
-                    if (index < messages.length) {
-                      msg = messages[index];
-                    } else {
-                      var extraIndex = index - messages.length;
-                      if (pendingQuestion != null) {
-                        if (extraIndex == 0) {
-                          msg = Message(
-                            id: 'pending_user',
-                            conversationId: widget.conversation.id,
-                            role: 'user',
-                            content: pendingQuestion,
-                            createdAtMs: 0,
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        itemCount: messages.length + extraCount,
+                        itemBuilder: (context, index) {
+                          Message? msg;
+                          String? textOverride;
+                          if (index < messages.length) {
+                            msg = messages[index];
+                          } else {
+                            var extraIndex = index - messages.length;
+                            if (pendingQuestion != null) {
+                              if (extraIndex == 0) {
+                                msg = Message(
+                                  id: 'pending_user',
+                                  conversationId: widget.conversation.id,
+                                  role: 'user',
+                                  content: pendingQuestion,
+                                  createdAtMs: 0,
+                                );
+                              }
+                              extraIndex -= 1;
+                            }
+                            if (msg == null &&
+                                _asking &&
+                                !_stopRequested &&
+                                extraIndex == 0) {
+                              msg = Message(
+                                id: 'pending_assistant',
+                                conversationId: widget.conversation.id,
+                                role: 'assistant',
+                                content: '',
+                                createdAtMs: 0,
+                              );
+                              textOverride = _streamingAnswer.isEmpty
+                                  ? '…'
+                                  : _streamingAnswer;
+                            }
+                          }
+
+                          final stableMsg = msg;
+                          if (stableMsg == null) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final isUser = stableMsg.role == 'user';
+                          final bubbleShape = RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(
+                              color: colorScheme.outlineVariant
+                                  .withOpacity(isUser ? 0 : 0.65),
+                            ),
                           );
-                        }
-                        extraIndex -= 1;
-                      }
-                      if (msg == null &&
-                          _asking &&
-                          !_stopRequested &&
-                          extraIndex == 0) {
-                        msg = Message(
-                          id: 'pending_assistant',
-                          conversationId: widget.conversation.id,
-                          role: 'assistant',
-                          content: '',
-                          createdAtMs: 0,
-                        );
-                        textOverride =
-                            _streamingAnswer.isEmpty ? '…' : _streamingAnswer;
-                      }
-                    }
+                          final bubbleColor = isUser
+                              ? colorScheme.primaryContainer
+                              : colorScheme.surface;
 
-                    final stableMsg = msg;
-                    if (stableMsg == null) return const SizedBox.shrink();
-                    final isUser = stableMsg.role == 'user';
-                    return Align(
-                      alignment:
-                          isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: GestureDetector(
-                        onLongPress: () => _showMessageActions(stableMsg),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isUser
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .secondaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(textOverride ?? stableMsg.content),
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: isUser
+                                  ? MainAxisAlignment.end
+                                  : MainAxisAlignment.start,
+                              children: [
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 560),
+                                  child: Material(
+                                    color: bubbleColor,
+                                    shape: bubbleShape,
+                                    child: InkWell(
+                                      onLongPress: () =>
+                                          _showMessageActions(stableMsg),
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                          vertical: 12,
+                                        ),
+                                        child: Text(
+                                            textOverride ?? stableMsg.content),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            if (_askError != null)
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Text(
+                      _askError!,
+                      style: TextStyle(color: colorScheme.error),
+                    ),
+                  ),
+                ),
+              ),
+            SafeArea(
+              top: false,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                key: const ValueKey('chat_input'),
+                                controller: _controller,
+                                decoration: const InputDecoration(
+                                  hintText: 'Message',
+                                  border: InputBorder.none,
+                                  filled: false,
+                                ),
+                                onSubmitted: (_) => _send(),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              key: const ValueKey('chat_send'),
+                              onPressed: (_sending || _asking) ? null : _send,
+                              child: const Text('Send'),
+                            ),
+                            const SizedBox(width: 8),
+                            if (_asking)
+                              OutlinedButton(
+                                key: const ValueKey('chat_stop'),
+                                onPressed: _stopRequested ? null : _stopAsk,
+                                child:
+                                    Text(_stopRequested ? 'Stopping…' : 'Stop'),
+                              )
+                            else
+                              FilledButton.tonal(
+                                key: const ValueKey('chat_ask_ai'),
+                                onPressed:
+                                    (_sending || _asking) ? null : _askAi,
+                                child: const Text('Ask AI'),
+                              ),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          if (_askError != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Text(
-                _askError!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const ValueKey('chat_input'),
-                      controller: _controller,
-                      decoration: const InputDecoration(
-                        hintText: 'Message',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _send(),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    key: const ValueKey('chat_send'),
-                    onPressed: (_sending || _asking) ? null : _send,
-                    child: const Text('Send'),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_asking)
-                    OutlinedButton(
-                      key: const ValueKey('chat_stop'),
-                      onPressed: _stopRequested ? null : _stopAsk,
-                      child: Text(_stopRequested ? 'Stopping…' : 'Stop'),
-                    )
-                  else
-                    FilledButton.tonal(
-                      key: const ValueKey('chat_ask_ai'),
-                      onPressed: (_sending || _asking) ? null : _askAi,
-                      child: const Text('Ask AI'),
-                    ),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

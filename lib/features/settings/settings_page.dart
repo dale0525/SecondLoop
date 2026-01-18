@@ -182,78 +182,127 @@ class _SettingsPageState extends State<SettingsPage> {
     final isDesktop = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows);
+
+    Widget sectionCard(List<Widget> children) {
+      return Card(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i != 0) const Divider(height: 1),
+              children[i],
+            ],
+          ],
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        SwitchListTile(
-          title: const Text('Auto lock'),
-          subtitle: const Text('Require unlock to access the app'),
-          value: enabled ?? false,
-          onChanged: (_busy || enabled == null) ? null : _setAppLock,
+        Text(
+          'Security',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
         ),
-        if ((enabled ?? false) && (isMobile || isDesktop)) ...[
-          const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        sectionCard([
           SwitchListTile(
-            title: Text(isMobile ? 'Use biometrics' : 'Use system unlock'),
-            subtitle: Text(isMobile
-                ? 'Unlock with biometrics instead of master password'
-                : 'Unlock with Touch ID / Windows Hello instead of master password'),
-            value: biometricEnabled ?? false,
-            onChanged: (_busy || biometricEnabled == null)
+            title: const Text('Auto lock'),
+            subtitle: const Text('Require unlock to access the app'),
+            value: enabled ?? false,
+            onChanged: (_busy || enabled == null) ? null : _setAppLock,
+          ),
+          if ((enabled ?? false) && (isMobile || isDesktop))
+            SwitchListTile(
+              title: Text(isMobile ? 'Use biometrics' : 'Use system unlock'),
+              subtitle: Text(
+                isMobile
+                    ? 'Unlock with biometrics instead of master password'
+                    : 'Unlock with Touch ID / Windows Hello instead of master password',
+              ),
+              value: biometricEnabled ?? false,
+              onChanged: (_busy || biometricEnabled == null)
+                  ? null
+                  : _setBiometricUnlock,
+            ),
+          ListTile(
+            title: const Text('Lock now'),
+            subtitle: const Text('Return to the unlock screen'),
+            onTap: _busy ? null : SessionScope.of(context).lock,
+          ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          'Connections',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        sectionCard([
+          ListTile(
+            title: const Text('LLM profiles'),
+            subtitle: const Text('Configure BYOK for Ask AI'),
+            onTap: _busy
                 ? null
-                : _setBiometricUnlock,
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const LlmProfilesPage(),
+                      ),
+                    );
+                  },
           ),
-        ],
-        const SizedBox(height: 12),
-        ListTile(
-          title: const Text('Lock now'),
-          subtitle: const Text('Return to the unlock screen'),
-          onTap: _busy ? null : SessionScope.of(context).lock,
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          title: const Text('LLM profiles'),
-          subtitle: const Text('Configure BYOK for Ask AI'),
-          onTap: _busy
-              ? null
-              : () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
-                  );
-                },
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          title: const Text('Sync'),
-          subtitle: const Text('Vault backends + auto sync settings'),
-          onTap: _busy
-              ? null
-              : () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SyncSettingsPage()),
-                  );
-                },
-        ),
+          ListTile(
+            title: const Text('Sync'),
+            subtitle: const Text('Vault backends + auto sync settings'),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SyncSettingsPage(),
+                      ),
+                    );
+                  },
+          ),
+        ]),
         if (kDebugMode) ...[
-          const Divider(height: 24),
-          ListTile(
-            title: const Text('Debug: Reset local data'),
-            subtitle:
-                const Text('Delete local messages + clear synced remote data'),
-            onTap: _busy ? null : _resetLocalData,
+          const SizedBox(height: 16),
+          Text(
+            'Debug',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 12),
-          ListTile(
-            title: const Text('Debug: Semantic search'),
-            subtitle: const Text(
-                'Search similar messages + rebuild embeddings index'),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (_) => const SemanticSearchDebugPage()),
-              );
-            },
-          ),
+          const SizedBox(height: 8),
+          sectionCard([
+            ListTile(
+              title: const Text('Debug: Reset local data'),
+              subtitle: const Text(
+                'Delete local messages + clear synced remote data',
+              ),
+              onTap: _busy ? null : _resetLocalData,
+            ),
+            ListTile(
+              title: const Text('Debug: Semantic search'),
+              subtitle: const Text(
+                'Search similar messages + rebuild embeddings index',
+              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SemanticSearchDebugPage(),
+                  ),
+                );
+              },
+            ),
+          ]),
         ],
       ],
     );

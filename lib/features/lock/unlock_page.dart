@@ -154,36 +154,56 @@ class _UnlockPageState extends State<UnlockPage> {
     final systemUnlockLabel = isMobile ? 'Use biometrics' : 'Use system unlock';
     return Scaffold(
       appBar: AppBar(title: const Text('Unlock')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              key: const ValueKey('unlock_password'),
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Master password'),
-            ),
-            if (showSystemUnlock) ...[
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: _busy ? null : _submitBiometricUnlock,
-                child: Text(systemUnlockLabel),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      key: const ValueKey('unlock_password'),
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Master password',
+                      ),
+                    ),
+                    if (showSystemUnlock) ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: _busy ? null : _submitBiometricUnlock,
+                        child: Text(systemUnlockLabel),
+                      ),
+                    ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        key: const ValueKey('unlock_continue'),
+                        onPressed: _busy ? null : _submit,
+                        child: Text(_busy ? 'Unlocking…' : 'Continue'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
-            const SizedBox(height: 20),
-            FilledButton(
-              key: const ValueKey('unlock_continue'),
-              onPressed: _busy ? null : _submit,
-              child: Text(_busy ? 'Unlocking…' : 'Continue'),
             ),
-          ],
+          ),
         ),
       ),
     );

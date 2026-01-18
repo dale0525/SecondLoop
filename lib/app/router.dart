@@ -29,28 +29,58 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: const <Widget>[
-          _MainStreamTab(),
-          _SettingsTab(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        destinations: [
-          for (final t in AppTab.values)
-            NavigationDestination(
-              icon: Icon(t.icon),
-              selectedIcon: Icon(t.selectedIcon),
-              label: t.label,
-            ),
-        ],
-        onDestinationSelected: (index) {
-          setState(() => _selectedIndex = index);
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useRail = constraints.maxWidth >= 720;
+        final content = IndexedStack(
+          index: _selectedIndex,
+          children: const <Widget>[
+            _MainStreamTab(),
+            _SettingsTab(),
+          ],
+        );
+
+        return Scaffold(
+          body: useRail
+              ? Row(
+                  children: [
+                    NavigationRail(
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: (index) =>
+                          setState(() => _selectedIndex = index),
+                      labelType: NavigationRailLabelType.all,
+                      destinations: [
+                        for (final t in AppTab.values)
+                          NavigationRailDestination(
+                            icon: Icon(t.icon),
+                            selectedIcon: Icon(t.selectedIcon),
+                            label: Text(t.label),
+                          ),
+                      ],
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: content),
+                  ],
+                )
+              : content,
+          bottomNavigationBar: useRail
+              ? null
+              : NavigationBar(
+                  selectedIndex: _selectedIndex,
+                  destinations: [
+                    for (final t in AppTab.values)
+                      NavigationDestination(
+                        icon: Icon(t.icon),
+                        selectedIcon: Icon(t.selectedIcon),
+                        label: t.label,
+                      ),
+                  ],
+                  onDestinationSelected: (index) {
+                    setState(() => _selectedIndex = index);
+                  },
+                ),
+        );
+      },
     );
   }
 }

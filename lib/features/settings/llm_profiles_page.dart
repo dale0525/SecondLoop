@@ -151,76 +151,93 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Active profile is used for Ask AI.'),
+          Text(
+            'Active profile is used for Ask AI.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 12),
-          if (profiles == null)
-            const Center(child: CircularProgressIndicator())
-          else if (profiles.isEmpty)
-            const Text('No profiles yet.')
-          else
-            ...profiles.map(
-              (p) => RadioListTile<String>(
-                value: p.id,
-                groupValue: activeId,
-                onChanged: _busy
-                    ? null
-                    : (v) => v == null ? null : _activateProfile(v),
-                title: Text(p.name),
-                subtitle: Text(
-                  '${p.providerType} • ${p.modelName}${p.baseUrl == null ? '' : ' • ${p.baseUrl}'}',
-                ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: profiles == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : profiles.isEmpty
+                      ? const Text('No profiles yet.')
+                      : Column(
+                          children: [
+                            for (var i = 0; i < profiles.length; i++) ...[
+                              if (i != 0) const Divider(height: 1),
+                              RadioListTile<String>(
+                                value: profiles[i].id,
+                                groupValue: activeId,
+                                onChanged: _busy
+                                    ? null
+                                    : (v) =>
+                                        v == null ? null : _activateProfile(v),
+                                title: Text(profiles[i].name),
+                                subtitle: Text(
+                                  '${profiles[i].providerType} • ${profiles[i].modelName}${profiles[i].baseUrl == null ? '' : ' • ${profiles[i].baseUrl}'}',
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Add profile',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _baseUrlController,
+                    decoration:
+                        const InputDecoration(labelText: 'Base URL (optional)'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _modelController,
+                    decoration: const InputDecoration(labelText: 'Model name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _apiKeyController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: 'API key'),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _busy ? null : _createProfile,
+                    child: const Text('Save & Activate'),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          const Divider(height: 32),
-          const Text(
-            'Add profile',
-            style: TextStyle(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _baseUrlController,
-            decoration: const InputDecoration(
-              labelText: 'Base URL (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _modelController,
-            decoration: const InputDecoration(
-              labelText: 'Model name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _apiKeyController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'API key',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _busy ? null : _createProfile,
-            child: const Text('Save & Activate'),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ],
         ],
       ),
     );

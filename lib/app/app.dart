@@ -49,6 +49,8 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
         child: MaterialApp(
           title: 'SecondLoop',
           theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.system,
           navigatorKey: _navigatorKey,
           home: const AppShell(),
           builder: (context, child) {

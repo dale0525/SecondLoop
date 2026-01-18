@@ -286,6 +286,28 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    Widget sectionTitle(String title) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          title,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    Widget sectionCard(Widget child) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: child,
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vault Sync'),
@@ -293,134 +315,159 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SwitchListTile(
-            title: const Text('Auto sync'),
-            subtitle: const Text(
-                'Foreground debounced push + background periodic sync (mobile)'),
-            value: _autoEnabled,
-            onChanged: _busy
-                ? null
-                : (value) async {
-                    final backend = AppBackendScope.of(context);
-                    setState(() => _autoEnabled = value);
-                    await _store.writeAutoEnabled(value);
-                    await BackgroundSync.refreshSchedule(backend: backend);
-                  },
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<SyncBackendType>(
-            value: _backendType,
-            decoration: const InputDecoration(
-              labelText: 'Vault backend',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: SyncBackendType.webdav,
-                child: Text('WebDAV'),
+          sectionTitle('Automation'),
+          sectionCard(
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Auto sync'),
+              subtitle: const Text(
+                'Foreground debounced push + background periodic sync (mobile)',
               ),
-              DropdownMenuItem(
-                value: SyncBackendType.localDir,
-                child: Text('Local directory (desktop)'),
-              ),
-            ],
-            onChanged: _busy
-                ? null
-                : (value) {
-                    if (value == null) return;
-                    setState(() => _backendType = value);
-                  },
-          ),
-          TextField(
-            controller: _baseUrlController,
-            decoration: const InputDecoration(
-              labelText: 'Base URL',
-              hintText: 'https://example.com/dav',
+              value: _autoEnabled,
+              onChanged: _busy
+                  ? null
+                  : (value) async {
+                      final backend = AppBackendScope.of(context);
+                      setState(() => _autoEnabled = value);
+                      await _store.writeAutoEnabled(value);
+                      await BackgroundSync.refreshSchedule(backend: backend);
+                    },
             ),
-            enabled: !_busy && _backendType == SyncBackendType.webdav,
-            keyboardType: TextInputType.url,
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _usernameController,
-            decoration: const InputDecoration(
-              labelText: 'Username (optional)',
+          const SizedBox(height: 16),
+          sectionTitle('Backend'),
+          sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<SyncBackendType>(
+                  value: _backendType,
+                  decoration: const InputDecoration(
+                    labelText: 'Vault backend',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: SyncBackendType.webdav,
+                      child: Text('WebDAV'),
+                    ),
+                    DropdownMenuItem(
+                      value: SyncBackendType.localDir,
+                      child: Text('Local directory (desktop)'),
+                    ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() => _backendType = value);
+                        },
+                ),
+                const SizedBox(height: 12),
+                if (_backendType == SyncBackendType.webdav) ...[
+                  TextField(
+                    controller: _baseUrlController,
+                    decoration: const InputDecoration(
+                      labelText: 'Base URL',
+                      hintText: 'https://example.com/dav',
+                    ),
+                    enabled: !_busy,
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Username (optional)',
+                    ),
+                    enabled: !_busy,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Password (optional)',
+                    ),
+                    enabled: !_busy,
+                    obscureText: true,
+                    obscuringCharacter: '*',
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (_backendType == SyncBackendType.localDir) ...[
+                  TextField(
+                    controller: _localDirController,
+                    decoration: const InputDecoration(
+                      labelText: 'Local directory path',
+                      hintText: '/Users/me/SecondLoopVault',
+                      helperText:
+                          'Best for desktop; mobile platforms may not support this path.',
+                    ),
+                    enabled: !_busy,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: _remoteRootController,
+                  decoration: const InputDecoration(
+                    labelText: 'Remote root folder',
+                    hintText: 'SecondLoop',
+                  ),
+                  enabled: !_busy,
+                ),
+              ],
             ),
-            enabled: !_busy && _backendType == SyncBackendType.webdav,
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _passwordController,
-            decoration: const InputDecoration(
-              labelText: 'Password (optional)',
-            ),
-            enabled: !_busy && _backendType == SyncBackendType.webdav,
-            obscureText: true,
-            obscuringCharacter: '*',
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _localDirController,
-            decoration: const InputDecoration(
-              labelText: 'Local directory path',
-              hintText: '/Users/me/SecondLoopVault',
-              helperText:
-                  'Best for desktop; mobile platforms may not support this path.',
-            ),
-            enabled: !_busy && _backendType == SyncBackendType.localDir,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _remoteRootController,
-            decoration: const InputDecoration(
-              labelText: 'Remote root folder',
-              hintText: 'SecondLoop',
-            ),
-            enabled: !_busy,
-          ),
-          const Divider(height: 24),
-          TextField(
-            controller: _syncPassphraseController,
-            decoration: const InputDecoration(
-              labelText: 'Sync passphrase (not stored; derives a key)',
-              helperText: 'Use the same passphrase on all devices.',
-            ),
-            enabled: !_busy,
-            obscureText: true,
-            obscuringCharacter: '*',
-            onTap: _passphraseIsPlaceholder
-                ? () {
-                    _syncPassphraseController.clear();
+          const SizedBox(height: 16),
+          sectionTitle('Security & Actions'),
+          sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _syncPassphraseController,
+                  decoration: const InputDecoration(
+                    labelText: 'Sync passphrase (not stored; derives a key)',
+                    helperText: 'Use the same passphrase on all devices.',
+                  ),
+                  enabled: !_busy,
+                  obscureText: true,
+                  obscuringCharacter: '*',
+                  onTap: _passphraseIsPlaceholder
+                      ? () {
+                          _syncPassphraseController.clear();
+                          setState(() => _passphraseIsPlaceholder = false);
+                        }
+                      : null,
+                  onChanged: (_) {
+                    if (!_passphraseIsPlaceholder) return;
                     setState(() => _passphraseIsPlaceholder = false);
-                  }
-                : null,
-            onChanged: (_) {
-              if (!_passphraseIsPlaceholder) return;
-              setState(() => _passphraseIsPlaceholder = false);
-            },
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: const Text('Save'),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy ? null : _push,
-                  child: const Text('Push'),
+                  },
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _busy ? null : _pull,
-                  child: const Text('Pull'),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: _busy ? null : _save,
+                  child: const Text('Save'),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : _push,
+                        child: const Text('Push'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : _pull,
+                        child: const Text('Pull'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),

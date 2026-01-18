@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -165,39 +166,50 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         child: Focus(
           autofocus: true,
           child: Material(
-            color: Colors.black54,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            key: const ValueKey('quick_capture_input'),
-                            controller: _textController,
-                            autofocus: true,
-                            textInputAction: TextInputAction.done,
-                            decoration: const InputDecoration(
-                              hintText: 'Quick capture',
-                              border: OutlineInputBorder(),
+            type: MaterialType.transparency,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: ColoredBox(color: Colors.black.withOpacity(0.35)),
+                  ),
+                ),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                key: const ValueKey('quick_capture_input'),
+                                controller: _textController,
+                                autofocus: true,
+                                textInputAction: TextInputAction.done,
+                                decoration: const InputDecoration(
+                                  hintText: 'Quick capture',
+                                  border: InputBorder.none,
+                                  filled: false,
+                                ),
+                                onSubmitted: (_) => _submit(),
+                              ),
                             ),
-                            onSubmitted: (_) => _submit(),
-                          ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              key: const ValueKey('quick_capture_submit'),
+                              onPressed: _busy ? null : _submit,
+                              child: const Text('Save'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          key: const ValueKey('quick_capture_submit'),
-                          onPressed: _busy ? null : _submit,
-                          child: const Text('Save'),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
