@@ -195,3 +195,43 @@ fn ask_ai_cancel_deletes_question_and_partial_answer() {
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].content, "seed");
 }
+
+#[test]
+fn ask_ai_accepts_trait_object_provider() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(&conn, &key, &conversation.id, "user", "seed").expect("seed");
+
+    let provider: Box<dyn rag::AnswerProvider> = Box::new(TwoChunkProvider);
+    let mut events: Vec<ChatDelta> = Vec::new();
+
+    let result = rag::ask_ai_with_provider(
+        &conn,
+        &key,
+        &conversation.id,
+        "question",
+        3,
+        rag::Focus::AllMemories,
+        provider.as_ref(),
+        &mut |ev| {
+            events.push(ev);
+            Ok(())
+        },
+    )
+    .expect("ask");
+
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].text_delta, "Hello");
+    assert_eq!(events[1].text_delta, " world");
+    assert!(events[2].done);
+
+    let messages = db::list_messages(&conn, &key, &conversation.id).expect("list");
+    assert_eq!(messages.len(), 3);
+    assert_eq!(messages[2].id, result.assistant_message_id);
+    assert_eq!(messages[2].content, "Hello world");
+}

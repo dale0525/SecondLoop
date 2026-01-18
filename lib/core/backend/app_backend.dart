@@ -70,6 +70,7 @@ abstract class AppBackend {
     bool setActive = true,
   });
   Future<void> setActiveLlmProfile(Uint8List key, String profileId);
+  Future<void> deleteLlmProfile(Uint8List key, String profileId);
 
   Stream<String> askAiStream(
     Uint8List key,

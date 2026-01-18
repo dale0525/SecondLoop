@@ -349,11 +349,26 @@ pub fn pull(
 
         let mut new_last_pulled = last_pulled_seq;
         let mut seq = last_pulled_seq + 1;
+
+        let mut tried_discover_start_seq = false;
         loop {
             let path = format!("{ops_dir}op_{seq}.json");
             let blob = match remote.get(&path) {
                 Ok(blob) => blob,
-                Err(e) if e.is::<NotFound>() => break,
+                Err(e) if e.is::<NotFound>() => {
+                    // If remote ops were pruned/reset, a new device might not have `op_1.json`.
+                    // Try to discover the first available seq once (without relying exclusively on listing).
+                    if !tried_discover_start_seq && last_pulled_seq == 0 && seq == 1 {
+                        tried_discover_start_seq = true;
+                        if let Some(start_seq) =
+                            discover_first_available_seq(remote, &ops_dir, 500)?
+                        {
+                            seq = start_seq;
+                            continue;
+                        }
+                    }
+                    break
+                }
                 Err(e) => return Err(e),
             };
             let plaintext = decrypt_bytes(
@@ -390,6 +405,54 @@ pub fn pull(
     }
 
     Ok(applied)
+}
+
+fn discover_first_available_seq(
+    remote: &impl RemoteStore,
+    ops_dir: &str,
+    probe_limit: i64,
+) -> Result<Option<i64>> {
+    fn parse_seq_from_path(ops_dir: &str, entry: &str) -> Option<i64> {
+        let rest = entry.strip_prefix(ops_dir)?;
+        let rest = rest.strip_prefix("op_")?;
+        let rest = rest.strip_suffix(".json")?;
+        if rest.is_empty() {
+            return None;
+        }
+        if rest.bytes().any(|b| !b.is_ascii_digit()) {
+            return None;
+        }
+        rest.parse::<i64>().ok()
+    }
+
+    // Best effort: use listing if available.
+    if let Ok(entries) = remote.list(ops_dir) {
+        let mut min_seq: Option<i64> = None;
+        for entry in entries {
+            let Some(seq) = parse_seq_from_path(ops_dir, &entry) else {
+                continue;
+            };
+            min_seq = Some(match min_seq {
+                Some(existing) => existing.min(seq),
+                None => seq,
+            });
+        }
+        if min_seq.is_some() {
+            return Ok(min_seq);
+        }
+    }
+
+    // Fallback: probe a small range to avoid depending on listing.
+    for seq in 2..=probe_limit {
+        let path = format!("{ops_dir}op_{seq}.json");
+        match remote.get(&path) {
+            Ok(_) => return Ok(Some(seq)),
+            Err(e) if e.is::<NotFound>() => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(None)
 }
 
 fn get_or_create_device_id(conn: &Connection) -> Result<String> {

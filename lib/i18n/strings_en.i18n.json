@@ -122,6 +122,19 @@
       "tooltip": "Focus",
       "allMemories": "Focus: All memories",
       "thisThread": "Focus: This thread"
+    },
+    "askAiSetup": {
+      "title": "Ask AI setup required",
+      "body": "Configure BYOK (LLM profiles) or subscribe to SecondLoop Cloud to use Ask AI.",
+      "actions": {
+        "subscribe": "Subscribe",
+        "configureByok": "Configure BYOK"
+      }
+    },
+    "askAiConsent": {
+      "title": "Before you ask",
+      "body": "SecondLoop will send your question and a few relevant snippets to your configured LLM provider to generate an answer.\n\nIt will NOT upload your vault key, sync key, or full history.",
+      "dontShowAgain": "Don't show again"
     }
   },
   "semanticSearch": {
@@ -197,16 +210,29 @@
     "activeProfileHelp": "Active profile is used for Ask AI.",
     "noProfilesYet": "No profiles yet.",
     "addProfile": "Add profile",
+    "deleted": "LLM profile deleted",
     "validationError": "Name, API key, and model name are required.",
+    "deleteDialog": {
+      "title": "Delete profile?",
+      "message": "Delete \"$name\"? This removes it from this device."
+    },
     "fields": {
       "name": "Name",
+      "provider": "Provider",
       "baseUrlOptional": "Base URL (optional)",
       "modelName": "Model name",
       "apiKey": "API key"
     },
+    "providers": {
+      "openaiCompatible": "OpenAI-compatible",
+      "geminiCompatible": "Gemini",
+      "anthropicCompatible": "Anthropic"
+    },
     "savedActivated": "LLM profile saved and activated",
     "actions": {
-      "saveActivate": "Save & Activate"
+      "saveActivate": "Save & Activate",
+      "cancel": "Cancel",
+      "delete": "Delete"
     }
   },
   "inbox": {

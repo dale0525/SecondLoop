@@ -1,4 +1,12 @@
 pluginManagement {
+    def useChinaMirrors = System.getenv("SECONDLOOP_USE_CN_MIRRORS") == "1"
+    def forceTls12 = System.getenv("SECONDLOOP_FORCE_TLS12") == "1"
+
+    if (forceTls12) {
+        System.setProperty("https.protocols", "TLSv1.2")
+        System.setProperty("jdk.tls.client.protocols", "TLSv1.2")
+    }
+
     def flutterSdkPath = {
         def properties = new Properties()
         file("local.properties").withInputStream { properties.load(it) }
@@ -11,6 +19,11 @@ pluginManagement {
     includeBuild("${settings.ext.flutterSdkPath}/packages/flutter_tools/gradle")
 
     repositories {
+        if (useChinaMirrors) {
+            maven { url "https://maven.aliyun.com/repository/google" }
+            maven { url "https://maven.aliyun.com/repository/public" }
+            maven { url "https://maven.aliyun.com/repository/gradle-plugin" }
+        }
         google()
         mavenCentral()
         gradlePluginPortal()

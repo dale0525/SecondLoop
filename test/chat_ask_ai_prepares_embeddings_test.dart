@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -12,6 +13,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets('Ask AI prepares embeddings before streaming', (tester) async {
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = _AskAiPreparationBackend();
 
     await tester.pumpWidget(
@@ -167,7 +169,18 @@ final class _AskAiPreparationBackend implements AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -183,6 +196,9 @@ final class _AskAiPreparationBackend implements AppBackend {
 
   @override
   Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {}
+
+  @override
+  Future<void> deleteLlmProfile(Uint8List key, String profileId) async {}
 
   @override
   Stream<String> askAiStream(

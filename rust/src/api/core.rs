@@ -194,6 +194,13 @@ pub fn db_set_active_llm_profile(app_dir: String, key: Vec<u8>, profile_id: Stri
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_delete_llm_profile(app_dir: String, key: Vec<u8>, profile_id: String) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::delete_llm_profile(&conn, &profile_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_process_pending_message_embeddings(
     app_dir: String,
     key: Vec<u8>,
@@ -320,48 +327,33 @@ pub fn rag_ask_ai_stream(
         rag::Focus::AllMemories
     };
 
-    let provider_type = profile.provider_type.as_str();
-    let base_url = profile
-        .base_url
-        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-    let model_name = profile.model_name;
-
-    let result = match provider_type {
-        "openai-compatible" => {
-            let api_key = profile
-                .api_key
-                .ok_or_else(|| anyhow!("missing api_key for openai-compatible provider"))?;
-            let provider =
-                llm::openai::OpenAiCompatibleProvider::new(base_url, api_key, model_name, None);
-            rag::ask_ai_with_provider_using_active_embeddings(
-                &conn,
-                &key,
-                Path::new(&app_dir),
-                &conversation_id,
-                &question,
-                top_k as usize,
-                focus,
-                &provider,
-                &mut |ev| {
-                    if ev.done {
-                        if sink.add(String::new()).is_err() {
-                            return Err(rag::StreamCancelled.into());
-                        }
-                        return Ok(());
-                    }
-                    if ev.text_delta.is_empty() {
-                        return Ok(());
-                    }
-                    if sink.add(ev.text_delta).is_err() {
-                        return Err(rag::StreamCancelled.into());
-                    }
-                    Ok(())
-                },
-            )
-            .map(|_| ())
-        }
-        _ => Err(anyhow!("unsupported provider_type: {provider_type}")),
-    };
+    let provider = llm::answer_provider_from_profile(&profile)?;
+    let result = rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        Path::new(&app_dir),
+        &conversation_id,
+        &question,
+        top_k as usize,
+        focus,
+        provider.as_ref(),
+        &mut |ev| {
+            if ev.done {
+                if sink.add(String::new()).is_err() {
+                    return Err(rag::StreamCancelled.into());
+                }
+                return Ok(());
+            }
+            if ev.text_delta.is_empty() {
+                return Ok(());
+            }
+            if sink.add(ev.text_delta).is_err() {
+                return Err(rag::StreamCancelled.into());
+            }
+            Ok(())
+        },
+    )
+    .map(|_| ());
 
     match result {
         Ok(()) => Ok(()),

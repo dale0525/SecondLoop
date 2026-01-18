@@ -374,6 +374,16 @@ class NativeAppBackend implements AppBackend {
   }
 
   @override
+  Future<void> deleteLlmProfile(Uint8List key, String profileId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbDeleteLlmProfile(
+      appDir: appDir,
+      key: key,
+      profileId: profileId,
+    );
+  }
+
+  @override
   Stream<String> askAiStream(
     Uint8List key,
     String conversationId, {

@@ -20,12 +20,14 @@ pixi run test
 pixi run frb-generate
 pixi run run-macos
 pixi run run-android
+pixi run build-android-apk
 pixi run run-windows
 ```
 
 Notes:
 - `run-macos` is only available on macOS.
 - `run-windows` is only available on Windows (it depends on `setup-windows`) and will download `nuget.exe` into `.tool/nuget/` so Flutter won't auto-download it.
+- Android tasks install SDK/NDK and Rust targets into `.tool/` (no system-wide Android SDK required).
 
 To run arbitrary Flutter commands through FVM:
 
@@ -40,6 +42,6 @@ pixi run dart pub global run fvm:main flutter <args...>
 
 ## Platform Prerequisites
 
-- Android: Android Studio + SDK (`flutter doctor -v`)
+- Android: optional Android Studio. Pixi tasks provision SDK/NDK + Rust toolchain into `.tool/` (run `pixi run doctor` to verify).
 - Windows (dev/build): Visual Studio 2022 + Desktop development with C++ + Individual component `C++ ATL for latest v143 build tools (x86 & x64)` (for `atlstr.h`). End users do not need VS/ATL (they may need the VC++ runtime, which your installer should include).
 - macOS/iOS: Xcode + Command Line Tools

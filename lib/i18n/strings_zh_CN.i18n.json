@@ -122,6 +122,19 @@
       "tooltip": "聚焦",
       "allMemories": "聚焦：所有记忆",
       "thisThread": "聚焦：当前对话"
+    },
+    "askAiSetup": {
+      "title": "问 AI 需要先配置",
+      "body": "要使用「问 AI」，请先配置 BYOK（LLM Profiles）或订阅 SecondLoop Cloud。",
+      "actions": {
+        "subscribe": "订阅",
+        "configureByok": "配置 BYOK"
+      }
+    },
+    "askAiConsent": {
+      "title": "发送前确认",
+      "body": "SecondLoop 会将你的问题与少量相关片段发送到你配置的 LLM 服务商以生成回答。\n\n不会上传：Vault 密钥、同步密钥、完整历史。",
+      "dontShowAgain": "不再提示"
     }
   },
   "semanticSearch": {
@@ -197,16 +210,29 @@
     "activeProfileHelp": "当前激活的 profile 用于 Ask AI。",
     "noProfilesYet": "暂无 profile。",
     "addProfile": "添加 profile",
+    "deleted": "LLM profile 已删除",
     "validationError": "Name、API key、Model name 为必填项。",
+    "deleteDialog": {
+      "title": "删除 profile？",
+      "message": "确定删除「$name」？该操作会从本设备移除该 profile。"
+    },
     "fields": {
       "name": "名称",
+      "provider": "提供商",
       "baseUrlOptional": "Base URL（可选）",
       "modelName": "Model name",
       "apiKey": "API key"
     },
+    "providers": {
+      "openaiCompatible": "OpenAI 兼容",
+      "geminiCompatible": "Gemini",
+      "anthropicCompatible": "Anthropic"
+    },
     "savedActivated": "LLM profile 已保存并激活",
     "actions": {
-      "saveActivate": "保存并激活"
+      "saveActivate": "保存并激活",
+      "cancel": "取消",
+      "delete": "删除"
     }
   },
   "inbox": {

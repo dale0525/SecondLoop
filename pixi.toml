@@ -7,12 +7,17 @@ version = "0.1.0"
 
 [tasks]
 setup-flutter = "dart pub global activate fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
+setup-android-sdk = "bash scripts/setup_android_sdk.sh"
+setup-rustup = "bash scripts/setup_rustup.sh"
 doctor = "dart pub global run fvm:main flutter doctor -v"
 analyze = "dart pub global run fvm:main flutter analyze"
 test = "dart pub global run fvm:main flutter test"
 clean = "dart pub global run fvm:main flutter clean"
 format = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver --set-exit-if-changed"
-run-android = "dart pub global run fvm:main flutter run -d android"
+run-android = { cmd = "env CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" dart pub global run fvm:main flutter run -d android", depends-on = ["setup-android-sdk", "setup-rustup"] }
+build-android-apk = { cmd = "env CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" dart pub global run fvm:main flutter build apk --release", depends-on = ["setup-android-sdk", "setup-rustup"] }
+run-android-cn = { cmd = "env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" dart pub global run fvm:main flutter run -d android", depends-on = ["setup-android-sdk", "setup-rustup"] }
+build-android-apk-cn = { cmd = "env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" dart pub global run fvm:main flutter build apk --release", depends-on = ["setup-android-sdk", "setup-rustup"] }
 frb-generate = "env RUST_LOG=info PATH=\"$PWD/.fvm/flutter_sdk/bin:$HOME/.cargo/bin:$PATH\" flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml"
 rust-build-release = "cargo build --manifest-path rust/Cargo.toml --release"
 rust-test = "cargo test --manifest-path rust/Cargo.toml"
@@ -28,6 +33,7 @@ python = "3.11.*"
 cmake = ">=4.2.1,<5"
 ninja = ">=1.13.2,<2"
 dart-sdk = "2.18.2.*"
+openjdk = "17.*"
 
 [target.osx-arm64.dependencies]
 ruby = ">=3.4.8,<4"

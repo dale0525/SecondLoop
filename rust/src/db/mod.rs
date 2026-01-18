@@ -932,6 +932,19 @@ pub fn set_active_llm_profile(conn: &Connection, profile_id: &str) -> Result<()>
     }
 }
 
+pub fn delete_llm_profile(conn: &Connection, profile_id: &str) -> Result<()> {
+    let deleted = conn.execute(
+        r#"DELETE FROM llm_profiles WHERE id = ?1"#,
+        params![profile_id],
+    )?;
+
+    if deleted == 0 {
+        return Err(anyhow!("llm profile not found: {profile_id}"));
+    }
+
+    Ok(())
+}
+
 pub fn load_active_llm_profile_config(
     conn: &Connection,
     key: &[u8; 32],
@@ -1615,48 +1628,7 @@ pub fn search_similar_messages_default(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
-    let top_k = top_k.max(1);
-    let candidate_k = (top_k.saturating_mul(10)).min(1000);
-
-    let query = format!("query: {query}");
-    let query_vector = default_embed_text(&query);
-    if query_vector.len() != MESSAGE_EMBEDDING_DIM {
-        return Err(anyhow!(
-            "default embed dim mismatch: expected {}, got {}",
-            MESSAGE_EMBEDDING_DIM,
-            query_vector.len()
-        ));
-    }
-
-    let mut stmt = conn.prepare(
-        r#"SELECT message_id, distance
-           FROM message_embeddings
-           WHERE embedding match ?1 AND k = ?2 AND model_name = ?3
-           ORDER BY distance ASC"#,
-    )?;
-
-    let mut rows = stmt.query(params![
-        query_vector.as_bytes(),
-        i64::try_from(candidate_k).unwrap_or(i64::MAX),
-        crate::embedding::DEFAULT_MODEL_NAME
-    ])?;
-
-    let mut result = Vec::new();
-    let mut seen_contents = std::collections::HashSet::new();
-    while let Some(row) = rows.next()? {
-        let message_id: String = row.get(0)?;
-        let distance: f64 = row.get(1)?;
-        let message = get_message_by_id(conn, key, &message_id)?;
-        if !seen_contents.insert(message.content.clone()) {
-            continue;
-        }
-        result.push(SimilarMessage { message, distance });
-        if result.len() >= top_k {
-            break;
-        }
-    }
-
-    Ok(result)
+    search_similar_messages_lite(conn, key, None, query, top_k)
 }
 
 pub fn search_similar_messages_in_conversation_default(
@@ -1666,15 +1638,200 @@ pub fn search_similar_messages_in_conversation_default(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
-    let top_k = top_k.max(1);
-    let candidate_k = (top_k.saturating_mul(50)).min(1000);
+    search_similar_messages_lite(conn, key, Some(conversation_id), query, top_k)
+}
 
-    let candidates = search_similar_messages_default(conn, key, query, candidate_k)?;
-    Ok(candidates
-        .into_iter()
-        .filter(|sm| sm.message.conversation_id == conversation_id)
-        .take(top_k)
-        .collect())
+fn search_similar_messages_lite(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: Option<&str>,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
+    let top_k = top_k.max(1);
+
+    let query_norm = lite_normalize_text(query);
+    let query_compact = lite_compact_text(&query_norm);
+    if query_compact.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query_chars: Vec<char> = query_compact.chars().collect();
+    let query_bigrams = lite_collect_bigrams(&query_chars);
+    let query_trigrams = lite_collect_trigrams(&query_chars);
+
+    let mut result: Vec<SimilarMessage> = Vec::new();
+    let mut seen_contents = std::collections::HashSet::new();
+
+    let mut stmt = if conversation_id.is_some() {
+        conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE conversation_id = ?1
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at DESC"#,
+        )?
+    } else {
+        conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at DESC"#,
+        )?
+    };
+
+    let mut rows = if let Some(conversation_id) = conversation_id {
+        stmt.query(params![conversation_id])?
+    } else {
+        stmt.query([])?
+    };
+
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let conversation_id: String = row.get(1)?;
+        let role: String = row.get(2)?;
+        let content_blob: Vec<u8> = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+
+        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+        if !seen_contents.insert(content.clone()) {
+            continue;
+        }
+
+        let score = lite_score(
+            &query_norm,
+            &query_compact,
+            &query_bigrams,
+            &query_trigrams,
+            &content,
+        );
+        if score == 0 {
+            continue;
+        }
+
+        let distance = 1.0 / (score as f64 + 1.0);
+        result.push(SimilarMessage {
+            message: Message {
+                id,
+                conversation_id,
+                role,
+                content,
+                created_at_ms,
+            },
+            distance,
+        });
+    }
+
+    result.sort_by(|a, b| {
+        a.distance
+            .partial_cmp(&b.distance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.message.created_at_ms.cmp(&a.message.created_at_ms))
+    });
+
+    result.truncate(top_k);
+    Ok(result)
+}
+
+fn lite_normalize_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if ch.is_alphanumeric() {
+            out.extend(ch.to_lowercase());
+        } else {
+            out.push(' ');
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn lite_compact_text(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+fn lite_collect_bigrams(chars: &[char]) -> std::collections::HashSet<u64> {
+    let mut set = std::collections::HashSet::new();
+    if chars.len() < 2 {
+        return set;
+    }
+    for i in 0..(chars.len() - 1) {
+        let a = chars[i] as u64;
+        let b = chars[i + 1] as u64;
+        set.insert((a << 32) | b);
+    }
+    set
+}
+
+fn lite_collect_trigrams(chars: &[char]) -> std::collections::HashSet<u128> {
+    let mut set = std::collections::HashSet::new();
+    if chars.len() < 3 {
+        return set;
+    }
+    for i in 0..(chars.len() - 2) {
+        let a = chars[i] as u128;
+        let b = chars[i + 1] as u128;
+        let c = chars[i + 2] as u128;
+        set.insert((a << 64) | (b << 32) | c);
+    }
+    set
+}
+
+fn lite_score(
+    query_norm: &str,
+    query_compact: &str,
+    query_bigrams: &std::collections::HashSet<u64>,
+    query_trigrams: &std::collections::HashSet<u128>,
+    candidate: &str,
+) -> u64 {
+    let cand_norm = lite_normalize_text(candidate);
+    if cand_norm.is_empty() {
+        return 0;
+    }
+
+    let cand_compact = lite_compact_text(&cand_norm);
+    if cand_compact.is_empty() {
+        return 0;
+    }
+
+    let mut score = 0u64;
+
+    if cand_norm == query_norm {
+        score = score.saturating_add(10_000);
+    }
+
+    if !query_norm.is_empty() && cand_norm.contains(query_norm) {
+        score = score.saturating_add(500);
+        score = score.saturating_add((query_compact.chars().count() as u64).saturating_mul(50));
+    }
+
+    for token in query_norm.split_whitespace() {
+        if token.len() < 2 {
+            continue;
+        }
+        if cand_norm.contains(token) {
+            score = score.saturating_add((token.chars().count() as u64).saturating_mul(200));
+        }
+    }
+
+    let cand_chars: Vec<char> = cand_compact.chars().collect();
+    if !query_bigrams.is_empty() {
+        let cand_bigrams = lite_collect_bigrams(&cand_chars);
+        let overlap = query_bigrams.intersection(&cand_bigrams).count() as u64;
+        score = score.saturating_add(overlap.saturating_mul(50));
+    }
+
+    if !query_trigrams.is_empty() {
+        let cand_trigrams = lite_collect_trigrams(&cand_chars);
+        let overlap = query_trigrams.intersection(&cand_trigrams).count() as u64;
+        score = score.saturating_add(overlap.saturating_mul(80));
+    }
+
+    score
 }
 
 pub fn search_similar_messages_in_conversation<E: Embedder + ?Sized>(

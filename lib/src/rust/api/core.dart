@@ -115,6 +115,13 @@ Future<void> dbSetActiveLlmProfile(
     RustLib.instance.api.crateApiCoreDbSetActiveLlmProfile(
         appDir: appDir, key: key, profileId: profileId);
 
+Future<void> dbDeleteLlmProfile(
+        {required String appDir,
+        required List<int> key,
+        required String profileId}) =>
+    RustLib.instance.api.crateApiCoreDbDeleteLlmProfile(
+        appDir: appDir, key: key, profileId: profileId);
+
 Future<int> dbProcessPendingMessageEmbeddings(
         {required String appDir, required List<int> key, required int limit}) =>
     RustLib.instance.api.crateApiCoreDbProcessPendingMessageEmbeddings(

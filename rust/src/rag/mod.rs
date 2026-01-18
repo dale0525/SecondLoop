@@ -64,7 +64,7 @@ pub fn ask_ai_with_provider(
     question: &str,
     top_k: usize,
     focus: Focus,
-    provider: &impl AnswerProvider,
+    provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     // Ensure existing messages are embedded before searching.
@@ -161,7 +161,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     question: &str,
     top_k: usize,
     focus: Focus,
-    provider: &impl AnswerProvider,
+    provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     db::set_active_embedding_model_name(conn, embedder.model_name())?;
@@ -260,7 +260,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     question: &str,
     top_k: usize,
     focus: Focus,
-    provider: &impl AnswerProvider,
+    provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;

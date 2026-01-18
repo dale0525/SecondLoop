@@ -2,13 +2,16 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../settings/llm_profiles_page.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({required this.conversation, super.key});
@@ -32,6 +35,8 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<String>? _askSub;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+
+  static const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
 
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
@@ -252,6 +257,14 @@ class _ChatPageState extends State<ChatPage> {
     final question = _controller.text.trim();
     if (question.isEmpty) return;
 
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final configured = await _ensureAskAiConfigured(backend, sessionKey);
+    if (!configured) return;
+
+    final consented = await _ensureAskAiDataConsent();
+    if (!consented) return;
+
     setState(() {
       _asking = true;
       _stopRequested = false;
@@ -260,9 +273,6 @@ class _ChatPageState extends State<ChatPage> {
       _streamingAnswer = '';
     });
     _controller.clear();
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
 
     try {
       await _prepareEmbeddingsForAskAi(backend, sessionKey);
@@ -324,6 +334,122 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     setState(() => _askSub = sub);
+  }
+
+  Future<bool> _ensureAskAiDataConsent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final skip = prefs.getBool(_kAskAiDataConsentPrefsKey) ?? false;
+    if (skip) return true;
+    if (!mounted) return false;
+
+    var dontShowAgain = false;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final t = context.t;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              key: const ValueKey('ask_ai_consent_dialog'),
+              title: Text(t.chat.askAiConsent.title),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t.chat.askAiConsent.body),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    key: const ValueKey('ask_ai_consent_dont_show_again'),
+                    contentPadding: EdgeInsets.zero,
+                    value: dontShowAgain,
+                    onChanged: (value) {
+                      setState(() => dontShowAgain = value ?? false);
+                    },
+                    title: Text(t.chat.askAiConsent.dontShowAgain),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(t.common.actions.cancel),
+                ),
+                FilledButton(
+                  key: const ValueKey('ask_ai_consent_continue'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(t.common.actions.continueLabel),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (approved != true) return false;
+    if (dontShowAgain) {
+      await prefs.setBool(_kAskAiDataConsentPrefsKey, true);
+    }
+    return true;
+  }
+
+  Future<bool> _ensureAskAiConfigured(
+    AppBackend backend,
+    Uint8List sessionKey,
+  ) async {
+    try {
+      final hasActiveProfile = await hasActiveLlmProfile(backend, sessionKey);
+      if (hasActiveProfile) return true;
+    } catch (_) {
+      return true;
+    }
+    if (!mounted) return false;
+
+    final action = await showDialog<_AskAiSetupAction>(
+      context: context,
+      builder: (context) {
+        final t = context.t;
+        return AlertDialog(
+          key: const ValueKey('ask_ai_setup_dialog'),
+          title: Text(t.chat.askAiSetup.title),
+          content: Text(t.chat.askAiSetup.body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(t.common.actions.cancel),
+            ),
+            TextButton(
+              key: const ValueKey('ask_ai_setup_subscribe'),
+              onPressed: () =>
+                  Navigator.of(context).pop(_AskAiSetupAction.subscribe),
+              child: Text(t.chat.askAiSetup.actions.subscribe),
+            ),
+            FilledButton(
+              key: const ValueKey('ask_ai_setup_configure_byok'),
+              onPressed: () =>
+                  Navigator.of(context).pop(_AskAiSetupAction.configureByok),
+              child: Text(t.chat.askAiSetup.actions.configureByok),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return false;
+
+    switch (action) {
+      case _AskAiSetupAction.configureByok:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
+        );
+        break;
+      case _AskAiSetupAction.subscribe:
+      case null:
+        break;
+    }
+
+    return false;
   }
 
   Future<void> _prepareEmbeddingsForAskAi(
@@ -660,4 +786,9 @@ class _ChatPageState extends State<ChatPage> {
 enum _MessageAction {
   edit,
   delete,
+}
+
+enum _AskAiSetupAction {
+  subscribe,
+  configureByok,
 }

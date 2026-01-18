@@ -227,6 +227,9 @@ final class _MutableBackend implements AppBackend {
   Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {}
 
   @override
+  Future<void> deleteLlmProfile(Uint8List key, String profileId) async {}
+
+  @override
   Stream<String> askAiStream(
     Uint8List key,
     String conversationId, {

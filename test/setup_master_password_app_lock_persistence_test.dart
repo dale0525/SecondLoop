@@ -266,6 +266,10 @@ final class _CountingBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
+  Future<void> deleteLlmProfile(Uint8List key, String profileId) =>
+      throw UnimplementedError();
+
+  @override
   Stream<String> askAiStream(Uint8List key, String conversationId,
           {required String question,
           int topK = 10,

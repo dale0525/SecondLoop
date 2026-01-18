@@ -11,7 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('Setup -> main stream -> send message', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = MemoryBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));
@@ -36,7 +36,7 @@ void main() {
 
   testWidgets('Ask AI -> Stop should return to idle even if cancel hangs',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = StuckCancelBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));
@@ -227,7 +227,18 @@ class MemoryBackend implements AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -243,6 +254,9 @@ class MemoryBackend implements AppBackend {
 
   @override
   Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {}
+
+  @override
+  Future<void> deleteLlmProfile(Uint8List key, String profileId) async {}
 
   @override
   Stream<String> askAiStream(
