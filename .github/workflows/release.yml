@@ -15,6 +15,10 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -34,24 +38,68 @@ jobs:
         run: |
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
+            echo "Prod gateway URL must start with https://"
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"stage"* ]]; then
+            echo "Refusing to build prod release with a staging gateway URL."
+            exit 1
+          fi
+      - name: Validate Android signing (tag releases)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          : "${ANDROID_KEYSTORE_BASE64:?Missing secret ANDROID_KEYSTORE_BASE64}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing secret ANDROID_KEYSTORE_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing secret ANDROID_KEY_ALIAS}"
+          : "${ANDROID_KEY_PASSWORD:?Missing secret ANDROID_KEY_PASSWORD}"
+      - name: Setup Android signing (tag releases)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          mkdir -p android/app
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/upload-keystore.jks
+          {
+            echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+            echo "keyAlias=${ANDROID_KEY_ALIAS}"
+            echo "storeFile=app/upload-keystore.jks"
+          } > android/key.properties
       - run: flutter pub get
       - name: Build (prod)
         shell: bash
         run: |
+          build_number="${GITHUB_RUN_NUMBER}"
+          build_name=''
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            candidate="${GITHUB_REF_NAME#v}"
+            if [[ "${candidate}" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
+              build_name="${candidate}"
+            fi
+          fi
+
+          build_args=("--build-number=${build_number}")
+          if [[ -n "${build_name}" ]]; then
+            build_args+=("--build-name=${build_name}")
+          fi
+
           defines=(
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           )
-          flutter build apk --release "${defines[@]}"
+          flutter build apk --release "${build_args[@]}" "${defines[@]}"
+          flutter build appbundle --release "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk "dist/SecondLoop-android-${GITHUB_REF_NAME}.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "dist/SecondLoop-android-${GITHUB_REF_NAME}.aab"
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: dist/*.apk
+          name: android
+          path: dist/*.a*
 
   windows:
     runs-on: windows-latest
@@ -73,15 +121,24 @@ jobs:
         run: |
           if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
+          if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD.StartsWith("https://")) { throw "Prod gateway URL must start with https://" }
+          if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
       - run: flutter pub get
       - name: Build (prod)
         shell: pwsh
         run: |
+          $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
+          if ($Env:GITHUB_REF -like "refs/tags/v*") {
+            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
+            if ($candidate -match '^\d+(\.\d+){2}$') {
+              $buildArgs += "--build-name=$candidate"
+            }
+          }
           $defines = @(
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD"
           )
-          flutter build windows --release @defines
+          flutter build windows --release @buildArgs @defines
       - name: Package
         shell: pwsh
         run: |
@@ -91,7 +148,7 @@ jobs:
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath $zip
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-zip
+          name: windows
           path: dist/*.zip
 
   macos:
@@ -120,26 +177,51 @@ jobs:
         run: |
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
+            echo "Prod gateway URL must start with https://"
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"stage"* ]]; then
+            echo "Refusing to build prod release with a staging gateway URL."
+            exit 1
+          fi
       - run: flutter pub get
       - name: Build (prod)
         shell: bash
         run: |
+          build_number="${GITHUB_RUN_NUMBER}"
+          build_name=''
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            candidate="${GITHUB_REF_NAME#v}"
+            if [[ "${candidate}" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
+              build_name="${candidate}"
+            fi
+          fi
+
+          build_args=("--build-number=${build_number}")
+          if [[ -n "${build_name}" ]]; then
+            build_args+=("--build-name=${build_name}")
+          fi
+
           defines=(
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           )
-          flutter build macos --release "${defines[@]}"
+          flutter build macos --release "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
           app="$(ls -1 build/macos/Build/Products/Release/*.app | head -n 1)"
-          zip_path="dist/SecondLoop-macos-${GITHUB_REF_NAME}.zip"
-          ditto -c -k --sequesterRsrc --keepParent "${app}" "${zip_path}"
+          stage_dir="$(mktemp -d)"
+          cp -R "${app}" "${stage_dir}/"
+          dmg_path="dist/SecondLoop-macos-${GITHUB_REF_NAME}.dmg"
+          rm -f "${dmg_path}"
+          hdiutil create -volname "SecondLoop" -srcfolder "${stage_dir}" -ov -format UDZO "${dmg_path}"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-zip
-          path: dist/*.zip
+          name: macos
+          path: dist/*.dmg
 
   publish:
     runs-on: ubuntu-latest
@@ -156,4 +238,6 @@ jobs:
           generate_release_notes: true
           files: |
             dist/*.apk
+            dist/*.aab
+            dist/*.dmg
             dist/*.zip

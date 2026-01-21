@@ -29,7 +29,7 @@ rust-build-release = "cargo build --manifest-path rust/Cargo.toml --release"
 rust-test = "cargo test --manifest-path rust/Cargo.toml"
 rust-fmt = "cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
 rust-clippy = "cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings"
-i18n-gen = "dart pub global run fvm:main dart run slang"
+i18n-gen = "dart pub global run fvm:main dart run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
 i18n-translate = "python tools/i18n_translate.py"
 i18n-sync = { depends-on = ["i18n-translate", "i18n-gen"] }
 

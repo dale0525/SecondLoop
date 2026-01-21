@@ -365,14 +365,13 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                     ],
                     if (controller?.emailVerified == false) ...[
                       const SizedBox(height: 12),
-                      Text(context
-                          .t.settings.cloudAccount.emailVerification.labels.help),
+                      Text(context.t.settings.cloudAccount.emailVerification
+                          .labels.help),
                       const SizedBox(height: 12),
                       OutlinedButton(
                         key: const ValueKey('cloud_resend_verification'),
-                        onPressed: _verificationBusy
-                            ? null
-                            : _resendVerificationEmail,
+                        onPressed:
+                            _verificationBusy ? null : _resendVerificationEmail,
                         child: Text(context.t.settings.cloudAccount
                             .emailVerification.actions.resend),
                       ),

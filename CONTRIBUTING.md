@@ -36,3 +36,9 @@ Note: `.env.local` must NOT set `SECONDLOOP_CLOUD_GATEWAY_BASE_URL` directly (th
 ## CI note
 
 PR CI should not require secrets (fork PRs don't have access to them). Keep Cloud/Subscription integration checks behind optional/manual workflows.
+
+## Release (maintainers)
+
+Release workflow: `.github/workflows/release.yml` (tag `v*`).
+
+See `RELEASE_CHECKLIST.md` for the full checklist, including Android signing + Play/App Store readiness notes.

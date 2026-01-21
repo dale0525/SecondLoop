@@ -118,14 +118,6 @@ pixi run dart pub global run fvm:main flutter <args...>
   - `SECONDLOOP_CLOUD_ENV=staging|prod`
   - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING` / `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
 
-### CI release (GitHub Actions)
-
-Release workflow: `.github/workflows/release.yml` (tag `v*`).
-
-Required repo secrets:
-- `SECONDLOOP_FIREBASE_WEB_API_KEY`
-- `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
-
 ### Troubleshooting
 
 - If you see build errors referencing macOS paths like `/Users/.../fvm/versions/...` on Windows, delete generated Flutter artifacts (or run `dart pub global run fvm:main flutter clean`) and then run `pixi run setup-flutter` again.
