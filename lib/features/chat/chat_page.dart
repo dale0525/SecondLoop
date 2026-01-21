@@ -396,6 +396,7 @@ class _ChatPageState extends State<ChatPage> {
           final cloudStatus = fromCloud ? parseHttpStatusFromError(e) : null;
 
           final hasByok = await hasActiveLlmProfile(backend, sessionKey);
+          if (!mounted) return;
           if (fromCloud && hasByok && isCloudFallbackableError(e)) {
             final message = switch (cloudStatus) {
               401 => context.t.chat.cloudGateway.fallback.auth,
@@ -404,7 +405,6 @@ class _ChatPageState extends State<ChatPage> {
               _ => context.t.chat.cloudGateway.fallback.generic,
             };
 
-            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 key: _kAskAiCloudFallbackSnackKey,
