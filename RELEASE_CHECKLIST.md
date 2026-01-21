@@ -61,8 +61,16 @@ base64 -i ~/secondloop-signing/upload-keystore.jks | tr -d '\n'
 
 ## 2) 发版（打 tag 触发）
 
+推荐用 pixi task（会做安全校验：main 分支、clean tree、与 origin/main 同步）：
+
 ```bash
-git tag v0.1.0
+pixi run release v0.1.0
+```
+
+或手动：
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin v0.1.0
 ```
 
@@ -75,4 +83,3 @@ Actions 将构建并发布：
 
 - 回滚到上一个已知可用的 tag（或新建 tag 指向旧 commit）
 - GitHub Release 产物按 tag 可追溯
-
