@@ -69,7 +69,6 @@ maybe_define() {
 
 maybe_define SECONDLOOP_FIREBASE_WEB_API_KEY
 maybe_define_value SECONDLOOP_CLOUD_GATEWAY_BASE_URL "${cloud_gateway_base_url}"
-maybe_define SECONDLOOP_CLOUD_MODEL_NAME
 
 if [[ -z "${SECONDLOOP_FIREBASE_WEB_API_KEY-}" && ! -f "${dotenv_file}" ]]; then
   cat >&2 <<'EOF'

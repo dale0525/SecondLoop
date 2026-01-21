@@ -6,7 +6,15 @@ import 'firebase_identity_toolkit.dart';
 abstract class CloudAuthController {
   String? get uid;
 
+  String? get email;
+
+  bool? get emailVerified;
+
   Future<String?> getIdToken();
+
+  Future<void> refreshUserInfo();
+
+  Future<void> sendEmailVerification();
 
   Future<void> signInWithEmailPassword({
     required String email,
@@ -38,9 +46,16 @@ final class CloudAuthControllerImpl extends ChangeNotifier
   bool _loaded = false;
   CloudAuthStoredSession? _storedSession;
   FirebaseAuthTokens? _cachedTokens;
+  FirebaseUserInfo? _cachedUserInfo;
 
   @override
   String? get uid => _storedSession?.uid ?? _cachedTokens?.uid;
+
+  @override
+  String? get email => _cachedUserInfo?.email;
+
+  @override
+  bool? get emailVerified => _cachedUserInfo?.emailVerified;
 
   Future<void> _ensureLoaded() async {
     if (_loaded) return;
@@ -58,6 +73,7 @@ final class CloudAuthControllerImpl extends ChangeNotifier
       password: password,
     );
     _cachedTokens = tokens;
+    _cachedUserInfo = null;
     _storedSession = CloudAuthStoredSession(
         uid: tokens.uid, refreshToken: tokens.refreshToken);
     _loaded = true;
@@ -75,6 +91,7 @@ final class CloudAuthControllerImpl extends ChangeNotifier
       password: password,
     );
     _cachedTokens = tokens;
+    _cachedUserInfo = null;
     _storedSession = CloudAuthStoredSession(
         uid: tokens.uid, refreshToken: tokens.refreshToken);
     _loaded = true;
@@ -85,6 +102,7 @@ final class CloudAuthControllerImpl extends ChangeNotifier
   @override
   Future<void> signOut() async {
     _cachedTokens = null;
+    _cachedUserInfo = null;
     _storedSession = null;
     _loaded = true;
     await _store.clear();
@@ -112,5 +130,32 @@ final class CloudAuthControllerImpl extends ChangeNotifier
     await _store.save(_storedSession!);
     notifyListeners();
     return refreshed.idToken;
+  }
+
+  @override
+  Future<void> refreshUserInfo() async {
+    final token = await getIdToken();
+    if (token == null || token.trim().isEmpty) {
+      if (_cachedUserInfo == null) return;
+      _cachedUserInfo = null;
+      notifyListeners();
+      return;
+    }
+
+    final info = await _identityToolkit.lookup(idToken: token);
+    _cachedUserInfo = info;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> sendEmailVerification() async {
+    final token = await getIdToken();
+    if (token == null || token.trim().isEmpty) {
+      throw StateError('missing_id_token');
+    }
+    await _identityToolkit.sendOobCode(
+      requestType: 'VERIFY_EMAIL',
+      idToken: token,
+    );
   }
 }

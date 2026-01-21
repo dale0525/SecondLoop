@@ -18,6 +18,17 @@ class FirebaseAuthTokens {
   final int expiresAtMs;
 }
 
+@immutable
+class FirebaseUserInfo {
+  const FirebaseUserInfo({
+    required this.email,
+    required this.emailVerified,
+  });
+
+  final String? email;
+  final bool? emailVerified;
+}
+
 class FirebaseAuthException implements Exception {
   FirebaseAuthException(this.code, {this.details});
 
@@ -44,6 +55,15 @@ abstract class FirebaseIdentityToolkit {
 
   Future<FirebaseAuthTokens> refreshIdToken({
     required String refreshToken,
+  });
+
+  Future<void> sendOobCode({
+    required String requestType,
+    required String idToken,
+  });
+
+  Future<FirebaseUserInfo> lookup({
+    required String idToken,
   });
 }
 
@@ -143,6 +163,45 @@ final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
       uid: uid,
       expiresAtMs: expiresAtMs,
     );
+  }
+
+  @override
+  Future<void> sendOobCode({
+    required String requestType,
+    required String idToken,
+  }) async {
+    await _postJson(
+      _accountsUri('sendOobCode'),
+      {
+        'requestType': requestType,
+        'idToken': idToken,
+      },
+    );
+  }
+
+  @override
+  Future<FirebaseUserInfo> lookup({required String idToken}) async {
+    final body = await _postJson(
+      _accountsUri('lookup'),
+      {
+        'idToken': idToken,
+      },
+    );
+
+    final users = body['users'];
+    if (users is List && users.isNotEmpty) {
+      final first = users.first;
+      if (first is Map) {
+        final email = first['email'];
+        final emailVerified = first['emailVerified'];
+        return FirebaseUserInfo(
+          email: email is String && email.trim().isNotEmpty ? email : null,
+          emailVerified: emailVerified is bool ? emailVerified : null,
+        );
+      }
+    }
+
+    throw FirebaseAuthException('missing_user');
   }
 
   FirebaseAuthTokens _parseAccountsResponse(Map<String, dynamic> body) {

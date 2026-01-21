@@ -43,6 +43,9 @@ class _ChatPageState extends State<ChatPage> {
   static const _kAskAiCloudFallbackSnackKey = ValueKey(
     'ask_ai_cloud_fallback_snack',
   );
+  static const _kAskAiEmailNotVerifiedSnackKey = ValueKey(
+    'ask_ai_email_not_verified_snack',
+  );
 
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
@@ -359,13 +362,53 @@ class _ChatPageState extends State<ChatPage> {
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
 
+          if (fromCloud && isCloudEmailNotVerifiedError(e)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                key: _kAskAiEmailNotVerifiedSnackKey,
+                content: Text(context.t.chat.cloudGateway.emailNotVerified),
+                action: SnackBarAction(
+                  label: context.t.settings.cloudAccount.title,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CloudAccountPage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+
+            if (!mounted) return;
+            setState(() {
+              _askError = null;
+              _askSub = null;
+              _asking = false;
+              _pendingQuestion = null;
+              _streamingAnswer = '';
+            });
+            _refresh();
+            SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+            return;
+          }
+
+          final cloudStatus = fromCloud ? parseHttpStatusFromError(e) : null;
+
           final hasByok = await hasActiveLlmProfile(backend, sessionKey);
           if (fromCloud && hasByok && isCloudFallbackableError(e)) {
+            final message = switch (cloudStatus) {
+              401 => context.t.chat.cloudGateway.fallback.auth,
+              402 => context.t.chat.cloudGateway.fallback.entitlement,
+              429 => context.t.chat.cloudGateway.fallback.rateLimited,
+              _ => context.t.chat.cloudGateway.fallback.generic,
+            };
+
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 key: _kAskAiCloudFallbackSnackKey,
-                content: Text(context.t.chat.askAiSetup.body),
+                content: Text(message),
               ),
             );
 
@@ -388,7 +431,14 @@ class _ChatPageState extends State<ChatPage> {
 
           if (!mounted) return;
           setState(() {
-            _askError = '$e';
+            _askError = fromCloud
+                ? switch (cloudStatus) {
+                    401 => context.t.chat.cloudGateway.errors.auth,
+                    402 => context.t.chat.cloudGateway.errors.entitlement,
+                    429 => context.t.chat.cloudGateway.errors.rateLimited,
+                    _ => context.t.chat.cloudGateway.errors.generic,
+                  }
+                : '$e';
             _askSub = null;
             _asking = false;
             _pendingQuestion = null;

@@ -89,6 +89,17 @@ final class _FakeIdentityToolkit implements FirebaseIdentityToolkit {
       expiresAtMs: clock.nowMs() + 10000,
     );
   }
+
+  @override
+  Future<void> sendOobCode({
+    required String requestType,
+    required String idToken,
+  }) async {}
+
+  @override
+  Future<FirebaseUserInfo> lookup({required String idToken}) async {
+    return const FirebaseUserInfo(email: null, emailVerified: null);
+  }
 }
 
 final class _InMemoryCloudAuthStore implements CloudAuthStore {

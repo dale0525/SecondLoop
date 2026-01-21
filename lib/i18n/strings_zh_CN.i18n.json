@@ -97,6 +97,26 @@
         "signIn": "登录",
         "signUp": "创建账号",
         "signOut": "退出登录"
+      },
+      "emailVerification": {
+        "title": "邮箱验证",
+        "status": {
+          "unknown": "未知",
+          "verified": "已验证",
+          "notVerified": "未验证"
+        },
+        "labels": {
+          "status": "状态：",
+          "help": "验证邮箱后才能使用 SecondLoop Cloud Ask AI。",
+          "loadFailed": "加载失败：$error"
+        },
+        "actions": {
+          "resend": "重新发送验证邮件"
+        },
+        "messages": {
+          "verificationEmailSent": "验证邮件已发送",
+          "verificationEmailSendFailed": "发送验证邮件失败：$error"
+        }
       }
     },
     "subscription": {
@@ -163,6 +183,21 @@
       "actions": {
         "subscribe": "订阅",
         "configureByok": "配置 BYOK"
+      }
+    },
+    "cloudGateway": {
+      "emailNotVerified": "邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud Ask AI。",
+      "fallback": {
+        "auth": "Cloud 登录已失效。本次将回落到 BYOK。",
+        "entitlement": "需要订阅 SecondLoop Cloud。本次将回落到 BYOK。",
+        "rateLimited": "Cloud 触发限速。本次将回落到 BYOK。",
+        "generic": "Cloud 请求失败。本次将回落到 BYOK。"
+      },
+      "errors": {
+        "auth": "Cloud 登录已失效，请在 Cloud 账号页重新登录。",
+        "entitlement": "需要订阅 SecondLoop Cloud。请配置 BYOK 或稍后再试。",
+        "rateLimited": "Cloud 触发限速，请稍后再试。",
+        "generic": "Cloud 请求失败。"
       }
     },
     "askAiConsent": {

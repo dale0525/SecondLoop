@@ -14,10 +14,7 @@ class CloudGatewayConfig {
       'SECONDLOOP_CLOUD_GATEWAY_BASE_URL',
       defaultValue: '',
     ),
-    modelName: String.fromEnvironment(
-      'SECONDLOOP_CLOUD_MODEL_NAME',
-      defaultValue: 'gpt-4o-mini',
-    ),
+    modelName: 'cloud',
   );
 }
 

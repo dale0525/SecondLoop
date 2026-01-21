@@ -55,12 +55,10 @@ if ($cloudEnv) {
     'production' { $cloudGatewayBaseUrl = $env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }
   }
 }
-$cloudModelName = $env:SECONDLOOP_CLOUD_MODEL_NAME
 
 $defines = @()
 if ($firebaseWebApiKey) { $defines += "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$firebaseWebApiKey" }
 if ($cloudGatewayBaseUrl) { $defines += "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$cloudGatewayBaseUrl" }
-if ($cloudModelName) { $defines += "--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=$cloudModelName" }
 
 & dart pub global run fvm:main flutter run -d windows @defines
 exit $LASTEXITCODE

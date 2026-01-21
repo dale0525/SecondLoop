@@ -22,6 +22,12 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   bool _busy = false;
   String? _error;
 
+  bool _userInfoBusy = false;
+  Object? _userInfoError;
+  String? _userInfoUid;
+
+  bool _verificationBusy = false;
+
   bool _subBusy = false;
   Object? _subError;
   String? _subscriptionUid;
@@ -76,6 +82,55 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     }
   }
 
+  Future<void> _refreshUserInfo() async {
+    if (_userInfoBusy) return;
+    final controller = CloudAuthScope.of(context).controller;
+    if (controller.uid == null) return;
+
+    setState(() => _userInfoBusy = true);
+    try {
+      await controller.refreshUserInfo();
+      if (!mounted) return;
+      setState(() => _userInfoError = null);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _userInfoError = e);
+    } finally {
+      if (mounted) setState(() => _userInfoBusy = false);
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    if (_verificationBusy) return;
+    final controller = CloudAuthScope.of(context).controller;
+
+    setState(() => _verificationBusy = true);
+    try {
+      await controller.sendEmailVerification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t.settings.cloudAccount.emailVerification.messages
+                .verificationEmailSent,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t.settings.cloudAccount.emailVerification.messages
+                .verificationEmailSendFailed(error: '$e'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _verificationBusy = false);
+    }
+  }
+
   String _formatCloudAuthError(BuildContext context, Object error) {
     if (error is FirebaseAuthException) {
       if (error.code == 'missing_web_api_key' ||
@@ -110,6 +165,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       setState(() {
         _passwordController.clear();
       });
+      unawaited(_refreshUserInfo());
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = _formatCloudAuthError(context, e));
@@ -137,6 +193,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       setState(() {
         _passwordController.clear();
       });
+      unawaited(_refreshUserInfo());
+      unawaited(_resendVerificationEmail());
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = _formatCloudAuthError(context, e));
@@ -173,6 +231,14 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       _subError = null;
       if (uid != null) {
         unawaited(_refreshSubscription());
+      }
+    }
+
+    if (uid != _userInfoUid) {
+      _userInfoUid = uid;
+      _userInfoError = null;
+      if (uid != null) {
+        unawaited(_refreshUserInfo());
       }
     }
 
@@ -241,6 +307,76 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                       child:
                           Text(context.t.settings.cloudAccount.actions.signOut),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            context.t.settings.cloudAccount.emailVerification
+                                .title,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _userInfoBusy ? null : _refreshUserInfo,
+                          icon: const Icon(Icons.refresh),
+                          tooltip: context.t.common.actions.refresh,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(context.t.settings.cloudAccount.emailVerification
+                            .labels.status),
+                        const SizedBox(width: 8),
+                        Text(
+                          controller?.emailVerified == true
+                              ? context.t.settings.cloudAccount
+                                  .emailVerification.status.verified
+                              : controller?.emailVerified == false
+                                  ? context.t.settings.cloudAccount
+                                      .emailVerification.status.notVerified
+                                  : context.t.settings.cloudAccount
+                                      .emailVerification.status.unknown,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    if (_userInfoError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        context.t.settings.cloudAccount.emailVerification.labels
+                            .loadFailed(error: '$_userInfoError'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    if (controller?.emailVerified == false) ...[
+                      const SizedBox(height: 12),
+                      Text(context
+                          .t.settings.cloudAccount.emailVerification.labels.help),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        key: const ValueKey('cloud_resend_verification'),
+                        onPressed: _verificationBusy
+                            ? null
+                            : _resendVerificationEmail,
+                        child: Text(context.t.settings.cloudAccount
+                            .emailVerification.actions.resend),
+                      ),
+                    ],
                   ],
                 ),
               ),

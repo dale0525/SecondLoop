@@ -126,9 +126,6 @@ Release workflow：`.github/workflows/release.yml`（tag `v*`）。
 - `SECONDLOOP_FIREBASE_WEB_API_KEY`
 - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
 
-可选 secret：
-- `SECONDLOOP_CLOUD_MODEL_NAME`
-
 ### 排错
 
 - 如果在 Windows 看到构建错误引用了 macOS 路径（如 `/Users/.../fvm/versions/...`），删除生成的 Flutter 构建产物（或执行 `dart pub global run fvm:main flutter clean`），然后重新跑 `pixi run setup-flutter`。

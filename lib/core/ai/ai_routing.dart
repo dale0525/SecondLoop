@@ -47,6 +47,18 @@ int? parseHttpStatusFromError(Object error) {
   return int.tryParse(match.group(1) ?? '');
 }
 
+String? parseCloudErrorCodeFromError(Object error) {
+  final message = error.toString();
+  final match = RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(message);
+  return match?.group(1);
+}
+
+bool isCloudEmailNotVerifiedError(Object error) {
+  final status = parseHttpStatusFromError(error);
+  if (status != 403) return false;
+  return parseCloudErrorCodeFromError(error) == 'email_not_verified';
+}
+
 bool isCloudFallbackableError(Object error) {
   final status = parseHttpStatusFromError(error);
   return status == 401 || status == 402 || status == 429;

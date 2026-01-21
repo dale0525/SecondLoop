@@ -15,7 +15,6 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
-      SECONDLOOP_CLOUD_MODEL_NAME: ${{ secrets.SECONDLOOP_CLOUD_MODEL_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -43,9 +42,6 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           )
-          if [[ -n "${SECONDLOOP_CLOUD_MODEL_NAME}" ]]; then
-            defines+=("--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=${SECONDLOOP_CLOUD_MODEL_NAME}")
-          fi
           flutter build apk --release "${defines[@]}"
       - name: Package
         shell: bash
@@ -62,7 +58,6 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
-      SECONDLOOP_CLOUD_MODEL_NAME: ${{ secrets.SECONDLOOP_CLOUD_MODEL_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -86,9 +81,6 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD"
           )
-          if ($Env:SECONDLOOP_CLOUD_MODEL_NAME) {
-            $defines += "--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=$Env:SECONDLOOP_CLOUD_MODEL_NAME"
-          }
           flutter build windows --release @defines
       - name: Package
         shell: pwsh
@@ -107,7 +99,6 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
-      SECONDLOOP_CLOUD_MODEL_NAME: ${{ secrets.SECONDLOOP_CLOUD_MODEL_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -137,9 +128,6 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           )
-          if [[ -n "${SECONDLOOP_CLOUD_MODEL_NAME}" ]]; then
-            defines+=("--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=${SECONDLOOP_CLOUD_MODEL_NAME}")
-          fi
           flutter build macos --release "${defines[@]}"
       - name: Package
         shell: bash

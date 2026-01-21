@@ -4,25 +4,58 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/core/subscription/subscription_scope.dart';
+import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI skips cloud when not entitled', (tester) async {
+  testWidgets(
+      'Cloud account shows resend verification when email is unverified',
+      (tester) async {
+    final cloudAuth = _FakeCloudAuthController(
+      idToken: 'test-id-token',
+      uid: 'uid_1',
+      emailVerified: false,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: cloudAuth,
+            child: const CloudAccountPage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('cloud_resend_verification')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('cloud_resend_verification')));
+    await tester.pumpAndSettle();
+
+    expect(cloudAuth.sendEmailVerificationCalls, 1);
+  });
+
+  testWidgets(
+      'Ask AI shows verify-email prompt when cloud returns email_not_verified',
+      (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
 
-    final backend = _NotEntitledBackend();
-    final cloudAuth = _FakeCloudAuthController(idToken: 'test-id-token');
-    final subscriptions =
-        _FakeSubscriptionStatusController(SubscriptionStatus.notEntitled);
+    final backend = _EmailNotVerifiedBackend();
+    final cloudAuth = _FakeCloudAuthController(
+      idToken: 'test-id-token',
+      uid: 'uid_1',
+      emailVerified: false,
+    );
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -35,18 +68,15 @@ void main() {
                 baseUrl: 'https://gateway.test',
                 modelName: 'gpt-test',
               ),
-              child: SubscriptionScope(
-                controller: subscriptions,
-                child: SessionScope(
-                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                  lock: () {},
-                  child: const ChatPage(
-                    conversation: Conversation(
-                      id: 'main_stream',
-                      title: 'Main Stream',
-                      createdAtMs: 0,
-                      updatedAtMs: 0,
-                    ),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
                   ),
                 ),
               ),
@@ -61,12 +91,63 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, isNot(contains('askAiStreamCloudGateway')));
-    expect(backend.calls, contains('askAiStream'));
+    expect(backend.calls, contains('askAiStreamCloudGateway'));
+    expect(backend.calls, isNot(contains('askAiStream')));
+
+    expect(find.byKey(const ValueKey('ask_ai_email_not_verified_snack')),
+        findsOneWidget);
+    expect(find.textContaining('HTTP 403'), findsNothing);
   });
 }
 
-final class _NotEntitledBackend implements AppBackend {
+final class _FakeCloudAuthController implements CloudAuthController {
+  _FakeCloudAuthController({
+    required this.idToken,
+    required this.uid,
+    required this.emailVerified,
+  });
+
+  final String idToken;
+
+  @override
+  final String? uid;
+
+  @override
+  final bool? emailVerified;
+
+  @override
+  String? get email => 'test@example.com';
+
+  int sendEmailVerificationCalls = 0;
+
+  @override
+  Future<String?> getIdToken() async => idToken;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {
+    sendEmailVerificationCalls += 1;
+  }
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+}
+
+final class _EmailNotVerifiedBackend implements AppBackend {
   final List<String> calls = <String>[];
 
   @override
@@ -119,9 +200,8 @@ final class _NotEntitledBackend implements AppBackend {
       );
 
   @override
-  Future<List<Message>> listMessages(
-          Uint8List key, String conversationId) async =>
-      const <Message>[];
+  Future<List<Message>> listMessages(Uint8List key, String conversationId) =>
+      Future<List<Message>>.value(const <Message>[]);
 
   @override
   Future<Message> insertMessage(
@@ -133,13 +213,12 @@ final class _NotEntitledBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(
-          Uint8List key, String messageId, String content) async =>
+  Future<void> editMessage(Uint8List key, String messageId, String content) =>
       throw UnimplementedError();
 
   @override
   Future<void> setMessageDeleted(
-          Uint8List key, String messageId, bool isDeleted) async =>
+          Uint8List key, String messageId, bool isDeleted) =>
       throw UnimplementedError();
 
   @override
@@ -156,6 +235,7 @@ final class _NotEntitledBackend implements AppBackend {
   Future<List<SimilarMessage>> searchSimilarMessages(
     Uint8List key,
     String query, {
+    String? conversationId,
     int topK = 10,
   }) async =>
       const <SimilarMessage>[];
@@ -236,7 +316,11 @@ final class _NotEntitledBackend implements AppBackend {
     required String modelName,
   }) {
     calls.add('askAiStreamCloudGateway');
-    return const Stream<String>.empty();
+    return Stream<String>.error(
+      Exception(
+        'cloud-gateway request failed: HTTP 403 {"error":"email_not_verified"}',
+      ),
+    );
   }
 
   @override
@@ -310,59 +394,4 @@ final class _NotEntitledBackend implements AppBackend {
     required String remoteRoot,
   }) async =>
       0;
-}
-
-final class _FakeCloudAuthController implements CloudAuthController {
-  _FakeCloudAuthController({required String idToken}) : _idToken = idToken;
-
-  final String _idToken;
-
-  @override
-  String? get uid => 'uid-test';
-
-  @override
-  String? get email => null;
-
-  @override
-  bool? get emailVerified => null;
-
-  @override
-  Future<String?> getIdToken() async => _idToken;
-
-  @override
-  Future<void> refreshUserInfo() async {}
-
-  @override
-  Future<void> sendEmailVerification() async {}
-
-  @override
-  Future<void> signInWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signUpWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signOut() async {}
-}
-
-final class _FakeSubscriptionStatusController extends ChangeNotifier
-    implements SubscriptionStatusController {
-  _FakeSubscriptionStatusController(this._status);
-
-  SubscriptionStatus _status;
-
-  @override
-  SubscriptionStatus get status => _status;
-
-  set status(SubscriptionStatus next) {
-    if (_status == next) return;
-    _status = next;
-    notifyListeners();
-  }
 }

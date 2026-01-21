@@ -97,6 +97,26 @@
         "signIn": "Sign in",
         "signUp": "Create account",
         "signOut": "Sign out"
+      },
+      "emailVerification": {
+        "title": "Email verification",
+        "status": {
+          "unknown": "Unknown",
+          "verified": "Verified",
+          "notVerified": "Not verified"
+        },
+        "labels": {
+          "status": "Status:",
+          "help": "Verify your email to use SecondLoop Cloud Ask AI.",
+          "loadFailed": "Failed to load: $error"
+        },
+        "actions": {
+          "resend": "Resend verification email"
+        },
+        "messages": {
+          "verificationEmailSent": "Verification email sent",
+          "verificationEmailSendFailed": "Failed to send verification email: $error"
+        }
       }
     },
     "subscription": {
@@ -163,6 +183,21 @@
       "actions": {
         "subscribe": "Subscribe",
         "configureByok": "Configure BYOK"
+      }
+    },
+    "cloudGateway": {
+      "emailNotVerified": "Email not verified. Verify your email to use SecondLoop Cloud Ask AI.",
+      "fallback": {
+        "auth": "Cloud sign-in required. Using BYOK for this request.",
+        "entitlement": "Cloud subscription required. Using BYOK for this request.",
+        "rateLimited": "Cloud is rate limited. Using BYOK for this request.",
+        "generic": "Cloud request failed. Using BYOK for this request."
+      },
+      "errors": {
+        "auth": "Cloud sign-in required. Open Cloud account and sign in again.",
+        "entitlement": "Cloud subscription required. Configure BYOK or try again later.",
+        "rateLimited": "Cloud is rate limited. Please try again later.",
+        "generic": "Cloud request failed."
       }
     },
     "askAiConsent": {

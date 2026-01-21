@@ -329,6 +329,18 @@ final class _FakeCloudAuthController implements CloudAuthController {
   String? get uid => 'uid_1';
 
   @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
   Future<void> signInWithEmailPassword({
     required String email,
     required String password,

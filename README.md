@@ -126,9 +126,6 @@ Required repo secrets:
 - `SECONDLOOP_FIREBASE_WEB_API_KEY`
 - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
 
-Optional repo secret:
-- `SECONDLOOP_CLOUD_MODEL_NAME`
-
 ### Troubleshooting
 
 - If you see build errors referencing macOS paths like `/Users/.../fvm/versions/...` on Windows, delete generated Flutter artifacts (or run `dart pub global run fvm:main flutter clean`) and then run `pixi run setup-flutter` again.
