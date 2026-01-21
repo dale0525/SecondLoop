@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/main.dart';
+import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
+
+import 'test_i18n.dart';
 
 void main() {
   testWidgets('Setup -> main stream -> send message', (tester) async {
@@ -39,19 +43,40 @@ void main() {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = StuckCancelBackend();
 
-    await tester.pumpWidget(MyApp(backend: backend));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byKey(MemoryBackend.kSetupPassword), 'pw');
-    await tester.enterText(
-        find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
-    await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pump();
+    for (var i = 0;
+        i < 50 && find.byKey(const ValueKey('chat_stop')).evaluate().isEmpty;
+        i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
 
+    expect(tester.takeException(), isNull);
+    expect(backend.askCalls, 1);
     expect(find.byKey(const ValueKey('chat_stop')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('chat_stop')));
@@ -269,6 +294,19 @@ class MemoryBackend implements AppBackend {
       const Stream<String>.empty();
 
   @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) =>
+      const Stream<String>.empty();
+
+  @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
       Uint8List.fromList(List<int>.filled(32, 1));
 
@@ -342,6 +380,8 @@ class MemoryBackend implements AppBackend {
 }
 
 class StuckCancelBackend extends MemoryBackend {
+  int askCalls = 0;
+
   @override
   Stream<String> askAiStream(
     Uint8List key,
@@ -350,6 +390,7 @@ class StuckCancelBackend extends MemoryBackend {
     int topK = 10,
     bool thisThreadOnly = false,
   }) {
+    askCalls += 1;
     final never = Completer<void>();
     final controller = StreamController<String>(
       onCancel: () => never.future,

@@ -10,6 +10,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
+import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
@@ -352,6 +353,19 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 8),
         sectionCard([
+          ListTile(
+            title: Text(context.t.settings.cloudAccount.title),
+            subtitle: Text(context.t.settings.cloudAccount.subtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CloudAccountPage(),
+                      ),
+                    );
+                  },
+          ),
           ListTile(
             title: Text(context.t.settings.llmProfiles.title),
             subtitle: Text(context.t.settings.llmProfiles.subtitle),

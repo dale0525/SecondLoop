@@ -82,6 +82,40 @@
       "title": "LLM profiles",
       "subtitle": "Configure BYOK for Ask AI"
     },
+    "cloudAccount": {
+      "title": "Cloud account",
+      "subtitle": "Sign in to SecondLoop Cloud",
+      "signedInAs": "Signed in as $uid",
+      "errors": {
+        "missingWebApiKey": "Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app."
+      },
+      "fields": {
+        "email": "Email",
+        "password": "Password"
+      },
+      "actions": {
+        "signIn": "Sign in",
+        "signUp": "Create account",
+        "signOut": "Sign out"
+      }
+    },
+    "subscription": {
+      "title": "Subscription",
+      "subtitle": "Manage SecondLoop Pro",
+      "status": {
+        "unknown": "Unknown",
+        "entitled": "Active",
+        "notEntitled": "Inactive"
+      },
+      "actions": {
+        "purchase": "Subscribe"
+      },
+      "labels": {
+        "status": "Status:",
+        "purchaseUnavailable": "Purchases are not available yet.",
+        "loadFailed": "Failed to load: $error"
+      }
+    },
     "sync": {
       "title": "Sync",
       "subtitle": "Vault backends + auto sync settings"

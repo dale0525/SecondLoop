@@ -147,6 +147,18 @@ pub fn db_set_message_deleted(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_insert_attachment(
+    app_dir: String,
+    key: Vec<u8>,
+    bytes: Vec<u8>,
+    mime_type: String,
+) -> Result<db::Attachment> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::insert_attachment(&conn, &key, Path::new(&app_dir), &bytes, &mime_type)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_reset_vault_data_preserving_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<()> {
     let key = key_from_bytes(key)?;
     auth::validate_key(Path::new(&app_dir), &key)?;
@@ -337,6 +349,77 @@ pub fn rag_ask_ai_stream(
         top_k as usize,
         focus,
         provider.as_ref(),
+        &mut |ev| {
+            if ev.done {
+                if sink.add(String::new()).is_err() {
+                    return Err(rag::StreamCancelled.into());
+                }
+                return Ok(());
+            }
+            if ev.text_delta.is_empty() {
+                return Ok(());
+            }
+            if sink.add(ev.text_delta).is_err() {
+                return Err(rag::StreamCancelled.into());
+            }
+            Ok(())
+        },
+    )
+    .map(|_| ());
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) if e.is::<rag::StreamCancelled>() => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[flutter_rust_bridge::frb]
+pub fn rag_ask_ai_stream_cloud_gateway(
+    app_dir: String,
+    key: Vec<u8>,
+    conversation_id: String,
+    question: String,
+    top_k: u32,
+    this_thread_only: bool,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+    sink: StreamSink<String>,
+) -> Result<()> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let focus = if this_thread_only {
+        rag::Focus::ThisThread
+    } else {
+        rag::Focus::AllMemories
+    };
+
+    let provider = llm::gateway::CloudGatewayProvider::new(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+        None,
+    );
+
+    let result = rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        Path::new(&app_dir),
+        &conversation_id,
+        &question,
+        top_k as usize,
+        focus,
+        &provider,
         &mut |ev| {
             if ev.done {
                 if sink.add(String::new()).is_err() {

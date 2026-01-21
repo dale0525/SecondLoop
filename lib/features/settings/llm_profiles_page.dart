@@ -122,6 +122,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
         false;
 
     if (!confirmed) return;
+    if (!mounted) return;
 
     setState(() {
       _busy = true;
@@ -272,7 +273,8 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                                         'llm_profile_delete_${profiles[i].id}',
                                       ),
                                       value: _ProfileMenuAction.delete,
-                                      child: Text(context.t.llmProfiles.actions.delete),
+                                      child: Text(
+                                          context.t.llmProfiles.actions.delete),
                                     ),
                                   ],
                                 ),
@@ -319,8 +321,8 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                       ),
                       DropdownMenuItem(
                         value: 'gemini-compatible',
-                        child:
-                            Text(context.t.llmProfiles.providers.geminiCompatible),
+                        child: Text(
+                            context.t.llmProfiles.providers.geminiCompatible),
                       ),
                       DropdownMenuItem(
                         value: 'anthropic-compatible',
@@ -366,7 +368,8 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                               final newDefaultBaseUrl =
                                   _defaultBaseUrlByProvider[_providerType];
                               if (newDefaultBaseUrl != null) {
-                                final baseUrlText = _baseUrlController.text.trim();
+                                final baseUrlText =
+                                    _baseUrlController.text.trim();
                                 if (baseUrlText.isEmpty ||
                                     baseUrlText == oldDefaultBaseUrl) {
                                   _baseUrlController.text = newDefaultBaseUrl;

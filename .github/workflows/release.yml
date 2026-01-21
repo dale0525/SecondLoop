@@ -4,10 +4,18 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   android:
     runs-on: ubuntu-latest
+    env:
+      SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
+      SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_CLOUD_MODEL_NAME: ${{ secrets.SECONDLOOP_CLOUD_MODEL_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -15,15 +23,46 @@ jobs:
           flutter-version: "3.19.6"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85.1"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Validate prod config
+        shell: bash
+        run: |
+          : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
+          : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Build (prod)
+        shell: bash
+        run: |
+          defines=(
+            "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
+            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          )
+          if [[ -n "${SECONDLOOP_CLOUD_MODEL_NAME}" ]]; then
+            defines+=("--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=${SECONDLOOP_CLOUD_MODEL_NAME}")
+          fi
+          flutter build apk --release "${defines[@]}"
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/SecondLoop-android-${GITHUB_REF_NAME}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          path: dist/*.apk
 
   windows:
     runs-on: windows-latest
+    env:
+      SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
+      SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_CLOUD_MODEL_NAME: ${{ secrets.SECONDLOOP_CLOUD_MODEL_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -31,15 +70,44 @@ jobs:
           flutter-version: "3.19.6"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85.1"
+      - name: Validate prod config
+        shell: pwsh
+        run: |
+          if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
+          if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
       - run: flutter pub get
-      - run: flutter build windows --release
+      - name: Build (prod)
+        shell: pwsh
+        run: |
+          $defines = @(
+            "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
+            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD"
+          )
+          if ($Env:SECONDLOOP_CLOUD_MODEL_NAME) {
+            $defines += "--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=$Env:SECONDLOOP_CLOUD_MODEL_NAME"
+          }
+          flutter build windows --release @defines
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $zip = "dist/SecondLoop-windows-x64-$Env:GITHUB_REF_NAME.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath $zip
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-build
-          path: build/windows/x64/runner/Release/
+          name: windows-zip
+          path: dist/*.zip
 
   macos:
     runs-on: macos-latest
+    env:
+      SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
+      SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_CLOUD_MODEL_NAME: ${{ secrets.SECONDLOOP_CLOUD_MODEL_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -47,9 +115,57 @@ jobs:
           flutter-version: "3.19.6"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85.1"
+      - name: Install CocoaPods
+        shell: bash
+        run: |
+          if ! gem list -i cocoapods -v 1.16.2 >/dev/null 2>&1; then
+            sudo gem install cocoapods -v 1.16.2
+          fi
+      - name: Validate prod config
+        shell: bash
+        run: |
+          : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
+          : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
       - run: flutter pub get
-      - run: flutter build macos --release
+      - name: Build (prod)
+        shell: bash
+        run: |
+          defines=(
+            "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
+            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          )
+          if [[ -n "${SECONDLOOP_CLOUD_MODEL_NAME}" ]]; then
+            defines+=("--dart-define=SECONDLOOP_CLOUD_MODEL_NAME=${SECONDLOOP_CLOUD_MODEL_NAME}")
+          fi
+          flutter build macos --release "${defines[@]}"
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          app="$(ls -1 build/macos/Build/Products/Release/*.app | head -n 1)"
+          zip_path="dist/SecondLoop-macos-${GITHUB_REF_NAME}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${app}" "${zip_path}"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-build
-          path: build/macos/Build/Products/Release/
+          name: macos-zip
+          path: dist/*.zip
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [android, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.apk
+            dist/*.zip

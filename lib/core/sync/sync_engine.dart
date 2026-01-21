@@ -130,6 +130,7 @@ final class SyncEngine {
   }
 
   void notifyLocalMutation() {
+    _notifyChange();
     if (!_running) return;
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = Timer(pushDebounce, _queuePush);

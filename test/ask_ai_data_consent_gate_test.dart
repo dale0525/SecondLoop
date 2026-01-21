@@ -12,7 +12,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI shows data consent dialog before sending', (tester) async {
+  testWidgets('Ask AI shows data consent dialog before sending',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _AskAiConsentBackend();
 
@@ -215,6 +216,19 @@ final class _AskAiConsentBackend implements AppBackend {
     calls.add('askAiStream');
     return const Stream<String>.empty();
   }
+
+  @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) =>
+      const Stream<String>.empty();
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>

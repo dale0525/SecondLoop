@@ -67,7 +67,7 @@ jobs:
         run: flutter pub get
       - name: Format check
         if: needs.changes.outputs.flutter == 'true'
-        run: dart format lib test rust_builder integration_test test_driver --set-exit-if-changed
+        run: dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed
       - name: Analyze
         if: needs.changes.outputs.flutter == 'true'
         run: flutter analyze
@@ -87,6 +87,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         if: needs.changes.outputs.rust == 'true'
         with:
+          toolchain: "1.85.1"
           components: rustfmt, clippy
       - name: Rust fmt
         if: needs.changes.outputs.rust == 'true'

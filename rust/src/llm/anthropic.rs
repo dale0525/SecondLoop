@@ -173,10 +173,7 @@ pub fn read_messages_sse(
         }
 
         let v: serde_json::Value = serde_json::from_str(data)?;
-        let ty = v
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default();
+        let ty = v.get("type").and_then(|v| v.as_str()).unwrap_or_default();
 
         match ty {
             "message_start" => {

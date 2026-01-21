@@ -177,6 +177,16 @@ final class _SavedKeyBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
+  Stream<String> askAiStreamCloudGateway(Uint8List key, String conversationId,
+          {required String question,
+          int topK = 10,
+          bool thisThreadOnly = false,
+          required String gatewayBaseUrl,
+          required String idToken,
+          required String modelName}) =>
+      throw UnimplementedError();
+
+  @override
   Future<Uint8List> deriveSyncKey(String passphrase) =>
       throw UnimplementedError();
 

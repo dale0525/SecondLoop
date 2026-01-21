@@ -86,7 +86,8 @@ void main() {
     final anthropicBaseUrlField = tester.widget<TextField>(
       find.byKey(const ValueKey('llm_base_url')),
     );
-    expect(anthropicBaseUrlField.controller?.text, 'https://api.anthropic.com/v1');
+    expect(
+        anthropicBaseUrlField.controller?.text, 'https://api.anthropic.com/v1');
   });
 }
 
@@ -136,7 +137,8 @@ final class _EmptyLlmProfilesBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       const <Message>[];
 
   @override
@@ -149,18 +151,22 @@ final class _EmptyLlmProfilesBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async =>
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();
 
   @override
-  Future<void> setMessageDeleted(Uint8List key, String messageId, bool isDeleted) async =>
+  Future<void> setMessageDeleted(
+          Uint8List key, String messageId, bool isDeleted) async =>
       throw UnimplementedError();
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key, {int limit = 32}) async => 0;
+  Future<int> processPendingMessageEmbeddings(Uint8List key,
+          {int limit = 32}) async =>
+      0;
 
   @override
   Future<List<SimilarMessage>> searchSimilarMessages(
@@ -171,20 +177,26 @@ final class _EmptyLlmProfilesBackend implements AppBackend {
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key, {int batchLimit = 256}) async => 0;
+  Future<int> rebuildMessageEmbeddings(Uint8List key,
+          {int batchLimit = 256}) async =>
+      0;
 
   @override
-  Future<List<String>> listEmbeddingModelNames(Uint8List key) async => const <String>[];
+  Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
+      const <String>[];
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
       'secondloop-default-embed-v0';
 
   @override
-  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) async => false;
+  Future<bool> setActiveEmbeddingModelName(
+          Uint8List key, String modelName) async =>
+      false;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => const <LlmProfile>[];
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -213,6 +225,19 @@ final class _EmptyLlmProfilesBackend implements AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
+  }) =>
+      const Stream<String>.empty();
+
+  @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
   }) =>
       const Stream<String>.empty();
 

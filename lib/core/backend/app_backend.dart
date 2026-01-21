@@ -80,6 +80,19 @@ abstract class AppBackend {
     bool thisThreadOnly = false,
   });
 
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('askAiStreamCloudGateway');
+  }
+
   Future<Uint8List> deriveSyncKey(String passphrase);
 
   Future<void> syncWebdavTestConnection({

@@ -40,11 +40,11 @@ fn lite_search_can_be_scoped_to_conversation_without_embeddings() {
     let c1 = db::create_conversation(&conn, &key, "Inbox").expect("c1");
     let c2 = db::create_conversation(&conn, &key, "Other").expect("c2");
 
-    let m1 = db::insert_message(&conn, &key, &c1.id, "user", "回台湾").expect("m1");
-    db::insert_message(&conn, &key, &c2.id, "user", "老婆 3 月 1 号回台湾").expect("m2");
+    let m1 = db::insert_message(&conn, &key, &c1.id, "user", "package delivery").expect("m1");
+    db::insert_message(&conn, &key, &c2.id, "user", "package delivery March 1").expect("m2");
 
-    let global =
-        db::search_similar_messages_default(&conn, &key, "老婆什么时候回台湾", 1).expect("global");
+    let global = db::search_similar_messages_default(&conn, &key, "package delivery March 1", 1)
+        .expect("global");
     assert_eq!(global.len(), 1);
     assert_eq!(global[0].message.conversation_id, c2.id);
 
@@ -52,7 +52,7 @@ fn lite_search_can_be_scoped_to_conversation_without_embeddings() {
         &conn,
         &key,
         &c1.id,
-        "老婆什么时候回台湾",
+        "package delivery March 1",
         1,
     )
     .expect("scoped");

@@ -40,7 +40,7 @@ fn ask_ai_inserts_non_memory_messages() {
         &key,
         &conversation.id,
         "user",
-        "老婆 3 月 1 号回台湾",
+        "package delivery March 1",
     )
     .expect("memory message");
 
@@ -50,7 +50,7 @@ fn ask_ai_inserts_non_memory_messages() {
         &conn,
         &key,
         &conversation.id,
-        "老婆什么时候回台湾？",
+        "When is the package delivery?",
         3,
         Focus::AllMemories,
         &provider,

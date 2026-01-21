@@ -28,15 +28,25 @@ typedef DbProcessPendingMessageEmbeddingsFn = Future<int> Function({
   required int limit,
 });
 
+typedef DbInsertAttachmentFn = Future<Attachment> Function({
+  required String appDir,
+  required List<int> key,
+  required List<int> bytes,
+  required String mimeType,
+});
+
 class NativeAppBackend implements AppBackend {
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
     DbInsertMessageFn? dbInsertMessage,
+    DbInsertAttachmentFn? dbInsertAttachment,
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
+        _dbInsertAttachment =
+            dbInsertAttachment ?? rust_core.dbInsertAttachment,
         _dbProcessPendingMessageEmbeddings =
             dbProcessPendingMessageEmbeddings ??
                 rust_core.dbProcessPendingMessageEmbeddings;
@@ -44,6 +54,7 @@ class NativeAppBackend implements AppBackend {
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
   final DbInsertMessageFn _dbInsertMessage;
+  final DbInsertAttachmentFn _dbInsertAttachment;
   final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
 
   String? _appDir;
@@ -235,6 +246,20 @@ class NativeAppBackend implements AppBackend {
     return message;
   }
 
+  Future<Attachment> insertAttachment(
+    Uint8List key, {
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbInsertAttachment(
+      appDir: appDir,
+      key: key,
+      bytes: bytes,
+      mimeType: mimeType,
+    );
+  }
+
   @override
   Future<void> editMessage(
       Uint8List key, String messageId, String content) async {
@@ -399,6 +424,31 @@ class NativeAppBackend implements AppBackend {
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_core.ragAskAiStreamCloudGateway(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
     );
   }
 

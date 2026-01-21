@@ -43,14 +43,10 @@ fn pull_recovers_after_pruned_initial_ops() {
     // Simulate remote pruning: remove the initial ops files for device A.
     let remote_root_dir = format!("/{}/", remote_root.trim_matches('/'));
     remote
-        .delete(&format!(
-            "{remote_root_dir}{device_id_a}/ops/op_1.json"
-        ))
+        .delete(&format!("{remote_root_dir}{device_id_a}/ops/op_1.json"))
         .expect("delete op_1");
     remote
-        .delete(&format!(
-            "{remote_root_dir}{device_id_a}/ops/op_2.json"
-        ))
+        .delete(&format!("{remote_root_dir}{device_id_a}/ops/op_2.json"))
         .expect("delete op_2");
 
     // Device B pulls from a remote where ops start at a higher seq.

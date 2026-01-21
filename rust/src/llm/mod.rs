@@ -1,6 +1,7 @@
-pub mod openai;
 pub mod anthropic;
+pub mod gateway;
 pub mod gemini;
+pub mod openai;
 
 use anyhow::{anyhow, Result};
 

@@ -11,7 +11,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Saving Gemini profile passes baseUrl to backend', (tester) async {
+  testWidgets('Saving Gemini profile passes baseUrl to backend',
+      (tester) async {
     final backend = _CaptureCreateLlmProfileBackend();
     await tester.pumpWidget(
       wrapWithI18n(
@@ -110,7 +111,8 @@ final class _CaptureCreateLlmProfileBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) async =>
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
       const <Message>[];
 
   @override
@@ -123,7 +125,8 @@ final class _CaptureCreateLlmProfileBackend implements AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) async =>
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();
 
   @override
@@ -138,7 +141,9 @@ final class _CaptureCreateLlmProfileBackend implements AppBackend {
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key, {int limit = 32}) async => 0;
+  Future<int> processPendingMessageEmbeddings(Uint8List key,
+          {int limit = 32}) async =>
+      0;
 
   @override
   Future<List<SimilarMessage>> searchSimilarMessages(
@@ -149,17 +154,22 @@ final class _CaptureCreateLlmProfileBackend implements AppBackend {
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key, {int batchLimit = 256}) async => 0;
+  Future<int> rebuildMessageEmbeddings(Uint8List key,
+          {int batchLimit = 256}) async =>
+      0;
 
   @override
-  Future<List<String>> listEmbeddingModelNames(Uint8List key) async => const <String>[];
+  Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
+      const <String>[];
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
       'secondloop-default-embed-v0';
 
   @override
-  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) async => false;
+  Future<bool> setActiveEmbeddingModelName(
+          Uint8List key, String modelName) async =>
+      false;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => _profiles;
@@ -205,6 +215,19 @@ final class _CaptureCreateLlmProfileBackend implements AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
+  }) =>
+      const Stream<String>.empty();
+
+  @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
   }) =>
       const Stream<String>.empty();
 

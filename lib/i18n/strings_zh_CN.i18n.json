@@ -82,6 +82,40 @@
       "title": "LLM Profiles",
       "subtitle": "为 Ask AI 配置 BYOK"
     },
+    "cloudAccount": {
+      "title": "Cloud 账号",
+      "subtitle": "登录 SecondLoop Cloud",
+      "signedInAs": "已登录：$uid",
+      "errors": {
+        "missingWebApiKey": "Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。"
+      },
+      "fields": {
+        "email": "邮箱",
+        "password": "密码"
+      },
+      "actions": {
+        "signIn": "登录",
+        "signUp": "创建账号",
+        "signOut": "退出登录"
+      }
+    },
+    "subscription": {
+      "title": "订阅",
+      "subtitle": "管理 SecondLoop Pro",
+      "status": {
+        "unknown": "未知",
+        "entitled": "已生效",
+        "notEntitled": "未生效"
+      },
+      "actions": {
+        "purchase": "订阅"
+      },
+      "labels": {
+        "status": "状态：",
+        "purchaseUnavailable": "订阅购买暂未开放。",
+        "loadFailed": "加载失败：$error"
+      }
+    },
     "sync": {
       "title": "同步",
       "subtitle": "Vault 后端 + 自动同步设置"

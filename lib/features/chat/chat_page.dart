@@ -6,11 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
 
 class ChatPage extends StatefulWidget {
@@ -37,6 +40,9 @@ class _ChatPageState extends State<ChatPage> {
   VoidCallback? _syncListener;
 
   static const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
+  static const _kAskAiCloudFallbackSnackKey = ValueKey(
+    'ask_ai_cloud_fallback_snack',
+  );
 
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
@@ -259,8 +265,32 @@ class _ChatPageState extends State<ChatPage> {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    final configured = await _ensureAskAiConfigured(backend, sessionKey);
-    if (!configured) return;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    String? cloudIdToken;
+    try {
+      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+    } catch (_) {
+      cloudIdToken = null;
+    }
+
+    if (!mounted) return;
+    final cloudGatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+
+    final route = await decideAskAiRoute(
+      backend,
+      sessionKey,
+      cloudIdToken: cloudIdToken,
+      cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+      subscriptionStatus: subscriptionStatus,
+    );
+
+    if (route == AskAiRouteKind.needsSetup) {
+      final configured = await _ensureAskAiConfigured(backend, sessionKey);
+      if (!configured) return;
+    }
 
     final consented = await _ensureAskAiDataConsent();
     if (!consented) return;
@@ -290,50 +320,103 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
 
-    final stream = backend.askAiStream(
-      sessionKey,
-      widget.conversation.id,
-      question: question,
-      topK: 10,
-      thisThreadOnly: _thisThreadOnly,
-    );
+    Stream<String> stream;
+    switch (route) {
+      case AskAiRouteKind.cloudGateway:
+        stream = backend.askAiStreamCloudGateway(
+          sessionKey,
+          widget.conversation.id,
+          question: question,
+          topK: 10,
+          thisThreadOnly: _thisThreadOnly,
+          gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+          idToken: cloudIdToken ?? '',
+          modelName: cloudGatewayConfig.modelName,
+        );
+        break;
+      case AskAiRouteKind.byok:
+      case AskAiRouteKind.needsSetup:
+        stream = backend.askAiStream(
+          sessionKey,
+          widget.conversation.id,
+          question: question,
+          topK: 10,
+          thisThreadOnly: _thisThreadOnly,
+        );
+        break;
+    }
 
-    late final StreamSubscription<String> sub;
-    sub = stream.listen(
-      (delta) {
-        if (!mounted) return;
-        if (!identical(_askSub, sub)) return;
-        setState(() => _streamingAnswer += delta);
-      },
-      onError: (e) {
-        if (!mounted) return;
-        if (!identical(_askSub, sub)) return;
-        setState(() {
-          _askError = '$e';
-          _askSub = null;
-          _asking = false;
-          _pendingQuestion = null;
-          _streamingAnswer = '';
-        });
-        _refresh();
-        SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-      },
-      onDone: () {
-        if (!mounted) return;
-        if (!identical(_askSub, sub)) return;
-        setState(() {
-          _askSub = null;
-          _asking = false;
-          _pendingQuestion = null;
-          _streamingAnswer = '';
-        });
-        _refresh();
-        SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-      },
-      cancelOnError: true,
-    );
+    Future<void> startStream(Stream<String> stream,
+        {required bool fromCloud}) async {
+      late final StreamSubscription<String> sub;
+      sub = stream.listen(
+        (delta) {
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
+          setState(() => _streamingAnswer += delta);
+        },
+        onError: (e) async {
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
 
-    setState(() => _askSub = sub);
+          final hasByok = await hasActiveLlmProfile(backend, sessionKey);
+          if (fromCloud && hasByok && isCloudFallbackableError(e)) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                key: _kAskAiCloudFallbackSnackKey,
+                content: Text(context.t.chat.askAiSetup.body),
+              ),
+            );
+
+            if (!mounted) return;
+            setState(() {
+              _askError = null;
+              _streamingAnswer = '';
+            });
+
+            final byokStream = backend.askAiStream(
+              sessionKey,
+              widget.conversation.id,
+              question: question,
+              topK: 10,
+              thisThreadOnly: _thisThreadOnly,
+            );
+            await startStream(byokStream, fromCloud: false);
+            return;
+          }
+
+          if (!mounted) return;
+          setState(() {
+            _askError = '$e';
+            _askSub = null;
+            _asking = false;
+            _pendingQuestion = null;
+            _streamingAnswer = '';
+          });
+          _refresh();
+          SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+        },
+        onDone: () {
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
+          setState(() {
+            _askSub = null;
+            _asking = false;
+            _pendingQuestion = null;
+            _streamingAnswer = '';
+          });
+          _refresh();
+          SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+        },
+        cancelOnError: true,
+      );
+
+      if (!mounted) return;
+      setState(() => _askSub = sub);
+    }
+
+    await startStream(stream, fromCloud: route == AskAiRouteKind.cloudGateway);
   }
 
   Future<bool> _ensureAskAiDataConsent() async {
@@ -445,6 +528,10 @@ class _ChatPageState extends State<ChatPage> {
         );
         break;
       case _AskAiSetupAction.subscribe:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CloudAccountPage()),
+        );
+        break;
       case null:
         break;
     }

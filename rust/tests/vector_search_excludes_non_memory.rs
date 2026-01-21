@@ -62,12 +62,24 @@ fn lite_search_excludes_non_memory_messages_without_embeddings() {
     let conn = db::open(&app_dir).expect("open db");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
-    db::insert_message_non_memory(&conn, &key, &conversation.id, "user", "老婆 3 月 1 号回台湾")
-        .expect("non-memory");
-    let memory =
-        db::insert_message(&conn, &key, &conversation.id, "user", "回台湾").expect("memory");
+    db::insert_message_non_memory(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "package delivery March 1 details",
+    )
+    .expect("non-memory");
+    let memory = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "package delivery March 1",
+    )
+    .expect("memory");
 
-    let results = db::search_similar_messages_default(&conn, &key, "老婆什么时候回台湾", 1)
+    let results = db::search_similar_messages_default(&conn, &key, "package delivery March 1", 1)
         .expect("search");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].message.content, memory.content);

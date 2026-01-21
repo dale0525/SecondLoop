@@ -6,6 +6,41 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+class Attachment {
+  final String sha256;
+  final String mimeType;
+  final String path;
+  final PlatformInt64 byteLen;
+  final PlatformInt64 createdAtMs;
+
+  const Attachment({
+    required this.sha256,
+    required this.mimeType,
+    required this.path,
+    required this.byteLen,
+    required this.createdAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      sha256.hashCode ^
+      mimeType.hashCode ^
+      path.hashCode ^
+      byteLen.hashCode ^
+      createdAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Attachment &&
+          runtimeType == other.runtimeType &&
+          sha256 == other.sha256 &&
+          mimeType == other.mimeType &&
+          path == other.path &&
+          byteLen == other.byteLen &&
+          createdAtMs == other.createdAtMs;
+}
+
 class Conversation {
   final String id;
   final String title;

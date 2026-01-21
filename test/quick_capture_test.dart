@@ -203,6 +203,19 @@ final class _UnlockedBackend implements AppBackend {
       const Stream<String>.empty();
 
   @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) =>
+      const Stream<String>.empty();
+
+  @override
   Future<Uint8List> deriveSyncKey(String passphrase) async => _key;
 
   @override

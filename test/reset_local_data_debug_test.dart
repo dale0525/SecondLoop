@@ -94,6 +94,10 @@ void main() {
     await pumpAndSettleShort();
 
     await tester.runAsync(() async {
+      await tester.scrollUntilVisible(
+        find.text('Debug: Reset local data'),
+        200,
+      );
       await tester.tap(find.text('Debug: Reset local data'));
     });
     await pumpAndSettleShort();
@@ -266,6 +270,19 @@ final class _FakeBackend implements AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
   }) =>
       throw UnimplementedError();
 

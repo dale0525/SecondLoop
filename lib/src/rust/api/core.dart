@@ -79,6 +79,14 @@ Future<void> dbSetMessageDeleted(
     RustLib.instance.api.crateApiCoreDbSetMessageDeleted(
         appDir: appDir, key: key, messageId: messageId, isDeleted: isDeleted);
 
+Future<Attachment> dbInsertAttachment(
+        {required String appDir,
+        required List<int> key,
+        required List<int> bytes,
+        required String mimeType}) =>
+    RustLib.instance.api.crateApiCoreDbInsertAttachment(
+        appDir: appDir, key: key, bytes: bytes, mimeType: mimeType);
+
 Future<void> dbResetVaultDataPreservingLlmProfiles(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbResetVaultDataPreservingLlmProfiles(
@@ -173,6 +181,27 @@ Stream<String> ragAskAiStream(
         question: question,
         topK: topK,
         thisThreadOnly: thisThreadOnly);
+
+Stream<String> ragAskAiStreamCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStreamCloudGateway(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
 
 Future<Uint8List> syncDeriveKey({required String passphrase}) =>
     RustLib.instance.api.crateApiCoreSyncDeriveKey(passphrase: passphrase);

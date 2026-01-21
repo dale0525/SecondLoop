@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
 use zerocopy::IntoBytes;
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -54,6 +55,15 @@ pub struct LlmProfileConfig {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub model_name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Attachment {
+    pub sha256: String,
+    pub mime_type: String,
+    pub path: String,
+    pub byte_len: i64,
+    pub created_at_ms: i64,
 }
 
 fn db_path(app_dir: &Path) -> PathBuf {
@@ -410,6 +420,23 @@ END;
 COMMIT;
 
 PRAGMA user_version = 7;
+"#,
+        )?;
+    }
+
+    if user_version < 8 {
+        // v8: encrypted attachments (for Android Share Intent).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachments (
+  sha256 TEXT PRIMARY KEY,
+  mime_type TEXT NOT NULL,
+  path TEXT NOT NULL,
+  byte_len INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_created_at ON attachments(created_at);
+PRAGMA user_version = 8;
 "#,
         )?;
     }
@@ -1854,4 +1881,79 @@ pub fn search_similar_messages_in_conversation<E: Embedder + ?Sized>(
         .filter(|sm| sm.message.conversation_id == conversation_id)
         .take(top_k)
         .collect())
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut out = String::with_capacity(64);
+    for b in digest {
+        use std::fmt::Write;
+        let _ = write!(&mut out, "{:02x}", b);
+    }
+    out
+}
+
+pub fn insert_attachment(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    bytes: &[u8],
+    mime_type: &str,
+) -> Result<Attachment> {
+    let sha256 = sha256_hex(bytes);
+    let rel_path = format!("attachments/{sha256}.bin");
+    let full_path = app_dir.join(&rel_path);
+
+    fs::create_dir_all(app_dir.join("attachments"))?;
+    let aad = format!("attachment.bytes:{sha256}");
+    let blob = encrypt_bytes(key, bytes, aad.as_bytes())?;
+    fs::write(&full_path, blob)?;
+
+    let now = now_ms();
+    conn.execute(
+        r#"INSERT OR IGNORE INTO attachments(sha256, mime_type, path, byte_len, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5)"#,
+        params![sha256, mime_type, rel_path, bytes.len() as i64, now],
+    )?;
+
+    let (stored_mime_type, stored_path, stored_byte_len, stored_created_at_ms): (
+        String,
+        String,
+        i64,
+        i64,
+    ) = conn.query_row(
+        r#"SELECT mime_type, path, byte_len, created_at
+           FROM attachments
+           WHERE sha256 = ?1"#,
+        params![sha256],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )?;
+
+    Ok(Attachment {
+        sha256,
+        mime_type: stored_mime_type,
+        path: stored_path,
+        byte_len: stored_byte_len,
+        created_at_ms: stored_created_at_ms,
+    })
+}
+
+pub fn read_attachment_bytes(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    sha256: &str,
+) -> Result<Vec<u8>> {
+    let stored_path: Option<String> = conn
+        .query_row(
+            r#"SELECT path FROM attachments WHERE sha256 = ?1"#,
+            params![sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
+
+    let blob = fs::read(app_dir.join(stored_path))?;
+    let aad = format!("attachment.bytes:{sha256}");
+    decrypt_bytes(key, &blob, aad.as_bytes())
 }

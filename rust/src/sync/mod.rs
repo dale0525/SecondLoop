@@ -367,7 +367,7 @@ pub fn pull(
                             continue;
                         }
                     }
-                    break
+                    break;
                 }
                 Err(e) => return Err(e),
             };

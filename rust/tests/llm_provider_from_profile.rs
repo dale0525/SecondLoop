@@ -3,8 +3,8 @@ use std::net::TcpListener;
 use std::thread;
 
 use secondloop_rust::db::LlmProfileConfig;
-use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::llm;
+use secondloop_rust::llm::ChatDelta;
 
 fn start_one_shot_server(
     body: String,
@@ -20,7 +20,7 @@ fn start_one_shot_server(
 
         let resp = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.as_bytes().len()
+            body.len()
         );
         stream.write_all(resp.as_bytes()).expect("write response");
     });

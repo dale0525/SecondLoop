@@ -29,6 +29,9 @@ build/
 # OS
 .DS_Store
 
+# Local config (do not commit secrets)
+.env.local
+
 # Local tools/cache
 .tool/
 

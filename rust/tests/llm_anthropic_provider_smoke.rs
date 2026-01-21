@@ -6,7 +6,10 @@ use secondloop_rust::llm::anthropic::AnthropicCompatibleProvider;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::rag::AnswerProvider;
 
-fn start_one_shot_server(body: String, content_type: &'static str) -> (String, thread::JoinHandle<()>) {
+fn start_one_shot_server(
+    body: String,
+    content_type: &'static str,
+) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let addr = listener.local_addr().expect("local addr");
 
@@ -17,7 +20,7 @@ fn start_one_shot_server(body: String, content_type: &'static str) -> (String, t
 
         let resp = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.as_bytes().len()
+            body.len()
         );
         stream.write_all(resp.as_bytes()).expect("write response");
     });
@@ -86,4 +89,3 @@ data: {"type":"message_stop"}
         ]
     );
 }
-
