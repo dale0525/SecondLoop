@@ -207,7 +207,24 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           )
-          flutter build macos --release "${build_args[@]}" "${defines[@]}"
+          # flutter build macos defaults to code signing and fails on CI without Apple certs.
+          # Use config-only to generate build settings (build name/number + dart-defines),
+          # then build with xcodebuild while explicitly disabling code signing.
+          flutter build macos --release --config-only "${build_args[@]}" "${defines[@]}"
+          (cd macos && pod install)
+          xcodebuild \
+            -workspace macos/Runner.xcworkspace \
+            -configuration Release \
+            -scheme Runner \
+            -derivedDataPath "$PWD/build/macos" \
+            -destination platform=macOS \
+            OBJROOT="$PWD/build/macos/Build/Intermediates.noindex" \
+            SYMROOT="$PWD/build/macos/Build/Products" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
       - name: Package
         shell: bash
         run: |
