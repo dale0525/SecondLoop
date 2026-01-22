@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 382 (191 per locale)
+/// Strings: 406 (203 per locale)
 ///
-/// Built on 2026-01-21 at 16:35 UTC
+/// Built on 2026-01-22 at 17:17 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -261,6 +261,8 @@ class _StringsSettingsEn {
       _StringsSettingsLlmProfilesEn._(_root);
   late final _StringsSettingsCloudAccountEn cloudAccount =
       _StringsSettingsCloudAccountEn._(_root);
+  late final _StringsSettingsCloudUsageEn cloudUsage =
+      _StringsSettingsCloudUsageEn._(_root);
   late final _StringsSettingsSubscriptionEn subscription =
       _StringsSettingsSubscriptionEn._(_root);
   late final _StringsSettingsSyncEn sync = _StringsSettingsSyncEn._(_root);
@@ -563,7 +565,7 @@ class _StringsSettingsCloudAccountEn {
   // Translations
   String get title => 'Cloud account';
   String get subtitle => 'Sign in to SecondLoop Cloud';
-  String signedInAs({required Object uid}) => 'Signed in as ${uid}';
+  String signedInAs({required Object email}) => 'Signed in as ${email}';
   late final _StringsSettingsCloudAccountErrorsEn errors =
       _StringsSettingsCloudAccountErrorsEn._(_root);
   late final _StringsSettingsCloudAccountFieldsEn fields =
@@ -572,6 +574,21 @@ class _StringsSettingsCloudAccountEn {
       _StringsSettingsCloudAccountActionsEn._(_root);
   late final _StringsSettingsCloudAccountEmailVerificationEn emailVerification =
       _StringsSettingsCloudAccountEmailVerificationEn._(_root);
+}
+
+// Path: settings.cloudUsage
+class _StringsSettingsCloudUsageEn {
+  _StringsSettingsCloudUsageEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Cloud usage';
+  String get subtitle => 'Usage for current billing period';
+  late final _StringsSettingsCloudUsageActionsEn actions =
+      _StringsSettingsCloudUsageActionsEn._(_root);
+  late final _StringsSettingsCloudUsageLabelsEn labels =
+      _StringsSettingsCloudUsageLabelsEn._(_root);
 }
 
 // Path: settings.subscription
@@ -849,6 +866,34 @@ class _StringsSettingsCloudAccountEmailVerificationEn {
       _StringsSettingsCloudAccountEmailVerificationActionsEn._(_root);
   late final _StringsSettingsCloudAccountEmailVerificationMessagesEn messages =
       _StringsSettingsCloudAccountEmailVerificationMessagesEn._(_root);
+}
+
+// Path: settings.cloudUsage.actions
+class _StringsSettingsCloudUsageActionsEn {
+  _StringsSettingsCloudUsageActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get refresh => 'Refresh';
+}
+
+// Path: settings.cloudUsage.labels
+class _StringsSettingsCloudUsageLabelsEn {
+  _StringsSettingsCloudUsageLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get gatewayNotConfigured => 'Cloud gateway is not configured.';
+  String get signInRequired => 'Sign in to view usage.';
+  String get usage => 'Usage:';
+  String get inputTokensUsed30d => 'Input tokens (30d):';
+  String get outputTokensUsed30d => 'Output tokens (30d):';
+  String get tokensUsed30d => 'Tokens (30d):';
+  String get requestsUsed30d => 'Requests (30d):';
+  String get resetAt => 'Resets on:';
+  String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
 // Path: settings.subscription.status
@@ -1192,6 +1237,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsCloudAccountZhCn cloudAccount =
       _StringsSettingsCloudAccountZhCn._(_root);
+  @override
+  late final _StringsSettingsCloudUsageZhCn cloudUsage =
+      _StringsSettingsCloudUsageZhCn._(_root);
   @override
   late final _StringsSettingsSubscriptionZhCn subscription =
       _StringsSettingsSubscriptionZhCn._(_root);
@@ -1657,7 +1705,7 @@ class _StringsSettingsCloudAccountZhCn extends _StringsSettingsCloudAccountEn {
   @override
   String get subtitle => '登录 SecondLoop Cloud';
   @override
-  String signedInAs({required Object uid}) => '已登录：${uid}';
+  String signedInAs({required Object email}) => '已登录：${email}';
   @override
   late final _StringsSettingsCloudAccountErrorsZhCn errors =
       _StringsSettingsCloudAccountErrorsZhCn._(_root);
@@ -1671,6 +1719,28 @@ class _StringsSettingsCloudAccountZhCn extends _StringsSettingsCloudAccountEn {
   late final _StringsSettingsCloudAccountEmailVerificationZhCn
       emailVerification =
       _StringsSettingsCloudAccountEmailVerificationZhCn._(_root);
+}
+
+// Path: settings.cloudUsage
+class _StringsSettingsCloudUsageZhCn extends _StringsSettingsCloudUsageEn {
+  _StringsSettingsCloudUsageZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'Cloud 用量';
+  @override
+  String get subtitle => '当前账期用量';
+  @override
+  late final _StringsSettingsCloudUsageActionsZhCn actions =
+      _StringsSettingsCloudUsageActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsCloudUsageLabelsZhCn labels =
+      _StringsSettingsCloudUsageLabelsZhCn._(_root);
 }
 
 // Path: settings.subscription
@@ -2084,6 +2154,52 @@ class _StringsSettingsCloudAccountEmailVerificationZhCn
       _StringsSettingsCloudAccountEmailVerificationMessagesZhCn._(_root);
 }
 
+// Path: settings.cloudUsage.actions
+class _StringsSettingsCloudUsageActionsZhCn
+    extends _StringsSettingsCloudUsageActionsEn {
+  _StringsSettingsCloudUsageActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get refresh => '刷新';
+}
+
+// Path: settings.cloudUsage.labels
+class _StringsSettingsCloudUsageLabelsZhCn
+    extends _StringsSettingsCloudUsageLabelsEn {
+  _StringsSettingsCloudUsageLabelsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get gatewayNotConfigured => 'Cloud 网关未配置。';
+  @override
+  String get signInRequired => '登录后才能查看用量。';
+  @override
+  String get usage => '用量：';
+  @override
+  String get inputTokensUsed30d => '输入 Tokens（30 天）：';
+  @override
+  String get outputTokensUsed30d => '输出 Tokens（30 天）：';
+  @override
+  String get tokensUsed30d => 'Tokens（30 天）：';
+  @override
+  String get requestsUsed30d => '请求数（30 天）：';
+  @override
+  String get resetAt => '重置时间：';
+  @override
+  String loadFailed({required Object error}) => '加载失败：${error}';
+}
+
 // Path: settings.subscription.status
 class _StringsSettingsSubscriptionStatusZhCn
     extends _StringsSettingsSubscriptionStatusEn {
@@ -2480,7 +2596,7 @@ extension on Translations {
       case 'settings.cloudAccount.subtitle':
         return 'Sign in to SecondLoop Cloud';
       case 'settings.cloudAccount.signedInAs':
-        return ({required Object uid}) => 'Signed in as ${uid}';
+        return ({required Object email}) => 'Signed in as ${email}';
       case 'settings.cloudAccount.errors.missingWebApiKey':
         return 'Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app.';
       case 'settings.cloudAccount.fields.email':
@@ -2514,6 +2630,30 @@ extension on Translations {
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) =>
             'Failed to send verification email: ${error}';
+      case 'settings.cloudUsage.title':
+        return 'Cloud usage';
+      case 'settings.cloudUsage.subtitle':
+        return 'Usage for current billing period';
+      case 'settings.cloudUsage.actions.refresh':
+        return 'Refresh';
+      case 'settings.cloudUsage.labels.gatewayNotConfigured':
+        return 'Cloud gateway is not configured.';
+      case 'settings.cloudUsage.labels.signInRequired':
+        return 'Sign in to view usage.';
+      case 'settings.cloudUsage.labels.usage':
+        return 'Usage:';
+      case 'settings.cloudUsage.labels.inputTokensUsed30d':
+        return 'Input tokens (30d):';
+      case 'settings.cloudUsage.labels.outputTokensUsed30d':
+        return 'Output tokens (30d):';
+      case 'settings.cloudUsage.labels.tokensUsed30d':
+        return 'Tokens (30d):';
+      case 'settings.cloudUsage.labels.requestsUsed30d':
+        return 'Requests (30d):';
+      case 'settings.cloudUsage.labels.resetAt':
+        return 'Resets on:';
+      case 'settings.cloudUsage.labels.loadFailed':
+        return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.subscription.title':
         return 'Subscription';
       case 'settings.subscription.subtitle':
@@ -2880,7 +3020,7 @@ extension on _StringsZhCn {
       case 'settings.cloudAccount.subtitle':
         return '登录 SecondLoop Cloud';
       case 'settings.cloudAccount.signedInAs':
-        return ({required Object uid}) => '已登录：${uid}';
+        return ({required Object email}) => '已登录：${email}';
       case 'settings.cloudAccount.errors.missingWebApiKey':
         return 'Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。';
       case 'settings.cloudAccount.fields.email':
@@ -2913,6 +3053,30 @@ extension on _StringsZhCn {
         return '验证邮件已发送';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) => '发送验证邮件失败：${error}';
+      case 'settings.cloudUsage.title':
+        return 'Cloud 用量';
+      case 'settings.cloudUsage.subtitle':
+        return '当前账期用量';
+      case 'settings.cloudUsage.actions.refresh':
+        return '刷新';
+      case 'settings.cloudUsage.labels.gatewayNotConfigured':
+        return 'Cloud 网关未配置。';
+      case 'settings.cloudUsage.labels.signInRequired':
+        return '登录后才能查看用量。';
+      case 'settings.cloudUsage.labels.usage':
+        return '用量：';
+      case 'settings.cloudUsage.labels.inputTokensUsed30d':
+        return '输入 Tokens（30 天）：';
+      case 'settings.cloudUsage.labels.outputTokensUsed30d':
+        return '输出 Tokens（30 天）：';
+      case 'settings.cloudUsage.labels.tokensUsed30d':
+        return 'Tokens（30 天）：';
+      case 'settings.cloudUsage.labels.requestsUsed30d':
+        return '请求数（30 天）：';
+      case 'settings.cloudUsage.labels.resetAt':
+        return '重置时间：';
+      case 'settings.cloudUsage.labels.loadFailed':
+        return ({required Object error}) => '加载失败：${error}';
       case 'settings.subscription.title':
         return '订阅';
       case 'settings.subscription.subtitle':

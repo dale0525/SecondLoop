@@ -85,7 +85,7 @@
     "cloudAccount": {
       "title": "Cloud account",
       "subtitle": "Sign in to SecondLoop Cloud",
-      "signedInAs": "Signed in as $uid",
+      "signedInAs": "Signed in as $email",
       "errors": {
         "missingWebApiKey": "Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app."
       },
@@ -117,6 +117,24 @@
           "verificationEmailSent": "Verification email sent",
           "verificationEmailSendFailed": "Failed to send verification email: $error"
         }
+      }
+    },
+    "cloudUsage": {
+      "title": "Cloud usage",
+      "subtitle": "Usage for current billing period",
+      "actions": {
+        "refresh": "Refresh"
+      },
+      "labels": {
+        "gatewayNotConfigured": "Cloud gateway is not configured.",
+        "signInRequired": "Sign in to view usage.",
+        "usage": "Usage:",
+        "inputTokensUsed30d": "Input tokens (30d):",
+        "outputTokensUsed30d": "Output tokens (30d):",
+        "tokensUsed30d": "Tokens (30d):",
+        "requestsUsed30d": "Requests (30d):",
+        "resetAt": "Resets on:",
+        "loadFailed": "Failed to load: $error"
       }
     },
     "subscription": {

@@ -7,81 +7,53 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/cloud_usage_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/cloud_account_page.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/settings/cloud_usage_card.dart';
+import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets(
-      'Cloud account shows resend verification when email is unverified',
-      (tester) async {
-    final cloudAuth = _FakeCloudAuthController(
-      idToken: 'test-id-token',
-      uid: 'uid_1',
-      emailVerified: false,
-    );
+  testWidgets('Settings does not show Cloud usage card', (tester) async {
+    SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: CloudAuthScope(
-            controller: cloudAuth,
-            child: const CloudAccountPage(),
+      AppBackendScope(
+        backend: _FakeBackend(),
+        child: CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: Scaffold(body: SettingsPage())),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Signed in as test@example.com'), findsOneWidget);
-    expect(find.textContaining('uid_1'), findsNothing);
-
-    expect(find.byKey(const ValueKey('cloud_resend_verification')),
-        findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('cloud_resend_verification')));
-    await tester.pumpAndSettle();
-
-    expect(cloudAuth.sendEmailVerificationCalls, 1);
+    expect(find.text('Cloud usage'), findsNothing);
   });
 
-  testWidgets(
-      'Ask AI shows verify-email prompt when cloud returns email_not_verified',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
-
-    final backend = _EmailNotVerifiedBackend();
-    final cloudAuth = _FakeCloudAuthController(
-      idToken: 'test-id-token',
-      uid: 'uid_1',
-      emailVerified: false,
-    );
+  testWidgets('Cloud usage summary shows input/output token totals', (tester) async {
+    SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: CloudAuthScope(
-              controller: cloudAuth,
-              gatewayConfig: const CloudGatewayConfig(
-                baseUrl: 'https://gateway.test',
-                modelName: 'gpt-test',
-              ),
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: const ChatPage(
-                  conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
-                    createdAtMs: 0,
-                    updatedAtMs: 0,
-                  ),
-                ),
+          home: Scaffold(
+            body: CloudUsageSummaryView(
+              summary: CloudUsageSummary(
+                usagePercent: 60,
+                resetAtMs: 1700006400000,
               ),
             ),
           ),
@@ -90,38 +62,56 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
-    await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
+    expect(find.text('Usage:'), findsOneWidget);
+    expect(find.text('60%'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('Resets on:'), findsOneWidget);
+  });
+
+  testWidgets('Cloud account page shows Cloud usage card', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: _FakeBackend(),
+        child: CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: Scaffold(body: SettingsPage())),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('askAiStreamCloudGateway'));
-    expect(backend.calls, isNot(contains('askAiStream')));
+    await tester.tap(find.text('Cloud account'));
+    await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('ask_ai_email_not_verified_snack')),
-        findsOneWidget);
-    expect(find.textContaining('HTTP 403'), findsNothing);
+    expect(find.text('Cloud usage'), findsOneWidget);
   });
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {
-  _FakeCloudAuthController({
-    required this.idToken,
-    required this.uid,
-    required this.emailVerified,
-  });
+  _FakeCloudAuthController({this.idToken});
 
-  final String idToken;
+  final String? idToken;
 
   @override
-  final String? uid;
+  String? get uid => 'uid_1';
 
   @override
-  final bool? emailVerified;
+  String? get email => null;
 
   @override
-  String? get email => 'test@example.com';
-
-  int sendEmailVerificationCalls = 0;
+  bool? get emailVerified => null;
 
   @override
   Future<String?> getIdToken() async => idToken;
@@ -130,9 +120,7 @@ final class _FakeCloudAuthController implements CloudAuthController {
   Future<void> refreshUserInfo() async {}
 
   @override
-  Future<void> sendEmailVerification() async {
-    sendEmailVerificationCalls += 1;
-  }
+  Future<void> sendEmailVerification() async {}
 
   @override
   Future<void> signInWithEmailPassword({
@@ -150,9 +138,7 @@ final class _FakeCloudAuthController implements CloudAuthController {
   Future<void> signOut() async {}
 }
 
-final class _EmailNotVerifiedBackend implements AppBackend {
-  final List<String> calls = <String>[];
-
+final class _FakeBackend implements AppBackend {
   @override
   Future<void> init() async {}
 
@@ -190,7 +176,7 @@ final class _EmailNotVerifiedBackend implements AppBackend {
       const <Conversation>[];
 
   @override
-  Future<Conversation> createConversation(Uint8List key, String title) async =>
+  Future<Conversation> createConversation(Uint8List key, String title) =>
       throw UnimplementedError();
 
   @override
@@ -212,7 +198,7 @@ final class _EmailNotVerifiedBackend implements AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) async =>
+  }) =>
       throw UnimplementedError();
 
   @override
@@ -238,7 +224,6 @@ final class _EmailNotVerifiedBackend implements AppBackend {
   Future<List<SimilarMessage>> searchSimilarMessages(
     Uint8List key,
     String query, {
-    String? conversationId,
     int topK = 10,
   }) async =>
       const <SimilarMessage>[];
@@ -252,7 +237,7 @@ final class _EmailNotVerifiedBackend implements AppBackend {
 
   @override
   Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
-      const <String>[];
+      const <String>['secondloop-default-embed-v0'];
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
@@ -260,22 +245,11 @@ final class _EmailNotVerifiedBackend implements AppBackend {
 
   @override
   Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
-      Future<bool>.value(false);
+      Future<bool>.value(modelName != 'secondloop-default-embed-v0');
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[
-        LlmProfile(
-          id: 'p1',
-          name: 'OpenAI',
-          providerType: 'openai-compatible',
-          baseUrl: 'https://api.openai.com/v1',
-          modelName: 'gpt-4o-mini',
-          isActive: true,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-        ),
-      ];
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -286,7 +260,7 @@ final class _EmailNotVerifiedBackend implements AppBackend {
     String? apiKey,
     required String modelName,
     bool setActive = true,
-  }) async =>
+  }) =>
       throw UnimplementedError();
 
   @override
@@ -302,10 +276,8 @@ final class _EmailNotVerifiedBackend implements AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) {
-    calls.add('askAiStream');
-    return Stream<String>.fromIterable(const ['byok']);
-  }
+  }) =>
+      const Stream<String>.empty();
 
   @override
   Stream<String> askAiStreamCloudGateway(
@@ -317,18 +289,12 @@ final class _EmailNotVerifiedBackend implements AppBackend {
     required String gatewayBaseUrl,
     required String idToken,
     required String modelName,
-  }) {
-    calls.add('askAiStreamCloudGateway');
-    return Stream<String>.error(
-      Exception(
-        'cloud-gateway request failed: HTTP 403 {"error":"email_not_verified"}',
-      ),
-    );
-  }
+  }) =>
+      const Stream<String>.empty();
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 2));
+      Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<void> syncWebdavTestConnection({

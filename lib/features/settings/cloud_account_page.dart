@@ -8,6 +8,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/subscription/cloud_subscription_controller.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
+import 'cloud_usage_card.dart';
 
 class CloudAccountPage extends StatefulWidget {
   const CloudAccountPage({super.key});
@@ -225,6 +226,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     final scope = CloudAuthScope.maybeOf(context);
     final controller = scope?.controller;
     final uid = controller?.uid;
+    final email = controller?.email;
 
     if (uid != _subscriptionUid) {
       _subscriptionUid = uid;
@@ -298,7 +300,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.t.settings.cloudAccount.signedInAs(uid: uid),
+                      context.t.settings.cloudAccount
+                          .signedInAs(email: email ?? '—'),
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 12),
@@ -423,6 +426,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            const CloudUsageCard(),
           ],
           if (_error != null) ...[
             const SizedBox(height: 16),

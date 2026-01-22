@@ -85,7 +85,7 @@
     "cloudAccount": {
       "title": "Cloud 账号",
       "subtitle": "登录 SecondLoop Cloud",
-      "signedInAs": "已登录：$uid",
+      "signedInAs": "已登录：$email",
       "errors": {
         "missingWebApiKey": "Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。"
       },
@@ -117,6 +117,24 @@
           "verificationEmailSent": "验证邮件已发送",
           "verificationEmailSendFailed": "发送验证邮件失败：$error"
         }
+      }
+    },
+    "cloudUsage": {
+      "title": "Cloud 用量",
+      "subtitle": "当前账期用量",
+      "actions": {
+        "refresh": "刷新"
+      },
+      "labels": {
+        "gatewayNotConfigured": "Cloud 网关未配置。",
+        "signInRequired": "登录后才能查看用量。",
+        "usage": "用量：",
+        "inputTokensUsed30d": "输入 Tokens（30 天）：",
+        "outputTokensUsed30d": "输出 Tokens（30 天）：",
+        "tokensUsed30d": "Tokens（30 天）：",
+        "requestsUsed30d": "请求数（30 天）：",
+        "resetAt": "重置时间：",
+        "loadFailed": "加载失败：$error"
       }
     },
     "subscription": {

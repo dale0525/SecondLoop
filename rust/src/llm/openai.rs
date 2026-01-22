@@ -10,6 +10,7 @@ use super::ChatDelta;
 
 #[derive(Debug, Deserialize)]
 struct OpenAiStreamChunk {
+    #[serde(default)]
     choices: Vec<OpenAiStreamChoice>,
 }
 

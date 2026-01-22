@@ -390,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         builder: (_) => const SyncSettingsPage(),
                       ),
                     );
-                  },
+              },
           ),
         ]),
         if (kDebugMode) ...[

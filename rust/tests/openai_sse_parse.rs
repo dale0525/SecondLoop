@@ -9,6 +9,8 @@ data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{"content":"Hello"},"fi
 
 data: {"id":"chatcmpl-123","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}
 
+data: {"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}
+
 data: [DONE]
 "#;
 
