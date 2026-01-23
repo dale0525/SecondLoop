@@ -23,7 +23,7 @@ void main() {
       AppBackendScope(
         backend: _FakeBackend(),
         child: CloudAuthScope(
-          controller: _FakeCloudAuthController(),
+          controller: _FakeCloudAuthController(idToken: ''),
           gatewayConfig: const CloudGatewayConfig(
             baseUrl: 'https://gateway.test',
             modelName: 'cloud',
@@ -49,7 +49,7 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: CloudUsageSummaryView(
               summary: CloudUsageSummary(
@@ -76,7 +76,7 @@ void main() {
       AppBackendScope(
         backend: _FakeBackend(),
         child: CloudAuthScope(
-          controller: _FakeCloudAuthController(),
+          controller: _FakeCloudAuthController(idToken: ''),
           gatewayConfig: const CloudGatewayConfig(
             baseUrl: 'https://gateway.test',
             modelName: 'cloud',
