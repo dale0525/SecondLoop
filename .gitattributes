@@ -1,2 +1,12 @@
+# Normalize line endings for text files.
+* text=auto
+
+# Keep LF to prevent cross-platform CI churn.
+*.dart text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
 # SCM syntax highlighting & preventing 3-way merges
-pixi.lock merge=binary linguist-language=YAML linguist-generated=true -diff
+pixi.lock -text merge=binary linguist-language=YAML linguist-generated=true -diff

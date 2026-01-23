@@ -43,7 +43,8 @@ void main() {
     expect(find.text('Cloud usage'), findsNothing);
   });
 
-  testWidgets('Cloud usage summary shows input/output token totals', (tester) async {
+  testWidgets('Cloud usage summary shows input/output token totals',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(

@@ -67,7 +67,16 @@ jobs:
         run: flutter pub get
       - name: Format check
         if: needs.changes.outputs.flutter == 'true'
-        run: dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed
+        run: |
+          dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed || {
+            echo ""
+            echo "Formatting required."
+            echo "Fix locally with:"
+            echo "  dart format lib test rust_builder integration_test test_driver"
+            echo "Or (recommended):"
+            echo "  pixi run fmt"
+            exit 1
+          }
       - name: Analyze
         if: needs.changes.outputs.flutter == 'true'
         run: flutter analyze

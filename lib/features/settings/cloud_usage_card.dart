@@ -133,7 +133,8 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
     final body = switch ((baseUrl.trim().isEmpty, uid == null)) {
       (true, _) =>
         Text(context.t.settings.cloudUsage.labels.gatewayNotConfigured),
-      (false, true) => Text(context.t.settings.cloudUsage.labels.signInRequired),
+      (false, true) =>
+        Text(context.t.settings.cloudUsage.labels.signInRequired),
       (false, false) when _busy =>
         const Center(child: CircularProgressIndicator()),
       (false, false) when _error != null => Text(

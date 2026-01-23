@@ -3,6 +3,7 @@
 ## Quick start (no secrets needed)
 
 - Install Flutter via Pixi/FVM: `pixi run setup-flutter`
+- Install git hooks (auto-format on commit): `pixi run install-git-hooks`
 - Run formatting:
   - Check (matches CI): `pixi run fmt-check`
   - Auto-fix: `pixi run fmt`

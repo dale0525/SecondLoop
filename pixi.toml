@@ -8,6 +8,7 @@ version = "0.1.0"
 [tasks]
 setup-flutter = "dart pub global activate fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
 init-env = "bash scripts/init_env.sh"
+install-git-hooks = "bash scripts/install_git_hooks.sh"
 release = "bash scripts/release_tag.sh"
 setup-android-sdk = "bash scripts/setup_android_sdk.sh"
 setup-rustup = "bash scripts/setup_rustup.sh"

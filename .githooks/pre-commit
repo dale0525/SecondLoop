@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+die() {
+  echo "pre-commit: $*" >&2
+  exit 1
+}
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${repo_root}" ]]; then
+  exit 0
+fi
+
+cd "${repo_root}"
+
+dart_files=()
+while IFS= read -r file; do
+  [[ "${file}" == *.dart ]] || continue
+  dart_files+=("${file}")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ ${#dart_files[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+dart_bin=""
+if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+  dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
+elif command -v dart >/dev/null 2>&1; then
+  dart_bin="$(command -v dart)"
+else
+  die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
+fi
+
+stashed=0
+cleanup() {
+  if (( stashed )); then
+    if ! git stash pop -q; then
+      trap - EXIT
+      echo "pre-commit: Failed to restore unstaged changes from stash. Resolve conflicts and re-run commit." >&2
+      exit 1
+    fi
+  fi
+}
+trap cleanup EXIT
+
+if ! git diff --quiet; then
+  git stash push -k -q -m "pre-commit(autoformat)"
+  stashed=1
+fi
+
+"${dart_bin}" format "${dart_files[@]}"
+git add -- "${dart_files[@]}"
