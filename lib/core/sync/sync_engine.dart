@@ -136,6 +136,10 @@ final class SyncEngine {
     _pushDebounceTimer = Timer(pushDebounce, _queuePush);
   }
 
+  void notifyExternalChange() {
+    _notifyChange();
+  }
+
   void triggerPushNow() {
     if (!_running) return;
     _queuePush();

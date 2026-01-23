@@ -1,73 +1,37 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/features/share/share_ingest.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  test('ShareIngest drains queued text into Main Stream', () async {
+  test('ShareIngest dedups duplicate payloads in a short window', () async {
     SharedPreferences.setMockInitialValues({});
 
-    final backend = _ShareBackend();
+    final backend = _CaptureBackend();
     final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
 
     await ShareIngest.enqueueText('hello');
+    await ShareIngest.enqueueText('hello');
 
-    final processed = await ShareIngest.drainQueue(backend, sessionKey);
-    expect(processed, 1);
+    await ShareIngest.drainQueue(backend, sessionKey);
+
     expect(backend.insertedContents, ['hello']);
-
-    final processedAgain = await ShareIngest.drainQueue(backend, sessionKey);
-    expect(processedAgain, 0);
-  });
-
-  test('ShareIngest drains queued image via handler', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final backend = _ShareBackend();
-    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
-
-    final dir = await Directory.systemTemp.createTemp('secondloop_share_');
-    addTearDown(() async => dir.delete(recursive: true));
-
-    final file = File('${dir.path}/img.bin');
-    await file.writeAsBytes([1, 2, 3]);
-
-    await ShareIngest.enqueueImage(
-      tempPath: file.path,
-      mimeType: 'image/png',
-    );
-
-    String? drainedPath;
-    String? drainedMimeType;
-    final processed = await ShareIngest.drainQueue(
-      backend,
-      sessionKey,
-      onImage: (path, mimeType) async {
-        drainedPath = path;
-        drainedMimeType = mimeType;
-        await File(path).delete();
-        return 'sha256_test';
-      },
-    );
-
-    expect(processed, 1);
-    expect(drainedPath, file.path);
-    expect(drainedMimeType, 'image/png');
-    expect(await file.exists(), false);
-    expect(backend.insertedContents, ['Shared image (image/png)']);
-    expect(backend.linkCalls, ['m1:sha256_test']);
   });
 }
 
-final class _ShareBackend implements AppBackend, AttachmentsBackend {
+final class _CaptureBackend implements AppBackend {
   final List<String> insertedContents = <String>[];
-  final List<String> linkCalls = <String>[];
+
+  static const _mainStream = Conversation(
+    id: 'main_stream',
+    title: 'Main Stream',
+    createdAtMs: 0,
+    updatedAtMs: 0,
+  );
 
   @override
   Future<void> init() async {}
@@ -103,7 +67,7 @@ final class _ShareBackend implements AppBackend, AttachmentsBackend {
 
   @override
   Future<List<Conversation>> listConversations(Uint8List key) async =>
-      const <Conversation>[];
+      const <Conversation>[_mainStream];
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
@@ -111,12 +75,7 @@ final class _ShareBackend implements AppBackend, AttachmentsBackend {
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      const Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
-        createdAtMs: 0,
-        updatedAtMs: 0,
-      );
+      _mainStream;
 
   @override
   Future<List<Message>> listMessages(
@@ -139,25 +98,6 @@ final class _ShareBackend implements AppBackend, AttachmentsBackend {
       createdAtMs: 0,
     );
   }
-
-  @override
-  Future<void> linkAttachmentToMessage(
-    Uint8List key,
-    String messageId, {
-    required String attachmentSha256,
-  }) async {
-    linkCalls.add('$messageId:$attachmentSha256');
-  }
-
-  @override
-  Future<List<Attachment>> listMessageAttachments(
-          Uint8List key, String messageId) async =>
-      const <Attachment>[];
-
-  @override
-  Future<Uint8List> readAttachmentBytes(Uint8List key,
-          {required String sha256}) async =>
-      Uint8List(0);
 
   @override
   Future<void> editMessage(
@@ -203,8 +143,9 @@ final class _ShareBackend implements AppBackend, AttachmentsBackend {
       'secondloop-default-embed-v0';
 
   @override
-  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
-      Future<bool>.value(false);
+  Future<bool> setActiveEmbeddingModelName(
+          Uint8List key, String modelName) async =>
+      false;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>

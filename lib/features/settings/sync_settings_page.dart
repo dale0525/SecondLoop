@@ -282,6 +282,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
       });
+      if (pulled > 0 && mounted) {
+        SyncEngineScope.maybeOf(context)?.notifyExternalChange();
+      }
       _showSnack(t.sync.pulledOps(count: pulled));
     } catch (e) {
       _showSnack(t.sync.pullFailed(error: '$e'));

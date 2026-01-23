@@ -21,6 +21,7 @@ final class SyncConfigStore {
   Future<SharedPreferences>? _prefsFuture;
 
   bool _loaded = false;
+  String? _lastRaw;
   Map<String, String> _cache = <String, String>{};
 
   static const kBackendType = 'sync_backend_type'; // webdav | localdir
@@ -185,6 +186,7 @@ final class SyncConfigStore {
   Future<Map<String, String>> _loadConfigMap() async {
     return _serial(() async {
       await _ensureLoaded();
+      await _reloadIfChanged();
       return Map<String, String>.from(_cache);
     });
   }
@@ -216,9 +218,49 @@ final class SyncConfigStore {
     await _serial(() async {
       final prefs = await _prefs();
       await prefs.remove(_kPrefsBlobKey);
+      _lastRaw = null;
       _cache = <String, String>{};
       _loaded = true;
     });
+  }
+
+  Future<void> _reloadIfChanged() async {
+    if (!_loaded) return;
+
+    final prefs = await _prefs();
+    final raw = prefs.getString(_kPrefsBlobKey);
+    if (raw == _lastRaw) return;
+
+    if (raw == null || raw.trim().isEmpty) {
+      _lastRaw = null;
+      _cache = <String, String>{};
+      return;
+    }
+
+    _lastRaw = raw;
+    _cache = _decodeRawConfigMap(raw);
+  }
+
+  Map<String, String> _decodeRawConfigMap(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return <String, String>{};
+
+      final result = <String, String>{};
+      for (final entry in decoded.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value is String) {
+          result[key] = value;
+          continue;
+        }
+        if (value == null) continue;
+        result[key] = value.toString();
+      }
+      return result;
+    } catch (_) {
+      return <String, String>{};
+    }
   }
 
   Future<void> _ensureLoaded() async {
@@ -235,34 +277,14 @@ final class SyncConfigStore {
         return;
       }
 
+      _lastRaw = null;
       _cache = <String, String>{};
       _loaded = true;
       return;
     }
 
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        _cache = <String, String>{};
-        _loaded = true;
-        return;
-      }
-
-      final result = <String, String>{};
-      for (final entry in decoded.entries) {
-        final key = entry.key;
-        final value = entry.value;
-        if (value is String) {
-          result[key] = value;
-          continue;
-        }
-        if (value == null) continue;
-        result[key] = value.toString();
-      }
-      _cache = result;
-    } catch (_) {
-      _cache = <String, String>{};
-    }
+    _lastRaw = raw;
+    _cache = _decodeRawConfigMap(raw);
 
     _loaded = true;
   }
@@ -313,8 +335,11 @@ final class SyncConfigStore {
     final prefs = await _prefs();
     if (_cache.isEmpty) {
       await prefs.remove(_kPrefsBlobKey);
+      _lastRaw = null;
       return;
     }
-    await prefs.setString(_kPrefsBlobKey, jsonEncode(_cache));
+    final raw = jsonEncode(_cache);
+    await prefs.setString(_kPrefsBlobKey, raw);
+    _lastRaw = raw;
   }
 }

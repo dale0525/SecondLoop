@@ -441,6 +441,25 @@ PRAGMA user_version = 8;
         )?;
     }
 
+    if user_version < 9 {
+        // v9: message <-> attachment associations.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS message_attachments (
+  message_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (message_id, attachment_sha256),
+  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message_created_at
+  ON message_attachments(message_id, created_at);
+PRAGMA user_version = 9;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -1956,4 +1975,47 @@ pub fn read_attachment_bytes(
     let blob = fs::read(app_dir.join(stored_path))?;
     let aad = format!("attachment.bytes:{sha256}");
     decrypt_bytes(key, &blob, aad.as_bytes())
+}
+
+pub fn link_attachment_to_message(
+    conn: &Connection,
+    message_id: &str,
+    attachment_sha256: &str,
+) -> Result<()> {
+    let now = now_ms();
+    conn.execute(
+        r#"INSERT OR IGNORE INTO message_attachments(message_id, attachment_sha256, created_at)
+           VALUES (?1, ?2, ?3)"#,
+        params![message_id, attachment_sha256, now],
+    )?;
+    Ok(())
+}
+
+pub fn list_message_attachments(
+    conn: &Connection,
+    _key: &[u8; 32],
+    message_id: &str,
+) -> Result<Vec<Attachment>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT a.sha256, a.mime_type, a.path, a.byte_len, a.created_at
+FROM attachments a
+JOIN message_attachments ma ON ma.attachment_sha256 = a.sha256
+WHERE ma.message_id = ?1
+ORDER BY a.created_at ASC, a.sha256 ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![message_id])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(Attachment {
+            sha256: row.get(0)?,
+            mime_type: row.get(1)?,
+            path: row.get(2)?,
+            byte_len: row.get(3)?,
+            created_at_ms: row.get(4)?,
+        });
+    }
+    Ok(result)
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/backend/app_backend.dart';
@@ -84,11 +85,11 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
 
-      Future<void> Function(String path, String mimeType)? onImage;
+      Future<String> Function(String path, String mimeType)? onImage;
       if (backend is NativeAppBackend) {
         onImage = (path, mimeType) async {
-          final bytes = await File(path).readAsBytes();
-          await backend.insertAttachment(
+          final bytes = await compute(_readFileBytes, path);
+          final attachment = await backend.insertAttachment(
             sessionKey,
             bytes: bytes,
             mimeType: mimeType,
@@ -98,6 +99,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           } catch (_) {
             // ignore
           }
+          return attachment.sha256;
         };
       }
 
@@ -115,3 +117,5 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
   @override
   Widget build(BuildContext context) => widget.child;
 }
+
+Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();

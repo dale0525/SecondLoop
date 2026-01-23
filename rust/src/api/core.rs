@@ -159,6 +159,36 @@ pub fn db_insert_attachment(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_link_attachment_to_message(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    attachment_sha256: String,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::link_attachment_to_message(&conn, &message_id, &attachment_sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_message_attachments(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+) -> Result<Vec<db::Attachment>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_message_attachments(&conn, &key, &message_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_read_attachment_bytes(app_dir: String, key: Vec<u8>, sha256: String) -> Result<Vec<u8>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::read_attachment_bytes(&conn, &key, Path::new(&app_dir), &sha256)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_reset_vault_data_preserving_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<()> {
     let key = key_from_bytes(key)?;
     auth::validate_key(Path::new(&app_dir), &key)?;

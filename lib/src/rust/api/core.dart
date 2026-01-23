@@ -87,6 +87,31 @@ Future<Attachment> dbInsertAttachment(
     RustLib.instance.api.crateApiCoreDbInsertAttachment(
         appDir: appDir, key: key, bytes: bytes, mimeType: mimeType);
 
+Future<void> dbLinkAttachmentToMessage(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required String attachmentSha256}) =>
+    RustLib.instance.api.crateApiCoreDbLinkAttachmentToMessage(
+        appDir: appDir,
+        key: key,
+        messageId: messageId,
+        attachmentSha256: attachmentSha256);
+
+Future<List<Attachment>> dbListMessageAttachments(
+        {required String appDir,
+        required List<int> key,
+        required String messageId}) =>
+    RustLib.instance.api.crateApiCoreDbListMessageAttachments(
+        appDir: appDir, key: key, messageId: messageId);
+
+Future<Uint8List> dbReadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreDbReadAttachmentBytes(
+        appDir: appDir, key: key, sha256: sha256);
+
 Future<void> dbResetVaultDataPreservingLlmProfiles(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbResetVaultDataPreservingLlmProfiles(

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
@@ -116,6 +117,64 @@ void main() {
 
     engine.stop();
   });
+
+  testWidgets('Manual Pull notifies sync listeners when ops were applied',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _SyncSettingsBackend(webdavPullResult: 1);
+
+    final runner = _FakeRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => _webdavConfig(),
+      pushDebounce: const Duration(milliseconds: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    var changeNotifications = 0;
+    engine.changes.addListener(() => changeNotifications += 1);
+
+    await tester.pumpWidget(wrapWithI18n(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SyncEngineScope(
+              engine: engine,
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Base URL',
+      ),
+      'https://example.com/dav',
+    );
+    await tester.pump();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Pull'));
+    await tester.pumpAndSettle();
+
+    expect(changeNotifications, 1);
+    engine.stop();
+  });
 }
 
 Widget _wrap({
@@ -164,7 +223,10 @@ final class _FakeRunner implements SyncRunner {
 }
 
 class _SyncSettingsBackend implements AppBackend {
+  _SyncSettingsBackend({this.webdavPullResult = 0});
+
   int webdavTestCalls = 0;
+  final int webdavPullResult;
 
   @override
   Future<void> init() async {}
@@ -357,7 +419,7 @@ class _SyncSettingsBackend implements AppBackend {
     String? password,
     required String remoteRoot,
   }) async =>
-      0;
+      webdavPullResult;
 
   @override
   Future<void> syncLocaldirTestConnection({

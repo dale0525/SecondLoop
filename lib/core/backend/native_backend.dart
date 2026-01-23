@@ -11,6 +11,7 @@ import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
 import 'app_backend.dart';
+import 'attachments_backend.dart';
 
 typedef AppDirProvider = Future<String> Function();
 
@@ -35,7 +36,7 @@ typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String mimeType,
 });
 
-class NativeAppBackend implements AppBackend {
+class NativeAppBackend implements AppBackend, AttachmentsBackend {
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
@@ -257,6 +258,45 @@ class NativeAppBackend implements AppBackend {
       key: key,
       bytes: bytes,
       mimeType: mimeType,
+    );
+  }
+
+  @override
+  Future<void> linkAttachmentToMessage(
+    Uint8List key,
+    String messageId, {
+    required String attachmentSha256,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbLinkAttachmentToMessage(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      attachmentSha256: attachmentSha256,
+    );
+  }
+
+  @override
+  Future<List<Attachment>> listMessageAttachments(
+      Uint8List key, String messageId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListMessageAttachments(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+    );
+  }
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbReadAttachmentBytes(
+      appDir: appDir,
+      key: key,
+      sha256: sha256,
     );
   }
 

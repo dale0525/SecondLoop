@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
+import '../../core/backend/attachments_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -13,6 +14,8 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../attachments/attachment_card.dart';
+import '../attachments/attachment_viewer_page.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
 
@@ -28,6 +31,8 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   Future<List<Message>>? _messagesFuture;
+  final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
+      <String, Future<List<Attachment>>>{};
   bool _sending = false;
   bool _asking = false;
   bool _stopRequested = false;
@@ -209,6 +214,7 @@ class _ChatPageState extends State<ChatPage> {
   void _refresh() {
     setState(() {
       _messagesFuture = _loadMessages();
+      _attachmentsFuturesByMessageId.clear();
     });
   }
 
@@ -751,6 +757,14 @@ class _ChatPageState extends State<ChatPage> {
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         itemCount: messages.length + extraCount,
                         itemBuilder: (context, index) {
+                          final backend = AppBackendScope.of(context);
+                          final attachmentsBackend =
+                              backend is AttachmentsBackend
+                                  ? backend as AttachmentsBackend
+                                  : null;
+                          final sessionKey =
+                              SessionScope.of(context).sessionKey;
+
                           Message? msg;
                           String? textOverride;
                           if (index < messages.length) {
@@ -803,6 +817,10 @@ class _ChatPageState extends State<ChatPage> {
                               ? colorScheme.primaryContainer
                               : colorScheme.surface;
 
+                          final supportsAttachments =
+                              attachmentsBackend != null &&
+                                  !stableMsg.id.startsWith('pending_');
+
                           return Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -828,8 +846,81 @@ class _ChatPageState extends State<ChatPage> {
                                           horizontal: 14,
                                           vertical: 12,
                                         ),
-                                        child: Text(
-                                            textOverride ?? stableMsg.content),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(textOverride ??
+                                                stableMsg.content),
+                                            if (supportsAttachments)
+                                              FutureBuilder(
+                                                future:
+                                                    _attachmentsFuturesByMessageId
+                                                        .putIfAbsent(
+                                                  stableMsg.id,
+                                                  () => attachmentsBackend!
+                                                      .listMessageAttachments(
+                                                    sessionKey,
+                                                    stableMsg.id,
+                                                  ),
+                                                ),
+                                                builder: (context, snapshot) {
+                                                  final items = snapshot.data ??
+                                                      const <Attachment>[];
+                                                  if (items.isEmpty) {
+                                                    return const SizedBox
+                                                        .shrink();
+                                                  }
+
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                      top: 8,
+                                                    ),
+                                                    child:
+                                                        SingleChildScrollView(
+                                                      scrollDirection:
+                                                          Axis.horizontal,
+                                                      child: Row(
+                                                        children: [
+                                                          for (final attachment
+                                                              in items)
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                right: 8,
+                                                              ),
+                                                              child:
+                                                                  AttachmentCard(
+                                                                attachment:
+                                                                    attachment,
+                                                                onTap: () {
+                                                                  Navigator.of(
+                                                                          context)
+                                                                      .push(
+                                                                    MaterialPageRoute(
+                                                                      builder:
+                                                                          (context) {
+                                                                        return AttachmentViewerPage(
+                                                                          attachment:
+                                                                              attachment,
+                                                                        );
+                                                                      },
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
