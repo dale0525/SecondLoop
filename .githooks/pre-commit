@@ -13,23 +13,55 @@ fi
 
 cd "${repo_root}"
 
-dart_files=()
+staged_files=()
 while IFS= read -r file; do
-  [[ "${file}" == *.dart ]] || continue
-  dart_files+=("${file}")
+  staged_files+=("${file}")
 done < <(git diff --cached --name-only --diff-filter=ACMR)
 
-if [[ ${#dart_files[@]} -eq 0 ]]; then
+if [[ ${#staged_files[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+dart_files=()
+run_flutter_checks=0
+for file in "${staged_files[@]}"; do
+  if [[ "${file}" == *.dart ]]; then
+    dart_files+=("${file}")
+    run_flutter_checks=1
+    continue
+  fi
+
+  case "${file}" in
+    analysis_options.yaml | pubspec.yaml | pubspec.lock)
+      run_flutter_checks=1
+      ;;
+  esac
+done
+
+if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 ]]; then
   exit 0
 fi
 
 dart_bin=""
-if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
-  dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
-elif command -v dart >/dev/null 2>&1; then
-  dart_bin="$(command -v dart)"
-else
-  die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
+if [[ ${#dart_files[@]} -ne 0 ]]; then
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+    dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
+  elif command -v dart >/dev/null 2>&1; then
+    dart_bin="$(command -v dart)"
+  else
+    die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
+  fi
+fi
+
+flutter_bin=""
+if [[ ${run_flutter_checks} -ne 0 ]]; then
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+    flutter_bin="${repo_root}/.fvm/flutter_sdk/bin/flutter"
+  elif command -v flutter >/dev/null 2>&1; then
+    flutter_bin="$(command -v flutter)"
+  else
+    die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
+  fi
 fi
 
 stashed=0
@@ -44,10 +76,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! git diff --quiet; then
-  git stash push -k -q -m "pre-commit(autoformat)"
+if ! git diff --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  git stash push -k -u -q -m "pre-commit(worktree)"
   stashed=1
 fi
 
-"${dart_bin}" format "${dart_files[@]}"
-git add -- "${dart_files[@]}"
+if [[ ${#dart_files[@]} -ne 0 ]]; then
+  "${dart_bin}" format "${dart_files[@]}"
+  git add -- "${dart_files[@]}"
+fi
+
+if [[ ${run_flutter_checks} -ne 0 ]]; then
+  if ! "${flutter_bin}" analyze; then
+    echo "" >&2
+    echo "pre-commit: flutter analyze failed." >&2
+    echo "Fix locally with: pixi run analyze" >&2
+    exit 1
+  fi
+fi

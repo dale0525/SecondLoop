@@ -859,7 +859,7 @@ class _ChatPageState extends State<ChatPage> {
                                                     _attachmentsFuturesByMessageId
                                                         .putIfAbsent(
                                                   stableMsg.id,
-                                                  () => attachmentsBackend!
+                                                  () => attachmentsBackend
                                                       .listMessageAttachments(
                                                     sessionKey,
                                                     stableMsg.id,
