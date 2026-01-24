@@ -255,7 +255,6 @@ class _ChatPageState extends State<ChatPage> {
     final settings = await ActionsSettingsStore.load();
 
     final nowLocal = DateTime.now();
-    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
     late final List<Todo> todos;
     try {
       todos = await backend.listTodos(sessionKey);
@@ -263,7 +262,7 @@ class _ChatPageState extends State<ChatPage> {
       return 0;
     }
 
-    var dueCount = 0;
+    var pendingCount = 0;
     for (final todo in todos) {
       final nextMs = todo.nextReviewAtMs;
       final stage = todo.reviewStage;
@@ -294,17 +293,14 @@ class _ChatPageState extends State<ChatPage> {
         } catch (_) {
           return 0;
         }
-        continue;
       }
 
       if (todo.dueAtMs != null) continue;
-      if (nextMs <= nowUtcMs) {
-        if (todo.status == 'done' || todo.status == 'dismissed') continue;
-        dueCount += 1;
-      }
+      if (todo.status == 'done' || todo.status == 'dismissed') continue;
+      pendingCount += 1;
     }
 
-    return dueCount;
+    return pendingCount;
   }
 
   void _refresh() {

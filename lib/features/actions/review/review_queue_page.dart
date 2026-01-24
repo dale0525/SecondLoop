@@ -37,7 +37,6 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
     final settings = await ActionsSettingsStore.load();
 
     final nowLocal = DateTime.now();
-    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
     final todos = await backend.listTodos(sessionKey);
 
     var changed = false;
@@ -84,14 +83,16 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
       setState(() {});
     }
 
-    return normalized
+    final pending = normalized
         .where((t) =>
+            t.reviewStage != null &&
             t.nextReviewAtMs != null &&
-            t.nextReviewAtMs! <= nowUtcMs &&
             t.status != _kTodoStatusDone &&
             t.status != _kTodoStatusDismissed &&
             t.dueAtMs == null)
         .toList(growable: false);
+    pending.sort((a, b) => a.nextReviewAtMs!.compareTo(b.nextReviewAtMs!));
+    return pending;
   }
 
   Future<void> _refresh() async {
