@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -27,6 +29,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   static const _kPassphrasePlaceholder = '********';
 
   final _baseUrlController = TextEditingController();
+  final _managedVaultBaseUrlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _localDirController = TextEditingController();
@@ -35,6 +38,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   bool _busy = false;
   bool _passphraseIsPlaceholder = false;
+  bool _showManagedVaultEndpointOverride = false;
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
 
@@ -50,6 +54,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   @override
   void dispose() {
     _baseUrlController.dispose();
+    _managedVaultBaseUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _localDirController.dispose();
@@ -62,11 +67,13 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final all = await _store.readAll();
     final backendType = switch (all[SyncConfigStore.kBackendType]) {
       'localdir' => SyncBackendType.localDir,
+      'managedvault' => SyncBackendType.managedVault,
       _ => SyncBackendType.webdav,
     };
     final autoValue = all[SyncConfigStore.kAutoEnabled];
     final autoEnabled = autoValue == null ? true : autoValue == '1';
     final baseUrl = all[SyncConfigStore.kWebdavBaseUrl];
+    final managedVaultBaseUrl = all[SyncConfigStore.kManagedVaultBaseUrl];
     final username = all[SyncConfigStore.kWebdavUsername];
     final password = all[SyncConfigStore.kWebdavPassword];
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
@@ -78,6 +85,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       _backendType = backendType;
       _autoEnabled = autoEnabled;
       _baseUrlController.text = baseUrl ?? '';
+      _managedVaultBaseUrlController.text = managedVaultBaseUrl ?? '';
       _usernameController.text = username ?? '';
       _passwordController.text = password ?? '';
       _remoteRootController.text = remoteRoot ?? _remoteRootController.text;
@@ -103,15 +111,24 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   Future<bool> _persistBackendConfig() async {
     final t = context.t;
-    final remoteRoot = _requiredTrimmed(_remoteRootController);
-    if (remoteRoot.isEmpty) {
-      _showSnack(t.sync.remoteRootRequired);
+    final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
+    final resolvedRemoteRoot = switch (_backendType) {
+      SyncBackendType.managedVault =>
+        cloudUid == null || cloudUid.isEmpty ? '' : cloudUid,
+      _ => _requiredTrimmed(_remoteRootController),
+    };
+    if (resolvedRemoteRoot.isEmpty) {
+      _showSnack(
+        _backendType == SyncBackendType.managedVault
+            ? t.sync.cloudManagedVault.signInRequired
+            : t.sync.remoteRootRequired,
+      );
       return false;
     }
 
     await _store.writeBackendType(_backendType);
     await _store.writeAutoEnabled(_autoEnabled);
-    await _store.writeRemoteRoot(remoteRoot);
+    await _store.writeRemoteRoot(resolvedRemoteRoot);
 
     switch (_backendType) {
       case SyncBackendType.webdav:
@@ -131,6 +148,17 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
           return false;
         }
         await _store.writeLocalDir(localDir);
+        break;
+      case SyncBackendType.managedVault:
+        if (kDebugMode && _showManagedVaultEndpointOverride) {
+          await _store.writeManagedVaultBaseUrl(
+              _requiredTrimmed(_managedVaultBaseUrlController));
+        }
+        final resolved = await _store.resolveManagedVaultBaseUrl();
+        if (resolved == null || resolved.trim().isEmpty) {
+          _showSnack(t.sync.baseUrlRequired);
+          return false;
+        }
         break;
     }
 
@@ -161,6 +189,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
           localDir: _requiredTrimmed(_localDirController),
           remoteRoot: remoteRoot,
         );
+        break;
+      case SyncBackendType.managedVault:
+        // Best-effort: managed vault connectivity is verified via push/pull.
         break;
     }
   }
@@ -239,6 +270,25 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             localDir: _requiredTrimmed(_localDirController),
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
+        SyncBackendType.managedVault => () async {
+            final cloudAuth = CloudAuthScope.of(context).controller;
+            final idToken = await cloudAuth.getIdToken();
+            if (idToken == null || idToken.trim().isEmpty) {
+              throw StateError('missing_id_token');
+            }
+            final vaultId = cloudAuth.uid ?? '';
+            final baseUrl = await _store.resolveManagedVaultBaseUrl();
+            if (baseUrl == null || baseUrl.trim().isEmpty) {
+              throw StateError('missing_managed_vault_base_url');
+            }
+            return backend.syncManagedVaultPush(
+              sessionKey,
+              syncKey,
+              baseUrl: baseUrl,
+              vaultId: vaultId,
+              idToken: idToken,
+            );
+          }(),
       });
       _showSnack(t.sync.pushedOps(count: pushed));
     } catch (e) {
@@ -253,6 +303,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     setState(() => _busy = true);
 
     final t = context.t;
+    final engine = SyncEngineScope.maybeOf(context);
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -281,12 +332,41 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             localDir: _requiredTrimmed(_localDirController),
             remoteRoot: _requiredTrimmed(_remoteRootController),
           ),
+        SyncBackendType.managedVault => () async {
+            final cloudAuth = CloudAuthScope.of(context).controller;
+            final idToken = await cloudAuth.getIdToken();
+            if (idToken == null || idToken.trim().isEmpty) {
+              throw StateError('missing_id_token');
+            }
+            final vaultId = cloudAuth.uid ?? '';
+            final baseUrl = await _store.resolveManagedVaultBaseUrl();
+            if (baseUrl == null || baseUrl.trim().isEmpty) {
+              throw StateError('missing_managed_vault_base_url');
+            }
+            return backend.syncManagedVaultPull(
+              sessionKey,
+              syncKey,
+              baseUrl: baseUrl,
+              vaultId: vaultId,
+              idToken: idToken,
+            );
+          }(),
       });
       if (pulled > 0 && mounted) {
-        SyncEngineScope.maybeOf(context)?.notifyExternalChange();
+        engine?.notifyExternalChange();
       }
       _showSnack(t.sync.pulledOps(count: pulled));
     } catch (e) {
+      if (_backendType == SyncBackendType.managedVault) {
+        final message = e.toString();
+        final status =
+            RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
+        if (status == '402') {
+          if (engine != null) {
+            engine.writeGate.value = const SyncWriteGateState.paymentRequired();
+          }
+        }
+      }
       _showSnack(t.sync.pullFailed(error: '$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -295,6 +375,15 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final engine = SyncEngineScope.maybeOf(context);
+    final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
+    if (_backendType == SyncBackendType.managedVault &&
+        cloudUid != null &&
+        cloudUid.isNotEmpty &&
+        _remoteRootController.text != cloudUid) {
+      _remoteRootController.text = cloudUid;
+    }
+
     Widget sectionTitle(String title) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -342,11 +431,77 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          sectionTitle(context.t.sync.sections.backend),
+          GestureDetector(
+            onLongPress:
+                (_backendType == SyncBackendType.managedVault && kDebugMode)
+                    ? () {
+                        setState(() {
+                          _showManagedVaultEndpointOverride =
+                              !_showManagedVaultEndpointOverride;
+                        });
+                      }
+                    : null,
+            child: sectionTitle(context.t.sync.sections.backend),
+          ),
           sectionCard(
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (engine != null)
+                  ValueListenableBuilder(
+                    valueListenable: engine.writeGate,
+                    builder: (context, gate, _) {
+                      if (_backendType != SyncBackendType.managedVault) {
+                        return const SizedBox.shrink();
+                      }
+                      if (gate.kind == SyncWriteGateKind.open) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final nowMs = DateTime.now().millisecondsSinceEpoch;
+                      final untilMs = gate.graceUntilMs;
+                      final activeGrace =
+                          gate.kind == SyncWriteGateKind.graceReadOnly &&
+                              untilMs != null &&
+                              nowMs < untilMs;
+
+                      if (gate.kind == SyncWriteGateKind.graceReadOnly &&
+                          activeGrace) {
+                        final dt = DateTime.fromMillisecondsSinceEpoch(untilMs)
+                            .toLocal();
+                        final until = MaterialLocalizations.of(context)
+                            .formatShortDate(dt);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            context.t.sync.cloudManagedVault
+                                .graceReadonlyUntil(until: until),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error),
+                          ),
+                        );
+                      }
+
+                      if (gate.kind == SyncWriteGateKind.paymentRequired) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            context.t.sync.cloudManagedVault.paymentRequired,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error),
+                          ),
+                        );
+                      }
+
+                      return const SizedBox.shrink();
+                    },
+                  ),
                 DropdownButtonFormField<SyncBackendType>(
                   value: _backendType,
                   decoration: InputDecoration(
@@ -360,6 +515,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                     DropdownMenuItem(
                       value: SyncBackendType.localDir,
                       child: Text(context.t.sync.backendLocalDir),
+                    ),
+                    DropdownMenuItem(
+                      value: SyncBackendType.managedVault,
+                      child: Text(context.t.sync.backendManagedVault),
                     ),
                   ],
                   onChanged: _busy
@@ -412,13 +571,34 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
+                if (_backendType == SyncBackendType.managedVault &&
+                    kDebugMode &&
+                    _showManagedVaultEndpointOverride) ...[
+                  TextField(
+                    controller: _managedVaultBaseUrlController,
+                    decoration: InputDecoration(
+                      labelText:
+                          context.t.sync.fields.managedVaultBaseUrl.label,
+                      hintText: context.t.sync.fields.managedVaultBaseUrl.hint,
+                    ),
+                    enabled: !_busy,
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TextField(
                   controller: _remoteRootController,
                   decoration: InputDecoration(
-                    labelText: context.t.sync.fields.remoteRoot.label,
-                    hintText: context.t.sync.fields.remoteRoot.hint,
+                    labelText: _backendType == SyncBackendType.managedVault
+                        ? context.t.sync.fields.vaultId.label
+                        : context.t.sync.fields.remoteRoot.label,
+                    hintText: _backendType == SyncBackendType.managedVault
+                        ? context.t.sync.fields.vaultId.hint
+                        : context.t.sync.fields.remoteRoot.hint,
                   ),
-                  enabled: !_busy,
+                  enabled: _backendType == SyncBackendType.managedVault
+                      ? false
+                      : !_busy,
                 ),
               ],
             ),
@@ -455,23 +635,63 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   child: Text(context.t.common.actions.save),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _busy ? null : _push,
-                        child: Text(context.t.common.actions.push),
-                      ),
+                if (_backendType == SyncBackendType.managedVault &&
+                    (cloudUid == null || cloudUid.isEmpty))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      context.t.sync.cloudManagedVault.signInRequired,
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _busy ? null : _pull,
-                        child: Text(context.t.common.actions.pull),
+                  ),
+                if (engine == null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _push,
+                          child: Text(context.t.common.actions.push),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _pull,
+                          child: Text(context.t.common.actions.pull),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  ValueListenableBuilder(
+                    valueListenable: engine.writeGate,
+                    builder: (context, gate, _) {
+                      final disablePush = _busy ||
+                          (_backendType == SyncBackendType.managedVault &&
+                              gate.kind != SyncWriteGateKind.open);
+                      final disablePull = _busy ||
+                          (_backendType == SyncBackendType.managedVault &&
+                              gate.kind == SyncWriteGateKind.paymentRequired);
+
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: disablePush ? null : _push,
+                              child: Text(context.t.common.actions.push),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: disablePull ? null : _pull,
+                              child: Text(context.t.common.actions.pull),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
               ],
             ),
           ),

@@ -87,7 +87,7 @@ void main() {
   });
 }
 
-class MemoryBackend implements AppBackend {
+class MemoryBackend extends AppBackend {
   static const kSetupPassword = ValueKey('setup_password');
   static const kSetupConfirmPassword = ValueKey('setup_confirm_password');
   static const kSetupContinue = ValueKey('setup_continue');

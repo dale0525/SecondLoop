@@ -52,7 +52,7 @@ void main() {
   });
 }
 
-final class _AskAiPreparationBackend implements AppBackend {
+final class _AskAiPreparationBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

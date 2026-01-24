@@ -588,3 +588,47 @@ pub fn sync_localdir_clear_remote_root(local_dir: String, remote_root: String) -
     let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     sync::clear_remote_root(&remote, &remote_root)
 }
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_push(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::push(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_pull(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::pull(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+    )
+}

@@ -10,6 +10,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
 pub mod localdir;
+pub mod managed_vault;
 pub mod webdav;
 
 #[derive(Debug)]

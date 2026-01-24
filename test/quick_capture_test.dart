@@ -39,7 +39,7 @@ void main() {
   });
 }
 
-final class _UnlockedBackend implements AppBackend {
+final class _UnlockedBackend extends AppBackend {
   final Uint8List _key = Uint8List.fromList(List<int>.filled(32, 1));
 
   final List<Conversation> _conversations = [

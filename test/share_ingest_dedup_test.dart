@@ -23,7 +23,7 @@ void main() {
   });
 }
 
-final class _CaptureBackend implements AppBackend {
+final class _CaptureBackend extends AppBackend {
   final List<String> insertedContents = <String>[];
 
   static const _mainStream = Conversation(

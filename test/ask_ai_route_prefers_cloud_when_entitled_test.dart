@@ -24,7 +24,7 @@ void main() {
   });
 }
 
-final class _ByokBackend implements AppBackend {
+final class _ByokBackend extends AppBackend {
   @override
   Future<void> init() async {}
 

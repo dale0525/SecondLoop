@@ -150,6 +150,26 @@ abstract class AppBackend {
     required String localDir,
     required String remoteRoot,
   });
+
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) {
+    throw UnimplementedError('syncManagedVaultPush');
+  }
+
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) {
+    throw UnimplementedError('syncManagedVaultPull');
+  }
 }
 
 class AppBackendScope extends InheritedWidget {

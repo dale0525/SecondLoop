@@ -151,7 +151,7 @@ void main() {
   });
 }
 
-class _FakeBackend implements AppBackend {
+class _FakeBackend extends AppBackend {
   _FakeBackend({this.webdavPushCompleter});
 
   final Completer<int>? webdavPushCompleter;
@@ -376,6 +376,26 @@ class _FakeBackend implements AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
   }) async =>
       0;
 }

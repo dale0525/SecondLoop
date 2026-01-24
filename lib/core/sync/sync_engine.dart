@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
 enum SyncBackendType {
   webdav,
   localDir,
+  managedVault,
 }
 
 final class SyncConfig {
@@ -50,6 +51,19 @@ final class SyncConfig {
     );
   }
 
+  factory SyncConfig.managedVault({
+    required Uint8List syncKey,
+    required String vaultId,
+    required String baseUrl,
+  }) {
+    return SyncConfig._(
+      backendType: SyncBackendType.managedVault,
+      syncKey: syncKey,
+      remoteRoot: vaultId,
+      baseUrl: baseUrl,
+    );
+  }
+
   final SyncBackendType backendType;
   final Uint8List syncKey;
   final String remoteRoot;
@@ -67,6 +81,44 @@ abstract class SyncRunner {
 }
 
 typedef SyncConfigLoader = Future<SyncConfig?> Function();
+
+enum SyncWriteGateKind {
+  open,
+  graceReadOnly,
+  paymentRequired,
+}
+
+final class SyncWriteGateState {
+  const SyncWriteGateState._({
+    required this.kind,
+    required this.graceUntilMs,
+  });
+
+  const SyncWriteGateState.open()
+      : this._(kind: SyncWriteGateKind.open, graceUntilMs: null);
+
+  const SyncWriteGateState.graceReadOnly(int graceUntilMs)
+      : this._(
+          kind: SyncWriteGateKind.graceReadOnly,
+          graceUntilMs: graceUntilMs,
+        );
+
+  const SyncWriteGateState.paymentRequired()
+      : this._(kind: SyncWriteGateKind.paymentRequired, graceUntilMs: null);
+
+  final SyncWriteGateKind kind;
+  final int? graceUntilMs;
+
+  @override
+  bool operator ==(Object other) {
+    return other is SyncWriteGateState &&
+        other.kind == kind &&
+        other.graceUntilMs == graceUntilMs;
+  }
+
+  @override
+  int get hashCode => Object.hash(kind, graceUntilMs);
+}
 
 final class SyncEngine {
   SyncEngine({
@@ -90,6 +142,11 @@ final class SyncEngine {
 
   final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
   Listenable get changes => _changeCounter;
+
+  final ValueNotifier<SyncWriteGateState> writeGate =
+      ValueNotifier<SyncWriteGateState>(
+    const SyncWriteGateState.open(),
+  );
 
   bool get isRunning => _running;
 
@@ -123,6 +180,24 @@ final class SyncEngine {
 
     _pushQueued = false;
     _pullQueued = false;
+  }
+
+  bool _isPushBlocked(int nowMs) {
+    final gate = writeGate.value;
+    if (gate.kind == SyncWriteGateKind.open) return false;
+    if (gate.kind == SyncWriteGateKind.paymentRequired) return true;
+    final untilMs = gate.graceUntilMs;
+    if (untilMs == null) return true;
+    if (nowMs >= untilMs) {
+      _setWriteGate(const SyncWriteGateState.open());
+      return false;
+    }
+    return true;
+  }
+
+  void _setWriteGate(SyncWriteGateState next) {
+    if (writeGate.value == next) return;
+    writeGate.value = next;
   }
 
   void _notifyChange() {
@@ -203,21 +278,74 @@ final class SyncEngine {
     try {
       final config = await loadConfig();
       if (!_running || config == null) return;
+      final backendType = config.backendType;
+
+      if (backendType != SyncBackendType.managedVault) {
+        _setWriteGate(const SyncWriteGateState.open());
+      } else {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        if (_isPushBlocked(nowMs)) return;
+      }
+
       await syncRunner.push(config);
-    } catch (_) {
+      if (backendType == SyncBackendType.managedVault) {
+        _setWriteGate(const SyncWriteGateState.open());
+      }
+    } catch (e) {
+      final config = await loadConfig();
+      if (config?.backendType != SyncBackendType.managedVault) {
+        // Best-effort: avoid crashing the app on transient sync errors.
+        return;
+      }
+
+      final message = e.toString();
+      final status =
+          RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
+      final code =
+          RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(message)?.group(1);
+      final graceUntilRaw =
+          RegExp(r'"grace_until_ms"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+      final graceUntilMs =
+          graceUntilRaw == null ? null : int.tryParse(graceUntilRaw);
+
+      if (status == '403' && code == 'grace_readonly' && graceUntilMs != null) {
+        _setWriteGate(SyncWriteGateState.graceReadOnly(graceUntilMs));
+      } else if (status == '402') {
+        _setWriteGate(const SyncWriteGateState.paymentRequired());
+      }
+
       // Best-effort: avoid crashing the app on transient sync errors.
     }
   }
 
   Future<void> _pullOnce() async {
+    SyncConfig? config;
     try {
-      final config = await loadConfig();
+      config = await loadConfig();
       if (!_running || config == null) return;
       final applied = await syncRunner.pull(config);
+
+      if (config.backendType == SyncBackendType.managedVault &&
+          writeGate.value.kind == SyncWriteGateKind.paymentRequired) {
+        _setWriteGate(const SyncWriteGateState.open());
+      }
+
       if (applied > 0) {
         _notifyChange();
       }
-    } catch (_) {
+    } catch (e) {
+      if (config?.backendType != SyncBackendType.managedVault) {
+        // Best-effort: avoid crashing the app on transient sync errors.
+        return;
+      }
+
+      final message = e.toString();
+      final status =
+          RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
+      if (status == '402') {
+        _setWriteGate(const SyncWriteGateState.paymentRequired());
+      }
+
       // Best-effort: avoid crashing the app on transient sync errors.
     }
   }

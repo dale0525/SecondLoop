@@ -53,7 +53,7 @@ void main() {
   });
 }
 
-final class _MutableLlmProfilesBackend implements AppBackend {
+final class _MutableLlmProfilesBackend extends AppBackend {
   final List<String> deletedProfileIds = <String>[];
 
   List<LlmProfile> _profiles = const <LlmProfile>[

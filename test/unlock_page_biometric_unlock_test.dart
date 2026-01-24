@@ -44,7 +44,7 @@ void main() {
   });
 }
 
-final class _SavedKeyBackend implements AppBackend {
+final class _SavedKeyBackend extends AppBackend {
   final Uint8List savedKey = Uint8List.fromList(List<int>.filled(32, 9));
 
   @override

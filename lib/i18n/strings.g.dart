@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 406 (203 per locale)
+/// Strings: 422 (211 per locale)
 ///
-/// Built on 2026-01-22 at 17:17 UTC
+/// Built on 2026-01-23 at 10:55 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -366,6 +366,9 @@ class _StringsSyncEn {
   String get backendLabel => 'Vault backend';
   String get backendWebdav => 'WebDAV';
   String get backendLocalDir => 'Local directory (desktop)';
+  String get backendManagedVault => 'Cloud managed vault';
+  late final _StringsSyncCloudManagedVaultEn cloudManagedVault =
+      _StringsSyncCloudManagedVaultEn._(_root);
   String get remoteRootRequired => 'Remote root is required';
   String get baseUrlRequired => 'Base URL is required';
   String get localDirRequired => 'Local directory is required';
@@ -732,6 +735,20 @@ class _StringsSyncAutoSyncEn {
       'Foreground debounced push + background periodic sync (mobile)';
 }
 
+// Path: sync.cloudManagedVault
+class _StringsSyncCloudManagedVaultEn {
+  _StringsSyncCloudManagedVaultEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get signInRequired => 'Sign in to use Cloud managed vault.';
+  String get paymentRequired =>
+      'Cloud sync is unavailable. Renew your subscription to continue syncing.';
+  String graceReadonlyUntil({required Object until}) =>
+      'Cloud sync is read-only until ${until}.';
+}
+
 // Path: sync.fields
 class _StringsSyncFieldsEn {
   _StringsSyncFieldsEn._(this._root);
@@ -747,6 +764,10 @@ class _StringsSyncFieldsEn {
       _StringsSyncFieldsPasswordEn._(_root);
   late final _StringsSyncFieldsLocalDirEn localDir =
       _StringsSyncFieldsLocalDirEn._(_root);
+  late final _StringsSyncFieldsManagedVaultBaseUrlEn managedVaultBaseUrl =
+      _StringsSyncFieldsManagedVaultBaseUrlEn._(_root);
+  late final _StringsSyncFieldsVaultIdEn vaultId =
+      _StringsSyncFieldsVaultIdEn._(_root);
   late final _StringsSyncFieldsRemoteRootEn remoteRoot =
       _StringsSyncFieldsRemoteRootEn._(_root);
   late final _StringsSyncFieldsPassphraseEn passphrase =
@@ -1013,6 +1034,28 @@ class _StringsSyncFieldsLocalDirEn {
   String get hint => '/Users/me/SecondLoopVault';
   String get helper =>
       'Best for desktop; mobile platforms may not support this path.';
+}
+
+// Path: sync.fields.managedVaultBaseUrl
+class _StringsSyncFieldsManagedVaultBaseUrlEn {
+  _StringsSyncFieldsManagedVaultBaseUrlEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get label => 'Managed Vault base URL';
+  String get hint => 'https://vault.example.com';
+}
+
+// Path: sync.fields.vaultId
+class _StringsSyncFieldsVaultIdEn {
+  _StringsSyncFieldsVaultIdEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get label => 'Vault ID';
+  String get hint => 'Cloud UID';
 }
 
 // Path: sync.fields.remoteRoot
@@ -1397,6 +1440,11 @@ class _StringsSyncZhCn extends _StringsSyncEn {
   String get backendWebdav => 'WebDAV';
   @override
   String get backendLocalDir => '本地目录（桌面端）';
+  @override
+  String get backendManagedVault => '云托管 Vault';
+  @override
+  late final _StringsSyncCloudManagedVaultZhCn cloudManagedVault =
+      _StringsSyncCloudManagedVaultZhCn._(_root);
   @override
   String get remoteRootRequired => '必须填写远端根目录';
   @override
@@ -1947,6 +1995,26 @@ class _StringsSyncAutoSyncZhCn extends _StringsSyncAutoSyncEn {
   String get subtitle => '前台防抖推送 + 后台周期同步（移动端）';
 }
 
+// Path: sync.cloudManagedVault
+class _StringsSyncCloudManagedVaultZhCn
+    extends _StringsSyncCloudManagedVaultEn {
+  _StringsSyncCloudManagedVaultZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get signInRequired => '请先登录 Cloud 账号后再使用云托管 Vault。';
+  @override
+  String get paymentRequired => 'Cloud 同步不可用。请续费订阅以继续同步。';
+  @override
+  String graceReadonlyUntil({required Object until}) =>
+      'Cloud 同步处于只读状态（宽限期至 ${until}）。';
+}
+
 // Path: sync.fields
 class _StringsSyncFieldsZhCn extends _StringsSyncFieldsEn {
   _StringsSyncFieldsZhCn._(_StringsZhCn root)
@@ -1969,6 +2037,12 @@ class _StringsSyncFieldsZhCn extends _StringsSyncFieldsEn {
   @override
   late final _StringsSyncFieldsLocalDirZhCn localDir =
       _StringsSyncFieldsLocalDirZhCn._(_root);
+  @override
+  late final _StringsSyncFieldsManagedVaultBaseUrlZhCn managedVaultBaseUrl =
+      _StringsSyncFieldsManagedVaultBaseUrlZhCn._(_root);
+  @override
+  late final _StringsSyncFieldsVaultIdZhCn vaultId =
+      _StringsSyncFieldsVaultIdZhCn._(_root);
   @override
   late final _StringsSyncFieldsRemoteRootZhCn remoteRoot =
       _StringsSyncFieldsRemoteRootZhCn._(_root);
@@ -2372,6 +2446,39 @@ class _StringsSyncFieldsLocalDirZhCn extends _StringsSyncFieldsLocalDirEn {
   String get hint => '/Users/me/SecondLoopVault';
   @override
   String get helper => '更适合桌面端；移动端可能不支持该路径。';
+}
+
+// Path: sync.fields.managedVaultBaseUrl
+class _StringsSyncFieldsManagedVaultBaseUrlZhCn
+    extends _StringsSyncFieldsManagedVaultBaseUrlEn {
+  _StringsSyncFieldsManagedVaultBaseUrlZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get label => '托管 Vault Base URL';
+  @override
+  String get hint => 'https://vault.example.com';
+}
+
+// Path: sync.fields.vaultId
+class _StringsSyncFieldsVaultIdZhCn extends _StringsSyncFieldsVaultIdEn {
+  _StringsSyncFieldsVaultIdZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get label => 'Vault ID';
+  @override
+  String get hint => 'Cloud UID';
 }
 
 // Path: sync.fields.remoteRoot
@@ -2807,6 +2914,15 @@ extension on Translations {
         return 'WebDAV';
       case 'sync.backendLocalDir':
         return 'Local directory (desktop)';
+      case 'sync.backendManagedVault':
+        return 'Cloud managed vault';
+      case 'sync.cloudManagedVault.signInRequired':
+        return 'Sign in to use Cloud managed vault.';
+      case 'sync.cloudManagedVault.paymentRequired':
+        return 'Cloud sync is unavailable. Renew your subscription to continue syncing.';
+      case 'sync.cloudManagedVault.graceReadonlyUntil':
+        return ({required Object until}) =>
+            'Cloud sync is read-only until ${until}.';
       case 'sync.remoteRootRequired':
         return 'Remote root is required';
       case 'sync.baseUrlRequired':
@@ -2843,6 +2959,14 @@ extension on Translations {
         return '/Users/me/SecondLoopVault';
       case 'sync.fields.localDir.helper':
         return 'Best for desktop; mobile platforms may not support this path.';
+      case 'sync.fields.managedVaultBaseUrl.label':
+        return 'Managed Vault base URL';
+      case 'sync.fields.managedVaultBaseUrl.hint':
+        return 'https://vault.example.com';
+      case 'sync.fields.vaultId.label':
+        return 'Vault ID';
+      case 'sync.fields.vaultId.hint':
+        return 'Cloud UID';
       case 'sync.fields.remoteRoot.label':
         return 'Remote root folder';
       case 'sync.fields.remoteRoot.hint':
@@ -3227,6 +3351,14 @@ extension on _StringsZhCn {
         return 'WebDAV';
       case 'sync.backendLocalDir':
         return '本地目录（桌面端）';
+      case 'sync.backendManagedVault':
+        return '云托管 Vault';
+      case 'sync.cloudManagedVault.signInRequired':
+        return '请先登录 Cloud 账号后再使用云托管 Vault。';
+      case 'sync.cloudManagedVault.paymentRequired':
+        return 'Cloud 同步不可用。请续费订阅以继续同步。';
+      case 'sync.cloudManagedVault.graceReadonlyUntil':
+        return ({required Object until}) => 'Cloud 同步处于只读状态（宽限期至 ${until}）。';
       case 'sync.remoteRootRequired':
         return '必须填写远端根目录';
       case 'sync.baseUrlRequired':
@@ -3263,6 +3395,14 @@ extension on _StringsZhCn {
         return '/Users/me/SecondLoopVault';
       case 'sync.fields.localDir.helper':
         return '更适合桌面端；移动端可能不支持该路径。';
+      case 'sync.fields.managedVaultBaseUrl.label':
+        return '托管 Vault Base URL';
+      case 'sync.fields.managedVaultBaseUrl.hint':
+        return 'https://vault.example.com';
+      case 'sync.fields.vaultId.label':
+        return 'Vault ID';
+      case 'sync.fields.vaultId.hint':
+        return 'Cloud UID';
       case 'sync.fields.remoteRoot.label':
         return '远端根目录';
       case 'sync.fields.remoteRoot.hint':

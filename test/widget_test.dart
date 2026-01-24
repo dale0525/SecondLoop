@@ -37,7 +37,7 @@ void main() {
   });
 }
 
-class FakeBackend implements AppBackend {
+class FakeBackend extends AppBackend {
   @override
   Future<void> init() async {}
 

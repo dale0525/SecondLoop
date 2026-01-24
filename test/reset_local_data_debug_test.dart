@@ -142,7 +142,7 @@ final class _FakePathProviderPlatform extends PathProviderPlatform {
   Future<String?> getApplicationSupportPath() async => applicationSupportPath;
 }
 
-final class _FakeBackend implements AppBackend {
+final class _FakeBackend extends AppBackend {
   @override
   Future<void> init() async {}
 

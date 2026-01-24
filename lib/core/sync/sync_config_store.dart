@@ -11,9 +11,15 @@ import 'sync_engine.dart';
 final class SyncConfigStore {
   SyncConfigStore({
     FlutterSecureStorage? storage,
-  }) : _unusedLegacySecureStorage = storage;
+    String managedVaultDefaultBaseUrl = const String.fromEnvironment(
+      'SECONDLOOP_MANAGED_VAULT_BASE_URL',
+      defaultValue: '',
+    ),
+  })  : _unusedLegacySecureStorage = storage,
+        _managedVaultDefaultBaseUrl = managedVaultDefaultBaseUrl;
 
   final FlutterSecureStorage? _unusedLegacySecureStorage;
+  final String _managedVaultDefaultBaseUrl;
 
   static const _kPrefsBlobKey = 'sync_config_plain_json_v1';
 
@@ -33,6 +39,7 @@ final class SyncConfigStore {
   static const kWebdavPassword = 'sync_webdav_password';
   static const kRemoteRoot = 'sync_webdav_remote_root';
   static const kSyncKeyB64 = 'sync_webdav_sync_key_b64';
+  static const kManagedVaultBaseUrl = 'sync_managed_vault_base_url';
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final next = _tail.then((_) => action());
@@ -62,12 +69,17 @@ final class SyncConfigStore {
     final v = (await _loadConfigMap())[kBackendType];
     return switch (v) {
       'localdir' => SyncBackendType.localDir,
+      'managedvault' => SyncBackendType.managedVault,
       _ => SyncBackendType.webdav,
     };
   }
 
   Future<void> writeBackendType(SyncBackendType type) async {
-    final v = type == SyncBackendType.localDir ? 'localdir' : 'webdav';
+    final v = switch (type) {
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+      SyncBackendType.webdav => 'webdav',
+    };
     await _writeConfigUpdates({kBackendType: v});
   }
 
@@ -87,6 +99,15 @@ final class SyncConfigStore {
 
   Future<String?> readWebdavBaseUrl() async =>
       (await _loadConfigMap())[kWebdavBaseUrl];
+  Future<String?> readManagedVaultBaseUrl() async =>
+      (await _loadConfigMap())[kManagedVaultBaseUrl];
+  Future<String?> resolveManagedVaultBaseUrl() async {
+    final v = (await _loadConfigMap())[kManagedVaultBaseUrl]?.trim();
+    if (v != null && v.isNotEmpty) return v;
+    final fallback = _managedVaultDefaultBaseUrl.trim();
+    return fallback.isEmpty ? null : fallback;
+  }
+
   Future<String?> readWebdavUsername() async =>
       (await _loadConfigMap())[kWebdavUsername];
   Future<String?> readWebdavPassword() async =>
@@ -97,6 +118,8 @@ final class SyncConfigStore {
 
   Future<void> writeWebdavBaseUrl(String baseUrl) async =>
       _writeConfigUpdates({kWebdavBaseUrl: baseUrl});
+  Future<void> writeManagedVaultBaseUrl(String baseUrl) async =>
+      _writeConfigUpdates({kManagedVaultBaseUrl: baseUrl});
   Future<void> writeRemoteRoot(String remoteRoot) async =>
       _writeConfigUpdates({kRemoteRoot: remoteRoot});
 
@@ -157,6 +180,7 @@ final class SyncConfigStore {
 
     final backendType = switch (all[kBackendType]) {
       'localdir' => SyncBackendType.localDir,
+      'managedvault' => SyncBackendType.managedVault,
       _ => SyncBackendType.webdav,
     };
     switch (backendType) {
@@ -179,6 +203,15 @@ final class SyncConfigStore {
           syncKey: syncKey,
           remoteRoot: remoteRoot,
           localDir: localDir,
+        );
+      case SyncBackendType.managedVault:
+        final baseUrl =
+            (all[kManagedVaultBaseUrl] ?? _managedVaultDefaultBaseUrl).trim();
+        if (baseUrl.isEmpty) return null;
+        return SyncConfig.managedVault(
+          syncKey: syncKey,
+          vaultId: remoteRoot,
+          baseUrl: baseUrl,
         );
     }
   }

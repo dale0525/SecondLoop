@@ -65,7 +65,7 @@ void main() {
   });
 }
 
-final class _ShareBackend implements AppBackend, AttachmentsBackend {
+final class _ShareBackend extends AppBackend implements AttachmentsBackend {
   final List<String> insertedContents = <String>[];
   final List<String> linkCalls = <String>[];
 

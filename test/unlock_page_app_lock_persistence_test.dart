@@ -132,7 +132,7 @@ void main() {
 
 void _noop(Uint8List _) {}
 
-final class _CountingBackend implements AppBackend {
+final class _CountingBackend extends AppBackend {
   int saveSessionKeyCalls = 0;
   int clearSavedSessionKeyCalls = 0;
 

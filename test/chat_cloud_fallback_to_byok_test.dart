@@ -68,7 +68,7 @@ void main() {
   });
 }
 
-final class _CloudFallbackBackend implements AppBackend {
+final class _CloudFallbackBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

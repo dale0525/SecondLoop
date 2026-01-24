@@ -24,7 +24,7 @@ void main() {
   });
 }
 
-final class _AutoUnlockedBackend implements AppBackend {
+final class _AutoUnlockedBackend extends AppBackend {
   Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
 
   static const _mainStream = Conversation(

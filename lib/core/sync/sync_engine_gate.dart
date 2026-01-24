@@ -3,7 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 
 import '../backend/app_backend.dart';
+import '../ai/ai_routing.dart';
+import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
+import '../subscription/subscription_scope.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 
@@ -64,15 +67,25 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status;
 
     final shouldReuse = identical(_backendIdentity, backend) &&
         _bytesEqual(_sessionKey, sessionKey);
-    if (shouldReuse) return;
+    if (shouldReuse) {
+      if (subscriptionStatus == SubscriptionStatus.entitled) {
+        _engine?.writeGate.value = const SyncWriteGateState.open();
+      }
+      return;
+    }
 
     _engine?.stop();
 
-    final runner =
-        _AppBackendSyncRunner(backend: backend, sessionKey: sessionKey);
+    final runner = _AppBackendSyncRunner(
+      backend: backend,
+      sessionKey: sessionKey,
+      idTokenGetter: cloudAuth?.getIdToken,
+    );
     final engine = SyncEngine(
       syncRunner: runner,
       loadConfig: _configStore.loadConfiguredSyncIfAutoEnabled,
@@ -88,6 +101,10 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     _backendIdentity = backend;
     _sessionKey = Uint8List.fromList(sessionKey);
     _engine = engine;
+
+    if (subscriptionStatus == SubscriptionStatus.entitled) {
+      engine.writeGate.value = const SyncWriteGateState.open();
+    }
   }
 
   bool _bytesEqual(Uint8List? a, Uint8List b) {
@@ -129,11 +146,16 @@ final class SyncEngineScope extends InheritedWidget {
 }
 
 final class _AppBackendSyncRunner implements SyncRunner {
-  _AppBackendSyncRunner({required this.backend, required Uint8List sessionKey})
-      : _sessionKey = Uint8List.fromList(sessionKey);
+  _AppBackendSyncRunner({
+    required this.backend,
+    required Uint8List sessionKey,
+    required Future<String?> Function()? idTokenGetter,
+  })  : _sessionKey = Uint8List.fromList(sessionKey),
+        _idTokenGetter = idTokenGetter;
 
   final AppBackend backend;
   final Uint8List _sessionKey;
+  final Future<String?> Function()? _idTokenGetter;
 
   @override
   Future<int> push(SyncConfig config) async {
@@ -152,6 +174,19 @@ final class _AppBackendSyncRunner implements SyncRunner {
           localDir: config.localDir ?? '',
           remoteRoot: config.remoteRoot,
         ),
+      SyncBackendType.managedVault => () async {
+          final getter = _idTokenGetter;
+          if (getter == null) return 0;
+          final idToken = await getter();
+          if (idToken == null || idToken.trim().isEmpty) return 0;
+          return backend.syncManagedVaultPush(
+            _sessionKey,
+            config.syncKey,
+            baseUrl: config.baseUrl ?? '',
+            vaultId: config.remoteRoot,
+            idToken: idToken,
+          );
+        }(),
     };
   }
 
@@ -172,6 +207,19 @@ final class _AppBackendSyncRunner implements SyncRunner {
           localDir: config.localDir ?? '',
           remoteRoot: config.remoteRoot,
         ),
+      SyncBackendType.managedVault => () async {
+          final getter = _idTokenGetter;
+          if (getter == null) return 0;
+          final idToken = await getter();
+          if (idToken == null || idToken.trim().isEmpty) return 0;
+          return backend.syncManagedVaultPull(
+            _sessionKey,
+            config.syncKey,
+            baseUrl: config.baseUrl ?? '',
+            vaultId: config.remoteRoot,
+            idToken: idToken,
+          );
+        }(),
     };
   }
 }

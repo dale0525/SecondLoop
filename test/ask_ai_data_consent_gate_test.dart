@@ -57,7 +57,7 @@ void main() {
   });
 }
 
-final class _AskAiConsentBackend implements AppBackend {
+final class _AskAiConsentBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

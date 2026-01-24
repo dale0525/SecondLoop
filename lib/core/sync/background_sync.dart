@@ -6,6 +6,8 @@ import 'package:workmanager/workmanager.dart';
 
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
+import '../cloud/cloud_auth_controller.dart';
+import '../cloud/firebase_identity_toolkit.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
@@ -72,6 +74,7 @@ final class BackgroundSync {
 
     final store = SyncConfigStore();
     final backend = NativeAppBackend();
+    CloudAuthControllerImpl? cloudAuth;
     final scheduler = WorkmanagerBackgroundSyncScheduler();
 
     Future<void> rescheduleIfNeeded() async {
@@ -104,13 +107,43 @@ final class BackgroundSync {
     await backend.init();
 
     try {
-      await _pullOnce(backend: backend, sessionKey: sessionKey, config: config);
-      await _pushOnce(backend: backend, sessionKey: sessionKey, config: config);
+      String? idToken;
+      if (config.backendType == SyncBackendType.managedVault) {
+        const webApiKey = String.fromEnvironment(
+          'SECONDLOOP_FIREBASE_WEB_API_KEY',
+          defaultValue: '',
+        );
+        if (webApiKey.trim().isNotEmpty) {
+          cloudAuth ??= CloudAuthControllerImpl(
+            identityToolkit: FirebaseIdentityToolkitHttp(webApiKey: webApiKey),
+          );
+          try {
+            idToken = await cloudAuth.getIdToken();
+          } catch (_) {
+            idToken = null;
+          }
+        }
+      }
+
+      await _pullOnce(
+        backend: backend,
+        sessionKey: sessionKey,
+        config: config,
+        managedVaultIdToken: idToken,
+      );
+      await _pushOnce(
+        backend: backend,
+        sessionKey: sessionKey,
+        config: config,
+        managedVaultIdToken: idToken,
+      );
       await rescheduleIfNeeded();
       return true;
     } catch (_) {
       await rescheduleIfNeeded();
       return false;
+    } finally {
+      cloudAuth?.dispose();
     }
   }
 
@@ -118,6 +151,7 @@ final class BackgroundSync {
     required AppBackend backend,
     required Uint8List sessionKey,
     required SyncConfig config,
+    required String? managedVaultIdToken,
   }) async {
     return switch (config.backendType) {
       SyncBackendType.webdav => backend.syncWebdavPull(
@@ -134,6 +168,23 @@ final class BackgroundSync {
           localDir: config.localDir ?? '',
           remoteRoot: config.remoteRoot,
         ),
+      SyncBackendType.managedVault => () async {
+          final idToken = managedVaultIdToken;
+          if (idToken == null || idToken.trim().isEmpty) return 0;
+          try {
+            return await backend.syncManagedVaultPull(
+              sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+          } catch (e) {
+            final msg = e.toString();
+            if (msg.contains('HTTP 402')) return 0;
+            return 0;
+          }
+        }(),
     };
   }
 
@@ -141,6 +192,7 @@ final class BackgroundSync {
     required AppBackend backend,
     required Uint8List sessionKey,
     required SyncConfig config,
+    required String? managedVaultIdToken,
   }) async {
     return switch (config.backendType) {
       SyncBackendType.webdav => backend.syncWebdavPush(
@@ -157,6 +209,26 @@ final class BackgroundSync {
           localDir: config.localDir ?? '',
           remoteRoot: config.remoteRoot,
         ),
+      SyncBackendType.managedVault => () async {
+          final idToken = managedVaultIdToken;
+          if (idToken == null || idToken.trim().isEmpty) return 0;
+          try {
+            return await backend.syncManagedVaultPush(
+              sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+          } catch (e) {
+            final msg = e.toString();
+            if (msg.contains('HTTP 402')) return 0;
+            if (msg.contains('HTTP 403') && msg.contains('"grace_readonly"')) {
+              return 0;
+            }
+            return 0;
+          }
+        }(),
     };
   }
 }

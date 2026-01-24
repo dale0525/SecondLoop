@@ -51,7 +51,7 @@ void main() {
   });
 }
 
-final class _SemanticSearchPrepBackend implements AppBackend {
+final class _SemanticSearchPrepBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

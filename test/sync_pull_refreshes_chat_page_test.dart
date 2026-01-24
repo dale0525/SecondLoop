@@ -96,7 +96,7 @@ final class _SyncingRunner implements SyncRunner {
   }
 }
 
-final class _MutableBackend implements AppBackend {
+final class _MutableBackend extends AppBackend {
   final List<Message> _messages = <Message>[];
 
   void addRemoteMessage(Message message) {

@@ -322,3 +322,33 @@ Future<void> syncLocaldirClearRemoteRoot(
         {required String localDir, required String remoteRoot}) =>
     RustLib.instance.api.crateApiCoreSyncLocaldirClearRemoteRoot(
         localDir: localDir, remoteRoot: remoteRoot);
+
+Future<BigInt> syncManagedVaultPush(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultPush(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken);
+
+Future<BigInt> syncManagedVaultPull(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultPull(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken);

@@ -254,6 +254,12 @@
     "backendLabel": "Vault 后端",
     "backendWebdav": "WebDAV",
     "backendLocalDir": "本地目录（桌面端）",
+    "backendManagedVault": "云托管 Vault",
+    "cloudManagedVault": {
+      "signInRequired": "请先登录 Cloud 账号后再使用云托管 Vault。",
+      "paymentRequired": "Cloud 同步不可用。请续费订阅以继续同步。",
+      "graceReadonlyUntil": "Cloud 同步处于只读状态（宽限期至 $until）。"
+    },
     "remoteRootRequired": "必须填写远端根目录",
     "baseUrlRequired": "必须填写 Base URL",
     "localDirRequired": "必须填写本地目录",
@@ -280,6 +286,14 @@
         "label": "本地目录路径",
         "hint": "/Users/me/SecondLoopVault",
         "helper": "更适合桌面端；移动端可能不支持该路径。"
+      },
+      "managedVaultBaseUrl": {
+        "label": "托管 Vault Base URL",
+        "hint": "https://vault.example.com"
+      },
+      "vaultId": {
+        "label": "Vault ID",
+        "hint": "Cloud UID"
       },
       "remoteRoot": {
         "label": "远端根目录",

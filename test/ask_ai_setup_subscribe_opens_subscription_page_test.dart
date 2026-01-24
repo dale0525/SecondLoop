@@ -67,7 +67,7 @@ void main() {
   });
 }
 
-final class _NoLlmProfileBackend implements AppBackend {
+final class _NoLlmProfileBackend extends AppBackend {
   @override
   Future<void> init() async {}
 

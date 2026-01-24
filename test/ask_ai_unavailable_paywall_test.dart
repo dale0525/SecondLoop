@@ -47,7 +47,7 @@ void main() {
   });
 }
 
-final class _NoLlmProfileBackend implements AppBackend {
+final class _NoLlmProfileBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

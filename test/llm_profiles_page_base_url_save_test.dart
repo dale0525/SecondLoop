@@ -60,7 +60,7 @@ void main() {
   });
 }
 
-final class _CaptureCreateLlmProfileBackend implements AppBackend {
+final class _CaptureCreateLlmProfileBackend extends AppBackend {
   String? lastCreateProviderType;
   String? lastCreateBaseUrl;
 

@@ -96,7 +96,7 @@ Widget _wrapChat({required AppBackend backend}) {
   );
 }
 
-class MessageActionsBackend implements AppBackend {
+class MessageActionsBackend extends AppBackend {
   MessageActionsBackend({required List<Message> messages})
       : _messages = List<Message>.from(messages);
 

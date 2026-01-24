@@ -150,7 +150,7 @@ final class _FakeCloudAuthController implements CloudAuthController {
   Future<void> signOut() async {}
 }
 
-final class _EmailNotVerifiedBackend implements AppBackend {
+final class _EmailNotVerifiedBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

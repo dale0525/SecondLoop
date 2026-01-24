@@ -254,6 +254,12 @@
     "backendLabel": "Vault backend",
     "backendWebdav": "WebDAV",
     "backendLocalDir": "Local directory (desktop)",
+    "backendManagedVault": "Cloud managed vault",
+    "cloudManagedVault": {
+      "signInRequired": "Sign in to use Cloud managed vault.",
+      "paymentRequired": "Cloud sync is unavailable. Renew your subscription to continue syncing.",
+      "graceReadonlyUntil": "Cloud sync is read-only until $until."
+    },
     "remoteRootRequired": "Remote root is required",
     "baseUrlRequired": "Base URL is required",
     "localDirRequired": "Local directory is required",
@@ -280,6 +286,14 @@
         "label": "Local directory path",
         "hint": "/Users/me/SecondLoopVault",
         "helper": "Best for desktop; mobile platforms may not support this path."
+      },
+      "managedVaultBaseUrl": {
+        "label": "Managed Vault base URL",
+        "hint": "https://vault.example.com"
+      },
+      "vaultId": {
+        "label": "Vault ID",
+        "hint": "Cloud UID"
       },
       "remoteRoot": {
         "label": "Remote root folder",

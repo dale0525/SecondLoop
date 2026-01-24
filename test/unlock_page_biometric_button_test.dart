@@ -35,7 +35,7 @@ void main() {
 
 void _noop(Uint8List _) {}
 
-final class _NoopBackend implements AppBackend {
+final class _NoopBackend extends AppBackend {
   @override
   Future<void> init() async {}
 
@@ -228,5 +228,25 @@ final class _NoopBackend implements AppBackend {
   @override
   Future<int> syncLocaldirPull(Uint8List key, Uint8List syncKey,
           {required String localDir, required String remoteRoot}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) =>
       throw UnimplementedError();
 }

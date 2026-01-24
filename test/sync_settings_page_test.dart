@@ -222,7 +222,7 @@ final class _FakeRunner implements SyncRunner {
   }
 }
 
-class _SyncSettingsBackend implements AppBackend {
+class _SyncSettingsBackend extends AppBackend {
   _SyncSettingsBackend({this.webdavPullResult = 0});
 
   int webdavTestCalls = 0;
@@ -448,6 +448,26 @@ class _SyncSettingsBackend implements AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async =>
+      0;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
   }) async =>
       0;
 }

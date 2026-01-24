@@ -66,7 +66,7 @@ void main() {
   });
 }
 
-final class _NotEntitledBackend implements AppBackend {
+final class _NotEntitledBackend extends AppBackend {
   final List<String> calls = <String>[];
 
   @override

@@ -84,6 +84,7 @@ class _SettingsPageState extends State<SettingsPage> {
               localDir: sync.localDir ?? '',
               remoteRoot: sync.remoteRoot,
             ),
+          SyncBackendType.managedVault => Future<void>.value(),
         };
       }
 

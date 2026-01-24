@@ -628,4 +628,44 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
     );
     return pulled.toInt();
   }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final appDir = await _getAppDir();
+    final pushed = await rust_core.syncManagedVaultPush(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+    );
+    return pushed.toInt();
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final appDir = await _getAppDir();
+    final pulled = await rust_core.syncManagedVaultPull(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+    );
+    return pulled.toInt();
+  }
 }

@@ -139,7 +139,7 @@ final class _FakeCloudAuthController implements CloudAuthController {
   Future<void> signOut() async {}
 }
 
-final class _FakeBackend implements AppBackend {
+final class _FakeBackend extends AppBackend {
   @override
   Future<void> init() async {}
 

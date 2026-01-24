@@ -54,7 +54,7 @@ void main() {
   });
 }
 
-final class _SlowPrepareBackend implements AppBackend {
+final class _SlowPrepareBackend extends AppBackend {
   @override
   Future<void> init() async {}
 

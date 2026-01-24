@@ -15,6 +15,7 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -38,12 +39,21 @@ jobs:
         run: |
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
           fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"stage"* ]]; then
             echo "Refusing to build prod release with a staging gateway URL."
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" != https://* ]]; then
+            echo "Prod managed vault URL must start with https://"
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" == *"stage"* ]]; then
+            echo "Refusing to build prod release with a staging managed vault URL."
             exit 1
           fi
       - name: Validate Android signing (tag releases)
@@ -87,6 +97,7 @@ jobs:
           defines=(
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
           flutter build apk --release "${build_args[@]}" "${defines[@]}"
           flutter build appbundle --release "${build_args[@]}" "${defines[@]}"
@@ -106,6 +117,7 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -121,8 +133,11 @@ jobs:
         run: |
           if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
+          if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD.StartsWith("https://")) { throw "Prod gateway URL must start with https://" }
           if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
+          if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
+          if ($Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging managed vault URL." }
       - run: flutter pub get
       - name: Build (prod)
         shell: pwsh
@@ -136,7 +151,8 @@ jobs:
           }
           $defines = @(
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
-            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD"
+            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
+            "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
           )
           flutter build windows --release @buildArgs @defines
       - name: Package
@@ -156,6 +172,7 @@ jobs:
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -177,12 +194,21 @@ jobs:
         run: |
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
           fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"stage"* ]]; then
             echo "Refusing to build prod release with a staging gateway URL."
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" != https://* ]]; then
+            echo "Prod managed vault URL must start with https://"
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" == *"stage"* ]]; then
+            echo "Refusing to build prod release with a staging managed vault URL."
             exit 1
           fi
       - run: flutter pub get
@@ -206,6 +232,7 @@ jobs:
           defines=(
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
           # flutter build macos defaults to code signing and fails on CI without Apple certs.
           # Use config-only to generate build settings (build name/number + dart-defines),

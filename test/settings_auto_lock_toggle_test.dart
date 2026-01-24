@@ -115,7 +115,7 @@ void main() {
   });
 }
 
-final class _CountingBackend implements AppBackend {
+final class _CountingBackend extends AppBackend {
   int saveSessionKeyCalls = 0;
   int clearSavedSessionKeyCalls = 0;
 
