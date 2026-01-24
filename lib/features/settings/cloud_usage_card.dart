@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_usage_client.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_surface.dart';
 
 String _formatResetAt(BuildContext context, int? resetAtMs) {
   if (resetAtMs == null) return '—';
@@ -145,45 +146,43 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
       _ => const SizedBox.shrink(),
     };
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.t.settings.cloudUsage.title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        context.t.settings.cloudUsage.subtitle,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
+    return SlSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t.settings.cloudUsage.title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.t.settings.cloudUsage.subtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  key: const ValueKey('cloud_usage_refresh'),
-                  onPressed: _busy ? null : _refresh,
-                  icon: const Icon(Icons.refresh),
-                  tooltip: context.t.settings.cloudUsage.actions.refresh,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            body,
-          ],
-        ),
+              ),
+              IconButton(
+                key: const ValueKey('cloud_usage_refresh'),
+                onPressed: _busy ? null : _refresh,
+                icon: const Icon(Icons.refresh),
+                tooltip: context.t.settings.cloudUsage.actions.refresh,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          body,
+        ],
       ),
     );
   }

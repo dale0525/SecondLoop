@@ -1,13 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-class AppTheme {
-  static const _seedColor = Color(0xFF0078D4); // Fluent blue
-  static const _lightBackground = Color(0xFFF3F3F3); // Fluent neutral canvas
-  static const _darkBackground = Color(0xFF202020); // Fluent dark canvas
+import '../ui/sl_tokens.dart';
 
-  static const _radiusMd = 10.0;
-  static const _radiusLg = 14.0;
+class AppTheme {
+  static const _primary = Color(0xFF6366F1); // Indigo
+  static const _accent = Color(0xFFA78BFA); // Violet
+
+  static const _lightBackground = Color(0xFFF6F7FB); // Paper
+  static const _lightSurface = Color(0xFFFFFFFF);
+  static const _lightSurface2 = Color(0xFFF1F3F9);
+  static const _lightBorder = Color(0xFFE6E8F0);
+
+  static const _darkBackground = Color(0xFF0B0B0F);
+  static const _darkSurface = Color(0xFF12121A);
+  static const _darkSurface2 = Color(0xFF171724);
+  static const _darkBorder = Color(0xFF24243A);
+
+  static const _radiusSm = 10.0;
+  static const _radiusMd = 14.0;
+  static const _radiusLg = 18.0;
 
   static ThemeData light({Locale? locale, TargetPlatform? platform}) {
     return _build(
@@ -30,10 +42,8 @@ class AppTheme {
     final fontFamilyFallback =
         _fontFamilyFallbackFor(locale, effectivePlatform);
 
-    final scheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: brightness,
-    );
+    final scheme = isDark ? _darkScheme() : _lightScheme();
+    final tokens = isDark ? _darkTokens() : _lightTokens();
 
     final base = ThemeData(
       useMaterial3: true,
@@ -42,13 +52,16 @@ class AppTheme {
       platform: effectivePlatform,
       fontFamily: fontFamily,
       fontFamilyFallback: fontFamilyFallback,
+      extensions: <ThemeExtension<dynamic>>[
+        tokens,
+      ],
     );
 
     final surface = scheme.surface;
     final outline = scheme.outlineVariant;
 
     return base.copyWith(
-      scaffoldBackgroundColor: isDark ? _darkBackground : _lightBackground,
+      scaffoldBackgroundColor: Colors.transparent,
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -57,19 +70,20 @@ class AppTheme {
         foregroundColor: scheme.onSurface,
       ),
       dividerTheme: DividerThemeData(
-        color: isDark ? outline.withOpacity(0.5) : outline.withOpacity(0.8),
+        color: isDark ? outline.withOpacity(0.55) : outline.withOpacity(0.85),
         space: 1,
         thickness: 1,
       ),
       cardTheme: CardTheme(
         color: surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(_radiusLg),
           side: BorderSide(
             color:
-                isDark ? outline.withOpacity(0.45) : outline.withOpacity(0.8),
+                isDark ? outline.withOpacity(0.65) : outline.withOpacity(0.9),
           ),
         ),
       ),
@@ -110,16 +124,32 @@ class AppTheme {
         textColor: scheme.onSurface,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         height: 72,
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(_radiusMd),
         ),
       ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: Colors.transparent,
+        indicatorColor: scheme.primary.withOpacity(isDark ? 0.18 : 0.12),
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_radiusMd),
+        ),
+        selectedIconTheme: IconThemeData(color: scheme.primary),
+        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
+        selectedLabelTextStyle: TextStyle(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelTextStyle: TextStyle(
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? scheme.surface : Colors.white.withOpacity(0.9),
+        fillColor: isDark ? tokens.surface2 : _lightSurface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,
@@ -130,7 +160,8 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(_radiusMd),
-          borderSide: BorderSide(color: outline.withOpacity(0.75)),
+          borderSide:
+              BorderSide(color: outline.withOpacity(isDark ? 0.7 : 0.85)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(_radiusMd),
@@ -179,6 +210,116 @@ class AppTheme {
         linearTrackColor:
             isDark ? outline.withOpacity(0.3) : outline.withOpacity(0.5),
       ),
+    );
+  }
+
+  static ColorScheme _darkScheme() {
+    return const ColorScheme(
+      brightness: Brightness.dark,
+      primary: _primary,
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFF1B1B2E),
+      onPrimaryContainer: Color(0xFFE7E7F0),
+      secondary: _accent,
+      onSecondary: _darkBackground,
+      secondaryContainer: Color(0xFF25213A),
+      onSecondaryContainer: Color(0xFFEDE9FE),
+      tertiary: Color(0xFF22D3EE),
+      onTertiary: Color(0xFF001216),
+      tertiaryContainer: Color(0xFF0B2A33),
+      onTertiaryContainer: Color(0xFFCFFAFE),
+      error: Color(0xFFF87171),
+      onError: Color(0xFF2B0000),
+      errorContainer: Color(0xFF3A0B0B),
+      onErrorContainer: Color(0xFFFEE2E2),
+      background: _darkBackground,
+      onBackground: Color(0xFFE7E7F0),
+      surface: _darkSurface,
+      onSurface: Color(0xFFE7E7F0),
+      surfaceVariant: _darkSurface2,
+      onSurfaceVariant: Color(0xFFB9B9CE),
+      outline: Color(0xFF2F2F4A),
+      outlineVariant: _darkBorder,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      inverseSurface: Color(0xFFE7E7F0),
+      onInverseSurface: Color(0xFF101018),
+      inversePrimary: Color(0xFF4F46E5),
+    );
+  }
+
+  static ColorScheme _lightScheme() {
+    return const ColorScheme(
+      brightness: Brightness.light,
+      primary: _primary,
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFFE0E7FF),
+      onPrimaryContainer: Color(0xFF1E1B4B),
+      secondary: Color(0xFF7C3AED),
+      onSecondary: Colors.white,
+      secondaryContainer: Color(0xFFF3E8FF),
+      onSecondaryContainer: Color(0xFF3B0764),
+      tertiary: Color(0xFF0891B2),
+      onTertiary: Colors.white,
+      tertiaryContainer: Color(0xFFCFFAFE),
+      onTertiaryContainer: Color(0xFF083344),
+      error: Color(0xFFDC2626),
+      onError: Colors.white,
+      errorContainer: Color(0xFFFEE2E2),
+      onErrorContainer: Color(0xFF450A0A),
+      background: _lightBackground,
+      onBackground: Color(0xFF0F172A),
+      surface: _lightSurface,
+      onSurface: Color(0xFF0F172A),
+      surfaceVariant: _lightSurface2,
+      onSurfaceVariant: Color(0xFF475569),
+      outline: Color(0xFFD0D4E0),
+      outlineVariant: _lightBorder,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      inverseSurface: Color(0xFF0F172A),
+      onInverseSurface: Color(0xFFF8FAFC),
+      inversePrimary: Color(0xFF4F46E5),
+    );
+  }
+
+  static SlTokens _darkTokens() {
+    return const SlTokens(
+      background: _darkBackground,
+      surface: _darkSurface,
+      surface2: _darkSurface2,
+      border: _darkBorder,
+      borderSubtle: Color(0xFF1F1F33),
+      ring: _accent,
+      sidebarBackground: Color(0xCC12121A),
+      sidebarBorder: Color(0x3324243A),
+      sidebarItemHover: Color(0x1A6366F1),
+      sidebarItemActive: Color(0x266366F1),
+      sidebarItemForeground: Color(0xFFB9B9CE),
+      sidebarItemActiveForeground: Color(0xFFE7E7F0),
+      radiusSm: _radiusSm,
+      radiusMd: _radiusMd,
+      radiusLg: _radiusLg,
+    );
+  }
+
+  static SlTokens _lightTokens() {
+    return const SlTokens(
+      background: _lightBackground,
+      surface: _lightSurface,
+      surface2: _lightSurface2,
+      border: _lightBorder,
+      borderSubtle: Color(0xFFDDE1EC),
+      ring: _accent,
+      sidebarBackground: Color(0xCCFFFFFF),
+      sidebarBorder: Color(0x66E6E8F0),
+      sidebarItemHover: Color(0x146366F1),
+      sidebarItemActive: Color(0x1F6366F1),
+      sidebarItemForeground: Color(0xFF475569),
+      sidebarItemActiveForeground: Color(0xFF0F172A),
+      radiusSm: _radiusSm,
+      radiusMd: _radiusMd,
+      radiusLg: _radiusLg,
     );
   }
 

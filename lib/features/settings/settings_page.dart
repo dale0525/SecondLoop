@@ -10,6 +10,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_surface.dart';
 import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
@@ -266,7 +267,7 @@ class _SettingsPageState extends State<SettingsPage> {
             defaultTargetPlatform == TargetPlatform.windows);
 
     Widget sectionCard(List<Widget> children) {
-      return Card(
+      return SlSurface(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

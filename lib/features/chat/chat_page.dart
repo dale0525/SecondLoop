@@ -14,6 +14,12 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../ui/sl_button.dart';
+import '../../ui/sl_focus_ring.dart';
+import '../../ui/sl_icon_button_frame.dart';
+import '../../ui/sl_icon_button.dart';
+import '../../ui/sl_surface.dart';
+import '../../ui/sl_tokens.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../settings/cloud_account_page.dart';
@@ -37,6 +43,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _asking = false;
   bool _stopRequested = false;
   bool _thisThreadOnly = false;
+  bool _hoverActionsEnabled = false;
+  String? _hoveredMessageId;
   String? _pendingQuestion;
   String _streamingAnswer = '';
   String? _askError;
@@ -79,27 +87,43 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _showMessageActions(Message message) async {
     if (message.id.startsWith('pending_')) return;
+    final canEdit = message.role == 'user';
 
     final action = await showModalBottomSheet<_MessageAction>(
       context: context,
       builder: (context) {
+        final tokens = SlTokens.of(context);
+        final colorScheme = Theme.of(context).colorScheme;
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                key: const ValueKey('message_action_edit'),
-                leading: const Icon(Icons.edit),
-                title: Text(context.t.common.actions.edit),
-                onTap: () => Navigator.of(context).pop(_MessageAction.edit),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SlSurface(
+              key: const ValueKey('message_actions_sheet'),
+              color: tokens.surface2,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (canEdit)
+                    ListTile(
+                      key: const ValueKey('message_action_edit'),
+                      leading: const Icon(Icons.edit_rounded),
+                      title: Text(context.t.common.actions.edit),
+                      onTap: () =>
+                          Navigator.of(context).pop(_MessageAction.edit),
+                    ),
+                  ListTile(
+                    key: const ValueKey('message_action_delete'),
+                    leading: const Icon(Icons.delete_outline_rounded),
+                    iconColor: colorScheme.error,
+                    textColor: colorScheme.error,
+                    title: Text(context.t.common.actions.delete),
+                    onTap: () =>
+                        Navigator.of(context).pop(_MessageAction.delete),
+                  ),
+                ],
               ),
-              ListTile(
-                key: const ValueKey('message_action_delete'),
-                leading: const Icon(Icons.delete_outline),
-                title: Text(context.t.common.actions.delete),
-                onTap: () => Navigator.of(context).pop(_MessageAction.delete),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -140,12 +164,16 @@ class _ChatPageState extends State<ChatPage> {
               onChanged: (value) => draft = value,
             ),
             actions: [
-              TextButton(
+              SlButton(
+                variant: SlButtonVariant.outline,
+                icon: const Icon(Icons.close_rounded, size: 18),
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text(context.t.common.actions.cancel),
               ),
-              FilledButton(
-                key: const ValueKey('edit_message_save'),
+              SlButton(
+                buttonKey: const ValueKey('edit_message_save'),
+                icon: const Icon(Icons.save_rounded, size: 18),
+                variant: SlButtonVariant.primary,
                 onPressed: () => Navigator.of(context).pop(draft),
                 child: Text(context.t.common.actions.save),
               ),
@@ -683,6 +711,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = SlTokens.of(context);
     final title = widget.conversation.id == 'main_stream'
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
@@ -703,309 +732,377 @@ class _ChatPageState extends State<ChatPage> {
                 child: Text(context.t.chat.focus.thisThread),
               ),
             ],
-            icon: const Icon(Icons.filter_alt),
             tooltip: context.t.chat.focus.tooltip,
+            child: const SlIconButtonFrame(
+              key: ValueKey('chat_filter_menu'),
+              icon: Icons.filter_alt_rounded,
+            ),
           ),
         ],
       ),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).scaffoldBackgroundColor,
-              Color.alphaBlend(
-                colorScheme.primary.withOpacity(0.04),
-                Theme.of(context).scaffoldBackgroundColor,
-              ),
-            ],
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: FutureBuilder(
-                    future: _messagesFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text(
-                            context.t.errors
-                                .loadFailed(error: '${snapshot.error}'),
-                          ),
-                        );
-                      }
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 880),
+                child: FutureBuilder(
+                  future: _messagesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          context.t.errors
+                              .loadFailed(error: '${snapshot.error}'),
+                        ),
+                      );
+                    }
 
-                      final messages = snapshot.data ?? const <Message>[];
-                      final pendingQuestion = _pendingQuestion;
-                      final extraCount = (pendingQuestion == null ? 0 : 1) +
-                          (_asking && !_stopRequested ? 1 : 0);
-                      if (messages.isEmpty && extraCount == 0) {
-                        return Center(
-                          child: Text(context.t.chat.noMessagesYet),
-                        );
-                      }
+                    final messages = snapshot.data ?? const <Message>[];
+                    final pendingQuestion = _pendingQuestion;
+                    final extraCount = (pendingQuestion == null ? 0 : 1) +
+                        (_asking && !_stopRequested ? 1 : 0);
+                    if (messages.isEmpty && extraCount == 0) {
+                      return Center(
+                        child: Text(context.t.chat.noMessagesYet),
+                      );
+                    }
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        itemCount: messages.length + extraCount,
-                        itemBuilder: (context, index) {
-                          final backend = AppBackendScope.of(context);
-                          final attachmentsBackend =
-                              backend is AttachmentsBackend
-                                  ? backend as AttachmentsBackend
-                                  : null;
-                          final sessionKey =
-                              SessionScope.of(context).sessionKey;
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      itemCount: messages.length + extraCount,
+                      itemBuilder: (context, index) {
+                        final backend = AppBackendScope.of(context);
+                        final attachmentsBackend = backend is AttachmentsBackend
+                            ? backend as AttachmentsBackend
+                            : null;
+                        final sessionKey = SessionScope.of(context).sessionKey;
 
-                          Message? msg;
-                          String? textOverride;
-                          if (index < messages.length) {
-                            msg = messages[index];
-                          } else {
-                            var extraIndex = index - messages.length;
-                            if (pendingQuestion != null) {
-                              if (extraIndex == 0) {
-                                msg = Message(
-                                  id: 'pending_user',
-                                  conversationId: widget.conversation.id,
-                                  role: 'user',
-                                  content: pendingQuestion,
-                                  createdAtMs: 0,
-                                );
-                              }
-                              extraIndex -= 1;
-                            }
-                            if (msg == null &&
-                                _asking &&
-                                !_stopRequested &&
-                                extraIndex == 0) {
+                        Message? msg;
+                        String? textOverride;
+                        if (index < messages.length) {
+                          msg = messages[index];
+                        } else {
+                          var extraIndex = index - messages.length;
+                          if (pendingQuestion != null) {
+                            if (extraIndex == 0) {
                               msg = Message(
-                                id: 'pending_assistant',
+                                id: 'pending_user',
                                 conversationId: widget.conversation.id,
-                                role: 'assistant',
-                                content: '',
+                                role: 'user',
+                                content: pendingQuestion,
                                 createdAtMs: 0,
                               );
-                              textOverride = _streamingAnswer.isEmpty
-                                  ? '…'
-                                  : _streamingAnswer;
                             }
+                            extraIndex -= 1;
                           }
-
-                          final stableMsg = msg;
-                          if (stableMsg == null) {
-                            return const SizedBox.shrink();
+                          if (msg == null &&
+                              _asking &&
+                              !_stopRequested &&
+                              extraIndex == 0) {
+                            msg = Message(
+                              id: 'pending_assistant',
+                              conversationId: widget.conversation.id,
+                              role: 'assistant',
+                              content: '',
+                              createdAtMs: 0,
+                            );
+                            textOverride = _streamingAnswer.isEmpty
+                                ? '…'
+                                : _streamingAnswer;
                           }
+                        }
 
-                          final isUser = stableMsg.role == 'user';
-                          final bubbleShape = RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            side: BorderSide(
-                              color: colorScheme.outlineVariant
-                                  .withOpacity(isUser ? 0 : 0.65),
+                        final stableMsg = msg;
+                        if (stableMsg == null) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final isUser = stableMsg.role == 'user';
+                        final bubbleShape = RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: BorderSide(
+                            color: isUser
+                                ? colorScheme.primary.withOpacity(
+                                    Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? 0.28
+                                        : 0.22,
+                                  )
+                                : tokens.borderSubtle,
+                          ),
+                        );
+                        final bubbleColor = isUser
+                            ? colorScheme.primaryContainer
+                            : tokens.surface2;
+
+                        final isPending = stableMsg.id.startsWith('pending_');
+                        final showHoverMenu =
+                            !isPending && _hoveredMessageId == stableMsg.id;
+
+                        final supportsAttachments =
+                            attachmentsBackend != null && !isPending;
+
+                        final hoverMenuSlot = _hoverActionsEnabled && !isPending
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: SizedBox(
+                                  width: 72,
+                                  height: 32,
+                                  child: showHoverMenu
+                                      ? Row(
+                                          mainAxisAlignment: isUser
+                                              ? MainAxisAlignment.end
+                                              : MainAxisAlignment.start,
+                                          children: [
+                                            if (isUser) ...[
+                                              SlIconButton(
+                                                key: ValueKey(
+                                                    'message_edit_${stableMsg.id}'),
+                                                icon: Icons.edit_rounded,
+                                                onPressed: () =>
+                                                    _editMessage(stableMsg),
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            SlIconButton(
+                                              key: ValueKey(
+                                                  'message_delete_${stableMsg.id}'),
+                                              icon:
+                                                  Icons.delete_outline_rounded,
+                                              color: colorScheme.error,
+                                              overlayBaseColor:
+                                                  colorScheme.error,
+                                              borderColor:
+                                                  colorScheme.error.withOpacity(
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? 0.32
+                                                    : 0.22,
+                                              ),
+                                              onPressed: () =>
+                                                  _deleteMessage(stableMsg),
+                                            ),
+                                          ],
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              )
+                            : const SizedBox.shrink();
+
+                        final bubble = ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: Material(
+                            color: bubbleColor,
+                            shape: bubbleShape,
+                            child: InkWell(
+                              onLongPress: () => _showMessageActions(stableMsg),
+                              borderRadius: BorderRadius.circular(18),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(textOverride ?? stableMsg.content),
+                                    if (supportsAttachments)
+                                      FutureBuilder(
+                                        future: _attachmentsFuturesByMessageId
+                                            .putIfAbsent(
+                                          stableMsg.id,
+                                          () => attachmentsBackend
+                                              .listMessageAttachments(
+                                            sessionKey,
+                                            stableMsg.id,
+                                          ),
+                                        ),
+                                        builder: (context, snapshot) {
+                                          final items = snapshot.data ??
+                                              const <Attachment>[];
+                                          if (items.isEmpty) {
+                                            return const SizedBox.shrink();
+                                          }
+
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8,
+                                            ),
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: Row(
+                                                children: [
+                                                  for (final attachment
+                                                      in items)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                        right: 8,
+                                                      ),
+                                                      child: AttachmentCard(
+                                                        attachment: attachment,
+                                                        onTap: () {
+                                                          Navigator.of(context)
+                                                              .push(
+                                                            MaterialPageRoute(
+                                                              builder:
+                                                                  (context) {
+                                                                return AttachmentViewerPage(
+                                                                  attachment:
+                                                                      attachment,
+                                                                );
+                                                              },
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          );
-                          final bubbleColor = isUser
-                              ? colorScheme.primaryContainer
-                              : colorScheme.surface;
+                          ),
+                        );
 
-                          final supportsAttachments =
-                              attachmentsBackend != null &&
-                                  !stableMsg.id.startsWith('pending_');
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          child: MouseRegion(
+                            onEnter: isPending
+                                ? null
+                                : (_) => setState(
+                                      () {
+                                        _hoverActionsEnabled = true;
+                                        _hoveredMessageId = stableMsg.id;
+                                      },
+                                    ),
+                            onExit: isPending
+                                ? null
+                                : (_) => setState(() {
+                                      if (_hoveredMessageId == stableMsg.id) {
+                                        _hoveredMessageId = null;
+                                      }
+                                    }),
                             child: Row(
                               mainAxisAlignment: isUser
                                   ? MainAxisAlignment.end
                                   : MainAxisAlignment.start,
                               children: [
-                                ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 560),
-                                  child: Material(
-                                    color: bubbleColor,
-                                    shape: bubbleShape,
-                                    child: InkWell(
-                                      onLongPress: () =>
-                                          _showMessageActions(stableMsg),
-                                      borderRadius: BorderRadius.circular(18),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 14,
-                                          vertical: 12,
-                                        ),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(textOverride ??
-                                                stableMsg.content),
-                                            if (supportsAttachments)
-                                              FutureBuilder(
-                                                future:
-                                                    _attachmentsFuturesByMessageId
-                                                        .putIfAbsent(
-                                                  stableMsg.id,
-                                                  () => attachmentsBackend
-                                                      .listMessageAttachments(
-                                                    sessionKey,
-                                                    stableMsg.id,
-                                                  ),
-                                                ),
-                                                builder: (context, snapshot) {
-                                                  final items = snapshot.data ??
-                                                      const <Attachment>[];
-                                                  if (items.isEmpty) {
-                                                    return const SizedBox
-                                                        .shrink();
-                                                  }
-
-                                                  return Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                      top: 8,
-                                                    ),
-                                                    child:
-                                                        SingleChildScrollView(
-                                                      scrollDirection:
-                                                          Axis.horizontal,
-                                                      child: Row(
-                                                        children: [
-                                                          for (final attachment
-                                                              in items)
-                                                            Padding(
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .only(
-                                                                right: 8,
-                                                              ),
-                                                              child:
-                                                                  AttachmentCard(
-                                                                attachment:
-                                                                    attachment,
-                                                                onTap: () {
-                                                                  Navigator.of(
-                                                                          context)
-                                                                      .push(
-                                                                    MaterialPageRoute(
-                                                                      builder:
-                                                                          (context) {
-                                                                        return AttachmentViewerPage(
-                                                                          attachment:
-                                                                              attachment,
-                                                                        );
-                                                                      },
-                                                                    ),
-                                                                  );
-                                                                },
-                                                              ),
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                if (isUser) hoverMenuSlot,
+                                bubble,
+                                if (!isUser) hoverMenuSlot,
                               ],
                             ),
-                          );
-                        },
-                      );
-                    },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          if (_askError != null)
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 880),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Text(
+                    _askError!,
+                    style: TextStyle(color: colorScheme.error),
                   ),
                 ),
               ),
             ),
-            if (_askError != null)
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Text(
-                      _askError!,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                  ),
-                ),
-              ),
-            SafeArea(
-              top: false,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('chat_input'),
-                                controller: _controller,
-                                decoration: InputDecoration(
-                                  hintText: context.t.common.fields.message,
-                                  border: InputBorder.none,
-                                  filled: false,
-                                ),
-                                onSubmitted: (_) => _send(),
+          SafeArea(
+            top: false,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 880),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SlFocusRing(
+                    key: const ValueKey('chat_input_ring'),
+                    borderRadius: BorderRadius.circular(tokens.radiusLg),
+                    child: SlSurface(
+                      color: tokens.surface2,
+                      borderColor: tokens.borderSubtle,
+                      borderRadius: BorderRadius.circular(tokens.radiusLg),
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const ValueKey('chat_input'),
+                              controller: _controller,
+                              decoration: InputDecoration(
+                                hintText: context.t.common.fields.message,
+                                border: InputBorder.none,
+                                filled: false,
                               ),
+                              onSubmitted: (_) => _send(),
                             ),
-                            const SizedBox(width: 8),
-                            FilledButton(
-                              key: const ValueKey('chat_send'),
-                              onPressed: (_sending || _asking) ? null : _send,
-                              child: Text(context.t.common.actions.send),
-                            ),
-                            const SizedBox(width: 8),
-                            if (_asking)
-                              OutlinedButton(
-                                key: const ValueKey('chat_stop'),
-                                onPressed: _stopRequested ? null : _stopAsk,
-                                child: Text(
-                                  _stopRequested
-                                      ? context.t.common.actions.stopping
-                                      : context.t.common.actions.stop,
-                                ),
-                              )
-                            else
-                              FilledButton.tonal(
-                                key: const ValueKey('chat_ask_ai'),
-                                onPressed:
-                                    (_sending || _asking) ? null : _askAi,
-                                child: Text(context.t.common.actions.askAi),
+                          ),
+                          const SizedBox(width: 8),
+                          SlButton(
+                            buttonKey: const ValueKey('chat_send'),
+                            icon: const Icon(Icons.send_rounded, size: 18),
+                            variant: SlButtonVariant.primary,
+                            onPressed: (_sending || _asking) ? null : _send,
+                            child: Text(context.t.common.actions.send),
+                          ),
+                          const SizedBox(width: 8),
+                          if (_asking)
+                            SlButton(
+                              buttonKey: const ValueKey('chat_stop'),
+                              icon: const Icon(
+                                Icons.stop_circle_outlined,
+                                size: 18,
                               ),
-                          ],
-                        ),
+                              variant: SlButtonVariant.outline,
+                              onPressed: _stopRequested ? null : _stopAsk,
+                              child: Text(
+                                _stopRequested
+                                    ? context.t.common.actions.stopping
+                                    : context.t.common.actions.stop,
+                              ),
+                            )
+                          else
+                            SlButton(
+                              buttonKey: const ValueKey('chat_ask_ai'),
+                              icon: const Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 18,
+                              ),
+                              variant: SlButtonVariant.secondary,
+                              onPressed: (_sending || _asking) ? null : _askAi,
+                              child: Text(context.t.common.actions.askAi),
+                            ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

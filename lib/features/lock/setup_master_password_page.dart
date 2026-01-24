@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_surface.dart';
 
 class SetupMasterPasswordPage extends StatefulWidget {
   const SetupMasterPasswordPage({required this.onUnlocked, super.key});
@@ -93,59 +94,57 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
           constraints: const BoxConstraints(maxWidth: 460),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      context.t.lock.masterPasswordRequired,
-                      style: Theme.of(context).textTheme.titleMedium,
+            child: SlSurface(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    context.t.lock.masterPasswordRequired,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    key: const ValueKey('setup_password'),
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: context.t.common.fields.masterPassword,
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      key: const ValueKey('setup_password'),
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: context.t.common.fields.masterPassword,
-                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('setup_confirm_password'),
+                    controller: _confirmController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: context.t.common.fields.confirm,
                     ),
+                  ),
+                  if (_error != null) ...[
                     const SizedBox(height: 12),
-                    TextField(
-                      key: const ValueKey('setup_confirm_password'),
-                      controller: _confirmController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: context.t.common.fields.confirm,
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        key: const ValueKey('setup_continue'),
-                        onPressed: _busy ? null : _submit,
-                        child: Text(
-                          _busy
-                              ? context.t.lock.creating
-                              : context.t.common.actions.continueLabel,
-                        ),
+                    Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey('setup_continue'),
+                      onPressed: _busy ? null : _submit,
+                      child: Text(
+                        _busy
+                            ? context.t.lock.creating
+                            : context.t.common.actions.continueLabel,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

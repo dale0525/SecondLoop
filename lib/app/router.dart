@@ -6,6 +6,9 @@ import '../features/chat/chat_page.dart';
 import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
+import '../ui/sl_glass.dart';
+import '../ui/sl_surface.dart';
+import '../ui/sl_tokens.dart';
 
 enum AppTab {
   mainStream(Icons.chat_bubble_outline, Icons.chat_bubble),
@@ -34,6 +37,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final useRail = constraints.maxWidth >= 720;
@@ -49,40 +53,70 @@ class _AppShellState extends State<AppShell> {
           body: useRail
               ? Row(
                   children: [
-                    NavigationRail(
-                      selectedIndex: _selectedIndex,
-                      onDestinationSelected: (index) =>
-                          setState(() => _selectedIndex = index),
-                      labelType: NavigationRailLabelType.all,
-                      destinations: [
-                        for (final t in AppTab.values)
-                          NavigationRailDestination(
-                            icon: Icon(t.icon),
-                            selectedIcon: Icon(t.selectedIcon),
-                            label: Text(t.label(context)),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 92,
+                        child: SlGlass(
+                          borderRadius: BorderRadius.circular(tokens.radiusLg),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: NavigationRail(
+                            selectedIndex: _selectedIndex,
+                            onDestinationSelected: (index) =>
+                                setState(() => _selectedIndex = index),
+                            labelType: NavigationRailLabelType.all,
+                            destinations: [
+                              for (final t in AppTab.values)
+                                NavigationRailDestination(
+                                  icon: Icon(t.icon),
+                                  selectedIcon: Icon(t.selectedIcon),
+                                  label: Text(t.label(context)),
+                                ),
+                            ],
                           ),
-                      ],
+                        ),
+                      ),
                     ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: content),
+                    Expanded(
+                      child: SlPageSurface(
+                        margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(tokens.radiusLg),
+                          child: content,
+                        ),
+                      ),
+                    ),
                   ],
                 )
-              : content,
+              : SlPageSurface(
+                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(tokens.radiusLg),
+                    child: content,
+                  ),
+                ),
           bottomNavigationBar: useRail
               ? null
-              : NavigationBar(
-                  selectedIndex: _selectedIndex,
-                  destinations: [
-                    for (final t in AppTab.values)
-                      NavigationDestination(
-                        icon: Icon(t.icon),
-                        selectedIcon: Icon(t.selectedIcon),
-                        label: t.label(context),
-                      ),
-                  ],
-                  onDestinationSelected: (index) {
-                    setState(() => _selectedIndex = index);
-                  },
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: SlGlass(
+                    borderRadius: BorderRadius.circular(tokens.radiusLg),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: NavigationBar(
+                      selectedIndex: _selectedIndex,
+                      destinations: [
+                        for (final t in AppTab.values)
+                          NavigationDestination(
+                            icon: Icon(t.icon),
+                            selectedIcon: Icon(t.selectedIcon),
+                            label: t.label(context),
+                          ),
+                      ],
+                      onDestinationSelected: (index) {
+                        setState(() => _selectedIndex = index);
+                      },
+                    ),
+                  ),
                 ),
         );
       },

@@ -4,6 +4,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../ui/sl_surface.dart';
 
 class LlmProfilesPage extends StatefulWidget {
   const LlmProfilesPage({super.key});
@@ -228,61 +229,59 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: profiles == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : profiles.isEmpty
-                      ? Text(context.t.llmProfiles.noProfilesYet)
-                      : Column(
-                          children: [
-                            for (var i = 0; i < profiles.length; i++) ...[
-                              if (i != 0) const Divider(height: 1),
-                              RadioListTile<String>(
-                                value: profiles[i].id,
-                                groupValue: activeId,
-                                onChanged: _busy
-                                    ? null
-                                    : (v) =>
-                                        v == null ? null : _activateProfile(v),
-                                title: Text(profiles[i].name),
-                                subtitle: Text(
-                                  [
-                                    profiles[i].providerType,
-                                    profiles[i].modelName,
-                                    if (profiles[i].baseUrl != null &&
-                                        profiles[i].baseUrl!.isNotEmpty)
-                                      profiles[i].baseUrl!,
-                                  ].join(' • '),
-                                ),
-                                secondary: PopupMenuButton<_ProfileMenuAction>(
-                                  key: ValueKey(
-                                    'llm_profile_actions_${profiles[i].id}',
-                                  ),
-                                  enabled: !_busy,
-                                  onSelected: (action) async {
-                                    switch (action) {
-                                      case _ProfileMenuAction.delete:
-                                        await _deleteProfile(profiles[i]);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    PopupMenuItem<_ProfileMenuAction>(
-                                      key: ValueKey(
-                                        'llm_profile_delete_${profiles[i].id}',
-                                      ),
-                                      value: _ProfileMenuAction.delete,
-                                      child: Text(
-                                          context.t.llmProfiles.actions.delete),
-                                    ),
-                                  ],
-                                ),
+          SlSurface(
+            padding: const EdgeInsets.all(12),
+            child: profiles == null
+                ? const Center(child: CircularProgressIndicator())
+                : profiles.isEmpty
+                    ? Text(context.t.llmProfiles.noProfilesYet)
+                    : Column(
+                        children: [
+                          for (var i = 0; i < profiles.length; i++) ...[
+                            if (i != 0) const Divider(height: 1),
+                            RadioListTile<String>(
+                              value: profiles[i].id,
+                              groupValue: activeId,
+                              onChanged: _busy
+                                  ? null
+                                  : (v) =>
+                                      v == null ? null : _activateProfile(v),
+                              title: Text(profiles[i].name),
+                              subtitle: Text(
+                                [
+                                  profiles[i].providerType,
+                                  profiles[i].modelName,
+                                  if (profiles[i].baseUrl != null &&
+                                      profiles[i].baseUrl!.isNotEmpty)
+                                    profiles[i].baseUrl!,
+                                ].join(' • '),
                               ),
-                            ],
+                              secondary: PopupMenuButton<_ProfileMenuAction>(
+                                key: ValueKey(
+                                  'llm_profile_actions_${profiles[i].id}',
+                                ),
+                                enabled: !_busy,
+                                onSelected: (action) async {
+                                  switch (action) {
+                                    case _ProfileMenuAction.delete:
+                                      await _deleteProfile(profiles[i]);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  PopupMenuItem<_ProfileMenuAction>(
+                                    key: ValueKey(
+                                      'llm_profile_delete_${profiles[i].id}',
+                                    ),
+                                    value: _ProfileMenuAction.delete,
+                                    child: Text(
+                                        context.t.llmProfiles.actions.delete),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
-                        ),
-            ),
+                        ],
+                      ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -293,132 +292,130 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      labelText: context.t.llmProfiles.fields.name,
-                    ),
+          SlSurface(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: context.t.llmProfiles.fields.name,
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    key: const ValueKey('llm_provider_type'),
-                    value: _providerType,
-                    decoration: InputDecoration(
-                      labelText: context.t.llmProfiles.fields.provider,
-                    ),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'openai-compatible',
-                        child: Text(
-                          context.t.llmProfiles.providers.openaiCompatible,
-                        ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  key: const ValueKey('llm_provider_type'),
+                  value: _providerType,
+                  decoration: InputDecoration(
+                    labelText: context.t.llmProfiles.fields.provider,
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'openai-compatible',
+                      child: Text(
+                        context.t.llmProfiles.providers.openaiCompatible,
                       ),
-                      DropdownMenuItem(
-                        value: 'gemini-compatible',
-                        child: Text(
-                            context.t.llmProfiles.providers.geminiCompatible),
-                      ),
-                      DropdownMenuItem(
-                        value: 'anthropic-compatible',
-                        child: Text(
-                          context.t.llmProfiles.providers.anthropicCompatible,
-                        ),
-                      ),
-                    ],
-                    onChanged: _busy
-                        ? null
-                        : (v) {
-                            if (v == null) return;
-                            setState(() {
-                              final oldProviderType = _providerType;
-                              _providerType = v;
-
-                              final oldDefaultModel =
-                                  _defaultModelByProvider[oldProviderType];
-                              final newDefaultModel =
-                                  _defaultModelByProvider[_providerType];
-                              if (newDefaultModel != null) {
-                                final modelText = _modelController.text.trim();
-                                if (modelText.isEmpty ||
-                                    modelText == oldDefaultModel) {
-                                  _modelController.text = newDefaultModel;
-                                }
-                              }
-
-                              final oldDefaultName =
-                                  _defaultNameByProvider[oldProviderType];
-                              final newDefaultName =
-                                  _defaultNameByProvider[_providerType];
-                              if (newDefaultName != null) {
-                                final nameText = _nameController.text.trim();
-                                if (nameText.isEmpty ||
-                                    nameText == oldDefaultName) {
-                                  _nameController.text = newDefaultName;
-                                }
-                              }
-
-                              final oldDefaultBaseUrl =
-                                  _defaultBaseUrlByProvider[oldProviderType];
-                              final newDefaultBaseUrl =
-                                  _defaultBaseUrlByProvider[_providerType];
-                              if (newDefaultBaseUrl != null) {
-                                final baseUrlText =
-                                    _baseUrlController.text.trim();
-                                if (baseUrlText.isEmpty ||
-                                    baseUrlText == oldDefaultBaseUrl) {
-                                  _baseUrlController.text = newDefaultBaseUrl;
-                                }
-                              }
-                            });
-                          },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    key: const ValueKey('llm_base_url'),
-                    controller: _baseUrlController,
-                    decoration: InputDecoration(
-                      labelText: context.t.llmProfiles.fields.baseUrlOptional,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    key: const ValueKey('llm_model_name'),
-                    controller: _modelController,
-                    decoration: InputDecoration(
-                      labelText: context.t.llmProfiles.fields.modelName,
+                    DropdownMenuItem(
+                      value: 'gemini-compatible',
+                      child: Text(
+                          context.t.llmProfiles.providers.geminiCompatible),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _apiKeyController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: context.t.llmProfiles.fields.apiKey,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    key: const ValueKey('llm_profile_save_activate'),
-                    onPressed: _busy ? null : _createProfile,
-                    child: Text(context.t.llmProfiles.actions.saveActivate),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                    DropdownMenuItem(
+                      value: 'anthropic-compatible',
+                      child: Text(
+                        context.t.llmProfiles.providers.anthropicCompatible,
                       ),
                     ),
                   ],
+                  onChanged: _busy
+                      ? null
+                      : (v) {
+                          if (v == null) return;
+                          setState(() {
+                            final oldProviderType = _providerType;
+                            _providerType = v;
+
+                            final oldDefaultModel =
+                                _defaultModelByProvider[oldProviderType];
+                            final newDefaultModel =
+                                _defaultModelByProvider[_providerType];
+                            if (newDefaultModel != null) {
+                              final modelText = _modelController.text.trim();
+                              if (modelText.isEmpty ||
+                                  modelText == oldDefaultModel) {
+                                _modelController.text = newDefaultModel;
+                              }
+                            }
+
+                            final oldDefaultName =
+                                _defaultNameByProvider[oldProviderType];
+                            final newDefaultName =
+                                _defaultNameByProvider[_providerType];
+                            if (newDefaultName != null) {
+                              final nameText = _nameController.text.trim();
+                              if (nameText.isEmpty ||
+                                  nameText == oldDefaultName) {
+                                _nameController.text = newDefaultName;
+                              }
+                            }
+
+                            final oldDefaultBaseUrl =
+                                _defaultBaseUrlByProvider[oldProviderType];
+                            final newDefaultBaseUrl =
+                                _defaultBaseUrlByProvider[_providerType];
+                            if (newDefaultBaseUrl != null) {
+                              final baseUrlText =
+                                  _baseUrlController.text.trim();
+                              if (baseUrlText.isEmpty ||
+                                  baseUrlText == oldDefaultBaseUrl) {
+                                _baseUrlController.text = newDefaultBaseUrl;
+                              }
+                            }
+                          });
+                        },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('llm_base_url'),
+                  controller: _baseUrlController,
+                  decoration: InputDecoration(
+                    labelText: context.t.llmProfiles.fields.baseUrlOptional,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('llm_model_name'),
+                  controller: _modelController,
+                  decoration: InputDecoration(
+                    labelText: context.t.llmProfiles.fields.modelName,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _apiKeyController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: context.t.llmProfiles.fields.apiKey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton(
+                  key: const ValueKey('llm_profile_save_activate'),
+                  onPressed: _busy ? null : _createProfile,
+                  child: Text(context.t.llmProfiles.actions.saveActivate),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ],

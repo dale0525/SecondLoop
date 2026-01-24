@@ -12,6 +12,7 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_surface.dart';
 
 class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
@@ -398,11 +399,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     }
 
     Widget sectionCard(Widget child) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: child,
-        ),
+      return SlSurface(
+        padding: const EdgeInsets.all(12),
+        child: child,
       );
     }
 

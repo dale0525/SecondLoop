@@ -7,6 +7,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
 import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/ui/sl_glass.dart';
 
 void main() {
   testWidgets('Quick capture inserts into Main Stream and hides',
@@ -23,6 +24,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('quick_capture_input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick_capture_ring')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('quick_capture_ring')),
+        matching: find.byKey(const ValueKey('quick_capture_input')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('quick_capture_input')),
+        matching: find.byType(SlGlass),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('quick_capture_input')));
     await tester.pump();

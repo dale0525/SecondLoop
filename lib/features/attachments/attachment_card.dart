@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../src/rust/db.dart';
+import '../../ui/sl_surface.dart';
+import '../../ui/sl_tokens.dart';
 
 class AttachmentCard extends StatelessWidget {
   const AttachmentCard({
@@ -14,6 +16,8 @@ class AttachmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final radius = BorderRadius.circular(tokens.radiusLg);
     final isImage = attachment.mimeType.startsWith('image/');
     final byteLen = attachment.byteLen.toInt();
     final subtitle = _formatBytes(byteLen);
@@ -52,13 +56,20 @@ class AttachmentCard extends StatelessWidget {
     );
 
     if (onTap == null) {
-      return Card(child: child);
+      return SlSurface(borderRadius: radius, child: child);
     }
 
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        child: child,
+    return SlSurface(
+      borderRadius: radius,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            child: child,
+          ),
+        ),
       ),
     );
   }

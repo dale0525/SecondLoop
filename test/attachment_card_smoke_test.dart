@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_card.dart';
 import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 void main() {
   testWidgets('AttachmentCard renders basic metadata', (tester) async {
@@ -24,5 +25,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('image/png'), findsOneWidget);
+    expect(find.byType(SlSurface), findsOneWidget);
   });
 }

@@ -16,6 +16,7 @@ import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
 import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
+import '../ui/sl_background.dart';
 import 'router.dart';
 import 'theme.dart';
 import '../features/lock/lock_gate.dart';
@@ -107,15 +108,17 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                     navigatorKey: _navigatorKey,
                     home: const AppShell(),
                     builder: (context, child) {
-                      return AppBootstrap(
-                        child: DesktopQuickCaptureService(
-                          child: ShareIntentListener(
-                            child: LockGate(
-                              child: SyncEngineGate(
-                                child: ShareIngestGate(
-                                  child: QuickCaptureOverlay(
-                                    navigatorKey: _navigatorKey,
-                                    child: child ?? const SizedBox.shrink(),
+                      return SlBackground(
+                        child: AppBootstrap(
+                          child: DesktopQuickCaptureService(
+                            child: ShareIntentListener(
+                              child: LockGate(
+                                child: SyncEngineGate(
+                                  child: ShareIngestGate(
+                                    child: QuickCaptureOverlay(
+                                      navigatorKey: _navigatorKey,
+                                      child: child ?? const SizedBox.shrink(),
+                                    ),
                                   ),
                                 ),
                               ),

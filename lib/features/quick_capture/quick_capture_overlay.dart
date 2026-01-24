@@ -10,6 +10,8 @@ import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_focus_ring.dart';
+import '../../ui/sl_glass.dart';
 
 class QuickCaptureOverlay extends StatefulWidget {
   const QuickCaptureOverlay({
@@ -179,8 +181,9 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                 Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 560),
-                    child: Card(
-                      child: Padding(
+                    child: SlFocusRing(
+                      key: const ValueKey('quick_capture_ring'),
+                      child: SlGlass(
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [

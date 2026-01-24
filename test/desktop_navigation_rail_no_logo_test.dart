@@ -3,85 +3,43 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('LLM profiles page can delete a profile', (tester) async {
-    final backend = _MutableLlmProfilesBackend();
+  testWidgets('Desktop NavigationRail has no loop logo', (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
           home: AppBackendScope(
-            backend: backend,
+            backend: _Backend(),
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const LlmProfilesPage(),
+              child: const Center(
+                child: SizedBox(
+                  width: 1000,
+                  height: 800,
+                  child: AppShell(),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
-
     await tester.pumpAndSettle();
 
-    expect(find.byType(SlSurface), findsWidgets);
-
-    Finder profileTile(String id) => find.byWidgetPredicate(
-          (w) => w is RadioListTile<String> && w.value == id,
-        );
-
-    expect(find.byType(RadioListTile<String>), findsNWidgets(2));
-    expect(profileTile('p1'), findsOneWidget);
-    expect(profileTile('p2'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('llm_profile_actions_p1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('llm_profile_delete_p1')));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('llm_profile_delete_confirm')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(RadioListTile<String>), findsOneWidget);
-    expect(profileTile('p1'), findsNothing);
-    expect(profileTile('p2'), findsOneWidget);
-    expect(backend.deletedProfileIds, contains('p1'));
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byIcon(Icons.loop), findsNothing);
   });
 }
 
-final class _MutableLlmProfilesBackend extends AppBackend {
-  final List<String> deletedProfileIds = <String>[];
-
-  List<LlmProfile> _profiles = const <LlmProfile>[
-    LlmProfile(
-      id: 'p1',
-      name: 'OpenAI',
-      providerType: 'openai-compatible',
-      baseUrl: 'https://api.openai.com/v1',
-      modelName: 'gpt-4o-mini',
-      isActive: true,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-    ),
-    LlmProfile(
-      id: 'p2',
-      name: 'Gemini',
-      providerType: 'gemini-compatible',
-      baseUrl: null,
-      modelName: 'gemini-1.5-flash',
-      isActive: false,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-    ),
-  ];
-
+final class _Backend extends AppBackend {
   @override
   Future<void> init() async {}
 
@@ -120,15 +78,27 @@ final class _MutableLlmProfilesBackend extends AppBackend {
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
-      throw UnimplementedError();
+      Conversation(
+        id: 'c1',
+        title: title,
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      );
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      throw UnimplementedError();
+      const Conversation(
+        id: 'main_stream',
+        title: 'Main Stream',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      );
 
   @override
   Future<List<Message>> listMessages(
-          Uint8List key, String conversationId) async =>
+    Uint8List key,
+    String conversationId,
+  ) async =>
       const <Message>[];
 
   @override
@@ -138,27 +108,33 @@ final class _MutableLlmProfilesBackend extends AppBackend {
     required String role,
     required String content,
   }) async =>
-      throw UnimplementedError();
+      Message(
+        id: 'm1',
+        conversationId: conversationId,
+        role: role,
+        content: content,
+        createdAtMs: 0,
+      );
 
   @override
   Future<void> editMessage(
-          Uint8List key, String messageId, String content) async =>
-      throw UnimplementedError();
+      Uint8List key, String messageId, String content) async {}
 
   @override
   Future<void> setMessageDeleted(
     Uint8List key,
     String messageId,
     bool isDeleted,
-  ) async =>
-      throw UnimplementedError();
+  ) async {}
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key,
-          {int limit = 32}) async =>
+  Future<int> processPendingMessageEmbeddings(
+    Uint8List key, {
+    int limit = 32,
+  }) async =>
       0;
 
   @override
@@ -170,8 +146,10 @@ final class _MutableLlmProfilesBackend extends AppBackend {
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key,
-          {int batchLimit = 256}) async =>
+  Future<int> rebuildMessageEmbeddings(
+    Uint8List key, {
+    int batchLimit = 256,
+  }) async =>
       0;
 
   @override
@@ -179,8 +157,7 @@ final class _MutableLlmProfilesBackend extends AppBackend {
       const <String>[];
 
   @override
-  Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
-      'secondloop-default-embed-v0';
+  Future<String> getActiveEmbeddingModelName(Uint8List key) async => '';
 
   @override
   Future<bool> setActiveEmbeddingModelName(
@@ -188,7 +165,8 @@ final class _MutableLlmProfilesBackend extends AppBackend {
       false;
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => _profiles;
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -206,11 +184,7 @@ final class _MutableLlmProfilesBackend extends AppBackend {
   Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {}
 
   @override
-  Future<void> deleteLlmProfile(Uint8List key, String profileId) async {
-    deletedProfileIds.add(profileId);
-    _profiles =
-        _profiles.where((p) => p.id != profileId).toList(growable: false);
-  }
+  Future<void> deleteLlmProfile(Uint8List key, String profileId) async {}
 
   @override
   Stream<String> askAiStream(
@@ -219,19 +193,6 @@ final class _MutableLlmProfilesBackend extends AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) =>
-      const Stream<String>.empty();
-
-  @override
-  Stream<String> askAiStreamCloudGateway(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
   }) =>
       const Stream<String>.empty();
 

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -32,6 +33,7 @@ void main() {
     await tester.longPress(find.text('hello'));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('message_actions_sheet')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
 
@@ -63,6 +65,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_edit')));
     await tester.pumpAndSettle();
 
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('edit_message_save')),
+        matching: find.byIcon(Icons.save_rounded),
+      ),
+      findsOneWidget,
+    );
     await tester.enterText(
         find.byKey(const ValueKey('edit_message_content')), 'updated');
     await tester.tap(find.byKey(const ValueKey('edit_message_save')));
@@ -71,6 +80,71 @@ void main() {
     expect(find.text('hello'), findsNothing);
     expect(find.text('updated'), findsOneWidget);
     expect(backend.editedMessageIds, contains('m1'));
+  });
+
+  testWidgets('Hover message shows menu button and opens actions',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_edit_m1')), findsNothing);
+    expect(find.byKey(const ValueKey('message_delete_m1')), findsNothing);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await tester.pump();
+    await mouse.moveTo(tester.getCenter(find.text('hello')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_edit_m1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_delete_m1')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('message_delete_m1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello'), findsNothing);
+    expect(backend.deletedMessageIds, contains('m1'));
+  });
+
+  testWidgets('AI messages are not editable', (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm2',
+          conversationId: 'main_stream',
+          role: 'assistant',
+          content: 'ai',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('ai'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_actions_sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_action_edit')), findsNothing);
+    expect(find.byKey(const ValueKey('message_action_delete')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('message_action_delete')));
+    await tester.pumpAndSettle();
+    expect(find.text('ai'), findsNothing);
+    expect(backend.deletedMessageIds, contains('m2'));
   });
 }
 
