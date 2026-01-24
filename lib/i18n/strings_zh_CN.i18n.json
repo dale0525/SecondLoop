@@ -45,13 +45,53 @@
     "lockGateError": "锁定流程错误：$error",
     "missingMainStream": "缺少主线对话"
   },
+  "actions": {
+    "capture": {
+      "title": "要把它变成提醒吗？",
+      "pickTime": "选择时间",
+      "reviewLater": "先放着，之后提醒我确认",
+      "justSave": "只保存为记录"
+    },
+    "reviewQueue": {
+      "title": "待确认",
+      "banner": "有 $count 条待确认事项",
+      "empty": "没有需要确认的事项",
+      "actions": {
+        "schedule": "安排时间",
+        "snooze": "稍后提醒",
+        "done": "完成",
+        "dismiss": "忽略"
+      }
+    },
+    "calendar": {
+      "title": "添加到日历？",
+      "pickTime": "选择开始时间",
+      "noAutoTime": "未找到可自动解析的时间",
+      "pickCustom": "选择日期时间"
+    }
+  },
   "settings": {
     "title": "设置",
     "sections": {
       "general": "通用",
+      "actions": "行动",
       "security": "安全",
       "connections": "连接",
       "debug": "调试"
+    },
+    "actionsReview": {
+      "morningTime": {
+        "title": "早上提醒时间",
+        "subtitle": "未排期事项的默认提醒时间"
+      },
+      "dayEndTime": {
+        "title": "日终时间",
+        "subtitle": "到此时间仍未处理，将降低提醒频率"
+      },
+      "weeklyTime": {
+        "title": "每周提醒时间",
+        "subtitle": "每周提醒时间（周日）"
+      }
     },
     "language": {
       "title": "语言",

@@ -39,6 +39,40 @@ abstract class AppBackend {
 
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key);
 
+  Future<List<Todo>> listTodos(Uint8List key) {
+    throw UnimplementedError('listTodos');
+  }
+
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+  }) {
+    throw UnimplementedError('upsertTodo');
+  }
+
+  Future<List<Event>> listEvents(Uint8List key) {
+    throw UnimplementedError('listEvents');
+  }
+
+  Future<Event> upsertEvent(
+    Uint8List key, {
+    required String id,
+    required String title,
+    required int startAtMs,
+    required int endAtMs,
+    required String tz,
+    String? sourceEntryId,
+  }) {
+    throw UnimplementedError('upsertEvent');
+  }
+
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,

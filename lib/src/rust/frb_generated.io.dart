@@ -36,7 +36,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
   Conversation dco_decode_conversation(dynamic raw);
+
+  @protected
+  Event dco_decode_event(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
@@ -54,6 +60,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Conversation> dco_decode_list_conversation(dynamic raw);
 
   @protected
+  List<Event> dco_decode_list_event(dynamic raw);
+
+  @protected
   List<LlmProfile> dco_decode_list_llm_profile(dynamic raw);
 
   @protected
@@ -69,6 +78,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SimilarMessage> dco_decode_list_similar_message(dynamic raw);
 
   @protected
+  List<Todo> dco_decode_list_todo(dynamic raw);
+
+  @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
 
   @protected
@@ -78,7 +90,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
   SimilarMessage dco_decode_similar_message(dynamic raw);
+
+  @protected
+  Todo dco_decode_todo(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -109,7 +127,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   Conversation sse_decode_conversation(SseDeserializer deserializer);
+
+  @protected
+  Event sse_decode_event(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
@@ -125,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Conversation> sse_decode_list_conversation(SseDeserializer deserializer);
+
+  @protected
+  List<Event> sse_decode_list_event(SseDeserializer deserializer);
 
   @protected
   List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer);
@@ -143,6 +170,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<Todo> sse_decode_list_todo(SseDeserializer deserializer);
+
+  @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
 
   @protected
@@ -152,7 +182,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   SimilarMessage sse_decode_similar_message(SseDeserializer deserializer);
+
+  @protected
+  Todo sse_decode_todo(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -187,7 +223,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_i_64(
+      PlatformInt64 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_conversation(Conversation self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_event(Event self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
@@ -205,6 +248,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_conversation(
       List<Conversation> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_event(List<Event> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_llm_profile(
@@ -225,6 +271,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<SimilarMessage> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_todo(List<Todo> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
 
   @protected
@@ -234,8 +283,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_i_64(
+      PlatformInt64? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_similar_message(
       SimilarMessage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo(Todo self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

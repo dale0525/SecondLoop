@@ -11,6 +11,7 @@ import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
@@ -27,6 +28,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool? _appLockEnabled;
   bool? _biometricUnlockEnabled;
   AppLocale? _localeOverride;
+  ActionsSettings? _actionsSettings;
   bool _busy = false;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
@@ -127,10 +129,13 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     }
     if (!mounted) return;
+    final actionsSettings = await ActionsSettingsStore.load();
+    if (!mounted) return;
     setState(() {
       _appLockEnabled = enabled;
       _biometricUnlockEnabled = biometricEnabled;
       _localeOverride = localeOverride;
+      _actionsSettings = actionsSettings;
     });
   }
 
@@ -242,6 +247,24 @@ class _SettingsPageState extends State<SettingsPage> {
 
       await BackgroundSync.refreshSchedule(backend: backend);
       if (mounted) setState(() => _biometricUnlockEnabled = enabled);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pickActionsTime({
+    required TimeOfDay initial,
+    required Future<void> Function(TimeOfDay value) persist,
+  }) async {
+    if (_busy) return;
+
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await persist(picked);
+      await _load();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -393,6 +416,55 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
+          ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          context.t.settings.sections.actions,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        sectionCard([
+          ListTile(
+            title: Text(context.t.settings.actionsReview.morningTime.title),
+            subtitle:
+                Text(context.t.settings.actionsReview.morningTime.subtitle),
+            trailing:
+                Text(_actionsSettings?.morningTime.format(context) ?? '—'),
+            onTap: (_busy || _actionsSettings == null)
+                ? null
+                : () => _pickActionsTime(
+                      initial: _actionsSettings!.morningTime,
+                      persist: ActionsSettingsStore.setMorningTime,
+                    ),
+          ),
+          ListTile(
+            title: Text(context.t.settings.actionsReview.dayEndTime.title),
+            subtitle:
+                Text(context.t.settings.actionsReview.dayEndTime.subtitle),
+            trailing: Text(_actionsSettings?.dayEndTime.format(context) ?? '—'),
+            onTap: (_busy || _actionsSettings == null)
+                ? null
+                : () => _pickActionsTime(
+                      initial: _actionsSettings!.dayEndTime,
+                      persist: ActionsSettingsStore.setDayEndTime,
+                    ),
+          ),
+          ListTile(
+            title: Text(context.t.settings.actionsReview.weeklyTime.title),
+            subtitle:
+                Text(context.t.settings.actionsReview.weeklyTime.subtitle),
+            trailing:
+                Text(_actionsSettings?.weeklyReviewTime.format(context) ?? '—'),
+            onTap: (_busy || _actionsSettings == null)
+                ? null
+                : () => _pickActionsTime(
+                      initial: _actionsSettings!.weeklyReviewTime,
+                      persist: ActionsSettingsStore.setWeeklyReviewTime,
+                    ),
           ),
         ]),
         if (kDebugMode) ...[

@@ -113,7 +113,7 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
-  if ! "${flutter_bin}" analyze; then
+  if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" analyze; then
     echo "" >&2
     echo "pre-commit: flutter analyze failed." >&2
     echo "Fix locally with: pixi run analyze" >&2

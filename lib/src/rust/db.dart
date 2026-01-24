@@ -72,6 +72,53 @@ class Conversation {
           updatedAtMs == other.updatedAtMs;
 }
 
+class Event {
+  final String id;
+  final String title;
+  final PlatformInt64 startAtMs;
+  final PlatformInt64 endAtMs;
+  final String tz;
+  final String? sourceEntryId;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const Event({
+    required this.id,
+    required this.title,
+    required this.startAtMs,
+    required this.endAtMs,
+    required this.tz,
+    this.sourceEntryId,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      startAtMs.hashCode ^
+      endAtMs.hashCode ^
+      tz.hashCode ^
+      sourceEntryId.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Event &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          startAtMs == other.startAtMs &&
+          endAtMs == other.endAtMs &&
+          tz == other.tz &&
+          sourceEntryId == other.sourceEntryId &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class LlmProfile {
   final String id;
   final String name;
@@ -173,4 +220,59 @@ class SimilarMessage {
           runtimeType == other.runtimeType &&
           message == other.message &&
           distance == other.distance;
+}
+
+class Todo {
+  final String id;
+  final String title;
+  final PlatformInt64? dueAtMs;
+  final String status;
+  final String? sourceEntryId;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final PlatformInt64? reviewStage;
+  final PlatformInt64? nextReviewAtMs;
+  final PlatformInt64? lastReviewAtMs;
+
+  const Todo({
+    required this.id,
+    required this.title,
+    this.dueAtMs,
+    required this.status,
+    this.sourceEntryId,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    this.reviewStage,
+    this.nextReviewAtMs,
+    this.lastReviewAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      dueAtMs.hashCode ^
+      status.hashCode ^
+      sourceEntryId.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      reviewStage.hashCode ^
+      nextReviewAtMs.hashCode ^
+      lastReviewAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Todo &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          dueAtMs == other.dueAtMs &&
+          status == other.status &&
+          sourceEntryId == other.sourceEntryId &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          reviewStage == other.reviewStage &&
+          nextReviewAtMs == other.nextReviewAtMs &&
+          lastReviewAtMs == other.lastReviewAtMs;
 }

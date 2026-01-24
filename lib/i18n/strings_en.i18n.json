@@ -45,13 +45,53 @@
     "lockGateError": "LockGate error: $error",
     "missingMainStream": "Missing Main Stream"
   },
+  "actions": {
+    "capture": {
+      "title": "Turn this into a reminder?",
+      "pickTime": "Pick a time",
+      "reviewLater": "Remind me to confirm later",
+      "justSave": "Just save as note"
+    },
+    "reviewQueue": {
+      "title": "Needs confirmation",
+      "banner": "$count items need confirmation",
+      "empty": "No items to confirm",
+      "actions": {
+        "schedule": "Schedule",
+        "snooze": "Snooze",
+        "done": "Done",
+        "dismiss": "Dismiss"
+      }
+    },
+    "calendar": {
+      "title": "Add to calendar?",
+      "pickTime": "Pick a start time",
+      "noAutoTime": "No suggested time found",
+      "pickCustom": "Pick date & time"
+    }
+  },
   "settings": {
     "title": "Settings",
     "sections": {
       "general": "General",
+      "actions": "Actions",
       "security": "Security",
       "connections": "Connections",
       "debug": "Debug"
+    },
+    "actionsReview": {
+      "morningTime": {
+        "title": "Morning review time",
+        "subtitle": "Default reminder time for unplanned tasks"
+      },
+      "dayEndTime": {
+        "title": "Day end time",
+        "subtitle": "If not handled by this time, reminders back off"
+      },
+      "weeklyTime": {
+        "title": "Weekly review time",
+        "subtitle": "Weekly reminder time (Sunday)"
+      }
     },
     "language": {
       "title": "Language",

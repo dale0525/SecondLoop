@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 422 (211 per locale)
+/// Strings: 466 (233 per locale)
 ///
-/// Built on 2026-01-23 at 10:55 UTC
+/// Built on 2026-01-24 at 14:02 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -191,6 +191,7 @@ class Translations implements BaseTranslations<AppLocale, Translations> {
   late final _StringsAppEn app = _StringsAppEn._(_root);
   late final _StringsCommonEn common = _StringsCommonEn._(_root);
   late final _StringsErrorsEn errors = _StringsErrorsEn._(_root);
+  late final _StringsActionsEn actions = _StringsActionsEn._(_root);
   late final _StringsSettingsEn settings = _StringsSettingsEn._(_root);
   late final _StringsLockEn lock = _StringsLockEn._(_root);
   late final _StringsChatEn chat = _StringsChatEn._(_root);
@@ -239,6 +240,21 @@ class _StringsErrorsEn {
   String get missingMainStream => 'Missing Main Stream';
 }
 
+// Path: actions
+class _StringsActionsEn {
+  _StringsActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsActionsCaptureEn capture =
+      _StringsActionsCaptureEn._(_root);
+  late final _StringsActionsReviewQueueEn reviewQueue =
+      _StringsActionsReviewQueueEn._(_root);
+  late final _StringsActionsCalendarEn calendar =
+      _StringsActionsCalendarEn._(_root);
+}
+
 // Path: settings
 class _StringsSettingsEn {
   _StringsSettingsEn._(this._root);
@@ -249,6 +265,8 @@ class _StringsSettingsEn {
   String get title => 'Settings';
   late final _StringsSettingsSectionsEn sections =
       _StringsSettingsSectionsEn._(_root);
+  late final _StringsSettingsActionsReviewEn actionsReview =
+      _StringsSettingsActionsReviewEn._(_root);
   late final _StringsSettingsLanguageEn language =
       _StringsSettingsLanguageEn._(_root);
   late final _StringsSettingsAutoLockEn autoLock =
@@ -484,6 +502,46 @@ class _StringsCommonLabelsEn {
   String get topK => 'Top‑K:';
 }
 
+// Path: actions.capture
+class _StringsActionsCaptureEn {
+  _StringsActionsCaptureEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Turn this into a reminder?';
+  String get pickTime => 'Pick a time';
+  String get reviewLater => 'Remind me to confirm later';
+  String get justSave => 'Just save as note';
+}
+
+// Path: actions.reviewQueue
+class _StringsActionsReviewQueueEn {
+  _StringsActionsReviewQueueEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Needs confirmation';
+  String banner({required Object count}) => '${count} items need confirmation';
+  String get empty => 'No items to confirm';
+  late final _StringsActionsReviewQueueActionsEn actions =
+      _StringsActionsReviewQueueActionsEn._(_root);
+}
+
+// Path: actions.calendar
+class _StringsActionsCalendarEn {
+  _StringsActionsCalendarEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Add to calendar?';
+  String get pickTime => 'Pick a start time';
+  String get noAutoTime => 'No suggested time found';
+  String get pickCustom => 'Pick date & time';
+}
+
 // Path: settings.sections
 class _StringsSettingsSectionsEn {
   _StringsSettingsSectionsEn._(this._root);
@@ -492,9 +550,25 @@ class _StringsSettingsSectionsEn {
 
   // Translations
   String get general => 'General';
+  String get actions => 'Actions';
   String get security => 'Security';
   String get connections => 'Connections';
   String get debug => 'Debug';
+}
+
+// Path: settings.actionsReview
+class _StringsSettingsActionsReviewEn {
+  _StringsSettingsActionsReviewEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsActionsReviewMorningTimeEn morningTime =
+      _StringsSettingsActionsReviewMorningTimeEn._(_root);
+  late final _StringsSettingsActionsReviewDayEndTimeEn dayEndTime =
+      _StringsSettingsActionsReviewDayEndTimeEn._(_root);
+  late final _StringsSettingsActionsReviewWeeklyTimeEn weeklyTime =
+      _StringsSettingsActionsReviewWeeklyTimeEn._(_root);
 }
 
 // Path: settings.language
@@ -822,6 +896,52 @@ class _StringsLlmProfilesActionsEn {
   String get saveActivate => 'Save & Activate';
   String get cancel => 'Cancel';
   String get delete => 'Delete';
+}
+
+// Path: actions.reviewQueue.actions
+class _StringsActionsReviewQueueActionsEn {
+  _StringsActionsReviewQueueActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get schedule => 'Schedule';
+  String get snooze => 'Snooze';
+  String get done => 'Done';
+  String get dismiss => 'Dismiss';
+}
+
+// Path: settings.actionsReview.morningTime
+class _StringsSettingsActionsReviewMorningTimeEn {
+  _StringsSettingsActionsReviewMorningTimeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Morning review time';
+  String get subtitle => 'Default reminder time for unplanned tasks';
+}
+
+// Path: settings.actionsReview.dayEndTime
+class _StringsSettingsActionsReviewDayEndTimeEn {
+  _StringsSettingsActionsReviewDayEndTimeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Day end time';
+  String get subtitle => 'If not handled by this time, reminders back off';
+}
+
+// Path: settings.actionsReview.weeklyTime
+class _StringsSettingsActionsReviewWeeklyTimeEn {
+  _StringsSettingsActionsReviewWeeklyTimeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Weekly review time';
+  String get subtitle => 'Weekly reminder time (Sunday)';
 }
 
 // Path: settings.language.options
@@ -1170,6 +1290,8 @@ class _StringsZhCn extends Translations {
   @override
   late final _StringsErrorsZhCn errors = _StringsErrorsZhCn._(_root);
   @override
+  late final _StringsActionsZhCn actions = _StringsActionsZhCn._(_root);
+  @override
   late final _StringsSettingsZhCn settings = _StringsSettingsZhCn._(_root);
   @override
   late final _StringsLockZhCn lock = _StringsLockZhCn._(_root);
@@ -1247,6 +1369,27 @@ class _StringsErrorsZhCn extends _StringsErrorsEn {
   String get missingMainStream => '缺少主线对话';
 }
 
+// Path: actions
+class _StringsActionsZhCn extends _StringsActionsEn {
+  _StringsActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsActionsCaptureZhCn capture =
+      _StringsActionsCaptureZhCn._(_root);
+  @override
+  late final _StringsActionsReviewQueueZhCn reviewQueue =
+      _StringsActionsReviewQueueZhCn._(_root);
+  @override
+  late final _StringsActionsCalendarZhCn calendar =
+      _StringsActionsCalendarZhCn._(_root);
+}
+
 // Path: settings
 class _StringsSettingsZhCn extends _StringsSettingsEn {
   _StringsSettingsZhCn._(_StringsZhCn root)
@@ -1262,6 +1405,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsSectionsZhCn sections =
       _StringsSettingsSectionsZhCn._(_root);
+  @override
+  late final _StringsSettingsActionsReviewZhCn actionsReview =
+      _StringsSettingsActionsReviewZhCn._(_root);
   @override
   late final _StringsSettingsLanguageZhCn language =
       _StringsSettingsLanguageZhCn._(_root);
@@ -1629,6 +1775,67 @@ class _StringsCommonLabelsZhCn extends _StringsCommonLabelsEn {
   String get topK => 'Top‑K：';
 }
 
+// Path: actions.capture
+class _StringsActionsCaptureZhCn extends _StringsActionsCaptureEn {
+  _StringsActionsCaptureZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '要把它变成提醒吗？';
+  @override
+  String get pickTime => '选择时间';
+  @override
+  String get reviewLater => '先放着，之后提醒我确认';
+  @override
+  String get justSave => '只保存为记录';
+}
+
+// Path: actions.reviewQueue
+class _StringsActionsReviewQueueZhCn extends _StringsActionsReviewQueueEn {
+  _StringsActionsReviewQueueZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '待确认';
+  @override
+  String banner({required Object count}) => '有 ${count} 条待确认事项';
+  @override
+  String get empty => '没有需要确认的事项';
+  @override
+  late final _StringsActionsReviewQueueActionsZhCn actions =
+      _StringsActionsReviewQueueActionsZhCn._(_root);
+}
+
+// Path: actions.calendar
+class _StringsActionsCalendarZhCn extends _StringsActionsCalendarEn {
+  _StringsActionsCalendarZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '添加到日历？';
+  @override
+  String get pickTime => '选择开始时间';
+  @override
+  String get noAutoTime => '未找到可自动解析的时间';
+  @override
+  String get pickCustom => '选择日期时间';
+}
+
 // Path: settings.sections
 class _StringsSettingsSectionsZhCn extends _StringsSettingsSectionsEn {
   _StringsSettingsSectionsZhCn._(_StringsZhCn root)
@@ -1642,11 +1849,35 @@ class _StringsSettingsSectionsZhCn extends _StringsSettingsSectionsEn {
   @override
   String get general => '通用';
   @override
+  String get actions => '行动';
+  @override
   String get security => '安全';
   @override
   String get connections => '连接';
   @override
   String get debug => '调试';
+}
+
+// Path: settings.actionsReview
+class _StringsSettingsActionsReviewZhCn
+    extends _StringsSettingsActionsReviewEn {
+  _StringsSettingsActionsReviewZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsActionsReviewMorningTimeZhCn morningTime =
+      _StringsSettingsActionsReviewMorningTimeZhCn._(_root);
+  @override
+  late final _StringsSettingsActionsReviewDayEndTimeZhCn dayEndTime =
+      _StringsSettingsActionsReviewDayEndTimeZhCn._(_root);
+  @override
+  late final _StringsSettingsActionsReviewWeeklyTimeZhCn weeklyTime =
+      _StringsSettingsActionsReviewWeeklyTimeZhCn._(_root);
 }
 
 // Path: settings.language
@@ -2125,6 +2356,78 @@ class _StringsLlmProfilesActionsZhCn extends _StringsLlmProfilesActionsEn {
   String get cancel => '取消';
   @override
   String get delete => '删除';
+}
+
+// Path: actions.reviewQueue.actions
+class _StringsActionsReviewQueueActionsZhCn
+    extends _StringsActionsReviewQueueActionsEn {
+  _StringsActionsReviewQueueActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get schedule => '安排时间';
+  @override
+  String get snooze => '稍后提醒';
+  @override
+  String get done => '完成';
+  @override
+  String get dismiss => '忽略';
+}
+
+// Path: settings.actionsReview.morningTime
+class _StringsSettingsActionsReviewMorningTimeZhCn
+    extends _StringsSettingsActionsReviewMorningTimeEn {
+  _StringsSettingsActionsReviewMorningTimeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '早上提醒时间';
+  @override
+  String get subtitle => '未排期事项的默认提醒时间';
+}
+
+// Path: settings.actionsReview.dayEndTime
+class _StringsSettingsActionsReviewDayEndTimeZhCn
+    extends _StringsSettingsActionsReviewDayEndTimeEn {
+  _StringsSettingsActionsReviewDayEndTimeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '日终时间';
+  @override
+  String get subtitle => '到此时间仍未处理，将降低提醒频率';
+}
+
+// Path: settings.actionsReview.weeklyTime
+class _StringsSettingsActionsReviewWeeklyTimeZhCn
+    extends _StringsSettingsActionsReviewWeeklyTimeEn {
+  _StringsSettingsActionsReviewWeeklyTimeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '每周提醒时间';
+  @override
+  String get subtitle => '每周提醒时间（周日）';
 }
 
 // Path: settings.language.options
@@ -2654,16 +2957,60 @@ extension on Translations {
         return ({required Object error}) => 'LockGate error: ${error}';
       case 'errors.missingMainStream':
         return 'Missing Main Stream';
+      case 'actions.capture.title':
+        return 'Turn this into a reminder?';
+      case 'actions.capture.pickTime':
+        return 'Pick a time';
+      case 'actions.capture.reviewLater':
+        return 'Remind me to confirm later';
+      case 'actions.capture.justSave':
+        return 'Just save as note';
+      case 'actions.reviewQueue.title':
+        return 'Needs confirmation';
+      case 'actions.reviewQueue.banner':
+        return ({required Object count}) => '${count} items need confirmation';
+      case 'actions.reviewQueue.empty':
+        return 'No items to confirm';
+      case 'actions.reviewQueue.actions.schedule':
+        return 'Schedule';
+      case 'actions.reviewQueue.actions.snooze':
+        return 'Snooze';
+      case 'actions.reviewQueue.actions.done':
+        return 'Done';
+      case 'actions.reviewQueue.actions.dismiss':
+        return 'Dismiss';
+      case 'actions.calendar.title':
+        return 'Add to calendar?';
+      case 'actions.calendar.pickTime':
+        return 'Pick a start time';
+      case 'actions.calendar.noAutoTime':
+        return 'No suggested time found';
+      case 'actions.calendar.pickCustom':
+        return 'Pick date & time';
       case 'settings.title':
         return 'Settings';
       case 'settings.sections.general':
         return 'General';
+      case 'settings.sections.actions':
+        return 'Actions';
       case 'settings.sections.security':
         return 'Security';
       case 'settings.sections.connections':
         return 'Connections';
       case 'settings.sections.debug':
         return 'Debug';
+      case 'settings.actionsReview.morningTime.title':
+        return 'Morning review time';
+      case 'settings.actionsReview.morningTime.subtitle':
+        return 'Default reminder time for unplanned tasks';
+      case 'settings.actionsReview.dayEndTime.title':
+        return 'Day end time';
+      case 'settings.actionsReview.dayEndTime.subtitle':
+        return 'If not handled by this time, reminders back off';
+      case 'settings.actionsReview.weeklyTime.title':
+        return 'Weekly review time';
+      case 'settings.actionsReview.weeklyTime.subtitle':
+        return 'Weekly reminder time (Sunday)';
       case 'settings.language.title':
         return 'Language';
       case 'settings.language.subtitle':
@@ -3095,16 +3442,60 @@ extension on _StringsZhCn {
         return ({required Object error}) => '锁定流程错误：${error}';
       case 'errors.missingMainStream':
         return '缺少主线对话';
+      case 'actions.capture.title':
+        return '要把它变成提醒吗？';
+      case 'actions.capture.pickTime':
+        return '选择时间';
+      case 'actions.capture.reviewLater':
+        return '先放着，之后提醒我确认';
+      case 'actions.capture.justSave':
+        return '只保存为记录';
+      case 'actions.reviewQueue.title':
+        return '待确认';
+      case 'actions.reviewQueue.banner':
+        return ({required Object count}) => '有 ${count} 条待确认事项';
+      case 'actions.reviewQueue.empty':
+        return '没有需要确认的事项';
+      case 'actions.reviewQueue.actions.schedule':
+        return '安排时间';
+      case 'actions.reviewQueue.actions.snooze':
+        return '稍后提醒';
+      case 'actions.reviewQueue.actions.done':
+        return '完成';
+      case 'actions.reviewQueue.actions.dismiss':
+        return '忽略';
+      case 'actions.calendar.title':
+        return '添加到日历？';
+      case 'actions.calendar.pickTime':
+        return '选择开始时间';
+      case 'actions.calendar.noAutoTime':
+        return '未找到可自动解析的时间';
+      case 'actions.calendar.pickCustom':
+        return '选择日期时间';
       case 'settings.title':
         return '设置';
       case 'settings.sections.general':
         return '通用';
+      case 'settings.sections.actions':
+        return '行动';
       case 'settings.sections.security':
         return '安全';
       case 'settings.sections.connections':
         return '连接';
       case 'settings.sections.debug':
         return '调试';
+      case 'settings.actionsReview.morningTime.title':
+        return '早上提醒时间';
+      case 'settings.actionsReview.morningTime.subtitle':
+        return '未排期事项的默认提醒时间';
+      case 'settings.actionsReview.dayEndTime.title':
+        return '日终时间';
+      case 'settings.actionsReview.dayEndTime.subtitle':
+        return '到此时间仍未处理，将降低提醒频率';
+      case 'settings.actionsReview.weeklyTime.title':
+        return '每周提醒时间';
+      case 'settings.actionsReview.weeklyTime.subtitle':
+        return '每周提醒时间（周日）';
       case 'settings.language.title':
         return '语言';
       case 'settings.language.subtitle':

@@ -12,6 +12,10 @@ import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_focus_ring.dart';
 import '../../ui/sl_glass.dart';
+import '../actions/review/review_backoff.dart';
+import '../actions/settings/actions_settings_store.dart';
+import '../actions/suggestions_card.dart';
+import '../actions/time/time_resolver.dart';
 
 class QuickCaptureOverlay extends StatefulWidget {
   const QuickCaptureOverlay({
@@ -139,7 +143,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       final conversation =
           await backend.getOrCreateMainStreamConversation(sessionKey);
 
-      await backend.insertMessage(
+      final message = await backend.insertMessage(
         sessionKey,
         conversation.id,
         role: 'user',
@@ -147,6 +151,64 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       );
       if (!mounted) return;
       syncEngine?.notifyLocalMutation();
+
+      final locale = Localizations.localeOf(context);
+      final settings = await ActionsSettingsStore.load();
+      final timeResolution = LocalTimeResolver.resolve(
+        text,
+        DateTime.now(),
+        locale: locale,
+        dayEndMinutes: settings.dayEndMinutes,
+      );
+      final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(text);
+
+      if (timeResolution != null || looksLikeReview) {
+        if (!mounted) return;
+        final decision = await showCaptureTodoSuggestionSheet(
+          context,
+          title: text,
+          timeResolution: timeResolution,
+        );
+        if (decision != null && mounted) {
+          final todoId = 'todo:${message.id}';
+          switch (decision) {
+            case CaptureTodoScheduleDecision(:final dueAtLocal):
+              await backend.upsertTodo(
+                sessionKey,
+                id: todoId,
+                title: text,
+                dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+                status: 'open',
+                sourceEntryId: message.id,
+                reviewStage: null,
+                nextReviewAtMs: null,
+                lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+              );
+              syncEngine?.notifyLocalMutation();
+              break;
+            case CaptureTodoReviewDecision():
+              final nextLocal = ReviewBackoff.initialNextReviewAt(
+                DateTime.now(),
+                settings,
+              );
+              await backend.upsertTodo(
+                sessionKey,
+                id: todoId,
+                title: text,
+                dueAtMs: null,
+                status: 'inbox',
+                sourceEntryId: message.id,
+                reviewStage: 0,
+                nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
+                lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+              );
+              syncEngine?.notifyLocalMutation();
+              break;
+            case CaptureTodoNoThanksDecision():
+              break;
+          }
+        }
+      }
 
       _dismiss();
     } finally {

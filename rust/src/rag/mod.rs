@@ -37,7 +37,124 @@ pub trait AnswerProvider {
     ) -> Result<()>;
 }
 
-pub fn build_prompt(question: &str, contexts: &[String]) -> String {
+fn now_ms() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(i64::MAX)
+}
+
+fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
+    let q = question.trim().to_lowercase();
+    if q.is_empty() {
+        return None;
+    }
+
+    let is_today = q.contains("today")
+        || q.contains("tonight")
+        || q.contains("today's")
+        || question.contains("今天")
+        || question.contains("今日");
+    if is_today {
+        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
+    }
+
+    let is_this_week = q.contains("this week")
+        || q.contains("week agenda")
+        || q.contains("weekly agenda")
+        || q.contains("this week's")
+        || question.contains("本周")
+        || question.contains("这周")
+        || question.contains("這週");
+    if is_this_week {
+        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
+    }
+
+    let is_agenda = q.contains("agenda")
+        || q.contains("schedule")
+        || q.contains("calendar")
+        || question.contains("日程")
+        || question.contains("行程")
+        || question.contains("安排");
+    if is_agenda {
+        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
+    }
+
+    None
+}
+
+fn should_include_actions_context(question: &str) -> bool {
+    agenda_horizon_ms(question, 0).is_some()
+}
+
+fn build_actions_context(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+) -> Result<Option<String>> {
+    if !should_include_actions_context(question) {
+        return Ok(None);
+    }
+
+    let now = now_ms();
+    let horizon = agenda_horizon_ms(question, now).unwrap_or(now);
+    let mut lines: Vec<String> = Vec::new();
+
+    for todo in db::list_todos(conn, key)? {
+        if todo.status == "done" || todo.status == "dismissed" {
+            continue;
+        }
+
+        let due = todo.due_at_ms;
+        let review = todo.next_review_at_ms;
+        let is_due = due.is_some_and(|ms| ms <= horizon);
+        let is_review_due = review.is_some_and(|ms| ms <= horizon);
+        if !is_due && !is_review_due {
+            continue;
+        }
+
+        let mut item = format!("TODO [{}] {}", todo.status, todo.title);
+        if let Some(ms) = due {
+            item.push_str(&format!(" (due_at_ms={ms})"));
+        }
+        if let Some(ms) = review {
+            item.push_str(&format!(" (next_review_at_ms={ms})"));
+        }
+        lines.push(item);
+    }
+
+    for event in db::list_events(conn, key)? {
+        if event.end_at_ms < now {
+            continue;
+        }
+        if event.start_at_ms > horizon {
+            continue;
+        }
+        lines.push(format!(
+            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+            event.title, event.start_at_ms, event.end_at_ms, event.tz
+        ));
+    }
+
+    if lines.is_empty() {
+        return Ok(None);
+    }
+
+    let mut out = String::new();
+    out.push_str("Upcoming actions (from local todos/events):\n");
+    for line in lines.into_iter().take(40) {
+        out.push_str("- ");
+        out.push_str(&line);
+        out.push('\n');
+    }
+    Ok(Some(out))
+}
+
+fn build_prompt_with_actions(question: &str, contexts: &[String], actions: Option<&str>) -> String {
     let mut out = String::new();
     out.push_str("You are SecondLoop, a helpful personal assistant.\n");
 
@@ -48,13 +165,31 @@ pub fn build_prompt(question: &str, contexts: &[String]) -> String {
         }
     }
 
+    if let Some(actions) = actions {
+        out.push('\n');
+        out.push_str(actions);
+    }
+
     out.push_str(
         "\nAnswer the user's question. If the memories are irrelevant, answer normally.\n",
+    );
+    out.push_str(
+        "\nIf you suggest actionable todos or calendar events, append ONE machine-readable block like:\n",
+    );
+    out.push_str("```secondloop_actions\n");
+    out.push_str("{\"version\":1,\"suggestions\":[{\"type\":\"todo\",\"title\":\"...\",\"when\":\"...\"}]}\n");
+    out.push_str("```\n");
+    out.push_str(
+        "- `suggestions[].type` must be `todo` or `event`\n- `title` is required\n- `when` is optional natural language (do NOT compute absolute dates)\n- Omit the block entirely if you have no suggestions\n",
     );
     out.push_str("\nQuestion: ");
     out.push_str(question);
     out.push('\n');
     out
+}
+
+pub fn build_prompt(question: &str, contexts: &[String]) -> String {
+    build_prompt_with_actions(question, contexts, None)
 }
 
 pub fn ask_ai_with_provider(
@@ -81,7 +216,8 @@ pub fn ask_ai_with_provider(
         )?,
     };
     let contexts: Vec<String> = similar.into_iter().map(|sm| sm.message.content).collect();
-    let prompt = build_prompt(question, &contexts);
+    let actions = build_actions_context(conn, key, question)?;
+    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 
     let user_message = db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
     let assistant_message =
@@ -180,7 +316,8 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     };
 
     let contexts: Vec<String> = similar.into_iter().map(|sm| sm.message.content).collect();
-    let prompt = build_prompt(question, &contexts);
+    let actions = build_actions_context(conn, key, question)?;
+    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 
     let user_message = db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
     let assistant_message =
@@ -280,7 +417,8 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     };
 
     let contexts: Vec<String> = similar.into_iter().map(|sm| sm.message.content).collect();
-    let prompt = build_prompt(question, &contexts);
+    let actions = build_actions_context(conn, key, question)?;
+    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 
     let user_message = db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
     let assistant_message =

@@ -66,6 +66,32 @@ pub struct Attachment {
     pub created_at_ms: i64,
 }
 
+#[derive(Clone, Debug)]
+pub struct Todo {
+    pub id: String,
+    pub title: String,
+    pub due_at_ms: Option<i64>,
+    pub status: String,
+    pub source_entry_id: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub review_stage: Option<i64>,
+    pub next_review_at_ms: Option<i64>,
+    pub last_review_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Event {
+    pub id: String,
+    pub title: String,
+    pub start_at_ms: i64,
+    pub end_at_ms: i64,
+    pub tz: String,
+    pub source_entry_id: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
 fn db_path(app_dir: &Path) -> PathBuf {
     app_dir.join("secondloop.sqlite3")
 }
@@ -460,6 +486,43 @@ PRAGMA user_version = 9;
         )?;
     }
 
+    if user_version < 10 {
+        // v10: actions (todos/events) + review scheduling metadata.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS todos (
+  id TEXT PRIMARY KEY,
+  title BLOB NOT NULL,
+  due_at_ms INTEGER,
+  status TEXT NOT NULL,
+  source_entry_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  review_stage INTEGER,
+  next_review_at_ms INTEGER,
+  last_review_at_ms INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_todos_due_at_ms ON todos(due_at_ms);
+CREATE INDEX IF NOT EXISTS idx_todos_next_review_at_ms ON todos(next_review_at_ms);
+CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
+
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  title BLOB NOT NULL,
+  start_at_ms INTEGER NOT NULL,
+  end_at_ms INTEGER NOT NULL,
+  tz TEXT NOT NULL,
+  source_entry_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_start_at_ms ON events(start_at_ms);
+CREATE INDEX IF NOT EXISTS idx_events_end_at_ms ON events(end_at_ms);
+PRAGMA user_version = 10;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -480,6 +543,8 @@ pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()>
 DELETE FROM message_embeddings;
 DELETE FROM messages;
 DELETE FROM conversations;
+DELETE FROM todos;
+DELETE FROM events;
 DELETE FROM oplog;
 DELETE FROM kv WHERE key != 'embedding.active_model_name';
 "#,
@@ -2015,6 +2080,324 @@ ORDER BY a.created_at ASC, a.sha256 ASC
             path: row.get(2)?,
             byte_len: row.get(3)?,
             created_at_ms: row.get(4)?,
+        });
+    }
+    Ok(result)
+}
+
+fn get_todo_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Todo> {
+    let (
+        title_blob,
+        due_at_ms,
+        status,
+        source_entry_id,
+        created_at_ms,
+        updated_at_ms,
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+    ): (Vec<u8>, Option<i64>, String, Option<String>, i64, i64, Option<i64>, Option<i64>, Option<i64>) = conn
+        .query_row(
+            r#"
+SELECT title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+FROM todos
+WHERE id = ?1
+"#,
+            params![id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ))
+            },
+        )
+        .map_err(|e| anyhow!("get todo failed: {e}"))?;
+
+    let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
+    let title =
+        String::from_utf8(title_bytes).map_err(|_| anyhow!("todo title is not valid utf-8"))?;
+
+    Ok(Todo {
+        id: id.to_string(),
+        title,
+        due_at_ms,
+        status,
+        source_entry_id,
+        created_at_ms,
+        updated_at_ms,
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+    })
+}
+
+pub fn upsert_todo(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+    title: &str,
+    due_at_ms: Option<i64>,
+    status: &str,
+    source_entry_id: Option<&str>,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+) -> Result<Todo> {
+    let now = now_ms();
+    let title_blob = encrypt_bytes(key, title.as_bytes(), b"todo.title")?;
+    conn.execute(
+        r#"
+INSERT INTO todos (
+  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+ON CONFLICT(id) DO UPDATE SET
+  title = excluded.title,
+  due_at_ms = excluded.due_at_ms,
+  status = excluded.status,
+  source_entry_id = excluded.source_entry_id,
+  updated_at_ms = excluded.updated_at_ms,
+  review_stage = excluded.review_stage,
+  next_review_at_ms = excluded.next_review_at_ms,
+  last_review_at_ms = excluded.last_review_at_ms
+"#,
+        params![
+            id,
+            title_blob,
+            due_at_ms,
+            status,
+            source_entry_id,
+            now,
+            now,
+            review_stage,
+            next_review_at_ms,
+            last_review_at_ms,
+        ],
+    )?;
+
+    let todo = get_todo_by_id(conn, key, id)?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.upsert.v1",
+        "payload": {
+            "todo_id": todo.id.as_str(),
+            "title": todo.title.as_str(),
+            "due_at_ms": todo.due_at_ms,
+            "status": todo.status.as_str(),
+            "source_entry_id": todo.source_entry_id.as_deref(),
+            "created_at_ms": todo.created_at_ms,
+            "updated_at_ms": todo.updated_at_ms,
+            "review_stage": todo.review_stage,
+            "next_review_at_ms": todo.next_review_at_ms,
+            "last_review_at_ms": todo.last_review_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(todo)
+}
+
+pub fn list_todos(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Todo>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+FROM todos
+ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let title_blob: Vec<u8> = row.get(1)?;
+        let due_at_ms: Option<i64> = row.get(2)?;
+        let status: String = row.get(3)?;
+        let source_entry_id: Option<String> = row.get(4)?;
+        let created_at_ms: i64 = row.get(5)?;
+        let updated_at_ms: i64 = row.get(6)?;
+        let review_stage: Option<i64> = row.get(7)?;
+        let next_review_at_ms: Option<i64> = row.get(8)?;
+        let last_review_at_ms: Option<i64> = row.get(9)?;
+
+        let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
+        let title =
+            String::from_utf8(title_bytes).map_err(|_| anyhow!("todo title is not valid utf-8"))?;
+
+        result.push(Todo {
+            id,
+            title,
+            due_at_ms,
+            status,
+            source_entry_id,
+            created_at_ms,
+            updated_at_ms,
+            review_stage,
+            next_review_at_ms,
+            last_review_at_ms,
+        });
+    }
+    Ok(result)
+}
+
+fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Event> {
+    let (title_blob, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms): (
+        Vec<u8>,
+        i64,
+        i64,
+        String,
+        Option<String>,
+        i64,
+        i64,
+    ) = conn
+        .query_row(
+            r#"
+SELECT title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
+FROM events
+WHERE id = ?1
+"#,
+            params![id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            },
+        )
+        .map_err(|e| anyhow!("get event failed: {e}"))?;
+
+    let title_bytes = decrypt_bytes(key, &title_blob, b"event.title")?;
+    let title =
+        String::from_utf8(title_bytes).map_err(|_| anyhow!("event title is not valid utf-8"))?;
+
+    Ok(Event {
+        id: id.to_string(),
+        title,
+        start_at_ms,
+        end_at_ms,
+        tz,
+        source_entry_id,
+        created_at_ms,
+        updated_at_ms,
+    })
+}
+
+pub fn upsert_event(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+    title: &str,
+    start_at_ms: i64,
+    end_at_ms: i64,
+    tz: &str,
+    source_entry_id: Option<&str>,
+) -> Result<Event> {
+    let now = now_ms();
+    let title_blob = encrypt_bytes(key, title.as_bytes(), b"event.title")?;
+    conn.execute(
+        r#"
+INSERT INTO events (
+  id, title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
+)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+ON CONFLICT(id) DO UPDATE SET
+  title = excluded.title,
+  start_at_ms = excluded.start_at_ms,
+  end_at_ms = excluded.end_at_ms,
+  tz = excluded.tz,
+  source_entry_id = excluded.source_entry_id,
+  updated_at_ms = excluded.updated_at_ms
+"#,
+        params![
+            id,
+            title_blob,
+            start_at_ms,
+            end_at_ms,
+            tz,
+            source_entry_id,
+            now,
+            now
+        ],
+    )?;
+
+    let event = get_event_by_id(conn, key, id)?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "event.upsert.v1",
+        "payload": {
+            "event_id": event.id.as_str(),
+            "title": event.title.as_str(),
+            "start_at_ms": event.start_at_ms,
+            "end_at_ms": event.end_at_ms,
+            "tz": event.tz.as_str(),
+            "source_entry_id": event.source_entry_id.as_deref(),
+            "created_at_ms": event.created_at_ms,
+            "updated_at_ms": event.updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(event)
+}
+
+pub fn list_events(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Event>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
+FROM events
+ORDER BY start_at_ms ASC, end_at_ms ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let title_blob: Vec<u8> = row.get(1)?;
+        let start_at_ms: i64 = row.get(2)?;
+        let end_at_ms: i64 = row.get(3)?;
+        let tz: String = row.get(4)?;
+        let source_entry_id: Option<String> = row.get(5)?;
+        let created_at_ms: i64 = row.get(6)?;
+        let updated_at_ms: i64 = row.get(7)?;
+
+        let title_bytes = decrypt_bytes(key, &title_blob, b"event.title")?;
+        let title = String::from_utf8(title_bytes)
+            .map_err(|_| anyhow!("event title is not valid utf-8"))?;
+
+        result.push(Event {
+            id,
+            title,
+            start_at_ms,
+            end_at_ms,
+            tz,
+            source_entry_id,
+            created_at_ms,
+            updated_at_ms,
         });
     }
     Ok(result)

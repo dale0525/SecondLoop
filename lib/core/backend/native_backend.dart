@@ -334,6 +334,68 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<List<Todo>> listTodos(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListTodos(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpsertTodo(
+      appDir: appDir,
+      key: key,
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+  }
+
+  @override
+  Future<List<Event>> listEvents(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListEvents(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<Event> upsertEvent(
+    Uint8List key, {
+    required String id,
+    required String title,
+    required int startAtMs,
+    required int endAtMs,
+    required String tz,
+    String? sourceEntryId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpsertEvent(
+      appDir: appDir,
+      key: key,
+      id: id,
+      title: title,
+      startAtMs: startAtMs,
+      endAtMs: endAtMs,
+      tz: tz,
+      sourceEntryId: sourceEntryId,
+    );
+  }
+
+  @override
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,

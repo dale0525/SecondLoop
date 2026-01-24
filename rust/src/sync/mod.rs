@@ -546,6 +546,8 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "conversation.upsert.v1" => apply_conversation_upsert(conn, db_key, &op["payload"]),
         "message.insert.v1" => apply_message_insert(conn, db_key, op),
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
+        "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
+        "event.upsert.v1" => apply_event_upsert(conn, db_key, &op["payload"]),
         other => Err(anyhow!("unsupported sync op type: {other}")),
     }
 }
@@ -597,6 +599,181 @@ fn apply_conversation_upsert(
         r#"UPDATE conversations SET title = ?2, updated_at = ?3 WHERE id = ?1"#,
         params![conversation_id, title_blob, updated_at_ms],
     )?;
+    Ok(())
+}
+
+fn apply_todo_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo op missing todo_id"))?;
+    let title = payload["title"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo op missing title"))?;
+    let status = payload["status"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo op missing status"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo op missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo op missing updated_at_ms"))?;
+
+    let due_at_ms = payload["due_at_ms"].as_i64();
+    let source_entry_id = payload["source_entry_id"].as_str();
+    let review_stage = payload["review_stage"].as_i64();
+    let next_review_at_ms = payload["next_review_at_ms"].as_i64();
+    let last_review_at_ms = payload["last_review_at_ms"].as_i64();
+
+    let existing_updated_at: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at_ms FROM todos WHERE id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(existing_updated_at) = existing_updated_at {
+        if updated_at_ms <= existing_updated_at {
+            return Ok(());
+        }
+    }
+
+    let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"todo.title")?;
+    if existing_updated_at.is_some() {
+        conn.execute(
+            r#"UPDATE todos
+               SET title = ?2,
+                   due_at_ms = ?3,
+                   status = ?4,
+                   source_entry_id = ?5,
+                   updated_at_ms = ?6,
+                   review_stage = ?7,
+                   next_review_at_ms = ?8,
+                   last_review_at_ms = ?9
+               WHERE id = ?1"#,
+            params![
+                todo_id,
+                title_blob,
+                due_at_ms,
+                status,
+                source_entry_id,
+                updated_at_ms,
+                review_stage,
+                next_review_at_ms,
+                last_review_at_ms,
+            ],
+        )?;
+    } else {
+        conn.execute(
+            r#"INSERT INTO todos(
+                 id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms,
+                 review_stage, next_review_at_ms, last_review_at_ms
+               )
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+            params![
+                todo_id,
+                title_blob,
+                due_at_ms,
+                status,
+                source_entry_id,
+                created_at_ms,
+                updated_at_ms,
+                review_stage,
+                next_review_at_ms,
+                last_review_at_ms,
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
+fn apply_event_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let event_id = payload["event_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("event op missing event_id"))?;
+    let title = payload["title"]
+        .as_str()
+        .ok_or_else(|| anyhow!("event op missing title"))?;
+    let start_at_ms = payload["start_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("event op missing start_at_ms"))?;
+    let end_at_ms = payload["end_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("event op missing end_at_ms"))?;
+    let tz = payload["tz"]
+        .as_str()
+        .ok_or_else(|| anyhow!("event op missing tz"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("event op missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("event op missing updated_at_ms"))?;
+
+    let source_entry_id = payload["source_entry_id"].as_str();
+
+    let existing_updated_at: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at_ms FROM events WHERE id = ?1"#,
+            params![event_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(existing_updated_at) = existing_updated_at {
+        if updated_at_ms <= existing_updated_at {
+            return Ok(());
+        }
+    }
+
+    let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"event.title")?;
+    if existing_updated_at.is_some() {
+        conn.execute(
+            r#"UPDATE events
+               SET title = ?2,
+                   start_at_ms = ?3,
+                   end_at_ms = ?4,
+                   tz = ?5,
+                   source_entry_id = ?6,
+                   updated_at_ms = ?7
+               WHERE id = ?1"#,
+            params![
+                event_id,
+                title_blob,
+                start_at_ms,
+                end_at_ms,
+                tz,
+                source_entry_id,
+                updated_at_ms
+            ],
+        )?;
+    } else {
+        conn.execute(
+            r#"INSERT INTO events(
+                 id, title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
+               )
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+            params![
+                event_id,
+                title_blob,
+                start_at_ms,
+                end_at_ms,
+                tz,
+                source_entry_id,
+                created_at_ms,
+                updated_at_ms
+            ],
+        )?;
+    }
+
     Ok(())
 }
 

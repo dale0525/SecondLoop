@@ -63,6 +63,56 @@ Future<Message> dbInsertMessage(
         role: role,
         content: content);
 
+Future<Todo> dbUpsertTodo(
+        {required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        PlatformInt64? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        PlatformInt64? reviewStage,
+        PlatformInt64? nextReviewAtMs,
+        PlatformInt64? lastReviewAtMs}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertTodo(
+        appDir: appDir,
+        key: key,
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs);
+
+Future<List<Todo>> dbListTodos(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api.crateApiCoreDbListTodos(appDir: appDir, key: key);
+
+Future<Event> dbUpsertEvent(
+        {required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        required PlatformInt64 startAtMs,
+        required PlatformInt64 endAtMs,
+        required String tz,
+        String? sourceEntryId}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertEvent(
+        appDir: appDir,
+        key: key,
+        id: id,
+        title: title,
+        startAtMs: startAtMs,
+        endAtMs: endAtMs,
+        tz: tz,
+        sourceEntryId: sourceEntryId);
+
+Future<List<Event>> dbListEvents(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api.crateApiCoreDbListEvents(appDir: appDir, key: key);
+
 Future<void> dbEditMessage(
         {required String appDir,
         required List<int> key,

@@ -53,6 +53,31 @@ void main() {
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
   });
+
+  testWidgets('Quick capture shows capture sheet for time phrases',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _UnlockedBackend();
+    final controller = QuickCaptureController();
+
+    await tester.pumpWidget(
+        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpAndSettle();
+
+    controller.show();
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('quick_capture_input')),
+      '明天分析对标账户的直播内容',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(backend.insertedMessages, hasLength(1));
+    expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
+        findsOneWidget);
+  });
 }
 
 final class _UnlockedBackend extends AppBackend {

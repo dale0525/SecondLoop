@@ -123,6 +123,74 @@ pub fn db_insert_message(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_upsert_todo(
+    app_dir: String,
+    key: Vec<u8>,
+    id: String,
+    title: String,
+    due_at_ms: Option<i64>,
+    status: String,
+    source_entry_id: Option<String>,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+) -> Result<db::Todo> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_todo(
+        &conn,
+        &key,
+        &id,
+        &title,
+        due_at_ms,
+        &status,
+        source_entry_id.as_deref(),
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todos(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Todo>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todos(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_event(
+    app_dir: String,
+    key: Vec<u8>,
+    id: String,
+    title: String,
+    start_at_ms: i64,
+    end_at_ms: i64,
+    tz: String,
+    source_entry_id: Option<String>,
+) -> Result<db::Event> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_event(
+        &conn,
+        &key,
+        &id,
+        &title,
+        start_at_ms,
+        end_at_ms,
+        &tz,
+        source_entry_id.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_events(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Event>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_events(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_edit_message(
     app_dir: String,
     key: Vec<u8>,

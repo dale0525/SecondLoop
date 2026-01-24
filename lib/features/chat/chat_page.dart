@@ -20,6 +20,15 @@ import '../../ui/sl_icon_button_frame.dart';
 import '../../ui/sl_icon_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import '../actions/assistant_message_actions.dart';
+import '../actions/calendar/calendar_action.dart';
+import '../actions/review/review_backoff.dart';
+import '../actions/review/review_queue_banner.dart';
+import '../actions/review/review_queue_page.dart';
+import '../actions/settings/actions_settings_store.dart';
+import '../actions/suggestions_card.dart';
+import '../actions/suggestions_parser.dart';
+import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../settings/cloud_account_page.dart';
@@ -37,6 +46,7 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   Future<List<Message>>? _messagesFuture;
+  Future<int>? _reviewCountFuture;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   bool _sending = false;
@@ -239,9 +249,68 @@ class _ChatPageState extends State<ChatPage> {
     return backend.listMessages(sessionKey, widget.conversation.id);
   }
 
+  Future<int> _loadReviewQueueCount() async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final settings = await ActionsSettingsStore.load();
+
+    final nowLocal = DateTime.now();
+    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
+    late final List<Todo> todos;
+    try {
+      todos = await backend.listTodos(sessionKey);
+    } catch (_) {
+      return 0;
+    }
+
+    var dueCount = 0;
+    for (final todo in todos) {
+      final nextMs = todo.nextReviewAtMs;
+      final stage = todo.reviewStage;
+      if (nextMs == null || stage == null) continue;
+
+      final scheduledLocal =
+          DateTime.fromMillisecondsSinceEpoch(nextMs, isUtc: true).toLocal();
+      final rolled = ReviewBackoff.rollForwardUntilDueOrFuture(
+        stage: stage,
+        scheduledAtLocal: scheduledLocal,
+        nowLocal: nowLocal,
+        settings: settings,
+      );
+      if (rolled.stage != stage || rolled.nextReviewAtLocal != scheduledLocal) {
+        try {
+          await backend.upsertTodo(
+            sessionKey,
+            id: todo.id,
+            title: todo.title,
+            dueAtMs: todo.dueAtMs,
+            status: todo.status,
+            sourceEntryId: todo.sourceEntryId,
+            reviewStage: rolled.stage,
+            nextReviewAtMs:
+                rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch,
+            lastReviewAtMs: todo.lastReviewAtMs,
+          );
+        } catch (_) {
+          return 0;
+        }
+        continue;
+      }
+
+      if (todo.dueAtMs != null) continue;
+      if (nextMs <= nowUtcMs) {
+        if (todo.status == 'done' || todo.status == 'dismissed') continue;
+        dueCount += 1;
+      }
+    }
+
+    return dueCount;
+  }
+
   void _refresh() {
     setState(() {
       _messagesFuture = _loadMessages();
+      _reviewCountFuture = _loadReviewQueueCount();
       _attachmentsFuturesByMessageId.clear();
     });
   }
@@ -258,7 +327,7 @@ class _ChatPageState extends State<ChatPage> {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
-      await backend.insertMessage(
+      final message = await backend.insertMessage(
         sessionKey,
         widget.conversation.id,
         role: 'user',
@@ -268,9 +337,313 @@ class _ChatPageState extends State<ChatPage> {
       syncEngine?.notifyLocalMutation();
       _controller.clear();
       _refresh();
+      unawaited(_maybeSuggestTodoFromCapture(message, text));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  Future<void> _maybeSuggestTodoFromCapture(
+      Message message, String rawText) async {
+    if (!mounted) return;
+    final locale = Localizations.localeOf(context);
+    final settings = await ActionsSettingsStore.load();
+
+    final timeResolution = LocalTimeResolver.resolve(
+      rawText,
+      DateTime.now(),
+      locale: locale,
+      dayEndMinutes: settings.dayEndMinutes,
+    );
+    final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
+    if (timeResolution == null && !looksLikeReview) return;
+
+    if (!mounted) return;
+    final decision = await showCaptureTodoSuggestionSheet(
+      context,
+      title: rawText.trim(),
+      timeResolution: timeResolution,
+    );
+    if (decision == null || !mounted) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final todoId = 'todo:${message.id}';
+
+    switch (decision) {
+      case CaptureTodoScheduleDecision(:final dueAtLocal):
+        try {
+          await backend.upsertTodo(
+            sessionKey,
+            id: todoId,
+            title: rawText.trim(),
+            dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+            status: 'open',
+            sourceEntryId: message.id,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+        } catch (_) {
+          return;
+        }
+        break;
+      case CaptureTodoReviewDecision():
+        final nextLocal = ReviewBackoff.initialNextReviewAt(
+          DateTime.now(),
+          settings,
+        );
+        try {
+          await backend.upsertTodo(
+            sessionKey,
+            id: todoId,
+            title: rawText.trim(),
+            dueAtMs: null,
+            status: 'inbox',
+            sourceEntryId: message.id,
+            reviewStage: 0,
+            nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
+            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+        } catch (_) {
+          return;
+        }
+        break;
+      case CaptureTodoNoThanksDecision():
+        return;
+    }
+
+    if (!mounted) return;
+    _refresh();
+  }
+
+  Future<void> _handleAssistantSuggestion(
+    Message sourceMessage,
+    ActionSuggestion suggestion,
+    int index,
+  ) async {
+    if (!mounted) return;
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final locale = Localizations.localeOf(context);
+
+    if (suggestion.type == 'event') {
+      final settings = await ActionsSettingsStore.load();
+      final timeResolution =
+          (suggestion.whenText == null || suggestion.whenText!.trim().isEmpty)
+              ? null
+              : LocalTimeResolver.resolve(
+                  suggestion.whenText!,
+                  DateTime.now(),
+                  locale: locale,
+                  dayEndMinutes: settings.dayEndMinutes,
+                );
+
+      if (!mounted) return;
+      final startLocal = await _pickEventStartTime(
+        title: suggestion.title,
+        timeResolution: timeResolution,
+      );
+      if (startLocal == null || !mounted) return;
+
+      final startUtc = startLocal.toUtc();
+      final endUtc = startLocal.add(const Duration(hours: 1)).toUtc();
+      final tz = _formatTzOffset(startLocal.timeZoneOffset);
+      final eventId = 'event:${sourceMessage.id}:$index';
+
+      try {
+        await CalendarAction.shareEventAsIcs(
+          uid: eventId,
+          title: suggestion.title,
+          startUtc: startUtc,
+          endUtc: endUtc,
+        );
+      } catch (_) {
+        // ignore
+      }
+
+      try {
+        await backend.upsertEvent(
+          sessionKey,
+          id: eventId,
+          title: suggestion.title.trim(),
+          startAtMs: startUtc.millisecondsSinceEpoch,
+          endAtMs: endUtc.millisecondsSinceEpoch,
+          tz: tz,
+          sourceEntryId: sourceMessage.id,
+        );
+      } catch (_) {
+        return;
+      }
+
+      if (!mounted) return;
+      _refresh();
+      return;
+    }
+
+    if (suggestion.type != 'todo') return;
+
+    final settings = await ActionsSettingsStore.load();
+    final timeResolution =
+        (suggestion.whenText == null || suggestion.whenText!.trim().isEmpty)
+            ? null
+            : LocalTimeResolver.resolve(
+                suggestion.whenText!,
+                DateTime.now(),
+                locale: locale,
+                dayEndMinutes: settings.dayEndMinutes,
+              );
+
+    if (!mounted) return;
+    final decision = await showCaptureTodoSuggestionSheet(
+      context,
+      title: suggestion.title,
+      timeResolution: timeResolution,
+    );
+    if (decision == null || !mounted) return;
+
+    final todoId = 'todo:${sourceMessage.id}:$index';
+
+    switch (decision) {
+      case CaptureTodoScheduleDecision(:final dueAtLocal):
+        try {
+          await backend.upsertTodo(
+            sessionKey,
+            id: todoId,
+            title: suggestion.title.trim(),
+            dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+            status: 'open',
+            sourceEntryId: sourceMessage.id,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+        } catch (_) {
+          return;
+        }
+        break;
+      case CaptureTodoReviewDecision():
+        final nextLocal = ReviewBackoff.initialNextReviewAt(
+          DateTime.now(),
+          settings,
+        );
+        try {
+          await backend.upsertTodo(
+            sessionKey,
+            id: todoId,
+            title: suggestion.title.trim(),
+            dueAtMs: null,
+            status: 'inbox',
+            sourceEntryId: sourceMessage.id,
+            reviewStage: 0,
+            nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
+            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+        } catch (_) {
+          return;
+        }
+        break;
+      case CaptureTodoNoThanksDecision():
+        return;
+    }
+
+    if (!mounted) return;
+    _refresh();
+  }
+
+  Future<DateTime?> _pickEventStartTime({
+    required String title,
+    required LocalTimeResolution? timeResolution,
+  }) async {
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SlSurface(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t.actions.calendar.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(title),
+                  const SizedBox(height: 12),
+                  Text(
+                    context.t.actions.calendar.pickTime,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  if (timeResolution != null)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final c in timeResolution.candidates)
+                          SlButton(
+                            onPressed: () =>
+                                Navigator.of(context).pop(c.dueAtLocal),
+                            child: Text(c.label),
+                          ),
+                      ],
+                    )
+                  else
+                    Text(
+                      context.t.actions.calendar.noAutoTime,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  const SizedBox(height: 12),
+                  SlButton(
+                    variant: SlButtonVariant.outline,
+                    onPressed: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                        initialDate: DateTime.now(),
+                      );
+                      if (date == null) return;
+                      if (!context.mounted) return;
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(DateTime.now()),
+                      );
+                      if (time == null) return;
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(
+                        DateTime(
+                          date.year,
+                          date.month,
+                          date.day,
+                          time.hour,
+                          time.minute,
+                        ),
+                      );
+                    },
+                    child: Text(context.t.actions.calendar.pickCustom),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _formatTzOffset(Duration offset) {
+    final minutes = offset.inMinutes;
+    final sign = minutes >= 0 ? '+' : '-';
+    final abs = minutes.abs();
+    final hh = (abs ~/ 60).toString().padLeft(2, '0');
+    final mm = (abs % 60).toString().padLeft(2, '0');
+    return '$sign$hh:$mm';
   }
 
   Future<void> _stopAsk() async {
@@ -705,6 +1078,7 @@ class _ChatPageState extends State<ChatPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
+    _reviewCountFuture ??= _loadReviewQueueCount();
     _attachSyncEngine();
   }
 
@@ -742,6 +1116,24 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: Column(
         children: [
+          FutureBuilder<int>(
+            future: _reviewCountFuture,
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              return ReviewQueueBanner(
+                count: count,
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const ReviewQueuePage(),
+                    ),
+                  );
+                  if (!mounted) return;
+                  _refresh();
+                },
+              );
+            },
+          ),
           Expanded(
             child: Center(
               child: ConstrainedBox(
@@ -846,6 +1238,17 @@ class _ChatPageState extends State<ChatPage> {
                         final supportsAttachments =
                             attachmentsBackend != null && !isPending;
 
+                        final rawText = textOverride ?? stableMsg.content;
+                        final assistantActions =
+                            (!isPending && stableMsg.role == 'assistant')
+                                ? parseAssistantMessageActions(rawText)
+                                : null;
+                        final displayText =
+                            assistantActions?.displayText ?? rawText;
+                        final actionSuggestions =
+                            assistantActions?.suggestions?.suggestions ??
+                                const <ActionSuggestion>[];
+
                         final hoverMenuSlot = _hoverActionsEnabled && !isPending
                             ? Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -912,7 +1315,48 @@ class _ChatPageState extends State<ChatPage> {
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(textOverride ?? stableMsg.content),
+                                    Text(displayText),
+                                    if (actionSuggestions.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            for (var i = 0;
+                                                i < actionSuggestions.length;
+                                                i++)
+                                              SlButton(
+                                                variant:
+                                                    SlButtonVariant.outline,
+                                                onPressed: () =>
+                                                    _handleAssistantSuggestion(
+                                                  stableMsg,
+                                                  actionSuggestions[i],
+                                                  i,
+                                                ),
+                                                icon: Icon(
+                                                  actionSuggestions[i].type ==
+                                                          'event'
+                                                      ? Icons.event_rounded
+                                                      : Icons
+                                                          .check_circle_outline_rounded,
+                                                  size: 18,
+                                                ),
+                                                child: Text(
+                                                  actionSuggestions[i]
+                                                              .whenText
+                                                              ?.trim()
+                                                              .isNotEmpty ==
+                                                          true
+                                                      ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
+                                                      : actionSuggestions[i]
+                                                          .title,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                     if (supportsAttachments)
                                       FutureBuilder(
                                         future: _attachmentsFuturesByMessageId
