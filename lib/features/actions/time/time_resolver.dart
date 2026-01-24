@@ -81,6 +81,185 @@ class LocalTimeResolver {
     const MapEntry('後天', 2),
   ];
 
+  static final List<({int weekday, Set<String> tokens})> _weekdayTokens = [
+    (
+      weekday: DateTime.monday,
+      tokens: {
+        // zh
+        '周一',
+        '週一',
+        '星期一',
+        '礼拜一',
+        '禮拜一',
+        // en
+        'monday',
+        // ja
+        '月曜',
+        '月曜日',
+        // ko
+        '월요일',
+        // es
+        'lunes',
+        // fr
+        'lundi',
+        // de
+        'montag',
+      },
+    ),
+    (
+      weekday: DateTime.tuesday,
+      tokens: {
+        // zh
+        '周二',
+        '週二',
+        '星期二',
+        '礼拜二',
+        '禮拜二',
+        // en
+        'tuesday',
+        // ja
+        '火曜',
+        '火曜日',
+        // ko
+        '화요일',
+        // es
+        'martes',
+        // fr
+        'mardi',
+        // de
+        'dienstag',
+      },
+    ),
+    (
+      weekday: DateTime.wednesday,
+      tokens: {
+        // zh
+        '周三',
+        '週三',
+        '星期三',
+        '礼拜三',
+        '禮拜三',
+        // en
+        'wednesday',
+        // ja
+        '水曜',
+        '水曜日',
+        // ko
+        '수요일',
+        // es
+        'miércoles',
+        'miercoles',
+        // fr
+        'mercredi',
+        // de
+        'mittwoch',
+      },
+    ),
+    (
+      weekday: DateTime.thursday,
+      tokens: {
+        // zh
+        '周四',
+        '週四',
+        '星期四',
+        '礼拜四',
+        '禮拜四',
+        // en
+        'thursday',
+        // ja
+        '木曜',
+        '木曜日',
+        // ko
+        '목요일',
+        // es
+        'jueves',
+        // fr
+        'jeudi',
+        // de
+        'donnerstag',
+      },
+    ),
+    (
+      weekday: DateTime.friday,
+      tokens: {
+        // zh
+        '周五',
+        '週五',
+        '星期五',
+        '礼拜五',
+        '禮拜五',
+        // en
+        'friday',
+        // ja
+        '金曜',
+        '金曜日',
+        // ko
+        '금요일',
+        // es
+        'viernes',
+        // fr
+        'vendredi',
+        // de
+        'freitag',
+      },
+    ),
+    (
+      weekday: DateTime.saturday,
+      tokens: {
+        // zh
+        '周六',
+        '週六',
+        '星期六',
+        '礼拜六',
+        '禮拜六',
+        // en
+        'saturday',
+        // ja
+        '土曜',
+        '土曜日',
+        // ko
+        '토요일',
+        // es
+        'sábado',
+        'sabado',
+        // fr
+        'samedi',
+        // de
+        'samstag',
+        'sonnabend',
+      },
+    ),
+    (
+      weekday: DateTime.sunday,
+      tokens: {
+        // zh
+        '周日',
+        '週日',
+        '周天',
+        '週天',
+        '星期日',
+        '星期天',
+        '礼拜日',
+        '礼拜天',
+        '禮拜日',
+        '禮拜天',
+        // en
+        'sunday',
+        // ja
+        '日曜',
+        '日曜日',
+        // ko
+        '일요일',
+        // es
+        'domingo',
+        // fr
+        'dimanche',
+        // de
+        'sonntag',
+      },
+    ),
+  ];
+
   static final Set<String> _weekendTokens = {
     // zh
     '周末',
@@ -332,7 +511,32 @@ class LocalTimeResolver {
       );
     }
 
-    // 4) Weekend anchor
+    // 4) Weekday anchor (Mon..Sun)
+    final weekdayMatch = _matchWeekdayToken(normalized, lower);
+    if (weekdayMatch != null) {
+      final next = _nextWeekdayOnOrAfter(nowLocal, weekdayMatch.weekday);
+      var due = timeOfDay == null
+          ? _atDayEnd(next, dayEndMinutes)
+          : DateTime(next.year, next.month, next.day, timeOfDay.hour,
+              timeOfDay.minute);
+      if (due.isBefore(nowLocal)) {
+        due = due.add(const Duration(days: 7));
+      }
+      return LocalTimeResolution(
+        kind: 'weekday',
+        matchedText: weekdayMatch.token,
+        candidates: [
+          DueCandidate(
+            dueAtLocal: due,
+            label: timeOfDay == null
+                ? _formatWeekdayLabel(due, locale)
+                : _formatDateTimeLabel(due, locale),
+          ),
+        ],
+      );
+    }
+
+    // 5) Weekend anchor
     final weekendToken = _matchToken(normalized, lower, _weekendTokens);
     if (weekendToken != null) {
       final sat = _nextWeekdayOnOrAfter(nowLocal, DateTime.saturday);
@@ -536,6 +740,16 @@ class LocalTimeResolver {
       }
       if (lower.contains(tokenLower)) return entry;
       if (original.contains(token)) return entry;
+    }
+    return null;
+  }
+
+  static ({String token, int weekday})? _matchWeekdayToken(
+      String original, String lower) {
+    for (final entry in _weekdayTokens) {
+      final token = _matchToken(original, lower, entry.tokens);
+      if (token == null) continue;
+      return (token: token, weekday: entry.weekday);
     }
     return null;
   }
