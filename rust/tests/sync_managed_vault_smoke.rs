@@ -35,10 +35,7 @@ fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
         let n = stream.read(&mut tmp).expect("read");
         assert!(n > 0, "unexpected EOF");
         buf.extend_from_slice(&tmp[..n]);
-        header_end = buf
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n")
-            .map(|p| p + 4);
+        header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").map(|p| p + 4);
     }
 
     let header_end = header_end.expect("header end");
@@ -93,8 +90,7 @@ fn write_json_response(stream: &mut TcpStream, status: u16, body: serde_json::Va
     stream.write_all(resp.as_bytes()).expect("write response");
 }
 
-fn start_mock_managed_vault_server(
-) -> (
+fn start_mock_managed_vault_server() -> (
     String,
     mpsc::Sender<()>,
     Arc<Mutex<ServerState>>,
@@ -122,13 +118,21 @@ fn start_mock_managed_vault_server(
                 }
 
                 if method != "POST" {
-                    write_json_response(&mut stream, 405, serde_json::json!({ "error": "method_not_allowed" }));
+                    write_json_response(
+                        &mut stream,
+                        405,
+                        serde_json::json!({ "error": "method_not_allowed" }),
+                    );
                     continue;
                 }
 
                 let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
                 if segments.len() < 3 || segments[0] != "v1" || segments[1] != "vaults" {
-                    write_json_response(&mut stream, 404, serde_json::json!({ "error": "not_found" }));
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    );
                     continue;
                 }
                 let vault_id = segments[2].to_string();
@@ -217,18 +221,16 @@ fn start_mock_managed_vault_server(
                         .get("device_id")
                         .and_then(|v| v.as_str())
                         .expect("device_id");
-                    let since = decoded.get("since").cloned().unwrap_or(serde_json::json!({}));
-                    let limit = decoded
-                        .get("limit")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(500) as usize;
+                    let since = decoded
+                        .get("since")
+                        .cloned()
+                        .unwrap_or(serde_json::json!({}));
+                    let limit =
+                        decoded.get("limit").and_then(|v| v.as_u64()).unwrap_or(500) as usize;
 
                     let devices: Vec<String> = {
                         let st = state_clone.lock().expect("lock");
-                        st.vault_devices
-                            .get(&vault_id)
-                            .cloned()
-                            .unwrap_or_default()
+                        st.vault_devices.get(&vault_id).cloned().unwrap_or_default()
                     };
 
                     let mut out_ops: Vec<serde_json::Value> = Vec::new();
@@ -242,10 +244,7 @@ fn start_mock_managed_vault_server(
                             continue;
                         }
 
-                        let since_seq = since
-                            .get(&dev)
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(0);
+                        let since_seq = since.get(&dev).and_then(|v| v.as_i64()).unwrap_or(0);
 
                         let ops_for_dev: Vec<StoredOp> = {
                             let st = state_clone.lock().expect("lock");
@@ -284,7 +283,11 @@ fn start_mock_managed_vault_server(
                     continue;
                 }
 
-                write_json_response(&mut stream, 404, serde_json::json!({ "error": "not_found" }));
+                write_json_response(
+                    &mut stream,
+                    404,
+                    serde_json::json!({ "error": "not_found" }),
+                );
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
@@ -326,12 +329,14 @@ fn managed_vault_push_then_pull_copies_messages() {
     )
     .expect("derive sync key");
 
-    let pushed = sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
-        .expect("push");
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
     assert!(pushed > 0);
 
-    let applied = sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
-        .expect("pull");
+    let applied =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
     assert!(applied > 0);
 
     let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");

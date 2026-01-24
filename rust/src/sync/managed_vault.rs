@@ -129,7 +129,9 @@ fn ensure_device_registered(
     let status = resp.status();
     let text = resp.text().unwrap_or_default();
     if !status.is_success() {
-        return Err(anyhow!("managed-vault register-device failed: HTTP {status} {text}"));
+        return Err(anyhow!(
+            "managed-vault register-device failed: HTTP {status} {text}"
+        ));
     }
 
     let parsed: RegisterDeviceResponse = serde_json::from_str(&text)?;

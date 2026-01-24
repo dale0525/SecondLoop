@@ -23,6 +23,7 @@ if [[ ${#staged_files[@]} -eq 0 ]]; then
 fi
 
 dart_files=()
+run_rust_fmt=0
 run_flutter_checks=0
 for file in "${staged_files[@]}"; do
   if [[ "${file}" == *.dart ]]; then
@@ -36,9 +37,13 @@ for file in "${staged_files[@]}"; do
       run_flutter_checks=1
       ;;
   esac
+
+  case "${file}" in
+    rust/*) run_rust_fmt=1 ;;
+  esac
 done
 
-if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 ]]; then
+if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_rust_fmt} -eq 0 ]]; then
   exit 0
 fi
 
@@ -64,6 +69,17 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
   fi
 fi
 
+cargo_bin=""
+if [[ ${run_rust_fmt} -ne 0 ]]; then
+  if [[ -x "${repo_root}/.tool/cargo/bin/cargo" ]]; then
+    cargo_bin="${repo_root}/.tool/cargo/bin/cargo"
+  elif command -v cargo >/dev/null 2>&1; then
+    cargo_bin="$(command -v cargo)"
+  else
+    die "Missing 'cargo'. Install Rust (recommended: \`pixi run setup-rustup\`) or add cargo to PATH."
+  fi
+fi
+
 stashed=0
 cleanup() {
   if (( stashed )); then
@@ -84,6 +100,16 @@ fi
 if [[ ${#dart_files[@]} -ne 0 ]]; then
   "${dart_bin}" format "${dart_files[@]}"
   git add -- "${dart_files[@]}"
+fi
+
+if [[ ${run_rust_fmt} -ne 0 ]]; then
+  if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all; then
+    echo "" >&2
+    echo "pre-commit: rustfmt failed." >&2
+    echo "Fix locally with: pixi run rust-fmt-fix" >&2
+    exit 1
+  fi
+  git add -u -- rust
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
