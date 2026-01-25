@@ -81,7 +81,31 @@
       "title": "Task",
       "emptyTimeline": "No updates yet",
       "noteHint": "Add a note…",
-      "addNote": "Add"
+      "addNote": "Add",
+      "attach": "Attach",
+      "pickAttachment": "Choose an attachment",
+      "noAttachments": "No attachments yet",
+      "attachmentNoteDefault": "Added attachment"
+    },
+    "history": {
+      "title": "History",
+      "empty": "No activity in this range",
+      "presets": {
+        "thisWeek": "This week",
+        "lastWeek": "Last week",
+        "lastTwoWeeks": "Last 2 weeks",
+        "custom": "Custom range"
+      },
+      "actions": {
+        "copy": "Copy",
+        "copied": "Copied"
+      },
+      "sections": {
+        "created": "Created",
+        "started": "Started",
+        "done": "Done",
+        "dismissed": "Dismissed"
+      }
     },
     "agenda": {
       "title": "Tasks",

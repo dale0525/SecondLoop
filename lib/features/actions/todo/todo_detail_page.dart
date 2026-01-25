@@ -30,6 +30,9 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   final _noteController = TextEditingController();
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
+  final Map<String, Future<List<Attachment>>> _attachmentsFuturesByActivityId =
+      <String, Future<List<Attachment>>>{};
+  final List<Attachment> _pendingAttachments = <Attachment>[];
 
   @override
   void dispose() {
@@ -53,6 +56,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     setState(() {
       _activitiesFuture = _loadActivities();
       _attachmentsFuturesByMessageId.clear();
+      _attachmentsFuturesByActivityId.clear();
     });
   }
 
@@ -87,17 +91,29 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
 
   Future<void> _appendNote() async {
     final text = _noteController.text.trim();
-    if (text.isEmpty) return;
+    final pending = List<Attachment>.from(_pendingAttachments);
+    if (text.isEmpty && pending.isEmpty) return;
     _noteController.clear();
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    await backend.appendTodoNote(
+    final content = text.isNotEmpty
+        ? text
+        : context.t.actions.todoDetail.attachmentNoteDefault;
+    final activity = await backend.appendTodoNote(
       sessionKey,
       todoId: _todo.id,
-      content: text,
+      content: content,
     );
+    for (final attachment in pending) {
+      await backend.linkAttachmentToTodoActivity(
+        sessionKey,
+        activityId: activity.id,
+        attachmentSha256: attachment.sha256,
+      );
+    }
     if (!mounted) return;
+    setState(_pendingAttachments.clear);
     _refreshActivities();
   }
 
@@ -175,9 +191,134 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
               },
             ),
           ],
+          FutureBuilder<List<Attachment>>(
+            future: _attachmentsFuturesByActivityId.putIfAbsent(
+              activity.id,
+              () async {
+                final backend = AppBackendScope.of(context);
+                final sessionKey = SessionScope.of(context).sessionKey;
+                return backend.listTodoActivityAttachments(
+                    sessionKey, activity.id);
+              },
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox.shrink();
+              }
+              final attachments = snapshot.data ?? const <Attachment>[];
+              if (attachments.isEmpty) return const SizedBox.shrink();
+
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final attachment in attachments)
+                      AttachmentCard(
+                        attachment: attachment,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AttachmentViewerPage(attachment: attachment),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _pickAttachment() async {
+    final backend = AppBackendScope.of(context);
+    if (backend is! AttachmentsBackend) return;
+    final attachmentsBackend = backend as AttachmentsBackend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    final selected = await showModalBottomSheet<Attachment>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t.actions.todoDetail.pickAttachment,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                FutureBuilder<List<Attachment>>(
+                  future: attachmentsBackend.listRecentAttachments(
+                    sessionKey,
+                    limit: 50,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          context.t.errors
+                              .loadFailed(error: '${snapshot.error}'),
+                        ),
+                      );
+                    }
+
+                    final items = snapshot.data ?? const <Attachment>[];
+                    if (items.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(context.t.actions.todoDetail.noAttachments),
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final attachment in items)
+                            AttachmentCard(
+                              attachment: attachment,
+                              onTap: () =>
+                                  Navigator.of(context).pop(attachment),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    if (selected == null) return;
+    setState(() {
+      final alreadySelected =
+          _pendingAttachments.any((a) => a.sha256 == selected.sha256);
+      if (!alreadySelected) {
+        _pendingAttachments.add(selected);
+      }
+    });
   }
 
   @override
@@ -258,22 +399,70 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _noteController,
-                        decoration: InputDecoration(
-                          hintText: context.t.actions.todoDetail.noteHint,
+                    if (_pendingAttachments.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final attachment in _pendingAttachments)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: GestureDetector(
+                                    onLongPress: () {
+                                      setState(
+                                        () => _pendingAttachments.removeWhere(
+                                          (a) => a.sha256 == attachment.sha256,
+                                        ),
+                                      );
+                                    },
+                                    child: AttachmentCard(
+                                      attachment: attachment,
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                AttachmentViewerPage(
+                                              attachment: attachment,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => unawaited(_appendNote()),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    SlButton(
-                      onPressed: () => unawaited(_appendNote()),
-                      child: Text(context.t.actions.todoDetail.addNote),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _noteController,
+                            decoration: InputDecoration(
+                              hintText: context.t.actions.todoDetail.noteHint,
+                            ),
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => unawaited(_appendNote()),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          tooltip: context.t.actions.todoDetail.attach,
+                          icon: const Icon(Icons.attach_file_rounded),
+                          onPressed: () => unawaited(_pickAttachment()),
+                        ),
+                        const SizedBox(width: 6),
+                        SlButton(
+                          onPressed: () => unawaited(_appendNote()),
+                          child: Text(context.t.actions.todoDetail.addNote),
+                        ),
+                      ],
                     ),
                   ],
                 ),

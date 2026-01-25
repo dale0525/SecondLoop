@@ -7,6 +7,7 @@ import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../todo/todo_detail_page.dart';
+import '../todo/todo_history_page.dart';
 
 class TodoAgendaPage extends StatefulWidget {
   const TodoAgendaPage({super.key});
@@ -75,6 +76,17 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       key: const ValueKey('todo_agenda_page'),
       appBar: AppBar(
         title: Text(context.t.actions.agenda.title),
+        actions: [
+          IconButton(
+            tooltip: context.t.actions.history.title,
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TodoHistoryPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(

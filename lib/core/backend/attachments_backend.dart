@@ -3,6 +3,11 @@ import 'dart:typed_data';
 import '../../src/rust/db.dart';
 
 abstract class AttachmentsBackend {
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  });
+
   Future<void> linkAttachmentToMessage(
     Uint8List key,
     String messageId, {

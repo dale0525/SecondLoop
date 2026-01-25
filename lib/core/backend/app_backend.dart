@@ -43,6 +43,14 @@ abstract class AppBackend {
     throw UnimplementedError('listTodos');
   }
 
+  Future<List<Todo>> listTodosCreatedInRange(
+    Uint8List key, {
+    required int startAtMsInclusive,
+    required int endAtMsExclusive,
+  }) {
+    throw UnimplementedError('listTodosCreatedInRange');
+  }
+
   Future<Todo> upsertTodo(
     Uint8List key, {
     required String id,
@@ -80,6 +88,29 @@ abstract class AppBackend {
     String todoId,
   ) {
     throw UnimplementedError('listTodoActivities');
+  }
+
+  Future<List<TodoActivity>> listTodoActivitiesInRange(
+    Uint8List key, {
+    required int startAtMsInclusive,
+    required int endAtMsExclusive,
+  }) {
+    throw UnimplementedError('listTodoActivitiesInRange');
+  }
+
+  Future<void> linkAttachmentToTodoActivity(
+    Uint8List key, {
+    required String activityId,
+    required String attachmentSha256,
+  }) {
+    throw UnimplementedError('linkAttachmentToTodoActivity');
+  }
+
+  Future<List<Attachment>> listTodoActivityAttachments(
+    Uint8List key,
+    String activityId,
+  ) {
+    throw UnimplementedError('listTodoActivityAttachments');
   }
 
   Future<List<Event>> listEvents(Uint8List key) {

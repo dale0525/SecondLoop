@@ -548,6 +548,9 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
+        "todo.activity_attachment.link.v1" => {
+            apply_todo_activity_attachment_link(conn, db_key, &op["payload"])
+        }
         "event.upsert.v1" => apply_event_upsert(conn, db_key, &op["payload"]),
         other => Err(anyhow!("unsupported sync op type: {other}")),
     }
@@ -765,6 +768,69 @@ fn apply_todo_activity_append(
     );
 
     if todo_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    insert_result?;
+    Ok(())
+}
+
+fn apply_todo_activity_attachment_link(
+    conn: &Connection,
+    _db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let activity_id = payload["activity_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity attachment op missing activity_id"))?;
+    let attachment_sha256 = payload["attachment_sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity attachment op missing attachment_sha256"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo activity attachment op missing created_at_ms"))?;
+
+    let existing: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1
+               FROM todo_activity_attachments
+               WHERE activity_id = ?1 AND attachment_sha256 = ?2"#,
+            params![activity_id, attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing.is_some() {
+        return Ok(());
+    }
+
+    let activity_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM todo_activities WHERE id = ?1"#,
+            params![activity_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let attachment_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if activity_exists.is_none() || attachment_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. Accept orphan links temporarily;
+        // they'll resolve once the activity/attachment arrives.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let insert_result = conn.execute(
+        r#"INSERT OR IGNORE INTO todo_activity_attachments(activity_id, attachment_sha256, created_at_ms)
+           VALUES (?1, ?2, ?3)"#,
+        params![activity_id, attachment_sha256, created_at_ms],
+    );
+
+    if activity_exists.is_none() || attachment_exists.is_none() {
         let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
     }
 

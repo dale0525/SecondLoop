@@ -262,6 +262,19 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListRecentAttachments(
+      appDir: appDir,
+      key: key,
+      limit: limit,
+    );
+  }
+
+  @override
   Future<void> linkAttachmentToMessage(
     Uint8List key,
     String messageId, {
@@ -340,6 +353,21 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<List<Todo>> listTodosCreatedInRange(
+    Uint8List key, {
+    required int startAtMsInclusive,
+    required int endAtMsExclusive,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListTodosCreatedInRange(
+      appDir: appDir,
+      key: key,
+      startAtMsInclusive: startAtMsInclusive,
+      endAtMsExclusive: endAtMsExclusive,
+    );
+  }
+
+  @override
   Future<Todo> upsertTodo(
     Uint8List key, {
     required String id,
@@ -408,6 +436,49 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
     final appDir = await _getAppDir();
     return rust_core.dbListTodoActivities(
         appDir: appDir, key: key, todoId: todoId);
+  }
+
+  @override
+  Future<List<TodoActivity>> listTodoActivitiesInRange(
+    Uint8List key, {
+    required int startAtMsInclusive,
+    required int endAtMsExclusive,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListTodoActivitiesInRange(
+      appDir: appDir,
+      key: key,
+      startAtMsInclusive: startAtMsInclusive,
+      endAtMsExclusive: endAtMsExclusive,
+    );
+  }
+
+  @override
+  Future<void> linkAttachmentToTodoActivity(
+    Uint8List key, {
+    required String activityId,
+    required String attachmentSha256,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbLinkAttachmentToTodoActivity(
+      appDir: appDir,
+      key: key,
+      activityId: activityId,
+      attachmentSha256: attachmentSha256,
+    );
+  }
+
+  @override
+  Future<List<Attachment>> listTodoActivityAttachments(
+    Uint8List key,
+    String activityId,
+  ) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListTodoActivityAttachments(
+      appDir: appDir,
+      key: key,
+      activityId: activityId,
+    );
   }
 
   @override

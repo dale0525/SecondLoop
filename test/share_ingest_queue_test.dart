@@ -141,6 +141,13 @@ final class _ShareBackend extends AppBackend implements AttachmentsBackend {
   }
 
   @override
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  }) async =>
+      const <Attachment>[];
+
+  @override
   Future<void> linkAttachmentToMessage(
     Uint8List key,
     String messageId, {

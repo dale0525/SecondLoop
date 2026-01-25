@@ -123,6 +123,7 @@ pub fn db_insert_message(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
 pub fn db_upsert_todo(
     app_dir: String,
     key: Vec<u8>,
@@ -156,6 +157,18 @@ pub fn db_list_todos(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Todo>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::list_todos(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todos_created_in_range(
+    app_dir: String,
+    key: Vec<u8>,
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+) -> Result<Vec<db::Todo>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todos_created_in_range(&conn, &key, start_at_ms_inclusive, end_at_ms_exclusive)
 }
 
 #[flutter_rust_bridge::frb]
@@ -205,6 +218,41 @@ pub fn db_list_todo_activities(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::list_todo_activities(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_activities_in_range(
+    app_dir: String,
+    key: Vec<u8>,
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+) -> Result<Vec<db::TodoActivity>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_activities_in_range(&conn, &key, start_at_ms_inclusive, end_at_ms_exclusive)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_link_attachment_to_todo_activity(
+    app_dir: String,
+    key: Vec<u8>,
+    activity_id: String,
+    attachment_sha256: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::link_attachment_to_todo_activity(&conn, &key, &activity_id, &attachment_sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_activity_attachments(
+    app_dir: String,
+    key: Vec<u8>,
+    activity_id: String,
+) -> Result<Vec<db::Attachment>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_activity_attachments(&conn, &key, &activity_id)
 }
 
 #[flutter_rust_bridge::frb]
@@ -296,6 +344,17 @@ pub fn db_list_message_attachments(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::list_message_attachments(&conn, &key, &message_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_recent_attachments(
+    app_dir: String,
+    key: Vec<u8>,
+    limit: u32,
+) -> Result<Vec<db::Attachment>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_recent_attachments(&conn, &key, limit as i64)
 }
 
 #[flutter_rust_bridge::frb]

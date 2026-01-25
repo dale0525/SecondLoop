@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 502 (251 per locale)
+/// Strings: 534 (267 per locale)
 ///
-/// Built on 2026-01-25 at 05:18 UTC
+/// Built on 2026-01-25 at 06:21 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -257,6 +257,8 @@ class _StringsActionsEn {
       _StringsActionsTodoLinkEn._(_root);
   late final _StringsActionsTodoDetailEn todoDetail =
       _StringsActionsTodoDetailEn._(_root);
+  late final _StringsActionsHistoryEn history =
+      _StringsActionsHistoryEn._(_root);
   late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
   late final _StringsActionsCalendarEn calendar =
       _StringsActionsCalendarEn._(_root);
@@ -575,6 +577,27 @@ class _StringsActionsTodoDetailEn {
   String get emptyTimeline => 'No updates yet';
   String get noteHint => 'Add a note…';
   String get addNote => 'Add';
+  String get attach => 'Attach';
+  String get pickAttachment => 'Choose an attachment';
+  String get noAttachments => 'No attachments yet';
+  String get attachmentNoteDefault => 'Added attachment';
+}
+
+// Path: actions.history
+class _StringsActionsHistoryEn {
+  _StringsActionsHistoryEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'History';
+  String get empty => 'No activity in this range';
+  late final _StringsActionsHistoryPresetsEn presets =
+      _StringsActionsHistoryPresetsEn._(_root);
+  late final _StringsActionsHistoryActionsEn actions =
+      _StringsActionsHistoryActionsEn._(_root);
+  late final _StringsActionsHistorySectionsEn sections =
+      _StringsActionsHistorySectionsEn._(_root);
 }
 
 // Path: actions.agenda
@@ -972,6 +995,43 @@ class _StringsActionsReviewQueueActionsEn {
   String get start => 'Start';
   String get done => 'Done';
   String get dismiss => 'Dismiss';
+}
+
+// Path: actions.history.presets
+class _StringsActionsHistoryPresetsEn {
+  _StringsActionsHistoryPresetsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get thisWeek => 'This week';
+  String get lastWeek => 'Last week';
+  String get lastTwoWeeks => 'Last 2 weeks';
+  String get custom => 'Custom range';
+}
+
+// Path: actions.history.actions
+class _StringsActionsHistoryActionsEn {
+  _StringsActionsHistoryActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get copy => 'Copy';
+  String get copied => 'Copied';
+}
+
+// Path: actions.history.sections
+class _StringsActionsHistorySectionsEn {
+  _StringsActionsHistorySectionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get created => 'Created';
+  String get started => 'Started';
+  String get done => 'Done';
+  String get dismissed => 'Dismissed';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -1457,6 +1517,9 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   @override
   late final _StringsActionsTodoDetailZhCn todoDetail =
       _StringsActionsTodoDetailZhCn._(_root);
+  @override
+  late final _StringsActionsHistoryZhCn history =
+      _StringsActionsHistoryZhCn._(_root);
   @override
   late final _StringsActionsAgendaZhCn agenda =
       _StringsActionsAgendaZhCn._(_root);
@@ -1952,6 +2015,39 @@ class _StringsActionsTodoDetailZhCn extends _StringsActionsTodoDetailEn {
   String get noteHint => '补充跟进…';
   @override
   String get addNote => '添加';
+  @override
+  String get attach => '添加附件';
+  @override
+  String get pickAttachment => '选择附件';
+  @override
+  String get noAttachments => '暂无附件';
+  @override
+  String get attachmentNoteDefault => '添加了附件';
+}
+
+// Path: actions.history
+class _StringsActionsHistoryZhCn extends _StringsActionsHistoryEn {
+  _StringsActionsHistoryZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '回溯';
+  @override
+  String get empty => '该时间范围内没有记录';
+  @override
+  late final _StringsActionsHistoryPresetsZhCn presets =
+      _StringsActionsHistoryPresetsZhCn._(_root);
+  @override
+  late final _StringsActionsHistoryActionsZhCn actions =
+      _StringsActionsHistoryActionsZhCn._(_root);
+  @override
+  late final _StringsActionsHistorySectionsZhCn sections =
+      _StringsActionsHistorySectionsZhCn._(_root);
 }
 
 // Path: actions.agenda
@@ -2538,6 +2634,65 @@ class _StringsActionsReviewQueueActionsZhCn
   String get done => '完成';
   @override
   String get dismiss => '忽略';
+}
+
+// Path: actions.history.presets
+class _StringsActionsHistoryPresetsZhCn
+    extends _StringsActionsHistoryPresetsEn {
+  _StringsActionsHistoryPresetsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get thisWeek => '本周';
+  @override
+  String get lastWeek => '上周';
+  @override
+  String get lastTwoWeeks => '上两周';
+  @override
+  String get custom => '自定义范围';
+}
+
+// Path: actions.history.actions
+class _StringsActionsHistoryActionsZhCn
+    extends _StringsActionsHistoryActionsEn {
+  _StringsActionsHistoryActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get copy => '复制';
+  @override
+  String get copied => '已复制';
+}
+
+// Path: actions.history.sections
+class _StringsActionsHistorySectionsZhCn
+    extends _StringsActionsHistorySectionsEn {
+  _StringsActionsHistorySectionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get created => '新增';
+  @override
+  String get started => '开始';
+  @override
+  String get done => '完成';
+  @override
+  String get dismissed => '不再提醒';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -3169,6 +3324,38 @@ extension on Translations {
         return 'Add a note…';
       case 'actions.todoDetail.addNote':
         return 'Add';
+      case 'actions.todoDetail.attach':
+        return 'Attach';
+      case 'actions.todoDetail.pickAttachment':
+        return 'Choose an attachment';
+      case 'actions.todoDetail.noAttachments':
+        return 'No attachments yet';
+      case 'actions.todoDetail.attachmentNoteDefault':
+        return 'Added attachment';
+      case 'actions.history.title':
+        return 'History';
+      case 'actions.history.empty':
+        return 'No activity in this range';
+      case 'actions.history.presets.thisWeek':
+        return 'This week';
+      case 'actions.history.presets.lastWeek':
+        return 'Last week';
+      case 'actions.history.presets.lastTwoWeeks':
+        return 'Last 2 weeks';
+      case 'actions.history.presets.custom':
+        return 'Custom range';
+      case 'actions.history.actions.copy':
+        return 'Copy';
+      case 'actions.history.actions.copied':
+        return 'Copied';
+      case 'actions.history.sections.created':
+        return 'Created';
+      case 'actions.history.sections.started':
+        return 'Started';
+      case 'actions.history.sections.done':
+        return 'Done';
+      case 'actions.history.sections.dismissed':
+        return 'Dismissed';
       case 'actions.agenda.title':
         return 'Tasks';
       case 'actions.agenda.summary':
@@ -3692,6 +3879,38 @@ extension on _StringsZhCn {
         return '补充跟进…';
       case 'actions.todoDetail.addNote':
         return '添加';
+      case 'actions.todoDetail.attach':
+        return '添加附件';
+      case 'actions.todoDetail.pickAttachment':
+        return '选择附件';
+      case 'actions.todoDetail.noAttachments':
+        return '暂无附件';
+      case 'actions.todoDetail.attachmentNoteDefault':
+        return '添加了附件';
+      case 'actions.history.title':
+        return '回溯';
+      case 'actions.history.empty':
+        return '该时间范围内没有记录';
+      case 'actions.history.presets.thisWeek':
+        return '本周';
+      case 'actions.history.presets.lastWeek':
+        return '上周';
+      case 'actions.history.presets.lastTwoWeeks':
+        return '上两周';
+      case 'actions.history.presets.custom':
+        return '自定义范围';
+      case 'actions.history.actions.copy':
+        return '复制';
+      case 'actions.history.actions.copied':
+        return '已复制';
+      case 'actions.history.sections.created':
+        return '新增';
+      case 'actions.history.sections.started':
+        return '开始';
+      case 'actions.history.sections.done':
+        return '完成';
+      case 'actions.history.sections.dismissed':
+        return '不再提醒';
       case 'actions.agenda.title':
         return '待办';
       case 'actions.agenda.summary':

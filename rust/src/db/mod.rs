@@ -2134,6 +2134,36 @@ ORDER BY a.created_at ASC, a.sha256 ASC
     Ok(result)
 }
 
+pub fn list_recent_attachments(
+    conn: &Connection,
+    _key: &[u8; 32],
+    limit: i64,
+) -> Result<Vec<Attachment>> {
+    let limit = limit.clamp(1, 500);
+    let mut stmt = conn.prepare(
+        r#"
+SELECT sha256, mime_type, path, byte_len, created_at
+FROM attachments
+ORDER BY created_at DESC, sha256 DESC
+LIMIT ?1
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![limit])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(Attachment {
+            sha256: row.get(0)?,
+            mime_type: row.get(1)?,
+            path: row.get(2)?,
+            byte_len: row.get(3)?,
+            created_at_ms: row.get(4)?,
+        });
+    }
+    Ok(result)
+}
+
+#[allow(clippy::type_complexity)]
 fn get_todo_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Todo> {
     let (
         title_blob,
@@ -2187,6 +2217,7 @@ WHERE id = ?1
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn upsert_todo(
     conn: &Connection,
     key: &[u8; 32],
@@ -2302,6 +2333,7 @@ ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
     Ok(result)
 }
 
+#[allow(clippy::type_complexity)]
 fn get_todo_activity_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<TodoActivity> {
     let (
         todo_id,
@@ -2415,6 +2447,58 @@ ORDER BY created_at_ms ASC, id ASC
     Ok(result)
 }
 
+pub fn list_todo_activities_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+) -> Result<Vec<TodoActivity>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+FROM todo_activities
+WHERE created_at_ms >= ?1 AND created_at_ms < ?2
+ORDER BY created_at_ms ASC, id ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let todo_id: String = row.get(1)?;
+        let activity_type: String = row.get(2)?;
+        let from_status: Option<String> = row.get(3)?;
+        let to_status: Option<String> = row.get(4)?;
+        let content_blob: Option<Vec<u8>> = row.get(5)?;
+        let source_message_id: Option<String> = row.get(6)?;
+        let created_at_ms: i64 = row.get(7)?;
+
+        let content = if let Some(blob) = content_blob {
+            let aad = format!("todo_activity.content:{id}");
+            let bytes = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            Some(
+                String::from_utf8(bytes)
+                    .map_err(|_| anyhow!("todo activity content is not valid utf-8"))?,
+            )
+        } else {
+            None
+        };
+
+        result.push(TodoActivity {
+            id,
+            todo_id,
+            activity_type,
+            from_status,
+            to_status,
+            content,
+            source_message_id,
+            created_at_ms,
+        });
+    }
+    Ok(result)
+}
+
 pub fn append_todo_note(
     conn: &Connection,
     key: &[u8; 32],
@@ -2461,6 +2545,119 @@ VALUES (?1, ?2, 'note', NULL, NULL, ?3, ?4, ?5)
     insert_oplog(conn, key, &op)?;
 
     Ok(activity)
+}
+
+pub fn link_attachment_to_todo_activity(
+    conn: &Connection,
+    key: &[u8; 32],
+    activity_id: &str,
+    attachment_sha256: &str,
+) -> Result<()> {
+    let now = now_ms();
+    let inserted = conn.execute(
+        r#"INSERT OR IGNORE INTO todo_activity_attachments(activity_id, attachment_sha256, created_at_ms)
+           VALUES (?1, ?2, ?3)"#,
+        params![activity_id, attachment_sha256, now],
+    )?;
+    if inserted == 0 {
+        return Ok(());
+    }
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.activity_attachment.link.v1",
+        "payload": {
+            "activity_id": activity_id,
+            "attachment_sha256": attachment_sha256,
+            "created_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(())
+}
+
+pub fn list_todo_activity_attachments(
+    conn: &Connection,
+    _key: &[u8; 32],
+    activity_id: &str,
+) -> Result<Vec<Attachment>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT a.sha256, a.mime_type, a.path, a.byte_len, a.created_at
+FROM attachments a
+JOIN todo_activity_attachments taa ON taa.attachment_sha256 = a.sha256
+WHERE taa.activity_id = ?1
+ORDER BY taa.created_at_ms ASC, a.sha256 ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![activity_id])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(Attachment {
+            sha256: row.get(0)?,
+            mime_type: row.get(1)?,
+            path: row.get(2)?,
+            byte_len: row.get(3)?,
+            created_at_ms: row.get(4)?,
+        });
+    }
+    Ok(result)
+}
+
+pub fn list_todos_created_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+) -> Result<Vec<Todo>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+FROM todos
+WHERE created_at_ms >= ?1 AND created_at_ms < ?2
+ORDER BY created_at_ms ASC, id ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let title_blob: Vec<u8> = row.get(1)?;
+        let due_at_ms: Option<i64> = row.get(2)?;
+        let status: String = row.get(3)?;
+        let source_entry_id: Option<String> = row.get(4)?;
+        let created_at_ms: i64 = row.get(5)?;
+        let updated_at_ms: i64 = row.get(6)?;
+        let review_stage: Option<i64> = row.get(7)?;
+        let next_review_at_ms: Option<i64> = row.get(8)?;
+        let last_review_at_ms: Option<i64> = row.get(9)?;
+
+        let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
+        let title =
+            String::from_utf8(title_bytes).map_err(|_| anyhow!("todo title is not valid utf-8"))?;
+
+        result.push(Todo {
+            id,
+            title,
+            due_at_ms,
+            status,
+            source_entry_id,
+            created_at_ms,
+            updated_at_ms,
+            review_stage,
+            next_review_at_ms,
+            last_review_at_ms,
+        });
+    }
+    Ok(result)
 }
 
 pub fn set_todo_status(

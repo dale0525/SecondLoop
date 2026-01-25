@@ -90,6 +90,17 @@ Future<List<Todo>> dbListTodos(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbListTodos(appDir: appDir, key: key);
 
+Future<List<Todo>> dbListTodosCreatedInRange(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 startAtMsInclusive,
+        required PlatformInt64 endAtMsExclusive}) =>
+    RustLib.instance.api.crateApiCoreDbListTodosCreatedInRange(
+        appDir: appDir,
+        key: key,
+        startAtMsInclusive: startAtMsInclusive,
+        endAtMsExclusive: endAtMsExclusive);
+
 Future<Todo> dbSetTodoStatus(
         {required String appDir,
         required List<int> key,
@@ -122,6 +133,35 @@ Future<List<TodoActivity>> dbListTodoActivities(
         required String todoId}) =>
     RustLib.instance.api.crateApiCoreDbListTodoActivities(
         appDir: appDir, key: key, todoId: todoId);
+
+Future<List<TodoActivity>> dbListTodoActivitiesInRange(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 startAtMsInclusive,
+        required PlatformInt64 endAtMsExclusive}) =>
+    RustLib.instance.api.crateApiCoreDbListTodoActivitiesInRange(
+        appDir: appDir,
+        key: key,
+        startAtMsInclusive: startAtMsInclusive,
+        endAtMsExclusive: endAtMsExclusive);
+
+Future<void> dbLinkAttachmentToTodoActivity(
+        {required String appDir,
+        required List<int> key,
+        required String activityId,
+        required String attachmentSha256}) =>
+    RustLib.instance.api.crateApiCoreDbLinkAttachmentToTodoActivity(
+        appDir: appDir,
+        key: key,
+        activityId: activityId,
+        attachmentSha256: attachmentSha256);
+
+Future<List<Attachment>> dbListTodoActivityAttachments(
+        {required String appDir,
+        required List<int> key,
+        required String activityId}) =>
+    RustLib.instance.api.crateApiCoreDbListTodoActivityAttachments(
+        appDir: appDir, key: key, activityId: activityId);
 
 Future<Event> dbUpsertEvent(
         {required String appDir,
@@ -187,6 +227,11 @@ Future<List<Attachment>> dbListMessageAttachments(
         required String messageId}) =>
     RustLib.instance.api.crateApiCoreDbListMessageAttachments(
         appDir: appDir, key: key, messageId: messageId);
+
+Future<List<Attachment>> dbListRecentAttachments(
+        {required String appDir, required List<int> key, required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListRecentAttachments(
+        appDir: appDir, key: key, limit: limit);
 
 Future<Uint8List> dbReadAttachmentBytes(
         {required String appDir,

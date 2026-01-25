@@ -81,7 +81,31 @@
       "title": "待办详情",
       "emptyTimeline": "暂无跟进记录",
       "noteHint": "补充跟进…",
-      "addNote": "添加"
+      "addNote": "添加",
+      "attach": "添加附件",
+      "pickAttachment": "选择附件",
+      "noAttachments": "暂无附件",
+      "attachmentNoteDefault": "添加了附件"
+    },
+    "history": {
+      "title": "回溯",
+      "empty": "该时间范围内没有记录",
+      "presets": {
+        "thisWeek": "本周",
+        "lastWeek": "上周",
+        "lastTwoWeeks": "上两周",
+        "custom": "自定义范围"
+      },
+      "actions": {
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "sections": {
+        "created": "新增",
+        "started": "开始",
+        "done": "完成",
+        "dismissed": "不再提醒"
+      }
     },
     "agenda": {
       "title": "待办",
