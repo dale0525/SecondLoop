@@ -18,6 +18,7 @@
       "stopping": "Stopping…",
       "edit": "Edit",
       "delete": "Delete",
+      "undo": "Undo",
       "refresh": "Refresh",
       "search": "Search",
       "useModel": "Use model",
@@ -59,9 +60,34 @@
       "actions": {
         "schedule": "Schedule",
         "snooze": "Snooze",
+        "start": "Start",
         "done": "Done",
         "dismiss": "Dismiss"
       }
+    },
+    "todoStatus": {
+      "inbox": "Needs confirmation",
+      "open": "Not started",
+      "inProgress": "In progress",
+      "done": "Done",
+      "dismissed": "Deleted"
+    },
+    "todoLink": {
+      "title": "Update a task?",
+      "subtitle": "Mark as: $status",
+      "updated": "Updated \"$title\" → $status"
+    },
+    "todoDetail": {
+      "title": "Task",
+      "emptyTimeline": "No updates yet",
+      "noteHint": "Add a note…",
+      "addNote": "Add"
+    },
+    "agenda": {
+      "title": "Tasks",
+      "summary": "Today $due • Overdue $overdue",
+      "viewAll": "View all",
+      "empty": "No scheduled tasks"
     },
     "calendar": {
       "title": "Add to calendar?",

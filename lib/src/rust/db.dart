@@ -276,3 +276,50 @@ class Todo {
           nextReviewAtMs == other.nextReviewAtMs &&
           lastReviewAtMs == other.lastReviewAtMs;
 }
+
+class TodoActivity {
+  final String id;
+  final String todoId;
+  final String activityType;
+  final String? fromStatus;
+  final String? toStatus;
+  final String? content;
+  final String? sourceMessageId;
+  final PlatformInt64 createdAtMs;
+
+  const TodoActivity({
+    required this.id,
+    required this.todoId,
+    required this.activityType,
+    this.fromStatus,
+    this.toStatus,
+    this.content,
+    this.sourceMessageId,
+    required this.createdAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      todoId.hashCode ^
+      activityType.hashCode ^
+      fromStatus.hashCode ^
+      toStatus.hashCode ^
+      content.hashCode ^
+      sourceMessageId.hashCode ^
+      createdAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoActivity &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          todoId == other.todoId &&
+          activityType == other.activityType &&
+          fromStatus == other.fromStatus &&
+          toStatus == other.toStatus &&
+          content == other.content &&
+          sourceMessageId == other.sourceMessageId &&
+          createdAtMs == other.createdAtMs;
+}

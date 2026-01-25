@@ -83,6 +83,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Todo> dco_decode_list_todo(dynamic raw);
 
   @protected
+  List<TodoActivity> dco_decode_list_todo_activity(dynamic raw);
+
+  @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
 
   @protected
@@ -99,6 +102,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Todo dco_decode_todo(dynamic raw);
+
+  @protected
+  TodoActivity dco_decode_todo_activity(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -175,6 +181,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Todo> sse_decode_list_todo(SseDeserializer deserializer);
 
   @protected
+  List<TodoActivity> sse_decode_list_todo_activity(
+      SseDeserializer deserializer);
+
+  @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
 
   @protected
@@ -191,6 +201,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Todo sse_decode_todo(SseDeserializer deserializer);
+
+  @protected
+  TodoActivity sse_decode_todo_activity(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -276,6 +289,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_todo(List<Todo> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_todo_activity(
+      List<TodoActivity> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
 
   @protected
@@ -294,6 +311,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_todo(Todo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_activity(TodoActivity self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

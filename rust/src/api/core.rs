@@ -159,6 +159,55 @@ pub fn db_list_todos(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Todo>> {
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_set_todo_status(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    new_status: String,
+    source_message_id: Option<String>,
+) -> Result<db::Todo> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::set_todo_status(
+        &conn,
+        &key,
+        &todo_id,
+        &new_status,
+        source_message_id.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_append_todo_note(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    content: String,
+    source_message_id: Option<String>,
+) -> Result<db::TodoActivity> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::append_todo_note(
+        &conn,
+        &key,
+        &todo_id,
+        &content,
+        source_message_id.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_activities(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Vec<db::TodoActivity>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_activities(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_upsert_event(
     app_dir: String,
     key: Vec<u8>,

@@ -18,6 +18,7 @@
       "stopping": "正在停止…",
       "edit": "编辑",
       "delete": "删除",
+      "undo": "撤销",
       "refresh": "刷新",
       "search": "搜索",
       "useModel": "使用模型",
@@ -59,9 +60,34 @@
       "actions": {
         "schedule": "安排时间",
         "snooze": "稍后提醒",
+        "start": "开始",
         "done": "完成",
         "dismiss": "忽略"
       }
+    },
+    "todoStatus": {
+      "inbox": "待确认",
+      "open": "未开始",
+      "inProgress": "进行中",
+      "done": "已完成",
+      "dismissed": "已删除"
+    },
+    "todoLink": {
+      "title": "要更新哪个待办？",
+      "subtitle": "默认标记为：$status",
+      "updated": "已更新「$title」为：$status"
+    },
+    "todoDetail": {
+      "title": "待办详情",
+      "emptyTimeline": "暂无跟进记录",
+      "noteHint": "补充跟进…",
+      "addNote": "添加"
+    },
+    "agenda": {
+      "title": "待办",
+      "summary": "今天 $due 条 · 逾期 $overdue 条",
+      "viewAll": "查看全部",
+      "empty": "暂无待办"
     },
     "calendar": {
       "title": "添加到日历？",

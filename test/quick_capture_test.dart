@@ -77,6 +77,15 @@ void main() {
     expect(backend.insertedMessages, hasLength(1));
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('capture_todo_option_pick_custom')),
+        findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('capture_todo_option_pick_custom')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('capture_todo_custom_datetime_picker')),
+        findsOneWidget);
   });
 }
 

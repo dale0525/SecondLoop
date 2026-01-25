@@ -90,6 +90,39 @@ Future<List<Todo>> dbListTodos(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbListTodos(appDir: appDir, key: key);
 
+Future<Todo> dbSetTodoStatus(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String newStatus,
+        String? sourceMessageId}) =>
+    RustLib.instance.api.crateApiCoreDbSetTodoStatus(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        newStatus: newStatus,
+        sourceMessageId: sourceMessageId);
+
+Future<TodoActivity> dbAppendTodoNote(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String content,
+        String? sourceMessageId}) =>
+    RustLib.instance.api.crateApiCoreDbAppendTodoNote(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        content: content,
+        sourceMessageId: sourceMessageId);
+
+Future<List<TodoActivity>> dbListTodoActivities(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbListTodoActivities(
+        appDir: appDir, key: key, todoId: todoId);
+
 Future<Event> dbUpsertEvent(
         {required String appDir,
         required List<int> key,

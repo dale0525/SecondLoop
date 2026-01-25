@@ -81,6 +81,18 @@ pub struct Todo {
 }
 
 #[derive(Clone, Debug)]
+pub struct TodoActivity {
+    pub id: String,
+    pub todo_id: String,
+    pub activity_type: String,
+    pub from_status: Option<String>,
+    pub to_status: Option<String>,
+    pub content: Option<String>,
+    pub source_message_id: Option<String>,
+    pub created_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct Event {
     pub id: String,
     pub title: String,
@@ -523,6 +535,41 @@ PRAGMA user_version = 10;
         )?;
     }
 
+    if user_version < 11 {
+        // v11: todo activity timeline (status changes + follow-ups).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS todo_activities (
+  id TEXT PRIMARY KEY,
+  todo_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  from_status TEXT,
+  to_status TEXT,
+  content BLOB,
+  source_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_todo_activities_todo_created_at_ms
+  ON todo_activities(todo_id, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_todo_activities_created_at_ms
+  ON todo_activities(created_at_ms);
+
+CREATE TABLE IF NOT EXISTS todo_activity_attachments (
+  activity_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (activity_id, attachment_sha256),
+  FOREIGN KEY(activity_id) REFERENCES todo_activities(id) ON DELETE CASCADE,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_todo_activity_attachments_created_at_ms
+  ON todo_activity_attachments(created_at_ms);
+PRAGMA user_version = 11;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -544,6 +591,8 @@ DELETE FROM message_embeddings;
 DELETE FROM messages;
 DELETE FROM conversations;
 DELETE FROM todos;
+DELETE FROM todo_activity_attachments;
+DELETE FROM todo_activities;
 DELETE FROM events;
 DELETE FROM oplog;
 DELETE FROM kv WHERE key != 'embedding.active_model_name';
@@ -2251,6 +2300,257 @@ ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
         });
     }
     Ok(result)
+}
+
+fn get_todo_activity_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<TodoActivity> {
+    let (
+        todo_id,
+        activity_type,
+        from_status,
+        to_status,
+        content_blob,
+        source_message_id,
+        created_at_ms,
+    ): (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<Vec<u8>>,
+        Option<String>,
+        i64,
+    ) = conn
+        .query_row(
+            r#"
+SELECT todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+FROM todo_activities
+WHERE id = ?1
+"#,
+            params![id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            },
+        )
+        .map_err(|e| anyhow!("get todo activity failed: {e}"))?;
+
+    let content = if let Some(blob) = content_blob {
+        let aad = format!("todo_activity.content:{id}");
+        let bytes = decrypt_bytes(key, &blob, aad.as_bytes())?;
+        Some(
+            String::from_utf8(bytes)
+                .map_err(|_| anyhow!("todo activity content is not valid utf-8"))?,
+        )
+    } else {
+        None
+    };
+
+    Ok(TodoActivity {
+        id: id.to_string(),
+        todo_id,
+        activity_type,
+        from_status,
+        to_status,
+        content,
+        source_message_id,
+        created_at_ms,
+    })
+}
+
+pub fn list_todo_activities(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+) -> Result<Vec<TodoActivity>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+FROM todo_activities
+WHERE todo_id = ?1
+ORDER BY created_at_ms ASC, id ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![todo_id])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let todo_id: String = row.get(1)?;
+        let activity_type: String = row.get(2)?;
+        let from_status: Option<String> = row.get(3)?;
+        let to_status: Option<String> = row.get(4)?;
+        let content_blob: Option<Vec<u8>> = row.get(5)?;
+        let source_message_id: Option<String> = row.get(6)?;
+        let created_at_ms: i64 = row.get(7)?;
+
+        let content = if let Some(blob) = content_blob {
+            let aad = format!("todo_activity.content:{id}");
+            let bytes = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            Some(
+                String::from_utf8(bytes)
+                    .map_err(|_| anyhow!("todo activity content is not valid utf-8"))?,
+            )
+        } else {
+            None
+        };
+
+        result.push(TodoActivity {
+            id,
+            todo_id,
+            activity_type,
+            from_status,
+            to_status,
+            content,
+            source_message_id,
+            created_at_ms,
+        });
+    }
+    Ok(result)
+}
+
+pub fn append_todo_note(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    content: &str,
+    source_message_id: Option<&str>,
+) -> Result<TodoActivity> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms();
+    let aad = format!("todo_activity.content:{id}");
+    let content_blob = encrypt_bytes(key, content.as_bytes(), aad.as_bytes())?;
+
+    conn.execute(
+        r#"
+INSERT INTO todo_activities(
+  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+)
+VALUES (?1, ?2, 'note', NULL, NULL, ?3, ?4, ?5)
+"#,
+        params![id, todo_id, content_blob, source_message_id, now],
+    )?;
+
+    let activity = get_todo_activity_by_id(conn, key, &id)?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.activity.append.v1",
+        "payload": {
+            "activity_id": activity.id.as_str(),
+            "todo_id": activity.todo_id.as_str(),
+            "activity_type": activity.activity_type.as_str(),
+            "from_status": activity.from_status.as_deref(),
+            "to_status": activity.to_status.as_deref(),
+            "content": activity.content.as_deref(),
+            "source_message_id": activity.source_message_id.as_deref(),
+            "created_at_ms": activity.created_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(activity)
+}
+
+pub fn set_todo_status(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    new_status: &str,
+    source_message_id: Option<&str>,
+) -> Result<Todo> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<Todo> = (|| {
+        let existing = get_todo_by_id(conn, key, todo_id)?;
+        if existing.status == new_status {
+            return Ok(existing);
+        }
+
+        let activity_id = uuid::Uuid::new_v4().to_string();
+        let now = now_ms();
+        conn.execute(
+            r#"
+INSERT INTO todo_activities(
+  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+)
+VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6)
+"#,
+            params![
+                activity_id,
+                todo_id,
+                existing.status,
+                new_status,
+                source_message_id,
+                now
+            ],
+        )?;
+
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.activity.append.v1",
+            "payload": {
+                "activity_id": activity_id.as_str(),
+                "todo_id": todo_id,
+                "activity_type": "status_change",
+                "from_status": existing.status.as_str(),
+                "to_status": new_status,
+                "content": null,
+                "source_message_id": source_message_id,
+                "created_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+
+        let (review_stage, next_review_at_ms) =
+            if existing.status == "inbox" && new_status != "inbox" {
+                (None, None)
+            } else {
+                (existing.review_stage, existing.next_review_at_ms)
+            };
+
+        let updated = upsert_todo(
+            conn,
+            key,
+            todo_id,
+            &existing.title,
+            existing.due_at_ms,
+            new_status,
+            existing.source_entry_id.as_deref(),
+            review_stage,
+            next_review_at_ms,
+            Some(now),
+        )?;
+
+        Ok(updated)
+    })();
+
+    match result {
+        Ok(todo) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(todo)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
 }
 
 fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Event> {

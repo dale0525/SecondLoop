@@ -367,6 +367,50 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<Todo> setTodoStatus(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSetTodoStatus(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      newStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+    );
+  }
+
+  @override
+  Future<TodoActivity> appendTodoNote(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+    String? sourceMessageId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbAppendTodoNote(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      content: content,
+      sourceMessageId: sourceMessageId,
+    );
+  }
+
+  @override
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListTodoActivities(
+        appDir: appDir, key: key, todoId: todoId);
+  }
+
+  @override
   Future<List<Event>> listEvents(Uint8List key) async {
     final appDir = await _getAppDir();
     return rust_core.dbListEvents(appDir: appDir, key: key);

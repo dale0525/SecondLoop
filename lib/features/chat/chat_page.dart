@@ -21,6 +21,8 @@ import '../../ui/sl_icon_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import '../actions/assistant_message_actions.dart';
+import '../actions/agenda/todo_agenda_banner.dart';
+import '../actions/agenda/todo_agenda_page.dart';
 import '../actions/calendar/calendar_action.dart';
 import '../actions/review/review_backoff.dart';
 import '../actions/review/review_queue_banner.dart';
@@ -28,6 +30,7 @@ import '../actions/review/review_queue_page.dart';
 import '../actions/settings/actions_settings_store.dart';
 import '../actions/suggestions_card.dart';
 import '../actions/suggestions_parser.dart';
+import '../actions/todo/todo_linking.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
@@ -47,6 +50,7 @@ class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   Future<List<Message>>? _messagesFuture;
   Future<int>? _reviewCountFuture;
+  Future<_TodoAgendaSummary>? _agendaFuture;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   bool _sending = false;
@@ -303,10 +307,53 @@ class _ChatPageState extends State<ChatPage> {
     return pendingCount;
   }
 
+  Future<_TodoAgendaSummary> _loadTodoAgendaSummary() async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    late final List<Todo> todos;
+    try {
+      todos = await backend.listTodos(sessionKey);
+    } catch (_) {
+      return const _TodoAgendaSummary.empty();
+    }
+
+    final nowLocal = DateTime.now();
+    final due = <({Todo todo, DateTime dueLocal})>[];
+    for (final todo in todos) {
+      final dueMs = todo.dueAtMs;
+      if (dueMs == null) continue;
+      if (todo.status == 'done' || todo.status == 'dismissed') continue;
+
+      final dueLocal =
+          DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true).toLocal();
+      final isOverdue = dueLocal.isBefore(nowLocal);
+      final isToday = _isSameLocalDate(dueLocal, nowLocal);
+      if (!isOverdue && !isToday) continue;
+      due.add((todo: todo, dueLocal: dueLocal));
+    }
+
+    due.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
+    if (due.isEmpty) return const _TodoAgendaSummary.empty();
+
+    final overdueCount = due.where((e) => e.dueLocal.isBefore(nowLocal)).length;
+    final previewTodos = due.take(2).map((e) => e.todo).toList(growable: false);
+
+    return _TodoAgendaSummary(
+      dueCount: due.length,
+      overdueCount: overdueCount,
+      previewTodos: previewTodos,
+    );
+  }
+
+  static bool _isSameLocalDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   void _refresh() {
     setState(() {
       _messagesFuture = _loadMessages();
       _reviewCountFuture = _loadReviewQueueCount();
+      _agendaFuture = _loadTodoAgendaSummary();
       _attachmentsFuturesByMessageId.clear();
     });
   }
@@ -334,6 +381,7 @@ class _ChatPageState extends State<ChatPage> {
       _controller.clear();
       _refresh();
       unawaited(_maybeSuggestTodoFromCapture(message, text));
+      unawaited(_maybeLinkMessageToExistingTodo(message, text));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -411,6 +459,195 @@ class _ChatPageState extends State<ChatPage> {
 
     if (!mounted) return;
     _refresh();
+  }
+
+  Future<void> _maybeLinkMessageToExistingTodo(
+    Message message,
+    String rawText,
+  ) async {
+    if (!mounted) return;
+
+    final locale = Localizations.localeOf(context);
+    final settings = await ActionsSettingsStore.load();
+    final timeResolution = LocalTimeResolver.resolve(
+      rawText,
+      DateTime.now(),
+      locale: locale,
+      dayEndMinutes: settings.dayEndMinutes,
+    );
+    final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
+    if (timeResolution != null || looksLikeReview) return;
+
+    if (!mounted) return;
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    late final List<Todo> todos;
+    try {
+      todos = await backend.listTodos(sessionKey);
+    } catch (_) {
+      return;
+    }
+
+    final nowLocal = DateTime.now();
+    final targets = <TodoLinkTarget>[];
+    final todosById = <String, Todo>{};
+    for (final todo in todos) {
+      if (todo.status == 'done' || todo.status == 'dismissed') continue;
+      todosById[todo.id] = todo;
+      final dueMs = todo.dueAtMs;
+      targets.add(
+        TodoLinkTarget(
+          id: todo.id,
+          title: todo.title,
+          status: todo.status,
+          dueLocal: dueMs == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true)
+                  .toLocal(),
+        ),
+      );
+    }
+    if (targets.isEmpty) return;
+
+    final intent = inferTodoUpdateIntent(rawText);
+    final ranked = rankTodoCandidates(
+      rawText,
+      targets,
+      nowLocal: nowLocal,
+      limit: 5,
+    );
+    if (ranked.isEmpty) return;
+
+    final top = ranked[0];
+    final secondScore = ranked.length > 1 ? ranked[1].score : 0;
+    final isHighConfidence = top.score >= 3200 ||
+        (top.score >= 2400 && (top.score - secondScore) >= 900);
+    final shouldPrompt = intent.isExplicit || top.score >= 1600;
+    if (!shouldPrompt) return;
+
+    final selectedTodoId = isHighConfidence
+        ? top.target.id
+        : await _showTodoLinkSheet(
+            ranked: ranked,
+            defaultActionStatus: intent.newStatus,
+          );
+    if (selectedTodoId == null || !mounted) return;
+
+    final selected = todosById[selectedTodoId];
+    if (selected == null) return;
+
+    final previousStatus = selected.status;
+
+    try {
+      await backend.setTodoStatus(
+        sessionKey,
+        todoId: selected.id,
+        newStatus: intent.newStatus,
+        sourceMessageId: message.id,
+      );
+    } catch (_) {
+      return;
+    }
+
+    try {
+      await backend.appendTodoNote(
+        sessionKey,
+        todoId: selected.id,
+        content: rawText.trim(),
+        sourceMessageId: message.id,
+      );
+    } catch (_) {
+      // ignore
+    }
+
+    if (!mounted) return;
+    _refresh();
+
+    final snackText = context.t.actions.todoLink.updated(
+      title: selected.title,
+      status: _todoStatusLabel(context, intent.newStatus),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(snackText),
+        action: SnackBarAction(
+          label: context.t.common.actions.undo,
+          onPressed: () async {
+            try {
+              await backend.setTodoStatus(
+                sessionKey,
+                todoId: selected.id,
+                newStatus: previousStatus,
+              );
+            } catch (_) {
+              return;
+            }
+            if (!mounted) return;
+            _refresh();
+          },
+        ),
+      ),
+    );
+  }
+
+  String _todoStatusLabel(BuildContext context, String status) =>
+      switch (status) {
+        'inbox' => context.t.actions.todoStatus.inbox,
+        'open' => context.t.actions.todoStatus.open,
+        'in_progress' => context.t.actions.todoStatus.inProgress,
+        'done' => context.t.actions.todoStatus.done,
+        'dismissed' => context.t.actions.todoStatus.dismissed,
+        _ => status,
+      };
+
+  Future<String?> _showTodoLinkSheet({
+    required List<TodoLinkCandidate> ranked,
+    required String defaultActionStatus,
+  }) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        final statusLabel = _todoStatusLabel(context, defaultActionStatus);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SlSurface(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t.actions.todoLink.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                      context.t.actions.todoLink.subtitle(status: statusLabel)),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: ranked.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final c = ranked[index];
+                        return ListTile(
+                          title: Text(c.target.title),
+                          subtitle:
+                              Text(_todoStatusLabel(context, c.target.status)),
+                          onTap: () => Navigator.of(context).pop(c.target.id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _handleAssistantSuggestion(
@@ -1075,6 +1312,7 @@ class _ChatPageState extends State<ChatPage> {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
     _reviewCountFuture ??= _loadReviewQueueCount();
+    _agendaFuture ??= _loadTodoAgendaSummary();
     _attachSyncEngine();
   }
 
@@ -1112,6 +1350,26 @@ class _ChatPageState extends State<ChatPage> {
       ),
       body: Column(
         children: [
+          FutureBuilder<_TodoAgendaSummary>(
+            future: _agendaFuture,
+            builder: (context, snapshot) {
+              final summary = snapshot.data ?? const _TodoAgendaSummary.empty();
+              return TodoAgendaBanner(
+                dueCount: summary.dueCount,
+                overdueCount: summary.overdueCount,
+                previewTodos: summary.previewTodos,
+                onViewAll: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const TodoAgendaPage(),
+                    ),
+                  );
+                  if (!mounted) return;
+                  _refresh();
+                },
+              );
+            },
+          ),
           FutureBuilder<int>(
             future: _reviewCountFuture,
             builder: (context, snapshot) {
@@ -1546,6 +1804,23 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
+}
+
+final class _TodoAgendaSummary {
+  const _TodoAgendaSummary({
+    required this.dueCount,
+    required this.overdueCount,
+    required this.previewTodos,
+  });
+
+  const _TodoAgendaSummary.empty()
+      : dueCount = 0,
+        overdueCount = 0,
+        previewTodos = const <Todo>[];
+
+  final int dueCount;
+  final int overdueCount;
+  final List<Todo> previewTodos;
 }
 
 enum _MessageAction {

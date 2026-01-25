@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 466 (233 per locale)
+/// Strings: 502 (251 per locale)
 ///
-/// Built on 2026-01-24 at 14:02 UTC
+/// Built on 2026-01-25 at 05:18 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -251,6 +251,13 @@ class _StringsActionsEn {
       _StringsActionsCaptureEn._(_root);
   late final _StringsActionsReviewQueueEn reviewQueue =
       _StringsActionsReviewQueueEn._(_root);
+  late final _StringsActionsTodoStatusEn todoStatus =
+      _StringsActionsTodoStatusEn._(_root);
+  late final _StringsActionsTodoLinkEn todoLink =
+      _StringsActionsTodoLinkEn._(_root);
+  late final _StringsActionsTodoDetailEn todoDetail =
+      _StringsActionsTodoDetailEn._(_root);
+  late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
   late final _StringsActionsCalendarEn calendar =
       _StringsActionsCalendarEn._(_root);
 }
@@ -467,6 +474,7 @@ class _StringsCommonActionsEn {
   String get stopping => 'Stopping…';
   String get edit => 'Edit';
   String get delete => 'Delete';
+  String get undo => 'Undo';
   String get refresh => 'Refresh';
   String get search => 'Search';
   String get useModel => 'Use model';
@@ -527,6 +535,60 @@ class _StringsActionsReviewQueueEn {
   String get empty => 'No items to confirm';
   late final _StringsActionsReviewQueueActionsEn actions =
       _StringsActionsReviewQueueActionsEn._(_root);
+}
+
+// Path: actions.todoStatus
+class _StringsActionsTodoStatusEn {
+  _StringsActionsTodoStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get inbox => 'Needs confirmation';
+  String get open => 'Not started';
+  String get inProgress => 'In progress';
+  String get done => 'Done';
+  String get dismissed => 'Deleted';
+}
+
+// Path: actions.todoLink
+class _StringsActionsTodoLinkEn {
+  _StringsActionsTodoLinkEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Update a task?';
+  String subtitle({required Object status}) => 'Mark as: ${status}';
+  String updated({required Object title, required Object status}) =>
+      'Updated "${title}" → ${status}';
+}
+
+// Path: actions.todoDetail
+class _StringsActionsTodoDetailEn {
+  _StringsActionsTodoDetailEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Task';
+  String get emptyTimeline => 'No updates yet';
+  String get noteHint => 'Add a note…';
+  String get addNote => 'Add';
+}
+
+// Path: actions.agenda
+class _StringsActionsAgendaEn {
+  _StringsActionsAgendaEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Tasks';
+  String summary({required Object due, required Object overdue}) =>
+      'Today ${due} • Overdue ${overdue}';
+  String get viewAll => 'View all';
+  String get empty => 'No scheduled tasks';
 }
 
 // Path: actions.calendar
@@ -907,6 +969,7 @@ class _StringsActionsReviewQueueActionsEn {
   // Translations
   String get schedule => 'Schedule';
   String get snooze => 'Snooze';
+  String get start => 'Start';
   String get done => 'Done';
   String get dismiss => 'Dismiss';
 }
@@ -1386,6 +1449,18 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsReviewQueueZhCn reviewQueue =
       _StringsActionsReviewQueueZhCn._(_root);
   @override
+  late final _StringsActionsTodoStatusZhCn todoStatus =
+      _StringsActionsTodoStatusZhCn._(_root);
+  @override
+  late final _StringsActionsTodoLinkZhCn todoLink =
+      _StringsActionsTodoLinkZhCn._(_root);
+  @override
+  late final _StringsActionsTodoDetailZhCn todoDetail =
+      _StringsActionsTodoDetailZhCn._(_root);
+  @override
+  late final _StringsActionsAgendaZhCn agenda =
+      _StringsActionsAgendaZhCn._(_root);
+  @override
   late final _StringsActionsCalendarZhCn calendar =
       _StringsActionsCalendarZhCn._(_root);
 }
@@ -1720,6 +1795,8 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   @override
   String get delete => '删除';
   @override
+  String get undo => '撤销';
+  @override
   String get refresh => '刷新';
   @override
   String get search => '搜索';
@@ -1814,6 +1891,88 @@ class _StringsActionsReviewQueueZhCn extends _StringsActionsReviewQueueEn {
   @override
   late final _StringsActionsReviewQueueActionsZhCn actions =
       _StringsActionsReviewQueueActionsZhCn._(_root);
+}
+
+// Path: actions.todoStatus
+class _StringsActionsTodoStatusZhCn extends _StringsActionsTodoStatusEn {
+  _StringsActionsTodoStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get inbox => '待确认';
+  @override
+  String get open => '未开始';
+  @override
+  String get inProgress => '进行中';
+  @override
+  String get done => '已完成';
+  @override
+  String get dismissed => '已删除';
+}
+
+// Path: actions.todoLink
+class _StringsActionsTodoLinkZhCn extends _StringsActionsTodoLinkEn {
+  _StringsActionsTodoLinkZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '要更新哪个待办？';
+  @override
+  String subtitle({required Object status}) => '默认标记为：${status}';
+  @override
+  String updated({required Object title, required Object status}) =>
+      '已更新「${title}」为：${status}';
+}
+
+// Path: actions.todoDetail
+class _StringsActionsTodoDetailZhCn extends _StringsActionsTodoDetailEn {
+  _StringsActionsTodoDetailZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '待办详情';
+  @override
+  String get emptyTimeline => '暂无跟进记录';
+  @override
+  String get noteHint => '补充跟进…';
+  @override
+  String get addNote => '添加';
+}
+
+// Path: actions.agenda
+class _StringsActionsAgendaZhCn extends _StringsActionsAgendaEn {
+  _StringsActionsAgendaZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '待办';
+  @override
+  String summary({required Object due, required Object overdue}) =>
+      '今天 ${due} 条 · 逾期 ${overdue} 条';
+  @override
+  String get viewAll => '查看全部';
+  @override
+  String get empty => '暂无待办';
 }
 
 // Path: actions.calendar
@@ -2374,6 +2533,8 @@ class _StringsActionsReviewQueueActionsZhCn
   @override
   String get snooze => '稍后提醒';
   @override
+  String get start => '开始';
+  @override
   String get done => '完成';
   @override
   String get dismiss => '忽略';
@@ -2919,6 +3080,8 @@ extension on Translations {
         return 'Edit';
       case 'common.actions.delete':
         return 'Delete';
+      case 'common.actions.undo':
+        return 'Undo';
       case 'common.actions.refresh':
         return 'Refresh';
       case 'common.actions.search':
@@ -2975,10 +3138,46 @@ extension on Translations {
         return 'Schedule';
       case 'actions.reviewQueue.actions.snooze':
         return 'Snooze';
+      case 'actions.reviewQueue.actions.start':
+        return 'Start';
       case 'actions.reviewQueue.actions.done':
         return 'Done';
       case 'actions.reviewQueue.actions.dismiss':
         return 'Dismiss';
+      case 'actions.todoStatus.inbox':
+        return 'Needs confirmation';
+      case 'actions.todoStatus.open':
+        return 'Not started';
+      case 'actions.todoStatus.inProgress':
+        return 'In progress';
+      case 'actions.todoStatus.done':
+        return 'Done';
+      case 'actions.todoStatus.dismissed':
+        return 'Deleted';
+      case 'actions.todoLink.title':
+        return 'Update a task?';
+      case 'actions.todoLink.subtitle':
+        return ({required Object status}) => 'Mark as: ${status}';
+      case 'actions.todoLink.updated':
+        return ({required Object title, required Object status}) =>
+            'Updated "${title}" → ${status}';
+      case 'actions.todoDetail.title':
+        return 'Task';
+      case 'actions.todoDetail.emptyTimeline':
+        return 'No updates yet';
+      case 'actions.todoDetail.noteHint':
+        return 'Add a note…';
+      case 'actions.todoDetail.addNote':
+        return 'Add';
+      case 'actions.agenda.title':
+        return 'Tasks';
+      case 'actions.agenda.summary':
+        return ({required Object due, required Object overdue}) =>
+            'Today ${due} • Overdue ${overdue}';
+      case 'actions.agenda.viewAll':
+        return 'View all';
+      case 'actions.agenda.empty':
+        return 'No scheduled tasks';
       case 'actions.calendar.title':
         return 'Add to calendar?';
       case 'actions.calendar.pickTime':
@@ -3404,6 +3603,8 @@ extension on _StringsZhCn {
         return '编辑';
       case 'common.actions.delete':
         return '删除';
+      case 'common.actions.undo':
+        return '撤销';
       case 'common.actions.refresh':
         return '刷新';
       case 'common.actions.search':
@@ -3460,10 +3661,46 @@ extension on _StringsZhCn {
         return '安排时间';
       case 'actions.reviewQueue.actions.snooze':
         return '稍后提醒';
+      case 'actions.reviewQueue.actions.start':
+        return '开始';
       case 'actions.reviewQueue.actions.done':
         return '完成';
       case 'actions.reviewQueue.actions.dismiss':
         return '忽略';
+      case 'actions.todoStatus.inbox':
+        return '待确认';
+      case 'actions.todoStatus.open':
+        return '未开始';
+      case 'actions.todoStatus.inProgress':
+        return '进行中';
+      case 'actions.todoStatus.done':
+        return '已完成';
+      case 'actions.todoStatus.dismissed':
+        return '已删除';
+      case 'actions.todoLink.title':
+        return '要更新哪个待办？';
+      case 'actions.todoLink.subtitle':
+        return ({required Object status}) => '默认标记为：${status}';
+      case 'actions.todoLink.updated':
+        return ({required Object title, required Object status}) =>
+            '已更新「${title}」为：${status}';
+      case 'actions.todoDetail.title':
+        return '待办详情';
+      case 'actions.todoDetail.emptyTimeline':
+        return '暂无跟进记录';
+      case 'actions.todoDetail.noteHint':
+        return '补充跟进…';
+      case 'actions.todoDetail.addNote':
+        return '添加';
+      case 'actions.agenda.title':
+        return '待办';
+      case 'actions.agenda.summary':
+        return ({required Object due, required Object overdue}) =>
+            '今天 ${due} 条 · 逾期 ${overdue} 条';
+      case 'actions.agenda.viewAll':
+        return '查看全部';
+      case 'actions.agenda.empty':
+        return '暂无待办';
       case 'actions.calendar.title':
         return '添加到日历？';
       case 'actions.calendar.pickTime':

@@ -14,6 +14,7 @@ import 'review_backoff.dart';
 const _kTodoStatusDone = 'done';
 const _kTodoStatusDismissed = 'dismissed';
 const _kTodoStatusOpen = 'open';
+const _kTodoStatusInProgress = 'in_progress';
 
 class ReviewQueuePage extends StatefulWidget {
   const ReviewQueuePage({super.key});
@@ -102,16 +103,22 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
   Future<void> _markDone(Todo todo) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    await backend.upsertTodo(
+    await backend.setTodoStatus(
       sessionKey,
-      id: todo.id,
-      title: todo.title,
-      dueAtMs: todo.dueAtMs,
-      status: _kTodoStatusDone,
-      sourceEntryId: todo.sourceEntryId,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      todoId: todo.id,
+      newStatus: _kTodoStatusDone,
+    );
+    if (!mounted) return;
+    await _refresh();
+  }
+
+  Future<void> _markInProgress(Todo todo) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    await backend.setTodoStatus(
+      sessionKey,
+      todoId: todo.id,
+      newStatus: _kTodoStatusInProgress,
     );
     if (!mounted) return;
     await _refresh();
@@ -120,16 +127,10 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
   Future<void> _dismiss(Todo todo) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    await backend.upsertTodo(
+    await backend.setTodoStatus(
       sessionKey,
-      id: todo.id,
-      title: todo.title,
-      dueAtMs: todo.dueAtMs,
-      status: _kTodoStatusDismissed,
-      sourceEntryId: todo.sourceEntryId,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      todoId: todo.id,
+      newStatus: _kTodoStatusDismissed,
     );
     if (!mounted) return;
     await _refresh();
@@ -272,6 +273,15 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
                               onPressed: () => unawaited(_markDone(todo)),
                               child: Text(
                                   context.t.actions.reviewQueue.actions.done),
+                            ),
+                            SlButton(
+                              variant: SlButtonVariant.outline,
+                              icon: const Icon(Icons.play_arrow_rounded,
+                                  size: 18),
+                              onPressed: () => unawaited(_markInProgress(todo)),
+                              child: Text(
+                                context.t.actions.reviewQueue.actions.start,
+                              ),
                             ),
                             SlButton(
                               variant: SlButtonVariant.outline,

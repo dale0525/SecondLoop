@@ -547,6 +547,7 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "message.insert.v1" => apply_message_insert(conn, db_key, op),
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
+        "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
         "event.upsert.v1" => apply_event_upsert(conn, db_key, &op["payload"]),
         other => Err(anyhow!("unsupported sync op type: {other}")),
     }
@@ -689,6 +690,85 @@ fn apply_todo_upsert(
         )?;
     }
 
+    Ok(())
+}
+
+fn apply_todo_activity_append(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let activity_id = payload["activity_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity op missing activity_id"))?;
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity op missing todo_id"))?;
+    let activity_type = payload["activity_type"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity op missing activity_type"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo activity op missing created_at_ms"))?;
+
+    let from_status = payload["from_status"].as_str();
+    let to_status = payload["to_status"].as_str();
+    let source_message_id = payload["source_message_id"].as_str();
+    let content = payload["content"].as_str();
+
+    let existing: Option<i64> = conn
+        .query_row(
+            r#"SELECT created_at_ms FROM todo_activities WHERE id = ?1"#,
+            params![activity_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing.is_some() {
+        return Ok(());
+    }
+
+    let content_blob = if let Some(content) = content {
+        let aad = format!("todo_activity.content:{activity_id}");
+        Some(encrypt_bytes(db_key, content.as_bytes(), aad.as_bytes())?)
+    } else {
+        None
+    };
+
+    let todo_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM todos WHERE id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if todo_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. We'll accept an orphan activity
+        // temporarily; if the todo arrives later, it will become valid.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let insert_result = conn.execute(
+        r#"INSERT OR IGNORE INTO todo_activities(
+             id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+           )
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+        params![
+            activity_id,
+            todo_id,
+            activity_type,
+            from_status,
+            to_status,
+            content_blob,
+            source_message_id,
+            created_at_ms
+        ],
+    );
+
+    if todo_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    insert_result?;
     Ok(())
 }
 

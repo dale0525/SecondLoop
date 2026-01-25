@@ -57,6 +57,31 @@ abstract class AppBackend {
     throw UnimplementedError('upsertTodo');
   }
 
+  Future<Todo> setTodoStatus(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+  }) {
+    throw UnimplementedError('setTodoStatus');
+  }
+
+  Future<TodoActivity> appendTodoNote(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+    String? sourceMessageId,
+  }) {
+    throw UnimplementedError('appendTodoNote');
+  }
+
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('listTodoActivities');
+  }
+
   Future<List<Event>> listEvents(Uint8List key) {
     throw UnimplementedError('listEvents');
   }
