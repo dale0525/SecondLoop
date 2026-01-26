@@ -2408,7 +2408,7 @@ pub fn list_messages_page(
     before_id: Option<&str>,
     limit: i64,
 ) -> Result<Vec<Message>> {
-    let limit = limit.max(1).min(500);
+    let limit = limit.clamp(1, 500);
 
     let mut stmt = match (before_created_at_ms, before_id) {
         (None, None) => conn.prepare(
@@ -3238,7 +3238,9 @@ pub fn upsert_todo(
         Option<i64>,
         i64,
     ) = {
-        let row: Option<(Vec<u8>, String, Option<i64>, Option<i64>)> = conn
+        type ExistingTodoRow = (Vec<u8>, String, Option<i64>, Option<i64>);
+
+        let row: Option<ExistingTodoRow> = conn
             .query_row(
                 r#"SELECT title, status, due_at_ms, needs_embedding FROM todos WHERE id = ?1"#,
                 params![id],
