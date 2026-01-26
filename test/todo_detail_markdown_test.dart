@@ -1,19 +1,30 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Chat input uses SlSurface container', (tester) async {
-    final backend = _Backend();
+  testWidgets('TodoDetailPage renders note as Markdown', (tester) async {
+    final backend = _Backend(
+      activities: const [
+        TodoActivity(
+          id: 'a1',
+          todoId: 't1',
+          activityType: 'note',
+          content: '**bold**',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -22,10 +33,11 @@ void main() {
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const ChatPage(
-                conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -37,90 +49,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
-    final input =
-        tester.widget<TextField>(find.byKey(const ValueKey('chat_input')));
-    expect(input.keyboardType, TextInputType.multiline);
-    expect(input.textInputAction, TextInputAction.newline);
-    expect(input.minLines, 1);
-    expect(input.maxLines, 6);
-    expect(find.byKey(const ValueKey('chat_input_ring')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_input_ring')),
-        matching: find.byKey(const ValueKey('chat_input')),
-      ),
-      findsOneWidget,
-    );
-
-    expect(find.byKey(const ValueKey('chat_filter_menu')), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(const ValueKey('chat_filter_menu'))),
-      const Size(40, 40),
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_filter_menu')),
-        matching: find.byIcon(Icons.filter_alt_rounded),
-      ),
-      findsOneWidget,
-    );
-
-    expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_send')),
-        matching: find.byIcon(Icons.send_rounded),
-      ),
-      findsOneWidget,
-    );
-    final sendButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('chat_send')),
-    );
-    expect(sendButton.style, isNotNull);
-    expect(sendButton.style!.minimumSize, isNotNull);
-    final sendMinimumSize =
-        sendButton.style!.minimumSize!.resolve(const <MaterialState>{});
-    expect(sendMinimumSize, isNotNull);
-    expect(
-      sendMinimumSize!.height,
-      44,
-    );
-
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_ask_ai')),
-        matching: find.byIcon(Icons.auto_awesome_rounded),
-      ),
-      findsOneWidget,
-    );
-    final askButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('chat_ask_ai')),
-    );
-    expect(askButton.style, isNotNull);
-    expect(askButton.style!.minimumSize, isNotNull);
-    final askMinimumSize =
-        askButton.style!.minimumSize!.resolve(const <MaterialState>{});
-    expect(askMinimumSize, isNotNull);
-    expect(
-      askMinimumSize!.height,
-      44,
-    );
-
-    expect(find.byType(SlSurface), findsWidgets);
-    expect(
-      find.byWidgetPredicate((widget) {
-        if (widget is! DecoratedBox) return false;
-        final decoration = widget.decoration;
-        return decoration is BoxDecoration && decoration.gradient != null;
-      }),
-      findsNothing,
-    );
+    expect(find.byType(MarkdownBody), findsOneWidget);
   });
 }
 
 final class _Backend extends AppBackend {
+  _Backend({required List<TodoActivity> activities})
+      : _activities = List<TodoActivity>.from(activities);
+
+  final List<TodoActivity> _activities;
+
   @override
   Future<void> init() async {}
 
@@ -154,15 +92,14 @@ final class _Backend extends AppBackend {
       Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
-  Future<List<Conversation>> listConversations(Uint8List key) async =>
-      const <Conversation>[];
+  Future<List<Conversation>> listConversations(Uint8List key) async => const [];
 
   @override
-  Future<Conversation> createConversation(Uint8List key, String title) =>
+  Future<Conversation> createConversation(Uint8List key, String title) async =>
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override
@@ -176,24 +113,44 @@ final class _Backend extends AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) =>
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();
 
   @override
   Future<void> setMessageDeleted(
-          Uint8List key, String messageId, bool isDeleted) =>
+    Uint8List key,
+    String messageId,
+    bool isDeleted,
+  ) async =>
       throw UnimplementedError();
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key,
-          {int limit = 32}) async =>
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      List<TodoActivity>.from(_activities);
+
+  @override
+  Future<List<Attachment>> listTodoActivityAttachments(
+    Uint8List key,
+    String activityId,
+  ) async =>
+      const <Attachment>[];
+
+  @override
+  Future<int> processPendingMessageEmbeddings(
+    Uint8List key, {
+    int limit = 32,
+  }) async =>
       0;
 
   @override
@@ -205,8 +162,10 @@ final class _Backend extends AppBackend {
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key,
-          {int batchLimit = 256}) async =>
+  Future<int> rebuildMessageEmbeddings(
+    Uint8List key, {
+    int batchLimit = 256,
+  }) async =>
       0;
 
   @override
@@ -214,12 +173,12 @@ final class _Backend extends AppBackend {
       const <String>[];
 
   @override
-  Future<String> getActiveEmbeddingModelName(Uint8List key) =>
-      Future<String>.value('');
+  Future<String> getActiveEmbeddingModelName(Uint8List key) async => '';
 
   @override
-  Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
-      Future<bool>.value(false);
+  Future<bool> setActiveEmbeddingModelName(
+          Uint8List key, String modelName) async =>
+      false;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
@@ -234,7 +193,7 @@ final class _Backend extends AppBackend {
     String? apiKey,
     required String modelName,
     bool setActive = true,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -254,19 +213,6 @@ final class _Backend extends AppBackend {
       const Stream<String>.empty();
 
   @override
-  Stream<String> askAiStreamCloudGateway(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
-  }) =>
-      const Stream<String>.empty();
-
-  @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
       Uint8List.fromList(List<int>.filled(32, 2));
 
@@ -276,7 +222,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -285,7 +231,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -296,7 +242,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -307,21 +253,21 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
   Future<void> syncLocaldirTestConnection({
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
   Future<void> syncLocaldirClearRemoteRoot({
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -330,7 +276,7 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -339,6 +285,6 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 }

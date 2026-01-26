@@ -10,6 +10,7 @@
     "actions": {
       "cancel": "Cancel",
       "save": "Save",
+      "copy": "Copy",
       "reset": "Reset",
       "continueLabel": "Continue",
       "send": "Send",
@@ -76,6 +77,14 @@
       "title": "Update a task?",
       "subtitle": "Mark as: $status",
       "updated": "Updated \"$title\" → $status"
+    },
+    "todoNoteLink": {
+      "action": "Link to task",
+      "actionShort": "Link",
+      "title": "Link to which task?",
+      "subtitle": "Add this message as a follow-up note",
+      "suggest": "Link this message to a task?",
+      "linked": "Linked to \"$title\""
     },
     "todoDetail": {
       "title": "Task",
@@ -248,14 +257,23 @@
       "title": "Sync",
       "subtitle": "Vault backends + auto sync settings"
     },
-    "resetLocalData": {
+    "resetLocalDataThisDeviceOnly": {
       "dialogTitle": "Reset local data?",
-      "dialogBody": "This will delete local messages and clear synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.",
+      "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.",
       "failed": "Reset failed: $error"
     },
-    "debugResetLocalData": {
-      "title": "Debug: Reset local data",
-      "subtitle": "Delete local messages + clear synced remote data"
+    "resetLocalDataAllDevices": {
+      "dialogTitle": "Reset local data?",
+      "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.",
+      "failed": "Reset failed: $error"
+    },
+    "debugResetLocalDataThisDeviceOnly": {
+      "title": "Debug: Reset local data (this device)",
+      "subtitle": "Delete local messages + clear remote data for this device only"
+    },
+    "debugResetLocalDataAllDevices": {
+      "title": "Debug: Reset local data (all devices)",
+      "subtitle": "Delete local messages + clear all remote data"
     },
     "debugSemanticSearch": {
       "title": "Debug: Semantic search",
@@ -280,6 +298,15 @@
     "editFailed": "Edit failed: $error",
     "deleteFailed": "Delete failed: $error",
     "noMessagesYet": "No messages yet",
+    "viewFull": "View full",
+    "messageActions": {
+      "convertToTodo": "Convert to task",
+      "openTodo": "Jump to task",
+      "linkOtherTodo": "Link to another task"
+    },
+    "messageViewer": {
+      "title": "Message"
+    },
     "focus": {
       "tooltip": "Focus",
       "allMemories": "Focus: All memories",

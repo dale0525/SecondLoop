@@ -80,6 +80,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SimilarMessage> dco_decode_list_similar_message(dynamic raw);
 
   @protected
+  List<SimilarTodoThread> dco_decode_list_similar_todo_thread(dynamic raw);
+
+  @protected
   List<Todo> dco_decode_list_todo(dynamic raw);
 
   @protected
@@ -99,6 +102,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SimilarMessage dco_decode_similar_message(dynamic raw);
+
+  @protected
+  SimilarTodoThread dco_decode_similar_todo_thread(dynamic raw);
 
   @protected
   Todo dco_decode_todo(dynamic raw);
@@ -178,6 +184,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<SimilarTodoThread> sse_decode_list_similar_todo_thread(
+      SseDeserializer deserializer);
+
+  @protected
   List<Todo> sse_decode_list_todo(SseDeserializer deserializer);
 
   @protected
@@ -198,6 +208,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SimilarMessage sse_decode_similar_message(SseDeserializer deserializer);
+
+  @protected
+  SimilarTodoThread sse_decode_similar_todo_thread(
+      SseDeserializer deserializer);
 
   @protected
   Todo sse_decode_todo(SseDeserializer deserializer);
@@ -286,6 +300,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<SimilarMessage> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_similar_todo_thread(
+      List<SimilarTodoThread> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_todo(List<Todo> self, SseSerializer serializer);
 
   @protected
@@ -308,6 +326,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_similar_message(
       SimilarMessage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_similar_todo_thread(
+      SimilarTodoThread self, SseSerializer serializer);
 
   @protected
   void sse_encode_todo(Todo self, SseSerializer serializer);

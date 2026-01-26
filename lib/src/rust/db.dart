@@ -222,6 +222,27 @@ class SimilarMessage {
           distance == other.distance;
 }
 
+class SimilarTodoThread {
+  final String todoId;
+  final double distance;
+
+  const SimilarTodoThread({
+    required this.todoId,
+    required this.distance,
+  });
+
+  @override
+  int get hashCode => todoId.hashCode ^ distance.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SimilarTodoThread &&
+          runtimeType == other.runtimeType &&
+          todoId == other.todoId &&
+          distance == other.distance;
+}
+
 class Todo {
   final String id;
   final String title;

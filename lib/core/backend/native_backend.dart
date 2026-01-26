@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/db.dart';
@@ -539,6 +540,29 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<List<TodoThreadMatch>> searchSimilarTodoThreads(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+  }) async {
+    final appDir = await _getAppDir();
+    final matches = await rust_core.dbSearchSimilarTodoThreads(
+      appDir: appDir,
+      key: key,
+      query: query,
+      topK: topK,
+    );
+    return matches
+        .map(
+          (m) => TodoThreadMatch(
+            todoId: m.todoId,
+            distance: m.distance,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
   Future<int> rebuildMessageEmbeddings(
     Uint8List key, {
     int batchLimit = 256,
@@ -844,5 +868,39 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       firebaseIdToken: idToken,
     );
     return pulled.toInt();
+  }
+
+  @override
+  Future<String> getOrCreateDeviceId() async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetOrCreateDeviceId(appDir: appDir);
+  }
+
+  @override
+  Future<void> syncManagedVaultClearDevice({
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String deviceId,
+  }) async {
+    await rust_core.syncManagedVaultClearDevice(
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+      deviceId: deviceId,
+    );
+  }
+
+  @override
+  Future<void> syncManagedVaultClearVault({
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    await rust_core.syncManagedVaultClearVault(
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+    );
   }
 }

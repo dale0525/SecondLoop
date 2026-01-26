@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -40,15 +41,30 @@ class _SettingsPageState extends State<SettingsPage> {
         defaultTargetPlatform == TargetPlatform.windows;
   }
 
-  Future<void> _resetLocalData() async {
+  String _joinRemotePath(String root, String child) {
+    final r = root.trim().replaceAll(RegExp(r'/+$'), '');
+    final c = child.trim().replaceAll(RegExp(r'^/+'), '');
+    if (r.isEmpty) return c;
+    if (c.isEmpty) return r;
+    return '$r/$c';
+  }
+
+  Future<void> _resetLocalData({required bool clearAllRemoteData}) async {
     if (_busy) return;
 
+    final t = context.t;
+    final dialogTitle = clearAllRemoteData
+        ? t.settings.resetLocalDataAllDevices.dialogTitle
+        : t.settings.resetLocalDataThisDeviceOnly.dialogTitle;
+    final dialogBody = clearAllRemoteData
+        ? t.settings.resetLocalDataAllDevices.dialogBody
+        : t.settings.resetLocalDataThisDeviceOnly.dialogBody;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(context.t.settings.resetLocalData.dialogTitle),
-          content: Text(context.t.settings.resetLocalData.dialogBody),
+          title: Text(dialogTitle),
+          content: Text(dialogBody),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -64,7 +80,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (confirmed != true || !mounted) return;
 
-    final t = context.t;
     final backend = AppBackendScope.of(context);
     final lock = SessionScope.of(context).lock;
     final messenger = ScaffoldMessenger.of(context);
@@ -76,18 +91,49 @@ class _SettingsPageState extends State<SettingsPage> {
       final store = SyncConfigStore();
       final sync = await store.loadConfiguredSync();
       if (sync != null) {
+        final deviceId =
+            clearAllRemoteData ? null : await backend.getOrCreateDeviceId();
         await switch (sync.backendType) {
           SyncBackendType.webdav => backend.syncWebdavClearRemoteRoot(
               baseUrl: sync.baseUrl ?? '',
               username: sync.username,
               password: sync.password,
-              remoteRoot: sync.remoteRoot,
+              remoteRoot: deviceId == null
+                  ? sync.remoteRoot
+                  : _joinRemotePath(sync.remoteRoot, deviceId),
             ),
           SyncBackendType.localDir => backend.syncLocaldirClearRemoteRoot(
               localDir: sync.localDir ?? '',
-              remoteRoot: sync.remoteRoot,
+              remoteRoot: deviceId == null
+                  ? sync.remoteRoot
+                  : _joinRemotePath(sync.remoteRoot, deviceId),
             ),
-          SyncBackendType.managedVault => Future<void>.value(),
+          SyncBackendType.managedVault => () async {
+              final idToken = await CloudAuthScope.maybeOf(context)
+                  ?.controller
+                  .getIdToken();
+              if (idToken == null || idToken.trim().isEmpty) {
+                throw StateError('missing_cloud_id_token');
+              }
+              final baseUrl = sync.baseUrl ?? '';
+              if (baseUrl.trim().isEmpty) throw StateError('missing_base_url');
+
+              if (deviceId == null) {
+                await backend.syncManagedVaultClearVault(
+                  baseUrl: baseUrl,
+                  vaultId: sync.remoteRoot,
+                  idToken: idToken,
+                );
+                return;
+              }
+
+              await backend.syncManagedVaultClearDevice(
+                baseUrl: baseUrl,
+                vaultId: sync.remoteRoot,
+                idToken: idToken,
+                deviceId: deviceId,
+              );
+            }(),
         };
       }
 
@@ -102,7 +148,9 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(t.settings.resetLocalData.failed(error: '$e')),
+          content: Text(clearAllRemoteData
+              ? t.settings.resetLocalDataAllDevices.failed(error: '$e')
+              : t.settings.resetLocalDataThisDeviceOnly.failed(error: '$e')),
         ),
       );
       return;
@@ -479,9 +527,22 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 8),
           sectionCard([
             ListTile(
-              title: Text(context.t.settings.debugResetLocalData.title),
-              subtitle: Text(context.t.settings.debugResetLocalData.subtitle),
-              onTap: _busy ? null : _resetLocalData,
+              title: Text(
+                  context.t.settings.debugResetLocalDataThisDeviceOnly.title),
+              subtitle: Text(context
+                  .t.settings.debugResetLocalDataThisDeviceOnly.subtitle),
+              onTap: _busy
+                  ? null
+                  : () => _resetLocalData(clearAllRemoteData: false),
+            ),
+            ListTile(
+              title:
+                  Text(context.t.settings.debugResetLocalDataAllDevices.title),
+              subtitle: Text(
+                  context.t.settings.debugResetLocalDataAllDevices.subtitle),
+              onTap: _busy
+                  ? null
+                  : () => _resetLocalData(clearAllRemoteData: true),
             ),
             ListTile(
               title: Text(context.t.settings.debugSemanticSearch.title),

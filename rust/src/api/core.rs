@@ -373,6 +373,12 @@ pub fn db_reset_vault_data_preserving_llm_profiles(app_dir: String, key: Vec<u8>
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_get_or_create_device_id(app_dir: String) -> Result<String> {
+    let conn = db::open(Path::new(&app_dir))?;
+    db::get_or_create_device_id(&conn)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_create_llm_profile(
     app_dir: String,
     key: Vec<u8>,
@@ -445,6 +451,24 @@ pub fn db_search_similar_messages(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::search_similar_messages_active(&conn, &key, Path::new(&app_dir), &query, top_k as usize)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_search_similar_todo_threads(
+    app_dir: String,
+    key: Vec<u8>,
+    query: String,
+    top_k: u32,
+) -> Result<Vec<db::SimilarTodoThread>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    // Best-effort: keep the index reasonably fresh without blocking too long.
+    // If embeddings are unavailable (e.g. fastembed init failure), callers can catch and fall back.
+    db::process_pending_todo_embeddings_active(&conn, &key, Path::new(&app_dir), 64)?;
+    db::process_pending_todo_activity_embeddings_active(&conn, &key, Path::new(&app_dir), 128)?;
+
+    db::search_similar_todo_threads_active(&conn, &key, Path::new(&app_dir), &query, top_k as usize)
 }
 
 #[flutter_rust_bridge::frb]
@@ -807,4 +831,23 @@ pub fn sync_managed_vault_pull(
         &vault_id,
         &firebase_id_token,
     )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_clear_device(
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+    device_id: String,
+) -> Result<()> {
+    sync::managed_vault::clear_device(&base_url, &vault_id, &firebase_id_token, &device_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_clear_vault(
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+) -> Result<()> {
+    sync::managed_vault::clear_vault(&base_url, &vault_id, &firebase_id_token)
 }

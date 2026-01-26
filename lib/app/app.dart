@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/app_bootstrap.dart';
@@ -108,16 +109,138 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                     navigatorKey: _navigatorKey,
                     home: const AppShell(),
                     builder: (context, child) {
-                      return SlBackground(
-                        child: AppBootstrap(
-                          child: DesktopQuickCaptureService(
-                            child: ShareIntentListener(
-                              child: LockGate(
-                                child: SyncEngineGate(
-                                  child: ShareIngestGate(
-                                    child: QuickCaptureOverlay(
-                                      navigatorKey: _navigatorKey,
-                                      child: child ?? const SizedBox.shrink(),
+                      // NOTE: On some platforms (notably macOS), modifier keys
+                      // might not be correctly reflected in `KeyEvent` state.
+                      // We add a RawKeyEvent fallback to keep standard text
+                      // editing shortcuts working.
+                      return Focus(
+                        canRequestFocus: false,
+                        skipTraversal: true,
+                        // ignore: deprecated_member_use
+                        onKey: (node, event) {
+                          // ignore: deprecated_member_use
+                          if (event is! RawKeyDownEvent) {
+                            return KeyEventResult.ignored;
+                          }
+                          if (event.repeat) {
+                            return KeyEventResult.ignored;
+                          }
+
+                          // ignore: deprecated_member_use
+                          final metaPressed = event.isMetaPressed;
+                          // ignore: deprecated_member_use
+                          final controlPressed = event.isControlPressed;
+                          // ignore: deprecated_member_use
+                          final shiftPressed = event.isShiftPressed;
+                          final hasModifier = metaPressed || controlPressed;
+                          if (!hasModifier) {
+                            return KeyEventResult.ignored;
+                          }
+
+                          final key = event.logicalKey;
+
+                          Intent? intent;
+                          if (key == LogicalKeyboardKey.keyA) {
+                            intent = const SelectAllTextIntent(
+                              SelectionChangedCause.keyboard,
+                            );
+                          } else if (key == LogicalKeyboardKey.keyC ||
+                              key == LogicalKeyboardKey.copy) {
+                            intent = CopySelectionTextIntent.copy;
+                          } else if (key == LogicalKeyboardKey.keyX ||
+                              key == LogicalKeyboardKey.cut) {
+                            intent = const CopySelectionTextIntent.cut(
+                              SelectionChangedCause.keyboard,
+                            );
+                          } else if (key == LogicalKeyboardKey.keyV ||
+                              key == LogicalKeyboardKey.paste) {
+                            intent = const PasteTextIntent(
+                              SelectionChangedCause.keyboard,
+                            );
+                          } else if (key == LogicalKeyboardKey.keyZ &&
+                              !shiftPressed) {
+                            intent = const UndoTextIntent(
+                              SelectionChangedCause.keyboard,
+                            );
+                          } else if (key == LogicalKeyboardKey.keyY ||
+                              (key == LogicalKeyboardKey.keyZ &&
+                                  shiftPressed)) {
+                            intent = const RedoTextIntent(
+                              SelectionChangedCause.keyboard,
+                            );
+                          }
+
+                          if (intent == null) {
+                            return KeyEventResult.ignored;
+                          }
+
+                          final focusContext =
+                              FocusManager.instance.primaryFocus?.context;
+                          if (focusContext == null) {
+                            return KeyEventResult.ignored;
+                          }
+
+                          final action = Actions.maybeFind<Intent>(
+                            focusContext,
+                            intent: intent,
+                          );
+                          if (action == null || !action.isEnabled(intent)) {
+                            return KeyEventResult.ignored;
+                          }
+
+                          Actions.invoke(focusContext, intent);
+                          return KeyEventResult.handled;
+                        },
+                        child: Shortcuts(
+                          shortcuts: const <ShortcutActivator, Intent>{
+                            SingleActivator(LogicalKeyboardKey.keyC,
+                                control: true): CopySelectionTextIntent.copy,
+                            SingleActivator(LogicalKeyboardKey.keyC,
+                                meta: true): CopySelectionTextIntent.copy,
+                            SingleActivator(LogicalKeyboardKey.copy):
+                                CopySelectionTextIntent.copy,
+                            SingleActivator(LogicalKeyboardKey.keyV,
+                                    control: true):
+                                PasteTextIntent(SelectionChangedCause.keyboard),
+                            SingleActivator(LogicalKeyboardKey.keyV,
+                                    meta: true):
+                                PasteTextIntent(SelectionChangedCause.keyboard),
+                            SingleActivator(LogicalKeyboardKey.paste):
+                                PasteTextIntent(SelectionChangedCause.keyboard),
+                            SingleActivator(LogicalKeyboardKey.keyX,
+                                control: true): CopySelectionTextIntent.cut(
+                              SelectionChangedCause.keyboard,
+                            ),
+                            SingleActivator(LogicalKeyboardKey.keyX,
+                                meta: true): CopySelectionTextIntent.cut(
+                              SelectionChangedCause.keyboard,
+                            ),
+                            SingleActivator(LogicalKeyboardKey.cut):
+                                CopySelectionTextIntent.cut(
+                              SelectionChangedCause.keyboard,
+                            ),
+                            SingleActivator(LogicalKeyboardKey.keyA,
+                                    control: true):
+                                SelectAllTextIntent(
+                                    SelectionChangedCause.keyboard),
+                            SingleActivator(LogicalKeyboardKey.keyA,
+                                    meta: true):
+                                SelectAllTextIntent(
+                                    SelectionChangedCause.keyboard),
+                          },
+                          child: SlBackground(
+                            child: AppBootstrap(
+                              child: DesktopQuickCaptureService(
+                                child: ShareIntentListener(
+                                  child: LockGate(
+                                    child: SyncEngineGate(
+                                      child: ShareIngestGate(
+                                        child: QuickCaptureOverlay(
+                                          navigatorKey: _navigatorKey,
+                                          child:
+                                              child ?? const SizedBox.shrink(),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),

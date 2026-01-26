@@ -38,6 +38,12 @@ pub struct SimilarMessage {
 }
 
 #[derive(Clone, Debug)]
+pub struct SimilarTodoThread {
+    pub todo_id: String,
+    pub distance: f64,
+}
+
+#[derive(Clone, Debug)]
 pub struct LlmProfile {
     pub id: String,
     pub name: String,
@@ -119,7 +125,7 @@ fn now_ms() -> i64 {
         .unwrap_or(i64::MAX)
 }
 
-fn get_or_create_device_id(conn: &Connection) -> Result<String> {
+pub fn get_or_create_device_id(conn: &Connection) -> Result<String> {
     let existing: Option<String> = conn
         .query_row(
             r#"SELECT value FROM kv WHERE key = 'device_id'"#,
@@ -170,11 +176,17 @@ pub fn set_active_embedding_model_name(conn: &Connection, model_name: &str) -> R
         conn.execute_batch(
             r#"
 DELETE FROM message_embeddings;
+DELETE FROM todo_embeddings;
+DELETE FROM todo_activity_embeddings;
 UPDATE messages
 SET needs_embedding = CASE
   WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
   ELSE 0
 END;
+UPDATE todos
+SET needs_embedding = CASE WHEN status != 'dismissed' THEN 1 ELSE 0 END;
+UPDATE todo_activities
+SET needs_embedding = 1;
 "#,
         )?;
 
@@ -570,6 +582,66 @@ PRAGMA user_version = 11;
         )?;
     }
 
+    if user_version < 12 {
+        // v12: embeddings for todos and todo activities.
+        let has_todo_needs_embedding: bool = {
+            let mut stmt = conn.prepare(r#"PRAGMA table_info(todos);"#)?;
+            let mut rows = stmt.query([])?;
+            let mut found = false;
+            while let Some(row) = rows.next()? {
+                let name: String = row.get(1)?;
+                if name == "needs_embedding" {
+                    found = true;
+                    break;
+                }
+            }
+            found
+        };
+        if !has_todo_needs_embedding {
+            conn.execute_batch("ALTER TABLE todos ADD COLUMN needs_embedding INTEGER;")?;
+            conn.execute_batch(
+                "UPDATE todos SET needs_embedding = 1 WHERE needs_embedding IS NULL;",
+            )?;
+        }
+
+        let has_activity_needs_embedding: bool = {
+            let mut stmt = conn.prepare(r#"PRAGMA table_info(todo_activities);"#)?;
+            let mut rows = stmt.query([])?;
+            let mut found = false;
+            while let Some(row) = rows.next()? {
+                let name: String = row.get(1)?;
+                if name == "needs_embedding" {
+                    found = true;
+                    break;
+                }
+            }
+            found
+        };
+        if !has_activity_needs_embedding {
+            conn.execute_batch("ALTER TABLE todo_activities ADD COLUMN needs_embedding INTEGER;")?;
+            conn.execute_batch(
+                "UPDATE todo_activities SET needs_embedding = 1 WHERE needs_embedding IS NULL;",
+            )?;
+        }
+
+        conn.execute_batch(
+            r#"
+CREATE VIRTUAL TABLE IF NOT EXISTS todo_embeddings USING vec0(
+  embedding float[384],
+  todo_id TEXT,
+  model_name TEXT
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS todo_activity_embeddings USING vec0(
+  embedding float[384],
+  activity_id TEXT,
+  todo_id TEXT,
+  model_name TEXT
+);
+PRAGMA user_version = 12;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -588,6 +660,8 @@ pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()>
         conn.execute_batch(
             r#"
 DELETE FROM message_embeddings;
+DELETE FROM todo_embeddings;
+DELETE FROM todo_activity_embeddings;
 DELETE FROM messages;
 DELETE FROM conversations;
 DELETE FROM todos;
@@ -1240,6 +1314,90 @@ pub fn process_pending_message_embeddings_active(
     process_pending_message_embeddings_default(conn, key, limit)
 }
 
+pub fn process_pending_todo_embeddings_active(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    limit: usize,
+) -> Result<usize> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return process_pending_todo_embeddings_default(conn, key, limit);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return process_pending_todo_embeddings(conn, key, &embedder, limit);
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return process_pending_todo_embeddings_default(conn, key, limit);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    process_pending_todo_embeddings_default(conn, key, limit)
+}
+
+pub fn process_pending_todo_activity_embeddings_active(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    limit: usize,
+) -> Result<usize> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return process_pending_todo_activity_embeddings_default(conn, key, limit);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return process_pending_todo_activity_embeddings(conn, key, &embedder, limit);
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return process_pending_todo_activity_embeddings_default(conn, key, limit);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    process_pending_todo_activity_embeddings_default(conn, key, limit)
+}
+
 pub fn rebuild_message_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
@@ -1388,6 +1546,49 @@ pub fn search_similar_messages_in_conversation_active(
     search_similar_messages_in_conversation_default(conn, key, conversation_id, query, top_k)
 }
 
+pub fn search_similar_todo_threads_active(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarTodoThread>> {
+    let desired = desired_embedding_model_name(conn)?;
+
+    if desired == crate::embedding::DEFAULT_MODEL_NAME {
+        set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+        return search_similar_todo_threads_default(conn, key, query, top_k);
+    }
+
+    if desired == crate::embedding::PRODUCTION_MODEL_NAME {
+        #[cfg(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        ))]
+        {
+            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+                Ok(embedder) => {
+                    set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
+                    return search_similar_todo_threads(conn, key, &embedder, query, top_k);
+                }
+                Err(e) => return Err(anyhow!("production embeddings unavailable: {e}")),
+            }
+        }
+
+        #[cfg(not(all(
+            any(target_os = "windows", target_os = "macos", target_os = "linux"),
+            not(frb_expand)
+        )))]
+        {
+            set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+            return search_similar_todo_threads_default(conn, key, query, top_k);
+        }
+    }
+
+    set_active_embedding_model_name(conn, crate::embedding::DEFAULT_MODEL_NAME)?;
+    search_similar_todo_threads_default(conn, key, query, top_k)
+}
+
 pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
     conn: &Connection,
     key: &[u8; 32],
@@ -1477,6 +1678,231 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
     Ok(message_ids.len())
 }
 
+pub fn process_pending_todo_embeddings<E: Embedder + ?Sized>(
+    conn: &Connection,
+    key: &[u8; 32],
+    embedder: &E,
+    limit: usize,
+) -> Result<usize> {
+    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
+        return Err(anyhow!(
+            "embedder dim mismatch: expected {}, got {}",
+            MESSAGE_EMBEDDING_DIM,
+            embedder.dim()
+        ));
+    }
+
+    let mut stmt = conn.prepare(
+        r#"SELECT rowid, id, title, status, due_at_ms
+           FROM todos
+           WHERE COALESCE(needs_embedding, 1) = 1
+             AND status != 'dismissed'
+           ORDER BY updated_at_ms ASC
+           LIMIT ?1"#,
+    )?;
+
+    let mut rows = stmt.query(params![i64::try_from(limit).unwrap_or(i64::MAX)])?;
+    let mut todo_rowids: Vec<i64> = Vec::new();
+    let mut todo_ids: Vec<String> = Vec::new();
+    let mut plaintexts: Vec<String> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        let rowid: i64 = row.get(0)?;
+        let id: String = row.get(1)?;
+        let title_blob: Vec<u8> = row.get(2)?;
+        let status: String = row.get(3)?;
+        let due_at_ms: Option<i64> = row.get(4)?;
+
+        let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
+        let title =
+            String::from_utf8(title_bytes).map_err(|_| anyhow!("todo title is not valid utf-8"))?;
+
+        let mut text = format!("TODO [{status}] {title}");
+        if let Some(ms) = due_at_ms {
+            text.push_str(&format!(" (due_at_ms={ms})"));
+        }
+
+        todo_rowids.push(rowid);
+        todo_ids.push(id);
+        plaintexts.push(format!("passage: {text}"));
+    }
+
+    if plaintexts.is_empty() {
+        return Ok(0);
+    }
+
+    let embeddings = embedder.embed(&plaintexts)?;
+    if embeddings.len() != plaintexts.len() {
+        return Err(anyhow!(
+            "embedder output length mismatch: expected {}, got {}",
+            plaintexts.len(),
+            embeddings.len()
+        ));
+    }
+
+    for i in 0..todo_ids.len() {
+        let updated = conn.execute(
+            r#"UPDATE todo_embeddings
+               SET embedding = ?2, todo_id = ?3, model_name = ?4
+               WHERE rowid = ?1"#,
+            params![
+                todo_rowids[i],
+                embeddings[i].as_bytes(),
+                todo_ids[i],
+                embedder.model_name()
+            ],
+        )?;
+        if updated == 0 {
+            conn.execute(
+                r#"INSERT INTO todo_embeddings(rowid, embedding, todo_id, model_name)
+                   VALUES (?1, ?2, ?3, ?4)"#,
+                params![
+                    todo_rowids[i],
+                    embeddings[i].as_bytes(),
+                    todo_ids[i],
+                    embedder.model_name()
+                ],
+            )?;
+        }
+
+        conn.execute(
+            r#"UPDATE todos SET needs_embedding = 0 WHERE rowid = ?1"#,
+            params![todo_rowids[i]],
+        )?;
+    }
+
+    Ok(todo_ids.len())
+}
+
+fn status_embedding_hint(status: &str) -> String {
+    match status {
+        "inbox" => "inbox needs confirmation not started 待确认 未开始".to_string(),
+        "in_progress" => "in_progress doing ongoing 进行中".to_string(),
+        "done" => "done completed finished 完成 已完成".to_string(),
+        "dismissed" => "dismissed deleted removed 已删除".to_string(),
+        _ => status.to_string(),
+    }
+}
+
+pub fn process_pending_todo_activity_embeddings<E: Embedder + ?Sized>(
+    conn: &Connection,
+    key: &[u8; 32],
+    embedder: &E,
+    limit: usize,
+) -> Result<usize> {
+    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
+        return Err(anyhow!(
+            "embedder dim mismatch: expected {}, got {}",
+            MESSAGE_EMBEDDING_DIM,
+            embedder.dim()
+        ));
+    }
+
+    let mut stmt = conn.prepare(
+        r#"SELECT a.rowid, a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content
+           FROM todo_activities a
+           LEFT JOIN todos t ON t.id = a.todo_id
+           WHERE COALESCE(a.needs_embedding, 1) = 1
+             AND (t.status IS NULL OR t.status != 'dismissed')
+           ORDER BY a.created_at_ms ASC
+           LIMIT ?1"#,
+    )?;
+
+    let mut rows = stmt.query(params![i64::try_from(limit).unwrap_or(i64::MAX)])?;
+    let mut activity_rowids: Vec<i64> = Vec::new();
+    let mut activity_ids: Vec<String> = Vec::new();
+    let mut todo_ids: Vec<String> = Vec::new();
+    let mut plaintexts: Vec<String> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        let rowid: i64 = row.get(0)?;
+        let id: String = row.get(1)?;
+        let todo_id: String = row.get(2)?;
+        let activity_type: String = row.get(3)?;
+        let from_status: Option<String> = row.get(4)?;
+        let to_status: Option<String> = row.get(5)?;
+        let content_blob: Option<Vec<u8>> = row.get(6)?;
+
+        let content = if let Some(blob) = content_blob {
+            let aad = format!("todo_activity.content:{id}");
+            let bytes = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            Some(
+                String::from_utf8(bytes)
+                    .map_err(|_| anyhow!("todo activity content is not valid utf-8"))?,
+            )
+        } else {
+            None
+        };
+
+        let text =
+            if let Some(content) = content.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                format!("TODO activity note: {content}")
+            } else if activity_type == "status_change" {
+                let from = from_status.as_deref().unwrap_or("unknown");
+                let to = to_status.as_deref().unwrap_or("unknown");
+                format!(
+                    "TODO status changed from {} to {}",
+                    status_embedding_hint(from),
+                    status_embedding_hint(to)
+                )
+            } else {
+                format!("TODO activity {activity_type}")
+            };
+
+        activity_rowids.push(rowid);
+        activity_ids.push(id);
+        todo_ids.push(todo_id);
+        plaintexts.push(format!("passage: {text}"));
+    }
+
+    if plaintexts.is_empty() {
+        return Ok(0);
+    }
+
+    let embeddings = embedder.embed(&plaintexts)?;
+    if embeddings.len() != plaintexts.len() {
+        return Err(anyhow!(
+            "embedder output length mismatch: expected {}, got {}",
+            plaintexts.len(),
+            embeddings.len()
+        ));
+    }
+
+    for i in 0..activity_ids.len() {
+        let updated = conn.execute(
+            r#"UPDATE todo_activity_embeddings
+               SET embedding = ?2, activity_id = ?3, todo_id = ?4, model_name = ?5
+               WHERE rowid = ?1"#,
+            params![
+                activity_rowids[i],
+                embeddings[i].as_bytes(),
+                activity_ids[i],
+                todo_ids[i],
+                embedder.model_name()
+            ],
+        )?;
+        if updated == 0 {
+            conn.execute(
+                r#"INSERT INTO todo_activity_embeddings(rowid, embedding, activity_id, todo_id, model_name)
+                   VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                params![
+                    activity_rowids[i],
+                    embeddings[i].as_bytes(),
+                    activity_ids[i],
+                    todo_ids[i],
+                    embedder.model_name()
+                ],
+            )?;
+        }
+        conn.execute(
+            r#"UPDATE todo_activities SET needs_embedding = 0 WHERE rowid = ?1"#,
+            params![activity_rowids[i]],
+        )?;
+    }
+
+    Ok(activity_ids.len())
+}
+
 pub fn process_pending_message_embeddings_default(
     conn: &Connection,
     key: &[u8; 32],
@@ -1555,6 +1981,204 @@ pub fn process_pending_message_embeddings_default(
     }
 
     Ok(message_ids.len())
+}
+
+pub fn process_pending_todo_embeddings_default(
+    conn: &Connection,
+    key: &[u8; 32],
+    limit: usize,
+) -> Result<usize> {
+    let mut stmt = conn.prepare(
+        r#"SELECT rowid, id, title, status, due_at_ms
+           FROM todos
+           WHERE COALESCE(needs_embedding, 1) = 1
+             AND status != 'dismissed'
+           ORDER BY updated_at_ms ASC
+           LIMIT ?1"#,
+    )?;
+
+    let mut rows = stmt.query(params![i64::try_from(limit).unwrap_or(i64::MAX)])?;
+    let mut todo_rowids: Vec<i64> = Vec::new();
+    let mut todo_ids: Vec<String> = Vec::new();
+    let mut plaintexts: Vec<String> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        let rowid: i64 = row.get(0)?;
+        let id: String = row.get(1)?;
+        let title_blob: Vec<u8> = row.get(2)?;
+        let status: String = row.get(3)?;
+        let due_at_ms: Option<i64> = row.get(4)?;
+
+        let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
+        let title =
+            String::from_utf8(title_bytes).map_err(|_| anyhow!("todo title is not valid utf-8"))?;
+
+        let mut text = format!("TODO [{status}] {title}");
+        if let Some(ms) = due_at_ms {
+            text.push_str(&format!(" (due_at_ms={ms})"));
+        }
+
+        todo_rowids.push(rowid);
+        todo_ids.push(id);
+        plaintexts.push(format!("passage: {text}"));
+    }
+
+    if plaintexts.is_empty() {
+        return Ok(0);
+    }
+
+    for i in 0..todo_ids.len() {
+        let embedding = default_embed_text(&plaintexts[i]);
+        if embedding.len() != MESSAGE_EMBEDDING_DIM {
+            return Err(anyhow!(
+                "default embed dim mismatch: expected {}, got {}",
+                MESSAGE_EMBEDDING_DIM,
+                embedding.len()
+            ));
+        }
+
+        let updated = conn.execute(
+            r#"UPDATE todo_embeddings
+               SET embedding = ?2, todo_id = ?3, model_name = ?4
+               WHERE rowid = ?1"#,
+            params![
+                todo_rowids[i],
+                embedding.as_bytes(),
+                todo_ids[i],
+                crate::embedding::DEFAULT_MODEL_NAME
+            ],
+        )?;
+        if updated == 0 {
+            conn.execute(
+                r#"INSERT INTO todo_embeddings(rowid, embedding, todo_id, model_name)
+                   VALUES (?1, ?2, ?3, ?4)"#,
+                params![
+                    todo_rowids[i],
+                    embedding.as_bytes(),
+                    todo_ids[i],
+                    crate::embedding::DEFAULT_MODEL_NAME
+                ],
+            )?;
+        }
+
+        conn.execute(
+            r#"UPDATE todos SET needs_embedding = 0 WHERE rowid = ?1"#,
+            params![todo_rowids[i]],
+        )?;
+    }
+
+    Ok(todo_ids.len())
+}
+
+pub fn process_pending_todo_activity_embeddings_default(
+    conn: &Connection,
+    key: &[u8; 32],
+    limit: usize,
+) -> Result<usize> {
+    let mut stmt = conn.prepare(
+        r#"SELECT a.rowid, a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content
+           FROM todo_activities a
+           LEFT JOIN todos t ON t.id = a.todo_id
+           WHERE COALESCE(a.needs_embedding, 1) = 1
+             AND (t.status IS NULL OR t.status != 'dismissed')
+           ORDER BY a.created_at_ms ASC
+           LIMIT ?1"#,
+    )?;
+
+    let mut rows = stmt.query(params![i64::try_from(limit).unwrap_or(i64::MAX)])?;
+    let mut activity_rowids: Vec<i64> = Vec::new();
+    let mut activity_ids: Vec<String> = Vec::new();
+    let mut todo_ids: Vec<String> = Vec::new();
+    let mut plaintexts: Vec<String> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        let rowid: i64 = row.get(0)?;
+        let id: String = row.get(1)?;
+        let todo_id: String = row.get(2)?;
+        let activity_type: String = row.get(3)?;
+        let from_status: Option<String> = row.get(4)?;
+        let to_status: Option<String> = row.get(5)?;
+        let content_blob: Option<Vec<u8>> = row.get(6)?;
+
+        let content = if let Some(blob) = content_blob {
+            let aad = format!("todo_activity.content:{id}");
+            let bytes = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            Some(
+                String::from_utf8(bytes)
+                    .map_err(|_| anyhow!("todo activity content is not valid utf-8"))?,
+            )
+        } else {
+            None
+        };
+
+        let text =
+            if let Some(content) = content.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                format!("TODO activity note: {content}")
+            } else if activity_type == "status_change" {
+                let from = from_status.as_deref().unwrap_or("unknown");
+                let to = to_status.as_deref().unwrap_or("unknown");
+                format!(
+                    "TODO status changed from {} to {}",
+                    status_embedding_hint(from),
+                    status_embedding_hint(to)
+                )
+            } else {
+                format!("TODO activity {activity_type}")
+            };
+
+        activity_rowids.push(rowid);
+        activity_ids.push(id);
+        todo_ids.push(todo_id);
+        plaintexts.push(format!("passage: {text}"));
+    }
+
+    if plaintexts.is_empty() {
+        return Ok(0);
+    }
+
+    for i in 0..activity_ids.len() {
+        let embedding = default_embed_text(&plaintexts[i]);
+        if embedding.len() != MESSAGE_EMBEDDING_DIM {
+            return Err(anyhow!(
+                "default embed dim mismatch: expected {}, got {}",
+                MESSAGE_EMBEDDING_DIM,
+                embedding.len()
+            ));
+        }
+
+        let updated = conn.execute(
+            r#"UPDATE todo_activity_embeddings
+               SET embedding = ?2, activity_id = ?3, todo_id = ?4, model_name = ?5
+               WHERE rowid = ?1"#,
+            params![
+                activity_rowids[i],
+                embedding.as_bytes(),
+                activity_ids[i],
+                todo_ids[i],
+                crate::embedding::DEFAULT_MODEL_NAME
+            ],
+        )?;
+        if updated == 0 {
+            conn.execute(
+                r#"INSERT INTO todo_activity_embeddings(rowid, embedding, activity_id, todo_id, model_name)
+                   VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                params![
+                    activity_rowids[i],
+                    embedding.as_bytes(),
+                    activity_ids[i],
+                    todo_ids[i],
+                    crate::embedding::DEFAULT_MODEL_NAME
+                ],
+            )?;
+        }
+
+        conn.execute(
+            r#"UPDATE todo_activities SET needs_embedding = 0 WHERE rowid = ?1"#,
+            params![activity_rowids[i]],
+        )?;
+    }
+
+    Ok(activity_ids.len())
 }
 
 pub fn rebuild_message_embeddings<E: Embedder + ?Sized>(
@@ -1799,6 +2423,175 @@ pub fn search_similar_messages_in_conversation_default(
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
     search_similar_messages_lite(conn, key, Some(conversation_id), query, top_k)
+}
+
+pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
+    conn: &Connection,
+    _key: &[u8; 32],
+    embedder: &E,
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarTodoThread>> {
+    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
+        return Err(anyhow!(
+            "embedder dim mismatch: expected {}, got {}",
+            MESSAGE_EMBEDDING_DIM,
+            embedder.dim()
+        ));
+    }
+
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(10)).min(1000);
+
+    let query = format!("query: {query}");
+    let mut vectors = embedder.embed(&[query])?;
+    if vectors.len() != 1 {
+        return Err(anyhow!(
+            "embedder output length mismatch: expected 1, got {}",
+            vectors.len()
+        ));
+    }
+    let query_vector = vectors.remove(0);
+
+    let mut best: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+    {
+        let mut stmt = conn.prepare(
+            r#"SELECT te.todo_id, te.distance
+               FROM todo_embeddings te
+               JOIN todos t ON t.id = te.todo_id
+               WHERE te.embedding match ?1 AND te.k = ?2 AND te.model_name = ?3
+                 AND t.status != 'dismissed'
+               ORDER BY te.distance ASC"#,
+        )?;
+
+        let mut rows = stmt.query(params![
+            query_vector.as_bytes(),
+            i64::try_from(candidate_k).unwrap_or(i64::MAX),
+            embedder.model_name()
+        ])?;
+
+        while let Some(row) = rows.next()? {
+            let todo_id: String = row.get(0)?;
+            let distance: f64 = row.get(1)?;
+            best.entry(todo_id)
+                .and_modify(|d| *d = (*d).min(distance))
+                .or_insert(distance);
+        }
+    }
+
+    {
+        let mut stmt = conn.prepare(
+            r#"SELECT tae.todo_id, tae.distance
+               FROM todo_activity_embeddings tae
+               JOIN todos t ON t.id = tae.todo_id
+               WHERE tae.embedding match ?1 AND tae.k = ?2 AND tae.model_name = ?3
+                 AND t.status != 'dismissed'
+               ORDER BY tae.distance ASC"#,
+        )?;
+
+        let mut rows = stmt.query(params![
+            query_vector.as_bytes(),
+            i64::try_from(candidate_k).unwrap_or(i64::MAX),
+            embedder.model_name()
+        ])?;
+
+        while let Some(row) = rows.next()? {
+            let todo_id: String = row.get(0)?;
+            let distance: f64 = row.get(1)?;
+            best.entry(todo_id)
+                .and_modify(|d| *d = (*d).min(distance))
+                .or_insert(distance);
+        }
+    }
+
+    let mut result: Vec<SimilarTodoThread> = best
+        .into_iter()
+        .map(|(todo_id, distance)| SimilarTodoThread { todo_id, distance })
+        .collect();
+    result.sort_by(|a, b| {
+        a.distance
+            .partial_cmp(&b.distance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.todo_id.cmp(&b.todo_id))
+    });
+    result.truncate(top_k);
+    Ok(result)
+}
+
+pub fn search_similar_todo_threads_default(
+    conn: &Connection,
+    key: &[u8; 32],
+    query: &str,
+    top_k: usize,
+) -> Result<Vec<SimilarTodoThread>> {
+    let top_k = top_k.max(1);
+
+    let query_norm = lite_normalize_text(query);
+    let query_compact = lite_compact_text(&query_norm);
+    if query_compact.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query_chars: Vec<char> = query_compact.chars().collect();
+    let query_bigrams = lite_collect_bigrams(&query_chars);
+    let query_trigrams = lite_collect_trigrams(&query_chars);
+
+    let mut result: Vec<SimilarTodoThread> = Vec::new();
+
+    for todo in list_todos(conn, key)? {
+        if todo.status == "dismissed" {
+            continue;
+        }
+
+        let activities = list_todo_activities(conn, key, &todo.id)?;
+        let mut text = String::new();
+        text.push_str("TODO ");
+        text.push_str(&todo.title);
+        for a in activities {
+            text.push('\n');
+            text.push_str("ACTIVITY ");
+            text.push_str(&a.activity_type);
+            if let Some(from) = a.from_status.as_deref() {
+                text.push_str(" from=");
+                text.push_str(from);
+            }
+            if let Some(to) = a.to_status.as_deref() {
+                text.push_str(" to=");
+                text.push_str(to);
+            }
+            if let Some(content) = a.content.as_deref() {
+                text.push_str(" content=");
+                text.push_str(content);
+            }
+        }
+
+        let score = lite_score(
+            &query_norm,
+            &query_compact,
+            &query_bigrams,
+            &query_trigrams,
+            &text,
+        );
+        if score == 0 {
+            continue;
+        }
+
+        let distance = 1.0 / (score as f64 + 1.0);
+        result.push(SimilarTodoThread {
+            todo_id: todo.id,
+            distance,
+        });
+    }
+
+    result.sort_by(|a, b| {
+        a.distance
+            .partial_cmp(&b.distance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.todo_id.cmp(&b.todo_id))
+    });
+    result.truncate(top_k);
+    Ok(result)
 }
 
 fn search_similar_messages_lite(
@@ -2217,6 +3010,10 @@ WHERE id = ?1
     })
 }
 
+pub fn get_todo(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Todo> {
+    get_todo_by_id(conn, key, id)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn upsert_todo(
     conn: &Connection,
@@ -2231,13 +3028,51 @@ pub fn upsert_todo(
     last_review_at_ms: Option<i64>,
 ) -> Result<Todo> {
     let now = now_ms();
+
+    let (existing_title, existing_status, existing_due_at_ms, existing_needs_embedding): (
+        Option<String>,
+        Option<String>,
+        Option<i64>,
+        i64,
+    ) = {
+        let row: Option<(Vec<u8>, String, Option<i64>, Option<i64>)> = conn
+            .query_row(
+                r#"SELECT title, status, due_at_ms, needs_embedding FROM todos WHERE id = ?1"#,
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        if let Some((title_blob, status, due_at_ms, needs_embedding)) = row {
+            let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
+            let title = String::from_utf8(title_bytes)
+                .map_err(|_| anyhow!("todo title is not valid utf-8"))?;
+            (
+                Some(title),
+                Some(status),
+                due_at_ms,
+                needs_embedding.unwrap_or(0),
+            )
+        } else {
+            (None, None, None, 0)
+        }
+    };
+
+    let needs_embedding = if existing_title.as_deref() != Some(title)
+        || existing_status.as_deref() != Some(status)
+        || existing_due_at_ms != due_at_ms
+    {
+        1i64
+    } else {
+        existing_needs_embedding
+    };
+
     let title_blob = encrypt_bytes(key, title.as_bytes(), b"todo.title")?;
     conn.execute(
         r#"
 INSERT INTO todos (
-  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
 )
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   due_at_ms = excluded.due_at_ms,
@@ -2246,7 +3081,8 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at_ms = excluded.updated_at_ms,
   review_stage = excluded.review_stage,
   next_review_at_ms = excluded.next_review_at_ms,
-  last_review_at_ms = excluded.last_review_at_ms
+  last_review_at_ms = excluded.last_review_at_ms,
+  needs_embedding = excluded.needs_embedding
 "#,
         params![
             id,
@@ -2259,6 +3095,7 @@ ON CONFLICT(id) DO UPDATE SET
             review_stage,
             next_review_at_ms,
             last_review_at_ms,
+            needs_embedding,
         ],
     )?;
 
@@ -2514,9 +3351,9 @@ pub fn append_todo_note(
     conn.execute(
         r#"
 INSERT INTO todo_activities(
-  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms, needs_embedding
 )
-VALUES (?1, ?2, 'note', NULL, NULL, ?3, ?4, ?5)
+VALUES (?1, ?2, 'note', NULL, NULL, ?3, ?4, ?5, 1)
 "#,
         params![id, todo_id, content_blob, source_message_id, now],
     )?;
@@ -2680,9 +3517,9 @@ pub fn set_todo_status(
         conn.execute(
             r#"
 INSERT INTO todo_activities(
-  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms, needs_embedding
 )
-VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6)
+VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
 "#,
             params![
                 activity_id,

@@ -245,6 +245,9 @@ Future<void> dbResetVaultDataPreservingLlmProfiles(
     RustLib.instance.api.crateApiCoreDbResetVaultDataPreservingLlmProfiles(
         appDir: appDir, key: key);
 
+Future<String> dbGetOrCreateDeviceId({required String appDir}) =>
+    RustLib.instance.api.crateApiCoreDbGetOrCreateDeviceId(appDir: appDir);
+
 Future<LlmProfile> dbCreateLlmProfile(
         {required String appDir,
         required List<int> key,
@@ -294,6 +297,14 @@ Future<List<SimilarMessage>> dbSearchSimilarMessages(
         required String query,
         required int topK}) =>
     RustLib.instance.api.crateApiCoreDbSearchSimilarMessages(
+        appDir: appDir, key: key, query: query, topK: topK);
+
+Future<List<SimilarTodoThread>> dbSearchSimilarTodoThreads(
+        {required String appDir,
+        required List<int> key,
+        required String query,
+        required int topK}) =>
+    RustLib.instance.api.crateApiCoreDbSearchSimilarTodoThreads(
         appDir: appDir, key: key, query: query, topK: topK);
 
 Future<int> dbRebuildMessageEmbeddings(
@@ -480,3 +491,21 @@ Future<BigInt> syncManagedVaultPull(
         baseUrl: baseUrl,
         vaultId: vaultId,
         firebaseIdToken: firebaseIdToken);
+
+Future<void> syncManagedVaultClearDevice(
+        {required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken,
+        required String deviceId}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultClearDevice(
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken,
+        deviceId: deviceId);
+
+Future<void> syncManagedVaultClearVault(
+        {required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultClearVault(
+        baseUrl: baseUrl, vaultId: vaultId, firebaseIdToken: firebaseIdToken);

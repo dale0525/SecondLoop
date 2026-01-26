@@ -31,12 +31,12 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
     if (widget.dueCount <= 0) return const SizedBox.shrink();
 
     final tokens = SlTokens.of(context);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final todos = widget.previewTodos;
     final summaryText = context.t.actions.agenda
         .summary(due: widget.dueCount, overdue: widget.overdueCount);
     final nextTitle = todos.isEmpty ? null : todos.first.title;
-    final collapsedLine =
-        nextTitle == null ? summaryText : '$summaryText · $nextTitle';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: SlSurface(
@@ -50,41 +50,84 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
               borderRadius: BorderRadius.circular(14),
               onTap: () => setState(() => _expanded = !_expanded),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.checklist_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      collapsedLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: tokens.surface,
+                      border: Border.all(color: tokens.borderSubtle),
+                      borderRadius: BorderRadius.circular(tokens.radiusMd),
+                    ),
+                    child: const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Icon(Icons.checklist_rounded, size: 18),
                     ),
                   ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          summaryText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (!_expanded && nextTitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            nextTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Icon(
                     _expanded
                         ? Icons.expand_less_rounded
                         : Icons.expand_more_rounded,
                     size: 18,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
             ),
             if (_expanded && todos.isNotEmpty) ...[
               const SizedBox(height: 10),
-              for (final todo in todos)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: SlSurface(
-                    padding: const EdgeInsets.all(10),
-                    child: Text(
-                      todo.title,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
+              SlSurface(
+                key: const ValueKey('todo_agenda_preview_list'),
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(tokens.radiusMd),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < todos.length; i++) ...[
+                      _TodoPreviewRow(
+                        key: ValueKey('todo_agenda_preview_${todos[i].id}'),
+                        todo: todos[i],
+                      ),
+                      if (i != todos.length - 1)
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: tokens.borderSubtle.withOpacity(0.9),
+                        ),
+                    ],
+                  ],
                 ),
+              ),
               if (widget.onViewAll != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -97,6 +140,71 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+final class _TodoPreviewRow extends StatelessWidget {
+  const _TodoPreviewRow({required this.todo, super.key});
+
+  final Todo todo;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final dueAtMs = todo.dueAtMs;
+    final dueAtLocal = dueAtMs == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+    final isOverdue = dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
+
+    final dueText = dueAtLocal == null
+        ? null
+        : MaterialLocalizations.of(context).formatTimeOfDay(
+            TimeOfDay.fromDateTime(dueAtLocal),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: isOverdue ? colorScheme.error : colorScheme.primary,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              todo.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          if (dueText != null) ...[
+            const SizedBox(width: 10),
+            Text(
+              dueText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(width: 2),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: tokens.border,
+          ),
+        ],
       ),
     );
   }

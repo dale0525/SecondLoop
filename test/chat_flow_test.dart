@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -84,6 +84,119 @@ void main() {
 
     expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
     expect(find.text('Stopping…'), findsNothing);
+  });
+
+  testWidgets('Chat input Enter sends message', (tester) async {
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+    final backend = MemoryBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    final field =
+        tester.widget<TextField>(find.byKey(MemoryBackend.kChatInput));
+    expect(field.controller!.text, isEmpty);
+    expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('Chat input Shift+Enter inserts newline (does not send)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+    final backend = MemoryBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+
+    final field =
+        tester.widget<TextField>(find.byKey(MemoryBackend.kChatInput));
+    expect(field.controller!.text, contains('\n'));
+    expect(backend._messages['main_stream'], isEmpty);
+  });
+
+  testWidgets('Chat input Ctrl+Enter sends message', (tester) async {
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+    final backend = MemoryBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello'), findsOneWidget);
   });
 }
 

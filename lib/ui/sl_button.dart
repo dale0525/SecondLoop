@@ -77,7 +77,7 @@ class SlButton extends StatelessWidget {
     final tokens = SlTokens.of(context);
     final colorScheme = Theme.of(context).colorScheme;
 
-    const minHeight = 40.0;
+    const minHeight = 44.0;
     const minSize = Size(0, minHeight);
     final radius = BorderRadius.circular(tokens.radiusMd);
 
@@ -99,7 +99,7 @@ class SlButton extends StatelessWidget {
     return ButtonStyle(
       minimumSize: const MaterialStatePropertyAll(minSize),
       padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
       shape: MaterialStatePropertyAll(
         RoundedRectangleBorder(borderRadius: radius),

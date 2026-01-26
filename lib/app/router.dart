@@ -38,6 +38,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
+    final mediaQuery = MediaQuery.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final useRail = constraints.maxWidth >= 720;
@@ -89,16 +90,30 @@ class _AppShellState extends State<AppShell> {
                   ],
                 )
               : SlPageSurface(
-                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  margin: EdgeInsets.fromLTRB(
+                    12,
+                    12 + mediaQuery.viewPadding.top,
+                    12,
+                    0,
+                  ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(tokens.radiusLg),
-                    child: content,
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: content,
+                    ),
                   ),
                 ),
           bottomNavigationBar: useRail
               ? null
               : Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    0,
+                    12,
+                    12 + mediaQuery.viewPadding.bottom,
+                  ),
                   child: SlGlass(
                     borderRadius: BorderRadius.circular(tokens.radiusLg),
                     padding: const EdgeInsets.symmetric(horizontal: 8),

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
+import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 
 abstract class AppBackend {
@@ -38,6 +39,10 @@ abstract class AppBackend {
       Uint8List key, String messageId, bool isDeleted);
 
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key);
+
+  Future<String> getOrCreateDeviceId() {
+    throw UnimplementedError('getOrCreateDeviceId');
+  }
 
   Future<List<Todo>> listTodos(Uint8List key) {
     throw UnimplementedError('listTodos');
@@ -139,6 +144,13 @@ abstract class AppBackend {
     String query, {
     int topK = 10,
   });
+
+  Future<List<TodoThreadMatch>> searchSimilarTodoThreads(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+  }) async =>
+      const <TodoThreadMatch>[];
 
   Future<int> rebuildMessageEmbeddings(
     Uint8List key, {
@@ -259,6 +271,23 @@ abstract class AppBackend {
     required String idToken,
   }) {
     throw UnimplementedError('syncManagedVaultPull');
+  }
+
+  Future<void> syncManagedVaultClearDevice({
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String deviceId,
+  }) {
+    throw UnimplementedError('syncManagedVaultClearDevice');
+  }
+
+  Future<void> syncManagedVaultClearVault({
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) {
+    throw UnimplementedError('syncManagedVaultClearVault');
   }
 }
 

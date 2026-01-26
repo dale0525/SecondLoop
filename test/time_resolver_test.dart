@@ -133,6 +133,48 @@ void main() {
     expect(res!.candidates.single.dueAtLocal, DateTime(2026, 1, 25, 15, 0));
   });
 
+  test('resolves spaced month/day (zh) into next occurrence', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final res = LocalTimeResolver.resolve(
+      '3 月 1 号做某事',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'date');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 3, 1, 21, 0));
+  });
+
+  test('resolves spaced slash date (en) into current year', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final res = LocalTimeResolver.resolve(
+      'file taxes on 1 / 31',
+      now,
+      locale: const Locale('en'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'date');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 1, 31, 21, 0));
+  });
+
+  test('resolves spaced ISO date (en) into exact date', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final res = LocalTimeResolver.resolve(
+      'plan 2026 - 01 - 31',
+      now,
+      locale: const Locale('en'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'date');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 1, 31, 21, 0));
+  });
+
   test('detects review intent keywords', () {
     expect(LocalTimeResolver.looksLikeReviewIntent('记得要做某事'), isTrue);
     expect(LocalTimeResolver.looksLikeReviewIntent('Remember to do X'), isTrue);

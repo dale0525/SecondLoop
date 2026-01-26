@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
     let user_version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("user_version");
-    assert_eq!(user_version, 11);
+    assert_eq!(user_version, 12);
 
     // Verify messages table has needs_embedding.
     let mut stmt = conn
@@ -84,4 +84,33 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
         )
         .expect("model_name");
     assert_eq!(model_name, "test-model");
+
+    // Verify todo vec0 tables exist and are usable.
+    conn.execute(
+        "INSERT INTO todo_embeddings(rowid, embedding, todo_id, model_name) VALUES (?1, ?2, ?3, ?4)",
+        params![1i64, embedding.as_bytes(), "t1", "test-model"],
+    )
+    .expect("insert todo vec0 row");
+    let todo_dim: i64 = conn
+        .query_row(
+            "SELECT vec_length(embedding) FROM todo_embeddings WHERE rowid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("todo vec_length");
+    assert_eq!(todo_dim, 384);
+
+    conn.execute(
+        "INSERT INTO todo_activity_embeddings(rowid, embedding, activity_id, todo_id, model_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![1i64, embedding.as_bytes(), "a1", "t1", "test-model"],
+    )
+    .expect("insert todo activity vec0 row");
+    let act_dim: i64 = conn
+        .query_row(
+            "SELECT vec_length(embedding) FROM todo_activity_embeddings WHERE rowid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("todo activity vec_length");
+    assert_eq!(act_dim, 384);
 }

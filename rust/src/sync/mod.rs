@@ -657,7 +657,8 @@ fn apply_todo_upsert(
                    updated_at_ms = ?6,
                    review_stage = ?7,
                    next_review_at_ms = ?8,
-                   last_review_at_ms = ?9
+                   last_review_at_ms = ?9,
+                   needs_embedding = 1
                WHERE id = ?1"#,
             params![
                 todo_id,
@@ -675,9 +676,9 @@ fn apply_todo_upsert(
         conn.execute(
             r#"INSERT INTO todos(
                  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms,
-                 review_stage, next_review_at_ms, last_review_at_ms
+                 review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
                )
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)"#,
             params![
                 todo_id,
                 title_blob,
@@ -752,9 +753,9 @@ fn apply_todo_activity_append(
 
     let insert_result = conn.execute(
         r#"INSERT OR IGNORE INTO todo_activities(
-             id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
+             id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms, needs_embedding
            )
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)"#,
         params![
             activity_id,
             todo_id,

@@ -188,6 +188,42 @@ fn build_prompt_with_actions(question: &str, contexts: &[String], actions: Optio
     out
 }
 
+fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
+    let todo = db::get_todo(conn, key, todo_id)?;
+    let activities = db::list_todo_activities(conn, key, todo_id)?;
+
+    let mut out = String::new();
+    out.push_str(&format!("TODO_THREAD todo_id={}\n", todo.id));
+
+    out.push_str(&format!("TODO [{}] {}", todo.status, todo.title));
+    if let Some(ms) = todo.due_at_ms {
+        out.push_str(&format!(" (due_at_ms={ms})"));
+    }
+    out.push('\n');
+
+    if !activities.is_empty() {
+        out.push_str("Activities:\n");
+        for a in activities {
+            out.push_str(&format!(
+                "- (created_at_ms={}) type={}",
+                a.created_at_ms, a.activity_type
+            ));
+            if let Some(from) = a.from_status.as_deref() {
+                out.push_str(&format!(" from={from}"));
+            }
+            if let Some(to) = a.to_status.as_deref() {
+                out.push_str(&format!(" to={to}"));
+            }
+            if let Some(content) = a.content.as_deref() {
+                out.push_str(&format!(" content={content}"));
+            }
+            out.push('\n');
+        }
+    }
+
+    Ok(out)
+}
+
 pub fn build_prompt(question: &str, contexts: &[String]) -> String {
     build_prompt_with_actions(question, contexts, None)
 }
@@ -204,8 +240,12 @@ pub fn ask_ai_with_provider(
 ) -> Result<AskAiResult> {
     // Ensure existing messages are embedded before searching.
     db::process_pending_message_embeddings_default(conn, key, 1024)?;
+    db::process_pending_todo_embeddings_default(conn, key, 1024)?;
+    db::process_pending_todo_activity_embeddings_default(conn, key, 1024)?;
 
-    let similar = match focus {
+    let top_k = top_k.max(1);
+
+    let similar_messages = match focus {
         Focus::AllMemories => db::search_similar_messages_default(conn, key, question, top_k)?,
         Focus::ThisThread => db::search_similar_messages_in_conversation_default(
             conn,
@@ -215,7 +255,27 @@ pub fn ask_ai_with_provider(
             top_k,
         )?,
     };
-    let contexts: Vec<String> = similar.into_iter().map(|sm| sm.message.content).collect();
+    let similar_todos = db::search_similar_todo_threads_default(conn, key, question, top_k)?;
+
+    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+    for sm in similar_messages {
+        contexts_with_distance.push((sm.distance, sm.message.content));
+    }
+    let mut seen_todos = std::collections::HashSet::new();
+    for st in similar_todos {
+        if !seen_todos.insert(st.todo_id.clone()) {
+            continue;
+        }
+        let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+        contexts_with_distance.push((st.distance, ctx));
+    }
+    contexts_with_distance
+        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    contexts_with_distance.truncate(top_k);
+    let contexts: Vec<String> = contexts_with_distance
+        .into_iter()
+        .map(|(_, ctx)| ctx)
+        .collect();
     let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 
@@ -302,8 +362,12 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
 ) -> Result<AskAiResult> {
     db::set_active_embedding_model_name(conn, embedder.model_name())?;
     db::process_pending_message_embeddings(conn, key, embedder, 1024)?;
+    db::process_pending_todo_embeddings(conn, key, embedder, 1024)?;
+    db::process_pending_todo_activity_embeddings(conn, key, embedder, 1024)?;
 
-    let similar = match focus {
+    let top_k = top_k.max(1);
+
+    let similar_messages = match focus {
         Focus::AllMemories => db::search_similar_messages(conn, key, embedder, question, top_k)?,
         Focus::ThisThread => db::search_similar_messages_in_conversation(
             conn,
@@ -315,7 +379,27 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
         )?,
     };
 
-    let contexts: Vec<String> = similar.into_iter().map(|sm| sm.message.content).collect();
+    let similar_todos = db::search_similar_todo_threads(conn, key, embedder, question, top_k)?;
+
+    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+    for sm in similar_messages {
+        contexts_with_distance.push((sm.distance, sm.message.content));
+    }
+    let mut seen_todos = std::collections::HashSet::new();
+    for st in similar_todos {
+        if !seen_todos.insert(st.todo_id.clone()) {
+            continue;
+        }
+        let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+        contexts_with_distance.push((st.distance, ctx));
+    }
+    contexts_with_distance
+        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    contexts_with_distance.truncate(top_k);
+    let contexts: Vec<String> = contexts_with_distance
+        .into_iter()
+        .map(|(_, ctx)| ctx)
+        .collect();
     let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 
@@ -401,8 +485,12 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
+    db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
+    db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
 
-    let similar = match focus {
+    let top_k = top_k.max(1);
+
+    let similar_messages = match focus {
         Focus::AllMemories => {
             db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
         }
@@ -416,7 +504,28 @@ pub fn ask_ai_with_provider_using_active_embeddings(
         )?,
     };
 
-    let contexts: Vec<String> = similar.into_iter().map(|sm| sm.message.content).collect();
+    let similar_todos =
+        db::search_similar_todo_threads_active(conn, key, app_dir, question, top_k)?;
+
+    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+    for sm in similar_messages {
+        contexts_with_distance.push((sm.distance, sm.message.content));
+    }
+    let mut seen_todos = std::collections::HashSet::new();
+    for st in similar_todos {
+        if !seen_todos.insert(st.todo_id.clone()) {
+            continue;
+        }
+        let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+        contexts_with_distance.push((st.distance, ctx));
+    }
+    contexts_with_distance
+        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    contexts_with_distance.truncate(top_k);
+    let contexts: Vec<String> = contexts_with_distance
+        .into_iter()
+        .map(|(_, ctx)| ctx)
+        .collect();
     let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 

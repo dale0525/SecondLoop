@@ -17,7 +17,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'Debug reset clears local+remote synced data but preserves master password and local config',
+      'Debug reset (all devices) clears local+remote synced data but preserves master password and local config',
       (tester) async {
     Future<void> pumpAndSettleShort() async {
       await tester.pumpAndSettle(
@@ -74,7 +74,7 @@ void main() {
     await syncStore.writeRemoteRoot(remoteRoot);
     await syncStore.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
 
-    final backend = _FakeBackend();
+    final backend = _FakeBackend(deviceId: 'deviceA');
     var locked = false;
 
     await tester.pumpWidget(
@@ -93,12 +93,16 @@ void main() {
     );
     await pumpAndSettleShort();
 
+    await tester.scrollUntilVisible(
+      find.text('Debug: Reset local data (all devices)'),
+      200,
+    );
+    await pumpAndSettleShort();
+    await tester
+        .ensureVisible(find.text('Debug: Reset local data (all devices)'));
+    await pumpAndSettleShort();
     await tester.runAsync(() async {
-      await tester.scrollUntilVisible(
-        find.text('Debug: Reset local data'),
-        200,
-      );
-      await tester.tap(find.text('Debug: Reset local data'));
+      await tester.tap(find.text('Debug: Reset local data (all devices)'));
     });
     await pumpAndSettleShort();
     expect(find.text('Reset local data?'), findsOneWidget);
@@ -107,6 +111,7 @@ void main() {
       await tester.tap(find.text('Reset'));
     });
     await pumpAndSettleShort();
+    expect(find.textContaining('Reset failed:'), findsNothing);
 
     await tester.runAsync(() async {
       final deadline = DateTime.now().add(const Duration(seconds: 2));
@@ -131,6 +136,137 @@ void main() {
       isFalse,
     );
   });
+
+  testWidgets('Debug reset (this device) clears only this device remote dir',
+      (tester) async {
+    Future<void> pumpAndSettleShort() async {
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 2),
+      );
+    }
+
+    SharedPreferences.setMockInitialValues({});
+    final tempAppSupport =
+        Directory.systemTemp.createTempSync('secondloop_appsupport_');
+    final tempRemote =
+        Directory.systemTemp.createTempSync('secondloop_remote_');
+    addTearDown(() async {
+      try {
+        if (tempAppSupport.existsSync()) {
+          tempAppSupport.deleteSync(recursive: true);
+        }
+      } catch (_) {}
+      try {
+        if (tempRemote.existsSync()) {
+          tempRemote.deleteSync(recursive: true);
+        }
+      } catch (_) {}
+    });
+
+    PathProviderPlatform.instance =
+        _FakePathProviderPlatform(applicationSupportPath: tempAppSupport.path);
+
+    final authFile =
+        File('${tempAppSupport.path}${Platform.pathSeparator}auth.json');
+    authFile.createSync(recursive: true);
+    authFile.writeAsStringSync('{"version":1}');
+
+    final dbFile = File(
+        '${tempAppSupport.path}${Platform.pathSeparator}secondloop.sqlite3');
+    dbFile.createSync(recursive: true);
+    dbFile.writeAsStringSync('sentinel-db');
+
+    const remoteRoot = 'SecondLoopTest';
+    const deviceA = 'devA';
+    const deviceB = 'devB';
+    final remoteDataA = File(
+      '${tempRemote.path}${Platform.pathSeparator}$remoteRoot'
+      '${Platform.pathSeparator}$deviceA${Platform.pathSeparator}ops'
+      '${Platform.pathSeparator}op_1.json',
+    );
+    remoteDataA.createSync(recursive: true);
+    remoteDataA.writeAsStringSync('{"op_id":"1"}');
+
+    final remoteDataB = File(
+      '${tempRemote.path}${Platform.pathSeparator}$remoteRoot'
+      '${Platform.pathSeparator}$deviceB${Platform.pathSeparator}ops'
+      '${Platform.pathSeparator}op_1.json',
+    );
+    remoteDataB.createSync(recursive: true);
+    remoteDataB.writeAsStringSync('{"op_id":"1"}');
+
+    final syncStore = SyncConfigStore();
+    await syncStore.writeBackendType(SyncBackendType.localDir);
+    await syncStore.writeAutoEnabled(true);
+    await syncStore.writeLocalDir(tempRemote.path);
+    await syncStore.writeRemoteRoot(remoteRoot);
+    await syncStore.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _FakeBackend(deviceId: deviceA);
+    var locked = false;
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () => locked = true,
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: Scaffold(body: SettingsPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpAndSettleShort();
+
+    await tester.scrollUntilVisible(
+      find.text('Debug: Reset local data (this device)'),
+      200,
+    );
+    await pumpAndSettleShort();
+    await tester
+        .ensureVisible(find.text('Debug: Reset local data (this device)'));
+    await pumpAndSettleShort();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Debug: Reset local data (this device)'));
+    });
+    await pumpAndSettleShort();
+    expect(find.text('Reset local data?'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Reset'));
+    });
+    await pumpAndSettleShort();
+    expect(find.textContaining('Reset failed:'), findsNothing);
+
+    await tester.runAsync(() async {
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (!locked && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+
+    expect(locked, isTrue);
+    expect(authFile.existsSync(), isTrue);
+    expect(dbFile.existsSync(), isTrue);
+
+    expect(
+      Directory(
+              '${tempRemote.path}${Platform.pathSeparator}$remoteRoot${Platform.pathSeparator}$deviceA')
+          .existsSync(),
+      isFalse,
+    );
+    expect(
+      Directory(
+              '${tempRemote.path}${Platform.pathSeparator}$remoteRoot${Platform.pathSeparator}$deviceB')
+          .existsSync(),
+      isTrue,
+    );
+  });
 }
 
 final class _FakePathProviderPlatform extends PathProviderPlatform {
@@ -143,6 +279,10 @@ final class _FakePathProviderPlatform extends PathProviderPlatform {
 }
 
 final class _FakeBackend extends AppBackend {
+  _FakeBackend({required this.deviceId});
+
+  final String deviceId;
+
   @override
   Future<void> init() async {}
 
@@ -211,6 +351,9 @@ final class _FakeBackend extends AppBackend {
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
+
+  @override
+  Future<String> getOrCreateDeviceId() async => deviceId;
 
   @override
   Future<int> processPendingMessageEmbeddings(Uint8List key,

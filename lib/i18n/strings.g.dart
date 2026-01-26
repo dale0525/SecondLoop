@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 534 (267 per locale)
+/// Strings: 568 (284 per locale)
 ///
-/// Built on 2026-01-25 at 06:21 UTC
+/// Built on 2026-01-25 at 14:34 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -255,6 +255,8 @@ class _StringsActionsEn {
       _StringsActionsTodoStatusEn._(_root);
   late final _StringsActionsTodoLinkEn todoLink =
       _StringsActionsTodoLinkEn._(_root);
+  late final _StringsActionsTodoNoteLinkEn todoNoteLink =
+      _StringsActionsTodoNoteLinkEn._(_root);
   late final _StringsActionsTodoDetailEn todoDetail =
       _StringsActionsTodoDetailEn._(_root);
   late final _StringsActionsHistoryEn history =
@@ -293,10 +295,18 @@ class _StringsSettingsEn {
   late final _StringsSettingsSubscriptionEn subscription =
       _StringsSettingsSubscriptionEn._(_root);
   late final _StringsSettingsSyncEn sync = _StringsSettingsSyncEn._(_root);
-  late final _StringsSettingsResetLocalDataEn resetLocalData =
-      _StringsSettingsResetLocalDataEn._(_root);
-  late final _StringsSettingsDebugResetLocalDataEn debugResetLocalData =
-      _StringsSettingsDebugResetLocalDataEn._(_root);
+  late final _StringsSettingsResetLocalDataThisDeviceOnlyEn
+      resetLocalDataThisDeviceOnly =
+      _StringsSettingsResetLocalDataThisDeviceOnlyEn._(_root);
+  late final _StringsSettingsResetLocalDataAllDevicesEn
+      resetLocalDataAllDevices =
+      _StringsSettingsResetLocalDataAllDevicesEn._(_root);
+  late final _StringsSettingsDebugResetLocalDataThisDeviceOnlyEn
+      debugResetLocalDataThisDeviceOnly =
+      _StringsSettingsDebugResetLocalDataThisDeviceOnlyEn._(_root);
+  late final _StringsSettingsDebugResetLocalDataAllDevicesEn
+      debugResetLocalDataAllDevices =
+      _StringsSettingsDebugResetLocalDataAllDevicesEn._(_root);
   late final _StringsSettingsDebugSemanticSearchEn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchEn._(_root);
 }
@@ -333,6 +343,11 @@ class _StringsChatEn {
   String editFailed({required Object error}) => 'Edit failed: ${error}';
   String deleteFailed({required Object error}) => 'Delete failed: ${error}';
   String get noMessagesYet => 'No messages yet';
+  String get viewFull => 'View full';
+  late final _StringsChatMessageActionsEn messageActions =
+      _StringsChatMessageActionsEn._(_root);
+  late final _StringsChatMessageViewerEn messageViewer =
+      _StringsChatMessageViewerEn._(_root);
   late final _StringsChatFocusEn focus = _StringsChatFocusEn._(_root);
   late final _StringsChatAskAiSetupEn askAiSetup =
       _StringsChatAskAiSetupEn._(_root);
@@ -468,6 +483,7 @@ class _StringsCommonActionsEn {
   // Translations
   String get cancel => 'Cancel';
   String get save => 'Save';
+  String get copy => 'Copy';
   String get reset => 'Reset';
   String get continueLabel => 'Continue';
   String get send => 'Send';
@@ -564,6 +580,21 @@ class _StringsActionsTodoLinkEn {
   String subtitle({required Object status}) => 'Mark as: ${status}';
   String updated({required Object title, required Object status}) =>
       'Updated "${title}" → ${status}';
+}
+
+// Path: actions.todoNoteLink
+class _StringsActionsTodoNoteLinkEn {
+  _StringsActionsTodoNoteLinkEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get action => 'Link to task';
+  String get actionShort => 'Link';
+  String get title => 'Link to which task?';
+  String get subtitle => 'Add this message as a follow-up note';
+  String get suggest => 'Link this message to a task?';
+  String linked({required Object title}) => 'Linked to "${title}"';
 }
 
 // Path: actions.todoDetail
@@ -781,28 +812,53 @@ class _StringsSettingsSyncEn {
   String get subtitle => 'Vault backends + auto sync settings';
 }
 
-// Path: settings.resetLocalData
-class _StringsSettingsResetLocalDataEn {
-  _StringsSettingsResetLocalDataEn._(this._root);
+// Path: settings.resetLocalDataThisDeviceOnly
+class _StringsSettingsResetLocalDataThisDeviceOnlyEn {
+  _StringsSettingsResetLocalDataThisDeviceOnlyEn._(this._root);
 
   final Translations _root; // ignore: unused_field
 
   // Translations
   String get dialogTitle => 'Reset local data?';
   String get dialogBody =>
-      'This will delete local messages and clear synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+      'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
   String failed({required Object error}) => 'Reset failed: ${error}';
 }
 
-// Path: settings.debugResetLocalData
-class _StringsSettingsDebugResetLocalDataEn {
-  _StringsSettingsDebugResetLocalDataEn._(this._root);
+// Path: settings.resetLocalDataAllDevices
+class _StringsSettingsResetLocalDataAllDevicesEn {
+  _StringsSettingsResetLocalDataAllDevicesEn._(this._root);
 
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Debug: Reset local data';
-  String get subtitle => 'Delete local messages + clear synced remote data';
+  String get dialogTitle => 'Reset local data?';
+  String get dialogBody =>
+      'This will delete local messages and clear all synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+  String failed({required Object error}) => 'Reset failed: ${error}';
+}
+
+// Path: settings.debugResetLocalDataThisDeviceOnly
+class _StringsSettingsDebugResetLocalDataThisDeviceOnlyEn {
+  _StringsSettingsDebugResetLocalDataThisDeviceOnlyEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Debug: Reset local data (this device)';
+  String get subtitle =>
+      'Delete local messages + clear remote data for this device only';
+}
+
+// Path: settings.debugResetLocalDataAllDevices
+class _StringsSettingsDebugResetLocalDataAllDevicesEn {
+  _StringsSettingsDebugResetLocalDataAllDevicesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Debug: Reset local data (all devices)';
+  String get subtitle => 'Delete local messages + clear all remote data';
 }
 
 // Path: settings.debugSemanticSearch
@@ -814,6 +870,28 @@ class _StringsSettingsDebugSemanticSearchEn {
   // Translations
   String get title => 'Debug: Semantic search';
   String get subtitle => 'Search similar messages + rebuild embeddings index';
+}
+
+// Path: chat.messageActions
+class _StringsChatMessageActionsEn {
+  _StringsChatMessageActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get convertToTodo => 'Convert to task';
+  String get openTodo => 'Jump to task';
+  String get linkOtherTodo => 'Link to another task';
+}
+
+// Path: chat.messageViewer
+class _StringsChatMessageViewerEn {
+  _StringsChatMessageViewerEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Message';
 }
 
 // Path: chat.focus
@@ -1515,6 +1593,9 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsTodoLinkZhCn todoLink =
       _StringsActionsTodoLinkZhCn._(_root);
   @override
+  late final _StringsActionsTodoNoteLinkZhCn todoNoteLink =
+      _StringsActionsTodoNoteLinkZhCn._(_root);
+  @override
   late final _StringsActionsTodoDetailZhCn todoDetail =
       _StringsActionsTodoDetailZhCn._(_root);
   @override
@@ -1573,11 +1654,21 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsSyncZhCn sync = _StringsSettingsSyncZhCn._(_root);
   @override
-  late final _StringsSettingsResetLocalDataZhCn resetLocalData =
-      _StringsSettingsResetLocalDataZhCn._(_root);
+  late final _StringsSettingsResetLocalDataThisDeviceOnlyZhCn
+      resetLocalDataThisDeviceOnly =
+      _StringsSettingsResetLocalDataThisDeviceOnlyZhCn._(_root);
   @override
-  late final _StringsSettingsDebugResetLocalDataZhCn debugResetLocalData =
-      _StringsSettingsDebugResetLocalDataZhCn._(_root);
+  late final _StringsSettingsResetLocalDataAllDevicesZhCn
+      resetLocalDataAllDevices =
+      _StringsSettingsResetLocalDataAllDevicesZhCn._(_root);
+  @override
+  late final _StringsSettingsDebugResetLocalDataThisDeviceOnlyZhCn
+      debugResetLocalDataThisDeviceOnly =
+      _StringsSettingsDebugResetLocalDataThisDeviceOnlyZhCn._(_root);
+  @override
+  late final _StringsSettingsDebugResetLocalDataAllDevicesZhCn
+      debugResetLocalDataAllDevices =
+      _StringsSettingsDebugResetLocalDataAllDevicesZhCn._(_root);
   @override
   late final _StringsSettingsDebugSemanticSearchZhCn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchZhCn._(_root);
@@ -1635,6 +1726,14 @@ class _StringsChatZhCn extends _StringsChatEn {
   String deleteFailed({required Object error}) => '删除失败：${error}';
   @override
   String get noMessagesYet => '暂无消息';
+  @override
+  String get viewFull => '查看全文';
+  @override
+  late final _StringsChatMessageActionsZhCn messageActions =
+      _StringsChatMessageActionsZhCn._(_root);
+  @override
+  late final _StringsChatMessageViewerZhCn messageViewer =
+      _StringsChatMessageViewerZhCn._(_root);
   @override
   late final _StringsChatFocusZhCn focus = _StringsChatFocusZhCn._(_root);
   @override
@@ -1842,6 +1941,8 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   @override
   String get save => '保存';
   @override
+  String get copy => '复制';
+  @override
   String get reset => '重置';
   @override
   String get continueLabel => '继续';
@@ -1995,6 +2096,30 @@ class _StringsActionsTodoLinkZhCn extends _StringsActionsTodoLinkEn {
   @override
   String updated({required Object title, required Object status}) =>
       '已更新「${title}」为：${status}';
+}
+
+// Path: actions.todoNoteLink
+class _StringsActionsTodoNoteLinkZhCn extends _StringsActionsTodoNoteLinkEn {
+  _StringsActionsTodoNoteLinkZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get action => '关联到待办';
+  @override
+  String get actionShort => '关联';
+  @override
+  String get title => '要关联到哪个待办？';
+  @override
+  String get subtitle => '将这条消息作为跟进记录添加';
+  @override
+  String get suggest => '要把这条消息关联到待办吗？';
+  @override
+  String linked({required Object title}) => '已关联到「${title}」';
 }
 
 // Path: actions.todoDetail
@@ -2318,10 +2443,10 @@ class _StringsSettingsSyncZhCn extends _StringsSettingsSyncEn {
   String get subtitle => 'Vault 后端 + 自动同步设置';
 }
 
-// Path: settings.resetLocalData
-class _StringsSettingsResetLocalDataZhCn
-    extends _StringsSettingsResetLocalDataEn {
-  _StringsSettingsResetLocalDataZhCn._(_StringsZhCn root)
+// Path: settings.resetLocalDataThisDeviceOnly
+class _StringsSettingsResetLocalDataThisDeviceOnlyZhCn
+    extends _StringsSettingsResetLocalDataThisDeviceOnlyEn {
+  _StringsSettingsResetLocalDataThisDeviceOnlyZhCn._(_StringsZhCn root)
       : this._root = root,
         super._(root);
 
@@ -2332,15 +2457,16 @@ class _StringsSettingsResetLocalDataZhCn
   @override
   String get dialogTitle => '重置本地数据？';
   @override
-  String get dialogBody => '这将删除本地消息并清空已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+  String get dialogBody =>
+      '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
   @override
   String failed({required Object error}) => '重置失败：${error}';
 }
 
-// Path: settings.debugResetLocalData
-class _StringsSettingsDebugResetLocalDataZhCn
-    extends _StringsSettingsDebugResetLocalDataEn {
-  _StringsSettingsDebugResetLocalDataZhCn._(_StringsZhCn root)
+// Path: settings.resetLocalDataAllDevices
+class _StringsSettingsResetLocalDataAllDevicesZhCn
+    extends _StringsSettingsResetLocalDataAllDevicesEn {
+  _StringsSettingsResetLocalDataAllDevicesZhCn._(_StringsZhCn root)
       : this._root = root,
         super._(root);
 
@@ -2349,9 +2475,46 @@ class _StringsSettingsDebugResetLocalDataZhCn
 
   // Translations
   @override
-  String get title => '调试：重置本地数据';
+  String get dialogTitle => '重置本地数据？';
   @override
-  String get subtitle => '删除本地消息 + 清空已同步的远端数据';
+  String get dialogBody =>
+      '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+  @override
+  String failed({required Object error}) => '重置失败：${error}';
+}
+
+// Path: settings.debugResetLocalDataThisDeviceOnly
+class _StringsSettingsDebugResetLocalDataThisDeviceOnlyZhCn
+    extends _StringsSettingsDebugResetLocalDataThisDeviceOnlyEn {
+  _StringsSettingsDebugResetLocalDataThisDeviceOnlyZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '调试：重置本地数据（仅本设备）';
+  @override
+  String get subtitle => '删除本地消息 + 清空本设备远端数据（其他设备保留）';
+}
+
+// Path: settings.debugResetLocalDataAllDevices
+class _StringsSettingsDebugResetLocalDataAllDevicesZhCn
+    extends _StringsSettingsDebugResetLocalDataAllDevicesEn {
+  _StringsSettingsDebugResetLocalDataAllDevicesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '调试：重置本地数据（所有设备）';
+  @override
+  String get subtitle => '删除本地消息 + 清空所有设备远端数据';
 }
 
 // Path: settings.debugSemanticSearch
@@ -2369,6 +2532,38 @@ class _StringsSettingsDebugSemanticSearchZhCn
   String get title => '调试：语义检索';
   @override
   String get subtitle => '搜索相似消息 + 重建向量索引';
+}
+
+// Path: chat.messageActions
+class _StringsChatMessageActionsZhCn extends _StringsChatMessageActionsEn {
+  _StringsChatMessageActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get convertToTodo => '转化为待办项';
+  @override
+  String get openTodo => '跳转到事项';
+  @override
+  String get linkOtherTodo => '关联到其他事项';
+}
+
+// Path: chat.messageViewer
+class _StringsChatMessageViewerZhCn extends _StringsChatMessageViewerEn {
+  _StringsChatMessageViewerZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '全文';
 }
 
 // Path: chat.focus
@@ -3219,6 +3414,8 @@ extension on Translations {
         return 'Cancel';
       case 'common.actions.save':
         return 'Save';
+      case 'common.actions.copy':
+        return 'Copy';
       case 'common.actions.reset':
         return 'Reset';
       case 'common.actions.continueLabel':
@@ -3316,6 +3513,18 @@ extension on Translations {
       case 'actions.todoLink.updated':
         return ({required Object title, required Object status}) =>
             'Updated "${title}" → ${status}';
+      case 'actions.todoNoteLink.action':
+        return 'Link to task';
+      case 'actions.todoNoteLink.actionShort':
+        return 'Link';
+      case 'actions.todoNoteLink.title':
+        return 'Link to which task?';
+      case 'actions.todoNoteLink.subtitle':
+        return 'Add this message as a follow-up note';
+      case 'actions.todoNoteLink.suggest':
+        return 'Link this message to a task?';
+      case 'actions.todoNoteLink.linked':
+        return ({required Object title}) => 'Linked to "${title}"';
       case 'actions.todoDetail.title':
         return 'Task';
       case 'actions.todoDetail.emptyTimeline':
@@ -3516,16 +3725,26 @@ extension on Translations {
         return 'Sync';
       case 'settings.sync.subtitle':
         return 'Vault backends + auto sync settings';
-      case 'settings.resetLocalData.dialogTitle':
+      case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return 'Reset local data?';
-      case 'settings.resetLocalData.dialogBody':
-        return 'This will delete local messages and clear synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
-      case 'settings.resetLocalData.failed':
+      case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
+        return 'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+      case 'settings.resetLocalDataThisDeviceOnly.failed':
         return ({required Object error}) => 'Reset failed: ${error}';
-      case 'settings.debugResetLocalData.title':
-        return 'Debug: Reset local data';
-      case 'settings.debugResetLocalData.subtitle':
-        return 'Delete local messages + clear synced remote data';
+      case 'settings.resetLocalDataAllDevices.dialogTitle':
+        return 'Reset local data?';
+      case 'settings.resetLocalDataAllDevices.dialogBody':
+        return 'This will delete local messages and clear all synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+      case 'settings.resetLocalDataAllDevices.failed':
+        return ({required Object error}) => 'Reset failed: ${error}';
+      case 'settings.debugResetLocalDataThisDeviceOnly.title':
+        return 'Debug: Reset local data (this device)';
+      case 'settings.debugResetLocalDataThisDeviceOnly.subtitle':
+        return 'Delete local messages + clear remote data for this device only';
+      case 'settings.debugResetLocalDataAllDevices.title':
+        return 'Debug: Reset local data (all devices)';
+      case 'settings.debugResetLocalDataAllDevices.subtitle':
+        return 'Delete local messages + clear all remote data';
       case 'settings.debugSemanticSearch.title':
         return 'Debug: Semantic search';
       case 'settings.debugSemanticSearch.subtitle':
@@ -3560,6 +3779,16 @@ extension on Translations {
         return ({required Object error}) => 'Delete failed: ${error}';
       case 'chat.noMessagesYet':
         return 'No messages yet';
+      case 'chat.viewFull':
+        return 'View full';
+      case 'chat.messageActions.convertToTodo':
+        return 'Convert to task';
+      case 'chat.messageActions.openTodo':
+        return 'Jump to task';
+      case 'chat.messageActions.linkOtherTodo':
+        return 'Link to another task';
+      case 'chat.messageViewer.title':
+        return 'Message';
       case 'chat.focus.tooltip':
         return 'Focus';
       case 'chat.focus.allMemories':
@@ -3774,6 +4003,8 @@ extension on _StringsZhCn {
         return '取消';
       case 'common.actions.save':
         return '保存';
+      case 'common.actions.copy':
+        return '复制';
       case 'common.actions.reset':
         return '重置';
       case 'common.actions.continueLabel':
@@ -3871,6 +4102,18 @@ extension on _StringsZhCn {
       case 'actions.todoLink.updated':
         return ({required Object title, required Object status}) =>
             '已更新「${title}」为：${status}';
+      case 'actions.todoNoteLink.action':
+        return '关联到待办';
+      case 'actions.todoNoteLink.actionShort':
+        return '关联';
+      case 'actions.todoNoteLink.title':
+        return '要关联到哪个待办？';
+      case 'actions.todoNoteLink.subtitle':
+        return '将这条消息作为跟进记录添加';
+      case 'actions.todoNoteLink.suggest':
+        return '要把这条消息关联到待办吗？';
+      case 'actions.todoNoteLink.linked':
+        return ({required Object title}) => '已关联到「${title}」';
       case 'actions.todoDetail.title':
         return '待办详情';
       case 'actions.todoDetail.emptyTimeline':
@@ -4070,16 +4313,26 @@ extension on _StringsZhCn {
         return '同步';
       case 'settings.sync.subtitle':
         return 'Vault 后端 + 自动同步设置';
-      case 'settings.resetLocalData.dialogTitle':
+      case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return '重置本地数据？';
-      case 'settings.resetLocalData.dialogBody':
-        return '这将删除本地消息并清空已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
-      case 'settings.resetLocalData.failed':
+      case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
+        return '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+      case 'settings.resetLocalDataThisDeviceOnly.failed':
         return ({required Object error}) => '重置失败：${error}';
-      case 'settings.debugResetLocalData.title':
-        return '调试：重置本地数据';
-      case 'settings.debugResetLocalData.subtitle':
-        return '删除本地消息 + 清空已同步的远端数据';
+      case 'settings.resetLocalDataAllDevices.dialogTitle':
+        return '重置本地数据？';
+      case 'settings.resetLocalDataAllDevices.dialogBody':
+        return '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+      case 'settings.resetLocalDataAllDevices.failed':
+        return ({required Object error}) => '重置失败：${error}';
+      case 'settings.debugResetLocalDataThisDeviceOnly.title':
+        return '调试：重置本地数据（仅本设备）';
+      case 'settings.debugResetLocalDataThisDeviceOnly.subtitle':
+        return '删除本地消息 + 清空本设备远端数据（其他设备保留）';
+      case 'settings.debugResetLocalDataAllDevices.title':
+        return '调试：重置本地数据（所有设备）';
+      case 'settings.debugResetLocalDataAllDevices.subtitle':
+        return '删除本地消息 + 清空所有设备远端数据';
       case 'settings.debugSemanticSearch.title':
         return '调试：语义检索';
       case 'settings.debugSemanticSearch.subtitle':
@@ -4114,6 +4367,16 @@ extension on _StringsZhCn {
         return ({required Object error}) => '删除失败：${error}';
       case 'chat.noMessagesYet':
         return '暂无消息';
+      case 'chat.viewFull':
+        return '查看全文';
+      case 'chat.messageActions.convertToTodo':
+        return '转化为待办项';
+      case 'chat.messageActions.openTodo':
+        return '跳转到事项';
+      case 'chat.messageActions.linkOtherTodo':
+        return '关联到其他事项';
+      case 'chat.messageViewer.title':
+        return '全文';
       case 'chat.focus.tooltip':
         return '聚焦';
       case 'chat.focus.allMemories':

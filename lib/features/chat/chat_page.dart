@@ -1,7 +1,10 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
@@ -30,12 +33,15 @@ import '../actions/review/review_queue_page.dart';
 import '../actions/settings/actions_settings_store.dart';
 import '../actions/suggestions_card.dart';
 import '../actions/suggestions_parser.dart';
+import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
+import '../actions/todo/todo_thread_match.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
+import 'message_viewer_page.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({required this.conversation, super.key});
@@ -48,6 +54,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
+  final _inputFocusNode = FocusNode();
   Future<List<Message>>? _messagesFuture;
   Future<int>? _reviewCountFuture;
   Future<_TodoAgendaSummary>? _agendaFuture;
@@ -73,6 +80,9 @@ class _ChatPageState extends State<ChatPage> {
   static const _kAskAiEmailNotVerifiedSnackKey = ValueKey(
     'ask_ai_email_not_verified_snack',
   );
+  static const _kCollapsedMessageHeight = 280.0;
+  static const _kLongMessageRuneThreshold = 600;
+  static const _kLongMessageLineThreshold = 12;
 
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
@@ -102,6 +112,8 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _showMessageActions(Message message) async {
     if (message.id.startsWith('pending_')) return;
     final canEdit = message.role == 'user';
+    final linkedTodo = await _resolveLinkedTodoInfo(message);
+    if (!mounted) return;
 
     final action = await showModalBottomSheet<_MessageAction>(
       context: context,
@@ -118,6 +130,28 @@ class _ChatPageState extends State<ChatPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  ListTile(
+                    key: const ValueKey('message_action_copy'),
+                    leading: const Icon(Icons.copy_all_rounded),
+                    title: Text(context.t.common.actions.copy),
+                    onTap: () => Navigator.of(context).pop(_MessageAction.copy),
+                  ),
+                  if (linkedTodo == null)
+                    ListTile(
+                      key: const ValueKey('message_action_convert_todo'),
+                      leading: const Icon(Icons.task_alt_rounded),
+                      title: Text(context.t.chat.messageActions.convertToTodo),
+                      onTap: () =>
+                          Navigator.of(context).pop(_MessageAction.convertTodo),
+                    )
+                  else
+                    ListTile(
+                      key: const ValueKey('message_action_open_todo'),
+                      leading: const Icon(Icons.chevron_right_rounded),
+                      title: Text(context.t.chat.messageActions.openTodo),
+                      onTap: () =>
+                          Navigator.of(context).pop(_MessageAction.openTodo),
+                    ),
                   if (canEdit)
                     ListTile(
                       key: const ValueKey('message_action_edit'),
@@ -125,6 +159,22 @@ class _ChatPageState extends State<ChatPage> {
                       title: Text(context.t.common.actions.edit),
                       onTap: () =>
                           Navigator.of(context).pop(_MessageAction.edit),
+                    ),
+                  if (linkedTodo == null)
+                    ListTile(
+                      key: const ValueKey('message_action_link_todo'),
+                      leading: const Icon(Icons.link_rounded),
+                      title: Text(context.t.actions.todoNoteLink.action),
+                      onTap: () =>
+                          Navigator.of(context).pop(_MessageAction.linkTodo),
+                    )
+                  else if (!linkedTodo.isSourceEntry)
+                    ListTile(
+                      key: const ValueKey('message_action_link_todo'),
+                      leading: const Icon(Icons.link_rounded),
+                      title: Text(context.t.chat.messageActions.linkOtherTodo),
+                      onTap: () =>
+                          Navigator.of(context).pop(_MessageAction.linkTodo),
                     ),
                   ListTile(
                     key: const ValueKey('message_action_delete'),
@@ -146,8 +196,20 @@ class _ChatPageState extends State<ChatPage> {
     if (!mounted) return;
 
     switch (action) {
+      case _MessageAction.copy:
+        await _copyMessageToClipboard(message);
+        break;
+      case _MessageAction.convertTodo:
+        await _convertMessageToTodo(message);
+        break;
+      case _MessageAction.openTodo:
+        await _openLinkedTodo(linkedTodo?.todo);
+        break;
       case _MessageAction.edit:
         await _editMessage(message);
+        break;
+      case _MessageAction.linkTodo:
+        await _linkMessageToTodo(message);
         break;
       case _MessageAction.delete:
         await _deleteMessage(message);
@@ -155,6 +217,241 @@ class _ChatPageState extends State<ChatPage> {
       case null:
         break;
     }
+  }
+
+  String _displayTextForMessage(Message message) {
+    final raw = message.content;
+    final actions =
+        message.role == 'assistant' ? parseAssistantMessageActions(raw) : null;
+    return (actions?.displayText ?? raw).trim();
+  }
+
+  Future<void> _copyMessageToClipboard(Message message) async {
+    try {
+      await Clipboard.setData(
+        ClipboardData(text: _displayTextForMessage(message)),
+      );
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.t.actions.history.actions.copied)),
+    );
+  }
+
+  Future<void> _pasteIntoChatInput() async {
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = clipboardData?.text;
+    if (text == null || text.isEmpty) return;
+
+    final value = _controller.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    final normalizedStart = start < end ? start : end;
+    final normalizedEnd = start < end ? end : start;
+    _controller.value = value.copyWith(
+      text: value.text.replaceRange(normalizedStart, normalizedEnd, text),
+      selection: TextSelection.collapsed(offset: normalizedStart + text.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  bool _shouldCollapseMessage(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.runes.length >= _kLongMessageRuneThreshold) return true;
+    final lineCount = '\n'.allMatches(trimmed).length + 1;
+    if (lineCount >= _kLongMessageLineThreshold) return true;
+    return false;
+  }
+
+  Widget _buildMessageMarkdown(
+    String content, {
+    required bool isDesktopPlatform,
+  }) {
+    final markdown = MarkdownBody(data: content, selectable: false);
+    if (!isDesktopPlatform) return markdown;
+
+    return SelectionArea(
+      contextMenuBuilder: (context, selectableRegionState) =>
+          const SizedBox.shrink(),
+      child: markdown,
+    );
+  }
+
+  Future<void> _openMessageViewer(String content) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MessageViewerPage(content: content),
+      ),
+    );
+  }
+
+  Future<void> _showMessageContextMenu(
+    Message message,
+    Offset globalPosition,
+  ) async {
+    if (message.id.startsWith('pending_')) return;
+    final canEdit = message.role == 'user';
+    final linkedTodo = await _resolveLinkedTodoInfo(message);
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final action = await showMenu<_MessageAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem<_MessageAction>(
+          key: const ValueKey('message_context_copy'),
+          value: _MessageAction.copy,
+          child: Text(context.t.common.actions.copy),
+        ),
+        if (linkedTodo == null)
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_convert_todo'),
+            value: _MessageAction.convertTodo,
+            child: Text(context.t.chat.messageActions.convertToTodo),
+          )
+        else
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_open_todo'),
+            value: _MessageAction.openTodo,
+            child: Text(context.t.chat.messageActions.openTodo),
+          ),
+        if (canEdit)
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_edit'),
+            value: _MessageAction.edit,
+            child: Text(context.t.common.actions.edit),
+          ),
+        if (linkedTodo == null)
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_link_todo'),
+            value: _MessageAction.linkTodo,
+            child: Text(context.t.actions.todoNoteLink.action),
+          )
+        else if (!linkedTodo.isSourceEntry)
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_link_todo'),
+            value: _MessageAction.linkTodo,
+            child: Text(context.t.chat.messageActions.linkOtherTodo),
+          ),
+        PopupMenuItem<_MessageAction>(
+          key: const ValueKey('message_context_delete'),
+          value: _MessageAction.delete,
+          child: Text(context.t.common.actions.delete),
+        ),
+      ],
+    );
+    if (!mounted) return;
+
+    switch (action) {
+      case _MessageAction.copy:
+        await _copyMessageToClipboard(message);
+        break;
+      case _MessageAction.convertTodo:
+        await _convertMessageToTodo(message);
+        break;
+      case _MessageAction.openTodo:
+        await _openLinkedTodo(linkedTodo?.todo);
+        break;
+      case _MessageAction.edit:
+        await _editMessage(message);
+        break;
+      case _MessageAction.linkTodo:
+        await _linkMessageToTodo(message);
+        break;
+      case _MessageAction.delete:
+        await _deleteMessage(message);
+        break;
+      case null:
+        break;
+    }
+  }
+
+  Future<({Todo todo, bool isSourceEntry})?> _resolveLinkedTodoInfo(
+    Message message,
+  ) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    late final List<Todo> todos;
+    try {
+      todos = await backend.listTodos(sessionKey);
+    } catch (_) {
+      return null;
+    }
+
+    final todosById = <String, Todo>{};
+    for (final todo in todos) {
+      todosById[todo.id] = todo;
+      if (todo.sourceEntryId == message.id) {
+        return (todo: todo, isSourceEntry: true);
+      }
+    }
+
+    try {
+      final activities = await backend.listTodoActivitiesInRange(
+        sessionKey,
+        startAtMsInclusive: 0,
+        endAtMsExclusive: DateTime.now().toUtc().millisecondsSinceEpoch + 1,
+      );
+      for (final activity in activities) {
+        if (activity.sourceMessageId != message.id) continue;
+        final todo = todosById[activity.todoId];
+        if (todo != null) return (todo: todo, isSourceEntry: false);
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    return null;
+  }
+
+  Future<void> _convertMessageToTodo(Message message) async {
+    if (!mounted) return;
+
+    final rawText = _displayTextForMessage(message);
+    final trimmed = rawText.trim();
+    if (trimmed.isEmpty) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final todoId = 'todo:${message.id}';
+
+    try {
+      await backend.upsertTodo(
+        sessionKey,
+        id: todoId,
+        title: trimmed,
+        dueAtMs: null,
+        status: 'open',
+        sourceEntryId: message.id,
+        reviewStage: null,
+        nextReviewAtMs: null,
+        lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted) return;
+    _refresh();
+  }
+
+  Future<void> _openLinkedTodo(Todo? linkedTodo) async {
+    if (linkedTodo == null) return;
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => TodoDetailPage(initialTodo: linkedTodo),
+      ),
+    );
   }
 
   Future<void> _editMessage(Message message) async {
@@ -244,6 +541,7 @@ class _ChatPageState extends State<ChatPage> {
     }
     _askSub?.cancel();
     _controller.dispose();
+    _inputFocusNode.dispose();
     super.dispose();
   }
 
@@ -348,6 +646,93 @@ class _ChatPageState extends State<ChatPage> {
 
   static bool _isSameLocalDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static int _dueBoost(DateTime? dueLocal, DateTime nowLocal) {
+    if (dueLocal == null) return 0;
+    final diffMinutes = dueLocal.difference(nowLocal).inMinutes.abs();
+    if (diffMinutes <= 120) return 1500;
+    if (diffMinutes <= 360) return 800;
+    if (diffMinutes <= 1440) return 200;
+    return 0;
+  }
+
+  static int _semanticBoost(int rank, double distance) {
+    if (!distance.isFinite) return 0;
+    final base = distance <= 0.35
+        ? 2200
+        : distance <= 0.50
+            ? 1400
+            : distance <= 0.70
+                ? 800
+                : 0;
+    if (base == 0) return 0;
+
+    final factor = switch (rank) {
+      0 => 1.0,
+      1 => 0.7,
+      2 => 0.5,
+      3 => 0.4,
+      _ => 0.3,
+    };
+    return (base * factor).round();
+  }
+
+  Future<List<TodoLinkCandidate>> _rankTodoCandidatesWithSemanticMatches(
+    AppBackend backend,
+    Uint8List sessionKey, {
+    required String query,
+    required List<TodoLinkTarget> targets,
+    required DateTime nowLocal,
+    required int limit,
+  }) async {
+    final ranked =
+        rankTodoCandidates(query, targets, nowLocal: nowLocal, limit: limit);
+
+    List<TodoThreadMatch> semantic = const <TodoThreadMatch>[];
+    try {
+      semantic = await backend.searchSimilarTodoThreads(
+        sessionKey,
+        query,
+        topK: limit,
+      );
+    } catch (_) {
+      semantic = const <TodoThreadMatch>[];
+    }
+    if (semantic.isEmpty) return ranked;
+
+    final targetsById = <String, TodoLinkTarget>{};
+    for (final t in targets) {
+      targetsById[t.id] = t;
+    }
+
+    final scoreByTodoId = <String, int>{};
+    for (final c in ranked) {
+      scoreByTodoId[c.target.id] = c.score;
+    }
+
+    for (var i = 0; i < semantic.length && i < limit; i++) {
+      final match = semantic[i];
+      final target = targetsById[match.todoId];
+      if (target == null) continue;
+
+      final boost = _semanticBoost(i, match.distance);
+      if (boost <= 0) continue;
+
+      final existing = scoreByTodoId[target.id];
+      final base = existing ?? _dueBoost(target.dueLocal, nowLocal);
+      scoreByTodoId[target.id] = base + boost;
+    }
+
+    final merged = <TodoLinkCandidate>[];
+    scoreByTodoId.forEach((id, score) {
+      final target = targetsById[id];
+      if (target == null) return;
+      merged.add(TodoLinkCandidate(target: target, score: score));
+    });
+    merged.sort((a, b) => b.score.compareTo(a.score));
+    if (merged.length <= limit) return merged;
+    return merged.sublist(0, limit);
+  }
 
   void _refresh() {
     setState(() {
@@ -510,9 +895,11 @@ class _ChatPageState extends State<ChatPage> {
     if (targets.isEmpty) return;
 
     final intent = inferTodoUpdateIntent(rawText);
-    final ranked = rankTodoCandidates(
-      rawText,
-      targets,
+    final ranked = await _rankTodoCandidatesWithSemanticMatches(
+      backend,
+      sessionKey,
+      query: rawText,
+      targets: targets,
       nowLocal: nowLocal,
       limit: 5,
     );
@@ -523,7 +910,22 @@ class _ChatPageState extends State<ChatPage> {
     final isHighConfidence = top.score >= 3200 ||
         (top.score >= 2400 && (top.score - secondScore) >= 900);
     final shouldPrompt = intent.isExplicit || top.score >= 1600;
-    if (!shouldPrompt) return;
+    if (!shouldPrompt) {
+      final looksLikeLongFormNote =
+          rawText.contains('\n') || rawText.trim().runes.length >= 160;
+      if (looksLikeLongFormNote && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t.actions.todoNoteLink.suggest),
+            action: SnackBarAction(
+              label: context.t.actions.todoNoteLink.actionShort,
+              onPressed: () => unawaited(_linkMessageToTodo(message)),
+            ),
+          ),
+        );
+      }
+      return;
+    }
 
     final selectedTodoId = isHighConfidence
         ? top.target.id
@@ -550,12 +952,25 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     try {
-      await backend.appendTodoNote(
+      final activity = await backend.appendTodoNote(
         sessionKey,
         todoId: selected.id,
         content: rawText.trim(),
         sourceMessageId: message.id,
       );
+      final attachmentsBackend =
+          backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+      if (attachmentsBackend != null) {
+        final attachments = await attachmentsBackend.listMessageAttachments(
+            sessionKey, message.id);
+        for (final attachment in attachments) {
+          await backend.linkAttachmentToTodoActivity(
+            sessionKey,
+            activityId: activity.id,
+            attachmentSha256: attachment.sha256,
+          );
+        }
+      }
     } catch (_) {
       // ignore
     }
@@ -587,6 +1002,156 @@ class _ChatPageState extends State<ChatPage> {
           },
         ),
       ),
+    );
+  }
+
+  Future<void> _linkMessageToTodo(Message message) async {
+    if (!mounted) return;
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    late final List<Todo> todos;
+    try {
+      todos = await backend.listTodos(sessionKey);
+    } catch (_) {
+      return;
+    }
+
+    final nowLocal = DateTime.now();
+    final targets = <TodoLinkTarget>[];
+    final todosById = <String, Todo>{};
+    for (final todo in todos) {
+      if (todo.status == 'dismissed') continue;
+      todosById[todo.id] = todo;
+      final dueMs = todo.dueAtMs;
+      targets.add(
+        TodoLinkTarget(
+          id: todo.id,
+          title: todo.title,
+          status: todo.status,
+          dueLocal: dueMs == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true)
+                  .toLocal(),
+        ),
+      );
+    }
+    if (targets.isEmpty) return;
+
+    final ranked = await _rankTodoCandidatesWithSemanticMatches(
+      backend,
+      sessionKey,
+      query: message.content,
+      targets: targets,
+      nowLocal: nowLocal,
+      limit: 10,
+    );
+    final selectedTodoId = await _showTodoNoteLinkSheet(
+      allTargets: targets,
+      ranked: ranked,
+    );
+    if (selectedTodoId == null || !mounted) return;
+
+    final selected = todosById[selectedTodoId];
+    if (selected == null) return;
+
+    late final TodoActivity activity;
+    try {
+      activity = await backend.appendTodoNote(
+        sessionKey,
+        todoId: selected.id,
+        content: message.content.trim(),
+        sourceMessageId: message.id,
+      );
+    } catch (_) {
+      return;
+    }
+
+    final attachmentsBackend =
+        backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+    if (attachmentsBackend != null) {
+      try {
+        final attachments = await attachmentsBackend.listMessageAttachments(
+            sessionKey, message.id);
+        for (final attachment in attachments) {
+          await backend.linkAttachmentToTodoActivity(
+            sessionKey,
+            activityId: activity.id,
+            attachmentSha256: attachment.sha256,
+          );
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    if (!mounted) return;
+    _refresh();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content:
+            Text(context.t.actions.todoNoteLink.linked(title: selected.title)),
+      ),
+    );
+  }
+
+  Future<String?> _showTodoNoteLinkSheet({
+    required List<TodoLinkTarget> allTargets,
+    required List<TodoLinkCandidate> ranked,
+  }) async {
+    final seen = <String>{};
+    final candidates = <TodoLinkCandidate>[];
+    for (final c in ranked) {
+      candidates.add(c);
+      seen.add(c.target.id);
+    }
+    for (final t in allTargets) {
+      if (seen.contains(t.id)) continue;
+      candidates.add(TodoLinkCandidate(target: t, score: 0));
+    }
+
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SlSurface(
+              key: const ValueKey('todo_note_link_sheet'),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t.actions.todoNoteLink.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(context.t.actions.todoNoteLink.subtitle),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: candidates.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final c = candidates[index];
+                        return ListTile(
+                          title: Text(c.target.title),
+                          subtitle:
+                              Text(_todoStatusLabel(context, c.target.status)),
+                          onTap: () => Navigator.of(context).pop(c.target.id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1320,6 +1885,10 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = SlTokens.of(context);
+    final isDesktopPlatform = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
     final title = widget.conversation.id == 'main_stream'
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
@@ -1503,6 +2072,10 @@ class _ChatPageState extends State<ChatPage> {
                             assistantActions?.suggestions?.suggestions ??
                                 const <ActionSuggestion>[];
 
+                        final shouldCollapse = !isPending &&
+                            _shouldCollapseMessage(displayText) &&
+                            actionSuggestions.isEmpty;
+
                         final hoverMenuSlot = _hoverActionsEnabled && !isPending
                             ? Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -1553,122 +2126,216 @@ class _ChatPageState extends State<ChatPage> {
                             : const SizedBox.shrink();
 
                         final bubble = ConstrainedBox(
+                          key: ValueKey('message_bubble_${stableMsg.id}'),
                           constraints: const BoxConstraints(maxWidth: 560),
                           child: Material(
                             color: bubbleColor,
                             shape: bubbleShape,
-                            child: InkWell(
-                              onLongPress: () => _showMessageActions(stableMsg),
-                              borderRadius: BorderRadius.circular(18),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(displayText),
-                                    if (actionSuggestions.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8),
-                                        child: Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: [
-                                            for (var i = 0;
-                                                i < actionSuggestions.length;
-                                                i++)
-                                              SlButton(
-                                                variant:
-                                                    SlButtonVariant.outline,
-                                                onPressed: () =>
-                                                    _handleAssistantSuggestion(
-                                                  stableMsg,
-                                                  actionSuggestions[i],
-                                                  i,
-                                                ),
-                                                icon: Icon(
-                                                  actionSuggestions[i].type ==
-                                                          'event'
-                                                      ? Icons.event_rounded
-                                                      : Icons
-                                                          .check_circle_outline_rounded,
-                                                  size: 18,
-                                                ),
-                                                child: Text(
-                                                  actionSuggestions[i]
-                                                              .whenText
-                                                              ?.trim()
-                                                              .isNotEmpty ==
-                                                          true
-                                                      ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
-                                                      : actionSuggestions[i]
-                                                          .title,
-                                                ),
-                                              ),
-                                          ],
+                            child: Listener(
+                              onPointerDown: isPending
+                                  ? null
+                                  : (event) {
+                                      final kind = event.kind;
+                                      final isPointerKind = kind ==
+                                              PointerDeviceKind.mouse ||
+                                          kind == PointerDeviceKind.trackpad;
+                                      if (!isPointerKind) return;
+                                      if (event.buttons &
+                                              kSecondaryMouseButton ==
+                                          0) {
+                                        return;
+                                      }
+                                      unawaited(
+                                        _showMessageContextMenu(
+                                          stableMsg,
+                                          event.position,
                                         ),
-                                      ),
-                                    if (supportsAttachments)
-                                      FutureBuilder(
-                                        future: _attachmentsFuturesByMessageId
-                                            .putIfAbsent(
-                                          stableMsg.id,
-                                          () => attachmentsBackend
-                                              .listMessageAttachments(
-                                            sessionKey,
-                                            stableMsg.id,
-                                          ),
-                                        ),
-                                        builder: (context, snapshot) {
-                                          final items = snapshot.data ??
-                                              const <Attachment>[];
-                                          if (items.isEmpty) {
-                                            return const SizedBox.shrink();
-                                          }
-
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 8,
-                                            ),
-                                            child: SingleChildScrollView(
-                                              scrollDirection: Axis.horizontal,
-                                              child: Row(
-                                                children: [
-                                                  for (final attachment
-                                                      in items)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                        right: 8,
-                                                      ),
-                                                      child: AttachmentCard(
-                                                        attachment: attachment,
-                                                        onTap: () {
-                                                          Navigator.of(context)
-                                                              .push(
-                                                            MaterialPageRoute(
-                                                              builder:
-                                                                  (context) {
-                                                                return AttachmentViewerPage(
-                                                                  attachment:
-                                                                      attachment,
-                                                                );
-                                                              },
-                                                            ),
-                                                          );
-                                                        },
+                                      );
+                                    },
+                              child: InkWell(
+                                onTap: shouldCollapse
+                                    ? () => unawaited(
+                                          _openMessageViewer(displayText),
+                                        )
+                                    : null,
+                                onLongPress: isDesktopPlatform
+                                    ? null
+                                    : () => _showMessageActions(stableMsg),
+                                borderRadius: BorderRadius.circular(18),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (shouldCollapse)
+                                        SizedBox(
+                                          height: _kCollapsedMessageHeight,
+                                          child: ClipRect(
+                                            child: Stack(
+                                              children: [
+                                                SingleChildScrollView(
+                                                  physics:
+                                                      const NeverScrollableScrollPhysics(),
+                                                  child: _buildMessageMarkdown(
+                                                    displayText,
+                                                    isDesktopPlatform:
+                                                        isDesktopPlatform,
+                                                  ),
+                                                ),
+                                                Positioned(
+                                                  left: 0,
+                                                  right: 0,
+                                                  bottom: 0,
+                                                  height: 32,
+                                                  child: DecoratedBox(
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(
+                                                        begin:
+                                                            Alignment.topCenter,
+                                                        end: Alignment
+                                                            .bottomCenter,
+                                                        colors: [
+                                                          bubbleColor
+                                                              .withOpacity(0),
+                                                          bubbleColor,
+                                                        ],
                                                       ),
                                                     ),
-                                                ],
-                                              ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          );
-                                        },
-                                      ),
-                                  ],
+                                          ),
+                                        )
+                                      else
+                                        _buildMessageMarkdown(
+                                          displayText,
+                                          isDesktopPlatform: isDesktopPlatform,
+                                        ),
+                                      if (shouldCollapse)
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: TextButton(
+                                            key: ValueKey(
+                                              'message_view_full_${stableMsg.id}',
+                                            ),
+                                            onPressed: () => unawaited(
+                                              _openMessageViewer(displayText),
+                                            ),
+                                            child:
+                                                Text(context.t.chat.viewFull),
+                                          ),
+                                        ),
+                                      if (actionSuggestions.isNotEmpty)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 8),
+                                          child: Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children: [
+                                              for (var i = 0;
+                                                  i < actionSuggestions.length;
+                                                  i++)
+                                                SlButton(
+                                                  variant:
+                                                      SlButtonVariant.outline,
+                                                  onPressed: () =>
+                                                      _handleAssistantSuggestion(
+                                                    stableMsg,
+                                                    actionSuggestions[i],
+                                                    i,
+                                                  ),
+                                                  icon: Icon(
+                                                    actionSuggestions[i].type ==
+                                                            'event'
+                                                        ? Icons.event_rounded
+                                                        : Icons
+                                                            .check_circle_outline_rounded,
+                                                    size: 18,
+                                                  ),
+                                                  child: Text(
+                                                    actionSuggestions[i]
+                                                                .whenText
+                                                                ?.trim()
+                                                                .isNotEmpty ==
+                                                            true
+                                                        ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
+                                                        : actionSuggestions[i]
+                                                            .title,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      if (supportsAttachments)
+                                        FutureBuilder(
+                                          future: _attachmentsFuturesByMessageId
+                                              .putIfAbsent(
+                                            stableMsg.id,
+                                            () => attachmentsBackend
+                                                .listMessageAttachments(
+                                              sessionKey,
+                                              stableMsg.id,
+                                            ),
+                                          ),
+                                          builder: (context, snapshot) {
+                                            final items = snapshot.data ??
+                                                const <Attachment>[];
+                                            if (items.isEmpty) {
+                                              return const SizedBox.shrink();
+                                            }
+
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 8,
+                                              ),
+                                              child: SingleChildScrollView(
+                                                scrollDirection:
+                                                    Axis.horizontal,
+                                                child: Row(
+                                                  children: [
+                                                    for (final attachment
+                                                        in items)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(
+                                                          right: 8,
+                                                        ),
+                                                        child: AttachmentCard(
+                                                          attachment:
+                                                              attachment,
+                                                          onTap: () {
+                                                            Navigator.of(
+                                                                    context)
+                                                                .push(
+                                                              MaterialPageRoute(
+                                                                builder:
+                                                                    (context) {
+                                                                  return AttachmentViewerPage(
+                                                                    attachment:
+                                                                        attachment,
+                                                                  );
+                                                                },
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -1702,7 +2369,7 @@ class _ChatPageState extends State<ChatPage> {
                                   : MainAxisAlignment.start,
                               children: [
                                 if (isUser) hoverMenuSlot,
-                                bubble,
+                                Flexible(child: bubble),
                                 if (!isUser) hoverMenuSlot,
                               ],
                             ),
@@ -1746,15 +2413,173 @@ class _ChatPageState extends State<ChatPage> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              key: const ValueKey('chat_input'),
-                              controller: _controller,
-                              decoration: InputDecoration(
-                                hintText: context.t.common.fields.message,
-                                border: InputBorder.none,
-                                filled: false,
+                            child: Focus(
+                              // ignore: deprecated_member_use
+                              onKey: (node, event) {
+                                // ignore: deprecated_member_use
+                                if (event is! RawKeyDownEvent) {
+                                  return KeyEventResult.ignored;
+                                }
+
+                                final key = event.logicalKey;
+                                final composing = _controller.value.composing;
+                                final isComposing =
+                                    composing.isValid && !composing.isCollapsed;
+
+                                // ignore: deprecated_member_use
+                                final metaPressed = event.isMetaPressed;
+                                // ignore: deprecated_member_use
+                                final controlPressed = event.isControlPressed;
+                                // ignore: deprecated_member_use
+                                final shiftPressed = event.isShiftPressed;
+
+                                final isPaste =
+                                    key == LogicalKeyboardKey.paste ||
+                                        (key == LogicalKeyboardKey.keyV &&
+                                            (metaPressed || controlPressed));
+                                if (isPaste) {
+                                  unawaited(_pasteIntoChatInput());
+                                  return KeyEventResult.handled;
+                                }
+
+                                final isSelectAll =
+                                    key == LogicalKeyboardKey.keyA &&
+                                        (metaPressed || controlPressed);
+                                if (isSelectAll) {
+                                  final textLength =
+                                      _controller.value.text.length;
+                                  _controller.selection = TextSelection(
+                                    baseOffset: 0,
+                                    extentOffset: textLength,
+                                  );
+                                  return KeyEventResult.handled;
+                                }
+
+                                final isCopy =
+                                    (key == LogicalKeyboardKey.copy ||
+                                            key == LogicalKeyboardKey.keyC) &&
+                                        (metaPressed || controlPressed);
+                                if (isCopy) {
+                                  final value = _controller.value;
+                                  final selection = value.selection;
+                                  if (selection.isValid &&
+                                      !selection.isCollapsed) {
+                                    final start = selection.start;
+                                    final end = selection.end;
+                                    final normalizedStart =
+                                        start < end ? start : end;
+                                    final normalizedEnd =
+                                        start < end ? end : start;
+                                    final selectedText = value.text.substring(
+                                      normalizedStart,
+                                      normalizedEnd,
+                                    );
+                                    unawaited(
+                                      Clipboard.setData(
+                                        ClipboardData(text: selectedText),
+                                      ),
+                                    );
+                                  }
+                                  return KeyEventResult.handled;
+                                }
+
+                                final isCut = (key == LogicalKeyboardKey.cut ||
+                                        key == LogicalKeyboardKey.keyX) &&
+                                    (metaPressed || controlPressed);
+                                if (isCut) {
+                                  final value = _controller.value;
+                                  final selection = value.selection;
+                                  if (selection.isValid &&
+                                      !selection.isCollapsed) {
+                                    final start = selection.start;
+                                    final end = selection.end;
+                                    final normalizedStart =
+                                        start < end ? start : end;
+                                    final normalizedEnd =
+                                        start < end ? end : start;
+                                    final selectedText = value.text.substring(
+                                      normalizedStart,
+                                      normalizedEnd,
+                                    );
+                                    unawaited(
+                                      Clipboard.setData(
+                                        ClipboardData(text: selectedText),
+                                      ),
+                                    );
+                                    final updatedText = value.text.replaceRange(
+                                      normalizedStart,
+                                      normalizedEnd,
+                                      '',
+                                    );
+                                    _controller.value = value.copyWith(
+                                      text: updatedText,
+                                      selection: TextSelection.collapsed(
+                                        offset: normalizedStart,
+                                      ),
+                                      composing: TextRange.empty,
+                                    );
+                                  }
+                                  return KeyEventResult.handled;
+                                }
+
+                                if (key != LogicalKeyboardKey.enter &&
+                                    key != LogicalKeyboardKey.numpadEnter) {
+                                  return KeyEventResult.ignored;
+                                }
+
+                                if (event.repeat) {
+                                  return KeyEventResult.handled;
+                                }
+
+                                if (isComposing) {
+                                  return KeyEventResult.ignored;
+                                }
+
+                                if (shiftPressed) {
+                                  final value = _controller.value;
+                                  final selection = value.selection;
+                                  final start = selection.isValid
+                                      ? selection.start
+                                      : value.text.length;
+                                  final end = selection.isValid
+                                      ? selection.end
+                                      : value.text.length;
+                                  final normalizedStart =
+                                      start < end ? start : end;
+                                  final normalizedEnd =
+                                      start < end ? end : start;
+                                  final updatedText = value.text.replaceRange(
+                                    normalizedStart,
+                                    normalizedEnd,
+                                    '\n',
+                                  );
+                                  _controller.value = value.copyWith(
+                                    text: updatedText,
+                                    selection: TextSelection.collapsed(
+                                      offset: normalizedStart + 1,
+                                    ),
+                                    composing: TextRange.empty,
+                                  );
+                                  return KeyEventResult.handled;
+                                }
+
+                                unawaited(_send());
+                                return KeyEventResult.handled;
+                              },
+                              child: TextField(
+                                key: const ValueKey('chat_input'),
+                                focusNode: _inputFocusNode,
+                                controller: _controller,
+                                decoration: InputDecoration(
+                                  hintText: context.t.common.fields.message,
+                                  border: InputBorder.none,
+                                  filled: false,
+                                ),
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                minLines: 1,
+                                maxLines: 6,
                               ),
-                              onSubmitted: (_) => _send(),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1824,7 +2649,11 @@ final class _TodoAgendaSummary {
 }
 
 enum _MessageAction {
+  copy,
+  convertTodo,
+  openTodo,
   edit,
+  linkTodo,
   delete,
 }
 

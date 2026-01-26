@@ -23,9 +23,14 @@ class LocalTimeResolution {
 }
 
 class LocalTimeResolver {
-  static final RegExp _isoDate = RegExp(r'\b(\d{4})-(\d{2})-(\d{2})\b');
+  static final RegExp _isoDate = RegExp(
+    r'\b(\d{4})\s*[-‐‑–—−－]\s*(\d{1,2})\s*[-‐‑–—−－]\s*(\d{1,2})\b',
+  );
   static final RegExp _slashDate =
-      RegExp(r'\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b');
+      RegExp(r'\b(\d{1,2})\s*[\/／]\s*(\d{1,2})(?:\s*[\/／]\s*(\d{2,4}))?\b');
+  static final RegExp _cjkMonthDay = RegExp(
+    r'(?<!\d)(\d{1,2})\s*(?:月|월)\s*(\d{1,2})\s*(?:日|号|號|일)(?!\d)',
+  );
   static final RegExp _time24h = RegExp(r'\b([01]?\d|2[0-3]):([0-5]\d)\b');
   static final RegExp _timeAmPm =
       RegExp(r'\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b', caseSensitive: false);
@@ -439,7 +444,10 @@ class LocalTimeResolver {
       final year = int.tryParse(isoMatch.group(1)!);
       final month = int.tryParse(isoMatch.group(2)!);
       final day = int.tryParse(isoMatch.group(3)!);
-      if (year != null && month != null && day != null) {
+      if (year != null &&
+          month != null &&
+          day != null &&
+          _isValidDate(year, month, day)) {
         final due = timeOfDay == null
             ? DateTime(year, month, day, dayEnd.hour, dayEnd.minute)
             : DateTime(year, month, day, timeOfDay.hour, timeOfDay.minute);
@@ -464,27 +472,70 @@ class LocalTimeResolver {
       final month = int.tryParse(slashMatch.group(1)!);
       final day = int.tryParse(slashMatch.group(2)!);
       final yearRaw = slashMatch.group(3);
-      final year = yearRaw == null
-          ? nowLocal.year
-          : (yearRaw.length == 2
-              ? 2000 + int.parse(yearRaw)
-              : int.parse(yearRaw));
       if (month != null && day != null) {
-        final due = timeOfDay == null
-            ? DateTime(year, month, day, dayEnd.hour, dayEnd.minute)
-            : DateTime(year, month, day, timeOfDay.hour, timeOfDay.minute);
-        return LocalTimeResolution(
-          kind: 'date',
-          matchedText: slashMatch.group(0)!,
-          candidates: [
-            DueCandidate(
-              dueAtLocal: due,
-              label: timeOfDay == null
-                  ? _formatDateLabel(due, locale)
-                  : _formatDateTimeLabel(due, locale),
-            ),
-          ],
-        );
+        final year = yearRaw == null
+            ? null
+            : (yearRaw.length == 2
+                ? 2000 + int.parse(yearRaw)
+                : int.parse(yearRaw));
+        final resolvedYear =
+            year ?? _resolveYearForMonthDay(nowLocal, month, day);
+        if (_isValidDate(resolvedYear, month, day)) {
+          final due = timeOfDay == null
+              ? DateTime(
+                  resolvedYear,
+                  month,
+                  day,
+                  dayEnd.hour,
+                  dayEnd.minute,
+                )
+              : DateTime(
+                  resolvedYear,
+                  month,
+                  day,
+                  timeOfDay.hour,
+                  timeOfDay.minute,
+                );
+          return LocalTimeResolution(
+            kind: 'date',
+            matchedText: slashMatch.group(0)!,
+            candidates: [
+              DueCandidate(
+                dueAtLocal: due,
+                label: timeOfDay == null
+                    ? _formatDateLabel(due, locale)
+                    : _formatDateTimeLabel(due, locale),
+              ),
+            ],
+          );
+        }
+      }
+    }
+
+    // 3) CJK month/day: 3月1号 / 3 月 1 号 / 3월 1일
+    final cjkMatch = _cjkMonthDay.firstMatch(normalized);
+    if (cjkMatch != null) {
+      final month = int.tryParse(cjkMatch.group(1)!);
+      final day = int.tryParse(cjkMatch.group(2)!);
+      if (month != null && day != null) {
+        final year = _resolveYearForMonthDay(nowLocal, month, day);
+        if (_isValidDate(year, month, day)) {
+          final due = timeOfDay == null
+              ? DateTime(year, month, day, dayEnd.hour, dayEnd.minute)
+              : DateTime(year, month, day, timeOfDay.hour, timeOfDay.minute);
+          return LocalTimeResolution(
+            kind: 'date',
+            matchedText: cjkMatch.group(0)!,
+            candidates: [
+              DueCandidate(
+                dueAtLocal: due,
+                label: timeOfDay == null
+                    ? _formatDateLabel(due, locale)
+                    : _formatDateTimeLabel(due, locale),
+              ),
+            ],
+          );
+        }
       }
     }
 
@@ -812,6 +863,20 @@ class LocalTimeResolver {
     }
 
     return null;
+  }
+
+  static bool _isValidDate(int year, int month, int day) {
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    final dt = DateTime(year, month, day);
+    return dt.year == year && dt.month == month && dt.day == day;
+  }
+
+  static int _resolveYearForMonthDay(DateTime nowLocal, int month, int day) {
+    final today = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+    final candidate = DateTime(nowLocal.year, month, day);
+    if (candidate.isBefore(today)) return nowLocal.year + 1;
+    return nowLocal.year;
   }
 
   static DateTime _nextWeekdayOnOrAfter(DateTime nowLocal, int weekday) {

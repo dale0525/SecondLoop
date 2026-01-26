@@ -78,6 +78,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('todo_agenda_banner')));
     await tester.pumpAndSettle();
 
+    expect(
+        find.byKey(const ValueKey('todo_agenda_preview_list')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_todo:today')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_todo:overdue')),
+      findsOneWidget,
+    );
+
     expect(find.text('分析对标账户的直播内容'), findsOneWidget);
     expect(find.text('买狗狗的口粮'), findsOneWidget);
 
@@ -86,6 +97,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('todo_agenda_page')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('todo_agenda_item_todo:today')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_agenda_item_todo:overdue')),
+      findsOneWidget,
+    );
     expect(find.text('分析对标账户的直播内容'), findsOneWidget);
     expect(find.text('买狗狗的口粮'), findsOneWidget);
   });

@@ -60,6 +60,11 @@ struct PullOp {
     ciphertext_b64: String,
 }
 
+#[derive(Debug, Serialize)]
+struct ClearDeviceRequest<'a> {
+    device_id: &'a str,
+}
+
 fn scope_id(base_url: &str, vault_id: &str) -> String {
     let raw = format!("managed_vault|{}|{}", base_url.trim(), vault_id.trim());
     B64_URL.encode(raw.as_bytes())
@@ -295,4 +300,36 @@ pub fn pull(
 
     update_since_map(conn, &scope_id, &parsed.next)?;
     Ok(applied)
+}
+
+pub fn clear_vault(base_url: &str, vault_id: &str, id_token: &str) -> Result<()> {
+    let http = client()?;
+    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:clear"))?;
+    let resp = http.post(endpoint).bearer_auth(id_token).send()?;
+
+    let status = resp.status();
+    let text = resp.text().unwrap_or_default();
+    if !status.is_success() {
+        return Err(anyhow!("managed-vault clear failed: HTTP {status} {text}"));
+    }
+    Ok(())
+}
+
+pub fn clear_device(base_url: &str, vault_id: &str, id_token: &str, device_id: &str) -> Result<()> {
+    let http = client()?;
+    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:clear_device"))?;
+    let resp = http
+        .post(endpoint)
+        .bearer_auth(id_token)
+        .json(&ClearDeviceRequest { device_id })
+        .send()?;
+
+    let status = resp.status();
+    let text = resp.text().unwrap_or_default();
+    if !status.is_success() {
+        return Err(anyhow!(
+            "managed-vault clear-device failed: HTTP {status} {text}"
+        ));
+    }
+    Ok(())
 }

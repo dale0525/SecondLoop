@@ -7,120 +7,85 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Chat input uses SlSurface container', (tester) async {
-    final backend = _Backend();
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: const ChatPage(
-                conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
-                  createdAtMs: 0,
-                  updatedAtMs: 0,
-                ),
-              ),
+  testWidgets('Long press message -> link to todo appends note',
+      (tester) async {
+    final backend = _Backend(
+      messages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello',
+          createdAtMs: 0,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task A',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_link_todo')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_note_link_sheet')), findsOneWidget);
+    await tester.tap(find.text('Task A'));
+    await tester.pumpAndSettle();
+
+    expect(backend.noteLinks, [
+      (todoId: 't1', content: 'hello', sourceMessageId: 'm1'),
+    ]);
+  });
+}
+
+Widget _wrapChat({required AppBackend backend}) {
+  return wrapWithI18n(
+    MaterialApp(
+      home: AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: const ChatPage(
+            conversation: Conversation(
+              id: 'main_stream',
+              title: 'Main Stream',
+              createdAtMs: 0,
+              updatedAtMs: 0,
             ),
           ),
         ),
       ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
-    final input =
-        tester.widget<TextField>(find.byKey(const ValueKey('chat_input')));
-    expect(input.keyboardType, TextInputType.multiline);
-    expect(input.textInputAction, TextInputAction.newline);
-    expect(input.minLines, 1);
-    expect(input.maxLines, 6);
-    expect(find.byKey(const ValueKey('chat_input_ring')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_input_ring')),
-        matching: find.byKey(const ValueKey('chat_input')),
-      ),
-      findsOneWidget,
-    );
-
-    expect(find.byKey(const ValueKey('chat_filter_menu')), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(const ValueKey('chat_filter_menu'))),
-      const Size(40, 40),
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_filter_menu')),
-        matching: find.byIcon(Icons.filter_alt_rounded),
-      ),
-      findsOneWidget,
-    );
-
-    expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_send')),
-        matching: find.byIcon(Icons.send_rounded),
-      ),
-      findsOneWidget,
-    );
-    final sendButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('chat_send')),
-    );
-    expect(sendButton.style, isNotNull);
-    expect(sendButton.style!.minimumSize, isNotNull);
-    final sendMinimumSize =
-        sendButton.style!.minimumSize!.resolve(const <MaterialState>{});
-    expect(sendMinimumSize, isNotNull);
-    expect(
-      sendMinimumSize!.height,
-      44,
-    );
-
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_ask_ai')),
-        matching: find.byIcon(Icons.auto_awesome_rounded),
-      ),
-      findsOneWidget,
-    );
-    final askButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('chat_ask_ai')),
-    );
-    expect(askButton.style, isNotNull);
-    expect(askButton.style!.minimumSize, isNotNull);
-    final askMinimumSize =
-        askButton.style!.minimumSize!.resolve(const <MaterialState>{});
-    expect(askMinimumSize, isNotNull);
-    expect(
-      askMinimumSize!.height,
-      44,
-    );
-
-    expect(find.byType(SlSurface), findsWidgets);
-    expect(
-      find.byWidgetPredicate((widget) {
-        if (widget is! DecoratedBox) return false;
-        final decoration = widget.decoration;
-        return decoration is BoxDecoration && decoration.gradient != null;
-      }),
-      findsNothing,
-    );
-  });
+    ),
+  );
 }
 
 final class _Backend extends AppBackend {
+  _Backend({required List<Message> messages, required List<Todo> todos})
+      : _messages = List<Message>.from(messages),
+        _todos = List<Todo>.from(todos);
+
+  final List<Message> _messages;
+  final List<Todo> _todos;
+
+  final List<({String todoId, String content, String sourceMessageId})>
+      noteLinks = [];
+
   @override
   Future<void> init() async {}
 
@@ -154,21 +119,22 @@ final class _Backend extends AppBackend {
       Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
-  Future<List<Conversation>> listConversations(Uint8List key) async =>
-      const <Conversation>[];
+  Future<List<Conversation>> listConversations(Uint8List key) async => const [];
 
   @override
-  Future<Conversation> createConversation(Uint8List key, String title) =>
+  Future<Conversation> createConversation(Uint8List key, String title) async =>
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override
   Future<List<Message>> listMessages(
-          Uint8List key, String conversationId) async =>
-      const <Message>[];
+    Uint8List key,
+    String conversationId,
+  ) async =>
+      List<Message>.from(_messages);
 
   @override
   Future<Message> insertMessage(
@@ -176,24 +142,64 @@ final class _Backend extends AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) =>
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();
 
   @override
   Future<void> setMessageDeleted(
-          Uint8List key, String messageId, bool isDeleted) =>
+    Uint8List key,
+    String messageId,
+    bool isDeleted,
+  ) async =>
       throw UnimplementedError();
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<int> processPendingMessageEmbeddings(Uint8List key,
-          {int limit = 32}) async =>
+  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+
+  @override
+  Future<TodoActivity> appendTodoNote(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+    String? sourceMessageId,
+  }) async {
+    noteLinks.add(
+      (
+        todoId: todoId,
+        content: content,
+        sourceMessageId: sourceMessageId ?? '',
+      ),
+    );
+    return TodoActivity(
+      id: 'activity_1',
+      todoId: todoId,
+      activityType: 'note',
+      content: content,
+      sourceMessageId: sourceMessageId,
+      createdAtMs: 0,
+    );
+  }
+
+  @override
+  Future<void> linkAttachmentToTodoActivity(
+    Uint8List key, {
+    required String activityId,
+    required String attachmentSha256,
+  }) async {}
+
+  @override
+  Future<int> processPendingMessageEmbeddings(
+    Uint8List key, {
+    int limit = 32,
+  }) async =>
       0;
 
   @override
@@ -205,8 +211,10 @@ final class _Backend extends AppBackend {
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key,
-          {int batchLimit = 256}) async =>
+  Future<int> rebuildMessageEmbeddings(
+    Uint8List key, {
+    int batchLimit = 256,
+  }) async =>
       0;
 
   @override
@@ -214,8 +222,7 @@ final class _Backend extends AppBackend {
       const <String>[];
 
   @override
-  Future<String> getActiveEmbeddingModelName(Uint8List key) =>
-      Future<String>.value('');
+  Future<String> getActiveEmbeddingModelName(Uint8List key) async => '';
 
   @override
   Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
@@ -234,7 +241,7 @@ final class _Backend extends AppBackend {
     String? apiKey,
     required String modelName,
     bool setActive = true,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -254,19 +261,6 @@ final class _Backend extends AppBackend {
       const Stream<String>.empty();
 
   @override
-  Stream<String> askAiStreamCloudGateway(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
-  }) =>
-      const Stream<String>.empty();
-
-  @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
       Uint8List.fromList(List<int>.filled(32, 2));
 
@@ -276,7 +270,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -285,7 +279,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -296,7 +290,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -307,21 +301,21 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
   Future<void> syncLocaldirTestConnection({
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
   Future<void> syncLocaldirClearRemoteRoot({
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -330,7 +324,7 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -339,6 +333,6 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 }
