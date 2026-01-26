@@ -30,6 +30,7 @@ jobs:
           filters: |
             flutter:
               - ".fvm/fvm_config.json"
+              - ".githooks/**"
               - "analysis_options.yaml"
               - "pubspec.yaml"
               - "pubspec.lock"
@@ -45,6 +46,7 @@ jobs:
               - "macos/**"
               - "windows/**"
             rust:
+              - ".githooks/**"
               - "rust/**"
 
   flutter:
@@ -65,21 +67,9 @@ jobs:
       - name: Pub get
         if: needs.changes.outputs.flutter == 'true'
         run: flutter pub get
-      - name: Format check
+      - name: Pre-commit hook (format + analyze)
         if: needs.changes.outputs.flutter == 'true'
-        run: |
-          dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed || {
-            echo ""
-            echo "Formatting required."
-            echo "Fix locally with:"
-            echo "  dart format lib test rust_builder integration_test test_driver"
-            echo "Or (recommended):"
-            echo "  pixi run fmt"
-            exit 1
-          }
-      - name: Analyze
-        if: needs.changes.outputs.flutter == 'true'
-        run: flutter analyze
+        run: bash .githooks/pre-commit --check --flutter
       - name: Test
         if: needs.changes.outputs.flutter == 'true'
         run: flutter test
@@ -98,9 +88,9 @@ jobs:
         with:
           toolchain: "1.85.1"
           components: rustfmt, clippy
-      - name: Rust fmt
+      - name: Pre-commit hook (rustfmt)
         if: needs.changes.outputs.rust == 'true'
-        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+        run: bash .githooks/pre-commit --check --rust
       - name: Rust clippy
         if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings

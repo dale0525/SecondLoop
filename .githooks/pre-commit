@@ -6,12 +6,106 @@ die() {
   exit 1
 }
 
+check_mode=0
+scope_flutter=0
+scope_rust=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check) check_mode=1 ;;
+    --flutter) scope_flutter=1 ;;
+    --rust) scope_rust=1 ;;
+    -h | --help)
+      cat <<'EOF'
+Usage: .githooks/pre-commit [--check] [--flutter] [--rust]
+
+Default (no flags): git pre-commit hook mode (format staged files + analyze).
+
+--check    CI-friendly mode: verify formatting/analyze without modifying files.
+--flutter  Limit --check to Dart format + flutter analyze.
+--rust     Limit --check to rustfmt.
+EOF
+      exit 0
+      ;;
+    *) die "Unknown argument: $1" ;;
+  esac
+  shift
+done
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "${repo_root}" ]]; then
   exit 0
 fi
 
 cd "${repo_root}"
+
+if (( check_mode )); then
+  if (( scope_flutter == 0 && scope_rust == 0 )); then
+    scope_flutter=1
+    scope_rust=1
+  fi
+
+  dart_bin=""
+  flutter_bin=""
+  if (( scope_flutter )); then
+    if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+      dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
+    elif command -v dart >/dev/null 2>&1; then
+      dart_bin="$(command -v dart)"
+    else
+      die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
+    fi
+
+    if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+      flutter_bin="${repo_root}/.fvm/flutter_sdk/bin/flutter"
+    elif command -v flutter >/dev/null 2>&1; then
+      flutter_bin="$(command -v flutter)"
+    else
+      die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
+    fi
+  fi
+
+  cargo_bin=""
+  if (( scope_rust )); then
+    if [[ -x "${repo_root}/.tool/cargo/bin/cargo" ]]; then
+      cargo_bin="${repo_root}/.tool/cargo/bin/cargo"
+    elif command -v cargo >/dev/null 2>&1; then
+      cargo_bin="$(command -v cargo)"
+    else
+      die "Missing 'cargo'. Install Rust (recommended: \`pixi run setup-rustup\`) or add cargo to PATH."
+    fi
+  fi
+
+  if (( scope_flutter )); then
+    if ! "${dart_bin}" format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed; then
+      echo "" >&2
+      echo "pre-commit: Formatting required." >&2
+      echo "Fix locally with:" >&2
+      echo "  dart format lib test rust_builder integration_test test_driver" >&2
+      echo "Or (recommended):" >&2
+      echo "  pixi run fmt" >&2
+      exit 1
+    fi
+
+    if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" analyze; then
+      echo "" >&2
+      echo "pre-commit: flutter analyze failed." >&2
+      echo "Fix locally with: pixi run analyze" >&2
+      exit 1
+    fi
+  fi
+
+  if (( scope_rust )); then
+    if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
+      echo "" >&2
+      echo "pre-commit: rustfmt failed." >&2
+      echo "Fix locally with: pixi run rust-fmt-fix" >&2
+      exit 1
+    fi
+  fi
+
+  exit 0
+fi
 
 staged_files=()
 while IFS= read -r file; do
