@@ -24,7 +24,12 @@ if [[ ! -f ".githooks/pre-commit" ]]; then
   die "Missing .githooks/pre-commit"
 fi
 
+if [[ ! -f ".githooks/pre-push" ]]; then
+  die "Missing .githooks/pre-push"
+fi
+
 git config core.hooksPath .githooks
 chmod +x .githooks/pre-commit
+chmod +x .githooks/pre-push
 
 echo "install-git-hooks: configured core.hooksPath=.githooks"

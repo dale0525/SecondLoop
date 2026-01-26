@@ -67,12 +67,9 @@ jobs:
       - name: Pub get
         if: needs.changes.outputs.flutter == 'true'
         run: flutter pub get
-      - name: Pre-commit hook (format + analyze)
+      - name: Pre-commit hook (format + analyze + test)
         if: needs.changes.outputs.flutter == 'true'
-        run: bash .githooks/pre-commit --check --flutter
-      - name: Test
-        if: needs.changes.outputs.flutter == 'true'
-        run: flutter test
+        run: bash .githooks/pre-commit --check --ci --flutter
 
   rust:
     needs: changes
@@ -88,12 +85,6 @@ jobs:
         with:
           toolchain: "1.85.1"
           components: rustfmt, clippy
-      - name: Pre-commit hook (rustfmt)
+      - name: Pre-commit hook (rustfmt + clippy + test)
         if: needs.changes.outputs.rust == 'true'
-        run: bash .githooks/pre-commit --check --rust
-      - name: Rust clippy
-        if: needs.changes.outputs.rust == 'true'
-        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
-      - name: Rust test
-        if: needs.changes.outputs.rust == 'true'
-        run: cargo test --manifest-path rust/Cargo.toml --all
+        run: bash .githooks/pre-commit --check --ci --rust

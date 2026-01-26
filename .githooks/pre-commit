@@ -9,21 +9,24 @@ die() {
 check_mode=0
 scope_flutter=0
 scope_rust=0
+ci_mode=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) check_mode=1 ;;
     --flutter) scope_flutter=1 ;;
     --rust) scope_rust=1 ;;
+    --ci) ci_mode=1 ;;
     -h | --help)
       cat <<'EOF'
-Usage: .githooks/pre-commit [--check] [--flutter] [--rust]
+Usage: .githooks/pre-commit [--check] [--flutter] [--rust] [--ci]
 
 Default (no flags): git pre-commit hook mode (format staged files + analyze).
 
 --check    CI-friendly mode: verify formatting/analyze without modifying files.
 --flutter  Limit --check to Dart format + flutter analyze.
 --rust     Limit --check to rustfmt.
+--ci       In --check mode, also run tests/clippy to match CI.
 EOF
       exit 0
       ;;
@@ -93,6 +96,15 @@ if (( check_mode )); then
       echo "Fix locally with: pixi run analyze" >&2
       exit 1
     fi
+
+    if (( ci_mode )); then
+      if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" test; then
+        echo "" >&2
+        echo "pre-commit: flutter test failed." >&2
+        echo "Fix locally with: pixi run test" >&2
+        exit 1
+      fi
+    fi
   fi
 
   if (( scope_rust )); then
@@ -101,6 +113,22 @@ if (( check_mode )); then
       echo "pre-commit: rustfmt failed." >&2
       echo "Fix locally with: pixi run rust-fmt-fix" >&2
       exit 1
+    fi
+
+    if (( ci_mode )); then
+      if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
+        echo "" >&2
+        echo "pre-commit: rust clippy failed." >&2
+        echo "Fix locally with: pixi run rust-clippy" >&2
+        exit 1
+      fi
+
+      if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
+        echo "" >&2
+        echo "pre-commit: rust tests failed." >&2
+        echo "Fix locally with: pixi run rust-test" >&2
+        exit 1
+      fi
     fi
   fi
 
