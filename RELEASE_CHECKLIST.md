@@ -79,6 +79,14 @@ Actions 将构建并发布：
 - macOS：`dmg`
 - Windows：`zip`
 
+### Windows SmartScreen（已知行为）
+
+未签名的 Windows 构建产物（尤其是 `.exe` / 解压后的可执行文件）在首次分发时很可能触发 SmartScreen 的“未知发布者/可能有风险”提示。
+
+后续计划（建议）：
+- 申请代码签名证书（优先考虑 EV Code Signing，可更快建立信誉）
+- 在 CI 中对 Windows 产物签名（并在发布说明里明确校验 SHA256）
+
 ## 3) 回滚
 
 - 回滚到上一个已知可用的 tag（或新建 tag 指向旧 commit）

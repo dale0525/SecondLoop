@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 568 (284 per locale)
+/// Strings: 602 (301 per locale)
 ///
-/// Built on 2026-01-25 at 14:34 UTC
+/// Built on 2026-01-26 at 08:59 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -292,6 +292,10 @@ class _StringsSettingsEn {
       _StringsSettingsCloudAccountEn._(_root);
   late final _StringsSettingsCloudUsageEn cloudUsage =
       _StringsSettingsCloudUsageEn._(_root);
+  late final _StringsSettingsDiagnosticsEn diagnostics =
+      _StringsSettingsDiagnosticsEn._(_root);
+  late final _StringsSettingsByokUsageEn byokUsage =
+      _StringsSettingsByokUsageEn._(_root);
   late final _StringsSettingsSubscriptionEn subscription =
       _StringsSettingsSubscriptionEn._(_root);
   late final _StringsSettingsSyncEn sync = _StringsSettingsSyncEn._(_root);
@@ -494,6 +498,7 @@ class _StringsCommonActionsEn {
   String get delete => 'Delete';
   String get undo => 'Undo';
   String get refresh => 'Refresh';
+  String get share => 'Share';
   String get search => 'Search';
   String get useModel => 'Use model';
   String get processPending => 'Process pending';
@@ -782,6 +787,42 @@ class _StringsSettingsCloudUsageEn {
       _StringsSettingsCloudUsageActionsEn._(_root);
   late final _StringsSettingsCloudUsageLabelsEn labels =
       _StringsSettingsCloudUsageLabelsEn._(_root);
+}
+
+// Path: settings.diagnostics
+class _StringsSettingsDiagnosticsEn {
+  _StringsSettingsDiagnosticsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Diagnostics';
+  String get subtitle => 'Export a diagnostics bundle for support';
+  String get privacyNote =>
+      'This bundle intentionally excludes plaintext notes and API keys.';
+  String get loading => 'Loading diagnostics…';
+  late final _StringsSettingsDiagnosticsMessagesEn messages =
+      _StringsSettingsDiagnosticsMessagesEn._(_root);
+}
+
+// Path: settings.byokUsage
+class _StringsSettingsByokUsageEn {
+  _StringsSettingsByokUsageEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'BYOK usage';
+  String get subtitle =>
+      'Active profile only • requests + tokens (if provided)';
+  String get loading => 'Loading…';
+  String get noData => 'No data';
+  late final _StringsSettingsByokUsageErrorsEn errors =
+      _StringsSettingsByokUsageErrorsEn._(_root);
+  late final _StringsSettingsByokUsageSectionsEn sections =
+      _StringsSettingsByokUsageSectionsEn._(_root);
+  late final _StringsSettingsByokUsageLabelsEn labels =
+      _StringsSettingsByokUsageLabelsEn._(_root);
 }
 
 // Path: settings.subscription
@@ -1238,6 +1279,54 @@ class _StringsSettingsCloudUsageLabelsEn {
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
+// Path: settings.diagnostics.messages
+class _StringsSettingsDiagnosticsMessagesEn {
+  _StringsSettingsDiagnosticsMessagesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get copied => 'Diagnostics copied to clipboard';
+  String copyFailed({required Object error}) =>
+      'Failed to copy diagnostics: ${error}';
+  String shareFailed({required Object error}) =>
+      'Failed to share diagnostics: ${error}';
+}
+
+// Path: settings.byokUsage.errors
+class _StringsSettingsByokUsageErrorsEn {
+  _StringsSettingsByokUsageErrorsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String unavailable({required Object error}) => 'Usage unavailable: ${error}';
+}
+
+// Path: settings.byokUsage.sections
+class _StringsSettingsByokUsageSectionsEn {
+  _StringsSettingsByokUsageSectionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String today({required Object day}) => 'Today (${day})';
+  String last30d({required Object start, required Object end}) =>
+      'Last 30 days (${start} → ${end})';
+}
+
+// Path: settings.byokUsage.labels
+class _StringsSettingsByokUsageLabelsEn {
+  _StringsSettingsByokUsageLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String requests({required Object purpose}) => '${purpose} requests';
+  String tokens({required Object purpose}) =>
+      '${purpose} tokens (in/out/total)';
+}
+
 // Path: settings.subscription.status
 class _StringsSettingsSubscriptionStatusEn {
   _StringsSettingsSubscriptionStatusEn._(this._root);
@@ -1649,6 +1738,12 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsCloudUsageZhCn cloudUsage =
       _StringsSettingsCloudUsageZhCn._(_root);
   @override
+  late final _StringsSettingsDiagnosticsZhCn diagnostics =
+      _StringsSettingsDiagnosticsZhCn._(_root);
+  @override
+  late final _StringsSettingsByokUsageZhCn byokUsage =
+      _StringsSettingsByokUsageZhCn._(_root);
+  @override
   late final _StringsSettingsSubscriptionZhCn subscription =
       _StringsSettingsSubscriptionZhCn._(_root);
   @override
@@ -1962,6 +2057,8 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   String get undo => '撤销';
   @override
   String get refresh => '刷新';
+  @override
+  String get share => '分享';
   @override
   String get search => '搜索';
   @override
@@ -2400,6 +2497,58 @@ class _StringsSettingsCloudUsageZhCn extends _StringsSettingsCloudUsageEn {
   @override
   late final _StringsSettingsCloudUsageLabelsZhCn labels =
       _StringsSettingsCloudUsageLabelsZhCn._(_root);
+}
+
+// Path: settings.diagnostics
+class _StringsSettingsDiagnosticsZhCn extends _StringsSettingsDiagnosticsEn {
+  _StringsSettingsDiagnosticsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '诊断信息';
+  @override
+  String get subtitle => '导出诊断包用于排查';
+  @override
+  String get privacyNote => '此诊断包会排除明文记录与 API Key。';
+  @override
+  String get loading => '正在加载诊断信息…';
+  @override
+  late final _StringsSettingsDiagnosticsMessagesZhCn messages =
+      _StringsSettingsDiagnosticsMessagesZhCn._(_root);
+}
+
+// Path: settings.byokUsage
+class _StringsSettingsByokUsageZhCn extends _StringsSettingsByokUsageEn {
+  _StringsSettingsByokUsageZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'BYOK 用量';
+  @override
+  String get subtitle => '仅统计当前激活的 profile • 请求数 + tokens（若上游返回）';
+  @override
+  String get loading => '加载中…';
+  @override
+  String get noData => '暂无数据';
+  @override
+  late final _StringsSettingsByokUsageErrorsZhCn errors =
+      _StringsSettingsByokUsageErrorsZhCn._(_root);
+  @override
+  late final _StringsSettingsByokUsageSectionsZhCn sections =
+      _StringsSettingsByokUsageSectionsZhCn._(_root);
+  @override
+  late final _StringsSettingsByokUsageLabelsZhCn labels =
+      _StringsSettingsByokUsageLabelsZhCn._(_root);
 }
 
 // Path: settings.subscription
@@ -3088,6 +3237,75 @@ class _StringsSettingsCloudUsageLabelsZhCn
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
 
+// Path: settings.diagnostics.messages
+class _StringsSettingsDiagnosticsMessagesZhCn
+    extends _StringsSettingsDiagnosticsMessagesEn {
+  _StringsSettingsDiagnosticsMessagesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get copied => '诊断信息已复制';
+  @override
+  String copyFailed({required Object error}) => '复制诊断信息失败：${error}';
+  @override
+  String shareFailed({required Object error}) => '分享诊断信息失败：${error}';
+}
+
+// Path: settings.byokUsage.errors
+class _StringsSettingsByokUsageErrorsZhCn
+    extends _StringsSettingsByokUsageErrorsEn {
+  _StringsSettingsByokUsageErrorsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String unavailable({required Object error}) => '用量不可用：${error}';
+}
+
+// Path: settings.byokUsage.sections
+class _StringsSettingsByokUsageSectionsZhCn
+    extends _StringsSettingsByokUsageSectionsEn {
+  _StringsSettingsByokUsageSectionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String today({required Object day}) => '今日（${day}）';
+  @override
+  String last30d({required Object start, required Object end}) =>
+      '近 30 天（${start} → ${end}）';
+}
+
+// Path: settings.byokUsage.labels
+class _StringsSettingsByokUsageLabelsZhCn
+    extends _StringsSettingsByokUsageLabelsEn {
+  _StringsSettingsByokUsageLabelsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String requests({required Object purpose}) => '${purpose} 请求数';
+  @override
+  String tokens({required Object purpose}) => '${purpose} tokens（输入/输出/总计）';
+}
+
 // Path: settings.subscription.status
 class _StringsSettingsSubscriptionStatusZhCn
     extends _StringsSettingsSubscriptionStatusEn {
@@ -3436,6 +3654,8 @@ extension on Translations {
         return 'Undo';
       case 'common.actions.refresh':
         return 'Refresh';
+      case 'common.actions.share':
+        return 'Share';
       case 'common.actions.search':
         return 'Search';
       case 'common.actions.useModel':
@@ -3703,6 +3923,42 @@ extension on Translations {
         return 'Resets on:';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
+      case 'settings.diagnostics.title':
+        return 'Diagnostics';
+      case 'settings.diagnostics.subtitle':
+        return 'Export a diagnostics bundle for support';
+      case 'settings.diagnostics.privacyNote':
+        return 'This bundle intentionally excludes plaintext notes and API keys.';
+      case 'settings.diagnostics.loading':
+        return 'Loading diagnostics…';
+      case 'settings.diagnostics.messages.copied':
+        return 'Diagnostics copied to clipboard';
+      case 'settings.diagnostics.messages.copyFailed':
+        return ({required Object error}) =>
+            'Failed to copy diagnostics: ${error}';
+      case 'settings.diagnostics.messages.shareFailed':
+        return ({required Object error}) =>
+            'Failed to share diagnostics: ${error}';
+      case 'settings.byokUsage.title':
+        return 'BYOK usage';
+      case 'settings.byokUsage.subtitle':
+        return 'Active profile only • requests + tokens (if provided)';
+      case 'settings.byokUsage.loading':
+        return 'Loading…';
+      case 'settings.byokUsage.noData':
+        return 'No data';
+      case 'settings.byokUsage.errors.unavailable':
+        return ({required Object error}) => 'Usage unavailable: ${error}';
+      case 'settings.byokUsage.sections.today':
+        return ({required Object day}) => 'Today (${day})';
+      case 'settings.byokUsage.sections.last30d':
+        return ({required Object start, required Object end}) =>
+            'Last 30 days (${start} → ${end})';
+      case 'settings.byokUsage.labels.requests':
+        return ({required Object purpose}) => '${purpose} requests';
+      case 'settings.byokUsage.labels.tokens':
+        return ({required Object purpose}) =>
+            '${purpose} tokens (in/out/total)';
       case 'settings.subscription.title':
         return 'Subscription';
       case 'settings.subscription.subtitle':
@@ -4025,6 +4281,8 @@ extension on _StringsZhCn {
         return '撤销';
       case 'common.actions.refresh':
         return '刷新';
+      case 'common.actions.share':
+        return '分享';
       case 'common.actions.search':
         return '搜索';
       case 'common.actions.useModel':
@@ -4291,6 +4549,39 @@ extension on _StringsZhCn {
         return '重置时间：';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
+      case 'settings.diagnostics.title':
+        return '诊断信息';
+      case 'settings.diagnostics.subtitle':
+        return '导出诊断包用于排查';
+      case 'settings.diagnostics.privacyNote':
+        return '此诊断包会排除明文记录与 API Key。';
+      case 'settings.diagnostics.loading':
+        return '正在加载诊断信息…';
+      case 'settings.diagnostics.messages.copied':
+        return '诊断信息已复制';
+      case 'settings.diagnostics.messages.copyFailed':
+        return ({required Object error}) => '复制诊断信息失败：${error}';
+      case 'settings.diagnostics.messages.shareFailed':
+        return ({required Object error}) => '分享诊断信息失败：${error}';
+      case 'settings.byokUsage.title':
+        return 'BYOK 用量';
+      case 'settings.byokUsage.subtitle':
+        return '仅统计当前激活的 profile • 请求数 + tokens（若上游返回）';
+      case 'settings.byokUsage.loading':
+        return '加载中…';
+      case 'settings.byokUsage.noData':
+        return '暂无数据';
+      case 'settings.byokUsage.errors.unavailable':
+        return ({required Object error}) => '用量不可用：${error}';
+      case 'settings.byokUsage.sections.today':
+        return ({required Object day}) => '今日（${day}）';
+      case 'settings.byokUsage.sections.last30d':
+        return ({required Object start, required Object end}) =>
+            '近 30 天（${start} → ${end}）';
+      case 'settings.byokUsage.labels.requests':
+        return ({required Object purpose}) => '${purpose} 请求数';
+      case 'settings.byokUsage.labels.tokens':
+        return ({required Object purpose}) => '${purpose} tokens（输入/输出/总计）';
       case 'settings.subscription.title':
         return '订阅';
       case 'settings.subscription.subtitle':

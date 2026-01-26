@@ -50,6 +50,21 @@ Future<List<Message>> dbListMessages(
     RustLib.instance.api.crateApiCoreDbListMessages(
         appDir: appDir, key: key, conversationId: conversationId);
 
+Future<List<Message>> dbListMessagesPage(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        PlatformInt64? beforeCreatedAtMs,
+        String? beforeId,
+        required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListMessagesPage(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        beforeCreatedAtMs: beforeCreatedAtMs,
+        beforeId: beforeId,
+        limit: limit);
+
 Future<Message> dbInsertMessage(
         {required String appDir,
         required List<int> key,
@@ -331,20 +346,54 @@ Future<bool> dbSetActiveEmbeddingModelName(
     RustLib.instance.api.crateApiCoreDbSetActiveEmbeddingModelName(
         appDir: appDir, key: key, modelName: modelName);
 
+Future<void> dbRecordLlmUsageDaily(
+        {required String appDir,
+        required List<int> key,
+        required String day,
+        required String profileId,
+        required String purpose,
+        PlatformInt64? inputTokens,
+        PlatformInt64? outputTokens,
+        PlatformInt64? totalTokens}) =>
+    RustLib.instance.api.crateApiCoreDbRecordLlmUsageDaily(
+        appDir: appDir,
+        key: key,
+        day: day,
+        profileId: profileId,
+        purpose: purpose,
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+        totalTokens: totalTokens);
+
+Future<List<LlmUsageAggregate>> dbSumLlmUsageDailyByPurpose(
+        {required String appDir,
+        required List<int> key,
+        required String profileId,
+        required String startDay,
+        required String endDay}) =>
+    RustLib.instance.api.crateApiCoreDbSumLlmUsageDailyByPurpose(
+        appDir: appDir,
+        key: key,
+        profileId: profileId,
+        startDay: startDay,
+        endDay: endDay);
+
 Stream<String> ragAskAiStream(
         {required String appDir,
         required List<int> key,
         required String conversationId,
         required String question,
         required int topK,
-        required bool thisThreadOnly}) =>
+        required bool thisThreadOnly,
+        required String localDay}) =>
     RustLib.instance.api.crateApiCoreRagAskAiStream(
         appDir: appDir,
         key: key,
         conversationId: conversationId,
         question: question,
         topK: topK,
-        thisThreadOnly: thisThreadOnly);
+        thisThreadOnly: thisThreadOnly,
+        localDay: localDay);
 
 Stream<String> ragAskAiStreamCloudGateway(
         {required String appDir,

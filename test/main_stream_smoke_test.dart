@@ -101,6 +101,7 @@ final class _AutoUnlockedBackend extends AppBackend {
       role: role,
       content: content,
       createdAtMs: 0,
+      isMemory: true,
     );
     _messages.add(message);
     return message;
@@ -118,6 +119,7 @@ final class _AutoUnlockedBackend extends AppBackend {
         role: msg.role,
         content: content,
         createdAtMs: msg.createdAtMs,
+        isMemory: msg.isMemory,
       );
       return;
     }

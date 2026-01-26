@@ -104,6 +104,7 @@ class FakeBackend extends AppBackend {
         role: role,
         content: content,
         createdAtMs: 0,
+        isMemory: true,
       );
 
   @override

@@ -21,6 +21,7 @@
       "delete": "Delete",
       "undo": "Undo",
       "refresh": "Refresh",
+      "share": "Share",
       "search": "Search",
       "useModel": "Use model",
       "processPending": "Process pending",
@@ -234,6 +235,34 @@
         "requestsUsed30d": "Requests (30d):",
         "resetAt": "Resets on:",
         "loadFailed": "Failed to load: $error"
+      }
+    },
+    "diagnostics": {
+      "title": "Diagnostics",
+      "subtitle": "Export a diagnostics bundle for support",
+      "privacyNote": "This bundle intentionally excludes plaintext notes and API keys.",
+      "loading": "Loading diagnostics…",
+      "messages": {
+        "copied": "Diagnostics copied to clipboard",
+        "copyFailed": "Failed to copy diagnostics: $error",
+        "shareFailed": "Failed to share diagnostics: $error"
+      }
+    },
+    "byokUsage": {
+      "title": "BYOK usage",
+      "subtitle": "Active profile only • requests + tokens (if provided)",
+      "loading": "Loading…",
+      "noData": "No data",
+      "errors": {
+        "unavailable": "Usage unavailable: $error"
+      },
+      "sections": {
+        "today": "Today ($day)",
+        "last30d": "Last 30 days ($start → $end)"
+      },
+      "labels": {
+        "requests": "$purpose requests",
+        "tokens": "$purpose tokens (in/out/total)"
       }
     },
     "subscription": {

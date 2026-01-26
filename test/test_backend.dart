@@ -1,91 +1,17 @@
+import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
-import 'test_i18n.dart';
+class TestAppBackend extends AppBackend {
+  TestAppBackend({List<Message>? initialMessages})
+      : _messagesByConversation = <String, List<Message>>{
+          'main_stream':
+              List<Message>.from(initialMessages ?? const <Message>[])
+        };
 
-void main() {
-  testWidgets('Long press message -> link to todo appends note',
-      (tester) async {
-    final backend = _Backend(
-      messages: const [
-        Message(
-          id: 'm1',
-          conversationId: 'main_stream',
-          role: 'user',
-          content: 'hello',
-          createdAtMs: 0,
-          isMemory: true,
-        ),
-      ],
-      todos: const [
-        Todo(
-          id: 't1',
-          title: 'Task A',
-          status: 'open',
-          createdAtMs: 0,
-          updatedAtMs: 0,
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(_wrapChat(backend: backend));
-    await tester.pumpAndSettle();
-
-    await tester.longPress(find.text('hello'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('message_action_link_todo')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('todo_note_link_sheet')), findsOneWidget);
-    await tester.tap(find.text('Task A'));
-    await tester.pumpAndSettle();
-
-    expect(backend.noteLinks, [
-      (todoId: 't1', content: 'hello', sourceMessageId: 'm1'),
-    ]);
-  });
-}
-
-Widget _wrapChat({required AppBackend backend}) {
-  return wrapWithI18n(
-    MaterialApp(
-      home: AppBackendScope(
-        backend: backend,
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: const ChatPage(
-            conversation: Conversation(
-              id: 'main_stream',
-              title: 'Main Stream',
-              createdAtMs: 0,
-              updatedAtMs: 0,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-final class _Backend extends AppBackend {
-  _Backend({required List<Message> messages, required List<Todo> todos})
-      : _messages = List<Message>.from(messages),
-        _todos = List<Todo>.from(todos);
-
-  final List<Message> _messages;
-  final List<Todo> _todos;
-
-  final List<({String todoId, String content, String sourceMessageId})>
-      noteLinks = [];
+  final Map<String, List<Message>> _messagesByConversation;
 
   @override
   Future<void> init() async {}
@@ -94,7 +20,7 @@ final class _Backend extends AppBackend {
   Future<bool> isMasterPasswordSet() async => true;
 
   @override
-  Future<bool> readAutoUnlockEnabled() async => true;
+  Future<bool> readAutoUnlockEnabled() async => false;
 
   @override
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
@@ -120,7 +46,15 @@ final class _Backend extends AppBackend {
       Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
-  Future<List<Conversation>> listConversations(Uint8List key) async => const [];
+  Future<List<Conversation>> listConversations(Uint8List key) async =>
+      const <Conversation>[
+        Conversation(
+          id: 'main_stream',
+          title: 'Main Stream',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
@@ -128,14 +62,17 @@ final class _Backend extends AppBackend {
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      throw UnimplementedError();
+      const Conversation(
+        id: 'main_stream',
+        title: 'Main Stream',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      );
 
   @override
   Future<List<Message>> listMessages(
-    Uint8List key,
-    String conversationId,
-  ) async =>
-      List<Message>.from(_messages);
+          Uint8List key, String conversationId) async =>
+      List<Message>.from(_messagesByConversation[conversationId] ?? const []);
 
   @override
   Future<Message> insertMessage(
@@ -143,58 +80,55 @@ final class _Backend extends AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) async =>
-      throw UnimplementedError();
+  }) async {
+    final list = _messagesByConversation.putIfAbsent(conversationId, () => []);
+    final id = 'm${list.length + 1}';
+    final message = Message(
+      id: id,
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      createdAtMs: list.length + 1,
+      isMemory: true,
+    );
+    list.add(message);
+    return message;
+  }
 
   @override
   Future<void> editMessage(
-          Uint8List key, String messageId, String content) async =>
-      throw UnimplementedError();
+      Uint8List key, String messageId, String content) async {
+    for (final entry in _messagesByConversation.entries) {
+      final list = entry.value;
+      for (var i = 0; i < list.length; i++) {
+        final msg = list[i];
+        if (msg.id != messageId) continue;
+        list[i] = Message(
+          id: msg.id,
+          conversationId: msg.conversationId,
+          role: msg.role,
+          content: content,
+          createdAtMs: msg.createdAtMs,
+          isMemory: msg.isMemory,
+        );
+        return;
+      }
+    }
+  }
 
   @override
   Future<void> setMessageDeleted(
-    Uint8List key,
-    String messageId,
-    bool isDeleted,
-  ) async =>
-      throw UnimplementedError();
+      Uint8List key, String messageId, bool isDeleted) async {
+    for (final list in _messagesByConversation.values) {
+      list.removeWhere((msg) => msg.id == messageId);
+    }
+  }
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
-  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
-
-  @override
-  Future<TodoActivity> appendTodoNote(
-    Uint8List key, {
-    required String todoId,
-    required String content,
-    String? sourceMessageId,
-  }) async {
-    noteLinks.add(
-      (
-        todoId: todoId,
-        content: content,
-        sourceMessageId: sourceMessageId ?? '',
-      ),
-    );
-    return TodoActivity(
-      id: 'activity_1',
-      todoId: todoId,
-      activityType: 'note',
-      content: content,
-      sourceMessageId: sourceMessageId,
-      createdAtMs: 0,
-    );
-  }
-
-  @override
-  Future<void> linkAttachmentToTodoActivity(
-    Uint8List key, {
-    required String activityId,
-    required String attachmentSha256,
-  }) async {}
+  Future<List<Todo>> listTodos(Uint8List key) async => const <Todo>[];
 
   @override
   Future<int> processPendingMessageEmbeddings(
@@ -220,18 +154,30 @@ final class _Backend extends AppBackend {
 
   @override
   Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
-      const <String>[];
+      const <String>['secondloop-default-embed-v0'];
 
   @override
-  Future<String> getActiveEmbeddingModelName(Uint8List key) async => '';
+  Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
+      'secondloop-default-embed-v0';
 
   @override
   Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
-      Future<bool>.value(false);
+      Future<bool>.value(modelName != 'secondloop-default-embed-v0');
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -263,7 +209,7 @@ final class _Backend extends AppBackend {
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 2));
+      Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<void> syncWebdavTestConnection({
@@ -271,8 +217,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) async =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<void> syncWebdavClearRemoteRoot({
@@ -280,8 +225,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) async =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<int> syncWebdavPush(
@@ -292,7 +236,7 @@ final class _Backend extends AppBackend {
     String? password,
     required String remoteRoot,
   }) async =>
-      throw UnimplementedError();
+      0;
 
   @override
   Future<int> syncWebdavPull(
@@ -303,21 +247,19 @@ final class _Backend extends AppBackend {
     String? password,
     required String remoteRoot,
   }) async =>
-      throw UnimplementedError();
+      0;
 
   @override
   Future<void> syncLocaldirTestConnection({
     required String localDir,
     required String remoteRoot,
-  }) async =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<void> syncLocaldirClearRemoteRoot({
     required String localDir,
     required String remoteRoot,
-  }) async =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<int> syncLocaldirPush(
@@ -326,7 +268,7 @@ final class _Backend extends AppBackend {
     required String localDir,
     required String remoteRoot,
   }) async =>
-      throw UnimplementedError();
+      0;
 
   @override
   Future<int> syncLocaldirPull(
@@ -335,5 +277,5 @@ final class _Backend extends AppBackend {
     required String localDir,
     required String remoteRoot,
   }) async =>
-      throw UnimplementedError();
+      0;
 }

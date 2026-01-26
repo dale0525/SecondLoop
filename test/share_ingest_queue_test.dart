@@ -137,6 +137,7 @@ final class _ShareBackend extends AppBackend implements AttachmentsBackend {
       role: role,
       content: content,
       createdAtMs: 0,
+      isMemory: true,
     );
   }
 

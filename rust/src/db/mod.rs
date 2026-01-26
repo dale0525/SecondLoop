@@ -29,6 +29,7 @@ pub struct Message {
     pub role: String,
     pub content: String,
     pub created_at_ms: i64,
+    pub is_memory: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -41,6 +42,16 @@ pub struct SimilarMessage {
 pub struct SimilarTodoThread {
     pub todo_id: String,
     pub distance: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct LlmUsageAggregate {
+    pub purpose: String,
+    pub requests: i64,
+    pub requests_with_usage: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub total_tokens: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -640,6 +651,32 @@ CREATE VIRTUAL TABLE IF NOT EXISTS todo_activity_embeddings USING vec0(
 PRAGMA user_version = 12;
 "#,
         )?;
+        user_version = 12;
+    }
+
+    if user_version < 13 {
+        // v13: local LLM usage metering for BYOK.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS llm_usage_daily (
+  day TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  purpose TEXT NOT NULL,
+  requests INTEGER NOT NULL DEFAULT 0,
+  requests_with_usage INTEGER NOT NULL DEFAULT 0,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (day, profile_id, purpose),
+  FOREIGN KEY(profile_id) REFERENCES llm_profiles(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_daily_profile_day
+  ON llm_usage_daily(profile_id, day);
+PRAGMA user_version = 13;
+"#,
+        )?;
     }
 
     Ok(())
@@ -896,6 +933,7 @@ fn insert_message_with_is_memory(
         role: role.to_string(),
         content: content.to_string(),
         created_at_ms: now,
+        is_memory,
     })
 }
 
@@ -1182,7 +1220,7 @@ pub fn delete_llm_profile(conn: &Connection, profile_id: &str) -> Result<()> {
 pub fn load_active_llm_profile_config(
     conn: &Connection,
     key: &[u8; 32],
-) -> Result<Option<LlmProfileConfig>> {
+) -> Result<Option<(String, LlmProfileConfig)>> {
     let row = conn
         .query_row(
             r#"SELECT id, provider_type, base_url, api_key, model_name
@@ -1219,12 +1257,92 @@ pub fn load_active_llm_profile_config(
         None => None,
     };
 
-    Ok(Some(LlmProfileConfig {
-        provider_type,
-        base_url,
-        api_key,
-        model_name,
-    }))
+    Ok(Some((
+        id,
+        LlmProfileConfig {
+            provider_type,
+            base_url,
+            api_key,
+            model_name,
+        },
+    )))
+}
+
+pub fn record_llm_usage_daily(
+    conn: &Connection,
+    day: &str,
+    profile_id: &str,
+    purpose: &str,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    total_tokens: Option<i64>,
+) -> Result<()> {
+    let now = now_ms();
+
+    let has_usage = input_tokens.is_some() && output_tokens.is_some() && total_tokens.is_some();
+    let requests_with_usage = if has_usage { 1 } else { 0 };
+
+    conn.execute(
+        r#"INSERT INTO llm_usage_daily
+           (day, profile_id, purpose, requests, requests_with_usage, input_tokens, output_tokens, total_tokens, created_at_ms, updated_at_ms)
+           VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?8)
+           ON CONFLICT(day, profile_id, purpose) DO UPDATE SET
+             requests = llm_usage_daily.requests + excluded.requests,
+             requests_with_usage = llm_usage_daily.requests_with_usage + excluded.requests_with_usage,
+             input_tokens = llm_usage_daily.input_tokens + excluded.input_tokens,
+             output_tokens = llm_usage_daily.output_tokens + excluded.output_tokens,
+             total_tokens = llm_usage_daily.total_tokens + excluded.total_tokens,
+             updated_at_ms = excluded.updated_at_ms"#,
+        params![
+            day,
+            profile_id,
+            purpose,
+            requests_with_usage,
+            input_tokens.unwrap_or(0),
+            output_tokens.unwrap_or(0),
+            total_tokens.unwrap_or(0),
+            now
+        ],
+    )?;
+
+    Ok(())
+}
+
+pub fn sum_llm_usage_daily_by_purpose(
+    conn: &Connection,
+    profile_id: &str,
+    start_day: &str,
+    end_day: &str,
+) -> Result<Vec<LlmUsageAggregate>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT purpose,
+                  COALESCE(SUM(requests), 0),
+                  COALESCE(SUM(requests_with_usage), 0),
+                  COALESCE(SUM(input_tokens), 0),
+                  COALESCE(SUM(output_tokens), 0),
+                  COALESCE(SUM(total_tokens), 0)
+           FROM llm_usage_daily
+           WHERE profile_id = ?1
+             AND day >= ?2
+             AND day <= ?3
+           GROUP BY purpose
+           ORDER BY purpose ASC"#,
+    )?;
+
+    let mut rows = stmt.query(params![profile_id, start_day, end_day])?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next()? {
+        out.push(LlmUsageAggregate {
+            purpose: row.get(0)?,
+            requests: row.get(1)?,
+            requests_with_usage: row.get(2)?,
+            input_tokens: row.get(3)?,
+            output_tokens: row.get(4)?,
+            total_tokens: row.get(5)?,
+        });
+    }
+
+    Ok(out)
 }
 
 fn default_embedding_model_name_for_platform() -> &'static str {
@@ -2250,7 +2368,7 @@ pub fn list_messages(
     conversation_id: &str,
 ) -> Result<Vec<Message>> {
     let mut stmt = conn.prepare(
-        r#"SELECT id, role, content, created_at
+        r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1)
            FROM messages
            WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
            ORDER BY created_at ASC"#,
@@ -2263,6 +2381,7 @@ pub fn list_messages(
         let role: String = row.get(1)?;
         let content_blob: Vec<u8> = row.get(2)?;
         let created_at_ms: i64 = row.get(3)?;
+        let is_memory_i64: i64 = row.get(4)?;
 
         let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
         let content = String::from_utf8(content_bytes)
@@ -2274,6 +2393,71 @@ pub fn list_messages(
             role,
             content,
             created_at_ms,
+            is_memory: is_memory_i64 != 0,
+        });
+    }
+
+    Ok(result)
+}
+
+pub fn list_messages_page(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    before_created_at_ms: Option<i64>,
+    before_id: Option<&str>,
+    limit: i64,
+) -> Result<Vec<Message>> {
+    let limit = limit.max(1).min(500);
+
+    let mut stmt = match (before_created_at_ms, before_id) {
+        (None, None) => conn.prepare(
+            r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1)
+               FROM messages
+               WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?2"#,
+        )?,
+        (Some(_), Some(_)) => conn.prepare(
+            r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1)
+               FROM messages
+               WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
+                 AND (created_at < ?2 OR (created_at = ?2 AND id < ?3))
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?4"#,
+        )?,
+        (Some(_), None) | (None, Some(_)) => {
+            return Err(anyhow!(
+                "invalid cursor: both before_created_at_ms and before_id required"
+            ))
+        }
+    };
+
+    let mut rows = match (before_created_at_ms, before_id) {
+        (None, None) => stmt.query(params![conversation_id, limit])?,
+        (Some(ts), Some(id)) => stmt.query(params![conversation_id, ts, id, limit])?,
+        _ => unreachable!(),
+    };
+
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let role: String = row.get(1)?;
+        let content_blob: Vec<u8> = row.get(2)?;
+        let created_at_ms: i64 = row.get(3)?;
+        let is_memory_i64: i64 = row.get(4)?;
+
+        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+        result.push(Message {
+            id,
+            conversation_id: conversation_id.to_string(),
+            role,
+            content,
+            created_at_ms,
+            is_memory: is_memory_i64 != 0,
         });
     }
 
@@ -2281,11 +2465,27 @@ pub fn list_messages(
 }
 
 fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Message> {
-    let (conversation_id, role, content_blob, created_at_ms): (String, String, Vec<u8>, i64) = conn
+    let (conversation_id, role, content_blob, created_at_ms, is_memory_i64): (
+        String,
+        String,
+        Vec<u8>,
+        i64,
+        i64,
+    ) = conn
         .query_row(
-            r#"SELECT conversation_id, role, content, created_at FROM messages WHERE id = ?1"#,
+            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
+               FROM messages
+               WHERE id = ?1"#,
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
         )
         .map_err(|e| anyhow!("get message failed: {e}"))?;
 
@@ -2299,6 +2499,7 @@ fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Mess
         role,
         content,
         created_at_ms,
+        is_memory: is_memory_i64 != 0,
     })
 }
 
@@ -2342,6 +2543,7 @@ fn get_message_by_id_with_is_memory(
             role,
             content,
             created_at_ms,
+            is_memory: is_memory_i64 != 0,
         },
         is_memory_i64 != 0,
     ))
@@ -2675,6 +2877,7 @@ fn search_similar_messages_lite(
                 role,
                 content,
                 created_at_ms,
+                is_memory: true,
             },
             distance,
         });

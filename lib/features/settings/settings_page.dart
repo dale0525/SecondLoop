@@ -17,6 +17,7 @@ import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
+import 'diagnostics_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -461,6 +462,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const SyncSettingsPage(),
+                      ),
+                    );
+                  },
+          ),
+          ListTile(
+            key: const ValueKey('settings_diagnostics'),
+            title: Text(context.t.settings.diagnostics.title),
+            subtitle: Text(context.t.settings.diagnostics.subtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DiagnosticsPage(),
                       ),
                     );
                   },

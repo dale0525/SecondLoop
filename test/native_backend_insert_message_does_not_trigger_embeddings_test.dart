@@ -26,6 +26,7 @@ void main() {
           role: role,
           content: content,
           createdAtMs: 0,
+          isMemory: true,
         );
       },
       dbProcessPendingMessageEmbeddings: ({

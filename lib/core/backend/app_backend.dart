@@ -28,6 +28,34 @@ abstract class AppBackend {
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key);
 
   Future<List<Message>> listMessages(Uint8List key, String conversationId);
+  Future<List<Message>> listMessagesPage(
+    Uint8List key,
+    String conversationId, {
+    int? beforeCreatedAtMs,
+    String? beforeId,
+    int limit = 60,
+  }) async {
+    final messages = await listMessages(key, conversationId);
+    final newestFirst = messages.reversed.toList(growable: false);
+
+    if (beforeCreatedAtMs == null && beforeId == null) {
+      return newestFirst.take(limit).toList(growable: false);
+    }
+
+    if (beforeCreatedAtMs == null || beforeId == null) {
+      throw ArgumentError(
+          'beforeCreatedAtMs and beforeId must be provided together');
+    }
+
+    final cursorIndex = newestFirst.indexWhere((m) => m.id == beforeId);
+    if (cursorIndex < 0) return const <Message>[];
+
+    return newestFirst
+        .skip(cursorIndex + 1)
+        .take(limit)
+        .toList(growable: false);
+  }
+
   Future<Message> insertMessage(
     Uint8List key,
     String conversationId, {
@@ -173,6 +201,15 @@ abstract class AppBackend {
   });
   Future<void> setActiveLlmProfile(Uint8List key, String profileId);
   Future<void> deleteLlmProfile(Uint8List key, String profileId);
+
+  Future<List<LlmUsageAggregate>> sumLlmUsageDailyByPurpose(
+    Uint8List key,
+    String profileId, {
+    required String startDay,
+    required String endDay,
+  }) {
+    throw UnimplementedError('sumLlmUsageDailyByPurpose');
+  }
 
   Stream<String> askAiStream(
     Uint8List key,

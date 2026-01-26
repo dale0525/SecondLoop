@@ -110,6 +110,27 @@ pub fn db_list_messages(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_messages_page(
+    app_dir: String,
+    key: Vec<u8>,
+    conversation_id: String,
+    before_created_at_ms: Option<i64>,
+    before_id: Option<String>,
+    limit: u32,
+) -> Result<Vec<db::Message>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_messages_page(
+        &conn,
+        &key,
+        &conversation_id,
+        before_created_at_ms,
+        before_id.as_deref(),
+        limit as i64,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_insert_message(
     app_dir: String,
     key: Vec<u8>,
@@ -548,6 +569,44 @@ pub fn db_set_active_embedding_model_name(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_record_llm_usage_daily(
+    app_dir: String,
+    key: Vec<u8>,
+    day: String,
+    profile_id: String,
+    purpose: String,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    total_tokens: Option<i64>,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::record_llm_usage_daily(
+        &conn,
+        day.trim(),
+        &profile_id,
+        &purpose,
+        input_tokens,
+        output_tokens,
+        total_tokens,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_sum_llm_usage_daily_by_purpose(
+    app_dir: String,
+    key: Vec<u8>,
+    profile_id: String,
+    start_day: String,
+    end_day: String,
+) -> Result<Vec<db::LlmUsageAggregate>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::sum_llm_usage_daily_by_purpose(&conn, &profile_id, start_day.trim(), end_day.trim())
+}
+
+#[flutter_rust_bridge::frb]
 pub fn rag_ask_ai_stream(
     app_dir: String,
     key: Vec<u8>,
@@ -555,12 +614,13 @@ pub fn rag_ask_ai_stream(
     question: String,
     top_k: u32,
     this_thread_only: bool,
+    local_day: String,
     sink: StreamSink<String>,
 ) -> Result<()> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
 
-    let profile = db::load_active_llm_profile_config(&conn, &key)?
+    let (profile_id, profile) = db::load_active_llm_profile_config(&conn, &key)?
         .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
 
     let focus = if this_thread_only {
@@ -598,9 +658,23 @@ pub fn rag_ask_ai_stream(
     .map(|_| ());
 
     match result {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            let day = local_day.trim();
+            if !day.is_empty() {
+                let _ =
+                    db::record_llm_usage_daily(&conn, day, &profile_id, "ask_ai", None, None, None);
+            }
+            Ok(())
+        }
         Err(e) if e.is::<rag::StreamCancelled>() => Ok(()),
-        Err(e) => Err(e),
+        Err(e) => {
+            let day = local_day.trim();
+            if !day.is_empty() {
+                let _ =
+                    db::record_llm_usage_daily(&conn, day, &profile_id, "ask_ai", None, None, None);
+            }
+            Err(e)
+        }
     }
 }
 

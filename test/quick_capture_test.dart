@@ -170,6 +170,7 @@ final class _UnlockedBackend extends AppBackend {
       role: role,
       content: content,
       createdAtMs: 0,
+      isMemory: true,
     );
     insertedMessages.add(message);
     return message;

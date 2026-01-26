@@ -61,6 +61,14 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
 
   String? _appDir;
 
+  static String _formatLocalDayKey(DateTime value) {
+    final dt = value.toLocal();
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
   static const _kAutoUnlockEnabled = 'auto_unlock_enabled';
   static const _kSessionKeyB64 = 'session_key_b64';
 
@@ -226,6 +234,25 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       appDir: appDir,
       key: key,
       conversationId: conversationId,
+    );
+  }
+
+  @override
+  Future<List<Message>> listMessagesPage(
+    Uint8List key,
+    String conversationId, {
+    int? beforeCreatedAtMs,
+    String? beforeId,
+    int limit = 60,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListMessagesPage(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      beforeCreatedAtMs: beforeCreatedAtMs,
+      beforeId: beforeId,
+      limit: limit,
     );
   }
 
@@ -650,6 +677,23 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<List<LlmUsageAggregate>> sumLlmUsageDailyByPurpose(
+    Uint8List key,
+    String profileId, {
+    required String startDay,
+    required String endDay,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSumLlmUsageDailyByPurpose(
+      appDir: appDir,
+      key: key,
+      profileId: profileId,
+      startDay: startDay,
+      endDay: endDay,
+    );
+  }
+
+  @override
   Stream<String> askAiStream(
     Uint8List key,
     String conversationId, {
@@ -658,6 +702,7 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
     bool thisThreadOnly = false,
   }) async* {
     final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
     yield* rust_core.ragAskAiStream(
       appDir: appDir,
       key: key,
@@ -665,6 +710,7 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
+      localDay: localDay,
     );
   }
 

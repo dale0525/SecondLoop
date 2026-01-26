@@ -21,6 +21,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -50,6 +51,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -92,6 +94,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -134,6 +137,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -178,6 +182,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -215,6 +220,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -253,6 +259,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -282,6 +289,7 @@ void main() {
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
       todos: const [
@@ -324,6 +332,7 @@ void main() {
           role: 'user',
           content: 'note',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
       todos: const [
@@ -371,6 +380,7 @@ void main() {
           role: 'assistant',
           content: 'ai',
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );
@@ -501,6 +511,7 @@ class MessageActionsBackend extends AppBackend {
           role: _messages[i].role,
           content: content,
           createdAtMs: _messages[i].createdAtMs,
+          isMemory: _messages[i].isMemory,
         );
         break;
       }

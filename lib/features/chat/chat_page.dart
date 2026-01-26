@@ -55,11 +55,17 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   final _inputFocusNode = FocusNode();
+  final _scrollController = ScrollController();
   Future<List<Message>>? _messagesFuture;
   Future<int>? _reviewCountFuture;
   Future<_TodoAgendaSummary>? _agendaFuture;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
+  List<Message> _paginatedMessages = <Message>[];
+  bool _loadingMoreMessages = false;
+  bool _hasMoreMessages = true;
+  bool _isAtBottom = true;
+  bool _hasUnseenNewMessages = false;
   bool _sending = false;
   bool _asking = false;
   bool _stopRequested = false;
@@ -83,6 +89,40 @@ class _ChatPageState extends State<ChatPage> {
   static const _kCollapsedMessageHeight = 280.0;
   static const _kLongMessageRuneThreshold = 600;
   static const _kLongMessageLineThreshold = 12;
+  static const _kMessagePageSize = 60;
+  static const _kLoadMoreThresholdPx = 200.0;
+  static const _kBottomThresholdPx = 60.0;
+
+  bool get _usePagination => widget.conversation.id == 'main_stream';
+  bool get _isDesktopPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final atBottom = position.pixels <= _kBottomThresholdPx;
+    if (atBottom != _isAtBottom) {
+      setState(() {
+        _isAtBottom = atBottom;
+        if (atBottom) _hasUnseenNewMessages = false;
+      });
+    }
+
+    if (!_usePagination) return;
+
+    final remaining = position.maxScrollExtent - position.pixels;
+    if (remaining > _kLoadMoreThresholdPx) return;
+    unawaited(_loadOlderMessages());
+  }
 
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
@@ -102,6 +142,14 @@ class _ChatPageState extends State<ChatPage> {
 
     void onSyncChange() {
       if (!mounted) return;
+      if (!_isAtBottom) {
+        setState(() {
+          _hasUnseenNewMessages = true;
+          _reviewCountFuture = _loadReviewQueueCount();
+          _agendaFuture = _loadTodoAgendaSummary();
+        });
+        return;
+      }
       _refresh();
     }
 
@@ -542,13 +590,97 @@ class _ChatPageState extends State<ChatPage> {
     _askSub?.cancel();
     _controller.dispose();
     _inputFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   Future<List<Message>> _loadMessages() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    if (_usePagination) {
+      final page = await backend.listMessagesPage(
+        sessionKey,
+        widget.conversation.id,
+        limit: _kMessagePageSize,
+      );
+      if (mounted) {
+        setState(() {
+          _paginatedMessages = page;
+          _hasMoreMessages = page.length == _kMessagePageSize;
+          _loadingMoreMessages = false;
+        });
+      }
+      return page;
+    }
+
     return backend.listMessages(sessionKey, widget.conversation.id);
+  }
+
+  Future<void> _loadOlderMessages() async {
+    if (!_usePagination) return;
+    if (_loadingMoreMessages || !_hasMoreMessages) return;
+    if (_paginatedMessages.isEmpty) return;
+
+    final oldest = _paginatedMessages.last;
+    setState(() => _loadingMoreMessages = true);
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final page = await backend.listMessagesPage(
+        sessionKey,
+        widget.conversation.id,
+        beforeCreatedAtMs: oldest.createdAtMs,
+        beforeId: oldest.id,
+        limit: _kMessagePageSize,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        if (page.isEmpty) {
+          _hasMoreMessages = false;
+        } else {
+          final existingIds =
+              _paginatedMessages.map((message) => message.id).toSet();
+          final deduped = page
+              .where((message) => !existingIds.contains(message.id))
+              .toList(growable: false);
+          _paginatedMessages = <Message>[..._paginatedMessages, ...deduped];
+          _hasMoreMessages = page.length == _kMessagePageSize;
+        }
+        _loadingMoreMessages = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingMoreMessages = false);
+    }
+  }
+
+  Future<void> _jumpToLatest() async {
+    if (_hasUnseenNewMessages) {
+      _refresh();
+      final future = _messagesFuture;
+      if (future != null) {
+        try {
+          await future;
+        } catch (_) {
+          // ignore
+        }
+      }
+    }
+
+    if (!mounted) return;
+    if (!_scrollController.hasClients) return;
+    await _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _hasUnseenNewMessages = false;
+      _isAtBottom = true;
+    });
   }
 
   Future<int> _loadReviewQueueCount() async {
@@ -736,6 +868,11 @@ class _ChatPageState extends State<ChatPage> {
 
   void _refresh() {
     setState(() {
+      if (_usePagination) {
+        _paginatedMessages = <Message>[];
+        _loadingMoreMessages = false;
+        _hasMoreMessages = true;
+      }
       _messagesFuture = _loadMessages();
       _reviewCountFuture = _loadReviewQueueCount();
       _agendaFuture = _loadTodoAgendaSummary();
@@ -765,6 +902,22 @@ class _ChatPageState extends State<ChatPage> {
       syncEngine?.notifyLocalMutation();
       _controller.clear();
       _refresh();
+      if (_isDesktopPlatform) {
+        _inputFocusNode.requestFocus();
+      }
+      if (_usePagination) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (!_scrollController.hasClients) return;
+          unawaited(
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+            ),
+          );
+        });
+      }
       unawaited(_maybeSuggestTodoFromCapture(message, text));
       unawaited(_maybeLinkMessageToExistingTodo(message, text));
     } finally {
@@ -1885,14 +2038,20 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = SlTokens.of(context);
-    final isDesktopPlatform = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux);
+    final isDesktopPlatform = _isDesktopPlatform;
     final title = widget.conversation.id == 'main_stream'
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
     return Scaffold(
+      floatingActionButton: _usePagination && !_isAtBottom
+          ? FloatingActionButton.small(
+              key: const ValueKey('chat_jump_to_latest'),
+              onPressed: _jumpToLatest,
+              backgroundColor: colorScheme.secondaryContainer,
+              foregroundColor: colorScheme.onSecondaryContainer,
+              child: const Icon(Icons.arrow_downward_rounded),
+            )
+          : null,
       appBar: AppBar(
         title: Text(title),
         actions: [
@@ -1976,10 +2135,13 @@ class _ChatPageState extends State<ChatPage> {
                       );
                     }
 
-                    final messages = snapshot.data ?? const <Message>[];
+                    final messages = _usePagination
+                        ? _paginatedMessages
+                        : snapshot.data ?? const <Message>[];
                     final pendingQuestion = _pendingQuestion;
-                    final extraCount = (pendingQuestion == null ? 0 : 1) +
-                        (_asking && !_stopRequested ? 1 : 0);
+                    final hasPendingAssistant = _asking && !_stopRequested;
+                    final extraCount = (hasPendingAssistant ? 1 : 0) +
+                        (pendingQuestion == null ? 0 : 1);
                     if (messages.isEmpty && extraCount == 0) {
                       return Center(
                         child: Text(context.t.chat.noMessagesYet),
@@ -1987,6 +2149,11 @@ class _ChatPageState extends State<ChatPage> {
                     }
 
                     return ListView.builder(
+                      key: _usePagination
+                          ? const ValueKey('chat_message_list')
+                          : null,
+                      controller: _usePagination ? _scrollController : null,
+                      reverse: _usePagination,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       itemCount: messages.length + extraCount,
                       itemBuilder: (context, index) {
@@ -1998,36 +2165,74 @@ class _ChatPageState extends State<ChatPage> {
 
                         Message? msg;
                         String? textOverride;
-                        if (index < messages.length) {
-                          msg = messages[index];
-                        } else {
-                          var extraIndex = index - messages.length;
-                          if (pendingQuestion != null) {
-                            if (extraIndex == 0) {
+                        if (_usePagination) {
+                          if (index < extraCount) {
+                            var extraIndex = index;
+                            if (hasPendingAssistant) {
+                              if (extraIndex == 0) {
+                                msg = Message(
+                                  id: 'pending_assistant',
+                                  conversationId: widget.conversation.id,
+                                  role: 'assistant',
+                                  content: '',
+                                  createdAtMs: 0,
+                                  isMemory: false,
+                                );
+                                textOverride = _streamingAnswer.isEmpty
+                                    ? '…'
+                                    : _streamingAnswer;
+                              }
+                              extraIndex -= 1;
+                            }
+                            if (msg == null &&
+                                pendingQuestion != null &&
+                                extraIndex == 0) {
                               msg = Message(
                                 id: 'pending_user',
                                 conversationId: widget.conversation.id,
                                 role: 'user',
                                 content: pendingQuestion,
                                 createdAtMs: 0,
+                                isMemory: false,
                               );
                             }
-                            extraIndex -= 1;
+                          } else {
+                            msg = messages[index - extraCount];
                           }
-                          if (msg == null &&
-                              _asking &&
-                              !_stopRequested &&
-                              extraIndex == 0) {
-                            msg = Message(
-                              id: 'pending_assistant',
-                              conversationId: widget.conversation.id,
-                              role: 'assistant',
-                              content: '',
-                              createdAtMs: 0,
-                            );
-                            textOverride = _streamingAnswer.isEmpty
-                                ? '…'
-                                : _streamingAnswer;
+                        } else {
+                          if (index < messages.length) {
+                            msg = messages[index];
+                          } else {
+                            var extraIndex = index - messages.length;
+                            if (pendingQuestion != null) {
+                              if (extraIndex == 0) {
+                                msg = Message(
+                                  id: 'pending_user',
+                                  conversationId: widget.conversation.id,
+                                  role: 'user',
+                                  content: pendingQuestion,
+                                  createdAtMs: 0,
+                                  isMemory: false,
+                                );
+                              }
+                              extraIndex -= 1;
+                            }
+                            if (msg == null &&
+                                _asking &&
+                                !_stopRequested &&
+                                extraIndex == 0) {
+                              msg = Message(
+                                id: 'pending_assistant',
+                                conversationId: widget.conversation.id,
+                                role: 'assistant',
+                                content: '',
+                                createdAtMs: 0,
+                                isMemory: false,
+                              );
+                              textOverride = _streamingAnswer.isEmpty
+                                  ? '…'
+                                  : _streamingAnswer;
+                            }
                           }
                         }
 
@@ -2172,6 +2377,37 @@ class _ChatPageState extends State<ChatPage> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      if (!stableMsg.isMemory)
+                                        Padding(
+                                          key: ValueKey(
+                                            'message_ask_ai_badge_${stableMsg.id}',
+                                          ),
+                                          padding:
+                                              const EdgeInsets.only(bottom: 6),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.auto_awesome_rounded,
+                                                size: 14,
+                                                color: colorScheme.secondary,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                context.t.common.actions.askAi,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color:
+                                                          colorScheme.secondary,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       if (shouldCollapse)
                                         SizedBox(
                                           height: _kCollapsedMessageHeight,

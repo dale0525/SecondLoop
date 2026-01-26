@@ -5,6 +5,7 @@ import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import 'byok_usage_card.dart';
 
 class LlmProfilesPage extends StatefulWidget {
   const LlmProfilesPage({super.key});
@@ -201,10 +202,12 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
   Widget build(BuildContext context) {
     final profiles = _profiles;
     String? activeId;
+    LlmProfile? activeProfile;
     if (profiles != null) {
       for (final p in profiles) {
         if (p.isActive) {
           activeId = p.id;
+          activeProfile = p;
           break;
         }
       }
@@ -229,6 +232,10 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
+          if (activeProfile != null) ...[
+            ByokUsageCard(activeProfile: activeProfile),
+            const SizedBox(height: 12),
+          ],
           SlSurface(
             padding: const EdgeInsets.all(12),
             child: profiles == null

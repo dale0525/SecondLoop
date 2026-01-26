@@ -5,45 +5,30 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/core/sync/sync_engine.dart';
-import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('ChatPage refreshes after sync pull applies ops', (tester) async {
-    final backend = _MutableBackend();
-    final runner = _SyncingRunner(backend);
-    final engine = SyncEngine(
-      syncRunner: runner,
-      loadConfig: () async => _webdavConfig(),
-      pushDebounce: const Duration(days: 1),
-      pullInterval: const Duration(days: 1),
-      pullJitter: Duration.zero,
-      pullOnStart: false,
-    );
-    engine.start();
-
-    const conversation = Conversation(
-      id: 'main_stream',
-      title: 'Main Stream',
-      createdAtMs: 0,
-      updatedAtMs: 0,
-    );
+  testWidgets('Main stream paginates older messages', (tester) async {
+    final backend = PagingBackend(messageCount: 65);
 
     await tester.pumpWidget(
-      AppBackendScope(
-        backend: backend,
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: SyncEngineScope(
-            engine: engine,
-            child: wrapWithI18n(
-              const MaterialApp(
-                home: ChatPage(conversation: conversation),
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
               ),
             ),
           ),
@@ -52,57 +37,43 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No messages yet'), findsOneWidget);
+    expect(backend.pageCalls.length, 1);
+    expect(find.text('m65'), findsOneWidget);
+    expect(find.text('m1'), findsNothing);
 
-    engine.triggerPullNow();
-    await tester.pumpAndSettle();
+    final list = find.byKey(const ValueKey('chat_message_list'));
+    for (var i = 0; i < 20 && backend.pageCalls.length < 2; i++) {
+      await tester.drag(list, const Offset(0, 800));
+      await tester.pumpAndSettle();
+    }
 
-    expect(find.text('hello from device A'), findsOneWidget);
-    engine.stop();
+    expect(backend.pageCalls.length, 2);
+
+    for (var i = 0; i < 40 && find.text('m1').evaluate().isEmpty; i++) {
+      await tester.drag(list, const Offset(0, 800));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('m1'), findsOneWidget);
   });
 }
 
-SyncConfig _webdavConfig() => SyncConfig.webdav(
-      syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
-      remoteRoot: 'SecondLoop',
-      baseUrl: 'https://example.com/dav',
-      username: 'u',
-      password: 'p',
-    );
+class PagingBackend extends AppBackend {
+  PagingBackend({required int messageCount})
+      : _messages = List.generate(
+          messageCount,
+          (i) => Message(
+            id: 'm${i + 1}',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: 'm${i + 1}',
+            createdAtMs: i + 1,
+            isMemory: true,
+          ),
+        );
 
-final class _SyncingRunner implements SyncRunner {
-  _SyncingRunner(this.backend);
-
-  final _MutableBackend backend;
-  bool _pulledOnce = false;
-
-  @override
-  Future<int> push(SyncConfig config) async => 0;
-
-  @override
-  Future<int> pull(SyncConfig config) async {
-    if (_pulledOnce) return 0;
-    _pulledOnce = true;
-    backend.addRemoteMessage(
-      const Message(
-        id: 'm1',
-        conversationId: 'main_stream',
-        role: 'user',
-        content: 'hello from device A',
-        createdAtMs: 0,
-        isMemory: true,
-      ),
-    );
-    return 1;
-  }
-}
-
-final class _MutableBackend extends AppBackend {
-  final List<Message> _messages = <Message>[];
-
-  void addRemoteMessage(Message message) {
-    _messages.add(message);
-  }
+  final List<Message> _messages;
+  final List<PageCall> pageCalls = [];
 
   @override
   Future<void> init() async {}
@@ -138,7 +109,14 @@ final class _MutableBackend extends AppBackend {
 
   @override
   Future<List<Conversation>> listConversations(Uint8List key) async =>
-      const <Conversation>[];
+      const <Conversation>[
+        Conversation(
+          id: 'main_stream',
+          title: 'Main Stream',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>
@@ -146,7 +124,12 @@ final class _MutableBackend extends AppBackend {
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      throw UnimplementedError();
+      const Conversation(
+        id: 'main_stream',
+        title: 'Main Stream',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      );
 
   @override
   Future<List<Message>> listMessages(
@@ -154,25 +137,7 @@ final class _MutableBackend extends AppBackend {
       List<Message>.from(_messages);
 
   @override
-  Future<Message> insertMessage(
-    Uint8List key,
-    String conversationId, {
-    required String role,
-    required String content,
-  }) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) =>
-      throw UnimplementedError();
-
-  @override
-  Future<void> setMessageDeleted(
-          Uint8List key, String messageId, bool isDeleted) =>
-      throw UnimplementedError();
-
-  @override
-  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
+  Future<List<Todo>> listTodos(Uint8List key) async => const <Todo>[];
 
   @override
   Future<int> processPendingMessageEmbeddings(
@@ -210,7 +175,18 @@ final class _MutableBackend extends AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -237,19 +213,6 @@ final class _MutableBackend extends AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) =>
-      const Stream<String>.empty();
-
-  @override
-  Stream<String> askAiStreamCloudGateway(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
   }) =>
       const Stream<String>.empty();
 
@@ -324,4 +287,67 @@ final class _MutableBackend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
+
+  @override
+  Future<List<Message>> listMessagesPage(
+    Uint8List key,
+    String conversationId, {
+    int? beforeCreatedAtMs,
+    String? beforeId,
+    int limit = 60,
+  }) async {
+    pageCalls.add(
+      PageCall(
+        beforeCreatedAtMs: beforeCreatedAtMs,
+        beforeId: beforeId,
+        limit: limit,
+      ),
+    );
+
+    final newestFirst = _messages.reversed.toList(growable: false);
+    if (beforeId == null) {
+      return newestFirst.take(limit).toList(growable: false);
+    }
+
+    final cursorIndex = newestFirst.indexWhere((m) => m.id == beforeId);
+    if (cursorIndex < 0) return const <Message>[];
+    final start = cursorIndex + 1;
+    if (start >= newestFirst.length) return const <Message>[];
+    return newestFirst.skip(start).take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<Message> insertMessage(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> setMessageDeleted(
+          Uint8List key, String messageId, bool isDeleted) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async =>
+      throw UnimplementedError();
+}
+
+class PageCall {
+  PageCall({
+    required this.beforeCreatedAtMs,
+    required this.beforeId,
+    required this.limit,
+  });
+
+  final int? beforeCreatedAtMs;
+  final String? beforeId;
+  final int limit;
 }

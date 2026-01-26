@@ -148,6 +148,7 @@ final class _Backend extends AppBackend {
       role: role,
       content: content,
       createdAtMs: 0,
+      isMemory: true,
     );
     _messages.add(message);
     return message;

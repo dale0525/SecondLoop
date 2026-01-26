@@ -21,6 +21,7 @@
       "delete": "删除",
       "undo": "撤销",
       "refresh": "刷新",
+      "share": "分享",
       "search": "搜索",
       "useModel": "使用模型",
       "processPending": "处理待处理",
@@ -234,6 +235,34 @@
         "requestsUsed30d": "请求数（30 天）：",
         "resetAt": "重置时间：",
         "loadFailed": "加载失败：$error"
+      }
+    },
+    "diagnostics": {
+      "title": "诊断信息",
+      "subtitle": "导出诊断包用于排查",
+      "privacyNote": "此诊断包会排除明文记录与 API Key。",
+      "loading": "正在加载诊断信息…",
+      "messages": {
+        "copied": "诊断信息已复制",
+        "copyFailed": "复制诊断信息失败：$error",
+        "shareFailed": "分享诊断信息失败：$error"
+      }
+    },
+    "byokUsage": {
+      "title": "BYOK 用量",
+      "subtitle": "仅统计当前激活的 profile • 请求数 + tokens（若上游返回）",
+      "loading": "加载中…",
+      "noData": "暂无数据",
+      "errors": {
+        "unavailable": "用量不可用：$error"
+      },
+      "sections": {
+        "today": "今日（$day）",
+        "last30d": "近 30 天（$start → $end）"
+      },
+      "labels": {
+        "requests": "$purpose 请求数",
+        "tokens": "$purpose tokens（输入/输出/总计）"
       }
     },
     "subscription": {

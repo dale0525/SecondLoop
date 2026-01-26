@@ -32,7 +32,7 @@ fn llm_profiles_are_encrypted_and_loadable() {
         .expect("read raw api_key");
     assert_ne!(encrypted, b"sk-test".to_vec());
 
-    let active = db::load_active_llm_profile_config(&conn, &key)
+    let (_active_id, active) = db::load_active_llm_profile_config(&conn, &key)
         .expect("load active")
         .expect("has active");
     assert_eq!(active.provider_type, "openai-compatible");
@@ -90,7 +90,7 @@ fn llm_profiles_can_be_listed_and_activated() {
     assert!(!p1_listed2.is_active);
     assert!(p2_listed2.is_active);
 
-    let active = db::load_active_llm_profile_config(&conn, &key)
+    let (_active_id, active) = db::load_active_llm_profile_config(&conn, &key)
         .expect("load active")
         .expect("has active");
     assert_eq!(active.api_key.as_deref(), Some("sk-p2"));

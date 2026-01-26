@@ -68,6 +68,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LlmProfile> dco_decode_list_llm_profile(dynamic raw);
 
   @protected
+  List<LlmUsageAggregate> dco_decode_list_llm_usage_aggregate(dynamic raw);
+
+  @protected
   List<Message> dco_decode_list_message(dynamic raw);
 
   @protected
@@ -90,6 +93,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
+
+  @protected
+  LlmUsageAggregate dco_decode_llm_usage_aggregate(dynamic raw);
 
   @protected
   Message dco_decode_message(dynamic raw);
@@ -171,6 +177,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer);
 
   @protected
+  List<LlmUsageAggregate> sse_decode_list_llm_usage_aggregate(
+      SseDeserializer deserializer);
+
+  @protected
   List<Message> sse_decode_list_message(SseDeserializer deserializer);
 
   @protected
@@ -196,6 +206,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
+
+  @protected
+  LlmUsageAggregate sse_decode_llm_usage_aggregate(
+      SseDeserializer deserializer);
 
   @protected
   Message sse_decode_message(SseDeserializer deserializer);
@@ -286,6 +300,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<LlmProfile> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_llm_usage_aggregate(
+      List<LlmUsageAggregate> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_message(List<Message> self, SseSerializer serializer);
 
   @protected
@@ -312,6 +330,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_llm_usage_aggregate(
+      LlmUsageAggregate self, SseSerializer serializer);
 
   @protected
   void sse_encode_message(Message self, SseSerializer serializer);

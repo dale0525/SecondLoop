@@ -36,6 +36,7 @@ void main() {
           role: 'user',
           content: longText.toString(),
           createdAtMs: 0,
+          isMemory: true,
         ),
       ],
     );

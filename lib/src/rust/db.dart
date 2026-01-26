@@ -166,12 +166,52 @@ class LlmProfile {
           updatedAtMs == other.updatedAtMs;
 }
 
+class LlmUsageAggregate {
+  final String purpose;
+  final PlatformInt64 requests;
+  final PlatformInt64 requestsWithUsage;
+  final PlatformInt64 inputTokens;
+  final PlatformInt64 outputTokens;
+  final PlatformInt64 totalTokens;
+
+  const LlmUsageAggregate({
+    required this.purpose,
+    required this.requests,
+    required this.requestsWithUsage,
+    required this.inputTokens,
+    required this.outputTokens,
+    required this.totalTokens,
+  });
+
+  @override
+  int get hashCode =>
+      purpose.hashCode ^
+      requests.hashCode ^
+      requestsWithUsage.hashCode ^
+      inputTokens.hashCode ^
+      outputTokens.hashCode ^
+      totalTokens.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LlmUsageAggregate &&
+          runtimeType == other.runtimeType &&
+          purpose == other.purpose &&
+          requests == other.requests &&
+          requestsWithUsage == other.requestsWithUsage &&
+          inputTokens == other.inputTokens &&
+          outputTokens == other.outputTokens &&
+          totalTokens == other.totalTokens;
+}
+
 class Message {
   final String id;
   final String conversationId;
   final String role;
   final String content;
   final PlatformInt64 createdAtMs;
+  final bool isMemory;
 
   const Message({
     required this.id,
@@ -179,6 +219,7 @@ class Message {
     required this.role,
     required this.content,
     required this.createdAtMs,
+    required this.isMemory,
   });
 
   @override
@@ -187,7 +228,8 @@ class Message {
       conversationId.hashCode ^
       role.hashCode ^
       content.hashCode ^
-      createdAtMs.hashCode;
+      createdAtMs.hashCode ^
+      isMemory.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -198,7 +240,8 @@ class Message {
           conversationId == other.conversationId &&
           role == other.role &&
           content == other.content &&
-          createdAtMs == other.createdAtMs;
+          createdAtMs == other.createdAtMs &&
+          isMemory == other.isMemory;
 }
 
 class SimilarMessage {

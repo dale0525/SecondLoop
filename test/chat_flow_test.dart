@@ -292,6 +292,7 @@ class MemoryBackend extends AppBackend {
       role: role,
       content: content,
       createdAtMs: 0,
+      isMemory: true,
     );
     _messages.putIfAbsent(conversationId, () => []);
     _messages[conversationId]!.add(message);
@@ -312,6 +313,7 @@ class MemoryBackend extends AppBackend {
           role: msg.role,
           content: content,
           createdAtMs: msg.createdAtMs,
+          isMemory: msg.isMemory,
         );
         return;
       }
