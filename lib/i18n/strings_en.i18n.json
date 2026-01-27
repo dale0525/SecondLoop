@@ -186,6 +186,15 @@
       "title": "Cloud account",
       "subtitle": "Sign in to SecondLoop Cloud",
       "signedInAs": "Signed in as $email",
+      "benefits": {
+        "title": "Create a cloud account to subscribe",
+        "items": {
+          "purchase": {
+            "title": "Subscribe to SecondLoop Pro",
+            "body": "A cloud account is required to purchase a subscription."
+          }
+        }
+      },
       "errors": {
         "missingWebApiKey": "Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app."
       },
@@ -268,6 +277,23 @@
     "subscription": {
       "title": "Subscription",
       "subtitle": "Manage SecondLoop Pro",
+      "benefits": {
+        "title": "SecondLoop Pro unlocks",
+        "items": {
+          "noSetup": {
+            "title": "AI without setup",
+            "body": "No setup. Subscribe and start using built-in AI."
+          },
+          "cloudSync": {
+            "title": "Cloud storage + sync",
+            "body": "Your data stays in sync across devices."
+          },
+          "mobileSearch": {
+            "title": "Smarter search on mobile",
+            "body": "Find things even if you remember different words."
+          }
+        }
+      },
       "status": {
         "unknown": "Unknown",
         "entitled": "Active",

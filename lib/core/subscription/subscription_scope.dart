@@ -6,6 +6,11 @@ abstract interface class SubscriptionStatusController extends Listenable {
   SubscriptionStatus get status;
 }
 
+abstract interface class SubscriptionDetailsController
+    extends SubscriptionStatusController {
+  bool? get canManageSubscription;
+}
+
 final class SubscriptionScope
     extends InheritedNotifier<SubscriptionStatusController> {
   const SubscriptionScope({

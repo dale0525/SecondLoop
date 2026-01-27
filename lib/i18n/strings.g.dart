@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 602 (301 per locale)
+/// Strings: 622 (311 per locale)
 ///
-/// Built on 2026-01-26 at 08:59 UTC
+/// Built on 2026-01-27 at 03:34 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -764,6 +764,8 @@ class _StringsSettingsCloudAccountEn {
   String get title => 'Cloud account';
   String get subtitle => 'Sign in to SecondLoop Cloud';
   String signedInAs({required Object email}) => 'Signed in as ${email}';
+  late final _StringsSettingsCloudAccountBenefitsEn benefits =
+      _StringsSettingsCloudAccountBenefitsEn._(_root);
   late final _StringsSettingsCloudAccountErrorsEn errors =
       _StringsSettingsCloudAccountErrorsEn._(_root);
   late final _StringsSettingsCloudAccountFieldsEn fields =
@@ -834,6 +836,8 @@ class _StringsSettingsSubscriptionEn {
   // Translations
   String get title => 'Subscription';
   String get subtitle => 'Manage SecondLoop Pro';
+  late final _StringsSettingsSubscriptionBenefitsEn benefits =
+      _StringsSettingsSubscriptionBenefitsEn._(_root);
   late final _StringsSettingsSubscriptionStatusEn status =
       _StringsSettingsSubscriptionStatusEn._(_root);
   late final _StringsSettingsSubscriptionActionsEn actions =
@@ -1199,6 +1203,18 @@ class _StringsSettingsLanguageOptionsEn {
   String get zhCn => 'Simplified Chinese';
 }
 
+// Path: settings.cloudAccount.benefits
+class _StringsSettingsCloudAccountBenefitsEn {
+  _StringsSettingsCloudAccountBenefitsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Create a cloud account to subscribe';
+  late final _StringsSettingsCloudAccountBenefitsItemsEn items =
+      _StringsSettingsCloudAccountBenefitsItemsEn._(_root);
+}
+
 // Path: settings.cloudAccount.errors
 class _StringsSettingsCloudAccountErrorsEn {
   _StringsSettingsCloudAccountErrorsEn._(this._root);
@@ -1325,6 +1341,18 @@ class _StringsSettingsByokUsageLabelsEn {
   String requests({required Object purpose}) => '${purpose} requests';
   String tokens({required Object purpose}) =>
       '${purpose} tokens (in/out/total)';
+}
+
+// Path: settings.subscription.benefits
+class _StringsSettingsSubscriptionBenefitsEn {
+  _StringsSettingsSubscriptionBenefitsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'SecondLoop Pro unlocks';
+  late final _StringsSettingsSubscriptionBenefitsItemsEn items =
+      _StringsSettingsSubscriptionBenefitsItemsEn._(_root);
 }
 
 // Path: settings.subscription.status
@@ -1490,6 +1518,17 @@ class _StringsSyncFieldsPassphraseEn {
   String get helper => 'Use the same passphrase on all devices.';
 }
 
+// Path: settings.cloudAccount.benefits.items
+class _StringsSettingsCloudAccountBenefitsItemsEn {
+  _StringsSettingsCloudAccountBenefitsItemsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsCloudAccountBenefitsItemsPurchaseEn purchase =
+      _StringsSettingsCloudAccountBenefitsItemsPurchaseEn._(_root);
+}
+
 // Path: settings.cloudAccount.emailVerification.status
 class _StringsSettingsCloudAccountEmailVerificationStatusEn {
   _StringsSettingsCloudAccountEmailVerificationStatusEn._(this._root);
@@ -1534,6 +1573,66 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesEn {
   String get verificationEmailSent => 'Verification email sent';
   String verificationEmailSendFailed({required Object error}) =>
       'Failed to send verification email: ${error}';
+}
+
+// Path: settings.subscription.benefits.items
+class _StringsSettingsSubscriptionBenefitsItemsEn {
+  _StringsSettingsSubscriptionBenefitsItemsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsSubscriptionBenefitsItemsNoSetupEn noSetup =
+      _StringsSettingsSubscriptionBenefitsItemsNoSetupEn._(_root);
+  late final _StringsSettingsSubscriptionBenefitsItemsCloudSyncEn cloudSync =
+      _StringsSettingsSubscriptionBenefitsItemsCloudSyncEn._(_root);
+  late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn
+      mobileSearch =
+      _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn._(_root);
+}
+
+// Path: settings.cloudAccount.benefits.items.purchase
+class _StringsSettingsCloudAccountBenefitsItemsPurchaseEn {
+  _StringsSettingsCloudAccountBenefitsItemsPurchaseEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Subscribe to SecondLoop Pro';
+  String get body => 'A cloud account is required to purchase a subscription.';
+}
+
+// Path: settings.subscription.benefits.items.noSetup
+class _StringsSettingsSubscriptionBenefitsItemsNoSetupEn {
+  _StringsSettingsSubscriptionBenefitsItemsNoSetupEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'AI without setup';
+  String get body => 'No setup. Subscribe and start using built-in AI.';
+}
+
+// Path: settings.subscription.benefits.items.cloudSync
+class _StringsSettingsSubscriptionBenefitsItemsCloudSyncEn {
+  _StringsSettingsSubscriptionBenefitsItemsCloudSyncEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Cloud storage + sync';
+  String get body => 'Your data stays in sync across devices.';
+}
+
+// Path: settings.subscription.benefits.items.mobileSearch
+class _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn {
+  _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Smarter search on mobile';
+  String get body => 'Find things even if you remember different words.';
 }
 
 // Path: <root>
@@ -2463,6 +2562,9 @@ class _StringsSettingsCloudAccountZhCn extends _StringsSettingsCloudAccountEn {
   @override
   String signedInAs({required Object email}) => '已登录：${email}';
   @override
+  late final _StringsSettingsCloudAccountBenefitsZhCn benefits =
+      _StringsSettingsCloudAccountBenefitsZhCn._(_root);
+  @override
   late final _StringsSettingsCloudAccountErrorsZhCn errors =
       _StringsSettingsCloudAccountErrorsZhCn._(_root);
   @override
@@ -2565,6 +2667,9 @@ class _StringsSettingsSubscriptionZhCn extends _StringsSettingsSubscriptionEn {
   String get title => '订阅';
   @override
   String get subtitle => '管理 SecondLoop Pro';
+  @override
+  late final _StringsSettingsSubscriptionBenefitsZhCn benefits =
+      _StringsSettingsSubscriptionBenefitsZhCn._(_root);
   @override
   late final _StringsSettingsSubscriptionStatusZhCn status =
       _StringsSettingsSubscriptionStatusZhCn._(_root);
@@ -3111,6 +3216,24 @@ class _StringsSettingsLanguageOptionsZhCn
   String get zhCn => '简体中文';
 }
 
+// Path: settings.cloudAccount.benefits
+class _StringsSettingsCloudAccountBenefitsZhCn
+    extends _StringsSettingsCloudAccountBenefitsEn {
+  _StringsSettingsCloudAccountBenefitsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '创建 Cloud 账号以购买订阅';
+  @override
+  late final _StringsSettingsCloudAccountBenefitsItemsZhCn items =
+      _StringsSettingsCloudAccountBenefitsItemsZhCn._(_root);
+}
+
 // Path: settings.cloudAccount.errors
 class _StringsSettingsCloudAccountErrorsZhCn
     extends _StringsSettingsCloudAccountErrorsEn {
@@ -3304,6 +3427,24 @@ class _StringsSettingsByokUsageLabelsZhCn
   String requests({required Object purpose}) => '${purpose} 请求数';
   @override
   String tokens({required Object purpose}) => '${purpose} tokens（输入/输出/总计）';
+}
+
+// Path: settings.subscription.benefits
+class _StringsSettingsSubscriptionBenefitsZhCn
+    extends _StringsSettingsSubscriptionBenefitsEn {
+  _StringsSettingsSubscriptionBenefitsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'SecondLoop Pro 可解锁';
+  @override
+  late final _StringsSettingsSubscriptionBenefitsItemsZhCn items =
+      _StringsSettingsSubscriptionBenefitsItemsZhCn._(_root);
 }
 
 // Path: settings.subscription.status
@@ -3545,6 +3686,22 @@ class _StringsSyncFieldsPassphraseZhCn extends _StringsSyncFieldsPassphraseEn {
   String get helper => '所有设备请使用同一口令。';
 }
 
+// Path: settings.cloudAccount.benefits.items
+class _StringsSettingsCloudAccountBenefitsItemsZhCn
+    extends _StringsSettingsCloudAccountBenefitsItemsEn {
+  _StringsSettingsCloudAccountBenefitsItemsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsCloudAccountBenefitsItemsPurchaseZhCn purchase =
+      _StringsSettingsCloudAccountBenefitsItemsPurchaseZhCn._(_root);
+}
+
 // Path: settings.cloudAccount.emailVerification.status
 class _StringsSettingsCloudAccountEmailVerificationStatusZhCn
     extends _StringsSettingsCloudAccountEmailVerificationStatusEn {
@@ -3614,6 +3771,97 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesZhCn
   @override
   String verificationEmailSendFailed({required Object error}) =>
       '发送验证邮件失败：${error}';
+}
+
+// Path: settings.subscription.benefits.items
+class _StringsSettingsSubscriptionBenefitsItemsZhCn
+    extends _StringsSettingsSubscriptionBenefitsItemsEn {
+  _StringsSettingsSubscriptionBenefitsItemsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsSubscriptionBenefitsItemsNoSetupZhCn noSetup =
+      _StringsSettingsSubscriptionBenefitsItemsNoSetupZhCn._(_root);
+  @override
+  late final _StringsSettingsSubscriptionBenefitsItemsCloudSyncZhCn cloudSync =
+      _StringsSettingsSubscriptionBenefitsItemsCloudSyncZhCn._(_root);
+  @override
+  late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn
+      mobileSearch =
+      _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn._(_root);
+}
+
+// Path: settings.cloudAccount.benefits.items.purchase
+class _StringsSettingsCloudAccountBenefitsItemsPurchaseZhCn
+    extends _StringsSettingsCloudAccountBenefitsItemsPurchaseEn {
+  _StringsSettingsCloudAccountBenefitsItemsPurchaseZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '购买 SecondLoop Pro 订阅';
+  @override
+  String get body => '需要 Cloud 账号才能开通订阅。';
+}
+
+// Path: settings.subscription.benefits.items.noSetup
+class _StringsSettingsSubscriptionBenefitsItemsNoSetupZhCn
+    extends _StringsSettingsSubscriptionBenefitsItemsNoSetupEn {
+  _StringsSettingsSubscriptionBenefitsItemsNoSetupZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '免配置直接用 AI';
+  @override
+  String get body => '不用做任何配置，订阅后就能直接问 AI。';
+}
+
+// Path: settings.subscription.benefits.items.cloudSync
+class _StringsSettingsSubscriptionBenefitsItemsCloudSyncZhCn
+    extends _StringsSettingsSubscriptionBenefitsItemsCloudSyncEn {
+  _StringsSettingsSubscriptionBenefitsItemsCloudSyncZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '云存储 + 多设备同步';
+  @override
+  String get body => '手机/电脑自动同步，换设备也不丢。';
+}
+
+// Path: settings.subscription.benefits.items.mobileSearch
+class _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn
+    extends _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn {
+  _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '手机也能按意思搜索';
+  @override
+  String get body => '就算记不住原话，用相近的说法也能搜到。';
 }
 
 /// Flat map(s) containing all translations.
@@ -3866,6 +4114,12 @@ extension on Translations {
         return 'Sign in to SecondLoop Cloud';
       case 'settings.cloudAccount.signedInAs':
         return ({required Object email}) => 'Signed in as ${email}';
+      case 'settings.cloudAccount.benefits.title':
+        return 'Create a cloud account to subscribe';
+      case 'settings.cloudAccount.benefits.items.purchase.title':
+        return 'Subscribe to SecondLoop Pro';
+      case 'settings.cloudAccount.benefits.items.purchase.body':
+        return 'A cloud account is required to purchase a subscription.';
       case 'settings.cloudAccount.errors.missingWebApiKey':
         return 'Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app.';
       case 'settings.cloudAccount.fields.email':
@@ -3963,6 +4217,20 @@ extension on Translations {
         return 'Subscription';
       case 'settings.subscription.subtitle':
         return 'Manage SecondLoop Pro';
+      case 'settings.subscription.benefits.title':
+        return 'SecondLoop Pro unlocks';
+      case 'settings.subscription.benefits.items.noSetup.title':
+        return 'AI without setup';
+      case 'settings.subscription.benefits.items.noSetup.body':
+        return 'No setup. Subscribe and start using built-in AI.';
+      case 'settings.subscription.benefits.items.cloudSync.title':
+        return 'Cloud storage + sync';
+      case 'settings.subscription.benefits.items.cloudSync.body':
+        return 'Your data stays in sync across devices.';
+      case 'settings.subscription.benefits.items.mobileSearch.title':
+        return 'Smarter search on mobile';
+      case 'settings.subscription.benefits.items.mobileSearch.body':
+        return 'Find things even if you remember different words.';
       case 'settings.subscription.status.unknown':
         return 'Unknown';
       case 'settings.subscription.status.entitled':
@@ -4493,6 +4761,12 @@ extension on _StringsZhCn {
         return '登录 SecondLoop Cloud';
       case 'settings.cloudAccount.signedInAs':
         return ({required Object email}) => '已登录：${email}';
+      case 'settings.cloudAccount.benefits.title':
+        return '创建 Cloud 账号以购买订阅';
+      case 'settings.cloudAccount.benefits.items.purchase.title':
+        return '购买 SecondLoop Pro 订阅';
+      case 'settings.cloudAccount.benefits.items.purchase.body':
+        return '需要 Cloud 账号才能开通订阅。';
       case 'settings.cloudAccount.errors.missingWebApiKey':
         return 'Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。';
       case 'settings.cloudAccount.fields.email':
@@ -4586,6 +4860,20 @@ extension on _StringsZhCn {
         return '订阅';
       case 'settings.subscription.subtitle':
         return '管理 SecondLoop Pro';
+      case 'settings.subscription.benefits.title':
+        return 'SecondLoop Pro 可解锁';
+      case 'settings.subscription.benefits.items.noSetup.title':
+        return '免配置直接用 AI';
+      case 'settings.subscription.benefits.items.noSetup.body':
+        return '不用做任何配置，订阅后就能直接问 AI。';
+      case 'settings.subscription.benefits.items.cloudSync.title':
+        return '云存储 + 多设备同步';
+      case 'settings.subscription.benefits.items.cloudSync.body':
+        return '手机/电脑自动同步，换设备也不丢。';
+      case 'settings.subscription.benefits.items.mobileSearch.title':
+        return '手机也能按意思搜索';
+      case 'settings.subscription.benefits.items.mobileSearch.body':
+        return '就算记不住原话，用相近的说法也能搜到。';
       case 'settings.subscription.status.unknown':
         return '未知';
       case 'settings.subscription.status.entitled':

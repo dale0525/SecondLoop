@@ -186,6 +186,15 @@
       "title": "Cloud 账号",
       "subtitle": "登录 SecondLoop Cloud",
       "signedInAs": "已登录：$email",
+      "benefits": {
+        "title": "创建 Cloud 账号以购买订阅",
+        "items": {
+          "purchase": {
+            "title": "购买 SecondLoop Pro 订阅",
+            "body": "需要 Cloud 账号才能开通订阅。"
+          }
+        }
+      },
       "errors": {
         "missingWebApiKey": "Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。"
       },
@@ -268,6 +277,23 @@
     "subscription": {
       "title": "订阅",
       "subtitle": "管理 SecondLoop Pro",
+      "benefits": {
+        "title": "SecondLoop Pro 可解锁",
+        "items": {
+          "noSetup": {
+            "title": "免配置直接用 AI",
+            "body": "不用做任何配置，订阅后就能直接问 AI。"
+          },
+          "cloudSync": {
+            "title": "云存储 + 多设备同步",
+            "body": "手机/电脑自动同步，换设备也不丢。"
+          },
+          "mobileSearch": {
+            "title": "手机也能按意思搜索",
+            "body": "就算记不住原话，用相近的说法也能搜到。"
+          }
+        }
+      },
       "status": {
         "unknown": "未知",
         "entitled": "已生效",

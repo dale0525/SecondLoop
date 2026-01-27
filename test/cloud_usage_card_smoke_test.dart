@@ -96,6 +96,12 @@ void main() {
     await tester.tap(find.text('Cloud account'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('cloud_usage_refresh')),
+      200,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('Cloud usage'), findsOneWidget);
   });
 }

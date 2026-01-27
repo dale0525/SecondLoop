@@ -6,8 +6,18 @@ import 'package:flutter/foundation.dart';
 import '../ai/ai_routing.dart';
 import 'subscription_scope.dart';
 
+final class _CloudSubscriptionSnapshot {
+  const _CloudSubscriptionSnapshot({
+    required this.status,
+    required this.canManageSubscription,
+  });
+
+  final SubscriptionStatus status;
+  final bool? canManageSubscription;
+}
+
 final class CloudSubscriptionController extends ChangeNotifier
-    implements SubscriptionStatusController {
+    implements SubscriptionDetailsController {
   CloudSubscriptionController({
     required Future<String?> Function() idTokenGetter,
     required String cloudGatewayBaseUrl,
@@ -24,12 +34,20 @@ final class CloudSubscriptionController extends ChangeNotifier
   @override
   SubscriptionStatus get status => _status;
 
+  bool? _canManageSubscription;
+
+  @override
+  bool? get canManageSubscription => _canManageSubscription;
+
   Future<void> refresh() async {
     final next = await _refreshFromCloudGateway();
-    _setStatus(next ?? SubscriptionStatus.unknown);
+    _setState(
+      status: next?.status ?? SubscriptionStatus.unknown,
+      canManageSubscription: next?.canManageSubscription,
+    );
   }
 
-  Future<SubscriptionStatus?> _refreshFromCloudGateway() async {
+  Future<_CloudSubscriptionSnapshot?> _refreshFromCloudGateway() async {
     if (kIsWeb) return null;
     if (_cloudGatewayBaseUrl.trim().isEmpty) return null;
 
@@ -61,17 +79,30 @@ final class CloudSubscriptionController extends ChangeNotifier
       final active = decoded['active'];
       if (active is! bool) return null;
 
-      return active
-          ? SubscriptionStatus.entitled
-          : SubscriptionStatus.notEntitled;
+      final rawCanManage = decoded['can_manage_subscription'];
+      final canManageSubscription = rawCanManage is bool ? rawCanManage : null;
+
+      return _CloudSubscriptionSnapshot(
+        status: active
+            ? SubscriptionStatus.entitled
+            : SubscriptionStatus.notEntitled,
+        canManageSubscription: canManageSubscription,
+      );
     } catch (_) {
       return null;
     }
   }
 
-  void _setStatus(SubscriptionStatus next) {
-    if (_status == next) return;
-    _status = next;
+  void _setState({
+    required SubscriptionStatus status,
+    required bool? canManageSubscription,
+  }) {
+    final statusChanged = _status != status;
+    final canManageChanged = _canManageSubscription != canManageSubscription;
+    if (!statusChanged && !canManageChanged) return;
+
+    _status = status;
+    _canManageSubscription = canManageSubscription;
     notifyListeners();
   }
 

@@ -6,13 +6,16 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/firebase_identity_toolkit.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/subscription/cloud_subscription_controller.dart';
+import '../../core/subscription/creem_billing_client.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'cloud_usage_card.dart';
 
 class CloudAccountPage extends StatefulWidget {
-  const CloudAccountPage({super.key});
+  const CloudAccountPage({super.key, this.billingClient});
+
+  final BillingClient? billingClient;
 
   @override
   State<CloudAccountPage> createState() => _CloudAccountPageState();
@@ -34,9 +37,32 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   Object? _subError;
   String? _subscriptionUid;
 
+  bool _billingBusy = false;
+  Object? _billingError;
+
   CloudSubscriptionController? _subscriptionController(BuildContext context) {
     final controller = SubscriptionScope.maybeOf(context);
     return controller is CloudSubscriptionController ? controller : null;
+  }
+
+  SubscriptionDetailsController? _subscriptionDetailsController(
+      BuildContext context) {
+    final controller = SubscriptionScope.maybeOf(context);
+    return controller is SubscriptionDetailsController ? controller : null;
+  }
+
+  BillingClient? _billingClient(BuildContext context) {
+    final override = widget.billingClient;
+    if (override != null) return override;
+
+    final scope = CloudAuthScope.maybeOf(context);
+    final controller = scope?.controller;
+    if (controller == null) return null;
+
+    return CreemBillingClient(
+      idTokenGetter: controller.getIdToken,
+      cloudGatewayBaseUrl: scope?.gatewayConfig.baseUrl ?? '',
+    );
   }
 
   @override
@@ -64,6 +90,21 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     );
   }
 
+  Widget _valuePropTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String body,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: scheme.primary),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(body),
+    );
+  }
+
   Future<void> _refreshSubscription() async {
     if (_subBusy) return;
     final controller = _subscriptionController(context);
@@ -81,6 +122,50 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       setState(() => _subError = e);
     } finally {
       if (mounted) setState(() => _subBusy = false);
+    }
+  }
+
+  Future<void> _openCheckout() async {
+    if (_billingBusy) return;
+    final client = _billingClient(context);
+    if (client == null) return;
+
+    setState(() {
+      _billingBusy = true;
+      _billingError = null;
+    });
+
+    try {
+      await client.openCheckout();
+      if (!mounted) return;
+      setState(() => _billingError = null);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _billingError = e);
+    } finally {
+      if (mounted) setState(() => _billingBusy = false);
+    }
+  }
+
+  Future<void> _openPortal() async {
+    if (_billingBusy) return;
+    final client = _billingClient(context);
+    if (client == null) return;
+
+    setState(() {
+      _billingBusy = true;
+      _billingError = null;
+    });
+
+    try {
+      await client.openPortal();
+      if (!mounted) return;
+      setState(() => _billingError = null);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _billingError = e);
+    } finally {
+      if (mounted) setState(() => _billingBusy = false);
     }
   }
 
@@ -247,6 +332,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
 
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
+    final canManageSubscription =
+        _subscriptionDetailsController(context)?.canManageSubscription ?? true;
 
     return Scaffold(
       appBar: AppBar(
@@ -256,6 +343,59 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
         padding: const EdgeInsets.all(16),
         children: [
           if (uid == null) ...[
+            SlSurface(
+              key: const ValueKey('cloud_account_value_props'),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t.settings.cloudAccount.benefits.title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  _valuePropTile(
+                    context,
+                    icon: Icons.shopping_cart,
+                    title: context
+                        .t.settings.cloudAccount.benefits.items.purchase.title,
+                    body: context
+                        .t.settings.cloudAccount.benefits.items.purchase.body,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.t.settings.subscription.benefits.title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  _valuePropTile(
+                    context,
+                    icon: Icons.flash_on,
+                    title: context
+                        .t.settings.subscription.benefits.items.noSetup.title,
+                    body: context
+                        .t.settings.subscription.benefits.items.noSetup.body,
+                  ),
+                  _valuePropTile(
+                    context,
+                    icon: Icons.cloud_sync,
+                    title: context
+                        .t.settings.subscription.benefits.items.cloudSync.title,
+                    body: context
+                        .t.settings.subscription.benefits.items.cloudSync.body,
+                  ),
+                  _valuePropTile(
+                    context,
+                    icon: Icons.manage_search,
+                    title: context.t.settings.subscription.benefits.items
+                        .mobileSearch.title,
+                    body: context.t.settings.subscription.benefits.items
+                        .mobileSearch.body,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             SlSurface(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -434,11 +574,71 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (subscriptionStatus != SubscriptionStatus.entitled)
+                  if (_billingError != null) ...[
                     Text(
-                      context
-                          .t.settings.subscription.labels.purchaseUnavailable,
+                      context.t.settings.subscription.labels.loadFailed(
+                        error: '$_billingError',
+                      ),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (subscriptionStatus != SubscriptionStatus.entitled) ...[
+                    Container(
+                      key: const ValueKey('cloud_subscription_value_props'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.t.settings.subscription.benefits.title,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 12),
+                          _valuePropTile(
+                            context,
+                            icon: Icons.flash_on,
+                            title: context.t.settings.subscription.benefits
+                                .items.noSetup.title,
+                            body: context.t.settings.subscription.benefits.items
+                                .noSetup.body,
+                          ),
+                          _valuePropTile(
+                            context,
+                            icon: Icons.cloud_sync,
+                            title: context.t.settings.subscription.benefits
+                                .items.cloudSync.title,
+                            body: context.t.settings.subscription.benefits.items
+                                .cloudSync.body,
+                          ),
+                          _valuePropTile(
+                            context,
+                            icon: Icons.manage_search,
+                            title: context.t.settings.subscription.benefits
+                                .items.mobileSearch.title,
+                            body: context.t.settings.subscription.benefits.items
+                                .mobileSearch.body,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      key: const ValueKey('cloud_subscribe'),
+                      onPressed: _billingBusy ? null : _openCheckout,
+                      child: Text(
+                        context.t.settings.subscription.actions.purchase,
+                      ),
+                    ),
+                  ] else ...[
+                    if (canManageSubscription)
+                      OutlinedButton(
+                        key: const ValueKey('cloud_manage_subscription'),
+                        onPressed: _billingBusy ? null : _openPortal,
+                        child: Text(context.t.settings.subscription.subtitle),
+                      ),
+                  ],
                 ],
               ),
             ),
