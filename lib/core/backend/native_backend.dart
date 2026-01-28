@@ -819,6 +819,29 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<void> syncWebdavDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.syncWebdavDownloadAttachmentBytes(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+      sha256: sha256,
+    );
+  }
+
+  @override
   Future<void> syncLocaldirTestConnection({
     required String localDir,
     required String remoteRoot,
@@ -877,6 +900,25 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<void> syncLocaldirDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.syncLocaldirDownloadAttachmentBytes(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+      sha256: sha256,
+    );
+  }
+
+  @override
   Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
@@ -917,6 +959,68 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<void> syncManagedVaultDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.syncManagedVaultDownloadAttachmentBytes(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+      sha256: sha256,
+    );
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final appDir = await _getAppDir();
+    final pushed = await rust_core.syncManagedVaultPushOpsOnly(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+    );
+    return pushed.toInt();
+  }
+
+  @override
+  Future<bool> syncManagedVaultUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.syncManagedVaultUploadAttachmentBytes(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+      sha256: sha256,
+    );
+  }
+
+  @override
   Future<String> getOrCreateDeviceId() async {
     final appDir = await _getAppDir();
     return rust_core.dbGetOrCreateDeviceId(appDir: appDir);
@@ -948,5 +1052,129 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       vaultId: vaultId,
       firebaseIdToken: idToken,
     );
+  }
+
+  @override
+  Future<AttachmentVariant> upsertAttachmentVariant(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String variant,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpsertAttachmentVariant(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: attachmentSha256,
+      variant: variant,
+      bytes: bytes,
+      mimeType: mimeType,
+    );
+  }
+
+  @override
+  Future<Uint8List> readAttachmentVariantBytes(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String variant,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbReadAttachmentVariantBytes(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: attachmentSha256,
+      variant: variant,
+    );
+  }
+
+  @override
+  Future<void> enqueueCloudMediaBackup(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String desiredVariant,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbEnqueueCloudMediaBackup(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: attachmentSha256,
+      desiredVariant: desiredVariant,
+      nowMs: nowMs,
+    );
+  }
+
+  @override
+  Future<int> backfillCloudMediaBackupImages(
+    Uint8List key, {
+    required String desiredVariant,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    final affected = await rust_core.dbBackfillCloudMediaBackupImages(
+      appDir: appDir,
+      key: key,
+      desiredVariant: desiredVariant,
+      nowMs: nowMs,
+    );
+    return affected.toInt();
+  }
+
+  @override
+  Future<List<CloudMediaBackup>> listDueCloudMediaBackups(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 100,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListDueCloudMediaBackups(
+      appDir: appDir,
+      key: key,
+      nowMs: nowMs,
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<void> markCloudMediaBackupFailed(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkCloudMediaBackupFailed(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: attachmentSha256,
+      attempts: attempts,
+      nextRetryAtMs: nextRetryAtMs,
+      lastError: lastError,
+      nowMs: nowMs,
+    );
+  }
+
+  @override
+  Future<void> markCloudMediaBackupUploaded(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkCloudMediaBackupUploaded(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: attachmentSha256,
+      nowMs: nowMs,
+    );
+  }
+
+  @override
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCloudMediaBackupSummary(appDir: appDir, key: key);
   }
 }

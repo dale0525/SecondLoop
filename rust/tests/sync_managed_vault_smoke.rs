@@ -110,6 +110,7 @@ fn start_mock_managed_vault_server() -> (
         }
         match listener.accept() {
             Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).expect("blocking stream");
                 let (raw_headers, method, path, body) = read_request(&mut stream);
                 let req_dump = format!("{raw_headers}{}", String::from_utf8_lossy(&body));
                 {
@@ -352,6 +353,76 @@ fn managed_vault_push_then_pull_copies_messages() {
     let requests = state.lock().expect("lock").requests.join("\n\n");
     let req_lower = requests.to_ascii_lowercase();
     assert!(req_lower.contains("authorization: bearer test_uid"));
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_paginates_until_caught_up() {
+    let (base_url, stop_tx, state, handle) = start_mock_managed_vault_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    // Device A creates data locally.
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+
+    // Add a todo, then enough ops to require multiple pull pages, then mark it done.
+    let todo_id = "todo:pagination";
+    db::upsert_todo(
+        &conn_a,
+        &key_a,
+        todo_id,
+        "pagination todo",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo A");
+    for i in 0..520 {
+        db::insert_message(&conn_a, &key_a, &conv_a.id, "user", &format!("m{i}"))
+            .expect("insert msg A");
+    }
+    db::set_todo_status(&conn_a, &key_a, todo_id, "done", None).expect("set todo done A");
+
+    // Device B is a fresh install (different local root key).
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    // Shared sync key derived from a shared passphrase (same on both devices).
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let applied =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert!(applied > 0);
+
+    let todo_b = db::get_todo(&conn_b, &key_b, todo_id).expect("get todo B");
+    assert_eq!(todo_b.status, "done");
+
+    let requests = state.lock().expect("lock").requests.join("\n\n");
+    assert!(requests.matches("ops:pull").count() >= 2);
 
     let _ = stop_tx.send(());
     handle.join().expect("join");

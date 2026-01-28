@@ -8,6 +8,7 @@ import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/firebase_identity_toolkit.dart';
+import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
@@ -104,7 +105,25 @@ final class BackgroundSync {
       return true;
     }
 
+    final wifiOnly = await store.readAutoWifiOnly();
+    if (wifiOnly) {
+      try {
+        final network =
+            await ConnectivityCloudMediaBackupNetworkProvider().call();
+        if (network == CloudMediaBackupNetwork.cellular ||
+            network == CloudMediaBackupNetwork.offline) {
+          await rescheduleIfNeeded();
+          return true;
+        }
+      } catch (_) {
+        // Best-effort: if connectivity plugin is unavailable in this isolate,
+        // fall back to running sync as usual.
+      }
+    }
+
     await backend.init();
+
+    final mediaQueueEnabled = await store.readCloudMediaBackupEnabled();
 
     try {
       String? idToken;
@@ -136,7 +155,37 @@ final class BackgroundSync {
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
+        useMediaQueue: mediaQueueEnabled,
       );
+
+      if (mediaQueueEnabled &&
+          config.backendType == SyncBackendType.managedVault) {
+        final token = idToken;
+        if (token != null && token.trim().isNotEmpty) {
+          final wifiOnly = await store.readCloudMediaBackupWifiOnly();
+          final runner = CloudMediaBackupRunner(
+            store: BackendCloudMediaBackupStore(
+              backend: backend,
+              sessionKey: sessionKey,
+            ),
+            client: ManagedVaultCloudMediaBackupClient(
+              backend: backend,
+              sessionKey: sessionKey,
+              syncKey: config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: token,
+            ),
+            settings: CloudMediaBackupRunnerSettings(
+              enabled: true,
+              wifiOnly: wifiOnly,
+            ),
+            getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
+          );
+          await runner.runOnce(allowCellular: false);
+        }
+      }
+
       await rescheduleIfNeeded();
       return true;
     } catch (_) {
@@ -193,6 +242,7 @@ final class BackgroundSync {
     required Uint8List sessionKey,
     required SyncConfig config,
     required String? managedVaultIdToken,
+    required bool useMediaQueue,
   }) async {
     return switch (config.backendType) {
       SyncBackendType.webdav => backend.syncWebdavPush(
@@ -213,6 +263,15 @@ final class BackgroundSync {
           final idToken = managedVaultIdToken;
           if (idToken == null || idToken.trim().isEmpty) return 0;
           try {
+            if (useMediaQueue) {
+              return await backend.syncManagedVaultPushOpsOnly(
+                sessionKey,
+                config.syncKey,
+                baseUrl: config.baseUrl ?? '',
+                vaultId: config.remoteRoot,
+                idToken: idToken,
+              );
+            }
             return await backend.syncManagedVaultPush(
               sessionKey,
               config.syncKey,

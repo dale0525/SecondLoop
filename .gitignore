@@ -35,5 +35,8 @@ build/
 # Local tools/cache
 .tool/
 
+# Local logs
+logs/
+
 # Git worktrees
 .worktrees/

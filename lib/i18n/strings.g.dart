@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 622 (311 per locale)
+/// Strings: 714 (357 per locale)
 ///
-/// Built on 2026-01-27 at 03:34 UTC
+/// Built on 2026-01-28 at 01:40 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -195,6 +195,7 @@ class Translations implements BaseTranslations<AppLocale, Translations> {
   late final _StringsSettingsEn settings = _StringsSettingsEn._(_root);
   late final _StringsLockEn lock = _StringsLockEn._(_root);
   late final _StringsChatEn chat = _StringsChatEn._(_root);
+  late final _StringsAttachmentsEn attachments = _StringsAttachmentsEn._(_root);
   late final _StringsSemanticSearchEn semanticSearch =
       _StringsSemanticSearchEn._(_root);
   late final _StringsSemanticSearchDebugEn semanticSearchDebug =
@@ -292,6 +293,8 @@ class _StringsSettingsEn {
       _StringsSettingsCloudAccountEn._(_root);
   late final _StringsSettingsCloudUsageEn cloudUsage =
       _StringsSettingsCloudUsageEn._(_root);
+  late final _StringsSettingsVaultUsageEn vaultUsage =
+      _StringsSettingsVaultUsageEn._(_root);
   late final _StringsSettingsDiagnosticsEn diagnostics =
       _StringsSettingsDiagnosticsEn._(_root);
   late final _StringsSettingsByokUsageEn byokUsage =
@@ -341,9 +344,12 @@ class _StringsChatEn {
 
   // Translations
   String get mainStreamTitle => 'Main Stream';
+  String get cameraTooltip => 'Take photo';
+  String get photoMessage => 'Photo';
   String get editMessageTitle => 'Edit message';
   String get messageUpdated => 'Message updated';
   String get messageDeleted => 'Message deleted';
+  String photoFailed({required Object error}) => 'Photo failed: ${error}';
   String editFailed({required Object error}) => 'Edit failed: ${error}';
   String deleteFailed({required Object error}) => 'Delete failed: ${error}';
   String get noMessagesYet => 'No messages yet';
@@ -359,6 +365,17 @@ class _StringsChatEn {
       _StringsChatCloudGatewayEn._(_root);
   late final _StringsChatAskAiConsentEn askAiConsent =
       _StringsChatAskAiConsentEn._(_root);
+}
+
+// Path: attachments
+class _StringsAttachmentsEn {
+  _StringsAttachmentsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsAttachmentsMetadataEn metadata =
+      _StringsAttachmentsMetadataEn._(_root);
 }
 
 // Path: semanticSearch
@@ -406,28 +423,32 @@ class _StringsSyncEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Vault Sync';
+  String get title => 'Sync settings';
   late final _StringsSyncSectionsEn sections = _StringsSyncSectionsEn._(_root);
   late final _StringsSyncAutoSyncEn autoSync = _StringsSyncAutoSyncEn._(_root);
-  String get backendLabel => 'Vault backend';
-  String get backendWebdav => 'WebDAV';
-  String get backendLocalDir => 'Local directory (desktop)';
-  String get backendManagedVault => 'Cloud managed vault';
+  late final _StringsSyncMediaPreviewEn mediaPreview =
+      _StringsSyncMediaPreviewEn._(_root);
+  late final _StringsSyncMediaBackupEn mediaBackup =
+      _StringsSyncMediaBackupEn._(_root);
+  String get backendLabel => 'Sync method';
+  String get backendWebdav => 'WebDAV (your server)';
+  String get backendLocalDir => 'Folder on this computer (desktop)';
+  String get backendManagedVault => 'SecondLoop Cloud';
   late final _StringsSyncCloudManagedVaultEn cloudManagedVault =
       _StringsSyncCloudManagedVaultEn._(_root);
-  String get remoteRootRequired => 'Remote root is required';
-  String get baseUrlRequired => 'Base URL is required';
-  String get localDirRequired => 'Local directory is required';
+  String get remoteRootRequired => 'Folder name is required';
+  String get baseUrlRequired => 'Server address is required';
+  String get localDirRequired => 'Folder path is required';
   String get connectionOk => 'Connection OK';
   String connectionFailed({required Object error}) =>
       'Connection failed: ${error}';
   String saveFailed({required Object error}) => 'Save failed: ${error}';
-  String get missingSyncKey =>
-      'Missing sync key. Enter a passphrase and Save first.';
-  String pushedOps({required Object count}) => 'Pushed ${count} ops';
-  String pulledOps({required Object count}) => 'Pulled ${count} ops';
-  String pushFailed({required Object error}) => 'Push failed: ${error}';
-  String pullFailed({required Object error}) => 'Pull failed: ${error}';
+  String get missingSyncKey => 'Enter your sync passphrase and tap Save first.';
+  String pushedOps({required Object count}) => 'Uploaded ${count} changes';
+  String pulledOps({required Object count}) => 'Downloaded ${count} changes';
+  String get noNewChanges => 'No new changes';
+  String pushFailed({required Object error}) => 'Upload failed: ${error}';
+  String pullFailed({required Object error}) => 'Download failed: ${error}';
   late final _StringsSyncFieldsEn fields = _StringsSyncFieldsEn._(_root);
 }
 
@@ -438,20 +459,20 @@ class _StringsLlmProfilesEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'LLM Profiles';
+  String get title => 'AI profiles';
   String get refreshTooltip => 'Refresh';
   String get activeProfileHelp => 'Active profile is used for Ask AI.';
   String get noProfilesYet => 'No profiles yet.';
   String get addProfile => 'Add profile';
-  String get deleted => 'LLM profile deleted';
-  String get validationError => 'Name, API key, and model name are required.';
+  String get deleted => 'AI profile deleted';
+  String get validationError => 'Name, API key, and model are required.';
   late final _StringsLlmProfilesDeleteDialogEn deleteDialog =
       _StringsLlmProfilesDeleteDialogEn._(_root);
   late final _StringsLlmProfilesFieldsEn fields =
       _StringsLlmProfilesFieldsEn._(_root);
   late final _StringsLlmProfilesProvidersEn providers =
       _StringsLlmProfilesProvidersEn._(_root);
-  String get savedActivated => 'LLM profile saved and activated';
+  String get savedActivated => 'AI profile saved and activated';
   late final _StringsLlmProfilesActionsEn actions =
       _StringsLlmProfilesActionsEn._(_root);
 }
@@ -503,8 +524,8 @@ class _StringsCommonActionsEn {
   String get useModel => 'Use model';
   String get processPending => 'Process pending';
   String get rebuildEmbeddings => 'Rebuild embeddings';
-  String get push => 'Push';
-  String get pull => 'Pull';
+  String get push => 'Upload';
+  String get pull => 'Download';
   String get lockNow => 'Lock now';
 }
 
@@ -750,8 +771,8 @@ class _StringsSettingsLlmProfilesEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'LLM profiles';
-  String get subtitle => 'Configure BYOK for Ask AI';
+  String get title => 'AI profiles';
+  String get subtitle => 'Use your own API key for Ask AI';
 }
 
 // Path: settings.cloudAccount
@@ -791,6 +812,21 @@ class _StringsSettingsCloudUsageEn {
       _StringsSettingsCloudUsageLabelsEn._(_root);
 }
 
+// Path: settings.vaultUsage
+class _StringsSettingsVaultUsageEn {
+  _StringsSettingsVaultUsageEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Vault storage';
+  String get subtitle => 'Storage used by your synced data';
+  late final _StringsSettingsVaultUsageActionsEn actions =
+      _StringsSettingsVaultUsageActionsEn._(_root);
+  late final _StringsSettingsVaultUsageLabelsEn labels =
+      _StringsSettingsVaultUsageLabelsEn._(_root);
+}
+
 // Path: settings.diagnostics
 class _StringsSettingsDiagnosticsEn {
   _StringsSettingsDiagnosticsEn._(this._root);
@@ -799,9 +835,9 @@ class _StringsSettingsDiagnosticsEn {
 
   // Translations
   String get title => 'Diagnostics';
-  String get subtitle => 'Export a diagnostics bundle for support';
+  String get subtitle => 'Share a diagnostics report with support';
   String get privacyNote =>
-      'This bundle intentionally excludes plaintext notes and API keys.';
+      'This report does not include your notes or API keys.';
   String get loading => 'Loading diagnostics…';
   late final _StringsSettingsDiagnosticsMessagesEn messages =
       _StringsSettingsDiagnosticsMessagesEn._(_root);
@@ -814,9 +850,8 @@ class _StringsSettingsByokUsageEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'BYOK usage';
-  String get subtitle =>
-      'Active profile only • requests + tokens (if provided)';
+  String get title => 'API key usage';
+  String get subtitle => 'Active profile • requests and tokens (if available)';
   String get loading => 'Loading…';
   String get noData => 'No data';
   late final _StringsSettingsByokUsageErrorsEn errors =
@@ -854,7 +889,7 @@ class _StringsSettingsSyncEn {
 
   // Translations
   String get title => 'Sync';
-  String get subtitle => 'Vault backends + auto sync settings';
+  String get subtitle => 'Choose how to sync and manage data usage';
 }
 
 // Path: settings.resetLocalDataThisDeviceOnly
@@ -866,7 +901,7 @@ class _StringsSettingsResetLocalDataThisDeviceOnlyEn {
   // Translations
   String get dialogTitle => 'Reset local data?';
   String get dialogBody =>
-      'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+      'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
   String failed({required Object error}) => 'Reset failed: ${error}';
 }
 
@@ -879,7 +914,7 @@ class _StringsSettingsResetLocalDataAllDevicesEn {
   // Translations
   String get dialogTitle => 'Reset local data?';
   String get dialogBody =>
-      'This will delete local messages and clear all synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+      'This will delete local messages and clear all synced remote data. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
   String failed({required Object error}) => 'Reset failed: ${error}';
 }
 
@@ -960,7 +995,7 @@ class _StringsChatAskAiSetupEn {
   // Translations
   String get title => 'Ask AI setup required';
   String get body =>
-      'Configure BYOK (LLM profiles) or subscribe to SecondLoop Cloud to use Ask AI.';
+      'To use Ask AI, add your own API key (AI profile) or subscribe to SecondLoop Cloud.';
   late final _StringsChatAskAiSetupActionsEn actions =
       _StringsChatAskAiSetupActionsEn._(_root);
 }
@@ -989,8 +1024,19 @@ class _StringsChatAskAiConsentEn {
   // Translations
   String get title => 'Before you ask';
   String get body =>
-      'SecondLoop will send your question and a few relevant snippets to your configured LLM provider to generate an answer.\n\nIt will NOT upload your vault key, sync key, or full history.';
+      'SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.';
   String get dontShowAgain => 'Don\'t show again';
+}
+
+// Path: attachments.metadata
+class _StringsAttachmentsMetadataEn {
+  _StringsAttachmentsMetadataEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get capturedAt => 'Captured';
+  String get location => 'Location';
 }
 
 // Path: sync.sections
@@ -1000,9 +1046,11 @@ class _StringsSyncSectionsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get automation => 'Automation';
-  String get backend => 'Backend';
-  String get securityActions => 'Security & Actions';
+  String get automation => 'Auto sync';
+  String get backend => 'Sync method';
+  String get mediaPreview => 'Media previews';
+  String get mediaBackup => 'Media backup';
+  String get securityActions => 'Security & manual sync';
 }
 
 // Path: sync.autoSync
@@ -1013,8 +1061,62 @@ class _StringsSyncAutoSyncEn {
 
   // Translations
   String get title => 'Auto sync';
-  String get subtitle =>
-      'Foreground debounced push + background periodic sync (mobile)';
+  String get subtitle => 'Keeps your devices in sync automatically.';
+  String get wifiOnlyTitle => 'Auto sync on Wi‑Fi only';
+  String get wifiOnlySubtitle =>
+      'Save mobile data by syncing automatically only on Wi‑Fi';
+}
+
+// Path: sync.mediaPreview
+class _StringsSyncMediaPreviewEn {
+  _StringsSyncMediaPreviewEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get chatThumbnailsWifiOnlyTitle => 'Image previews on Wi‑Fi only';
+  String get chatThumbnailsWifiOnlySubtitle =>
+      'If a photo isn\'t on this device yet, download its preview only on Wi‑Fi';
+}
+
+// Path: sync.mediaBackup
+class _StringsSyncMediaBackupEn {
+  _StringsSyncMediaBackupEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Media backup (Cloud)';
+  String get subtitle => 'Backs up photos and files in the background';
+  String get wifiOnlyTitle => 'Back up on Wi‑Fi only';
+  String get wifiOnlySubtitle => 'Save mobile data by backing up only on Wi‑Fi';
+  String get description =>
+      'Securely backs up photos and files. It’s not a cloud drive. If a file is missing on this device, it can be downloaded when needed after it’s backed up.';
+  String stats(
+          {required Object pending,
+          required Object failed,
+          required Object uploaded}) =>
+      'Waiting ${pending} · Failed ${failed} · Backed up ${uploaded}';
+  String lastUploaded({required Object at}) => 'Last backup: ${at}';
+  String lastError({required Object error}) => 'Last error: ${error}';
+  String lastErrorWithTime({required Object at, required Object error}) =>
+      'Last error (${at}): ${error}';
+  String get backfillButton => 'Back up existing photos';
+  String get uploadNowButton => 'Back up now';
+  String backfillEnqueued({required Object count}) =>
+      'Queued ${count} photos for backup';
+  String backfillFailed({required Object error}) =>
+      'Couldn\'t queue old photos: ${error}';
+  String get notEnabled => 'Turn on Media backup first.';
+  String get managedVaultOnly =>
+      'Media backup is available with SecondLoop Cloud sync.';
+  String get wifiOnlyBlocked =>
+      'Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.';
+  String get uploaded => 'Backup complete';
+  String get nothingToUpload => 'Nothing to back up';
+  String uploadFailed({required Object error}) => 'Backup failed: ${error}';
+  late final _StringsSyncMediaBackupCellularDialogEn cellularDialog =
+      _StringsSyncMediaBackupCellularDialogEn._(_root);
 }
 
 // Path: sync.cloudManagedVault
@@ -1024,11 +1126,16 @@ class _StringsSyncCloudManagedVaultEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get signInRequired => 'Sign in to use Cloud managed vault.';
+  String get signInRequired => 'Sign in to use SecondLoop Cloud sync.';
   String get paymentRequired =>
-      'Cloud sync is unavailable. Renew your subscription to continue syncing.';
+      'Cloud sync is paused. Renew your subscription to continue syncing.';
   String graceReadonlyUntil({required Object until}) =>
       'Cloud sync is read-only until ${until}.';
+  String get storageQuotaExceeded =>
+      'Cloud storage is full. Uploads are paused.';
+  String storageQuotaExceededWithUsage(
+          {required Object used, required Object limit}) =>
+      'Cloud storage is full (${used} / ${limit}). Uploads are paused.';
 }
 
 // Path: sync.fields
@@ -1077,8 +1184,8 @@ class _StringsLlmProfilesFieldsEn {
   // Translations
   String get name => 'Name';
   String get provider => 'Provider';
-  String get baseUrlOptional => 'Base URL (optional)';
-  String get modelName => 'Model name';
+  String get baseUrlOptional => 'API endpoint (optional)';
+  String get modelName => 'Model';
   String get apiKey => 'API key';
 }
 
@@ -1223,7 +1330,7 @@ class _StringsSettingsCloudAccountErrorsEn {
 
   // Translations
   String get missingWebApiKey =>
-      'Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app.';
+      'Cloud sign-in isn\'t available in this build. If you\'re running from source, run `pixi run init-env` (or copy `.env.example` → `.env.local`), set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app.';
 }
 
 // Path: settings.cloudAccount.fields
@@ -1284,7 +1391,8 @@ class _StringsSettingsCloudUsageLabelsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get gatewayNotConfigured => 'Cloud gateway is not configured.';
+  String get gatewayNotConfigured =>
+      'Cloud usage isn\'t available in this build.';
   String get signInRequired => 'Sign in to view usage.';
   String get usage => 'Usage:';
   String get inputTokensUsed30d => 'Input tokens (30d):';
@@ -1292,6 +1400,32 @@ class _StringsSettingsCloudUsageLabelsEn {
   String get tokensUsed30d => 'Tokens (30d):';
   String get requestsUsed30d => 'Requests (30d):';
   String get resetAt => 'Resets on:';
+  String loadFailed({required Object error}) => 'Failed to load: ${error}';
+}
+
+// Path: settings.vaultUsage.actions
+class _StringsSettingsVaultUsageActionsEn {
+  _StringsSettingsVaultUsageActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get refresh => 'Refresh';
+}
+
+// Path: settings.vaultUsage.labels
+class _StringsSettingsVaultUsageLabelsEn {
+  _StringsSettingsVaultUsageLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get notConfigured => 'Vault storage isn\'t available in this build.';
+  String get signInRequired => 'Sign in to view vault storage.';
+  String get used => 'Used:';
+  String get limit => 'Limit:';
+  String get attachments => 'Photos & files:';
+  String get ops => 'Sync history:';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
@@ -1397,7 +1531,7 @@ class _StringsChatAskAiSetupActionsEn {
 
   // Translations
   String get subscribe => 'Subscribe';
-  String get configureByok => 'Configure BYOK';
+  String get configureByok => 'Add API key';
 }
 
 // Path: chat.cloudGateway.fallback
@@ -1407,12 +1541,14 @@ class _StringsChatCloudGatewayFallbackEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get auth => 'Cloud sign-in required. Using BYOK for this request.';
+  String get auth =>
+      'Cloud sign-in required. Using your API key for this request.';
   String get entitlement =>
-      'Cloud subscription required. Using BYOK for this request.';
+      'Cloud subscription required. Using your API key for this request.';
   String get rateLimited =>
-      'Cloud is rate limited. Using BYOK for this request.';
-  String get generic => 'Cloud request failed. Using BYOK for this request.';
+      'Cloud is busy. Using your API key for this request.';
+  String get generic =>
+      'Cloud request failed. Using your API key for this request.';
 }
 
 // Path: chat.cloudGateway.errors
@@ -1425,9 +1561,22 @@ class _StringsChatCloudGatewayErrorsEn {
   String get auth =>
       'Cloud sign-in required. Open Cloud account and sign in again.';
   String get entitlement =>
-      'Cloud subscription required. Configure BYOK or try again later.';
+      'Cloud subscription required. Add an API key or try again later.';
   String get rateLimited => 'Cloud is rate limited. Please try again later.';
   String get generic => 'Cloud request failed.';
+}
+
+// Path: sync.mediaBackup.cellularDialog
+class _StringsSyncMediaBackupCellularDialogEn {
+  _StringsSyncMediaBackupCellularDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Use mobile data?';
+  String get message =>
+      'Wi‑Fi only is on. Backing up over mobile data may use a lot of data.';
+  String get confirm => 'Use mobile data';
 }
 
 // Path: sync.fields.baseUrl
@@ -1437,7 +1586,7 @@ class _StringsSyncFieldsBaseUrlEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Base URL';
+  String get label => 'Server address';
   String get hint => 'https://example.com/dav';
 }
 
@@ -1468,7 +1617,7 @@ class _StringsSyncFieldsLocalDirEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Local directory path';
+  String get label => 'Folder path';
   String get hint => '/Users/me/SecondLoopVault';
   String get helper =>
       'Best for desktop; mobile platforms may not support this path.';
@@ -1481,7 +1630,7 @@ class _StringsSyncFieldsManagedVaultBaseUrlEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Managed Vault base URL';
+  String get label => 'Cloud server address (advanced)';
   String get hint => 'https://vault.example.com';
 }
 
@@ -1492,8 +1641,8 @@ class _StringsSyncFieldsVaultIdEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Vault ID';
-  String get hint => 'Cloud UID';
+  String get label => 'Cloud account ID';
+  String get hint => 'Auto';
 }
 
 // Path: sync.fields.remoteRoot
@@ -1503,7 +1652,7 @@ class _StringsSyncFieldsRemoteRootEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Remote root folder';
+  String get label => 'Folder name';
   String get hint => 'SecondLoop';
 }
 
@@ -1514,8 +1663,9 @@ class _StringsSyncFieldsPassphraseEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Sync passphrase (not stored; derives a key)';
-  String get helper => 'Use the same passphrase on all devices.';
+  String get label => 'Sync passphrase';
+  String get helper =>
+      'Use the same passphrase on all devices. It’s never uploaded.';
 }
 
 // Path: settings.cloudAccount.benefits.items
@@ -1687,6 +1837,9 @@ class _StringsZhCn extends Translations {
   @override
   late final _StringsChatZhCn chat = _StringsChatZhCn._(_root);
   @override
+  late final _StringsAttachmentsZhCn attachments =
+      _StringsAttachmentsZhCn._(_root);
+  @override
   late final _StringsSemanticSearchZhCn semanticSearch =
       _StringsSemanticSearchZhCn._(_root);
   @override
@@ -1837,6 +1990,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsCloudUsageZhCn cloudUsage =
       _StringsSettingsCloudUsageZhCn._(_root);
   @override
+  late final _StringsSettingsVaultUsageZhCn vaultUsage =
+      _StringsSettingsVaultUsageZhCn._(_root);
+  @override
   late final _StringsSettingsDiagnosticsZhCn diagnostics =
       _StringsSettingsDiagnosticsZhCn._(_root);
   @override
@@ -1909,11 +2065,17 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   String get mainStreamTitle => '主线';
   @override
+  String get cameraTooltip => '拍照';
+  @override
+  String get photoMessage => '照片';
+  @override
   String get editMessageTitle => '编辑消息';
   @override
   String get messageUpdated => '消息已更新';
   @override
   String get messageDeleted => '消息已删除';
+  @override
+  String photoFailed({required Object error}) => '拍照失败：${error}';
   @override
   String editFailed({required Object error}) => '编辑失败：${error}';
   @override
@@ -1939,6 +2101,21 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   late final _StringsChatAskAiConsentZhCn askAiConsent =
       _StringsChatAskAiConsentZhCn._(_root);
+}
+
+// Path: attachments
+class _StringsAttachmentsZhCn extends _StringsAttachmentsEn {
+  _StringsAttachmentsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsAttachmentsMetadataZhCn metadata =
+      _StringsAttachmentsMetadataZhCn._(_root);
 }
 
 // Path: semanticSearch
@@ -2004,7 +2181,7 @@ class _StringsSyncZhCn extends _StringsSyncEn {
 
   // Translations
   @override
-  String get title => 'Vault 同步';
+  String get title => '同步设置';
   @override
   late final _StringsSyncSectionsZhCn sections =
       _StringsSyncSectionsZhCn._(_root);
@@ -2012,38 +2189,46 @@ class _StringsSyncZhCn extends _StringsSyncEn {
   late final _StringsSyncAutoSyncZhCn autoSync =
       _StringsSyncAutoSyncZhCn._(_root);
   @override
-  String get backendLabel => 'Vault 后端';
+  late final _StringsSyncMediaPreviewZhCn mediaPreview =
+      _StringsSyncMediaPreviewZhCn._(_root);
   @override
-  String get backendWebdav => 'WebDAV';
+  late final _StringsSyncMediaBackupZhCn mediaBackup =
+      _StringsSyncMediaBackupZhCn._(_root);
   @override
-  String get backendLocalDir => '本地目录（桌面端）';
+  String get backendLabel => '同步方式';
   @override
-  String get backendManagedVault => '云托管 Vault';
+  String get backendWebdav => 'WebDAV（你自己的服务器）';
+  @override
+  String get backendLocalDir => '本机文件夹（桌面端）';
+  @override
+  String get backendManagedVault => 'SecondLoop Cloud';
   @override
   late final _StringsSyncCloudManagedVaultZhCn cloudManagedVault =
       _StringsSyncCloudManagedVaultZhCn._(_root);
   @override
-  String get remoteRootRequired => '必须填写远端根目录';
+  String get remoteRootRequired => '必须填写文件夹名称';
   @override
-  String get baseUrlRequired => '必须填写 Base URL';
+  String get baseUrlRequired => '必须填写服务器地址';
   @override
-  String get localDirRequired => '必须填写本地目录';
+  String get localDirRequired => '必须填写文件夹路径';
   @override
-  String get connectionOk => '连接正常';
+  String get connectionOk => '连接成功';
   @override
   String connectionFailed({required Object error}) => '连接失败：${error}';
   @override
   String saveFailed({required Object error}) => '保存失败：${error}';
   @override
-  String get missingSyncKey => '缺少同步密钥。请先输入 passphrase 并点击保存。';
+  String get missingSyncKey => '缺少同步口令。请先输入口令并点击保存。';
   @override
-  String pushedOps({required Object count}) => '已推送 ${count} 条操作';
+  String pushedOps({required Object count}) => '已上传 ${count} 个更改';
   @override
-  String pulledOps({required Object count}) => '已拉取 ${count} 条操作';
+  String pulledOps({required Object count}) => '已下载 ${count} 个更改';
   @override
-  String pushFailed({required Object error}) => '推送失败：${error}';
+  String get noNewChanges => '已是最新';
   @override
-  String pullFailed({required Object error}) => '拉取失败：${error}';
+  String pushFailed({required Object error}) => '上传失败：${error}';
+  @override
+  String pullFailed({required Object error}) => '下载失败：${error}';
   @override
   late final _StringsSyncFieldsZhCn fields = _StringsSyncFieldsZhCn._(_root);
 }
@@ -2059,19 +2244,19 @@ class _StringsLlmProfilesZhCn extends _StringsLlmProfilesEn {
 
   // Translations
   @override
-  String get title => 'LLM Profiles';
+  String get title => 'AI 配置';
   @override
   String get refreshTooltip => '刷新';
   @override
-  String get activeProfileHelp => '当前激活的 profile 用于 Ask AI。';
+  String get activeProfileHelp => '当前选择的配置将用于「问 AI」。';
   @override
-  String get noProfilesYet => '暂无 profile。';
+  String get noProfilesYet => '暂无配置。';
   @override
-  String get addProfile => '添加 profile';
+  String get addProfile => '添加配置';
   @override
-  String get deleted => 'LLM profile 已删除';
+  String get deleted => '配置已删除';
   @override
-  String get validationError => 'Name、API key、Model name 为必填项。';
+  String get validationError => '名称、API Key 和模型名称为必填项。';
   @override
   late final _StringsLlmProfilesDeleteDialogZhCn deleteDialog =
       _StringsLlmProfilesDeleteDialogZhCn._(_root);
@@ -2082,7 +2267,7 @@ class _StringsLlmProfilesZhCn extends _StringsLlmProfilesEn {
   late final _StringsLlmProfilesProvidersZhCn providers =
       _StringsLlmProfilesProvidersZhCn._(_root);
   @override
-  String get savedActivated => 'LLM profile 已保存并激活';
+  String get savedActivated => '已保存并设为当前配置';
   @override
   late final _StringsLlmProfilesActionsZhCn actions =
       _StringsLlmProfilesActionsZhCn._(_root);
@@ -2167,9 +2352,9 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   @override
   String get rebuildEmbeddings => '重建向量索引';
   @override
-  String get push => '推送';
+  String get push => '上传';
   @override
-  String get pull => '拉取';
+  String get pull => '下载';
   @override
   String get lockNow => '立即锁定';
 }
@@ -2540,9 +2725,9 @@ class _StringsSettingsLlmProfilesZhCn extends _StringsSettingsLlmProfilesEn {
 
   // Translations
   @override
-  String get title => 'LLM Profiles';
+  String get title => 'AI 配置';
   @override
-  String get subtitle => '为 Ask AI 配置 BYOK';
+  String get subtitle => '添加你自己的 API Key（用于问 AI）';
 }
 
 // Path: settings.cloudAccount
@@ -2590,7 +2775,7 @@ class _StringsSettingsCloudUsageZhCn extends _StringsSettingsCloudUsageEn {
 
   // Translations
   @override
-  String get title => 'Cloud 用量';
+  String get title => '云端用量';
   @override
   String get subtitle => '当前账期用量';
   @override
@@ -2599,6 +2784,28 @@ class _StringsSettingsCloudUsageZhCn extends _StringsSettingsCloudUsageEn {
   @override
   late final _StringsSettingsCloudUsageLabelsZhCn labels =
       _StringsSettingsCloudUsageLabelsZhCn._(_root);
+}
+
+// Path: settings.vaultUsage
+class _StringsSettingsVaultUsageZhCn extends _StringsSettingsVaultUsageEn {
+  _StringsSettingsVaultUsageZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '云端存储';
+  @override
+  String get subtitle => '你的同步数据占用的云端存储';
+  @override
+  late final _StringsSettingsVaultUsageActionsZhCn actions =
+      _StringsSettingsVaultUsageActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsVaultUsageLabelsZhCn labels =
+      _StringsSettingsVaultUsageLabelsZhCn._(_root);
 }
 
 // Path: settings.diagnostics
@@ -2614,9 +2821,9 @@ class _StringsSettingsDiagnosticsZhCn extends _StringsSettingsDiagnosticsEn {
   @override
   String get title => '诊断信息';
   @override
-  String get subtitle => '导出诊断包用于排查';
+  String get subtitle => '导出诊断信息以便支持排查';
   @override
-  String get privacyNote => '此诊断包会排除明文记录与 API Key。';
+  String get privacyNote => '该报告不会包含你的记录正文或 API Key。';
   @override
   String get loading => '正在加载诊断信息…';
   @override
@@ -2635,9 +2842,9 @@ class _StringsSettingsByokUsageZhCn extends _StringsSettingsByokUsageEn {
 
   // Translations
   @override
-  String get title => 'BYOK 用量';
+  String get title => 'API Key 用量';
   @override
-  String get subtitle => '仅统计当前激活的 profile • 请求数 + tokens（若上游返回）';
+  String get subtitle => '当前配置 • 请求数与 Token（如可获取）';
   @override
   String get loading => '加载中…';
   @override
@@ -2694,7 +2901,7 @@ class _StringsSettingsSyncZhCn extends _StringsSettingsSyncEn {
   @override
   String get title => '同步';
   @override
-  String get subtitle => 'Vault 后端 + 自动同步设置';
+  String get subtitle => '选择同步方式，并管理流量选项';
 }
 
 // Path: settings.resetLocalDataThisDeviceOnly
@@ -2712,7 +2919,7 @@ class _StringsSettingsResetLocalDataThisDeviceOnlyZhCn
   String get dialogTitle => '重置本地数据？';
   @override
   String get dialogBody =>
-      '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+      '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
   @override
   String failed({required Object error}) => '重置失败：${error}';
 }
@@ -2732,7 +2939,7 @@ class _StringsSettingsResetLocalDataAllDevicesZhCn
   String get dialogTitle => '重置本地数据？';
   @override
   String get dialogBody =>
-      '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+      '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
   @override
   String failed({required Object error}) => '重置失败：${error}';
 }
@@ -2851,7 +3058,7 @@ class _StringsChatAskAiSetupZhCn extends _StringsChatAskAiSetupEn {
   @override
   String get title => '问 AI 需要先配置';
   @override
-  String get body => '要使用「问 AI」，请先配置 BYOK（LLM Profiles）或订阅 SecondLoop Cloud。';
+  String get body => '要使用「问 AI」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。';
   @override
   late final _StringsChatAskAiSetupActionsZhCn actions =
       _StringsChatAskAiSetupActionsZhCn._(_root);
@@ -2891,9 +3098,25 @@ class _StringsChatAskAiConsentZhCn extends _StringsChatAskAiConsentEn {
   String get title => '发送前确认';
   @override
   String get body =>
-      'SecondLoop 会将你的问题与少量相关片段发送到你配置的 LLM 服务商以生成回答。\n\n不会上传：Vault 密钥、同步密钥、完整历史。';
+      'SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。';
   @override
   String get dontShowAgain => '不再提示';
+}
+
+// Path: attachments.metadata
+class _StringsAttachmentsMetadataZhCn extends _StringsAttachmentsMetadataEn {
+  _StringsAttachmentsMetadataZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get capturedAt => '拍摄时间';
+  @override
+  String get location => '地点';
 }
 
 // Path: sync.sections
@@ -2907,11 +3130,15 @@ class _StringsSyncSectionsZhCn extends _StringsSyncSectionsEn {
 
   // Translations
   @override
-  String get automation => '自动化';
+  String get automation => '自动同步';
   @override
-  String get backend => '后端';
+  String get backend => '同步方式';
   @override
-  String get securityActions => '安全与操作';
+  String get mediaPreview => '媒体预览';
+  @override
+  String get mediaBackup => '媒体备份';
+  @override
+  String get securityActions => '安全与手动同步';
 }
 
 // Path: sync.autoSync
@@ -2927,7 +3154,85 @@ class _StringsSyncAutoSyncZhCn extends _StringsSyncAutoSyncEn {
   @override
   String get title => '自动同步';
   @override
-  String get subtitle => '前台防抖推送 + 后台周期同步（移动端）';
+  String get subtitle => '自动保持你的设备间数据同步。';
+  @override
+  String get wifiOnlyTitle => '仅在 Wi‑Fi 下自动同步';
+  @override
+  String get wifiOnlySubtitle => '节省流量：自动同步只在 Wi‑Fi 下进行';
+}
+
+// Path: sync.mediaPreview
+class _StringsSyncMediaPreviewZhCn extends _StringsSyncMediaPreviewEn {
+  _StringsSyncMediaPreviewZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get chatThumbnailsWifiOnlyTitle => '仅在 Wi‑Fi 下下载图片预览';
+  @override
+  String get chatThumbnailsWifiOnlySubtitle => '当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览';
+}
+
+// Path: sync.mediaBackup
+class _StringsSyncMediaBackupZhCn extends _StringsSyncMediaBackupEn {
+  _StringsSyncMediaBackupZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '媒体备份（云端）';
+  @override
+  String get subtitle => '在后台备份照片和文件';
+  @override
+  String get wifiOnlyTitle => '仅在 Wi‑Fi 下备份';
+  @override
+  String get wifiOnlySubtitle => '节省流量：只在 Wi‑Fi 下后台备份';
+  @override
+  String get description => '安全地备份照片和文件（加密存储），不是网盘。附件在本机缺失时，只要之前已备份过，就可以按需下载。';
+  @override
+  String stats(
+          {required Object pending,
+          required Object failed,
+          required Object uploaded}) =>
+      '待备份 ${pending} · 失败 ${failed} · 已备份 ${uploaded}';
+  @override
+  String lastUploaded({required Object at}) => '最近一次备份：${at}';
+  @override
+  String lastError({required Object error}) => '最近一次错误：${error}';
+  @override
+  String lastErrorWithTime({required Object at, required Object error}) =>
+      '最近一次错误（${at}）：${error}';
+  @override
+  String get backfillButton => '备份历史图片';
+  @override
+  String get uploadNowButton => '立即备份';
+  @override
+  String backfillEnqueued({required Object count}) => '已将 ${count} 张图片加入备份队列';
+  @override
+  String backfillFailed({required Object error}) => '加入失败：${error}';
+  @override
+  String get notEnabled => '请先开启媒体备份。';
+  @override
+  String get managedVaultOnly => '媒体备份仅适用于 SecondLoop 云同步。';
+  @override
+  String get wifiOnlyBlocked => '已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。';
+  @override
+  String get uploaded => '备份完成';
+  @override
+  String get nothingToUpload => '暂无可备份内容';
+  @override
+  String uploadFailed({required Object error}) => '备份失败：${error}';
+  @override
+  late final _StringsSyncMediaBackupCellularDialogZhCn cellularDialog =
+      _StringsSyncMediaBackupCellularDialogZhCn._(_root);
 }
 
 // Path: sync.cloudManagedVault
@@ -2942,12 +3247,18 @@ class _StringsSyncCloudManagedVaultZhCn
 
   // Translations
   @override
-  String get signInRequired => '请先登录 Cloud 账号后再使用云托管 Vault。';
+  String get signInRequired => '请先登录 SecondLoop Cloud 才能使用云同步。';
   @override
-  String get paymentRequired => 'Cloud 同步不可用。请续费订阅以继续同步。';
+  String get paymentRequired => '云同步已暂停。请续费订阅以继续同步。';
   @override
   String graceReadonlyUntil({required Object until}) =>
-      'Cloud 同步处于只读状态（宽限期至 ${until}）。';
+      '云同步处于只读状态（宽限期至 ${until}）。';
+  @override
+  String get storageQuotaExceeded => '云端存储已满，已暂停上传。';
+  @override
+  String storageQuotaExceededWithUsage(
+          {required Object used, required Object limit}) =>
+      '云端存储已满（${used} / ${limit}），已暂停上传。';
 }
 
 // Path: sync.fields
@@ -2998,10 +3309,9 @@ class _StringsLlmProfilesDeleteDialogZhCn
 
   // Translations
   @override
-  String get title => '删除 profile？';
+  String get title => '删除配置？';
   @override
-  String message({required Object name}) =>
-      '确定删除「${name}」？该操作会从本设备移除该 profile。';
+  String message({required Object name}) => '确定删除「${name}」？该操作会从本设备移除。';
 }
 
 // Path: llmProfiles.fields
@@ -3019,11 +3329,11 @@ class _StringsLlmProfilesFieldsZhCn extends _StringsLlmProfilesFieldsEn {
   @override
   String get provider => '提供商';
   @override
-  String get baseUrlOptional => 'Base URL（可选）';
+  String get baseUrlOptional => '接口地址（可选）';
   @override
-  String get modelName => 'Model name';
+  String get modelName => '模型名称';
   @override
-  String get apiKey => 'API key';
+  String get apiKey => 'API Key';
 }
 
 // Path: llmProfiles.providers
@@ -3055,7 +3365,7 @@ class _StringsLlmProfilesActionsZhCn extends _StringsLlmProfilesActionsEn {
 
   // Translations
   @override
-  String get saveActivate => '保存并激活';
+  String get saveActivate => '保存并启用';
   @override
   String get cancel => '取消';
   @override
@@ -3247,7 +3557,7 @@ class _StringsSettingsCloudAccountErrorsZhCn
   // Translations
   @override
   String get missingWebApiKey =>
-      'Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。';
+      '当前版本暂不支持 Cloud 登录。如果你是从源码运行，请先执行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。';
 }
 
 // Path: settings.cloudAccount.fields
@@ -3341,7 +3651,7 @@ class _StringsSettingsCloudUsageLabelsZhCn
 
   // Translations
   @override
-  String get gatewayNotConfigured => 'Cloud 网关未配置。';
+  String get gatewayNotConfigured => '当前版本暂不支持查看云端用量。';
   @override
   String get signInRequired => '登录后才能查看用量。';
   @override
@@ -3356,6 +3666,48 @@ class _StringsSettingsCloudUsageLabelsZhCn
   String get requestsUsed30d => '请求数（30 天）：';
   @override
   String get resetAt => '重置时间：';
+  @override
+  String loadFailed({required Object error}) => '加载失败：${error}';
+}
+
+// Path: settings.vaultUsage.actions
+class _StringsSettingsVaultUsageActionsZhCn
+    extends _StringsSettingsVaultUsageActionsEn {
+  _StringsSettingsVaultUsageActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get refresh => '刷新';
+}
+
+// Path: settings.vaultUsage.labels
+class _StringsSettingsVaultUsageLabelsZhCn
+    extends _StringsSettingsVaultUsageLabelsEn {
+  _StringsSettingsVaultUsageLabelsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get notConfigured => '当前版本暂不支持查看云端存储用量。';
+  @override
+  String get signInRequired => '登录后才能查看云端存储用量。';
+  @override
+  String get used => '已用：';
+  @override
+  String get limit => '上限：';
+  @override
+  String get attachments => '照片与文件：';
+  @override
+  String get ops => '同步记录：';
   @override
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
@@ -3514,7 +3866,7 @@ class _StringsChatAskAiSetupActionsZhCn
   @override
   String get subscribe => '订阅';
   @override
-  String get configureByok => '配置 BYOK';
+  String get configureByok => '添加 API Key';
 }
 
 // Path: chat.cloudGateway.fallback
@@ -3529,13 +3881,13 @@ class _StringsChatCloudGatewayFallbackZhCn
 
   // Translations
   @override
-  String get auth => 'Cloud 登录已失效。本次将回落到 BYOK。';
+  String get auth => 'Cloud 登录已失效。本次将使用你的 API Key。';
   @override
-  String get entitlement => '需要订阅 SecondLoop Cloud。本次将回落到 BYOK。';
+  String get entitlement => '需要订阅 SecondLoop Cloud。本次将使用你的 API Key。';
   @override
-  String get rateLimited => 'Cloud 触发限速。本次将回落到 BYOK。';
+  String get rateLimited => 'Cloud 正忙。本次将使用你的 API Key。';
   @override
-  String get generic => 'Cloud 请求失败。本次将回落到 BYOK。';
+  String get generic => 'Cloud 请求失败。本次将使用你的 API Key。';
 }
 
 // Path: chat.cloudGateway.errors
@@ -3552,11 +3904,30 @@ class _StringsChatCloudGatewayErrorsZhCn
   @override
   String get auth => 'Cloud 登录已失效，请在 Cloud 账号页重新登录。';
   @override
-  String get entitlement => '需要订阅 SecondLoop Cloud。请配置 BYOK 或稍后再试。';
+  String get entitlement => '需要订阅 SecondLoop Cloud。请添加 API Key 或稍后再试。';
   @override
   String get rateLimited => 'Cloud 触发限速，请稍后再试。';
   @override
   String get generic => 'Cloud 请求失败。';
+}
+
+// Path: sync.mediaBackup.cellularDialog
+class _StringsSyncMediaBackupCellularDialogZhCn
+    extends _StringsSyncMediaBackupCellularDialogEn {
+  _StringsSyncMediaBackupCellularDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '使用蜂窝数据？';
+  @override
+  String get message => '已开启仅 Wi‑Fi。使用蜂窝数据备份可能消耗较多流量。';
+  @override
+  String get confirm => '仍然使用';
 }
 
 // Path: sync.fields.baseUrl
@@ -3570,7 +3941,7 @@ class _StringsSyncFieldsBaseUrlZhCn extends _StringsSyncFieldsBaseUrlEn {
 
   // Translations
   @override
-  String get label => 'Base URL';
+  String get label => '服务器地址';
   @override
   String get hint => 'https://example.com/dav';
 }
@@ -3614,7 +3985,7 @@ class _StringsSyncFieldsLocalDirZhCn extends _StringsSyncFieldsLocalDirEn {
 
   // Translations
   @override
-  String get label => '本地目录路径';
+  String get label => '文件夹路径';
   @override
   String get hint => '/Users/me/SecondLoopVault';
   @override
@@ -3633,7 +4004,7 @@ class _StringsSyncFieldsManagedVaultBaseUrlZhCn
 
   // Translations
   @override
-  String get label => '托管 Vault Base URL';
+  String get label => 'Cloud 服务器地址（高级）';
   @override
   String get hint => 'https://vault.example.com';
 }
@@ -3649,9 +4020,9 @@ class _StringsSyncFieldsVaultIdZhCn extends _StringsSyncFieldsVaultIdEn {
 
   // Translations
   @override
-  String get label => 'Vault ID';
+  String get label => 'Cloud 账号 ID';
   @override
-  String get hint => 'Cloud UID';
+  String get hint => '自动填写';
 }
 
 // Path: sync.fields.remoteRoot
@@ -3665,7 +4036,7 @@ class _StringsSyncFieldsRemoteRootZhCn extends _StringsSyncFieldsRemoteRootEn {
 
   // Translations
   @override
-  String get label => '远端根目录';
+  String get label => '文件夹名称';
   @override
   String get hint => 'SecondLoop';
 }
@@ -3681,9 +4052,9 @@ class _StringsSyncFieldsPassphraseZhCn extends _StringsSyncFieldsPassphraseEn {
 
   // Translations
   @override
-  String get label => '同步口令（不会存储；用于派生密钥）';
+  String get label => '同步口令';
   @override
-  String get helper => '所有设备请使用同一口令。';
+  String get helper => '所有设备请使用同一口令。口令不会被上传。';
 }
 
 // Path: settings.cloudAccount.benefits.items
@@ -3913,9 +4284,9 @@ extension on Translations {
       case 'common.actions.rebuildEmbeddings':
         return 'Rebuild embeddings';
       case 'common.actions.push':
-        return 'Push';
+        return 'Upload';
       case 'common.actions.pull':
-        return 'Pull';
+        return 'Download';
       case 'common.actions.lockNow':
         return 'Lock now';
       case 'common.fields.masterPassword':
@@ -4105,9 +4476,9 @@ extension on Translations {
       case 'settings.lockNow.subtitle':
         return 'Return to the unlock screen';
       case 'settings.llmProfiles.title':
-        return 'LLM profiles';
+        return 'AI profiles';
       case 'settings.llmProfiles.subtitle':
-        return 'Configure BYOK for Ask AI';
+        return 'Use your own API key for Ask AI';
       case 'settings.cloudAccount.title':
         return 'Cloud account';
       case 'settings.cloudAccount.subtitle':
@@ -4121,7 +4492,7 @@ extension on Translations {
       case 'settings.cloudAccount.benefits.items.purchase.body':
         return 'A cloud account is required to purchase a subscription.';
       case 'settings.cloudAccount.errors.missingWebApiKey':
-        return 'Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app.';
+        return 'Cloud sign-in isn\'t available in this build. If you\'re running from source, run `pixi run init-env` (or copy `.env.example` → `.env.local`), set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app.';
       case 'settings.cloudAccount.fields.email':
         return 'Email';
       case 'settings.cloudAccount.fields.password':
@@ -4160,7 +4531,7 @@ extension on Translations {
       case 'settings.cloudUsage.actions.refresh':
         return 'Refresh';
       case 'settings.cloudUsage.labels.gatewayNotConfigured':
-        return 'Cloud gateway is not configured.';
+        return 'Cloud usage isn\'t available in this build.';
       case 'settings.cloudUsage.labels.signInRequired':
         return 'Sign in to view usage.';
       case 'settings.cloudUsage.labels.usage':
@@ -4177,12 +4548,32 @@ extension on Translations {
         return 'Resets on:';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
+      case 'settings.vaultUsage.title':
+        return 'Vault storage';
+      case 'settings.vaultUsage.subtitle':
+        return 'Storage used by your synced data';
+      case 'settings.vaultUsage.actions.refresh':
+        return 'Refresh';
+      case 'settings.vaultUsage.labels.notConfigured':
+        return 'Vault storage isn\'t available in this build.';
+      case 'settings.vaultUsage.labels.signInRequired':
+        return 'Sign in to view vault storage.';
+      case 'settings.vaultUsage.labels.used':
+        return 'Used:';
+      case 'settings.vaultUsage.labels.limit':
+        return 'Limit:';
+      case 'settings.vaultUsage.labels.attachments':
+        return 'Photos & files:';
+      case 'settings.vaultUsage.labels.ops':
+        return 'Sync history:';
+      case 'settings.vaultUsage.labels.loadFailed':
+        return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.diagnostics.title':
         return 'Diagnostics';
       case 'settings.diagnostics.subtitle':
-        return 'Export a diagnostics bundle for support';
+        return 'Share a diagnostics report with support';
       case 'settings.diagnostics.privacyNote':
-        return 'This bundle intentionally excludes plaintext notes and API keys.';
+        return 'This report does not include your notes or API keys.';
       case 'settings.diagnostics.loading':
         return 'Loading diagnostics…';
       case 'settings.diagnostics.messages.copied':
@@ -4194,9 +4585,9 @@ extension on Translations {
         return ({required Object error}) =>
             'Failed to share diagnostics: ${error}';
       case 'settings.byokUsage.title':
-        return 'BYOK usage';
+        return 'API key usage';
       case 'settings.byokUsage.subtitle':
-        return 'Active profile only • requests + tokens (if provided)';
+        return 'Active profile • requests and tokens (if available)';
       case 'settings.byokUsage.loading':
         return 'Loading…';
       case 'settings.byokUsage.noData':
@@ -4248,17 +4639,17 @@ extension on Translations {
       case 'settings.sync.title':
         return 'Sync';
       case 'settings.sync.subtitle':
-        return 'Vault backends + auto sync settings';
+        return 'Choose how to sync and manage data usage';
       case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return 'Reset local data?';
       case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
-        return 'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+        return 'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
       case 'settings.resetLocalDataThisDeviceOnly.failed':
         return ({required Object error}) => 'Reset failed: ${error}';
       case 'settings.resetLocalDataAllDevices.dialogTitle':
         return 'Reset local data?';
       case 'settings.resetLocalDataAllDevices.dialogBody':
-        return 'This will delete local messages and clear all synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.';
+        return 'This will delete local messages and clear all synced remote data. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
       case 'settings.resetLocalDataAllDevices.failed':
         return ({required Object error}) => 'Reset failed: ${error}';
       case 'settings.debugResetLocalDataThisDeviceOnly.title':
@@ -4291,12 +4682,18 @@ extension on Translations {
         return 'Unlocking…';
       case 'chat.mainStreamTitle':
         return 'Main Stream';
+      case 'chat.cameraTooltip':
+        return 'Take photo';
+      case 'chat.photoMessage':
+        return 'Photo';
       case 'chat.editMessageTitle':
         return 'Edit message';
       case 'chat.messageUpdated':
         return 'Message updated';
       case 'chat.messageDeleted':
         return 'Message deleted';
+      case 'chat.photoFailed':
+        return ({required Object error}) => 'Photo failed: ${error}';
       case 'chat.editFailed':
         return ({required Object error}) => 'Edit failed: ${error}';
       case 'chat.deleteFailed':
@@ -4322,25 +4719,25 @@ extension on Translations {
       case 'chat.askAiSetup.title':
         return 'Ask AI setup required';
       case 'chat.askAiSetup.body':
-        return 'Configure BYOK (LLM profiles) or subscribe to SecondLoop Cloud to use Ask AI.';
+        return 'To use Ask AI, add your own API key (AI profile) or subscribe to SecondLoop Cloud.';
       case 'chat.askAiSetup.actions.subscribe':
         return 'Subscribe';
       case 'chat.askAiSetup.actions.configureByok':
-        return 'Configure BYOK';
+        return 'Add API key';
       case 'chat.cloudGateway.emailNotVerified':
         return 'Email not verified. Verify your email to use SecondLoop Cloud Ask AI.';
       case 'chat.cloudGateway.fallback.auth':
-        return 'Cloud sign-in required. Using BYOK for this request.';
+        return 'Cloud sign-in required. Using your API key for this request.';
       case 'chat.cloudGateway.fallback.entitlement':
-        return 'Cloud subscription required. Using BYOK for this request.';
+        return 'Cloud subscription required. Using your API key for this request.';
       case 'chat.cloudGateway.fallback.rateLimited':
-        return 'Cloud is rate limited. Using BYOK for this request.';
+        return 'Cloud is busy. Using your API key for this request.';
       case 'chat.cloudGateway.fallback.generic':
-        return 'Cloud request failed. Using BYOK for this request.';
+        return 'Cloud request failed. Using your API key for this request.';
       case 'chat.cloudGateway.errors.auth':
         return 'Cloud sign-in required. Open Cloud account and sign in again.';
       case 'chat.cloudGateway.errors.entitlement':
-        return 'Cloud subscription required. Configure BYOK or try again later.';
+        return 'Cloud subscription required. Add an API key or try again later.';
       case 'chat.cloudGateway.errors.rateLimited':
         return 'Cloud is rate limited. Please try again later.';
       case 'chat.cloudGateway.errors.generic':
@@ -4348,9 +4745,13 @@ extension on Translations {
       case 'chat.askAiConsent.title':
         return 'Before you ask';
       case 'chat.askAiConsent.body':
-        return 'SecondLoop will send your question and a few relevant snippets to your configured LLM provider to generate an answer.\n\nIt will NOT upload your vault key, sync key, or full history.';
+        return 'SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.';
       case 'chat.askAiConsent.dontShowAgain':
         return 'Don\'t show again';
+      case 'attachments.metadata.capturedAt':
+        return 'Captured';
+      case 'attachments.metadata.location':
+        return 'Location';
       case 'semanticSearch.preparing':
         return 'Preparing semantic search…';
       case 'semanticSearch.indexingMessages':
@@ -4383,38 +4784,105 @@ extension on Translations {
                 required Object conversationId}) =>
             'distance=${distance} • role=${role} • convo=${conversationId}';
       case 'sync.title':
-        return 'Vault Sync';
+        return 'Sync settings';
       case 'sync.sections.automation':
-        return 'Automation';
+        return 'Auto sync';
       case 'sync.sections.backend':
-        return 'Backend';
+        return 'Sync method';
+      case 'sync.sections.mediaPreview':
+        return 'Media previews';
+      case 'sync.sections.mediaBackup':
+        return 'Media backup';
       case 'sync.sections.securityActions':
-        return 'Security & Actions';
+        return 'Security & manual sync';
       case 'sync.autoSync.title':
         return 'Auto sync';
       case 'sync.autoSync.subtitle':
-        return 'Foreground debounced push + background periodic sync (mobile)';
+        return 'Keeps your devices in sync automatically.';
+      case 'sync.autoSync.wifiOnlyTitle':
+        return 'Auto sync on Wi‑Fi only';
+      case 'sync.autoSync.wifiOnlySubtitle':
+        return 'Save mobile data by syncing automatically only on Wi‑Fi';
+      case 'sync.mediaPreview.chatThumbnailsWifiOnlyTitle':
+        return 'Image previews on Wi‑Fi only';
+      case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
+        return 'If a photo isn\'t on this device yet, download its preview only on Wi‑Fi';
+      case 'sync.mediaBackup.title':
+        return 'Media backup (Cloud)';
+      case 'sync.mediaBackup.subtitle':
+        return 'Backs up photos and files in the background';
+      case 'sync.mediaBackup.wifiOnlyTitle':
+        return 'Back up on Wi‑Fi only';
+      case 'sync.mediaBackup.wifiOnlySubtitle':
+        return 'Save mobile data by backing up only on Wi‑Fi';
+      case 'sync.mediaBackup.description':
+        return 'Securely backs up photos and files. It’s not a cloud drive. If a file is missing on this device, it can be downloaded when needed after it’s backed up.';
+      case 'sync.mediaBackup.stats':
+        return (
+                {required Object pending,
+                required Object failed,
+                required Object uploaded}) =>
+            'Waiting ${pending} · Failed ${failed} · Backed up ${uploaded}';
+      case 'sync.mediaBackup.lastUploaded':
+        return ({required Object at}) => 'Last backup: ${at}';
+      case 'sync.mediaBackup.lastError':
+        return ({required Object error}) => 'Last error: ${error}';
+      case 'sync.mediaBackup.lastErrorWithTime':
+        return ({required Object at, required Object error}) =>
+            'Last error (${at}): ${error}';
+      case 'sync.mediaBackup.backfillButton':
+        return 'Back up existing photos';
+      case 'sync.mediaBackup.uploadNowButton':
+        return 'Back up now';
+      case 'sync.mediaBackup.backfillEnqueued':
+        return ({required Object count}) => 'Queued ${count} photos for backup';
+      case 'sync.mediaBackup.backfillFailed':
+        return ({required Object error}) =>
+            'Couldn\'t queue old photos: ${error}';
+      case 'sync.mediaBackup.notEnabled':
+        return 'Turn on Media backup first.';
+      case 'sync.mediaBackup.managedVaultOnly':
+        return 'Media backup is available with SecondLoop Cloud sync.';
+      case 'sync.mediaBackup.wifiOnlyBlocked':
+        return 'Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.';
+      case 'sync.mediaBackup.uploaded':
+        return 'Backup complete';
+      case 'sync.mediaBackup.nothingToUpload':
+        return 'Nothing to back up';
+      case 'sync.mediaBackup.uploadFailed':
+        return ({required Object error}) => 'Backup failed: ${error}';
+      case 'sync.mediaBackup.cellularDialog.title':
+        return 'Use mobile data?';
+      case 'sync.mediaBackup.cellularDialog.message':
+        return 'Wi‑Fi only is on. Backing up over mobile data may use a lot of data.';
+      case 'sync.mediaBackup.cellularDialog.confirm':
+        return 'Use mobile data';
       case 'sync.backendLabel':
-        return 'Vault backend';
+        return 'Sync method';
       case 'sync.backendWebdav':
-        return 'WebDAV';
+        return 'WebDAV (your server)';
       case 'sync.backendLocalDir':
-        return 'Local directory (desktop)';
+        return 'Folder on this computer (desktop)';
       case 'sync.backendManagedVault':
-        return 'Cloud managed vault';
+        return 'SecondLoop Cloud';
       case 'sync.cloudManagedVault.signInRequired':
-        return 'Sign in to use Cloud managed vault.';
+        return 'Sign in to use SecondLoop Cloud sync.';
       case 'sync.cloudManagedVault.paymentRequired':
-        return 'Cloud sync is unavailable. Renew your subscription to continue syncing.';
+        return 'Cloud sync is paused. Renew your subscription to continue syncing.';
       case 'sync.cloudManagedVault.graceReadonlyUntil':
         return ({required Object until}) =>
             'Cloud sync is read-only until ${until}.';
+      case 'sync.cloudManagedVault.storageQuotaExceeded':
+        return 'Cloud storage is full. Uploads are paused.';
+      case 'sync.cloudManagedVault.storageQuotaExceededWithUsage':
+        return ({required Object used, required Object limit}) =>
+            'Cloud storage is full (${used} / ${limit}). Uploads are paused.';
       case 'sync.remoteRootRequired':
-        return 'Remote root is required';
+        return 'Folder name is required';
       case 'sync.baseUrlRequired':
-        return 'Base URL is required';
+        return 'Server address is required';
       case 'sync.localDirRequired':
-        return 'Local directory is required';
+        return 'Folder path is required';
       case 'sync.connectionOk':
         return 'Connection OK';
       case 'sync.connectionFailed':
@@ -4422,17 +4890,19 @@ extension on Translations {
       case 'sync.saveFailed':
         return ({required Object error}) => 'Save failed: ${error}';
       case 'sync.missingSyncKey':
-        return 'Missing sync key. Enter a passphrase and Save first.';
+        return 'Enter your sync passphrase and tap Save first.';
       case 'sync.pushedOps':
-        return ({required Object count}) => 'Pushed ${count} ops';
+        return ({required Object count}) => 'Uploaded ${count} changes';
       case 'sync.pulledOps':
-        return ({required Object count}) => 'Pulled ${count} ops';
+        return ({required Object count}) => 'Downloaded ${count} changes';
+      case 'sync.noNewChanges':
+        return 'No new changes';
       case 'sync.pushFailed':
-        return ({required Object error}) => 'Push failed: ${error}';
+        return ({required Object error}) => 'Upload failed: ${error}';
       case 'sync.pullFailed':
-        return ({required Object error}) => 'Pull failed: ${error}';
+        return ({required Object error}) => 'Download failed: ${error}';
       case 'sync.fields.baseUrl.label':
-        return 'Base URL';
+        return 'Server address';
       case 'sync.fields.baseUrl.hint':
         return 'https://example.com/dav';
       case 'sync.fields.username.label':
@@ -4440,29 +4910,29 @@ extension on Translations {
       case 'sync.fields.password.label':
         return 'Password (optional)';
       case 'sync.fields.localDir.label':
-        return 'Local directory path';
+        return 'Folder path';
       case 'sync.fields.localDir.hint':
         return '/Users/me/SecondLoopVault';
       case 'sync.fields.localDir.helper':
         return 'Best for desktop; mobile platforms may not support this path.';
       case 'sync.fields.managedVaultBaseUrl.label':
-        return 'Managed Vault base URL';
+        return 'Cloud server address (advanced)';
       case 'sync.fields.managedVaultBaseUrl.hint':
         return 'https://vault.example.com';
       case 'sync.fields.vaultId.label':
-        return 'Vault ID';
+        return 'Cloud account ID';
       case 'sync.fields.vaultId.hint':
-        return 'Cloud UID';
+        return 'Auto';
       case 'sync.fields.remoteRoot.label':
-        return 'Remote root folder';
+        return 'Folder name';
       case 'sync.fields.remoteRoot.hint':
         return 'SecondLoop';
       case 'sync.fields.passphrase.label':
-        return 'Sync passphrase (not stored; derives a key)';
+        return 'Sync passphrase';
       case 'sync.fields.passphrase.helper':
-        return 'Use the same passphrase on all devices.';
+        return 'Use the same passphrase on all devices. It’s never uploaded.';
       case 'llmProfiles.title':
-        return 'LLM Profiles';
+        return 'AI profiles';
       case 'llmProfiles.refreshTooltip':
         return 'Refresh';
       case 'llmProfiles.activeProfileHelp':
@@ -4472,9 +4942,9 @@ extension on Translations {
       case 'llmProfiles.addProfile':
         return 'Add profile';
       case 'llmProfiles.deleted':
-        return 'LLM profile deleted';
+        return 'AI profile deleted';
       case 'llmProfiles.validationError':
-        return 'Name, API key, and model name are required.';
+        return 'Name, API key, and model are required.';
       case 'llmProfiles.deleteDialog.title':
         return 'Delete profile?';
       case 'llmProfiles.deleteDialog.message':
@@ -4485,9 +4955,9 @@ extension on Translations {
       case 'llmProfiles.fields.provider':
         return 'Provider';
       case 'llmProfiles.fields.baseUrlOptional':
-        return 'Base URL (optional)';
+        return 'API endpoint (optional)';
       case 'llmProfiles.fields.modelName':
-        return 'Model name';
+        return 'Model';
       case 'llmProfiles.fields.apiKey':
         return 'API key';
       case 'llmProfiles.providers.openaiCompatible':
@@ -4497,7 +4967,7 @@ extension on Translations {
       case 'llmProfiles.providers.anthropicCompatible':
         return 'Anthropic';
       case 'llmProfiles.savedActivated':
-        return 'LLM profile saved and activated';
+        return 'AI profile saved and activated';
       case 'llmProfiles.actions.saveActivate':
         return 'Save & Activate';
       case 'llmProfiles.actions.cancel':
@@ -4560,9 +5030,9 @@ extension on _StringsZhCn {
       case 'common.actions.rebuildEmbeddings':
         return '重建向量索引';
       case 'common.actions.push':
-        return '推送';
+        return '上传';
       case 'common.actions.pull':
-        return '拉取';
+        return '下载';
       case 'common.actions.lockNow':
         return '立即锁定';
       case 'common.fields.masterPassword':
@@ -4752,9 +5222,9 @@ extension on _StringsZhCn {
       case 'settings.lockNow.subtitle':
         return '返回解锁页面';
       case 'settings.llmProfiles.title':
-        return 'LLM Profiles';
+        return 'AI 配置';
       case 'settings.llmProfiles.subtitle':
-        return '为 Ask AI 配置 BYOK';
+        return '添加你自己的 API Key（用于问 AI）';
       case 'settings.cloudAccount.title':
         return 'Cloud 账号';
       case 'settings.cloudAccount.subtitle':
@@ -4768,7 +5238,7 @@ extension on _StringsZhCn {
       case 'settings.cloudAccount.benefits.items.purchase.body':
         return '需要 Cloud 账号才能开通订阅。';
       case 'settings.cloudAccount.errors.missingWebApiKey':
-        return 'Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。';
+        return '当前版本暂不支持 Cloud 登录。如果你是从源码运行，请先执行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。';
       case 'settings.cloudAccount.fields.email':
         return '邮箱';
       case 'settings.cloudAccount.fields.password':
@@ -4800,13 +5270,13 @@ extension on _StringsZhCn {
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) => '发送验证邮件失败：${error}';
       case 'settings.cloudUsage.title':
-        return 'Cloud 用量';
+        return '云端用量';
       case 'settings.cloudUsage.subtitle':
         return '当前账期用量';
       case 'settings.cloudUsage.actions.refresh':
         return '刷新';
       case 'settings.cloudUsage.labels.gatewayNotConfigured':
-        return 'Cloud 网关未配置。';
+        return '当前版本暂不支持查看云端用量。';
       case 'settings.cloudUsage.labels.signInRequired':
         return '登录后才能查看用量。';
       case 'settings.cloudUsage.labels.usage':
@@ -4823,12 +5293,32 @@ extension on _StringsZhCn {
         return '重置时间：';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
+      case 'settings.vaultUsage.title':
+        return '云端存储';
+      case 'settings.vaultUsage.subtitle':
+        return '你的同步数据占用的云端存储';
+      case 'settings.vaultUsage.actions.refresh':
+        return '刷新';
+      case 'settings.vaultUsage.labels.notConfigured':
+        return '当前版本暂不支持查看云端存储用量。';
+      case 'settings.vaultUsage.labels.signInRequired':
+        return '登录后才能查看云端存储用量。';
+      case 'settings.vaultUsage.labels.used':
+        return '已用：';
+      case 'settings.vaultUsage.labels.limit':
+        return '上限：';
+      case 'settings.vaultUsage.labels.attachments':
+        return '照片与文件：';
+      case 'settings.vaultUsage.labels.ops':
+        return '同步记录：';
+      case 'settings.vaultUsage.labels.loadFailed':
+        return ({required Object error}) => '加载失败：${error}';
       case 'settings.diagnostics.title':
         return '诊断信息';
       case 'settings.diagnostics.subtitle':
-        return '导出诊断包用于排查';
+        return '导出诊断信息以便支持排查';
       case 'settings.diagnostics.privacyNote':
-        return '此诊断包会排除明文记录与 API Key。';
+        return '该报告不会包含你的记录正文或 API Key。';
       case 'settings.diagnostics.loading':
         return '正在加载诊断信息…';
       case 'settings.diagnostics.messages.copied':
@@ -4838,9 +5328,9 @@ extension on _StringsZhCn {
       case 'settings.diagnostics.messages.shareFailed':
         return ({required Object error}) => '分享诊断信息失败：${error}';
       case 'settings.byokUsage.title':
-        return 'BYOK 用量';
+        return 'API Key 用量';
       case 'settings.byokUsage.subtitle':
-        return '仅统计当前激活的 profile • 请求数 + tokens（若上游返回）';
+        return '当前配置 • 请求数与 Token（如可获取）';
       case 'settings.byokUsage.loading':
         return '加载中…';
       case 'settings.byokUsage.noData':
@@ -4891,17 +5381,17 @@ extension on _StringsZhCn {
       case 'settings.sync.title':
         return '同步';
       case 'settings.sync.subtitle':
-        return 'Vault 后端 + 自动同步设置';
+        return '选择同步方式，并管理流量选项';
       case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return '重置本地数据？';
       case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
-        return '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+        return '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
       case 'settings.resetLocalDataThisDeviceOnly.failed':
         return ({required Object error}) => '重置失败：${error}';
       case 'settings.resetLocalDataAllDevices.dialogTitle':
         return '重置本地数据？';
       case 'settings.resetLocalDataAllDevices.dialogBody':
-        return '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。';
+        return '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
       case 'settings.resetLocalDataAllDevices.failed':
         return ({required Object error}) => '重置失败：${error}';
       case 'settings.debugResetLocalDataThisDeviceOnly.title':
@@ -4934,12 +5424,18 @@ extension on _StringsZhCn {
         return '正在解锁…';
       case 'chat.mainStreamTitle':
         return '主线';
+      case 'chat.cameraTooltip':
+        return '拍照';
+      case 'chat.photoMessage':
+        return '照片';
       case 'chat.editMessageTitle':
         return '编辑消息';
       case 'chat.messageUpdated':
         return '消息已更新';
       case 'chat.messageDeleted':
         return '消息已删除';
+      case 'chat.photoFailed':
+        return ({required Object error}) => '拍照失败：${error}';
       case 'chat.editFailed':
         return ({required Object error}) => '编辑失败：${error}';
       case 'chat.deleteFailed':
@@ -4965,25 +5461,25 @@ extension on _StringsZhCn {
       case 'chat.askAiSetup.title':
         return '问 AI 需要先配置';
       case 'chat.askAiSetup.body':
-        return '要使用「问 AI」，请先配置 BYOK（LLM Profiles）或订阅 SecondLoop Cloud。';
+        return '要使用「问 AI」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。';
       case 'chat.askAiSetup.actions.subscribe':
         return '订阅';
       case 'chat.askAiSetup.actions.configureByok':
-        return '配置 BYOK';
+        return '添加 API Key';
       case 'chat.cloudGateway.emailNotVerified':
         return '邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud Ask AI。';
       case 'chat.cloudGateway.fallback.auth':
-        return 'Cloud 登录已失效。本次将回落到 BYOK。';
+        return 'Cloud 登录已失效。本次将使用你的 API Key。';
       case 'chat.cloudGateway.fallback.entitlement':
-        return '需要订阅 SecondLoop Cloud。本次将回落到 BYOK。';
+        return '需要订阅 SecondLoop Cloud。本次将使用你的 API Key。';
       case 'chat.cloudGateway.fallback.rateLimited':
-        return 'Cloud 触发限速。本次将回落到 BYOK。';
+        return 'Cloud 正忙。本次将使用你的 API Key。';
       case 'chat.cloudGateway.fallback.generic':
-        return 'Cloud 请求失败。本次将回落到 BYOK。';
+        return 'Cloud 请求失败。本次将使用你的 API Key。';
       case 'chat.cloudGateway.errors.auth':
         return 'Cloud 登录已失效，请在 Cloud 账号页重新登录。';
       case 'chat.cloudGateway.errors.entitlement':
-        return '需要订阅 SecondLoop Cloud。请配置 BYOK 或稍后再试。';
+        return '需要订阅 SecondLoop Cloud。请添加 API Key 或稍后再试。';
       case 'chat.cloudGateway.errors.rateLimited':
         return 'Cloud 触发限速，请稍后再试。';
       case 'chat.cloudGateway.errors.generic':
@@ -4991,9 +5487,13 @@ extension on _StringsZhCn {
       case 'chat.askAiConsent.title':
         return '发送前确认';
       case 'chat.askAiConsent.body':
-        return 'SecondLoop 会将你的问题与少量相关片段发送到你配置的 LLM 服务商以生成回答。\n\n不会上传：Vault 密钥、同步密钥、完整历史。';
+        return 'SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。';
       case 'chat.askAiConsent.dontShowAgain':
         return '不再提示';
+      case 'attachments.metadata.capturedAt':
+        return '拍摄时间';
+      case 'attachments.metadata.location':
+        return '地点';
       case 'semanticSearch.preparing':
         return '正在准备语义检索…';
       case 'semanticSearch.indexingMessages':
@@ -5023,55 +5523,123 @@ extension on _StringsZhCn {
                 required Object conversationId}) =>
             'distance=${distance} • role=${role} • convo=${conversationId}';
       case 'sync.title':
-        return 'Vault 同步';
+        return '同步设置';
       case 'sync.sections.automation':
-        return '自动化';
+        return '自动同步';
       case 'sync.sections.backend':
-        return '后端';
+        return '同步方式';
+      case 'sync.sections.mediaPreview':
+        return '媒体预览';
+      case 'sync.sections.mediaBackup':
+        return '媒体备份';
       case 'sync.sections.securityActions':
-        return '安全与操作';
+        return '安全与手动同步';
       case 'sync.autoSync.title':
         return '自动同步';
       case 'sync.autoSync.subtitle':
-        return '前台防抖推送 + 后台周期同步（移动端）';
+        return '自动保持你的设备间数据同步。';
+      case 'sync.autoSync.wifiOnlyTitle':
+        return '仅在 Wi‑Fi 下自动同步';
+      case 'sync.autoSync.wifiOnlySubtitle':
+        return '节省流量：自动同步只在 Wi‑Fi 下进行';
+      case 'sync.mediaPreview.chatThumbnailsWifiOnlyTitle':
+        return '仅在 Wi‑Fi 下下载图片预览';
+      case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
+        return '当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览';
+      case 'sync.mediaBackup.title':
+        return '媒体备份（云端）';
+      case 'sync.mediaBackup.subtitle':
+        return '在后台备份照片和文件';
+      case 'sync.mediaBackup.wifiOnlyTitle':
+        return '仅在 Wi‑Fi 下备份';
+      case 'sync.mediaBackup.wifiOnlySubtitle':
+        return '节省流量：只在 Wi‑Fi 下后台备份';
+      case 'sync.mediaBackup.description':
+        return '安全地备份照片和文件（加密存储），不是网盘。附件在本机缺失时，只要之前已备份过，就可以按需下载。';
+      case 'sync.mediaBackup.stats':
+        return (
+                {required Object pending,
+                required Object failed,
+                required Object uploaded}) =>
+            '待备份 ${pending} · 失败 ${failed} · 已备份 ${uploaded}';
+      case 'sync.mediaBackup.lastUploaded':
+        return ({required Object at}) => '最近一次备份：${at}';
+      case 'sync.mediaBackup.lastError':
+        return ({required Object error}) => '最近一次错误：${error}';
+      case 'sync.mediaBackup.lastErrorWithTime':
+        return ({required Object at, required Object error}) =>
+            '最近一次错误（${at}）：${error}';
+      case 'sync.mediaBackup.backfillButton':
+        return '备份历史图片';
+      case 'sync.mediaBackup.uploadNowButton':
+        return '立即备份';
+      case 'sync.mediaBackup.backfillEnqueued':
+        return ({required Object count}) => '已将 ${count} 张图片加入备份队列';
+      case 'sync.mediaBackup.backfillFailed':
+        return ({required Object error}) => '加入失败：${error}';
+      case 'sync.mediaBackup.notEnabled':
+        return '请先开启媒体备份。';
+      case 'sync.mediaBackup.managedVaultOnly':
+        return '媒体备份仅适用于 SecondLoop 云同步。';
+      case 'sync.mediaBackup.wifiOnlyBlocked':
+        return '已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。';
+      case 'sync.mediaBackup.uploaded':
+        return '备份完成';
+      case 'sync.mediaBackup.nothingToUpload':
+        return '暂无可备份内容';
+      case 'sync.mediaBackup.uploadFailed':
+        return ({required Object error}) => '备份失败：${error}';
+      case 'sync.mediaBackup.cellularDialog.title':
+        return '使用蜂窝数据？';
+      case 'sync.mediaBackup.cellularDialog.message':
+        return '已开启仅 Wi‑Fi。使用蜂窝数据备份可能消耗较多流量。';
+      case 'sync.mediaBackup.cellularDialog.confirm':
+        return '仍然使用';
       case 'sync.backendLabel':
-        return 'Vault 后端';
+        return '同步方式';
       case 'sync.backendWebdav':
-        return 'WebDAV';
+        return 'WebDAV（你自己的服务器）';
       case 'sync.backendLocalDir':
-        return '本地目录（桌面端）';
+        return '本机文件夹（桌面端）';
       case 'sync.backendManagedVault':
-        return '云托管 Vault';
+        return 'SecondLoop Cloud';
       case 'sync.cloudManagedVault.signInRequired':
-        return '请先登录 Cloud 账号后再使用云托管 Vault。';
+        return '请先登录 SecondLoop Cloud 才能使用云同步。';
       case 'sync.cloudManagedVault.paymentRequired':
-        return 'Cloud 同步不可用。请续费订阅以继续同步。';
+        return '云同步已暂停。请续费订阅以继续同步。';
       case 'sync.cloudManagedVault.graceReadonlyUntil':
-        return ({required Object until}) => 'Cloud 同步处于只读状态（宽限期至 ${until}）。';
+        return ({required Object until}) => '云同步处于只读状态（宽限期至 ${until}）。';
+      case 'sync.cloudManagedVault.storageQuotaExceeded':
+        return '云端存储已满，已暂停上传。';
+      case 'sync.cloudManagedVault.storageQuotaExceededWithUsage':
+        return ({required Object used, required Object limit}) =>
+            '云端存储已满（${used} / ${limit}），已暂停上传。';
       case 'sync.remoteRootRequired':
-        return '必须填写远端根目录';
+        return '必须填写文件夹名称';
       case 'sync.baseUrlRequired':
-        return '必须填写 Base URL';
+        return '必须填写服务器地址';
       case 'sync.localDirRequired':
-        return '必须填写本地目录';
+        return '必须填写文件夹路径';
       case 'sync.connectionOk':
-        return '连接正常';
+        return '连接成功';
       case 'sync.connectionFailed':
         return ({required Object error}) => '连接失败：${error}';
       case 'sync.saveFailed':
         return ({required Object error}) => '保存失败：${error}';
       case 'sync.missingSyncKey':
-        return '缺少同步密钥。请先输入 passphrase 并点击保存。';
+        return '缺少同步口令。请先输入口令并点击保存。';
       case 'sync.pushedOps':
-        return ({required Object count}) => '已推送 ${count} 条操作';
+        return ({required Object count}) => '已上传 ${count} 个更改';
       case 'sync.pulledOps':
-        return ({required Object count}) => '已拉取 ${count} 条操作';
+        return ({required Object count}) => '已下载 ${count} 个更改';
+      case 'sync.noNewChanges':
+        return '已是最新';
       case 'sync.pushFailed':
-        return ({required Object error}) => '推送失败：${error}';
+        return ({required Object error}) => '上传失败：${error}';
       case 'sync.pullFailed':
-        return ({required Object error}) => '拉取失败：${error}';
+        return ({required Object error}) => '下载失败：${error}';
       case 'sync.fields.baseUrl.label':
-        return 'Base URL';
+        return '服务器地址';
       case 'sync.fields.baseUrl.hint':
         return 'https://example.com/dav';
       case 'sync.fields.username.label':
@@ -5079,55 +5647,55 @@ extension on _StringsZhCn {
       case 'sync.fields.password.label':
         return '密码（可选）';
       case 'sync.fields.localDir.label':
-        return '本地目录路径';
+        return '文件夹路径';
       case 'sync.fields.localDir.hint':
         return '/Users/me/SecondLoopVault';
       case 'sync.fields.localDir.helper':
         return '更适合桌面端；移动端可能不支持该路径。';
       case 'sync.fields.managedVaultBaseUrl.label':
-        return '托管 Vault Base URL';
+        return 'Cloud 服务器地址（高级）';
       case 'sync.fields.managedVaultBaseUrl.hint':
         return 'https://vault.example.com';
       case 'sync.fields.vaultId.label':
-        return 'Vault ID';
+        return 'Cloud 账号 ID';
       case 'sync.fields.vaultId.hint':
-        return 'Cloud UID';
+        return '自动填写';
       case 'sync.fields.remoteRoot.label':
-        return '远端根目录';
+        return '文件夹名称';
       case 'sync.fields.remoteRoot.hint':
         return 'SecondLoop';
       case 'sync.fields.passphrase.label':
-        return '同步口令（不会存储；用于派生密钥）';
+        return '同步口令';
       case 'sync.fields.passphrase.helper':
-        return '所有设备请使用同一口令。';
+        return '所有设备请使用同一口令。口令不会被上传。';
       case 'llmProfiles.title':
-        return 'LLM Profiles';
+        return 'AI 配置';
       case 'llmProfiles.refreshTooltip':
         return '刷新';
       case 'llmProfiles.activeProfileHelp':
-        return '当前激活的 profile 用于 Ask AI。';
+        return '当前选择的配置将用于「问 AI」。';
       case 'llmProfiles.noProfilesYet':
-        return '暂无 profile。';
+        return '暂无配置。';
       case 'llmProfiles.addProfile':
-        return '添加 profile';
+        return '添加配置';
       case 'llmProfiles.deleted':
-        return 'LLM profile 已删除';
+        return '配置已删除';
       case 'llmProfiles.validationError':
-        return 'Name、API key、Model name 为必填项。';
+        return '名称、API Key 和模型名称为必填项。';
       case 'llmProfiles.deleteDialog.title':
-        return '删除 profile？';
+        return '删除配置？';
       case 'llmProfiles.deleteDialog.message':
-        return ({required Object name}) => '确定删除「${name}」？该操作会从本设备移除该 profile。';
+        return ({required Object name}) => '确定删除「${name}」？该操作会从本设备移除。';
       case 'llmProfiles.fields.name':
         return '名称';
       case 'llmProfiles.fields.provider':
         return '提供商';
       case 'llmProfiles.fields.baseUrlOptional':
-        return 'Base URL（可选）';
+        return '接口地址（可选）';
       case 'llmProfiles.fields.modelName':
-        return 'Model name';
+        return '模型名称';
       case 'llmProfiles.fields.apiKey':
-        return 'API key';
+        return 'API Key';
       case 'llmProfiles.providers.openaiCompatible':
         return 'OpenAI 兼容';
       case 'llmProfiles.providers.geminiCompatible':
@@ -5135,9 +5703,9 @@ extension on _StringsZhCn {
       case 'llmProfiles.providers.anthropicCompatible':
         return 'Anthropic';
       case 'llmProfiles.savedActivated':
-        return 'LLM profile 已保存并激活';
+        return '已保存并设为当前配置';
       case 'llmProfiles.actions.saveActivate':
-        return '保存并激活';
+        return '保存并启用';
       case 'llmProfiles.actions.cancel':
         return '取消';
       case 'llmProfiles.actions.delete':

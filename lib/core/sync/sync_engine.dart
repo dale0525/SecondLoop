@@ -81,43 +81,74 @@ abstract class SyncRunner {
 }
 
 typedef SyncConfigLoader = Future<SyncConfig?> Function();
+typedef SyncAutoRunGate = Future<bool> Function();
 
 enum SyncWriteGateKind {
   open,
   graceReadOnly,
   paymentRequired,
+  storageQuotaExceeded,
 }
 
 final class SyncWriteGateState {
   const SyncWriteGateState._({
     required this.kind,
     required this.graceUntilMs,
+    required this.quotaUsedBytes,
+    required this.quotaLimitBytes,
   });
 
   const SyncWriteGateState.open()
-      : this._(kind: SyncWriteGateKind.open, graceUntilMs: null);
+      : this._(
+          kind: SyncWriteGateKind.open,
+          graceUntilMs: null,
+          quotaUsedBytes: null,
+          quotaLimitBytes: null,
+        );
 
   const SyncWriteGateState.graceReadOnly(int graceUntilMs)
       : this._(
           kind: SyncWriteGateKind.graceReadOnly,
           graceUntilMs: graceUntilMs,
+          quotaUsedBytes: null,
+          quotaLimitBytes: null,
         );
 
   const SyncWriteGateState.paymentRequired()
-      : this._(kind: SyncWriteGateKind.paymentRequired, graceUntilMs: null);
+      : this._(
+          kind: SyncWriteGateKind.paymentRequired,
+          graceUntilMs: null,
+          quotaUsedBytes: null,
+          quotaLimitBytes: null,
+        );
+
+  const SyncWriteGateState.storageQuotaExceeded({
+    int? usedBytes,
+    int? limitBytes,
+  }) : this._(
+          kind: SyncWriteGateKind.storageQuotaExceeded,
+          graceUntilMs: null,
+          quotaUsedBytes: usedBytes,
+          quotaLimitBytes: limitBytes,
+        );
 
   final SyncWriteGateKind kind;
   final int? graceUntilMs;
+  final int? quotaUsedBytes;
+  final int? quotaLimitBytes;
 
   @override
   bool operator ==(Object other) {
     return other is SyncWriteGateState &&
         other.kind == kind &&
-        other.graceUntilMs == graceUntilMs;
+        other.graceUntilMs == graceUntilMs &&
+        other.quotaUsedBytes == quotaUsedBytes &&
+        other.quotaLimitBytes == quotaLimitBytes;
   }
 
   @override
-  int get hashCode => Object.hash(kind, graceUntilMs);
+  int get hashCode =>
+      Object.hash(kind, graceUntilMs, quotaUsedBytes, quotaLimitBytes);
 }
 
 final class SyncEngine {
@@ -128,6 +159,7 @@ final class SyncEngine {
     this.pullInterval = const Duration(seconds: 20),
     this.pullJitter = const Duration(seconds: 5),
     this.pullOnStart = true,
+    this.autoRunGate,
     Random? random,
   }) : _random = random ?? Random();
 
@@ -138,6 +170,7 @@ final class SyncEngine {
   final Duration pullInterval;
   final Duration pullJitter;
   final bool pullOnStart;
+  final SyncAutoRunGate? autoRunGate;
   final Random _random;
 
   final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
@@ -186,6 +219,7 @@ final class SyncEngine {
     final gate = writeGate.value;
     if (gate.kind == SyncWriteGateKind.open) return false;
     if (gate.kind == SyncWriteGateKind.paymentRequired) return true;
+    if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) return true;
     final untilMs = gate.graceUntilMs;
     if (untilMs == null) return true;
     if (nowMs >= untilMs) {
@@ -262,6 +296,11 @@ final class SyncEngine {
 
   Future<void> _runQueue() async {
     while (_running && (_pullQueued || _pushQueued)) {
+      final gate = autoRunGate;
+      if (gate != null) {
+        final allowed = await gate();
+        if (!allowed) return;
+      }
       if (_pullQueued) {
         _pullQueued = false;
         await _pullOnce();
@@ -307,9 +346,22 @@ final class SyncEngine {
           RegExp(r'"grace_until_ms"\s*:\s*(\d+)').firstMatch(message)?.group(1);
       final graceUntilMs =
           graceUntilRaw == null ? null : int.tryParse(graceUntilRaw);
+      final usedRaw =
+          RegExp(r'"used_bytes"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+      final usedBytes = usedRaw == null ? null : int.tryParse(usedRaw);
+      final limitRaw =
+          RegExp(r'"limit_bytes"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+      final limitBytes = limitRaw == null ? null : int.tryParse(limitRaw);
 
       if (status == '403' && code == 'grace_readonly' && graceUntilMs != null) {
         _setWriteGate(SyncWriteGateState.graceReadOnly(graceUntilMs));
+      } else if (status == '403' && code == 'storage_quota_exceeded') {
+        _setWriteGate(
+          SyncWriteGateState.storageQuotaExceeded(
+            usedBytes: usedBytes,
+            limitBytes: limitBytes,
+          ),
+        );
       } else if (status == '402') {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
       }
@@ -326,7 +378,8 @@ final class SyncEngine {
       final applied = await syncRunner.pull(config);
 
       if (config.backendType == SyncBackendType.managedVault &&
-          writeGate.value.kind == SyncWriteGateKind.paymentRequired) {
+          (writeGate.value.kind == SyncWriteGateKind.paymentRequired ||
+              writeGate.value.kind == SyncWriteGateKind.storageQuotaExceeded)) {
         _setWriteGate(const SyncWriteGateState.open());
       }
 

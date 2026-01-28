@@ -84,6 +84,37 @@ pub struct Attachment {
 }
 
 #[derive(Clone, Debug)]
+pub struct AttachmentVariant {
+    pub attachment_sha256: String,
+    pub variant: String,
+    pub mime_type: String,
+    pub path: String,
+    pub byte_len: i64,
+    pub created_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct CloudMediaBackup {
+    pub attachment_sha256: String,
+    pub desired_variant: String,
+    pub status: String,
+    pub attempts: i64,
+    pub next_retry_at_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct CloudMediaBackupSummary {
+    pub pending: i64,
+    pub failed: i64,
+    pub uploaded: i64,
+    pub last_uploaded_at_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub last_error_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Todo {
     pub id: String,
     pub title: String,
@@ -225,6 +256,25 @@ fn next_device_seq(conn: &Connection, device_id: &str) -> Result<i64> {
     Ok(max_seq.unwrap_or(0) + 1)
 }
 
+fn kv_get_string(conn: &Connection, key: &str) -> Result<Option<String>> {
+    conn.query_row(
+        r#"SELECT value FROM kv WHERE key = ?1"#,
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+fn kv_set_string(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![key, value],
+    )?;
+    Ok(())
+}
+
 fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) -> Result<()> {
     let op_id = op_json["op_id"]
         .as_str()
@@ -247,6 +297,87 @@ fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) 
         params![op_id, device_id, seq, blob, created_at],
     )?;
     Ok(())
+}
+
+const KV_ATTACHMENTS_OPLOG_BACKFILLED: &str = "oplog.backfill.attachments.v1";
+
+pub fn backfill_attachments_oplog_if_needed(conn: &Connection, key: &[u8; 32]) -> Result<u64> {
+    if kv_get_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED)?.is_some() {
+        return Ok(0);
+    }
+
+    let device_id = get_or_create_device_id(conn)?;
+
+    let mut ops_inserted = 0u64;
+
+    {
+        let mut stmt = conn.prepare(
+            r#"
+SELECT sha256, mime_type, byte_len, created_at
+FROM attachments
+ORDER BY created_at ASC, sha256 ASC
+"#,
+        )?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let sha256: String = row.get(0)?;
+            let mime_type: String = row.get(1)?;
+            let byte_len: i64 = row.get(2)?;
+            let created_at_ms: i64 = row.get(3)?;
+
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id.as_str(),
+                "seq": seq,
+                "ts_ms": created_at_ms,
+                "type": "attachment.upsert.v1",
+                "payload": {
+                    "sha256": sha256,
+                    "mime_type": mime_type,
+                    "byte_len": byte_len,
+                    "created_at_ms": created_at_ms,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            ops_inserted += 1;
+        }
+    }
+
+    {
+        let mut stmt = conn.prepare(
+            r#"
+SELECT message_id, attachment_sha256, created_at
+FROM message_attachments
+ORDER BY created_at ASC, message_id ASC, attachment_sha256 ASC
+"#,
+        )?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let message_id: String = row.get(0)?;
+            let attachment_sha256: String = row.get(1)?;
+            let created_at_ms: i64 = row.get(2)?;
+
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id.as_str(),
+                "seq": seq,
+                "ts_ms": created_at_ms,
+                "type": "message.attachment.link.v1",
+                "payload": {
+                    "message_id": message_id,
+                    "attachment_sha256": attachment_sha256,
+                    "created_at_ms": created_at_ms,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            ops_inserted += 1;
+        }
+    }
+
+    kv_set_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED, "1")?;
+    Ok(ops_inserted)
 }
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -675,6 +806,39 @@ CREATE TABLE IF NOT EXISTS llm_usage_daily (
 CREATE INDEX IF NOT EXISTS idx_llm_usage_daily_profile_day
   ON llm_usage_daily(profile_id, day);
 PRAGMA user_version = 13;
+"#,
+        )?;
+        user_version = 13;
+    }
+
+    if user_version < 14 {
+        // v14: attachment variants + cloud media backup bookkeeping.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_variants (
+  attachment_sha256 TEXT NOT NULL,
+  variant TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  path TEXT NOT NULL,
+  byte_len INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (attachment_sha256, variant),
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS cloud_media_backup (
+  attachment_sha256 TEXT PRIMARY KEY,
+  desired_variant TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_cloud_media_backup_status_retry
+  ON cloud_media_backup(status, next_retry_at);
+PRAGMA user_version = 14;
 "#,
         )?;
     }
@@ -3029,6 +3193,8 @@ pub fn insert_attachment(
     bytes: &[u8],
     mime_type: &str,
 ) -> Result<Attachment> {
+    backfill_attachments_oplog_if_needed(conn, key)?;
+
     let sha256 = sha256_hex(bytes);
     let rel_path = format!("attachments/{sha256}.bin");
     let full_path = app_dir.join(&rel_path);
@@ -3039,7 +3205,7 @@ pub fn insert_attachment(
     fs::write(&full_path, blob)?;
 
     let now = now_ms();
-    conn.execute(
+    let inserted = conn.execute(
         r#"INSERT OR IGNORE INTO attachments(sha256, mime_type, path, byte_len, created_at)
            VALUES (?1, ?2, ?3, ?4, ?5)"#,
         params![sha256, mime_type, rel_path, bytes.len() as i64, now],
@@ -3057,6 +3223,25 @@ pub fn insert_attachment(
         params![sha256],
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )?;
+
+    if inserted > 0 {
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": stored_created_at_ms,
+            "type": "attachment.upsert.v1",
+            "payload": {
+                "sha256": sha256.as_str(),
+                "mime_type": stored_mime_type.as_str(),
+                "byte_len": stored_byte_len,
+                "created_at_ms": stored_created_at_ms,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+    }
 
     Ok(Attachment {
         sha256,
@@ -3089,16 +3274,370 @@ pub fn read_attachment_bytes(
 
 pub fn link_attachment_to_message(
     conn: &Connection,
+    key: &[u8; 32],
     message_id: &str,
     attachment_sha256: &str,
 ) -> Result<()> {
+    backfill_attachments_oplog_if_needed(conn, key)?;
+
     let now = now_ms();
-    conn.execute(
+    let inserted = conn.execute(
         r#"INSERT OR IGNORE INTO message_attachments(message_id, attachment_sha256, created_at)
            VALUES (?1, ?2, ?3)"#,
         params![message_id, attachment_sha256, now],
     )?;
+    if inserted == 0 {
+        return Ok(());
+    }
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "message.attachment.link.v1",
+        "payload": {
+            "message_id": message_id,
+            "attachment_sha256": attachment_sha256,
+            "created_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
     Ok(())
+}
+
+fn sanitize_variant_id(raw: &str) -> String {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return "variant".to_string();
+    }
+    let mut out = String::with_capacity(raw.len().min(64));
+    for ch in raw.chars() {
+        if out.len() >= 64 {
+            break;
+        }
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    if out.is_empty() {
+        "variant".to_string()
+    } else {
+        out
+    }
+}
+
+pub fn upsert_attachment_variant(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    attachment_sha256: &str,
+    variant: &str,
+    bytes: &[u8],
+    mime_type: &str,
+) -> Result<AttachmentVariant> {
+    let variant = variant.trim();
+    if variant.is_empty() {
+        return Err(anyhow!("variant is required"));
+    }
+
+    let safe_variant = sanitize_variant_id(variant);
+    let rel_dir = format!("attachments/variants/{attachment_sha256}");
+    let rel_path = format!("{rel_dir}/{safe_variant}.bin");
+
+    let full_dir = app_dir.join(&rel_dir);
+    fs::create_dir_all(&full_dir)?;
+
+    let full_path = full_dir.join(format!("{safe_variant}.bin"));
+    let aad = format!("attachment.variant.bytes:{attachment_sha256}:{variant}");
+    let blob = encrypt_bytes(key, bytes, aad.as_bytes())?;
+    fs::write(&full_path, blob)?;
+
+    let now = now_ms();
+    conn.execute(
+        r#"INSERT OR IGNORE INTO attachment_variants(
+             attachment_sha256,
+             variant,
+             mime_type,
+             path,
+             byte_len,
+             created_at
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
+        params![
+            attachment_sha256,
+            variant,
+            mime_type,
+            rel_path.as_str(),
+            bytes.len() as i64,
+            now
+        ],
+    )?;
+
+    let (stored_mime_type, stored_path, stored_byte_len, stored_created_at_ms): (
+        String,
+        String,
+        i64,
+        i64,
+    ) = conn.query_row(
+        r#"SELECT mime_type, path, byte_len, created_at
+           FROM attachment_variants
+           WHERE attachment_sha256 = ?1 AND variant = ?2"#,
+        params![attachment_sha256, variant],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    )?;
+
+    Ok(AttachmentVariant {
+        attachment_sha256: attachment_sha256.to_string(),
+        variant: variant.to_string(),
+        mime_type: stored_mime_type,
+        path: stored_path,
+        byte_len: stored_byte_len,
+        created_at_ms: stored_created_at_ms,
+    })
+}
+
+pub fn read_attachment_variant_bytes(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    attachment_sha256: &str,
+    variant: &str,
+) -> Result<Vec<u8>> {
+    let variant = variant.trim();
+    if variant.is_empty() {
+        return Err(anyhow!("variant is required"));
+    }
+
+    let stored_path: Option<String> = conn
+        .query_row(
+            r#"SELECT path
+               FROM attachment_variants
+               WHERE attachment_sha256 = ?1 AND variant = ?2"#,
+            params![attachment_sha256, variant],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let stored_path = stored_path.ok_or_else(|| anyhow!("attachment variant not found"))?;
+
+    let blob = fs::read(app_dir.join(stored_path))?;
+    let aad = format!("attachment.variant.bytes:{attachment_sha256}:{variant}");
+    decrypt_bytes(key, &blob, aad.as_bytes())
+}
+
+pub fn enqueue_cloud_media_backup(
+    conn: &Connection,
+    attachment_sha256: &str,
+    desired_variant: &str,
+    now_ms: i64,
+) -> Result<()> {
+    let desired_variant = desired_variant.trim();
+    if desired_variant.is_empty() {
+        return Err(anyhow!("desired_variant is required"));
+    }
+
+    conn.execute(
+        r#"
+INSERT INTO cloud_media_backup(
+  attachment_sha256,
+  desired_variant,
+  status,
+  attempts,
+  next_retry_at,
+  last_error,
+  updated_at
+)
+VALUES (?1, ?2, 'pending', 0, NULL, NULL, ?3)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  desired_variant = excluded.desired_variant,
+  status = CASE
+    WHEN cloud_media_backup.status = 'uploaded' THEN 'uploaded'
+    ELSE 'pending'
+  END,
+  next_retry_at = NULL,
+  last_error = NULL,
+  updated_at = excluded.updated_at
+"#,
+        params![attachment_sha256, desired_variant, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn backfill_cloud_media_backup_images(
+    conn: &Connection,
+    desired_variant: &str,
+    now_ms: i64,
+) -> Result<u64> {
+    let desired_variant = desired_variant.trim();
+    if desired_variant.is_empty() {
+        return Err(anyhow!("desired_variant is required"));
+    }
+
+    let affected = conn.execute(
+        r#"
+INSERT INTO cloud_media_backup(
+  attachment_sha256,
+  desired_variant,
+  status,
+  attempts,
+  next_retry_at,
+  last_error,
+  updated_at
+)
+SELECT sha256, ?1, 'pending', 0, NULL, NULL, ?2
+FROM attachments
+WHERE mime_type LIKE 'image/%'
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  desired_variant = excluded.desired_variant,
+  status = CASE
+    WHEN cloud_media_backup.status = 'uploaded' THEN 'uploaded'
+    ELSE 'pending'
+  END,
+  next_retry_at = NULL,
+  last_error = NULL,
+  updated_at = excluded.updated_at
+"#,
+        params![desired_variant, now_ms],
+    )?;
+
+    Ok(affected as u64)
+}
+
+pub fn list_due_cloud_media_backups(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<CloudMediaBackup>> {
+    let limit = limit.clamp(1, 500);
+    let mut stmt = conn.prepare(
+        r#"
+SELECT attachment_sha256, desired_variant, status, attempts, next_retry_at, last_error, updated_at
+FROM cloud_media_backup
+WHERE status != 'uploaded'
+  AND (next_retry_at IS NULL OR next_retry_at <= ?1)
+ORDER BY updated_at ASC, attachment_sha256 ASC
+LIMIT ?2
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(CloudMediaBackup {
+            attachment_sha256: row.get(0)?,
+            desired_variant: row.get(1)?,
+            status: row.get(2)?,
+            attempts: row.get(3)?,
+            next_retry_at_ms: row.get(4)?,
+            last_error: row.get(5)?,
+            updated_at_ms: row.get(6)?,
+        });
+    }
+    Ok(result)
+}
+
+pub fn mark_cloud_media_backup_failed(
+    conn: &Connection,
+    attachment_sha256: &str,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE cloud_media_backup
+SET status = 'failed',
+    attempts = ?2,
+    next_retry_at = ?3,
+    last_error = ?4,
+    updated_at = ?5
+WHERE attachment_sha256 = ?1
+"#,
+        params![
+            attachment_sha256,
+            attempts,
+            next_retry_at_ms,
+            last_error,
+            now_ms
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn mark_cloud_media_backup_uploaded(
+    conn: &Connection,
+    attachment_sha256: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE cloud_media_backup
+SET status = 'uploaded',
+    next_retry_at = NULL,
+    last_error = NULL,
+    updated_at = ?2
+WHERE attachment_sha256 = ?1
+"#,
+        params![attachment_sha256, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn cloud_media_backup_summary(conn: &Connection) -> Result<CloudMediaBackupSummary> {
+    let mut pending = 0i64;
+    let mut failed = 0i64;
+    let mut uploaded = 0i64;
+
+    let mut stmt =
+        conn.prepare(r#"SELECT status, COUNT(*) FROM cloud_media_backup GROUP BY status"#)?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let status: String = row.get(0)?;
+        let count: i64 = row.get(1)?;
+        match status.as_str() {
+            "pending" => pending = count,
+            "failed" => failed = count,
+            "uploaded" => uploaded = count,
+            _ => {}
+        }
+    }
+
+    let last_uploaded_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT MAX(updated_at) FROM cloud_media_backup WHERE status = 'uploaded'"#,
+            [],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+
+    let (last_error, last_error_at_ms): (Option<String>, Option<i64>) = conn
+        .query_row(
+            r#"
+SELECT last_error, updated_at
+FROM cloud_media_backup
+WHERE last_error IS NOT NULL
+ORDER BY updated_at DESC
+LIMIT 1
+"#,
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?
+        .unwrap_or((None, None));
+
+    Ok(CloudMediaBackupSummary {
+        pending,
+        failed,
+        uploaded,
+        last_uploaded_at_ms,
+        last_error,
+        last_error_at_ms,
+    })
 }
 
 pub fn list_message_attachments(

@@ -54,6 +54,8 @@
 	<array>
 		<string>com.secondloop.secondloop.backgroundSync</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to send in chat.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock SecondLoop with Face ID</string>
 </dict>

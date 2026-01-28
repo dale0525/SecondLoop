@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -12,7 +12,9 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import '../media_backup/cloud_media_backup_runner.dart';
 
 class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
@@ -45,6 +47,11 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
+  bool _autoWifiOnly = false;
+  bool _chatThumbnailsWifiOnly = true;
+  bool _cloudMediaBackupEnabled = false;
+  bool _cloudMediaBackupWifiOnly = true;
+  Future<CloudMediaBackupSummary>? _cloudMediaBackupSummary;
 
   @override
   void initState() {
@@ -64,6 +71,26 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     super.dispose();
   }
 
+  Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary() {
+    final backendScope =
+        context.getInheritedWidgetOfExactType<AppBackendScope>();
+    final sessionScope = context.getInheritedWidgetOfExactType<SessionScope>();
+    if (backendScope == null || sessionScope == null) return null;
+    try {
+      return backendScope.backend
+          .cloudMediaBackupSummary(sessionScope.sessionKey);
+    } on UnimplementedError {
+      return null;
+    }
+  }
+
+  void _refreshCloudMediaBackupSummary() {
+    if (!mounted) return;
+    setState(() {
+      _cloudMediaBackupSummary = _maybeLoadCloudMediaBackupSummary();
+    });
+  }
+
   Future<void> _load() async {
     final all = await _store.readAll();
     final backendType = switch (all[SyncConfigStore.kBackendType]) {
@@ -73,6 +100,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     };
     final autoValue = all[SyncConfigStore.kAutoEnabled];
     final autoEnabled = autoValue == null ? true : autoValue == '1';
+    final autoWifiOnly = (all[SyncConfigStore.kAutoWifiOnly] ?? '0') == '1';
     final baseUrl = all[SyncConfigStore.kWebdavBaseUrl];
     final managedVaultBaseUrl = all[SyncConfigStore.kManagedVaultBaseUrl];
     final username = all[SyncConfigStore.kWebdavUsername];
@@ -80,17 +108,30 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
     final localDir = all[SyncConfigStore.kLocalDir];
     final hasSyncKey = (all[SyncConfigStore.kSyncKeyB64] ?? '').isNotEmpty;
+    final chatThumbnailsWifiOnly =
+        (all[SyncConfigStore.kChatThumbnailsWifiOnly] ?? '1') == '1';
+    final cloudMediaBackupEnabled =
+        (all[SyncConfigStore.kCloudMediaBackupEnabled] ?? '') == '1';
+    final cloudMediaBackupWifiOnly =
+        (all[SyncConfigStore.kCloudMediaBackupWifiOnly] ?? '1') == '1';
 
     if (!mounted) return;
     setState(() {
       _backendType = backendType;
       _autoEnabled = autoEnabled;
+      _autoWifiOnly = autoWifiOnly;
       _baseUrlController.text = baseUrl ?? '';
       _managedVaultBaseUrlController.text = managedVaultBaseUrl ?? '';
       _usernameController.text = username ?? '';
       _passwordController.text = password ?? '';
       _remoteRootController.text = remoteRoot ?? _remoteRootController.text;
       _localDirController.text = localDir ?? '';
+      _chatThumbnailsWifiOnly = chatThumbnailsWifiOnly;
+      _cloudMediaBackupEnabled = cloudMediaBackupEnabled;
+      _cloudMediaBackupWifiOnly = cloudMediaBackupWifiOnly;
+      _cloudMediaBackupSummary = backendType == SyncBackendType.managedVault
+          ? _maybeLoadCloudMediaBackupSummary()
+          : null;
       if (hasSyncKey) {
         _syncPassphraseController.text = _kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
@@ -282,6 +323,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             if (baseUrl == null || baseUrl.trim().isEmpty) {
               throw StateError('missing_managed_vault_base_url');
             }
+            final useMediaQueue = await _store.readCloudMediaBackupEnabled();
+            if (useMediaQueue) {
+              return backend.syncManagedVaultPushOpsOnly(
+                sessionKey,
+                syncKey,
+                baseUrl: baseUrl,
+                vaultId: vaultId,
+                idToken: idToken,
+              );
+            }
             return backend.syncManagedVaultPush(
               sessionKey,
               syncKey,
@@ -356,7 +407,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       if (pulled > 0 && mounted) {
         engine?.notifyExternalChange();
       }
-      _showSnack(t.sync.pulledOps(count: pulled));
+      _showSnack(
+        pulled == 0 ? t.sync.noNewChanges : t.sync.pulledOps(count: pulled),
+      );
     } catch (e) {
       if (_backendType == SyncBackendType.managedVault) {
         final message = e.toString();
@@ -369,6 +422,190 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         }
       }
       _showSnack(t.sync.pullFailed(error: '$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  static String _formatTimestamp(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    final mb = kb / 1024;
+    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
+    final gb = mb / 1024;
+    return '${gb.toStringAsFixed(1)} GB';
+  }
+
+  Future<void> _setCloudMediaBackupEnabled(bool enabled) async {
+    await _store.writeCloudMediaBackupEnabled(enabled);
+    if (!mounted) return;
+    setState(() => _cloudMediaBackupEnabled = enabled);
+  }
+
+  Future<void> _setAutoWifiOnly(bool enabled) async {
+    await _store.writeAutoWifiOnly(enabled);
+    if (!mounted) return;
+    setState(() => _autoWifiOnly = enabled);
+  }
+
+  Future<void> _setChatThumbnailsWifiOnly(bool enabled) async {
+    await _store.writeChatThumbnailsWifiOnly(enabled);
+    if (!mounted) return;
+    setState(() => _chatThumbnailsWifiOnly = enabled);
+  }
+
+  Future<void> _setCloudMediaBackupWifiOnly(bool enabled) async {
+    await _store.writeCloudMediaBackupWifiOnly(enabled);
+    if (!mounted) return;
+    setState(() => _cloudMediaBackupWifiOnly = enabled);
+  }
+
+  Future<void> _copyText(String value) async {
+    final copied = context.t.common.actions.copy;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    _showSnack(copied);
+  }
+
+  Future<void> _backfillCloudMediaBackupImages() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final t = context.t;
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final enqueued = await backend.backfillCloudMediaBackupImages(
+        sessionKey,
+        desiredVariant: 'original',
+        nowMs: now,
+      );
+      if (!mounted) return;
+      _showSnack(t.sync.mediaBackup.backfillEnqueued(count: enqueued));
+      _refreshCloudMediaBackupSummary();
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(t.sync.mediaBackup.backfillFailed(error: '$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _uploadCloudMediaBackupNow() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final t = context.t;
+    try {
+      if (!_cloudMediaBackupEnabled) {
+        _showSnack(t.sync.mediaBackup.notEnabled);
+        return;
+      }
+
+      if (_backendType != SyncBackendType.managedVault) {
+        _showSnack(t.sync.mediaBackup.managedVaultOnly);
+        return;
+      }
+
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final cloudAuth = CloudAuthScope.of(context).controller;
+
+      final syncKey = await _loadSyncKey();
+      if (!mounted) return;
+      if (syncKey == null || syncKey.length != 32) {
+        _showSnack(t.sync.missingSyncKey);
+        return;
+      }
+
+      final idToken = await cloudAuth.getIdToken();
+      if (!mounted) return;
+      if (idToken == null || idToken.trim().isEmpty) {
+        _showSnack(t.sync.cloudManagedVault.signInRequired);
+        return;
+      }
+
+      final vaultId = cloudAuth.uid ?? '';
+      final baseUrl = await _store.resolveManagedVaultBaseUrl();
+      if (!mounted) return;
+      if (baseUrl == null || baseUrl.trim().isEmpty) {
+        _showSnack(t.sync.baseUrlRequired);
+        return;
+      }
+
+      final runner = CloudMediaBackupRunner(
+        store: BackendCloudMediaBackupStore(
+          backend: backend,
+          sessionKey: sessionKey,
+        ),
+        client: ManagedVaultCloudMediaBackupClient(
+          backend: backend,
+          sessionKey: sessionKey,
+          syncKey: syncKey,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+          idToken: idToken,
+        ),
+        settings: CloudMediaBackupRunnerSettings(
+          enabled: true,
+          wifiOnly: _cloudMediaBackupWifiOnly,
+        ),
+        getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
+      );
+
+      var result = await runner.runOnce(allowCellular: false);
+      if (!mounted) return;
+      if (result.needsCellularConfirmation) {
+        final allow = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text(t.sync.mediaBackup.cellularDialog.title),
+              content: Text(t.sync.mediaBackup.cellularDialog.message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(t.common.actions.cancel),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(t.sync.mediaBackup.cellularDialog.confirm),
+                ),
+              ],
+            );
+          },
+        );
+        if (!mounted) return;
+        if (allow == true) {
+          result = await runner.runOnce(allowCellular: true);
+          if (!mounted) return;
+        } else {
+          _showSnack(t.sync.mediaBackup.wifiOnlyBlocked);
+          return;
+        }
+      }
+
+      if (result.didUploadAny) {
+        _showSnack(t.sync.mediaBackup.uploaded);
+      } else {
+        _showSnack(t.sync.mediaBackup.nothingToUpload);
+      }
+      _refreshCloudMediaBackupSummary();
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(t.sync.mediaBackup.uploadFailed(error: '$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -414,19 +651,37 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         children: [
           sectionTitle(context.t.sync.sections.automation),
           sectionCard(
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.t.sync.autoSync.title),
-              subtitle: Text(context.t.sync.autoSync.subtitle),
-              value: _autoEnabled,
-              onChanged: _busy
-                  ? null
-                  : (value) async {
-                      final backend = AppBackendScope.of(context);
-                      setState(() => _autoEnabled = value);
-                      await _store.writeAutoEnabled(value);
-                      await BackgroundSync.refreshSchedule(backend: backend);
-                    },
+            Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(context.t.sync.autoSync.title),
+                  subtitle: Text(context.t.sync.autoSync.subtitle),
+                  value: _autoEnabled,
+                  onChanged: _busy
+                      ? null
+                      : (value) async {
+                          final backend = AppBackendScope.of(context);
+                          setState(() => _autoEnabled = value);
+                          await _store.writeAutoEnabled(value);
+                          await BackgroundSync.refreshSchedule(
+                              backend: backend);
+                        },
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  key: const ValueKey('sync_auto_wifi_only'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(context.t.sync.autoSync.wifiOnlyTitle),
+                  subtitle: Text(context.t.sync.autoSync.wifiOnlySubtitle),
+                  value: _autoWifiOnly,
+                  onChanged: _busy
+                      ? null
+                      : (value) async {
+                          await _setAutoWifiOnly(value);
+                        },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -498,6 +753,31 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                         );
                       }
 
+                      if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) {
+                        final used = gate.quotaUsedBytes;
+                        final limit = gate.quotaLimitBytes;
+                        final message =
+                            (used != null && limit != null && limit > 0)
+                                ? context.t.sync.cloudManagedVault
+                                    .storageQuotaExceededWithUsage(
+                                    used: _formatBytes(used),
+                                    limit: _formatBytes(limit),
+                                  )
+                                : context.t.sync.cloudManagedVault
+                                    .storageQuotaExceeded;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            message,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error),
+                          ),
+                        );
+                      }
+
                       return const SizedBox.shrink();
                     },
                   ),
@@ -524,7 +804,13 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       ? null
                       : (value) {
                           if (value == null) return;
-                          setState(() => _backendType = value);
+                          setState(() {
+                            _backendType = value;
+                            _cloudMediaBackupSummary =
+                                value == SyncBackendType.managedVault
+                                    ? _maybeLoadCloudMediaBackupSummary()
+                                    : null;
+                          });
                         },
                 ),
                 const SizedBox(height: 12),
@@ -603,6 +889,161 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
+          sectionTitle(context.t.sync.sections.mediaPreview),
+          sectionCard(
+            SwitchListTile(
+              key: const ValueKey('sync_chat_thumbnails_wifi_only'),
+              contentPadding: EdgeInsets.zero,
+              title:
+                  Text(context.t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle),
+              subtitle: Text(
+                  context.t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle),
+              value: _chatThumbnailsWifiOnly,
+              onChanged: _busy
+                  ? null
+                  : (value) async {
+                      await _setChatThumbnailsWifiOnly(value);
+                    },
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_backendType == SyncBackendType.managedVault) ...[
+            sectionTitle(context.t.sync.sections.mediaBackup),
+            sectionCard(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(context.t.sync.mediaBackup.title),
+                    subtitle: Text(context.t.sync.mediaBackup.subtitle),
+                    value: _cloudMediaBackupEnabled,
+                    onChanged: _busy
+                        ? null
+                        : (value) async {
+                            await _setCloudMediaBackupEnabled(value);
+                          },
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(context.t.sync.mediaBackup.wifiOnlyTitle),
+                    subtitle: Text(context.t.sync.mediaBackup.wifiOnlySubtitle),
+                    value: _cloudMediaBackupWifiOnly,
+                    onChanged: _busy || !_cloudMediaBackupEnabled
+                        ? null
+                        : (value) async {
+                            await _setCloudMediaBackupWifiOnly(value);
+                          },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.t.sync.mediaBackup.description,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  FutureBuilder(
+                    future: _cloudMediaBackupSummary,
+                    builder: (context, snapshot) {
+                      final s = snapshot.data;
+                      if (s == null) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const SizedBox.shrink();
+                        }
+                        return const SizedBox.shrink();
+                      }
+
+                      final lastUploaded = s.lastUploadedAtMs;
+                      final lastError = s.lastError;
+                      final lastErrorAtMs = s.lastErrorAtMs;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            context.t.sync.mediaBackup.stats(
+                              pending: s.pending,
+                              failed: s.failed,
+                              uploaded: s.uploaded,
+                            ),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (lastUploaded != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              context.t.sync.mediaBackup.lastUploaded(
+                                at: _formatTimestamp(lastUploaded),
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          if (lastError != null &&
+                              lastError.trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    lastErrorAtMs == null
+                                        ? context.t.sync.mediaBackup
+                                            .lastError(error: lastError)
+                                        : context.t.sync.mediaBackup
+                                            .lastErrorWithTime(
+                                            error: lastError,
+                                            at: _formatTimestamp(lastErrorAtMs),
+                                          ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .error),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: context.t.common.actions.copy,
+                                  onPressed: () => _copyText(lastError),
+                                  icon: const Icon(Icons.copy_rounded),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _busy || !_cloudMediaBackupEnabled
+                              ? null
+                              : _backfillCloudMediaBackupImages,
+                          child:
+                              Text(context.t.sync.mediaBackup.backfillButton),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _busy || !_cloudMediaBackupEnabled
+                              ? null
+                              : _uploadCloudMediaBackupNow,
+                          child:
+                              Text(context.t.sync.mediaBackup.uploadNowButton),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           sectionTitle(context.t.sync.sections.securityActions),
           sectionCard(
             Column(

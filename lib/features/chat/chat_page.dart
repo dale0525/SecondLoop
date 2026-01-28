@@ -5,16 +5,20 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
+import '../../core/backend/native_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_button.dart';
@@ -39,8 +43,10 @@ import '../actions/todo/todo_thread_match.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
+import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
+import 'chat_image_attachment_thumbnail.dart';
 import 'message_viewer_page.dart';
 
 class ChatPage extends StatefulWidget {
@@ -99,6 +105,11 @@ class _ChatPageState extends State<ChatPage> {
       (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux);
+  bool get _supportsCamera =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
 
   @override
   void initState() {
@@ -271,7 +282,17 @@ class _ChatPageState extends State<ChatPage> {
     final raw = message.content;
     final actions =
         message.role == 'assistant' ? parseAssistantMessageActions(raw) : null;
-    return (actions?.displayText ?? raw).trim();
+    final text = (actions?.displayText ?? raw).trim();
+    if (text == 'Photo' || text == '照片') return '';
+    return text;
+  }
+
+  bool _isPhotoPlaceholderText(BuildContext context, String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    final localized = context.t.chat.photoMessage.trim();
+    if (localized.isNotEmpty && trimmed == localized) return true;
+    return trimmed == 'Photo' || trimmed == '照片';
   }
 
   Future<void> _copyMessageToClipboard(Message message) async {
@@ -922,6 +943,165 @@ class _ChatPageState extends State<ChatPage> {
       unawaited(_maybeLinkMessageToExistingTodo(message, text));
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String _inferImageMimeTypeFromPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heif';
+    return 'image/jpeg';
+  }
+
+  Future<void> _maybeEnqueueCloudMediaBackup(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256,
+  ) async {
+    final store = SyncConfigStore();
+    final backendType = await store.readBackendType();
+    if (backendType != SyncBackendType.managedVault) return;
+
+    final enabled = await store.readCloudMediaBackupEnabled();
+    if (!enabled) return;
+
+    await backend.enqueueCloudMediaBackup(
+      sessionKey,
+      attachmentSha256: attachmentSha256,
+      desiredVariant: 'original',
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> _captureAndSendPhoto() async {
+    if (_sending) return;
+    if (_asking) return;
+    if (!_supportsCamera) return;
+
+    setState(() => _sending = true);
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (picked == null) return;
+
+      final rawBytes = await picked.readAsBytes();
+      final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
+      await _sendImageAttachment(rawBytes, inferredMimeType);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.chat.photoFailed(error: '$e'))),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _pickAndSendImageFromGallery() async {
+    if (_sending) return;
+    if (_asking) return;
+    if (!_supportsCamera) return;
+
+    setState(() => _sending = true);
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      final rawBytes = await picked.readAsBytes();
+      final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
+      await _sendImageAttachment(rawBytes, inferredMimeType);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.chat.photoFailed(error: '$e'))),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _pickAndSendImageFromFile() async {
+    if (_sending) return;
+    if (_asking) return;
+    if (!_isDesktopPlatform) return;
+
+    setState(() => _sending = true);
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif'],
+        withData: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.first;
+      final rawBytes = file.bytes;
+      if (rawBytes == null) {
+        throw Exception('file_picker returned no bytes');
+      }
+
+      final inferredMimeType = _inferImageMimeTypeFromPath(file.name);
+      await _sendImageAttachment(rawBytes, inferredMimeType);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.chat.photoFailed(error: '$e'))),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _sendImageAttachment(
+    Uint8List rawBytes,
+    String inferredMimeType,
+  ) async {
+    final backendAny = AppBackendScope.of(context);
+    if (backendAny is! NativeAppBackend) return;
+    final backend = backendAny;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
+
+    final compressed =
+        await compressImageForStorage(rawBytes, mimeType: inferredMimeType);
+
+    final attachment = await backend.insertAttachment(
+      sessionKey,
+      bytes: compressed.bytes,
+      mimeType: compressed.mimeType,
+    );
+    unawaited(_maybeEnqueueCloudMediaBackup(
+      backend,
+      sessionKey,
+      attachment.sha256,
+    ));
+    final message = await backend.insertMessage(
+      sessionKey,
+      widget.conversation.id,
+      role: 'user',
+      content: '',
+    );
+    await backend.linkAttachmentToMessage(
+      sessionKey,
+      message.id,
+      attachmentSha256: attachment.sha256,
+    );
+
+    syncEngine?.notifyLocalMutation();
+    if (!mounted) return;
+    _refresh();
+
+    if (_usePagination) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!_scrollController.hasClients) return;
+        unawaited(
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      });
     }
   }
 
@@ -2271,8 +2451,12 @@ class _ChatPageState extends State<ChatPage> {
                             (!isPending && stableMsg.role == 'assistant')
                                 ? parseAssistantMessageActions(rawText)
                                 : null;
-                        final displayText =
+                        final rawDisplayText =
                             assistantActions?.displayText ?? rawText;
+                        final displayText =
+                            _isPhotoPlaceholderText(context, rawDisplayText)
+                                ? ''
+                                : rawDisplayText;
                         final actionSuggestions =
                             assistantActions?.suggestions?.suggestions ??
                                 const <ActionSuggestion>[];
@@ -2329,6 +2513,12 @@ class _ChatPageState extends State<ChatPage> {
                                 ),
                               )
                             : const SizedBox.shrink();
+
+                        final hasContentAboveAttachments =
+                            displayText.trim().isNotEmpty ||
+                                shouldCollapse ||
+                                actionSuggestions.isNotEmpty ||
+                                !stableMsg.isMemory;
 
                         final bubble = ConstrainedBox(
                           key: ValueKey('message_bubble_${stableMsg.id}'),
@@ -2449,10 +2639,13 @@ class _ChatPageState extends State<ChatPage> {
                                           ),
                                         )
                                       else
-                                        _buildMessageMarkdown(
-                                          displayText,
-                                          isDesktopPlatform: isDesktopPlatform,
-                                        ),
+                                        displayText.trim().isEmpty
+                                            ? const SizedBox.shrink()
+                                            : _buildMessageMarkdown(
+                                                displayText,
+                                                isDesktopPlatform:
+                                                    isDesktopPlatform,
+                                              ),
                                       if (shouldCollapse)
                                         Align(
                                           alignment: Alignment.centerRight,
@@ -2528,8 +2721,10 @@ class _ChatPageState extends State<ChatPage> {
                                             }
 
                                             return Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 8,
+                                              padding: EdgeInsets.only(
+                                                top: hasContentAboveAttachments
+                                                    ? 8
+                                                    : 0,
                                               ),
                                               child: SingleChildScrollView(
                                                 scrollDirection:
@@ -2544,25 +2739,51 @@ class _ChatPageState extends State<ChatPage> {
                                                                 .only(
                                                           right: 8,
                                                         ),
-                                                        child: AttachmentCard(
-                                                          attachment:
-                                                              attachment,
-                                                          onTap: () {
-                                                            Navigator.of(
-                                                                    context)
-                                                                .push(
-                                                              MaterialPageRoute(
-                                                                builder:
-                                                                    (context) {
-                                                                  return AttachmentViewerPage(
-                                                                    attachment:
-                                                                        attachment,
+                                                        child: attachment
+                                                                .mimeType
+                                                                .startsWith(
+                                                                    'image/')
+                                                            ? ChatImageAttachmentThumbnail(
+                                                                key: ValueKey(
+                                                                  'chat_attachment_image_${attachment.sha256}',
+                                                                ),
+                                                                attachment:
+                                                                    attachment,
+                                                                onTap: () {
+                                                                  Navigator.of(
+                                                                          context)
+                                                                      .push(
+                                                                    MaterialPageRoute(
+                                                                      builder:
+                                                                          (context) {
+                                                                        return AttachmentViewerPage(
+                                                                          attachment:
+                                                                              attachment,
+                                                                        );
+                                                                      },
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              )
+                                                            : AttachmentCard(
+                                                                attachment:
+                                                                    attachment,
+                                                                onTap: () {
+                                                                  Navigator.of(
+                                                                          context)
+                                                                      .push(
+                                                                    MaterialPageRoute(
+                                                                      builder:
+                                                                          (context) {
+                                                                        return AttachmentViewerPage(
+                                                                          attachment:
+                                                                              attachment,
+                                                                        );
+                                                                      },
+                                                                    ),
                                                                   );
                                                                 },
                                                               ),
-                                                            );
-                                                          },
-                                                        ),
                                                       ),
                                                   ],
                                                 ),
@@ -2819,6 +3040,26 @@ class _ChatPageState extends State<ChatPage> {
                             ),
                           ),
                           const SizedBox(width: 8),
+                          if (_supportsImageUpload) ...[
+                            GestureDetector(
+                              onLongPress: (_sending || _asking)
+                                  ? null
+                                  : _pickAndSendImageFromGallery,
+                              child: SlIconButton(
+                                key: const ValueKey('chat_camera'),
+                                icon: Icons.photo_camera_rounded,
+                                size: 44,
+                                iconSize: 20,
+                                tooltip: context.t.chat.cameraTooltip,
+                                onPressed: (_sending || _asking)
+                                    ? null
+                                    : (_isDesktopPlatform
+                                        ? _pickAndSendImageFromFile
+                                        : _captureAndSendPhoto),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           SlButton(
                             buttonKey: const ValueKey('chat_send'),
                             icon: const Icon(Icons.send_rounded, size: 18),

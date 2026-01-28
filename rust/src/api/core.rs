@@ -351,9 +351,9 @@ pub fn db_link_attachment_to_message(
     message_id: String,
     attachment_sha256: String,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::link_attachment_to_message(&conn, &message_id, &attachment_sha256)
+    db::link_attachment_to_message(&conn, &key, &message_id, &attachment_sha256)
 }
 
 #[flutter_rust_bridge::frb]
@@ -383,6 +383,127 @@ pub fn db_read_attachment_bytes(app_dir: String, key: Vec<u8>, sha256: String) -
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::read_attachment_bytes(&conn, &key, Path::new(&app_dir), &sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_attachment_variant(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    variant: String,
+    bytes: Vec<u8>,
+    mime_type: String,
+) -> Result<db::AttachmentVariant> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_attachment_variant(
+        &conn,
+        &key,
+        Path::new(&app_dir),
+        &attachment_sha256,
+        &variant,
+        &bytes,
+        &mime_type,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_read_attachment_variant_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    variant: String,
+) -> Result<Vec<u8>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::read_attachment_variant_bytes(
+        &conn,
+        &key,
+        Path::new(&app_dir),
+        &attachment_sha256,
+        &variant,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_enqueue_cloud_media_backup(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    desired_variant: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::enqueue_cloud_media_backup(&conn, &attachment_sha256, &desired_variant, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_backfill_cloud_media_backup_images(
+    app_dir: String,
+    key: Vec<u8>,
+    desired_variant: String,
+    now_ms: i64,
+) -> Result<u64> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::backfill_cloud_media_backup_images(&conn, &desired_variant, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_due_cloud_media_backups(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::CloudMediaBackup>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_due_cloud_media_backups(&conn, now_ms, limit as i64)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_cloud_media_backup_failed(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_cloud_media_backup_failed(
+        &conn,
+        &attachment_sha256,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_cloud_media_backup_uploaded(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_cloud_media_backup_uploaded(&conn, &attachment_sha256, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_cloud_media_backup_summary(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<db::CloudMediaBackupSummary> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::cloud_media_backup_summary(&conn)
 }
 
 #[flutter_rust_bridge::frb]
@@ -809,6 +930,24 @@ pub fn sync_webdav_pull(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn sync_webdav_download_attachment_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+    sha256: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::download_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn sync_webdav_clear_remote_root(
     base_url: String,
     username: Option<String>,
@@ -858,6 +997,22 @@ pub fn sync_localdir_pull(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn sync_localdir_download_attachment_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    local_dir: String,
+    remote_root: String,
+    sha256: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
+    sync::download_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn sync_localdir_clear_remote_root(local_dir: String, remote_root: String) -> Result<()> {
     let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     sync::clear_remote_root(&remote, &remote_root)
@@ -886,6 +1041,28 @@ pub fn sync_managed_vault_push(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_push_ops_only(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::push_ops_only(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn sync_managed_vault_pull(
     app_dir: String,
     key: Vec<u8>,
@@ -904,6 +1081,54 @@ pub fn sync_managed_vault_pull(
         &base_url,
         &vault_id,
         &firebase_id_token,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_upload_attachment_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+    sha256: String,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::upload_attachment_bytes(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+        &sha256,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_download_attachment_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+    sha256: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::download_attachment_bytes(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+        &sha256,
     )
 }
 

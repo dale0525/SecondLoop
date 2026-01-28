@@ -43,7 +43,7 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final pull = find.widgetWithText(OutlinedButton, 'Pull');
+    final pull = find.widgetWithText(OutlinedButton, 'Download');
     expect(pull, findsOneWidget);
     expect(tester.widget<OutlinedButton>(pull).onPressed, isNull);
   });

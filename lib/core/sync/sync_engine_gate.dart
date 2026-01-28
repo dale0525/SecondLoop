@@ -1,5 +1,6 @@
-import 'dart:typed_data';
-
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../backend/app_backend.dart';
@@ -22,6 +23,7 @@ final class SyncEngineGate extends StatefulWidget {
 final class _SyncEngineGateState extends State<SyncEngineGate>
     with WidgetsBindingObserver {
   final SyncConfigStore _configStore = SyncConfigStore();
+  final Connectivity _connectivity = Connectivity();
   SyncEngine? _engine;
   Object? _backendIdentity;
   Uint8List? _sessionKey;
@@ -83,12 +85,14 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
 
     final runner = _AppBackendSyncRunner(
       backend: backend,
+      configStore: _configStore,
       sessionKey: sessionKey,
       idTokenGetter: cloudAuth?.getIdToken,
     );
     final engine = SyncEngine(
       syncRunner: runner,
       loadConfig: _configStore.loadConfiguredSyncIfAutoEnabled,
+      autoRunGate: _autoRunGate,
       pushDebounce: const Duration(seconds: 2),
       pullInterval: const Duration(seconds: 20),
       pullJitter: const Duration(seconds: 5),
@@ -114,6 +118,29 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  Future<bool> _autoRunGate() async {
+    final wifiOnly = await _configStore.readAutoWifiOnly();
+    if (!wifiOnly) return true;
+    if (kIsWeb) return true;
+
+    try {
+      final results = await _connectivity.checkConnectivity();
+      if (results.contains(ConnectivityResult.wifi) ||
+          results.contains(ConnectivityResult.ethernet)) {
+        return true;
+      }
+      if (results.contains(ConnectivityResult.mobile) ||
+          results.contains(ConnectivityResult.none)) {
+        return false;
+      }
+      return true;
+    } on MissingPluginException {
+      return true;
+    } catch (_) {
+      return true;
+    }
   }
 
   @override
@@ -148,12 +175,15 @@ final class SyncEngineScope extends InheritedWidget {
 final class _AppBackendSyncRunner implements SyncRunner {
   _AppBackendSyncRunner({
     required this.backend,
+    required SyncConfigStore configStore,
     required Uint8List sessionKey,
     required Future<String?> Function()? idTokenGetter,
   })  : _sessionKey = Uint8List.fromList(sessionKey),
+        _configStore = configStore,
         _idTokenGetter = idTokenGetter;
 
   final AppBackend backend;
+  final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
 
@@ -179,6 +209,17 @@ final class _AppBackendSyncRunner implements SyncRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
+          final useMediaQueue =
+              await _configStore.readCloudMediaBackupEnabled();
+          if (useMediaQueue) {
+            return backend.syncManagedVaultPushOpsOnly(
+              _sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+          }
           return backend.syncManagedVaultPush(
             _sessionKey,
             config.syncKey,

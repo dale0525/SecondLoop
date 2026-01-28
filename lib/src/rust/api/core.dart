@@ -255,6 +255,94 @@ Future<Uint8List> dbReadAttachmentBytes(
     RustLib.instance.api.crateApiCoreDbReadAttachmentBytes(
         appDir: appDir, key: key, sha256: sha256);
 
+Future<AttachmentVariant> dbUpsertAttachmentVariant(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String variant,
+        required List<int> bytes,
+        required String mimeType}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertAttachmentVariant(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        variant: variant,
+        bytes: bytes,
+        mimeType: mimeType);
+
+Future<Uint8List> dbReadAttachmentVariantBytes(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String variant}) =>
+    RustLib.instance.api.crateApiCoreDbReadAttachmentVariantBytes(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        variant: variant);
+
+Future<void> dbEnqueueCloudMediaBackup(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String desiredVariant,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbEnqueueCloudMediaBackup(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        desiredVariant: desiredVariant,
+        nowMs: nowMs);
+
+Future<BigInt> dbBackfillCloudMediaBackupImages(
+        {required String appDir,
+        required List<int> key,
+        required String desiredVariant,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbBackfillCloudMediaBackupImages(
+        appDir: appDir, key: key, desiredVariant: desiredVariant, nowMs: nowMs);
+
+Future<List<CloudMediaBackup>> dbListDueCloudMediaBackups(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs,
+        required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListDueCloudMediaBackups(
+        appDir: appDir, key: key, nowMs: nowMs, limit: limit);
+
+Future<void> dbMarkCloudMediaBackupFailed(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required PlatformInt64 attempts,
+        required PlatformInt64 nextRetryAtMs,
+        required String lastError,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkCloudMediaBackupFailed(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: lastError,
+        nowMs: nowMs);
+
+Future<void> dbMarkCloudMediaBackupUploaded(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkCloudMediaBackupUploaded(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        nowMs: nowMs);
+
+Future<CloudMediaBackupSummary> dbCloudMediaBackupSummary(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbCloudMediaBackupSummary(appDir: appDir, key: key);
+
 Future<void> dbResetVaultDataPreservingLlmProfiles(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbResetVaultDataPreservingLlmProfiles(
@@ -464,6 +552,25 @@ Future<BigInt> syncWebdavPull(
         password: password,
         remoteRoot: remoteRoot);
 
+Future<void> syncWebdavDownloadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavDownloadAttachmentBytes(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot,
+        sha256: sha256);
+
 Future<void> syncWebdavClearRemoteRoot(
         {required String baseUrl,
         String? username,
@@ -506,6 +613,21 @@ Future<BigInt> syncLocaldirPull(
         localDir: localDir,
         remoteRoot: remoteRoot);
 
+Future<void> syncLocaldirDownloadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String localDir,
+        required String remoteRoot,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirDownloadAttachmentBytes(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        localDir: localDir,
+        remoteRoot: remoteRoot,
+        sha256: sha256);
+
 Future<void> syncLocaldirClearRemoteRoot(
         {required String localDir, required String remoteRoot}) =>
     RustLib.instance.api.crateApiCoreSyncLocaldirClearRemoteRoot(
@@ -519,6 +641,21 @@ Future<BigInt> syncManagedVaultPush(
         required String vaultId,
         required String firebaseIdToken}) =>
     RustLib.instance.api.crateApiCoreSyncManagedVaultPush(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken);
+
+Future<BigInt> syncManagedVaultPushOpsOnly(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultPushOpsOnly(
         appDir: appDir,
         key: key,
         syncKey: syncKey,
@@ -540,6 +677,40 @@ Future<BigInt> syncManagedVaultPull(
         baseUrl: baseUrl,
         vaultId: vaultId,
         firebaseIdToken: firebaseIdToken);
+
+Future<bool> syncManagedVaultUploadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultUploadAttachmentBytes(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken,
+        sha256: sha256);
+
+Future<void> syncManagedVaultDownloadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreSyncManagedVaultDownloadAttachmentBytes(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken,
+        sha256: sha256);
 
 Future<void> syncManagedVaultClearDevice(
         {required String baseUrl,

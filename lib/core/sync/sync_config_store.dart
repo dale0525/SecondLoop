@@ -32,6 +32,9 @@ final class SyncConfigStore {
 
   static const kBackendType = 'sync_backend_type'; // webdav | localdir
   static const kAutoEnabled = 'sync_auto_enabled'; // 1 | 0
+  static const kAutoWifiOnly = 'sync_auto_wifi_only'; // 1 | 0
+  static const kChatThumbnailsWifiOnly =
+      'sync_chat_thumbnails_wifi_only'; // 1 | 0
   static const kLocalDir = 'sync_localdir_path';
 
   static const kWebdavBaseUrl = 'sync_webdav_base_url';
@@ -40,6 +43,10 @@ final class SyncConfigStore {
   static const kRemoteRoot = 'sync_webdav_remote_root';
   static const kSyncKeyB64 = 'sync_webdav_sync_key_b64';
   static const kManagedVaultBaseUrl = 'sync_managed_vault_base_url';
+
+  static const kCloudMediaBackupEnabled = 'cloud_media_backup_enabled'; // 1|0
+  static const kCloudMediaBackupWifiOnly =
+      'cloud_media_backup_wifi_only'; // 1|0
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final next = _tail.then((_) => action());
@@ -63,6 +70,26 @@ final class SyncConfigStore {
 
   Future<void> writeAutoEnabled(bool enabled) async {
     await _writeConfigUpdates({kAutoEnabled: enabled ? '1' : '0'});
+  }
+
+  Future<bool> readAutoWifiOnly() async {
+    final v = (await _loadConfigMap())[kAutoWifiOnly];
+    if (v == null) return false;
+    return v == '1';
+  }
+
+  Future<void> writeAutoWifiOnly(bool enabled) async {
+    await _writeConfigUpdates({kAutoWifiOnly: enabled ? '1' : '0'});
+  }
+
+  Future<bool> readChatThumbnailsWifiOnly() async {
+    final v = (await _loadConfigMap())[kChatThumbnailsWifiOnly];
+    if (v == null) return true;
+    return v == '1';
+  }
+
+  Future<void> writeChatThumbnailsWifiOnly(bool enabled) async {
+    await _writeConfigUpdates({kChatThumbnailsWifiOnly: enabled ? '1' : '0'});
   }
 
   Future<SyncBackendType> readBackendType() async {
@@ -145,6 +172,26 @@ final class SyncConfigStore {
       return;
     }
     await _writeConfigUpdates({kLocalDir: localDir});
+  }
+
+  Future<bool> readCloudMediaBackupEnabled() async {
+    final v = (await _loadConfigMap())[kCloudMediaBackupEnabled];
+    if (v == null) return false;
+    return v == '1';
+  }
+
+  Future<void> writeCloudMediaBackupEnabled(bool enabled) async {
+    await _writeConfigUpdates({kCloudMediaBackupEnabled: enabled ? '1' : '0'});
+  }
+
+  Future<bool> readCloudMediaBackupWifiOnly() async {
+    final v = (await _loadConfigMap())[kCloudMediaBackupWifiOnly];
+    if (v == null) return true;
+    return v == '1';
+  }
+
+  Future<void> writeCloudMediaBackupWifiOnly(bool enabled) async {
+    await _writeConfigUpdates({kCloudMediaBackupWifiOnly: enabled ? '1' : '0'});
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {

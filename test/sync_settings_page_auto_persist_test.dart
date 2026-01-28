@@ -38,7 +38,7 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Base URL',
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
       ),
       'https://example.com/dav',
     );
@@ -46,7 +46,7 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Push'));
+    await tester.tap(find.text('Upload'));
     await tester.pumpAndSettle();
 
     final configured = await store.loadConfiguredSync();
@@ -79,7 +79,7 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Base URL',
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
       ),
       'https://example.com/dav',
     );
@@ -124,7 +124,7 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Base URL',
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
       ),
       'https://example.com/dav',
     );
@@ -133,11 +133,11 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Push'));
+    await tester.tap(find.text('Upload'));
     await tester.pump();
 
     final pushButton = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Push'),
+      find.widgetWithText(OutlinedButton, 'Upload'),
     );
     expect(pushButton.onPressed, isNull);
 
@@ -145,7 +145,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final pushButtonAfter = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Push'),
+      find.widgetWithText(OutlinedButton, 'Upload'),
     );
     expect(pushButtonAfter.onPressed, isNotNull);
   });

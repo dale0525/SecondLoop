@@ -26,8 +26,8 @@
       "useModel": "Use model",
       "processPending": "Process pending",
       "rebuildEmbeddings": "Rebuild embeddings",
-      "push": "Push",
-      "pull": "Pull",
+      "push": "Upload",
+      "pull": "Download",
       "lockNow": "Lock now"
     },
     "fields": {
@@ -179,8 +179,8 @@
       "subtitle": "Return to the unlock screen"
     },
     "llmProfiles": {
-      "title": "LLM profiles",
-      "subtitle": "Configure BYOK for Ask AI"
+      "title": "AI profiles",
+      "subtitle": "Use your own API key for Ask AI"
     },
     "cloudAccount": {
       "title": "Cloud account",
@@ -196,7 +196,7 @@
         }
       },
       "errors": {
-        "missingWebApiKey": "Cloud sign-in is not configured. Run `pixi run init-env` (or copy `.env.example` → `.env.local`) and set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app."
+        "missingWebApiKey": "Cloud sign-in isn't available in this build. If you're running from source, run `pixi run init-env` (or copy `.env.example` → `.env.local`), set `SECONDLOOP_FIREBASE_WEB_API_KEY`, then restart the app."
       },
       "fields": {
         "email": "Email",
@@ -235,7 +235,7 @@
         "refresh": "Refresh"
       },
       "labels": {
-        "gatewayNotConfigured": "Cloud gateway is not configured.",
+        "gatewayNotConfigured": "Cloud usage isn't available in this build.",
         "signInRequired": "Sign in to view usage.",
         "usage": "Usage:",
         "inputTokensUsed30d": "Input tokens (30d):",
@@ -246,10 +246,26 @@
         "loadFailed": "Failed to load: $error"
       }
     },
+    "vaultUsage": {
+      "title": "Vault storage",
+      "subtitle": "Storage used by your synced data",
+      "actions": {
+        "refresh": "Refresh"
+      },
+      "labels": {
+        "notConfigured": "Vault storage isn't available in this build.",
+        "signInRequired": "Sign in to view vault storage.",
+        "used": "Used:",
+        "limit": "Limit:",
+        "attachments": "Photos & files:",
+        "ops": "Sync history:",
+        "loadFailed": "Failed to load: $error"
+      }
+    },
     "diagnostics": {
       "title": "Diagnostics",
-      "subtitle": "Export a diagnostics bundle for support",
-      "privacyNote": "This bundle intentionally excludes plaintext notes and API keys.",
+      "subtitle": "Share a diagnostics report with support",
+      "privacyNote": "This report does not include your notes or API keys.",
       "loading": "Loading diagnostics…",
       "messages": {
         "copied": "Diagnostics copied to clipboard",
@@ -258,8 +274,8 @@
       }
     },
     "byokUsage": {
-      "title": "BYOK usage",
-      "subtitle": "Active profile only • requests + tokens (if provided)",
+      "title": "API key usage",
+      "subtitle": "Active profile • requests and tokens (if available)",
       "loading": "Loading…",
       "noData": "No data",
       "errors": {
@@ -310,16 +326,16 @@
     },
     "sync": {
       "title": "Sync",
-      "subtitle": "Vault backends + auto sync settings"
+      "subtitle": "Choose how to sync and manage data usage"
     },
     "resetLocalDataThisDeviceOnly": {
       "dialogTitle": "Reset local data?",
-      "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.",
+      "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.",
       "failed": "Reset failed: $error"
     },
     "resetLocalDataAllDevices": {
       "dialogTitle": "Reset local data?",
-      "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your master password or local LLM/sync config. You will need to unlock again.",
+      "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.",
       "failed": "Reset failed: $error"
     },
     "debugResetLocalDataThisDeviceOnly": {
@@ -347,9 +363,12 @@
   },
   "chat": {
     "mainStreamTitle": "Main Stream",
+    "cameraTooltip": "Take photo",
+    "photoMessage": "Photo",
     "editMessageTitle": "Edit message",
     "messageUpdated": "Message updated",
     "messageDeleted": "Message deleted",
+    "photoFailed": "Photo failed: $error",
     "editFailed": "Edit failed: $error",
     "deleteFailed": "Delete failed: $error",
     "noMessagesYet": "No messages yet",
@@ -369,31 +388,37 @@
     },
     "askAiSetup": {
       "title": "Ask AI setup required",
-      "body": "Configure BYOK (LLM profiles) or subscribe to SecondLoop Cloud to use Ask AI.",
+      "body": "To use Ask AI, add your own API key (AI profile) or subscribe to SecondLoop Cloud.",
       "actions": {
         "subscribe": "Subscribe",
-        "configureByok": "Configure BYOK"
+        "configureByok": "Add API key"
       }
     },
     "cloudGateway": {
       "emailNotVerified": "Email not verified. Verify your email to use SecondLoop Cloud Ask AI.",
       "fallback": {
-        "auth": "Cloud sign-in required. Using BYOK for this request.",
-        "entitlement": "Cloud subscription required. Using BYOK for this request.",
-        "rateLimited": "Cloud is rate limited. Using BYOK for this request.",
-        "generic": "Cloud request failed. Using BYOK for this request."
+        "auth": "Cloud sign-in required. Using your API key for this request.",
+        "entitlement": "Cloud subscription required. Using your API key for this request.",
+        "rateLimited": "Cloud is busy. Using your API key for this request.",
+        "generic": "Cloud request failed. Using your API key for this request."
       },
       "errors": {
         "auth": "Cloud sign-in required. Open Cloud account and sign in again.",
-        "entitlement": "Cloud subscription required. Configure BYOK or try again later.",
+        "entitlement": "Cloud subscription required. Add an API key or try again later.",
         "rateLimited": "Cloud is rate limited. Please try again later.",
         "generic": "Cloud request failed."
       }
     },
     "askAiConsent": {
       "title": "Before you ask",
-      "body": "SecondLoop will send your question and a few relevant snippets to your configured LLM provider to generate an answer.\n\nIt will NOT upload your vault key, sync key, or full history.",
+      "body": "SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.",
       "dontShowAgain": "Don't show again"
+    }
+  },
+  "attachments": {
+    "metadata": {
+      "capturedAt": "Captured",
+      "location": "Location"
     }
   },
   "semanticSearch": {
@@ -413,39 +438,76 @@
     "resultSubtitle": "distance=$distance • role=$role • convo=$conversationId"
   },
   "sync": {
-    "title": "Vault Sync",
+    "title": "Sync settings",
     "sections": {
-      "automation": "Automation",
-      "backend": "Backend",
-      "securityActions": "Security & Actions"
+      "automation": "Auto sync",
+      "backend": "Sync method",
+      "mediaPreview": "Media previews",
+      "mediaBackup": "Media backup",
+      "securityActions": "Security & manual sync"
     },
     "autoSync": {
       "title": "Auto sync",
-      "subtitle": "Foreground debounced push + background periodic sync (mobile)"
+      "subtitle": "Keeps your devices in sync automatically.",
+      "wifiOnlyTitle": "Auto sync on Wi‑Fi only",
+      "wifiOnlySubtitle": "Save mobile data by syncing automatically only on Wi‑Fi"
     },
-    "backendLabel": "Vault backend",
-    "backendWebdav": "WebDAV",
-    "backendLocalDir": "Local directory (desktop)",
-    "backendManagedVault": "Cloud managed vault",
+    "mediaPreview": {
+      "chatThumbnailsWifiOnlyTitle": "Image previews on Wi‑Fi only",
+      "chatThumbnailsWifiOnlySubtitle": "If a photo isn't on this device yet, download its preview only on Wi‑Fi"
+    },
+    "mediaBackup": {
+      "title": "Media backup (Cloud)",
+      "subtitle": "Backs up photos and files in the background",
+      "wifiOnlyTitle": "Back up on Wi‑Fi only",
+      "wifiOnlySubtitle": "Save mobile data by backing up only on Wi‑Fi",
+      "description": "Securely backs up photos and files. It’s not a cloud drive. If a file is missing on this device, it can be downloaded when needed after it’s backed up.",
+      "stats": "Waiting $pending · Failed $failed · Backed up $uploaded",
+      "lastUploaded": "Last backup: $at",
+      "lastError": "Last error: $error",
+      "lastErrorWithTime": "Last error ($at): $error",
+      "backfillButton": "Back up existing photos",
+      "uploadNowButton": "Back up now",
+      "backfillEnqueued": "Queued $count photos for backup",
+      "backfillFailed": "Couldn't queue old photos: $error",
+      "notEnabled": "Turn on Media backup first.",
+      "managedVaultOnly": "Media backup is available with SecondLoop Cloud sync.",
+      "wifiOnlyBlocked": "Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.",
+      "uploaded": "Backup complete",
+      "nothingToUpload": "Nothing to back up",
+      "uploadFailed": "Backup failed: $error",
+      "cellularDialog": {
+        "title": "Use mobile data?",
+        "message": "Wi‑Fi only is on. Backing up over mobile data may use a lot of data.",
+        "confirm": "Use mobile data"
+      }
+    },
+    "backendLabel": "Sync method",
+    "backendWebdav": "WebDAV (your server)",
+    "backendLocalDir": "Folder on this computer (desktop)",
+    "backendManagedVault": "SecondLoop Cloud",
     "cloudManagedVault": {
-      "signInRequired": "Sign in to use Cloud managed vault.",
-      "paymentRequired": "Cloud sync is unavailable. Renew your subscription to continue syncing.",
-      "graceReadonlyUntil": "Cloud sync is read-only until $until."
+      "signInRequired": "Sign in to use SecondLoop Cloud sync.",
+      "paymentRequired": "Cloud sync is paused. Renew your subscription to continue syncing.",
+      "graceReadonlyUntil": "Cloud sync is read-only until $until.",
+      "storageQuotaExceeded": "Cloud storage is full. Uploads are paused.",
+      "storageQuotaExceededWithUsage": "Cloud storage is full ($used / $limit). Uploads are paused."
     },
-    "remoteRootRequired": "Remote root is required",
-    "baseUrlRequired": "Base URL is required",
-    "localDirRequired": "Local directory is required",
+    "remoteRootRequired": "Folder name is required",
+    "baseUrlRequired": "Server address is required",
+    "localDirRequired": "Folder path is required",
     "connectionOk": "Connection OK",
     "connectionFailed": "Connection failed: $error",
     "saveFailed": "Save failed: $error",
-    "missingSyncKey": "Missing sync key. Enter a passphrase and Save first.",
-    "pushedOps": "Pushed $count ops",
-    "pulledOps": "Pulled $count ops",
-    "pushFailed": "Push failed: $error",
-    "pullFailed": "Pull failed: $error",
+    "missingSyncKey": "Enter your sync passphrase and tap Save first.",
+    "pushedOps": "Uploaded $count changes",
+    "pulledOps": "Downloaded $count changes",
+    "noNewChanges": "No new changes",
+    "pushFailed": "Upload failed: $error",
+    "pullFailed": "Download failed: $error",
     "fields": {
       "baseUrl": {
-        "label": "Base URL",
+        "label": "Server address",
         "hint": "https://example.com/dav"
       },
       "username": {
@@ -455,36 +517,36 @@
         "label": "Password (optional)"
       },
       "localDir": {
-        "label": "Local directory path",
+        "label": "Folder path",
         "hint": "/Users/me/SecondLoopVault",
         "helper": "Best for desktop; mobile platforms may not support this path."
       },
       "managedVaultBaseUrl": {
-        "label": "Managed Vault base URL",
+        "label": "Cloud server address (advanced)",
         "hint": "https://vault.example.com"
       },
       "vaultId": {
-        "label": "Vault ID",
-        "hint": "Cloud UID"
+        "label": "Cloud account ID",
+        "hint": "Auto"
       },
       "remoteRoot": {
-        "label": "Remote root folder",
+        "label": "Folder name",
         "hint": "SecondLoop"
       },
       "passphrase": {
-        "label": "Sync passphrase (not stored; derives a key)",
-        "helper": "Use the same passphrase on all devices."
+        "label": "Sync passphrase",
+        "helper": "Use the same passphrase on all devices. It’s never uploaded."
       }
     }
   },
   "llmProfiles": {
-    "title": "LLM Profiles",
+    "title": "AI profiles",
     "refreshTooltip": "Refresh",
     "activeProfileHelp": "Active profile is used for Ask AI.",
     "noProfilesYet": "No profiles yet.",
     "addProfile": "Add profile",
-    "deleted": "LLM profile deleted",
-    "validationError": "Name, API key, and model name are required.",
+    "deleted": "AI profile deleted",
+    "validationError": "Name, API key, and model are required.",
     "deleteDialog": {
       "title": "Delete profile?",
       "message": "Delete \"$name\"? This removes it from this device."
@@ -492,8 +554,8 @@
     "fields": {
       "name": "Name",
       "provider": "Provider",
-      "baseUrlOptional": "Base URL (optional)",
-      "modelName": "Model name",
+      "baseUrlOptional": "API endpoint (optional)",
+      "modelName": "Model",
       "apiKey": "API key"
     },
     "providers": {
@@ -501,7 +563,7 @@
       "geminiCompatible": "Gemini",
       "anthropicCompatible": "Anthropic"
     },
-    "savedActivated": "LLM profile saved and activated",
+    "savedActivated": "AI profile saved and activated",
     "actions": {
       "saveActivate": "Save & Activate",
       "cancel": "Cancel",

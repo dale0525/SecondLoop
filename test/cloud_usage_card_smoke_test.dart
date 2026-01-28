@@ -104,6 +104,39 @@ void main() {
 
     expect(find.text('Cloud usage'), findsOneWidget);
   });
+
+  testWidgets('Cloud account page shows Vault storage card', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: _FakeBackend(),
+        child: CloudAuthScope(
+          controller: _FakeCloudAuthController(idToken: ''),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: Scaffold(body: SettingsPage())),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cloud account'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -1200));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vault storage'), findsOneWidget);
+  });
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {

@@ -7,7 +7,10 @@ import 'package:flutter/widgets.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_config_store.dart';
+import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../media_backup/image_compression.dart';
 import 'share_ingest.dart';
 
 final class ShareIngestGate extends StatefulWidget {
@@ -75,6 +78,28 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     return true;
   }
 
+  Future<void> _maybeEnqueueCloudMediaBackup(
+    AppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256,
+  ) async {
+    if (backend is! NativeAppBackend) return;
+
+    final store = SyncConfigStore();
+    final backendType = await store.readBackendType();
+    if (backendType != SyncBackendType.managedVault) return;
+
+    final enabled = await store.readCloudMediaBackupEnabled();
+    if (!enabled) return;
+
+    await backend.enqueueCloudMediaBackup(
+      sessionKey,
+      attachmentSha256: attachmentSha256,
+      desiredVariant: 'original',
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
@@ -88,11 +113,18 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       if (backend is NativeAppBackend) {
         onImage = (path, mimeType) async {
           final bytes = await compute(_readFileBytes, path);
+          final compressed =
+              await compressImageForStorage(bytes, mimeType: mimeType);
           final attachment = await backend.insertAttachment(
             sessionKey,
-            bytes: bytes,
-            mimeType: mimeType,
+            bytes: compressed.bytes,
+            mimeType: compressed.mimeType,
           );
+          unawaited(_maybeEnqueueCloudMediaBackup(
+            backend,
+            sessionKey,
+            attachment.sha256,
+          ));
           try {
             await File(path).delete();
           } catch (_) {

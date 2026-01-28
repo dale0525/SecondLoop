@@ -51,7 +51,7 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Push'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Upload'));
     await tester.pumpAndSettle();
 
     expect(backend.lastBaseUrl, 'https://vault.default.example');

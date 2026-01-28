@@ -18,7 +18,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Vault Sync'), findsOneWidget);
+    expect(find.text('Sync settings'), findsOneWidget);
     expect(find.byType(SlSurface), findsWidgets);
   });
 }

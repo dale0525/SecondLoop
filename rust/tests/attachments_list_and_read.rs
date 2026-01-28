@@ -19,8 +19,10 @@ fn attachments_list_and_read_roundtrip() {
     let meta2 =
         db::insert_attachment(&conn, &key, app_dir, &bytes2, "image/png").expect("insert a2");
 
-    db::link_attachment_to_message(&conn, &message.id, &meta1.sha256).expect("link a1 -> message");
-    db::link_attachment_to_message(&conn, &message.id, &meta2.sha256).expect("link a2 -> message");
+    db::link_attachment_to_message(&conn, &key, &message.id, &meta1.sha256)
+        .expect("link a1 -> message");
+    db::link_attachment_to_message(&conn, &key, &message.id, &meta2.sha256)
+        .expect("link a2 -> message");
 
     let listed = db::list_message_attachments(&conn, &key, &message.id).expect("list attachments");
     assert_eq!(listed.len(), 2);

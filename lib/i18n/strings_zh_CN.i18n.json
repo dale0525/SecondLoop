@@ -26,8 +26,8 @@
       "useModel": "使用模型",
       "processPending": "处理待处理",
       "rebuildEmbeddings": "重建向量索引",
-      "push": "推送",
-      "pull": "拉取",
+      "push": "上传",
+      "pull": "下载",
       "lockNow": "立即锁定"
     },
     "fields": {
@@ -179,8 +179,8 @@
       "subtitle": "返回解锁页面"
     },
     "llmProfiles": {
-      "title": "LLM Profiles",
-      "subtitle": "为 Ask AI 配置 BYOK"
+      "title": "AI 配置",
+      "subtitle": "添加你自己的 API Key（用于问 AI）"
     },
     "cloudAccount": {
       "title": "Cloud 账号",
@@ -196,7 +196,7 @@
         }
       },
       "errors": {
-        "missingWebApiKey": "Cloud 登录未配置。请先运行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。"
+        "missingWebApiKey": "当前版本暂不支持 Cloud 登录。如果你是从源码运行，请先执行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。"
       },
       "fields": {
         "email": "邮箱",
@@ -229,13 +229,13 @@
       }
     },
     "cloudUsage": {
-      "title": "Cloud 用量",
+      "title": "云端用量",
       "subtitle": "当前账期用量",
       "actions": {
         "refresh": "刷新"
       },
       "labels": {
-        "gatewayNotConfigured": "Cloud 网关未配置。",
+        "gatewayNotConfigured": "当前版本暂不支持查看云端用量。",
         "signInRequired": "登录后才能查看用量。",
         "usage": "用量：",
         "inputTokensUsed30d": "输入 Tokens（30 天）：",
@@ -246,10 +246,26 @@
         "loadFailed": "加载失败：$error"
       }
     },
+    "vaultUsage": {
+      "title": "云端存储",
+      "subtitle": "你的同步数据占用的云端存储",
+      "actions": {
+        "refresh": "刷新"
+      },
+      "labels": {
+        "notConfigured": "当前版本暂不支持查看云端存储用量。",
+        "signInRequired": "登录后才能查看云端存储用量。",
+        "used": "已用：",
+        "limit": "上限：",
+        "attachments": "照片与文件：",
+        "ops": "同步记录：",
+        "loadFailed": "加载失败：$error"
+      }
+    },
     "diagnostics": {
       "title": "诊断信息",
-      "subtitle": "导出诊断包用于排查",
-      "privacyNote": "此诊断包会排除明文记录与 API Key。",
+      "subtitle": "导出诊断信息以便支持排查",
+      "privacyNote": "该报告不会包含你的记录正文或 API Key。",
       "loading": "正在加载诊断信息…",
       "messages": {
         "copied": "诊断信息已复制",
@@ -258,8 +274,8 @@
       }
     },
     "byokUsage": {
-      "title": "BYOK 用量",
-      "subtitle": "仅统计当前激活的 profile • 请求数 + tokens（若上游返回）",
+      "title": "API Key 用量",
+      "subtitle": "当前配置 • 请求数与 Token（如可获取）",
       "loading": "加载中…",
       "noData": "暂无数据",
       "errors": {
@@ -310,16 +326,16 @@
     },
     "sync": {
       "title": "同步",
-      "subtitle": "Vault 后端 + 自动同步设置"
+      "subtitle": "选择同步方式，并管理流量选项"
     },
     "resetLocalDataThisDeviceOnly": {
       "dialogTitle": "重置本地数据？",
-      "dialogBody": "这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。",
+      "dialogBody": "这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。",
       "failed": "重置失败：$error"
     },
     "resetLocalDataAllDevices": {
       "dialogTitle": "重置本地数据？",
-      "dialogBody": "这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 LLM/同步配置。你需要重新解锁。",
+      "dialogBody": "这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。",
       "failed": "重置失败：$error"
     },
     "debugResetLocalDataThisDeviceOnly": {
@@ -347,9 +363,12 @@
   },
   "chat": {
     "mainStreamTitle": "主线",
+    "cameraTooltip": "拍照",
+    "photoMessage": "照片",
     "editMessageTitle": "编辑消息",
     "messageUpdated": "消息已更新",
     "messageDeleted": "消息已删除",
+    "photoFailed": "拍照失败：$error",
     "editFailed": "编辑失败：$error",
     "deleteFailed": "删除失败：$error",
     "noMessagesYet": "暂无消息",
@@ -369,31 +388,37 @@
     },
     "askAiSetup": {
       "title": "问 AI 需要先配置",
-      "body": "要使用「问 AI」，请先配置 BYOK（LLM Profiles）或订阅 SecondLoop Cloud。",
+      "body": "要使用「问 AI」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。",
       "actions": {
         "subscribe": "订阅",
-        "configureByok": "配置 BYOK"
+        "configureByok": "添加 API Key"
       }
     },
     "cloudGateway": {
       "emailNotVerified": "邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud Ask AI。",
       "fallback": {
-        "auth": "Cloud 登录已失效。本次将回落到 BYOK。",
-        "entitlement": "需要订阅 SecondLoop Cloud。本次将回落到 BYOK。",
-        "rateLimited": "Cloud 触发限速。本次将回落到 BYOK。",
-        "generic": "Cloud 请求失败。本次将回落到 BYOK。"
+        "auth": "Cloud 登录已失效。本次将使用你的 API Key。",
+        "entitlement": "需要订阅 SecondLoop Cloud。本次将使用你的 API Key。",
+        "rateLimited": "Cloud 正忙。本次将使用你的 API Key。",
+        "generic": "Cloud 请求失败。本次将使用你的 API Key。"
       },
       "errors": {
         "auth": "Cloud 登录已失效，请在 Cloud 账号页重新登录。",
-        "entitlement": "需要订阅 SecondLoop Cloud。请配置 BYOK 或稍后再试。",
+        "entitlement": "需要订阅 SecondLoop Cloud。请添加 API Key 或稍后再试。",
         "rateLimited": "Cloud 触发限速，请稍后再试。",
         "generic": "Cloud 请求失败。"
       }
     },
     "askAiConsent": {
       "title": "发送前确认",
-      "body": "SecondLoop 会将你的问题与少量相关片段发送到你配置的 LLM 服务商以生成回答。\n\n不会上传：Vault 密钥、同步密钥、完整历史。",
+      "body": "SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。",
       "dontShowAgain": "不再提示"
+    }
+  },
+  "attachments": {
+    "metadata": {
+      "capturedAt": "拍摄时间",
+      "location": "地点"
     }
   },
   "semanticSearch": {
@@ -413,39 +438,76 @@
     "resultSubtitle": "distance=$distance • role=$role • convo=$conversationId"
   },
   "sync": {
-    "title": "Vault 同步",
+    "title": "同步设置",
     "sections": {
-      "automation": "自动化",
-      "backend": "后端",
-      "securityActions": "安全与操作"
+      "automation": "自动同步",
+      "backend": "同步方式",
+      "mediaPreview": "媒体预览",
+      "mediaBackup": "媒体备份",
+      "securityActions": "安全与手动同步"
     },
     "autoSync": {
       "title": "自动同步",
-      "subtitle": "前台防抖推送 + 后台周期同步（移动端）"
+      "subtitle": "自动保持你的设备间数据同步。",
+      "wifiOnlyTitle": "仅在 Wi‑Fi 下自动同步",
+      "wifiOnlySubtitle": "节省流量：自动同步只在 Wi‑Fi 下进行"
     },
-    "backendLabel": "Vault 后端",
-    "backendWebdav": "WebDAV",
-    "backendLocalDir": "本地目录（桌面端）",
-    "backendManagedVault": "云托管 Vault",
+    "mediaPreview": {
+      "chatThumbnailsWifiOnlyTitle": "仅在 Wi‑Fi 下下载图片预览",
+      "chatThumbnailsWifiOnlySubtitle": "当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览"
+    },
+    "mediaBackup": {
+      "title": "媒体备份（云端）",
+      "subtitle": "在后台备份照片和文件",
+      "wifiOnlyTitle": "仅在 Wi‑Fi 下备份",
+      "wifiOnlySubtitle": "节省流量：只在 Wi‑Fi 下后台备份",
+      "description": "安全地备份照片和文件（加密存储），不是网盘。附件在本机缺失时，只要之前已备份过，就可以按需下载。",
+      "stats": "待备份 $pending · 失败 $failed · 已备份 $uploaded",
+      "lastUploaded": "最近一次备份：$at",
+      "lastError": "最近一次错误：$error",
+      "lastErrorWithTime": "最近一次错误（$at）：$error",
+      "backfillButton": "备份历史图片",
+      "uploadNowButton": "立即备份",
+      "backfillEnqueued": "已将 $count 张图片加入备份队列",
+      "backfillFailed": "加入失败：$error",
+      "notEnabled": "请先开启媒体备份。",
+      "managedVaultOnly": "媒体备份仅适用于 SecondLoop 云同步。",
+      "wifiOnlyBlocked": "已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。",
+      "uploaded": "备份完成",
+      "nothingToUpload": "暂无可备份内容",
+      "uploadFailed": "备份失败：$error",
+      "cellularDialog": {
+        "title": "使用蜂窝数据？",
+        "message": "已开启仅 Wi‑Fi。使用蜂窝数据备份可能消耗较多流量。",
+        "confirm": "仍然使用"
+      }
+    },
+    "backendLabel": "同步方式",
+    "backendWebdav": "WebDAV（你自己的服务器）",
+    "backendLocalDir": "本机文件夹（桌面端）",
+    "backendManagedVault": "SecondLoop Cloud",
     "cloudManagedVault": {
-      "signInRequired": "请先登录 Cloud 账号后再使用云托管 Vault。",
-      "paymentRequired": "Cloud 同步不可用。请续费订阅以继续同步。",
-      "graceReadonlyUntil": "Cloud 同步处于只读状态（宽限期至 $until）。"
+      "signInRequired": "请先登录 SecondLoop Cloud 才能使用云同步。",
+      "paymentRequired": "云同步已暂停。请续费订阅以继续同步。",
+      "graceReadonlyUntil": "云同步处于只读状态（宽限期至 $until）。",
+      "storageQuotaExceeded": "云端存储已满，已暂停上传。",
+      "storageQuotaExceededWithUsage": "云端存储已满（$used / $limit），已暂停上传。"
     },
-    "remoteRootRequired": "必须填写远端根目录",
-    "baseUrlRequired": "必须填写 Base URL",
-    "localDirRequired": "必须填写本地目录",
-    "connectionOk": "连接正常",
+    "remoteRootRequired": "必须填写文件夹名称",
+    "baseUrlRequired": "必须填写服务器地址",
+    "localDirRequired": "必须填写文件夹路径",
+    "connectionOk": "连接成功",
     "connectionFailed": "连接失败：$error",
     "saveFailed": "保存失败：$error",
-    "missingSyncKey": "缺少同步密钥。请先输入 passphrase 并点击保存。",
-    "pushedOps": "已推送 $count 条操作",
-    "pulledOps": "已拉取 $count 条操作",
-    "pushFailed": "推送失败：$error",
-    "pullFailed": "拉取失败：$error",
+    "missingSyncKey": "缺少同步口令。请先输入口令并点击保存。",
+    "pushedOps": "已上传 $count 个更改",
+    "pulledOps": "已下载 $count 个更改",
+    "noNewChanges": "已是最新",
+    "pushFailed": "上传失败：$error",
+    "pullFailed": "下载失败：$error",
     "fields": {
       "baseUrl": {
-        "label": "Base URL",
+        "label": "服务器地址",
         "hint": "https://example.com/dav"
       },
       "username": {
@@ -455,55 +517,55 @@
         "label": "密码（可选）"
       },
       "localDir": {
-        "label": "本地目录路径",
+        "label": "文件夹路径",
         "hint": "/Users/me/SecondLoopVault",
         "helper": "更适合桌面端；移动端可能不支持该路径。"
       },
       "managedVaultBaseUrl": {
-        "label": "托管 Vault Base URL",
+        "label": "Cloud 服务器地址（高级）",
         "hint": "https://vault.example.com"
       },
       "vaultId": {
-        "label": "Vault ID",
-        "hint": "Cloud UID"
+        "label": "Cloud 账号 ID",
+        "hint": "自动填写"
       },
       "remoteRoot": {
-        "label": "远端根目录",
+        "label": "文件夹名称",
         "hint": "SecondLoop"
       },
       "passphrase": {
-        "label": "同步口令（不会存储；用于派生密钥）",
-        "helper": "所有设备请使用同一口令。"
+        "label": "同步口令",
+        "helper": "所有设备请使用同一口令。口令不会被上传。"
       }
     }
   },
   "llmProfiles": {
-    "title": "LLM Profiles",
+    "title": "AI 配置",
     "refreshTooltip": "刷新",
-    "activeProfileHelp": "当前激活的 profile 用于 Ask AI。",
-    "noProfilesYet": "暂无 profile。",
-    "addProfile": "添加 profile",
-    "deleted": "LLM profile 已删除",
-    "validationError": "Name、API key、Model name 为必填项。",
+    "activeProfileHelp": "当前选择的配置将用于「问 AI」。",
+    "noProfilesYet": "暂无配置。",
+    "addProfile": "添加配置",
+    "deleted": "配置已删除",
+    "validationError": "名称、API Key 和模型名称为必填项。",
     "deleteDialog": {
-      "title": "删除 profile？",
-      "message": "确定删除「$name」？该操作会从本设备移除该 profile。"
+      "title": "删除配置？",
+      "message": "确定删除「$name」？该操作会从本设备移除。"
     },
     "fields": {
       "name": "名称",
       "provider": "提供商",
-      "baseUrlOptional": "Base URL（可选）",
-      "modelName": "Model name",
-      "apiKey": "API key"
+      "baseUrlOptional": "接口地址（可选）",
+      "modelName": "模型名称",
+      "apiKey": "API Key"
     },
     "providers": {
       "openaiCompatible": "OpenAI 兼容",
       "geminiCompatible": "Gemini",
       "anthropicCompatible": "Anthropic"
     },
-    "savedActivated": "LLM profile 已保存并激活",
+    "savedActivated": "已保存并设为当前配置",
     "actions": {
-      "saveActivate": "保存并激活",
+      "saveActivate": "保存并启用",
       "cancel": "取消",
       "delete": "删除"
     }

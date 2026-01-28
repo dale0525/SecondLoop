@@ -1,4 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
@@ -6,6 +8,7 @@ use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
 use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
@@ -225,7 +228,11 @@ pub fn push(
     remote: &impl RemoteStore,
     remote_root: &str,
 ) -> Result<u64> {
+    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+
     let device_id = get_or_create_device_id(conn)?;
+    let app_dir = app_dir_from_conn(conn)?;
+    let app_dir_path = app_dir.as_path();
     let remote_root_dir = normalize_dir(remote_root);
     let scope_id = sync_scope_id(remote, &remote_root_dir);
     let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
@@ -234,25 +241,48 @@ pub fn push(
     let last_pushed_key = format!("sync.last_pushed_seq:{scope_id}");
     let last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
 
-    fn push_ops_after(
-        conn: &Connection,
-        db_key: &[u8; 32],
-        sync_key: &[u8; 32],
-        remote: &impl RemoteStore,
-        device_id: &str,
-        ops_dir: &str,
+    let attachments_dir = format!("{remote_root_dir}attachments/");
+    remote.mkdir_all(&attachments_dir)?;
+
+    let attachment_backfill_key = format!("sync.attachments.bytes_backfilled:{scope_id}");
+    if kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
+        upload_all_local_attachment_bytes(
+            conn,
+            db_key,
+            sync_key,
+            remote,
+            &attachments_dir,
+            app_dir_path,
+        )?;
+        kv_set_i64(conn, &attachment_backfill_key, 1)?;
+    }
+
+    struct PushOpsContext<'a, R: RemoteStore> {
+        conn: &'a Connection,
+        db_key: &'a [u8; 32],
+        sync_key: &'a [u8; 32],
+        remote: &'a R,
+        device_id: &'a str,
+        ops_dir: &'a str,
+        attachments_dir: &'a str,
+        app_dir: &'a Path,
+    }
+
+    fn push_ops_after<R: RemoteStore>(
+        ctx: &PushOpsContext<'_, R>,
         after_seq: i64,
     ) -> Result<(u64, i64)> {
-        let mut stmt = conn.prepare(
+        let mut stmt = ctx.conn.prepare(
             r#"SELECT op_id, seq, op_json
                FROM oplog
                WHERE device_id = ?1 AND seq > ?2
                ORDER BY seq ASC"#,
         )?;
 
-        let mut rows = stmt.query(params![device_id, after_seq])?;
+        let mut rows = stmt.query(params![ctx.device_id, after_seq])?;
         let mut pushed: u64 = 0;
         let mut max_seq = after_seq;
+        let mut uploaded_attachments: BTreeSet<String> = BTreeSet::new();
 
         while let Some(row) = rows.next()? {
             let op_id: String = row.get(0)?;
@@ -260,18 +290,37 @@ pub fn push(
             let op_json_blob: Vec<u8> = row.get(2)?;
 
             let plaintext = decrypt_bytes(
-                db_key,
+                ctx.db_key,
                 &op_json_blob,
                 format!("oplog.op_json:{op_id}").as_bytes(),
             )?;
+
+            if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
+                if op_json["type"].as_str() == Some("attachment.upsert.v1") {
+                    if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                        if uploaded_attachments.insert(sha256.to_string()) {
+                            let _ = upload_attachment_bytes_if_present(
+                                ctx.conn,
+                                ctx.db_key,
+                                ctx.sync_key,
+                                ctx.remote,
+                                ctx.attachments_dir,
+                                ctx.app_dir,
+                                sha256,
+                            )?;
+                        }
+                    }
+                }
+            }
+
             let file_blob = encrypt_bytes(
-                sync_key,
+                ctx.sync_key,
                 &plaintext,
-                format!("sync.ops:{device_id}:{seq}").as_bytes(),
+                format!("sync.ops:{}:{seq}", ctx.device_id).as_bytes(),
             )?;
 
-            let file_path = format!("{ops_dir}op_{seq}.json");
-            remote.put(&file_path, file_blob)?;
+            let file_path = format!("{}op_{seq}.json", ctx.ops_dir);
+            ctx.remote.put(&file_path, file_blob)?;
 
             pushed += 1;
             if seq > max_seq {
@@ -282,15 +331,18 @@ pub fn push(
         Ok((pushed, max_seq))
     }
 
-    let (pushed, max_seq) = push_ops_after(
+    let ctx = PushOpsContext {
         conn,
         db_key,
         sync_key,
         remote,
-        &device_id,
-        &ops_dir,
-        last_pushed_seq,
-    )?;
+        device_id: &device_id,
+        ops_dir: &ops_dir,
+        attachments_dir: &attachments_dir,
+        app_dir: app_dir_path,
+    };
+
+    let (pushed, max_seq) = push_ops_after(&ctx, last_pushed_seq)?;
 
     if pushed > 0 {
         kv_set_i64(conn, &last_pushed_key, max_seq)?;
@@ -304,8 +356,7 @@ pub fn push(
         match remote.get(&last_path) {
             Ok(_) => {}
             Err(e) if e.is::<NotFound>() => {
-                let (re_pushed, re_max_seq) =
-                    push_ops_after(conn, db_key, sync_key, remote, &device_id, &ops_dir, 0)?;
+                let (re_pushed, re_max_seq) = push_ops_after(&ctx, 0)?;
                 if re_pushed > 0 {
                     kv_set_i64(conn, &last_pushed_key, re_max_seq)?;
                 }
@@ -316,6 +367,144 @@ pub fn push(
     }
 
     Ok(0)
+}
+
+pub fn download_attachment_bytes(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    sha256: &str,
+) -> Result<()> {
+    let app_dir = app_dir_from_conn(conn)?;
+
+    let stored_path: Option<String> = conn
+        .query_row(
+            r#"SELECT path FROM attachments WHERE sha256 = ?1"#,
+            params![sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
+
+    let remote_root_dir = normalize_dir(remote_root);
+    let remote_path = format!("{remote_root_dir}attachments/{sha256}.bin");
+    let ciphertext = remote.get(&remote_path)?;
+    let aad = format!("sync.attachment.bytes:{sha256}");
+    let plaintext = decrypt_bytes(sync_key, &ciphertext, aad.as_bytes())?;
+
+    if sha256_hex(&plaintext) != sha256 {
+        return Err(anyhow!("attachment sha256 mismatch after download"));
+    }
+
+    let local_path = app_dir.join(&stored_path);
+    if let Some(parent) = local_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let local_aad = format!("attachment.bytes:{sha256}");
+    let local_cipher = encrypt_bytes(db_key, &plaintext, local_aad.as_bytes())?;
+    fs::write(local_path, local_cipher)?;
+    Ok(())
+}
+
+fn upload_all_local_attachment_bytes(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    attachments_dir: &str,
+    app_dir: &Path,
+) -> Result<u64> {
+    let existing = remote.list(attachments_dir)?;
+    let existing: BTreeSet<String> = existing.into_iter().collect();
+
+    let mut stmt =
+        conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC"#)?;
+    let mut rows = stmt.query([])?;
+
+    let mut uploaded = 0u64;
+    while let Some(row) = rows.next()? {
+        let sha256: String = row.get(0)?;
+        let remote_path = format!("{attachments_dir}{sha256}.bin");
+        if existing.contains(&remote_path) {
+            continue;
+        }
+        match upload_attachment_bytes_if_present(
+            conn,
+            db_key,
+            sync_key,
+            remote,
+            attachments_dir,
+            app_dir,
+            &sha256,
+        ) {
+            Ok(true) => uploaded += 1,
+            Ok(false) => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(uploaded)
+}
+
+fn upload_attachment_bytes_if_present(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    attachments_dir: &str,
+    app_dir: &Path,
+    sha256: &str,
+) -> Result<bool> {
+    let plaintext = match crate::db::read_attachment_bytes(conn, db_key, app_dir, sha256) {
+        Ok(bytes) => bytes,
+        Err(e)
+            if e.downcast_ref::<std::io::Error>()
+                .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            return Ok(false);
+        }
+        Err(e) => return Err(e),
+    };
+
+    let remote_aad = format!("sync.attachment.bytes:{sha256}");
+    let ciphertext = encrypt_bytes(sync_key, &plaintext, remote_aad.as_bytes())?;
+    let remote_path = format!("{attachments_dir}{sha256}.bin");
+    remote.put(&remote_path, ciphertext)?;
+    Ok(true)
+}
+
+fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
+    let mut stmt = conn.prepare("PRAGMA database_list")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name != "main" {
+            continue;
+        }
+        let file: String = row.get(2)?;
+        if file.is_empty() {
+            break;
+        }
+        let path = PathBuf::from(file);
+        let Some(parent) = path.parent() else {
+            break;
+        };
+        return Ok(parent.to_path_buf());
+    }
+    Err(anyhow!("unable to derive app_dir from sqlite connection"))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut out = String::with_capacity(64);
+    for b in digest {
+        use std::fmt::Write;
+        let _ = write!(&mut out, "{:02x}", b);
+    }
+    out
 }
 
 pub fn pull(
@@ -333,9 +522,6 @@ pub fn pull(
 
     let device_dirs = remote.list(&remote_root_dir)?;
     for device_dir in device_dirs {
-        if !device_dir.ends_with('/') {
-            continue;
-        }
         let Some(device_id) = device_id_from_child_dir(&remote_root_dir, &device_dir) else {
             continue;
         };
@@ -499,7 +685,7 @@ fn kv_set_i64(conn: &Connection, key: &str, value: i64) -> Result<()> {
 
 fn device_id_from_child_dir(root_dir: &str, child_dir: &str) -> Option<String> {
     let rest = child_dir.strip_prefix(root_dir)?;
-    let rest = rest.strip_suffix('/')?;
+    let rest = rest.trim_end_matches('/');
     if rest.is_empty() || rest.contains('/') {
         return None;
     }
@@ -546,6 +732,8 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "conversation.upsert.v1" => apply_conversation_upsert(conn, db_key, &op["payload"]),
         "message.insert.v1" => apply_message_insert(conn, db_key, op),
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
+        "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
+        "message.attachment.link.v1" => apply_message_attachment_link(conn, db_key, &op["payload"]),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
         "todo.activity_attachment.link.v1" => {
@@ -1174,5 +1362,104 @@ fn apply_message_set_v2(
         params![conversation_id.as_str(), updated_at_ms],
     )?;
 
+    Ok(())
+}
+
+fn apply_attachment_upsert(
+    conn: &Connection,
+    _db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let sha256 = payload["sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment op missing sha256"))?;
+    let mime_type = payload["mime_type"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment op missing mime_type"))?;
+    let byte_len = payload["byte_len"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment op missing byte_len"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment op missing created_at_ms"))?;
+
+    let path = format!("attachments/{sha256}.bin");
+
+    conn.execute(
+        r#"
+INSERT INTO attachments(sha256, mime_type, path, byte_len, created_at)
+VALUES (?1, ?2, ?3, ?4, ?5)
+ON CONFLICT(sha256) DO UPDATE SET
+  mime_type = excluded.mime_type,
+  path = excluded.path,
+  byte_len = excluded.byte_len,
+  created_at = min(attachments.created_at, excluded.created_at)
+"#,
+        params![sha256, mime_type, path, byte_len, created_at_ms],
+    )?;
+
+    Ok(())
+}
+
+fn apply_message_attachment_link(
+    conn: &Connection,
+    _db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let message_id = payload["message_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message attachment op missing message_id"))?;
+    let attachment_sha256 = payload["attachment_sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message attachment op missing attachment_sha256"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("message attachment op missing created_at_ms"))?;
+
+    let existing: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1
+               FROM message_attachments
+               WHERE message_id = ?1 AND attachment_sha256 = ?2"#,
+            params![message_id, attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing.is_some() {
+        return Ok(());
+    }
+
+    let message_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM messages WHERE id = ?1"#,
+            params![message_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let attachment_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if message_exists.is_none() || attachment_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. Accept orphan links temporarily;
+        // they'll resolve once the message/attachment arrives.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let insert_result = conn.execute(
+        r#"INSERT OR IGNORE INTO message_attachments(message_id, attachment_sha256, created_at)
+           VALUES (?1, ?2, ?3)"#,
+        params![message_id, attachment_sha256, created_at_ms],
+    );
+
+    if message_exists.is_none() || attachment_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    insert_result?;
     Ok(())
 }

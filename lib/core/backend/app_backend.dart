@@ -266,6 +266,18 @@ abstract class AppBackend {
     required String remoteRoot,
   });
 
+  Future<void> syncWebdavDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) {
+    throw UnimplementedError('syncWebdavDownloadAttachmentBytes');
+  }
+
   Future<void> syncLocaldirTestConnection({
     required String localDir,
     required String remoteRoot,
@@ -290,6 +302,16 @@ abstract class AppBackend {
     required String remoteRoot,
   });
 
+  Future<void> syncLocaldirDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+    required String sha256,
+  }) {
+    throw UnimplementedError('syncLocaldirDownloadAttachmentBytes');
+  }
+
   Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
@@ -310,6 +332,38 @@ abstract class AppBackend {
     throw UnimplementedError('syncManagedVaultPull');
   }
 
+  Future<void> syncManagedVaultDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String sha256,
+  }) {
+    throw UnimplementedError('syncManagedVaultDownloadAttachmentBytes');
+  }
+
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) {
+    throw UnimplementedError('syncManagedVaultPushOpsOnly');
+  }
+
+  Future<bool> syncManagedVaultUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String sha256,
+  }) {
+    throw UnimplementedError('syncManagedVaultUploadAttachmentBytes');
+  }
+
   Future<void> syncManagedVaultClearDevice({
     required String baseUrl,
     required String vaultId,
@@ -325,6 +379,72 @@ abstract class AppBackend {
     required String idToken,
   }) {
     throw UnimplementedError('syncManagedVaultClearVault');
+  }
+
+  Future<AttachmentVariant> upsertAttachmentVariant(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String variant,
+    required Uint8List bytes,
+    required String mimeType,
+  }) {
+    throw UnimplementedError('upsertAttachmentVariant');
+  }
+
+  Future<Uint8List> readAttachmentVariantBytes(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String variant,
+  }) {
+    throw UnimplementedError('readAttachmentVariantBytes');
+  }
+
+  Future<void> enqueueCloudMediaBackup(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String desiredVariant,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('enqueueCloudMediaBackup');
+  }
+
+  Future<int> backfillCloudMediaBackupImages(
+    Uint8List key, {
+    required String desiredVariant,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('backfillCloudMediaBackupImages');
+  }
+
+  Future<List<CloudMediaBackup>> listDueCloudMediaBackups(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 100,
+  }) {
+    throw UnimplementedError('listDueCloudMediaBackups');
+  }
+
+  Future<void> markCloudMediaBackupFailed(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markCloudMediaBackupFailed');
+  }
+
+  Future<void> markCloudMediaBackupUploaded(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markCloudMediaBackupUploaded');
+  }
+
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) {
+    throw UnimplementedError('cloudMediaBackupSummary');
   }
 }
 

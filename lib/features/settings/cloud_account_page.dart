@@ -11,6 +11,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'cloud_usage_card.dart';
+import 'vault_usage_card.dart';
 
 class CloudAccountPage extends StatefulWidget {
   const CloudAccountPage({super.key, this.billingClient});
@@ -644,6 +645,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
             ),
             const SizedBox(height: 16),
             const CloudUsageCard(),
+            const SizedBox(height: 16),
+            const VaultUsageCard(),
           ],
           if (_error != null) ...[
             const SizedBox(height: 16),

@@ -59,7 +59,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -1006382115;
+  int get rustContentHash => -1158404697;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -88,6 +88,15 @@ abstract class RustLibApi extends BaseApi {
       required String content,
       String? sourceMessageId});
 
+  Future<BigInt> crateApiCoreDbBackfillCloudMediaBackupImages(
+      {required String appDir,
+      required List<int> key,
+      required String desiredVariant,
+      required PlatformInt64 nowMs});
+
+  Future<CloudMediaBackupSummary> crateApiCoreDbCloudMediaBackupSummary(
+      {required String appDir, required List<int> key});
+
   Future<Conversation> crateApiCoreDbCreateConversation(
       {required String appDir, required List<int> key, required String title});
 
@@ -111,6 +120,13 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required String messageId,
       required String content});
+
+  Future<void> crateApiCoreDbEnqueueCloudMediaBackup(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required String desiredVariant,
+      required PlatformInt64 nowMs});
 
   Future<String> crateApiCoreDbGetActiveEmbeddingModelName(
       {required String appDir, required List<int> key});
@@ -147,6 +163,12 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<Conversation>> crateApiCoreDbListConversations(
       {required String appDir, required List<int> key});
+
+  Future<List<CloudMediaBackup>> crateApiCoreDbListDueCloudMediaBackups(
+      {required String appDir,
+      required List<int> key,
+      required PlatformInt64 nowMs,
+      required int limit});
 
   Future<List<String>> crateApiCoreDbListEmbeddingModelNames(
       {required String appDir, required List<int> key});
@@ -201,11 +223,32 @@ abstract class RustLibApi extends BaseApi {
       required PlatformInt64 startAtMsInclusive,
       required PlatformInt64 endAtMsExclusive});
 
+  Future<void> crateApiCoreDbMarkCloudMediaBackupFailed(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required PlatformInt64 attempts,
+      required PlatformInt64 nextRetryAtMs,
+      required String lastError,
+      required PlatformInt64 nowMs});
+
+  Future<void> crateApiCoreDbMarkCloudMediaBackupUploaded(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required PlatformInt64 nowMs});
+
   Future<int> crateApiCoreDbProcessPendingMessageEmbeddings(
       {required String appDir, required List<int> key, required int limit});
 
   Future<Uint8List> crateApiCoreDbReadAttachmentBytes(
       {required String appDir, required List<int> key, required String sha256});
+
+  Future<Uint8List> crateApiCoreDbReadAttachmentVariantBytes(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required String variant});
 
   Future<int> crateApiCoreDbRebuildMessageEmbeddings(
       {required String appDir,
@@ -267,6 +310,14 @@ abstract class RustLibApi extends BaseApi {
       required String startDay,
       required String endDay});
 
+  Future<AttachmentVariant> crateApiCoreDbUpsertAttachmentVariant(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required String variant,
+      required List<int> bytes,
+      required String mimeType});
+
   Future<Event> crateApiCoreDbUpsertEvent(
       {required String appDir,
       required List<int> key,
@@ -314,6 +365,14 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiCoreSyncLocaldirClearRemoteRoot(
       {required String localDir, required String remoteRoot});
 
+  Future<void> crateApiCoreSyncLocaldirDownloadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot,
+      required String sha256});
+
   Future<BigInt> crateApiCoreSyncLocaldirPull(
       {required String appDir,
       required List<int> key,
@@ -342,6 +401,15 @@ abstract class RustLibApi extends BaseApi {
       required String vaultId,
       required String firebaseIdToken});
 
+  Future<void> crateApiCoreSyncManagedVaultDownloadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken,
+      required String sha256});
+
   Future<BigInt> crateApiCoreSyncManagedVaultPull(
       {required String appDir,
       required List<int> key,
@@ -358,11 +426,38 @@ abstract class RustLibApi extends BaseApi {
       required String vaultId,
       required String firebaseIdToken});
 
+  Future<BigInt> crateApiCoreSyncManagedVaultPushOpsOnly(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken});
+
+  Future<bool> crateApiCoreSyncManagedVaultUploadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken,
+      required String sha256});
+
   Future<void> crateApiCoreSyncWebdavClearRemoteRoot(
       {required String baseUrl,
       String? username,
       String? password,
       required String remoteRoot});
+
+  Future<void> crateApiCoreSyncWebdavDownloadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot,
+      required String sha256});
 
   Future<BigInt> crateApiCoreSyncWebdavPull(
       {required String appDir,
@@ -542,6 +637,65 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiCoreDbBackfillCloudMediaBackupImages(
+      {required String appDir,
+      required List<int> key,
+      required String desiredVariant,
+      required PlatformInt64 nowMs}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(desiredVariant, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 6, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbBackfillCloudMediaBackupImagesConstMeta,
+      argValues: [appDir, key, desiredVariant, nowMs],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbBackfillCloudMediaBackupImagesConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_backfill_cloud_media_backup_images",
+        argNames: ["appDir", "key", "desiredVariant", "nowMs"],
+      );
+
+  @override
+  Future<CloudMediaBackupSummary> crateApiCoreDbCloudMediaBackupSummary(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 7, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_cloud_media_backup_summary,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbCloudMediaBackupSummaryConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbCloudMediaBackupSummaryConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_cloud_media_backup_summary",
+        argNames: ["appDir", "key"],
+      );
+
+  @override
   Future<Conversation> crateApiCoreDbCreateConversation(
       {required String appDir, required List<int> key, required String title}) {
     return handler.executeNormal(NormalTask(
@@ -551,7 +705,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(title, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 6, port: port_);
+            funcId: 8, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_conversation,
@@ -591,7 +745,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(modelName, serializer);
         sse_encode_bool(setActive, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 7, port: port_);
+            funcId: 9, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_llm_profile,
@@ -639,7 +793,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(profileId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 8, port: port_);
+            funcId: 10, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -671,7 +825,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_String(content, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -689,6 +843,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCoreDbEnqueueCloudMediaBackup(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required String desiredVariant,
+      required PlatformInt64 nowMs}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(attachmentSha256, serializer);
+        sse_encode_String(desiredVariant, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 12, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbEnqueueCloudMediaBackupConstMeta,
+      argValues: [appDir, key, attachmentSha256, desiredVariant, nowMs],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbEnqueueCloudMediaBackupConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_enqueue_cloud_media_backup",
+        argNames: [
+          "appDir",
+          "key",
+          "attachmentSha256",
+          "desiredVariant",
+          "nowMs"
+        ],
+      );
+
+  @override
   Future<String> crateApiCoreDbGetActiveEmbeddingModelName(
       {required String appDir, required List<int> key}) {
     return handler.executeNormal(NormalTask(
@@ -697,7 +891,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 10, port: port_);
+            funcId: 13, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -722,7 +916,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(appDir, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 11, port: port_);
+            funcId: 14, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -749,7 +943,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 12, port: port_);
+            funcId: 15, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_conversation,
@@ -781,7 +975,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(bytes, serializer);
         sse_encode_String(mimeType, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 13, port: port_);
+            funcId: 16, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_attachment,
@@ -815,7 +1009,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(role, serializer);
         sse_encode_String(content, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 14, port: port_);
+            funcId: 17, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_message,
@@ -847,7 +1041,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_String(attachmentSha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 15, port: port_);
+            funcId: 18, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -879,7 +1073,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(activityId, serializer);
         sse_encode_String(attachmentSha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 16, port: port_);
+            funcId: 19, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -906,7 +1100,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 17, port: port_);
+            funcId: 20, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_conversation,
@@ -925,6 +1119,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<CloudMediaBackup>> crateApiCoreDbListDueCloudMediaBackups(
+      {required String appDir,
+      required List<int> key,
+      required PlatformInt64 nowMs,
+      required int limit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        sse_encode_u_32(limit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 21, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_cloud_media_backup,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbListDueCloudMediaBackupsConstMeta,
+      argValues: [appDir, key, nowMs, limit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbListDueCloudMediaBackupsConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_list_due_cloud_media_backups",
+        argNames: ["appDir", "key", "nowMs", "limit"],
+      );
+
+  @override
   Future<List<String>> crateApiCoreDbListEmbeddingModelNames(
       {required String appDir, required List<int> key}) {
     return handler.executeNormal(NormalTask(
@@ -933,7 +1159,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 18, port: port_);
+            funcId: 22, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -960,7 +1186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 19, port: port_);
+            funcId: 23, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_event,
@@ -986,7 +1212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 20, port: port_);
+            funcId: 24, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_llm_profile,
@@ -1016,7 +1242,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 21, port: port_);
+            funcId: 25, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_attachment,
@@ -1046,7 +1272,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(conversationId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 22, port: port_);
+            funcId: 26, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_message,
@@ -1081,7 +1307,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(beforeId, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 23, port: port_);
+            funcId: 27, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_message,
@@ -1123,7 +1349,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 24, port: port_);
+            funcId: 28, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_attachment,
@@ -1153,7 +1379,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(todoId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 25, port: port_);
+            funcId: 29, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo_activity,
@@ -1185,7 +1411,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_64(startAtMsInclusive, serializer);
         sse_encode_i_64(endAtMsExclusive, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 26, port: port_);
+            funcId: 30, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo_activity,
@@ -1215,7 +1441,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(activityId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 27, port: port_);
+            funcId: 31, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_attachment,
@@ -1242,7 +1468,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 28, port: port_);
+            funcId: 32, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo,
@@ -1273,7 +1499,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_64(startAtMsInclusive, serializer);
         sse_encode_i_64(endAtMsExclusive, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 29, port: port_);
+            funcId: 33, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo,
@@ -1292,6 +1518,92 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCoreDbMarkCloudMediaBackupFailed(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required PlatformInt64 attempts,
+      required PlatformInt64 nextRetryAtMs,
+      required String lastError,
+      required PlatformInt64 nowMs}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(attachmentSha256, serializer);
+        sse_encode_i_64(attempts, serializer);
+        sse_encode_i_64(nextRetryAtMs, serializer);
+        sse_encode_String(lastError, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 34, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbMarkCloudMediaBackupFailedConstMeta,
+      argValues: [
+        appDir,
+        key,
+        attachmentSha256,
+        attempts,
+        nextRetryAtMs,
+        lastError,
+        nowMs
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbMarkCloudMediaBackupFailedConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_mark_cloud_media_backup_failed",
+        argNames: [
+          "appDir",
+          "key",
+          "attachmentSha256",
+          "attempts",
+          "nextRetryAtMs",
+          "lastError",
+          "nowMs"
+        ],
+      );
+
+  @override
+  Future<void> crateApiCoreDbMarkCloudMediaBackupUploaded(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required PlatformInt64 nowMs}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(attachmentSha256, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 35, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbMarkCloudMediaBackupUploadedConstMeta,
+      argValues: [appDir, key, attachmentSha256, nowMs],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbMarkCloudMediaBackupUploadedConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_mark_cloud_media_backup_uploaded",
+        argNames: ["appDir", "key", "attachmentSha256", "nowMs"],
+      );
+
+  @override
   Future<int> crateApiCoreDbProcessPendingMessageEmbeddings(
       {required String appDir, required List<int> key, required int limit}) {
     return handler.executeNormal(NormalTask(
@@ -1301,7 +1613,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 30, port: port_);
+            funcId: 36, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -1331,7 +1643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 31, port: port_);
+            funcId: 37, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -1350,6 +1662,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List> crateApiCoreDbReadAttachmentVariantBytes(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required String variant}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(attachmentSha256, serializer);
+        sse_encode_String(variant, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 38, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_prim_u_8_strict,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbReadAttachmentVariantBytesConstMeta,
+      argValues: [appDir, key, attachmentSha256, variant],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbReadAttachmentVariantBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_read_attachment_variant_bytes",
+        argNames: ["appDir", "key", "attachmentSha256", "variant"],
+      );
+
+  @override
   Future<int> crateApiCoreDbRebuildMessageEmbeddings(
       {required String appDir,
       required List<int> key,
@@ -1361,7 +1705,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(batchLimit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 32, port: port_);
+            funcId: 39, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -1401,7 +1745,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(outputTokens, serializer);
         sse_encode_opt_box_autoadd_i_64(totalTokens, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 33, port: port_);
+            funcId: 40, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1446,7 +1790,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 34, port: port_);
+            funcId: 41, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1479,7 +1823,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 35, port: port_);
+            funcId: 42, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_message,
@@ -1511,7 +1855,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 36, port: port_);
+            funcId: 43, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_todo_thread,
@@ -1541,7 +1885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(modelName, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 37, port: port_);
+            funcId: 44, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -1571,7 +1915,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(profileId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 38, port: port_);
+            funcId: 45, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1603,7 +1947,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_bool(isDeleted, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 39, port: port_);
+            funcId: 46, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1637,7 +1981,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(newStatus, serializer);
         sse_encode_opt_String(sourceMessageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 40, port: port_);
+            funcId: 47, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_todo,
@@ -1671,7 +2015,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(startDay, serializer);
         sse_encode_String(endDay, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 41, port: port_);
+            funcId: 48, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_llm_usage_aggregate,
@@ -1687,6 +2031,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "db_sum_llm_usage_daily_by_purpose",
         argNames: ["appDir", "key", "profileId", "startDay", "endDay"],
+      );
+
+  @override
+  Future<AttachmentVariant> crateApiCoreDbUpsertAttachmentVariant(
+      {required String appDir,
+      required List<int> key,
+      required String attachmentSha256,
+      required String variant,
+      required List<int> bytes,
+      required String mimeType}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(attachmentSha256, serializer);
+        sse_encode_String(variant, serializer);
+        sse_encode_list_prim_u_8_loose(bytes, serializer);
+        sse_encode_String(mimeType, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 49, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_attachment_variant,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbUpsertAttachmentVariantConstMeta,
+      argValues: [appDir, key, attachmentSha256, variant, bytes, mimeType],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreDbUpsertAttachmentVariantConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_upsert_attachment_variant",
+        argNames: [
+          "appDir",
+          "key",
+          "attachmentSha256",
+          "variant",
+          "bytes",
+          "mimeType"
+        ],
       );
 
   @override
@@ -1711,7 +2098,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(tz, serializer);
         sse_encode_opt_String(sourceEntryId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 42, port: port_);
+            funcId: 50, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_event,
@@ -1772,7 +2159,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(nextReviewAtMs, serializer);
         sse_encode_opt_box_autoadd_i_64(lastReviewAtMs, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 43, port: port_);
+            funcId: 51, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_todo,
@@ -1833,7 +2220,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDay, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 44, port: port_);
+            funcId: 52, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1895,7 +2282,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(modelName, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 45, port: port_);
+            funcId: 53, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1943,7 +2330,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(passphrase, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 46, port: port_);
+            funcId: 54, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -1969,7 +2356,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 47, port: port_);
+            funcId: 55, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -1988,6 +2375,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiCoreSyncLocaldirDownloadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot,
+      required String sha256}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(localDir, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        sse_encode_String(sha256, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 56, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncLocaldirDownloadAttachmentBytesConstMeta,
+      argValues: [appDir, key, syncKey, localDir, remoteRoot, sha256],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncLocaldirDownloadAttachmentBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_localdir_download_attachment_bytes",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "localDir",
+          "remoteRoot",
+          "sha256"
+        ],
+      );
+
+  @override
   Future<BigInt> crateApiCoreSyncLocaldirPull(
       {required String appDir,
       required List<int> key,
@@ -2003,7 +2433,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 48, port: port_);
+            funcId: 57, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2037,7 +2467,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 49, port: port_);
+            funcId: 58, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2064,7 +2494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 50, port: port_);
+            funcId: 59, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2096,7 +2526,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(deviceId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 51, port: port_);
+            funcId: 60, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2126,7 +2556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 52, port: port_);
+            funcId: 61, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2143,6 +2573,61 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "sync_managed_vault_clear_vault",
         argNames: ["baseUrl", "vaultId", "firebaseIdToken"],
       );
+
+  @override
+  Future<void> crateApiCoreSyncManagedVaultDownloadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken,
+      required String sha256}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_String(sha256, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 62, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncManagedVaultDownloadAttachmentBytesConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        vaultId,
+        firebaseIdToken,
+        sha256
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreSyncManagedVaultDownloadAttachmentBytesConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_download_attachment_bytes",
+            argNames: [
+              "appDir",
+              "key",
+              "syncKey",
+              "baseUrl",
+              "vaultId",
+              "firebaseIdToken",
+              "sha256"
+            ],
+          );
 
   @override
   Future<BigInt> crateApiCoreSyncManagedVaultPull(
@@ -2162,7 +2647,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 53, port: port_);
+            funcId: 63, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2205,7 +2690,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 54, port: port_);
+            funcId: 64, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2231,6 +2716,104 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<BigInt> crateApiCoreSyncManagedVaultPushOpsOnly(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 65, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_64,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncManagedVaultPushOpsOnlyConstMeta,
+      argValues: [appDir, key, syncKey, baseUrl, vaultId, firebaseIdToken],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncManagedVaultPushOpsOnlyConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_managed_vault_push_ops_only",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "vaultId",
+          "firebaseIdToken"
+        ],
+      );
+
+  @override
+  Future<bool> crateApiCoreSyncManagedVaultUploadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken,
+      required String sha256}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_String(sha256, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 66, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncManagedVaultUploadAttachmentBytesConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        vaultId,
+        firebaseIdToken,
+        sha256
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreSyncManagedVaultUploadAttachmentBytesConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_upload_attachment_bytes",
+            argNames: [
+              "appDir",
+              "key",
+              "syncKey",
+              "baseUrl",
+              "vaultId",
+              "firebaseIdToken",
+              "sha256"
+            ],
+          );
+
+  @override
   Future<void> crateApiCoreSyncWebdavClearRemoteRoot(
       {required String baseUrl,
       String? username,
@@ -2244,7 +2827,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 55, port: port_);
+            funcId: 67, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2260,6 +2843,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "sync_webdav_clear_remote_root",
         argNames: ["baseUrl", "username", "password", "remoteRoot"],
+      );
+
+  @override
+  Future<void> crateApiCoreSyncWebdavDownloadAttachmentBytes(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot,
+      required String sha256}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_opt_String(username, serializer);
+        sse_encode_opt_String(password, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        sse_encode_String(sha256, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 68, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreSyncWebdavDownloadAttachmentBytesConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        username,
+        password,
+        remoteRoot,
+        sha256
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiCoreSyncWebdavDownloadAttachmentBytesConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_webdav_download_attachment_bytes",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "username",
+          "password",
+          "remoteRoot",
+          "sha256"
+        ],
       );
 
   @override
@@ -2282,7 +2923,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 56, port: port_);
+            funcId: 69, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2335,7 +2976,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 57, port: port_);
+            funcId: 70, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2382,7 +3023,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 58, port: port_);
+            funcId: 71, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2406,7 +3047,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -2429,7 +3070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 60, port: port_);
+            funcId: 73, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2480,6 +3121,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AttachmentVariant dco_decode_attachment_variant(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AttachmentVariant(
+      attachmentSha256: dco_decode_String(arr[0]),
+      variant: dco_decode_String(arr[1]),
+      mimeType: dco_decode_String(arr[2]),
+      path: dco_decode_String(arr[3]),
+      byteLen: dco_decode_i_64(arr[4]),
+      createdAtMs: dco_decode_i_64(arr[5]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -2489,6 +3146,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
+  }
+
+  @protected
+  CloudMediaBackup dco_decode_cloud_media_backup(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return CloudMediaBackup(
+      attachmentSha256: dco_decode_String(arr[0]),
+      desiredVariant: dco_decode_String(arr[1]),
+      status: dco_decode_String(arr[2]),
+      attempts: dco_decode_i_64(arr[3]),
+      nextRetryAtMs: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      lastError: dco_decode_opt_String(arr[5]),
+      updatedAtMs: dco_decode_i_64(arr[6]),
+    );
+  }
+
+  @protected
+  CloudMediaBackupSummary dco_decode_cloud_media_backup_summary(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return CloudMediaBackupSummary(
+      pending: dco_decode_i_64(arr[0]),
+      failed: dco_decode_i_64(arr[1]),
+      uploaded: dco_decode_i_64(arr[2]),
+      lastUploadedAtMs: dco_decode_opt_box_autoadd_i_64(arr[3]),
+      lastError: dco_decode_opt_String(arr[4]),
+      lastErrorAtMs: dco_decode_opt_box_autoadd_i_64(arr[5]),
+    );
   }
 
   @protected
@@ -2545,6 +3235,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<Attachment> dco_decode_list_attachment(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_attachment).toList();
+  }
+
+  @protected
+  List<CloudMediaBackup> dco_decode_list_cloud_media_backup(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_cloud_media_backup).toList();
   }
 
   @protected
@@ -2799,6 +3495,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AttachmentVariant sse_decode_attachment_variant(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_attachmentSha256 = sse_decode_String(deserializer);
+    var var_variant = sse_decode_String(deserializer);
+    var var_mimeType = sse_decode_String(deserializer);
+    var var_path = sse_decode_String(deserializer);
+    var var_byteLen = sse_decode_i_64(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    return AttachmentVariant(
+        attachmentSha256: var_attachmentSha256,
+        variant: var_variant,
+        mimeType: var_mimeType,
+        path: var_path,
+        byteLen: var_byteLen,
+        createdAtMs: var_createdAtMs);
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -2808,6 +3523,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
+  CloudMediaBackup sse_decode_cloud_media_backup(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_attachmentSha256 = sse_decode_String(deserializer);
+    var var_desiredVariant = sse_decode_String(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    var var_attempts = sse_decode_i_64(deserializer);
+    var var_nextRetryAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_lastError = sse_decode_opt_String(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    return CloudMediaBackup(
+        attachmentSha256: var_attachmentSha256,
+        desiredVariant: var_desiredVariant,
+        status: var_status,
+        attempts: var_attempts,
+        nextRetryAtMs: var_nextRetryAtMs,
+        lastError: var_lastError,
+        updatedAtMs: var_updatedAtMs);
+  }
+
+  @protected
+  CloudMediaBackupSummary sse_decode_cloud_media_backup_summary(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pending = sse_decode_i_64(deserializer);
+    var var_failed = sse_decode_i_64(deserializer);
+    var var_uploaded = sse_decode_i_64(deserializer);
+    var var_lastUploadedAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_lastError = sse_decode_opt_String(deserializer);
+    var var_lastErrorAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    return CloudMediaBackupSummary(
+        pending: var_pending,
+        failed: var_failed,
+        uploaded: var_uploaded,
+        lastUploadedAtMs: var_lastUploadedAtMs,
+        lastError: var_lastError,
+        lastErrorAtMs: var_lastErrorAtMs);
   }
 
   @protected
@@ -2878,6 +3632,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <Attachment>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_attachment(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<CloudMediaBackup> sse_decode_list_cloud_media_backup(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CloudMediaBackup>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_cloud_media_backup(deserializer));
     }
     return ans_;
   }
@@ -3219,6 +3986,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_attachment_variant(
+      AttachmentVariant self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.attachmentSha256, serializer);
+    sse_encode_String(self.variant, serializer);
+    sse_encode_String(self.mimeType, serializer);
+    sse_encode_String(self.path, serializer);
+    sse_encode_i_64(self.byteLen, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -3229,6 +4008,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       PlatformInt64 self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_cloud_media_backup(
+      CloudMediaBackup self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.attachmentSha256, serializer);
+    sse_encode_String(self.desiredVariant, serializer);
+    sse_encode_String(self.status, serializer);
+    sse_encode_i_64(self.attempts, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.nextRetryAtMs, serializer);
+    sse_encode_opt_String(self.lastError, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+  }
+
+  @protected
+  void sse_encode_cloud_media_backup_summary(
+      CloudMediaBackupSummary self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.pending, serializer);
+    sse_encode_i_64(self.failed, serializer);
+    sse_encode_i_64(self.uploaded, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastUploadedAtMs, serializer);
+    sse_encode_opt_String(self.lastError, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastErrorAtMs, serializer);
   }
 
   @protected
@@ -3281,6 +4085,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_attachment(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_cloud_media_backup(
+      List<CloudMediaBackup> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_cloud_media_backup(item, serializer);
     }
   }
 

@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
@@ -53,10 +55,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final passphraseField = find.byWidgetPredicate(
-      (w) =>
-          w is TextField &&
-          w.decoration?.labelText ==
-              'Sync passphrase (not stored; derives a key)',
+      (w) => w is TextField && w.decoration?.labelText == 'Sync passphrase',
     );
     final field = tester.widget<TextField>(passphraseField);
     expect(field.controller?.text, isNotEmpty);
@@ -87,7 +86,7 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Base URL',
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
       ),
       'https://example.com/dav',
     );
@@ -98,10 +97,7 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) =>
-            w is TextField &&
-            w.decoration?.labelText ==
-                'Sync passphrase (not stored; derives a key)',
+        (w) => w is TextField && w.decoration?.labelText == 'Sync passphrase',
       ),
       'passphrase',
     );
@@ -160,7 +156,7 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Base URL',
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
       ),
       'https://example.com/dav',
     );
@@ -169,11 +165,53 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Pull'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Download'));
     await tester.pumpAndSettle();
 
     expect(changeNotifications, 1);
     engine.stop();
+  });
+
+  testWidgets('Cloud Download shows up-to-date message when no new changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _SyncSettingsBackend(managedVaultPullResult: 0);
+    final cloudAuth = _FakeCloudAuthController();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Download'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No new changes'), findsOneWidget);
   });
 }
 
@@ -223,10 +261,14 @@ final class _FakeRunner implements SyncRunner {
 }
 
 class _SyncSettingsBackend extends AppBackend {
-  _SyncSettingsBackend({this.webdavPullResult = 0});
+  _SyncSettingsBackend({
+    this.webdavPullResult = 0,
+    this.managedVaultPullResult = 0,
+  });
 
   int webdavTestCalls = 0;
   final int webdavPullResult;
+  final int managedVaultPullResult;
 
   @override
   Future<void> init() async {}
@@ -469,5 +511,40 @@ class _SyncSettingsBackend extends AppBackend {
     required String vaultId,
     required String idToken,
   }) async =>
-      0;
+      managedVaultPullResult;
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  @override
+  Future<String?> getIdToken() async => 'test-id-token';
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
 }

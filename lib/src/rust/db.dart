@@ -41,6 +41,127 @@ class Attachment {
           createdAtMs == other.createdAtMs;
 }
 
+class AttachmentVariant {
+  final String attachmentSha256;
+  final String variant;
+  final String mimeType;
+  final String path;
+  final PlatformInt64 byteLen;
+  final PlatformInt64 createdAtMs;
+
+  const AttachmentVariant({
+    required this.attachmentSha256,
+    required this.variant,
+    required this.mimeType,
+    required this.path,
+    required this.byteLen,
+    required this.createdAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      attachmentSha256.hashCode ^
+      variant.hashCode ^
+      mimeType.hashCode ^
+      path.hashCode ^
+      byteLen.hashCode ^
+      createdAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AttachmentVariant &&
+          runtimeType == other.runtimeType &&
+          attachmentSha256 == other.attachmentSha256 &&
+          variant == other.variant &&
+          mimeType == other.mimeType &&
+          path == other.path &&
+          byteLen == other.byteLen &&
+          createdAtMs == other.createdAtMs;
+}
+
+class CloudMediaBackup {
+  final String attachmentSha256;
+  final String desiredVariant;
+  final String status;
+  final PlatformInt64 attempts;
+  final PlatformInt64? nextRetryAtMs;
+  final String? lastError;
+  final PlatformInt64 updatedAtMs;
+
+  const CloudMediaBackup({
+    required this.attachmentSha256,
+    required this.desiredVariant,
+    required this.status,
+    required this.attempts,
+    this.nextRetryAtMs,
+    this.lastError,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      attachmentSha256.hashCode ^
+      desiredVariant.hashCode ^
+      status.hashCode ^
+      attempts.hashCode ^
+      nextRetryAtMs.hashCode ^
+      lastError.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudMediaBackup &&
+          runtimeType == other.runtimeType &&
+          attachmentSha256 == other.attachmentSha256 &&
+          desiredVariant == other.desiredVariant &&
+          status == other.status &&
+          attempts == other.attempts &&
+          nextRetryAtMs == other.nextRetryAtMs &&
+          lastError == other.lastError &&
+          updatedAtMs == other.updatedAtMs;
+}
+
+class CloudMediaBackupSummary {
+  final PlatformInt64 pending;
+  final PlatformInt64 failed;
+  final PlatformInt64 uploaded;
+  final PlatformInt64? lastUploadedAtMs;
+  final String? lastError;
+  final PlatformInt64? lastErrorAtMs;
+
+  const CloudMediaBackupSummary({
+    required this.pending,
+    required this.failed,
+    required this.uploaded,
+    this.lastUploadedAtMs,
+    this.lastError,
+    this.lastErrorAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      pending.hashCode ^
+      failed.hashCode ^
+      uploaded.hashCode ^
+      lastUploadedAtMs.hashCode ^
+      lastError.hashCode ^
+      lastErrorAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudMediaBackupSummary &&
+          runtimeType == other.runtimeType &&
+          pending == other.pending &&
+          failed == other.failed &&
+          uploaded == other.uploaded &&
+          lastUploadedAtMs == other.lastUploadedAtMs &&
+          lastError == other.lastError &&
+          lastErrorAtMs == other.lastErrorAtMs;
+}
+
 class Conversation {
   final String id;
   final String title;

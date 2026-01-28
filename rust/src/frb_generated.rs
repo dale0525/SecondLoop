@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1006382115;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1158404697;
 
 // Section: executor
 
@@ -214,6 +214,79 @@ fn wire__crate__api__core__db_append_todo_note_impl(
         },
     )
 }
+fn wire__crate__api__core__db_backfill_cloud_media_backup_images_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_backfill_cloud_media_backup_images",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_desired_variant = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_backfill_cloud_media_backup_images(
+                        api_app_dir,
+                        api_key,
+                        api_desired_variant,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_cloud_media_backup_summary_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_cloud_media_backup_summary",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_cloud_media_backup_summary(api_app_dir, api_key)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__db_create_conversation_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -364,6 +437,48 @@ fn wire__crate__api__core__db_edit_message_impl(
                         api_key,
                         api_message_id,
                         api_content,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_enqueue_cloud_media_backup",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
+            let api_desired_variant = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_enqueue_cloud_media_backup(
+                        api_app_dir,
+                        api_key,
+                        api_attachment_sha256,
+                        api_desired_variant,
+                        api_now_ms,
                     )
                 })())
             }
@@ -661,6 +776,46 @@ fn wire__crate__api__core__db_list_conversations_impl(
             move |context| {
                 transform_result_sse((move || {
                     crate::api::core::db_list_conversations(api_app_dir, api_key)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_list_due_cloud_media_backups_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_list_due_cloud_media_backups",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_list_due_cloud_media_backups(
+                        api_app_dir,
+                        api_key,
+                        api_now_ms,
+                        api_limit,
+                    )
                 })())
             }
         },
@@ -1100,6 +1255,92 @@ fn wire__crate__api__core__db_list_todos_created_in_range_impl(
         },
     )
 }
+fn wire__crate__api__core__db_mark_cloud_media_backup_failed_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_cloud_media_backup_failed",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
+            let api_attempts = <i64>::sse_decode(&mut deserializer);
+            let api_next_retry_at_ms = <i64>::sse_decode(&mut deserializer);
+            let api_last_error = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_cloud_media_backup_failed(
+                        api_app_dir,
+                        api_key,
+                        api_attachment_sha256,
+                        api_attempts,
+                        api_next_retry_at_ms,
+                        api_last_error,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_cloud_media_backup_uploaded",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_cloud_media_backup_uploaded(
+                        api_app_dir,
+                        api_key,
+                        api_attachment_sha256,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__db_process_pending_message_embeddings_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1167,6 +1408,46 @@ fn wire__crate__api__core__db_read_attachment_bytes_impl(
             move |context| {
                 transform_result_sse((move || {
                     crate::api::core::db_read_attachment_bytes(api_app_dir, api_key, api_sha256)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_read_attachment_variant_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_read_attachment_variant_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
+            let api_variant = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_read_attachment_variant_bytes(
+                        api_app_dir,
+                        api_key,
+                        api_attachment_sha256,
+                        api_variant,
+                    )
                 })())
             }
         },
@@ -1574,6 +1855,50 @@ fn wire__crate__api__core__db_sum_llm_usage_daily_by_purpose_impl(
         },
     )
 }
+fn wire__crate__api__core__db_upsert_attachment_variant_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_upsert_attachment_variant",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
+            let api_variant = <String>::sse_decode(&mut deserializer);
+            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_mime_type = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_upsert_attachment_variant(
+                        api_app_dir,
+                        api_key,
+                        api_attachment_sha256,
+                        api_variant,
+                        api_bytes,
+                        api_mime_type,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__db_upsert_event_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1846,6 +2171,50 @@ fn wire__crate__api__core__sync_localdir_clear_remote_root_impl(
         },
     )
 }
+fn wire__crate__api__core__sync_localdir_download_attachment_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_localdir_download_attachment_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_local_dir = <String>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            let api_sha256 = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_localdir_download_attachment_bytes(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_local_dir,
+                        api_remote_root,
+                        api_sha256,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__sync_localdir_pull_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2041,6 +2410,52 @@ fn wire__crate__api__core__sync_managed_vault_clear_vault_impl(
         },
     )
 }
+fn wire__crate__api__core__sync_managed_vault_download_attachment_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_download_attachment_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
+            let api_sha256 = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_managed_vault_download_attachment_bytes(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_firebase_id_token,
+                        api_sha256,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__sync_managed_vault_pull_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2129,6 +2544,96 @@ fn wire__crate__api__core__sync_managed_vault_push_impl(
         },
     )
 }
+fn wire__crate__api__core__sync_managed_vault_push_ops_only_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_push_ops_only",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_managed_vault_push_ops_only(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_firebase_id_token,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__sync_managed_vault_upload_attachment_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_upload_attachment_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
+            let api_sha256 = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_managed_vault_upload_attachment_bytes(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_firebase_id_token,
+                        api_sha256,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__sync_webdav_clear_remote_root_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2163,6 +2668,54 @@ fn wire__crate__api__core__sync_webdav_clear_remote_root_impl(
                         api_username,
                         api_password,
                         api_remote_root,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__sync_webdav_download_attachment_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_webdav_download_attachment_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_username = <Option<String>>::sse_decode(&mut deserializer);
+            let api_password = <Option<String>>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            let api_sha256 = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::sync_webdav_download_attachment_bytes(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_username,
+                        api_password,
+                        api_remote_root,
+                        api_sha256,
                     )
                 })())
             }
@@ -2408,10 +2961,72 @@ impl SseDecode for crate::db::Attachment {
     }
 }
 
+impl SseDecode for crate::db::AttachmentVariant {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_attachmentSha256 = <String>::sse_decode(deserializer);
+        let mut var_variant = <String>::sse_decode(deserializer);
+        let mut var_mimeType = <String>::sse_decode(deserializer);
+        let mut var_path = <String>::sse_decode(deserializer);
+        let mut var_byteLen = <i64>::sse_decode(deserializer);
+        let mut var_createdAtMs = <i64>::sse_decode(deserializer);
+        return crate::db::AttachmentVariant {
+            attachment_sha256: var_attachmentSha256,
+            variant: var_variant,
+            mime_type: var_mimeType,
+            path: var_path,
+            byte_len: var_byteLen,
+            created_at_ms: var_createdAtMs,
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_u8().unwrap() != 0
+    }
+}
+
+impl SseDecode for crate::db::CloudMediaBackup {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_attachmentSha256 = <String>::sse_decode(deserializer);
+        let mut var_desiredVariant = <String>::sse_decode(deserializer);
+        let mut var_status = <String>::sse_decode(deserializer);
+        let mut var_attempts = <i64>::sse_decode(deserializer);
+        let mut var_nextRetryAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_lastError = <Option<String>>::sse_decode(deserializer);
+        let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
+        return crate::db::CloudMediaBackup {
+            attachment_sha256: var_attachmentSha256,
+            desired_variant: var_desiredVariant,
+            status: var_status,
+            attempts: var_attempts,
+            next_retry_at_ms: var_nextRetryAtMs,
+            last_error: var_lastError,
+            updated_at_ms: var_updatedAtMs,
+        };
+    }
+}
+
+impl SseDecode for crate::db::CloudMediaBackupSummary {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_pending = <i64>::sse_decode(deserializer);
+        let mut var_failed = <i64>::sse_decode(deserializer);
+        let mut var_uploaded = <i64>::sse_decode(deserializer);
+        let mut var_lastUploadedAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_lastError = <Option<String>>::sse_decode(deserializer);
+        let mut var_lastErrorAtMs = <Option<i64>>::sse_decode(deserializer);
+        return crate::db::CloudMediaBackupSummary {
+            pending: var_pending,
+            failed: var_failed,
+            uploaded: var_uploaded,
+            last_uploaded_at_ms: var_lastUploadedAtMs,
+            last_error: var_lastError,
+            last_error_at_ms: var_lastErrorAtMs,
+        };
     }
 }
 
@@ -2488,6 +3103,18 @@ impl SseDecode for Vec<crate::db::Attachment> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::db::Attachment>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::db::CloudMediaBackup> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::db::CloudMediaBackup>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -2832,205 +3459,283 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         4 => wire__crate__api__core__auth_validate_key_impl(port, ptr, rust_vec_len, data_len),
         5 => wire__crate__api__core__db_append_todo_note_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__core__db_create_conversation_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__db_create_llm_profile_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__core__db_delete_llm_profile_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__core__db_edit_message_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__db_get_active_embedding_model_name_impl(
+        6 => wire__crate__api__core__db_backfill_cloud_media_backup_images_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__core__db_get_or_create_device_id_impl(
+        7 => wire__crate__api__core__db_cloud_media_backup_summary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+        8 => wire__crate__api__core__db_create_conversation_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__core__db_create_llm_profile_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__db_delete_llm_profile_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__db_edit_message_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__core__db_insert_attachment_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__db_insert_message_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__core__db_link_attachment_to_message_impl(
+        13 => wire__crate__api__core__db_get_active_embedding_model_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__core__db_link_attachment_to_todo_activity_impl(
+        14 => wire__crate__api__core__db_get_or_create_device_id_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__core__db_list_conversations_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__db_list_embedding_model_names_impl(
+        15 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__core__db_list_events_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__core__db_list_llm_profiles_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__db_list_message_attachments_impl(
+        16 => wire__crate__api__core__db_insert_attachment_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__db_insert_message_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__db_link_attachment_to_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__core__db_list_messages_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__db_list_messages_page_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__db_list_recent_attachments_impl(
+        19 => wire__crate__api__core__db_link_attachment_to_todo_activity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => {
+        20 => wire__crate__api__core__db_list_conversations_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__db_list_due_cloud_media_backups_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        22 => wire__crate__api__core__db_list_embedding_model_names_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        23 => wire__crate__api__core__db_list_events_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__db_list_llm_profiles_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__db_list_message_attachments_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        26 => wire__crate__api__core__db_list_messages_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__db_list_messages_page_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__db_list_recent_attachments_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        29 => {
             wire__crate__api__core__db_list_todo_activities_impl(port, ptr, rust_vec_len, data_len)
         }
-        26 => wire__crate__api__core__db_list_todo_activities_in_range_impl(
+        30 => wire__crate__api__core__db_list_todo_activities_in_range_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__core__db_list_todo_activity_attachments_impl(
+        31 => wire__crate__api__core__db_list_todo_activity_attachments_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__core__db_list_todos_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__db_list_todos_created_in_range_impl(
+        32 => wire__crate__api__core__db_list_todos_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__db_list_todos_created_in_range_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__core__db_process_pending_message_embeddings_impl(
+        34 => wire__crate__api__core__db_mark_cloud_media_backup_failed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => {
+        35 => wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        36 => wire__crate__api__core__db_process_pending_message_embeddings_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        37 => {
             wire__crate__api__core__db_read_attachment_bytes_impl(port, ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__core__db_rebuild_message_embeddings_impl(
+        38 => wire__crate__api__core__db_read_attachment_variant_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__core__db_record_llm_usage_daily_impl(
+        39 => wire__crate__api__core__db_rebuild_message_embeddings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__core__db_reset_vault_data_preserving_llm_profiles_impl(
+        40 => wire__crate__api__core__db_record_llm_usage_daily_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__core__db_search_similar_messages_impl(
+        41 => wire__crate__api__core__db_reset_vault_data_preserving_llm_profiles_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__core__db_search_similar_todo_threads_impl(
+        42 => wire__crate__api__core__db_search_similar_messages_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__core__db_set_active_embedding_model_name_impl(
+        43 => wire__crate__api__core__db_search_similar_todo_threads_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__core__db_set_active_llm_profile_impl(
+        44 => wire__crate__api__core__db_set_active_embedding_model_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => {
+        45 => wire__crate__api__core__db_set_active_llm_profile_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        46 => {
             wire__crate__api__core__db_set_message_deleted_impl(port, ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__api__core__db_set_todo_status_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__core__db_sum_llm_usage_daily_by_purpose_impl(
+        47 => wire__crate__api__core__db_set_todo_status_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__core__db_sum_llm_usage_daily_by_purpose_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__core__db_upsert_event_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__core__db_upsert_todo_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__core__rag_ask_ai_stream_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_impl(
+        49 => wire__crate__api__core__db_upsert_attachment_variant_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__core__sync_derive_key_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__core__sync_localdir_clear_remote_root_impl(
+        50 => wire__crate__api__core__db_upsert_event_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__core__db_upsert_todo_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__core__rag_ask_ai_stream_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__core__sync_localdir_pull_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__core__sync_localdir_push_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__core__sync_localdir_test_connection_impl(
+        54 => wire__crate__api__core__sync_derive_key_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__core__sync_localdir_clear_remote_root_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__api__core__sync_managed_vault_clear_device_impl(
+        56 => wire__crate__api__core__sync_localdir_download_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__core__sync_managed_vault_clear_vault_impl(
+        57 => wire__crate__api__core__sync_localdir_pull_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__core__sync_localdir_push_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__core__sync_localdir_test_connection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => {
+        60 => wire__crate__api__core__sync_managed_vault_clear_device_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        61 => wire__crate__api__core__sync_managed_vault_clear_vault_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        62 => wire__crate__api__core__sync_managed_vault_download_attachment_bytes_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        63 => {
             wire__crate__api__core__sync_managed_vault_pull_impl(port, ptr, rust_vec_len, data_len)
         }
-        54 => {
+        64 => {
             wire__crate__api__core__sync_managed_vault_push_impl(port, ptr, rust_vec_len, data_len)
         }
-        55 => wire__crate__api__core__sync_webdav_clear_remote_root_impl(
+        65 => wire__crate__api__core__sync_managed_vault_push_ops_only_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__core__sync_webdav_pull_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__core__sync_webdav_push_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__core__sync_webdav_test_connection_impl(
+        66 => wire__crate__api__core__sync_managed_vault_upload_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__core__sync_webdav_clear_remote_root_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        68 => wire__crate__api__core__sync_webdav_download_attachment_bytes_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        69 => wire__crate__api__core__sync_webdav_pull_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__core__sync_webdav_push_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__core__sync_webdav_test_connection_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        73 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3043,7 +3748,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        59 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3066,6 +3771,76 @@ impl flutter_rust_bridge::IntoDart for crate::db::Attachment {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::Attachment {}
 impl flutter_rust_bridge::IntoIntoDart<crate::db::Attachment> for crate::db::Attachment {
     fn into_into_dart(self) -> crate::db::Attachment {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::db::AttachmentVariant {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.attachment_sha256.into_into_dart().into_dart(),
+            self.variant.into_into_dart().into_dart(),
+            self.mime_type.into_into_dart().into_dart(),
+            self.path.into_into_dart().into_dart(),
+            self.byte_len.into_into_dart().into_dart(),
+            self.created_at_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::AttachmentVariant {}
+impl flutter_rust_bridge::IntoIntoDart<crate::db::AttachmentVariant>
+    for crate::db::AttachmentVariant
+{
+    fn into_into_dart(self) -> crate::db::AttachmentVariant {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::db::CloudMediaBackup {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.attachment_sha256.into_into_dart().into_dart(),
+            self.desired_variant.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.attempts.into_into_dart().into_dart(),
+            self.next_retry_at_ms.into_into_dart().into_dart(),
+            self.last_error.into_into_dart().into_dart(),
+            self.updated_at_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::CloudMediaBackup {}
+impl flutter_rust_bridge::IntoIntoDart<crate::db::CloudMediaBackup>
+    for crate::db::CloudMediaBackup
+{
+    fn into_into_dart(self) -> crate::db::CloudMediaBackup {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::db::CloudMediaBackupSummary {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.pending.into_into_dart().into_dart(),
+            self.failed.into_into_dart().into_dart(),
+            self.uploaded.into_into_dart().into_dart(),
+            self.last_uploaded_at_ms.into_into_dart().into_dart(),
+            self.last_error.into_into_dart().into_dart(),
+            self.last_error_at_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::db::CloudMediaBackupSummary
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::db::CloudMediaBackupSummary>
+    for crate::db::CloudMediaBackupSummary
+{
+    fn into_into_dart(self) -> crate::db::CloudMediaBackupSummary {
         self
     }
 }
@@ -3286,10 +4061,47 @@ impl SseEncode for crate::db::Attachment {
     }
 }
 
+impl SseEncode for crate::db::AttachmentVariant {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.attachment_sha256, serializer);
+        <String>::sse_encode(self.variant, serializer);
+        <String>::sse_encode(self.mime_type, serializer);
+        <String>::sse_encode(self.path, serializer);
+        <i64>::sse_encode(self.byte_len, serializer);
+        <i64>::sse_encode(self.created_at_ms, serializer);
+    }
+}
+
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
+    }
+}
+
+impl SseEncode for crate::db::CloudMediaBackup {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.attachment_sha256, serializer);
+        <String>::sse_encode(self.desired_variant, serializer);
+        <String>::sse_encode(self.status, serializer);
+        <i64>::sse_encode(self.attempts, serializer);
+        <Option<i64>>::sse_encode(self.next_retry_at_ms, serializer);
+        <Option<String>>::sse_encode(self.last_error, serializer);
+        <i64>::sse_encode(self.updated_at_ms, serializer);
+    }
+}
+
+impl SseEncode for crate::db::CloudMediaBackupSummary {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.pending, serializer);
+        <i64>::sse_encode(self.failed, serializer);
+        <i64>::sse_encode(self.uploaded, serializer);
+        <Option<i64>>::sse_encode(self.last_uploaded_at_ms, serializer);
+        <Option<String>>::sse_encode(self.last_error, serializer);
+        <Option<i64>>::sse_encode(self.last_error_at_ms, serializer);
     }
 }
 
@@ -3347,6 +4159,16 @@ impl SseEncode for Vec<crate::db::Attachment> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::db::Attachment>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::db::CloudMediaBackup> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::db::CloudMediaBackup>::sse_encode(item, serializer);
         }
     }
 }
