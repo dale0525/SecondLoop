@@ -852,7 +852,7 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     vector::register_sqlite_vec()?;
     let conn = Connection::open(db_path(app_dir))?;
     conn.busy_timeout(Duration::from_millis(5_000))?;
-    conn.pragma_update(None, "journal_mode", &"WAL")?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
     migrate(&conn)?;
     Ok(conn)
 }
