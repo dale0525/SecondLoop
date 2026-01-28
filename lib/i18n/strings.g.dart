@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 714 (357 per locale)
+/// Strings: 720 (360 per locale)
 ///
-/// Built on 2026-01-28 at 01:40 UTC
+/// Built on 2026-01-28 at 05:19 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -344,6 +344,9 @@ class _StringsChatEn {
 
   // Translations
   String get mainStreamTitle => 'Main Stream';
+  String get attachTooltip => 'Add attachment';
+  String get attachPickMedia => 'Choose media';
+  String get attachTakePhoto => 'Take photo';
   String get cameraTooltip => 'Take photo';
   String get photoMessage => 'Photo';
   String get editMessageTitle => 'Edit message';
@@ -2064,6 +2067,12 @@ class _StringsChatZhCn extends _StringsChatEn {
   // Translations
   @override
   String get mainStreamTitle => '主线';
+  @override
+  String get attachTooltip => '添加附件';
+  @override
+  String get attachPickMedia => '选择媒体文件';
+  @override
+  String get attachTakePhoto => '拍照';
   @override
   String get cameraTooltip => '拍照';
   @override
@@ -4682,6 +4691,12 @@ extension on Translations {
         return 'Unlocking…';
       case 'chat.mainStreamTitle':
         return 'Main Stream';
+      case 'chat.attachTooltip':
+        return 'Add attachment';
+      case 'chat.attachPickMedia':
+        return 'Choose media';
+      case 'chat.attachTakePhoto':
+        return 'Take photo';
       case 'chat.cameraTooltip':
         return 'Take photo';
       case 'chat.photoMessage':
@@ -5424,6 +5439,12 @@ extension on _StringsZhCn {
         return '正在解锁…';
       case 'chat.mainStreamTitle':
         return '主线';
+      case 'chat.attachTooltip':
+        return '添加附件';
+      case 'chat.attachPickMedia':
+        return '选择媒体文件';
+      case 'chat.attachTakePhoto':
+        return '拍照';
       case 'chat.cameraTooltip':
         return '拍照';
       case 'chat.photoMessage':

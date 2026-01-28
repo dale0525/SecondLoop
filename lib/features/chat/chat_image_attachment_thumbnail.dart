@@ -4,7 +4,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -16,11 +15,13 @@ import '../../ui/sl_tokens.dart';
 class ChatImageAttachmentThumbnail extends StatefulWidget {
   const ChatImageAttachmentThumbnail({
     required this.attachment,
+    required this.attachmentsBackend,
     required this.onTap,
     super.key,
   });
 
   final Attachment attachment;
+  final AttachmentsBackend attachmentsBackend;
   final VoidCallback onTap;
 
   @override
@@ -35,22 +36,37 @@ class _ChatImageAttachmentThumbnailState
 
   Future<Uint8List?>? _bytesFuture;
   bool _hasBytes = false;
+  bool _loadingBytes = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   @override
   void initState() {
     super.initState();
-    _bytesFuture = _loadBytes().then((v) {
-      _hasBytes = v != null;
-      return v;
-    });
     _listenConnectivity();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_bytesFuture == null) {
+      _startBytesLoad();
+    }
   }
 
   @override
   void dispose() {
     _connectivitySub?.cancel();
     super.dispose();
+  }
+
+  void _startBytesLoad() {
+    _loadingBytes = true;
+    _bytesFuture = _loadBytes().then((v) {
+      _hasBytes = v != null && v.isNotEmpty;
+      return v;
+    }).whenComplete(() {
+      _loadingBytes = false;
+    });
   }
 
   void _listenConnectivity() {
@@ -68,14 +84,13 @@ class _ChatImageAttachmentThumbnailState
   }
 
   Future<void> _maybeRetry() async {
+    if (_loadingBytes) return;
     final allowed = await _shouldAutoDownloadNow();
     if (!allowed) return;
     if (!mounted) return;
+    if (_loadingBytes) return;
     setState(() {
-      _bytesFuture = _loadBytes().then((v) {
-        _hasBytes = v != null;
-        return v;
-      });
+      _startBytesLoad();
     });
   }
 
@@ -102,13 +117,10 @@ class _ChatImageAttachmentThumbnailState
   }
 
   Future<Uint8List?> _loadBytes() async {
-    final backend = AppBackendScope.of(context);
-    if (backend is! AttachmentsBackend) return null;
-    final attachmentsBackend = backend as AttachmentsBackend;
     final sessionKey = SessionScope.of(context).sessionKey;
 
     try {
-      return await attachmentsBackend.readAttachmentBytes(
+      return await widget.attachmentsBackend.readAttachmentBytes(
         sessionKey,
         sha256: widget.attachment.sha256,
       );
@@ -125,7 +137,7 @@ class _ChatImageAttachmentThumbnailState
       if (!didDownload) return null;
 
       try {
-        return await attachmentsBackend.readAttachmentBytes(
+        return await widget.attachmentsBackend.readAttachmentBytes(
           sessionKey,
           sha256: widget.attachment.sha256,
         );

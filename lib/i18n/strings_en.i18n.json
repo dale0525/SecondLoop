@@ -363,6 +363,9 @@
   },
   "chat": {
     "mainStreamTitle": "Main Stream",
+    "attachTooltip": "Add attachment",
+    "attachPickMedia": "Choose media",
+    "attachTakePhoto": "Take photo",
     "cameraTooltip": "Take photo",
     "photoMessage": "Photo",
     "editMessageTitle": "Edit message",

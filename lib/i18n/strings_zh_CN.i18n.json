@@ -363,6 +363,9 @@
   },
   "chat": {
     "mainStreamTitle": "主线",
+    "attachTooltip": "添加附件",
+    "attachPickMedia": "选择媒体文件",
+    "attachTakePhoto": "拍照",
     "cameraTooltip": "拍照",
     "photoMessage": "照片",
     "editMessageTitle": "编辑消息",

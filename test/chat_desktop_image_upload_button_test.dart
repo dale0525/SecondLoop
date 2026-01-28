@@ -54,9 +54,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('chat_camera')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_attach')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('chat_camera')));
+      await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('chat_attach_pick_media')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('chat_attach_pick_media')));
       await tester.pumpAndSettle();
 
       expect(backend.insertAttachmentCalls, 1);

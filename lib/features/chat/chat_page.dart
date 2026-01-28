@@ -67,6 +67,8 @@ class _ChatPageState extends State<ChatPage> {
   Future<_TodoAgendaSummary>? _agendaFuture;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
+  final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
+      <String, List<Attachment>>{};
   List<Message> _paginatedMessages = <Message>[];
   bool _loadingMoreMessages = false;
   bool _hasMoreMessages = true;
@@ -890,7 +892,6 @@ class _ChatPageState extends State<ChatPage> {
   void _refresh() {
     setState(() {
       if (_usePagination) {
-        _paginatedMessages = <Message>[];
         _loadingMoreMessages = false;
         _hasMoreMessages = true;
       }
@@ -971,6 +972,52 @@ class _ChatPageState extends State<ChatPage> {
       attachmentSha256: attachmentSha256,
       desiredVariant: 'original',
       nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> _pickAndSendMedia() async {
+    if (_isDesktopPlatform) {
+      return _pickAndSendImageFromFile();
+    }
+    return _pickAndSendImageFromGallery();
+  }
+
+  Future<void> _openAttachmentSheet() async {
+    if (_sending) return;
+    if (_asking) return;
+    if (!_supportsImageUpload) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const ValueKey('chat_attach_pick_media'),
+                leading: const Icon(Icons.photo_library_rounded),
+                title: Text(context.t.chat.attachPickMedia),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_pickAndSendMedia());
+                },
+              ),
+              if (_supportsCamera)
+                ListTile(
+                  key: const ValueKey('chat_attach_take_photo'),
+                  leading: const Icon(Icons.photo_camera_rounded),
+                  title: Text(context.t.chat.attachTakePhoto),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_captureAndSendPhoto());
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2303,18 +2350,8 @@ class _ChatPageState extends State<ChatPage> {
                 child: FutureBuilder(
                   future: _messagesFuture,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          context.t.errors
-                              .loadFailed(error: '${snapshot.error}'),
-                        ),
-                      );
-                    }
-
+                    final isLoading =
+                        snapshot.connectionState != ConnectionState.done;
                     final messages = _usePagination
                         ? _paginatedMessages
                         : snapshot.data ?? const <Message>[];
@@ -2323,9 +2360,27 @@ class _ChatPageState extends State<ChatPage> {
                     final extraCount = (hasPendingAssistant ? 1 : 0) +
                         (pendingQuestion == null ? 0 : 1);
                     if (messages.isEmpty && extraCount == 0) {
+                      if (isLoading) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            context.t.errors
+                                .loadFailed(error: '${snapshot.error}'),
+                          ),
+                        );
+                      }
                       return Center(
                         child: Text(context.t.chat.noMessagesYet),
                       );
+                    }
+
+                    final messageIndexById = <String, int>{};
+                    for (var i = 0; i < messages.length; i++) {
+                      messageIndexById[messages[i].id] = i;
                     }
 
                     return ListView.builder(
@@ -2335,6 +2390,35 @@ class _ChatPageState extends State<ChatPage> {
                       controller: _usePagination ? _scrollController : null,
                       reverse: _usePagination,
                       padding: const EdgeInsets.symmetric(vertical: 16),
+                      findChildIndexCallback: (key) {
+                        if (key is! ValueKey) return null;
+                        final v = key.value;
+                        if (v is! String) return null;
+                        if (!v.startsWith('chat_message_row_')) return null;
+                        final messageId =
+                            v.substring('chat_message_row_'.length);
+
+                        if (messageId == 'pending_assistant') {
+                          if (!hasPendingAssistant) return null;
+                          if (_usePagination) return 0;
+                          return messages.length +
+                              (pendingQuestion == null ? 0 : 1);
+                        }
+
+                        if (messageId == 'pending_user') {
+                          if (pendingQuestion == null) return null;
+                          if (_usePagination) {
+                            return hasPendingAssistant ? 1 : 0;
+                          }
+                          return messages.length;
+                        }
+
+                        final messageIndex = messageIndexById[messageId];
+                        if (messageIndex == null) return null;
+                        return _usePagination
+                            ? messageIndex + extraCount
+                            : messageIndex;
+                      },
                       itemCount: messages.length + extraCount,
                       itemBuilder: (context, index) {
                         final backend = AppBackendScope.of(context);
@@ -2704,6 +2788,9 @@ class _ChatPageState extends State<ChatPage> {
                                         ),
                                       if (supportsAttachments)
                                         FutureBuilder(
+                                          initialData:
+                                              _attachmentsCacheByMessageId[
+                                                  stableMsg.id],
                                           future: _attachmentsFuturesByMessageId
                                               .putIfAbsent(
                                             stableMsg.id,
@@ -2711,7 +2798,12 @@ class _ChatPageState extends State<ChatPage> {
                                                 .listMessageAttachments(
                                               sessionKey,
                                               stableMsg.id,
-                                            ),
+                                            )
+                                                .then((items) {
+                                              _attachmentsCacheByMessageId[
+                                                  stableMsg.id] = items;
+                                              return items;
+                                            }),
                                           ),
                                           builder: (context, snapshot) {
                                             final items = snapshot.data ??
@@ -2749,6 +2841,8 @@ class _ChatPageState extends State<ChatPage> {
                                                                 ),
                                                                 attachment:
                                                                     attachment,
+                                                                attachmentsBackend:
+                                                                    attachmentsBackend,
                                                                 onTap: () {
                                                                   Navigator.of(
                                                                           context)
@@ -2800,6 +2894,7 @@ class _ChatPageState extends State<ChatPage> {
                         );
 
                         return Padding(
+                          key: ValueKey('chat_message_row_${stableMsg.id}'),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 4,
@@ -3041,21 +3136,18 @@ class _ChatPageState extends State<ChatPage> {
                           ),
                           const SizedBox(width: 8),
                           if (_supportsImageUpload) ...[
-                            GestureDetector(
-                              onLongPress: (_sending || _asking)
-                                  ? null
-                                  : _pickAndSendImageFromGallery,
+                            Semantics(
+                              label: context.t.chat.attachTooltip,
+                              button: true,
                               child: SlIconButton(
-                                key: const ValueKey('chat_camera'),
-                                icon: Icons.photo_camera_rounded,
+                                key: const ValueKey('chat_attach'),
+                                icon: Icons.add_rounded,
                                 size: 44,
-                                iconSize: 20,
-                                tooltip: context.t.chat.cameraTooltip,
+                                iconSize: 22,
+                                tooltip: context.t.chat.attachTooltip,
                                 onPressed: (_sending || _asking)
                                     ? null
-                                    : (_isDesktopPlatform
-                                        ? _pickAndSendImageFromFile
-                                        : _captureAndSendPhoto),
+                                    : _openAttachmentSheet,
                               ),
                             ),
                             const SizedBox(width: 8),
