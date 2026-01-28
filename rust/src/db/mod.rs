@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -850,6 +851,8 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     fs::create_dir_all(app_dir)?;
     vector::register_sqlite_vec()?;
     let conn = Connection::open(db_path(app_dir))?;
+    conn.busy_timeout(Duration::from_millis(5_000))?;
+    conn.pragma_update(None, "journal_mode", &"WAL")?;
     migrate(&conn)?;
     Ok(conn)
 }

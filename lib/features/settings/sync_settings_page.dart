@@ -129,7 +129,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       _chatThumbnailsWifiOnly = chatThumbnailsWifiOnly;
       _cloudMediaBackupEnabled = cloudMediaBackupEnabled;
       _cloudMediaBackupWifiOnly = cloudMediaBackupWifiOnly;
-      _cloudMediaBackupSummary = backendType == SyncBackendType.managedVault
+      _cloudMediaBackupSummary = (backendType == SyncBackendType.managedVault ||
+              backendType == SyncBackendType.webdav)
           ? _maybeLoadCloudMediaBackupSummary()
           : null;
       if (hasSyncKey) {
@@ -209,8 +210,17 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
+      ),
+    );
   }
 
   Future<void> _runConnectionTest() async {
@@ -246,11 +256,27 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     try {
       final backend = AppBackendScope.of(context);
 
+      final requiresSyncKey = _backendType == SyncBackendType.webdav ||
+          _backendType == SyncBackendType.managedVault;
+      final passphrase = _optionalTrimmed(_syncPassphraseController);
+      final hasNewPassphrase = passphrase != null && !_passphraseIsPlaceholder;
+      if (requiresSyncKey && !hasNewPassphrase) {
+        final existing = await _loadSyncKey();
+        if (existing == null || existing.length != 32) {
+          _showSnack(t.sync.missingSyncKey);
+          return;
+        }
+      }
+
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final passphrase = _optionalTrimmed(_syncPassphraseController);
-      if (passphrase != null && !_passphraseIsPlaceholder) {
+      if (hasNewPassphrase) {
+        final passphrase = _optionalTrimmed(_syncPassphraseController);
+        if (passphrase == null) {
+          _showSnack(t.sync.missingSyncKey);
+          return;
+        }
         final derived = await backend.deriveSyncKey(passphrase);
         await _store.writeSyncKey(derived);
         _syncPassphraseController.text = _kPassphrasePlaceholder;
@@ -297,15 +323,25 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         return;
       }
 
+      final useMediaQueue = await _store.readCloudMediaBackupEnabled();
       final pushed = await (switch (_backendType) {
-        SyncBackendType.webdav => backend.syncWebdavPush(
-            sessionKey,
-            syncKey,
-            baseUrl: _requiredTrimmed(_baseUrlController),
-            username: _optionalTrimmed(_usernameController),
-            password: _optionalTrimmed(_passwordController),
-            remoteRoot: _requiredTrimmed(_remoteRootController),
-          ),
+        SyncBackendType.webdav => useMediaQueue
+            ? backend.syncWebdavPushOpsOnly(
+                sessionKey,
+                syncKey,
+                baseUrl: _requiredTrimmed(_baseUrlController),
+                username: _optionalTrimmed(_usernameController),
+                password: _optionalTrimmed(_passwordController),
+                remoteRoot: _requiredTrimmed(_remoteRootController),
+              )
+            : backend.syncWebdavPush(
+                sessionKey,
+                syncKey,
+                baseUrl: _requiredTrimmed(_baseUrlController),
+                username: _optionalTrimmed(_usernameController),
+                password: _optionalTrimmed(_passwordController),
+                remoteRoot: _requiredTrimmed(_remoteRootController),
+              ),
         SyncBackendType.localDir => backend.syncLocaldirPush(
             sessionKey,
             syncKey,
@@ -323,7 +359,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             if (baseUrl == null || baseUrl.trim().isEmpty) {
               throw StateError('missing_managed_vault_base_url');
             }
-            final useMediaQueue = await _store.readCloudMediaBackupEnabled();
             if (useMediaQueue) {
               return backend.syncManagedVaultPushOpsOnly(
                 sessionKey,
@@ -514,14 +549,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         return;
       }
 
-      if (_backendType != SyncBackendType.managedVault) {
-        _showSnack(t.sync.mediaBackup.managedVaultOnly);
-        return;
-      }
-
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
-      final cloudAuth = CloudAuthScope.of(context).controller;
 
       final syncKey = await _loadSyncKey();
       if (!mounted) return;
@@ -530,40 +559,76 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         return;
       }
 
-      final idToken = await cloudAuth.getIdToken();
-      if (!mounted) return;
-      if (idToken == null || idToken.trim().isEmpty) {
-        _showSnack(t.sync.cloudManagedVault.signInRequired);
-        return;
-      }
+      CloudMediaBackupRunner? runner;
+      switch (_backendType) {
+        case SyncBackendType.webdav:
+          final baseUrl = _requiredTrimmed(_baseUrlController);
+          if (baseUrl.isEmpty) {
+            _showSnack(t.sync.baseUrlRequired);
+            return;
+          }
+          runner = CloudMediaBackupRunner(
+            store: BackendCloudMediaBackupStore(
+              backend: backend,
+              sessionKey: sessionKey,
+            ),
+            client: WebDavCloudMediaBackupClient(
+              backend: backend,
+              sessionKey: sessionKey,
+              syncKey: syncKey,
+              baseUrl: baseUrl,
+              username: _optionalTrimmed(_usernameController),
+              password: _optionalTrimmed(_passwordController),
+              remoteRoot: _requiredTrimmed(_remoteRootController),
+            ),
+            settings: CloudMediaBackupRunnerSettings(
+              enabled: true,
+              wifiOnly: _cloudMediaBackupWifiOnly,
+            ),
+            getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
+          );
+          break;
+        case SyncBackendType.managedVault:
+          final cloudAuth = CloudAuthScope.of(context).controller;
+          final idToken = await cloudAuth.getIdToken();
+          if (!mounted) return;
+          if (idToken == null || idToken.trim().isEmpty) {
+            _showSnack(t.sync.cloudManagedVault.signInRequired);
+            return;
+          }
 
-      final vaultId = cloudAuth.uid ?? '';
-      final baseUrl = await _store.resolveManagedVaultBaseUrl();
-      if (!mounted) return;
-      if (baseUrl == null || baseUrl.trim().isEmpty) {
-        _showSnack(t.sync.baseUrlRequired);
-        return;
-      }
+          final vaultId = cloudAuth.uid ?? '';
+          final baseUrl = await _store.resolveManagedVaultBaseUrl();
+          if (!mounted) return;
+          if (baseUrl == null || baseUrl.trim().isEmpty) {
+            _showSnack(t.sync.baseUrlRequired);
+            return;
+          }
 
-      final runner = CloudMediaBackupRunner(
-        store: BackendCloudMediaBackupStore(
-          backend: backend,
-          sessionKey: sessionKey,
-        ),
-        client: ManagedVaultCloudMediaBackupClient(
-          backend: backend,
-          sessionKey: sessionKey,
-          syncKey: syncKey,
-          baseUrl: baseUrl,
-          vaultId: vaultId,
-          idToken: idToken,
-        ),
-        settings: CloudMediaBackupRunnerSettings(
-          enabled: true,
-          wifiOnly: _cloudMediaBackupWifiOnly,
-        ),
-        getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
-      );
+          runner = CloudMediaBackupRunner(
+            store: BackendCloudMediaBackupStore(
+              backend: backend,
+              sessionKey: sessionKey,
+            ),
+            client: ManagedVaultCloudMediaBackupClient(
+              backend: backend,
+              sessionKey: sessionKey,
+              syncKey: syncKey,
+              baseUrl: baseUrl,
+              vaultId: vaultId,
+              idToken: idToken,
+            ),
+            settings: CloudMediaBackupRunnerSettings(
+              enabled: true,
+              wifiOnly: _cloudMediaBackupWifiOnly,
+            ),
+            getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
+          );
+          break;
+        case SyncBackendType.localDir:
+          _showSnack(t.sync.mediaBackup.managedVaultOnly);
+          return;
+      }
 
       var result = await runner.runOnce(allowCellular: false);
       if (!mounted) return;
@@ -907,13 +972,15 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          if (_backendType == SyncBackendType.managedVault) ...[
+          if (_backendType == SyncBackendType.managedVault ||
+              _backendType == SyncBackendType.webdav) ...[
             sectionTitle(context.t.sync.sections.mediaBackup),
             sectionCard(
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SwitchListTile(
+                    key: const ValueKey('sync_media_backup_enabled'),
                     contentPadding: EdgeInsets.zero,
                     title: Text(context.t.sync.mediaBackup.title),
                     subtitle: Text(context.t.sync.mediaBackup.subtitle),
@@ -926,6 +993,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
+                    key: const ValueKey('sync_media_backup_wifi_only'),
                     contentPadding: EdgeInsets.zero,
                     title: Text(context.t.sync.mediaBackup.wifiOnlyTitle),
                     subtitle: Text(context.t.sync.mediaBackup.wifiOnlySubtitle),
@@ -1054,6 +1122,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   decoration: InputDecoration(
                     labelText: context.t.sync.fields.passphrase.label,
                     helperText: context.t.sync.fields.passphrase.helper,
+                    helperMaxLines: 3,
                   ),
                   enabled: !_busy,
                   obscureText: true,

@@ -257,6 +257,46 @@ final class ManagedVaultCloudMediaBackupClient
   }
 }
 
+final class WebDavCloudMediaBackupClient implements CloudMediaBackupClient {
+  WebDavCloudMediaBackupClient({
+    required this.backend,
+    required Uint8List sessionKey,
+    required Uint8List syncKey,
+    required this.baseUrl,
+    this.username,
+    this.password,
+    required this.remoteRoot,
+  })  : _sessionKey = Uint8List.fromList(sessionKey),
+        _syncKey = Uint8List.fromList(syncKey);
+
+  final AppBackend backend;
+  final Uint8List _sessionKey;
+  final Uint8List _syncKey;
+  final String baseUrl;
+  final String? username;
+  final String? password;
+  final String remoteRoot;
+
+  @override
+  Future<void> upload({
+    required String attachmentSha256,
+    required String desiredVariant,
+  }) async {
+    final ok = await backend.syncWebdavUploadAttachmentBytes(
+      _sessionKey,
+      _syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+      sha256: attachmentSha256,
+    );
+    if (!ok) {
+      throw StateError('missing_local_attachment_bytes:$attachmentSha256');
+    }
+  }
+}
+
 final class ConnectivityCloudMediaBackupNetworkProvider {
   ConnectivityCloudMediaBackupNetworkProvider({Connectivity? connectivity})
       : _connectivity = connectivity ?? Connectivity();

@@ -257,6 +257,17 @@ abstract class AppBackend {
     required String remoteRoot,
   });
 
+  Future<int> syncWebdavPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) {
+    throw UnimplementedError('syncWebdavPushOpsOnly');
+  }
+
   Future<int> syncWebdavPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -276,6 +287,18 @@ abstract class AppBackend {
     required String sha256,
   }) {
     throw UnimplementedError('syncWebdavDownloadAttachmentBytes');
+  }
+
+  Future<bool> syncWebdavUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) {
+    throw UnimplementedError('syncWebdavUploadAttachmentBytes');
   }
 
   Future<void> syncLocaldirTestConnection({

@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::{STANDARD as B64_STD, URL_SAFE_NO_PAD as B64_URL};
@@ -62,6 +63,16 @@ struct PullOp {
     ciphertext_b64: String,
 }
 
+const PULL_BIN_MAGIC_V1: &[u8; 5] = b"SLVB1";
+
+#[derive(Debug)]
+struct PullOpBin {
+    device_id: String,
+    seq: i64,
+    op_id: String,
+    ciphertext: Vec<u8>,
+}
+
 #[derive(Debug, Serialize)]
 struct ClearDeviceRequest<'a> {
     device_id: &'a str,
@@ -84,7 +95,8 @@ fn scope_id(base_url: &str, vault_id: &str) -> String {
 }
 
 fn client() -> Result<Client> {
-    Ok(Client::builder().build()?)
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    Ok(CLIENT.get_or_init(Client::new).clone())
 }
 
 fn url(base_url: &str, path: &str) -> Result<String> {
@@ -125,6 +137,99 @@ fn update_since_map(conn: &Connection, scope_id: &str, next: &BTreeMap<String, i
         super::kv_set_i64(conn, &key, *last_seq)?;
     }
     Ok(())
+}
+
+fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
+    if bytes.len() < PULL_BIN_MAGIC_V1.len() + 4 {
+        return Err(anyhow!("invalid pull_bin response: too short"));
+    }
+    if &bytes[..PULL_BIN_MAGIC_V1.len()] != PULL_BIN_MAGIC_V1 {
+        return Err(anyhow!("invalid pull_bin response: bad magic"));
+    }
+
+    let mut cursor = PULL_BIN_MAGIC_V1.len();
+    let count = u32::from_le_bytes(
+        bytes[cursor..cursor + 4]
+            .try_into()
+            .map_err(|_| anyhow!("invalid pull_bin response: count"))?,
+    ) as usize;
+    cursor += 4;
+
+    let mut out: Vec<PullOpBin> = Vec::with_capacity(count);
+    for _ in 0..count {
+        if cursor + 2 > bytes.len() {
+            return Err(anyhow!(
+                "invalid pull_bin response: truncated device_id_len"
+            ));
+        }
+        let device_len = u16::from_le_bytes(
+            bytes[cursor..cursor + 2]
+                .try_into()
+                .map_err(|_| anyhow!("invalid pull_bin response: device_id_len"))?,
+        ) as usize;
+        cursor += 2;
+
+        if cursor + device_len > bytes.len() {
+            return Err(anyhow!("invalid pull_bin response: truncated device_id"));
+        }
+        let device_id = String::from_utf8(bytes[cursor..cursor + device_len].to_vec())
+            .map_err(|_| anyhow!("invalid pull_bin response: device_id not utf-8"))?;
+        cursor += device_len;
+
+        if cursor + 8 > bytes.len() {
+            return Err(anyhow!("invalid pull_bin response: truncated seq"));
+        }
+        let seq = i64::from_le_bytes(
+            bytes[cursor..cursor + 8]
+                .try_into()
+                .map_err(|_| anyhow!("invalid pull_bin response: seq"))?,
+        );
+        cursor += 8;
+
+        if cursor + 2 > bytes.len() {
+            return Err(anyhow!("invalid pull_bin response: truncated op_id_len"));
+        }
+        let op_id_len = u16::from_le_bytes(
+            bytes[cursor..cursor + 2]
+                .try_into()
+                .map_err(|_| anyhow!("invalid pull_bin response: op_id_len"))?,
+        ) as usize;
+        cursor += 2;
+
+        if cursor + op_id_len > bytes.len() {
+            return Err(anyhow!("invalid pull_bin response: truncated op_id"));
+        }
+        let op_id = String::from_utf8(bytes[cursor..cursor + op_id_len].to_vec())
+            .map_err(|_| anyhow!("invalid pull_bin response: op_id not utf-8"))?;
+        cursor += op_id_len;
+
+        if cursor + 4 > bytes.len() {
+            return Err(anyhow!(
+                "invalid pull_bin response: truncated ciphertext_len"
+            ));
+        }
+        let cipher_len = u32::from_le_bytes(
+            bytes[cursor..cursor + 4]
+                .try_into()
+                .map_err(|_| anyhow!("invalid pull_bin response: ciphertext_len"))?,
+        ) as usize;
+        cursor += 4;
+
+        if cursor + cipher_len > bytes.len() {
+            return Err(anyhow!("invalid pull_bin response: truncated ciphertext"));
+        }
+        let ciphertext = bytes[cursor..cursor + cipher_len].to_vec();
+        cursor += cipher_len;
+
+        out.push(PullOpBin {
+            device_id,
+            seq,
+            op_id,
+            ciphertext,
+        });
+    }
+
+    Ok(out)
 }
 
 fn ensure_device_registered(
@@ -464,6 +569,20 @@ fn upload_attachment_bytes_if_present(
     Ok(true)
 }
 
+fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    match f() {
+        Ok(v) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(v)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
 pub fn pull(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -481,64 +600,111 @@ pub fn pull(
     let scope_id = scope_id(base_url, vault_id);
     let mut since = load_since_map(conn, &scope_id)?;
 
-    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_json = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_bin = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_bin"))?;
     let mut applied: u64 = 0;
+    let mut pull_bin_supported: Option<bool> = None;
     loop {
+        let request = PullRequest {
+            device_id: local_device_id.as_str(),
+            since: since.clone(),
+            limit: PULL_LIMIT,
+        };
+
+        if pull_bin_supported != Some(false) {
+            let resp = http
+                .post(&endpoint_bin)
+                .bearer_auth(id_token)
+                .json(&request)
+                .send()?;
+
+            let status = resp.status();
+            if status.as_u16() == 404 {
+                pull_bin_supported = Some(false);
+            } else {
+                if !status.is_success() {
+                    let text = resp.text().unwrap_or_default();
+                    return Err(anyhow!(
+                        "managed-vault pull_bin failed: HTTP {status} {text}"
+                    ));
+                }
+
+                pull_bin_supported = Some(true);
+                let body = resp.bytes()?;
+                let ops = decode_pull_bin_response(body.as_ref())?;
+
+                let mut next_since = since.clone();
+                for op in &ops {
+                    next_since
+                        .entry(op.device_id.clone())
+                        .and_modify(|v| *v = (*v).max(op.seq))
+                        .or_insert(op.seq);
+                }
+
+                if next_since == since && !ops.is_empty() {
+                    return Err(anyhow!("managed-vault pull made no progress"));
+                }
+
+                let mut batch_applied = 0u64;
+                with_immediate_transaction(conn, || {
+                    for op in &ops {
+                        let plaintext = decrypt_bytes(
+                            sync_key,
+                            &op.ciphertext,
+                            format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
+                        )?;
+                        let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+                        let op_id = op_json["op_id"]
+                            .as_str()
+                            .ok_or_else(|| anyhow!("sync op missing op_id"))?;
+                        if op_id != op.op_id.as_str() {
+                            return Err(anyhow!(
+                                "managed vault pull op_id mismatch: envelope={} plaintext={}",
+                                op.op_id,
+                                op_id
+                            ));
+                        }
+
+                        let inserted =
+                            super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+                        if !inserted {
+                            continue;
+                        }
+
+                        super::apply_op(conn, db_key, &op_json)?;
+                        batch_applied += 1;
+                    }
+
+                    if next_since != since {
+                        update_since_map(conn, &scope_id, &next_since)?;
+                    }
+
+                    Ok(())
+                })?;
+                applied += batch_applied;
+                since = next_since;
+
+                if ops.len() < (PULL_LIMIT as usize) {
+                    break;
+                }
+                continue;
+            }
+        }
+
         let resp = http
-            .post(&endpoint)
+            .post(&endpoint_json)
             .bearer_auth(id_token)
-            .json(&PullRequest {
-                device_id: local_device_id.as_str(),
-                since: since.clone(),
-                limit: PULL_LIMIT,
-            })
+            .json(&request)
             .send()?;
 
         let status = resp.status();
-        let text = resp.text().unwrap_or_default();
         if !status.is_success() {
+            let text = resp.text().unwrap_or_default();
             return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
         }
 
-        let parsed: PullResponse = serde_json::from_str(&text)?;
-
-        for op in &parsed.ops {
-            let ciphertext = B64_STD
-                .decode(op.ciphertext_b64.as_bytes())
-                .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
-            let plaintext = decrypt_bytes(
-                sync_key,
-                &ciphertext,
-                format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-            )?;
-            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-            let op_id = op_json["op_id"]
-                .as_str()
-                .ok_or_else(|| anyhow!("sync op missing op_id"))?
-                .to_string();
-            if op_id != op.op_id {
-                return Err(anyhow!(
-                    "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                    op.op_id,
-                    op_id
-                ));
-            }
-
-            let seen: Option<i64> = conn
-                .query_row(
-                    r#"SELECT 1 FROM oplog WHERE op_id = ?1"#,
-                    params![op_id.as_str()],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if seen.is_some() {
-                continue;
-            }
-
-            super::apply_op(conn, db_key, &op_json)?;
-            super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-            applied += 1;
-        }
+        let body = resp.bytes()?;
+        let parsed: PullResponse = serde_json::from_slice(body.as_ref())?;
 
         let mut next_since = since.clone();
         for (device_id, last_seq) in &parsed.next {
@@ -549,8 +715,46 @@ pub fn pull(
             return Err(anyhow!("managed-vault pull made no progress"));
         }
 
+        let mut batch_applied = 0u64;
+        with_immediate_transaction(conn, || {
+            for op in &parsed.ops {
+                let ciphertext = B64_STD
+                    .decode(op.ciphertext_b64.as_bytes())
+                    .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
+                let plaintext = decrypt_bytes(
+                    sync_key,
+                    &ciphertext,
+                    format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
+                )?;
+                let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+                let op_id = op_json["op_id"]
+                    .as_str()
+                    .ok_or_else(|| anyhow!("sync op missing op_id"))?;
+                if op_id != op.op_id.as_str() {
+                    return Err(anyhow!(
+                        "managed vault pull op_id mismatch: envelope={} plaintext={}",
+                        op.op_id,
+                        op_id
+                    ));
+                }
+
+                let inserted = super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+                if !inserted {
+                    continue;
+                }
+
+                super::apply_op(conn, db_key, &op_json)?;
+                batch_applied += 1;
+            }
+
+            if next_since != since {
+                update_since_map(conn, &scope_id, &next_since)?;
+            }
+
+            Ok(())
+        })?;
+        applied += batch_applied;
         since = next_since;
-        update_since_map(conn, &scope_id, &since)?;
 
         if parsed.ops.len() < (PULL_LIMIT as usize) {
             break;

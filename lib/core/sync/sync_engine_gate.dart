@@ -190,14 +190,28 @@ final class _AppBackendSyncRunner implements SyncRunner {
   @override
   Future<int> push(SyncConfig config) async {
     return switch (config.backendType) {
-      SyncBackendType.webdav => backend.syncWebdavPush(
-          _sessionKey,
-          config.syncKey,
-          baseUrl: config.baseUrl ?? '',
-          username: config.username,
-          password: config.password,
-          remoteRoot: config.remoteRoot,
-        ),
+      SyncBackendType.webdav => () async {
+          final useMediaQueue =
+              await _configStore.readCloudMediaBackupEnabled();
+          if (useMediaQueue) {
+            return backend.syncWebdavPushOpsOnly(
+              _sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              username: config.username,
+              password: config.password,
+              remoteRoot: config.remoteRoot,
+            );
+          }
+          return backend.syncWebdavPush(
+            _sessionKey,
+            config.syncKey,
+            baseUrl: config.baseUrl ?? '',
+            username: config.username,
+            password: config.password,
+            remoteRoot: config.remoteRoot,
+          );
+        }(),
       SyncBackendType.localDir => backend.syncLocaldirPush(
           _sessionKey,
           config.syncKey,

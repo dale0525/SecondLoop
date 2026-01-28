@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 720 (360 per locale)
+/// Strings: 732 (366 per locale)
 ///
-/// Built on 2026-01-28 at 05:19 UTC
+/// Built on 2026-01-28 at 09:02 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1052,7 +1052,7 @@ class _StringsSyncSectionsEn {
   String get automation => 'Auto sync';
   String get backend => 'Sync method';
   String get mediaPreview => 'Media previews';
-  String get mediaBackup => 'Media backup';
+  String get mediaBackup => 'Media uploads';
   String get securityActions => 'Security & manual sync';
 }
 
@@ -1089,35 +1089,36 @@ class _StringsSyncMediaBackupEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Media backup (Cloud)';
-  String get subtitle => 'Backs up photos and files in the background';
-  String get wifiOnlyTitle => 'Back up on Wi‑Fi only';
-  String get wifiOnlySubtitle => 'Save mobile data by backing up only on Wi‑Fi';
+  String get title => 'Media uploads';
+  String get subtitle =>
+      'Uploads encrypted images for cross‑device viewing and memory recall';
+  String get wifiOnlyTitle => 'Upload on Wi‑Fi only';
+  String get wifiOnlySubtitle => 'Avoid using mobile data for large uploads';
   String get description =>
-      'Securely backs up photos and files. It’s not a cloud drive. If a file is missing on this device, it can be downloaded when needed after it’s backed up.';
+      'Uploads encrypted image attachments to your sync storage. Images are downloaded on demand when viewing on another device.';
   String stats(
           {required Object pending,
           required Object failed,
           required Object uploaded}) =>
-      'Waiting ${pending} · Failed ${failed} · Backed up ${uploaded}';
-  String lastUploaded({required Object at}) => 'Last backup: ${at}';
+      'Queued ${pending} · Failed ${failed} · Uploaded ${uploaded}';
+  String lastUploaded({required Object at}) => 'Last upload: ${at}';
   String lastError({required Object error}) => 'Last error: ${error}';
   String lastErrorWithTime({required Object at, required Object error}) =>
       'Last error (${at}): ${error}';
-  String get backfillButton => 'Back up existing photos';
-  String get uploadNowButton => 'Back up now';
+  String get backfillButton => 'Queue existing images';
+  String get uploadNowButton => 'Upload now';
   String backfillEnqueued({required Object count}) =>
-      'Queued ${count} photos for backup';
+      'Queued ${count} images for upload';
   String backfillFailed({required Object error}) =>
-      'Couldn\'t queue old photos: ${error}';
-  String get notEnabled => 'Turn on Media backup first.';
+      'Couldn\'t queue existing images: ${error}';
+  String get notEnabled => 'Turn on Media uploads first.';
   String get managedVaultOnly =>
-      'Media backup is available with SecondLoop Cloud sync.';
+      'Media uploads are available with WebDAV or SecondLoop Cloud sync.';
   String get wifiOnlyBlocked =>
       'Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.';
-  String get uploaded => 'Backup complete';
-  String get nothingToUpload => 'Nothing to back up';
-  String uploadFailed({required Object error}) => 'Backup failed: ${error}';
+  String get uploaded => 'Upload complete';
+  String get nothingToUpload => 'Nothing to upload';
+  String uploadFailed({required Object error}) => 'Upload failed: ${error}';
   late final _StringsSyncMediaBackupCellularDialogEn cellularDialog =
       _StringsSyncMediaBackupCellularDialogEn._(_root);
 }
@@ -1139,6 +1140,11 @@ class _StringsSyncCloudManagedVaultEn {
   String storageQuotaExceededWithUsage(
           {required Object used, required Object limit}) =>
       'Cloud storage is full (${used} / ${limit}). Uploads are paused.';
+  late final _StringsSyncCloudManagedVaultSwitchDialogEn switchDialog =
+      _StringsSyncCloudManagedVaultSwitchDialogEn._(_root);
+  late final _StringsSyncCloudManagedVaultSetPassphraseDialogEn
+      setPassphraseDialog =
+      _StringsSyncCloudManagedVaultSetPassphraseDialogEn._(_root);
 }
 
 // Path: sync.fields
@@ -1578,8 +1584,33 @@ class _StringsSyncMediaBackupCellularDialogEn {
   // Translations
   String get title => 'Use mobile data?';
   String get message =>
-      'Wi‑Fi only is on. Backing up over mobile data may use a lot of data.';
+      'Wi‑Fi only is on. Uploading over mobile data may use a lot of data.';
   String get confirm => 'Use mobile data';
+}
+
+// Path: sync.cloudManagedVault.switchDialog
+class _StringsSyncCloudManagedVaultSwitchDialogEn {
+  _StringsSyncCloudManagedVaultSwitchDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Switch to SecondLoop Cloud sync?';
+  String get message =>
+      'Your subscription is active. Switch your sync method to SecondLoop Cloud? You can change this anytime.';
+  String get cancel => 'Not now';
+  String get confirm => 'Switch';
+}
+
+// Path: sync.cloudManagedVault.setPassphraseDialog
+class _StringsSyncCloudManagedVaultSetPassphraseDialogEn {
+  _StringsSyncCloudManagedVaultSetPassphraseDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Set sync passphrase';
+  String get confirm => 'Save passphrase';
 }
 
 // Path: sync.fields.baseUrl
@@ -3145,7 +3176,7 @@ class _StringsSyncSectionsZhCn extends _StringsSyncSectionsEn {
   @override
   String get mediaPreview => '媒体预览';
   @override
-  String get mediaBackup => '媒体备份';
+  String get mediaBackup => '媒体上传';
   @override
   String get securityActions => '安全与手动同步';
 }
@@ -3197,48 +3228,49 @@ class _StringsSyncMediaBackupZhCn extends _StringsSyncMediaBackupEn {
 
   // Translations
   @override
-  String get title => '媒体备份（云端）';
+  String get title => '媒体上传';
   @override
-  String get subtitle => '在后台备份照片和文件';
+  String get subtitle => '后台上传加密图片，用于跨设备回看与回溯记忆';
   @override
-  String get wifiOnlyTitle => '仅在 Wi‑Fi 下备份';
+  String get wifiOnlyTitle => '仅在 Wi‑Fi 下上传';
   @override
-  String get wifiOnlySubtitle => '节省流量：只在 Wi‑Fi 下后台备份';
+  String get wifiOnlySubtitle => '节省流量：只在 Wi‑Fi 下上传';
   @override
-  String get description => '安全地备份照片和文件（加密存储），不是网盘。附件在本机缺失时，只要之前已备份过，就可以按需下载。';
+  String get description =>
+      '将加密的图片附件上传到同步存储，用于跨设备回看，并支持后续的回溯记忆功能。附件在本机缺失时可按需下载。';
   @override
   String stats(
           {required Object pending,
           required Object failed,
           required Object uploaded}) =>
-      '待备份 ${pending} · 失败 ${failed} · 已备份 ${uploaded}';
+      '待上传 ${pending} · 失败 ${failed} · 已上传 ${uploaded}';
   @override
-  String lastUploaded({required Object at}) => '最近一次备份：${at}';
+  String lastUploaded({required Object at}) => '最近一次上传：${at}';
   @override
   String lastError({required Object error}) => '最近一次错误：${error}';
   @override
   String lastErrorWithTime({required Object at, required Object error}) =>
       '最近一次错误（${at}）：${error}';
   @override
-  String get backfillButton => '备份历史图片';
+  String get backfillButton => '加入历史图片';
   @override
-  String get uploadNowButton => '立即备份';
+  String get uploadNowButton => '立即上传';
   @override
-  String backfillEnqueued({required Object count}) => '已将 ${count} 张图片加入备份队列';
+  String backfillEnqueued({required Object count}) => '已将 ${count} 张图片加入上传队列';
   @override
   String backfillFailed({required Object error}) => '加入失败：${error}';
   @override
-  String get notEnabled => '请先开启媒体备份。';
+  String get notEnabled => '请先开启媒体上传。';
   @override
-  String get managedVaultOnly => '媒体备份仅适用于 SecondLoop 云同步。';
+  String get managedVaultOnly => '媒体上传仅适用于 WebDAV 或 SecondLoop 云同步。';
   @override
   String get wifiOnlyBlocked => '已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。';
   @override
-  String get uploaded => '备份完成';
+  String get uploaded => '上传完成';
   @override
-  String get nothingToUpload => '暂无可备份内容';
+  String get nothingToUpload => '暂无可上传内容';
   @override
-  String uploadFailed({required Object error}) => '备份失败：${error}';
+  String uploadFailed({required Object error}) => '上传失败：${error}';
   @override
   late final _StringsSyncMediaBackupCellularDialogZhCn cellularDialog =
       _StringsSyncMediaBackupCellularDialogZhCn._(_root);
@@ -3268,6 +3300,13 @@ class _StringsSyncCloudManagedVaultZhCn
   String storageQuotaExceededWithUsage(
           {required Object used, required Object limit}) =>
       '云端存储已满（${used} / ${limit}），已暂停上传。';
+  @override
+  late final _StringsSyncCloudManagedVaultSwitchDialogZhCn switchDialog =
+      _StringsSyncCloudManagedVaultSwitchDialogZhCn._(_root);
+  @override
+  late final _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn
+      setPassphraseDialog =
+      _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn._(_root);
 }
 
 // Path: sync.fields
@@ -3934,9 +3973,47 @@ class _StringsSyncMediaBackupCellularDialogZhCn
   @override
   String get title => '使用蜂窝数据？';
   @override
-  String get message => '已开启仅 Wi‑Fi。使用蜂窝数据备份可能消耗较多流量。';
+  String get message => '已开启仅 Wi‑Fi。使用蜂窝数据上传可能消耗较多流量。';
   @override
   String get confirm => '仍然使用';
+}
+
+// Path: sync.cloudManagedVault.switchDialog
+class _StringsSyncCloudManagedVaultSwitchDialogZhCn
+    extends _StringsSyncCloudManagedVaultSwitchDialogEn {
+  _StringsSyncCloudManagedVaultSwitchDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '切换到 SecondLoop Cloud 同步？';
+  @override
+  String get message => '你的订阅已生效。是否将同步方式切换到 SecondLoop Cloud？你可以随时切换回来。';
+  @override
+  String get cancel => '暂不';
+  @override
+  String get confirm => '切换';
+}
+
+// Path: sync.cloudManagedVault.setPassphraseDialog
+class _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn
+    extends _StringsSyncCloudManagedVaultSetPassphraseDialogEn {
+  _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '设置同步口令';
+  @override
+  String get confirm => '保存口令';
 }
 
 // Path: sync.fields.baseUrl
@@ -4807,7 +4884,7 @@ extension on Translations {
       case 'sync.sections.mediaPreview':
         return 'Media previews';
       case 'sync.sections.mediaBackup':
-        return 'Media backup';
+        return 'Media uploads';
       case 'sync.sections.securityActions':
         return 'Security & manual sync';
       case 'sync.autoSync.title':
@@ -4823,53 +4900,53 @@ extension on Translations {
       case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
         return 'If a photo isn\'t on this device yet, download its preview only on Wi‑Fi';
       case 'sync.mediaBackup.title':
-        return 'Media backup (Cloud)';
+        return 'Media uploads';
       case 'sync.mediaBackup.subtitle':
-        return 'Backs up photos and files in the background';
+        return 'Uploads encrypted images for cross‑device viewing and memory recall';
       case 'sync.mediaBackup.wifiOnlyTitle':
-        return 'Back up on Wi‑Fi only';
+        return 'Upload on Wi‑Fi only';
       case 'sync.mediaBackup.wifiOnlySubtitle':
-        return 'Save mobile data by backing up only on Wi‑Fi';
+        return 'Avoid using mobile data for large uploads';
       case 'sync.mediaBackup.description':
-        return 'Securely backs up photos and files. It’s not a cloud drive. If a file is missing on this device, it can be downloaded when needed after it’s backed up.';
+        return 'Uploads encrypted image attachments to your sync storage. Images are downloaded on demand when viewing on another device.';
       case 'sync.mediaBackup.stats':
         return (
                 {required Object pending,
                 required Object failed,
                 required Object uploaded}) =>
-            'Waiting ${pending} · Failed ${failed} · Backed up ${uploaded}';
+            'Queued ${pending} · Failed ${failed} · Uploaded ${uploaded}';
       case 'sync.mediaBackup.lastUploaded':
-        return ({required Object at}) => 'Last backup: ${at}';
+        return ({required Object at}) => 'Last upload: ${at}';
       case 'sync.mediaBackup.lastError':
         return ({required Object error}) => 'Last error: ${error}';
       case 'sync.mediaBackup.lastErrorWithTime':
         return ({required Object at, required Object error}) =>
             'Last error (${at}): ${error}';
       case 'sync.mediaBackup.backfillButton':
-        return 'Back up existing photos';
+        return 'Queue existing images';
       case 'sync.mediaBackup.uploadNowButton':
-        return 'Back up now';
+        return 'Upload now';
       case 'sync.mediaBackup.backfillEnqueued':
-        return ({required Object count}) => 'Queued ${count} photos for backup';
+        return ({required Object count}) => 'Queued ${count} images for upload';
       case 'sync.mediaBackup.backfillFailed':
         return ({required Object error}) =>
-            'Couldn\'t queue old photos: ${error}';
+            'Couldn\'t queue existing images: ${error}';
       case 'sync.mediaBackup.notEnabled':
-        return 'Turn on Media backup first.';
+        return 'Turn on Media uploads first.';
       case 'sync.mediaBackup.managedVaultOnly':
-        return 'Media backup is available with SecondLoop Cloud sync.';
+        return 'Media uploads are available with WebDAV or SecondLoop Cloud sync.';
       case 'sync.mediaBackup.wifiOnlyBlocked':
         return 'Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.';
       case 'sync.mediaBackup.uploaded':
-        return 'Backup complete';
+        return 'Upload complete';
       case 'sync.mediaBackup.nothingToUpload':
-        return 'Nothing to back up';
+        return 'Nothing to upload';
       case 'sync.mediaBackup.uploadFailed':
-        return ({required Object error}) => 'Backup failed: ${error}';
+        return ({required Object error}) => 'Upload failed: ${error}';
       case 'sync.mediaBackup.cellularDialog.title':
         return 'Use mobile data?';
       case 'sync.mediaBackup.cellularDialog.message':
-        return 'Wi‑Fi only is on. Backing up over mobile data may use a lot of data.';
+        return 'Wi‑Fi only is on. Uploading over mobile data may use a lot of data.';
       case 'sync.mediaBackup.cellularDialog.confirm':
         return 'Use mobile data';
       case 'sync.backendLabel':
@@ -4892,6 +4969,18 @@ extension on Translations {
       case 'sync.cloudManagedVault.storageQuotaExceededWithUsage':
         return ({required Object used, required Object limit}) =>
             'Cloud storage is full (${used} / ${limit}). Uploads are paused.';
+      case 'sync.cloudManagedVault.switchDialog.title':
+        return 'Switch to SecondLoop Cloud sync?';
+      case 'sync.cloudManagedVault.switchDialog.message':
+        return 'Your subscription is active. Switch your sync method to SecondLoop Cloud? You can change this anytime.';
+      case 'sync.cloudManagedVault.switchDialog.cancel':
+        return 'Not now';
+      case 'sync.cloudManagedVault.switchDialog.confirm':
+        return 'Switch';
+      case 'sync.cloudManagedVault.setPassphraseDialog.title':
+        return 'Set sync passphrase';
+      case 'sync.cloudManagedVault.setPassphraseDialog.confirm':
+        return 'Save passphrase';
       case 'sync.remoteRootRequired':
         return 'Folder name is required';
       case 'sync.baseUrlRequired':
@@ -5552,7 +5641,7 @@ extension on _StringsZhCn {
       case 'sync.sections.mediaPreview':
         return '媒体预览';
       case 'sync.sections.mediaBackup':
-        return '媒体备份';
+        return '媒体上传';
       case 'sync.sections.securityActions':
         return '安全与手动同步';
       case 'sync.autoSync.title':
@@ -5568,52 +5657,52 @@ extension on _StringsZhCn {
       case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
         return '当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览';
       case 'sync.mediaBackup.title':
-        return '媒体备份（云端）';
+        return '媒体上传';
       case 'sync.mediaBackup.subtitle':
-        return '在后台备份照片和文件';
+        return '后台上传加密图片，用于跨设备回看与回溯记忆';
       case 'sync.mediaBackup.wifiOnlyTitle':
-        return '仅在 Wi‑Fi 下备份';
+        return '仅在 Wi‑Fi 下上传';
       case 'sync.mediaBackup.wifiOnlySubtitle':
-        return '节省流量：只在 Wi‑Fi 下后台备份';
+        return '节省流量：只在 Wi‑Fi 下上传';
       case 'sync.mediaBackup.description':
-        return '安全地备份照片和文件（加密存储），不是网盘。附件在本机缺失时，只要之前已备份过，就可以按需下载。';
+        return '将加密的图片附件上传到同步存储，用于跨设备回看，并支持后续的回溯记忆功能。附件在本机缺失时可按需下载。';
       case 'sync.mediaBackup.stats':
         return (
                 {required Object pending,
                 required Object failed,
                 required Object uploaded}) =>
-            '待备份 ${pending} · 失败 ${failed} · 已备份 ${uploaded}';
+            '待上传 ${pending} · 失败 ${failed} · 已上传 ${uploaded}';
       case 'sync.mediaBackup.lastUploaded':
-        return ({required Object at}) => '最近一次备份：${at}';
+        return ({required Object at}) => '最近一次上传：${at}';
       case 'sync.mediaBackup.lastError':
         return ({required Object error}) => '最近一次错误：${error}';
       case 'sync.mediaBackup.lastErrorWithTime':
         return ({required Object at, required Object error}) =>
             '最近一次错误（${at}）：${error}';
       case 'sync.mediaBackup.backfillButton':
-        return '备份历史图片';
+        return '加入历史图片';
       case 'sync.mediaBackup.uploadNowButton':
-        return '立即备份';
+        return '立即上传';
       case 'sync.mediaBackup.backfillEnqueued':
-        return ({required Object count}) => '已将 ${count} 张图片加入备份队列';
+        return ({required Object count}) => '已将 ${count} 张图片加入上传队列';
       case 'sync.mediaBackup.backfillFailed':
         return ({required Object error}) => '加入失败：${error}';
       case 'sync.mediaBackup.notEnabled':
-        return '请先开启媒体备份。';
+        return '请先开启媒体上传。';
       case 'sync.mediaBackup.managedVaultOnly':
-        return '媒体备份仅适用于 SecondLoop 云同步。';
+        return '媒体上传仅适用于 WebDAV 或 SecondLoop 云同步。';
       case 'sync.mediaBackup.wifiOnlyBlocked':
         return '已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。';
       case 'sync.mediaBackup.uploaded':
-        return '备份完成';
+        return '上传完成';
       case 'sync.mediaBackup.nothingToUpload':
-        return '暂无可备份内容';
+        return '暂无可上传内容';
       case 'sync.mediaBackup.uploadFailed':
-        return ({required Object error}) => '备份失败：${error}';
+        return ({required Object error}) => '上传失败：${error}';
       case 'sync.mediaBackup.cellularDialog.title':
         return '使用蜂窝数据？';
       case 'sync.mediaBackup.cellularDialog.message':
-        return '已开启仅 Wi‑Fi。使用蜂窝数据备份可能消耗较多流量。';
+        return '已开启仅 Wi‑Fi。使用蜂窝数据上传可能消耗较多流量。';
       case 'sync.mediaBackup.cellularDialog.confirm':
         return '仍然使用';
       case 'sync.backendLabel':
@@ -5635,6 +5724,18 @@ extension on _StringsZhCn {
       case 'sync.cloudManagedVault.storageQuotaExceededWithUsage':
         return ({required Object used, required Object limit}) =>
             '云端存储已满（${used} / ${limit}），已暂停上传。';
+      case 'sync.cloudManagedVault.switchDialog.title':
+        return '切换到 SecondLoop Cloud 同步？';
+      case 'sync.cloudManagedVault.switchDialog.message':
+        return '你的订阅已生效。是否将同步方式切换到 SecondLoop Cloud？你可以随时切换回来。';
+      case 'sync.cloudManagedVault.switchDialog.cancel':
+        return '暂不';
+      case 'sync.cloudManagedVault.switchDialog.confirm':
+        return '切换';
+      case 'sync.cloudManagedVault.setPassphraseDialog.title':
+        return '设置同步口令';
+      case 'sync.cloudManagedVault.setPassphraseDialog.confirm':
+        return '保存口令';
       case 'sync.remoteRootRequired':
         return '必须填写文件夹名称';
       case 'sync.baseUrlRequired':

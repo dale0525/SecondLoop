@@ -913,6 +913,23 @@ pub fn sync_webdav_push(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn sync_webdav_push_ops_only(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::push_ops_only(&conn, &key, &sync_key, &remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn sync_webdav_pull(
     app_dir: String,
     key: Vec<u8>,
@@ -945,6 +962,24 @@ pub fn sync_webdav_download_attachment_bytes(
     let conn = db::open(Path::new(&app_dir))?;
     let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
     sync::download_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_webdav_upload_attachment_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    username: Option<String>,
+    password: Option<String>,
+    remote_root: String,
+    sha256: String,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
+    sync::upload_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
 }
 
 #[flutter_rust_bridge::frb]
@@ -982,6 +1017,21 @@ pub fn sync_localdir_push(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn sync_localdir_push_ops_only(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    local_dir: String,
+    remote_root: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
+    sync::push_ops_only(&conn, &key, &sync_key, &remote, &remote_root)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn sync_localdir_pull(
     app_dir: String,
     key: Vec<u8>,
@@ -1010,6 +1060,22 @@ pub fn sync_localdir_download_attachment_bytes(
     let conn = db::open(Path::new(&app_dir))?;
     let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     sync::download_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_localdir_upload_attachment_bytes(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    local_dir: String,
+    remote_root: String,
+    sha256: String,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
+    sync::upload_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
 }
 
 #[flutter_rust_bridge::frb]

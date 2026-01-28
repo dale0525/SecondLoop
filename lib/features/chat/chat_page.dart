@@ -962,7 +962,10 @@ class _ChatPageState extends State<ChatPage> {
   ) async {
     final store = SyncConfigStore();
     final backendType = await store.readBackendType();
-    if (backendType != SyncBackendType.managedVault) return;
+    if (backendType != SyncBackendType.managedVault &&
+        backendType != SyncBackendType.webdav) {
+      return;
+    }
 
     final enabled = await store.readCloudMediaBackupEnabled();
     if (!enabled) return;

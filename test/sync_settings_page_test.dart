@@ -102,7 +102,10 @@ void main() {
       'passphrase',
     );
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
     expect(backend.webdavTestCalls, 1);
@@ -112,6 +115,85 @@ void main() {
     expect(runner.pushCalls, 1);
 
     engine.stop();
+  });
+
+  testWidgets('Save requires sync passphrase (WebDAV)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final backend = _SyncSettingsBackend();
+
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
+      ),
+      'https://example.com/dav',
+    );
+    await tester.pump();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Enter your sync passphrase and tap Save first.'),
+      findsOneWidget,
+    );
+    expect(await store.readWebdavBaseUrl(), isNull);
+  });
+
+  testWidgets('Save requires sync passphrase (SecondLoop Cloud)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+
+    final backend = _SyncSettingsBackend();
+    final cloudAuth = _FakeCloudAuthController();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Enter your sync passphrase and tap Save first.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Manual Pull notifies sync listeners when ops were applied',
@@ -165,7 +247,10 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Download'));
+    final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
+    await tester.ensureVisible(downloadButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(downloadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
     expect(changeNotifications, 1);
@@ -208,7 +293,10 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Download'));
+    final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
+    await tester.ensureVisible(downloadButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(downloadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
     expect(find.text('No new changes'), findsOneWidget);

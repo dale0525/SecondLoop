@@ -46,7 +46,10 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Upload'));
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.ensureVisible(uploadButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(uploadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
     final configured = await store.loadConfiguredSync();
@@ -88,7 +91,10 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Save'));
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
     final configured = await store.loadConfiguredSync();
@@ -133,7 +139,10 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Upload'));
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.ensureVisible(uploadButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(uploadButton) + const Offset(4, 4));
     await tester.pump();
 
     final pushButton = tester.widget<OutlinedButton>(

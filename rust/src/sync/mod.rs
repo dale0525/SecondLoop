@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::thread;
 
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
@@ -37,6 +38,9 @@ pub trait RemoteStore: Send + Sync {
     fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()>;
     fn delete(&self, path: &str) -> Result<()>;
 }
+
+const OPS_PACK_CHUNK_SIZE: i64 = 500;
+const OPS_PACK_MAGIC_V1: &[u8; 5] = b"SLPK1";
 
 static INMEM_NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -228,6 +232,27 @@ pub fn push(
     remote: &impl RemoteStore,
     remote_root: &str,
 ) -> Result<u64> {
+    push_internal(conn, db_key, sync_key, remote, remote_root, true)
+}
+
+pub fn push_ops_only(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+) -> Result<u64> {
+    push_internal(conn, db_key, sync_key, remote, remote_root, false)
+}
+
+fn push_internal(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    upload_attachment_bytes: bool,
+) -> Result<u64> {
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
 
     let device_id = get_or_create_device_id(conn)?;
@@ -237,6 +262,8 @@ pub fn push(
     let scope_id = sync_scope_id(remote, &remote_root_dir);
     let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
     remote.mkdir_all(&ops_dir)?;
+    let packs_dir = format!("{remote_root_dir}{device_id}/packs/");
+    remote.mkdir_all(&packs_dir)?;
 
     let last_pushed_key = format!("sync.last_pushed_seq:{scope_id}");
     let last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
@@ -244,18 +271,24 @@ pub fn push(
     let attachments_dir = format!("{remote_root_dir}attachments/");
     remote.mkdir_all(&attachments_dir)?;
 
-    let attachment_backfill_key = format!("sync.attachments.bytes_backfilled:{scope_id}");
-    if kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
-        upload_all_local_attachment_bytes(
-            conn,
-            db_key,
-            sync_key,
-            remote,
-            &attachments_dir,
-            app_dir_path,
-        )?;
-        kv_set_i64(conn, &attachment_backfill_key, 1)?;
+    if upload_attachment_bytes {
+        let attachment_backfill_key = format!("sync.attachments.bytes_backfilled:{scope_id}");
+        if kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
+            upload_all_local_attachment_bytes(
+                conn,
+                db_key,
+                sync_key,
+                remote,
+                &attachments_dir,
+                app_dir_path,
+            )?;
+            kv_set_i64(conn, &attachment_backfill_key, 1)?;
+        }
     }
+
+    ensure_ops_packs_backfilled(
+        conn, db_key, sync_key, remote, &packs_dir, &device_id, &scope_id,
+    )?;
 
     struct PushOpsContext<'a, R: RemoteStore> {
         conn: &'a Connection,
@@ -264,8 +297,10 @@ pub fn push(
         remote: &'a R,
         device_id: &'a str,
         ops_dir: &'a str,
+        packs_dir: &'a str,
         attachments_dir: &'a str,
         app_dir: &'a Path,
+        upload_attachment_bytes: bool,
     }
 
     fn push_ops_after<R: RemoteStore>(
@@ -283,6 +318,7 @@ pub fn push(
         let mut pushed: u64 = 0;
         let mut max_seq = after_seq;
         let mut uploaded_attachments: BTreeSet<String> = BTreeSet::new();
+        let mut touched_pack_chunks: BTreeSet<i64> = BTreeSet::new();
 
         while let Some(row) = rows.next()? {
             let op_id: String = row.get(0)?;
@@ -295,19 +331,21 @@ pub fn push(
                 format!("oplog.op_json:{op_id}").as_bytes(),
             )?;
 
-            if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
-                if op_json["type"].as_str() == Some("attachment.upsert.v1") {
-                    if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
-                        if uploaded_attachments.insert(sha256.to_string()) {
-                            let _ = upload_attachment_bytes_if_present(
-                                ctx.conn,
-                                ctx.db_key,
-                                ctx.sync_key,
-                                ctx.remote,
-                                ctx.attachments_dir,
-                                ctx.app_dir,
-                                sha256,
-                            )?;
+            if ctx.upload_attachment_bytes {
+                if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
+                    if op_json["type"].as_str() == Some("attachment.upsert.v1") {
+                        if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                            if uploaded_attachments.insert(sha256.to_string()) {
+                                let _ = upload_attachment_bytes_if_present(
+                                    ctx.conn,
+                                    ctx.db_key,
+                                    ctx.sync_key,
+                                    ctx.remote,
+                                    ctx.attachments_dir,
+                                    ctx.app_dir,
+                                    sha256,
+                                )?;
+                            }
                         }
                     }
                 }
@@ -321,11 +359,24 @@ pub fn push(
 
             let file_path = format!("{}op_{seq}.json", ctx.ops_dir);
             ctx.remote.put(&file_path, file_blob)?;
+            touched_pack_chunks.insert(ops_pack_chunk_start(seq));
 
             pushed += 1;
             if seq > max_seq {
                 max_seq = seq;
             }
+        }
+
+        for chunk_start in touched_pack_chunks {
+            upload_ops_pack_chunk(
+                ctx.conn,
+                ctx.db_key,
+                ctx.sync_key,
+                ctx.remote,
+                ctx.packs_dir,
+                ctx.device_id,
+                chunk_start,
+            )?;
         }
 
         Ok((pushed, max_seq))
@@ -338,8 +389,10 @@ pub fn push(
         remote,
         device_id: &device_id,
         ops_dir: &ops_dir,
+        packs_dir: &packs_dir,
         attachments_dir: &attachments_dir,
         app_dir: app_dir_path,
+        upload_attachment_bytes,
     };
 
     let (pushed, max_seq) = push_ops_after(&ctx, last_pushed_seq)?;
@@ -367,6 +420,115 @@ pub fn push(
     }
 
     Ok(0)
+}
+
+fn ensure_ops_packs_backfilled(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    packs_dir: &str,
+    device_id: &str,
+    scope_id: &str,
+) -> Result<()> {
+    let (min_seq, max_seq): (Option<i64>, Option<i64>) = conn.query_row(
+        r#"SELECT min(seq), max(seq) FROM oplog WHERE device_id = ?1"#,
+        params![device_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let (Some(min_seq), Some(max_seq)) = (min_seq, max_seq) else {
+        return Ok(());
+    };
+
+    let packs_backfill_key = format!("sync.ops_packs_backfilled:{scope_id}");
+    let packs_backfilled = kv_get_i64(conn, &packs_backfill_key)?.unwrap_or(0) != 0;
+
+    let first_chunk_start = ops_pack_chunk_start(min_seq);
+    let first_pack_path = format!("{packs_dir}pack_{first_chunk_start}.bin");
+
+    let needs_backfill = if !packs_backfilled {
+        true
+    } else {
+        match remote.get(&first_pack_path) {
+            Ok(_) => false,
+            Err(e) if e.is::<NotFound>() => true,
+            Err(e) => return Err(e),
+        }
+    };
+
+    if !needs_backfill {
+        return Ok(());
+    }
+
+    let start_chunk = ops_pack_chunk_start(min_seq);
+    let end_chunk = ops_pack_chunk_start(max_seq);
+    for chunk_start in (start_chunk..=end_chunk).step_by(OPS_PACK_CHUNK_SIZE as usize) {
+        upload_ops_pack_chunk(
+            conn,
+            db_key,
+            sync_key,
+            remote,
+            packs_dir,
+            device_id,
+            chunk_start,
+        )?;
+    }
+
+    kv_set_i64(conn, &packs_backfill_key, 1)?;
+    Ok(())
+}
+
+fn upload_ops_pack_chunk(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    packs_dir: &str,
+    device_id: &str,
+    chunk_start: i64,
+) -> Result<()> {
+    let chunk_end = chunk_start + OPS_PACK_CHUNK_SIZE - 1;
+
+    let mut stmt = conn.prepare(
+        r#"SELECT op_id, seq, op_json
+           FROM oplog
+           WHERE device_id = ?1
+             AND seq >= ?2
+             AND seq <= ?3
+           ORDER BY seq ASC"#,
+    )?;
+
+    let mut rows = stmt.query(params![device_id, chunk_start, chunk_end])?;
+    let mut entries: Vec<(i64, Vec<u8>)> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        let op_id: String = row.get(0)?;
+        let seq: i64 = row.get(1)?;
+        let op_json_blob: Vec<u8> = row.get(2)?;
+
+        let plaintext = decrypt_bytes(
+            db_key,
+            &op_json_blob,
+            format!("oplog.op_json:{op_id}").as_bytes(),
+        )?;
+
+        let file_blob = encrypt_bytes(
+            sync_key,
+            &plaintext,
+            format!("sync.ops:{device_id}:{seq}").as_bytes(),
+        )?;
+
+        entries.push((seq, file_blob));
+    }
+
+    if entries.is_empty() {
+        return Ok(());
+    }
+
+    let pack_bytes = encode_ops_pack(&entries)?;
+    let pack_path = format!("{packs_dir}pack_{chunk_start}.bin");
+    remote.put(&pack_path, pack_bytes)?;
+    Ok(())
 }
 
 pub fn download_attachment_bytes(
@@ -407,6 +569,29 @@ pub fn download_attachment_bytes(
     let local_cipher = encrypt_bytes(db_key, &plaintext, local_aad.as_bytes())?;
     fs::write(local_path, local_cipher)?;
     Ok(())
+}
+
+pub fn upload_attachment_bytes(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    sha256: &str,
+) -> Result<bool> {
+    let app_dir = app_dir_from_conn(conn)?;
+    let remote_root_dir = normalize_dir(remote_root);
+    let attachments_dir = format!("{remote_root_dir}attachments/");
+    remote.mkdir_all(&attachments_dir)?;
+    upload_attachment_bytes_if_present(
+        conn,
+        db_key,
+        sync_key,
+        remote,
+        &attachments_dir,
+        app_dir.as_path(),
+        sha256,
+    )
 }
 
 fn upload_all_local_attachment_bytes(
@@ -514,6 +699,9 @@ pub fn pull(
     remote: &impl RemoteStore,
     remote_root: &str,
 ) -> Result<u64> {
+    const OPS_PREFETCH_BATCH_SIZE: usize = 128;
+    const OPS_PREFETCH_CONCURRENCY: usize = 8;
+
     let local_device_id = get_or_create_device_id(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
     let scope_id = sync_scope_id(remote, &remote_root_dir);
@@ -530,6 +718,7 @@ pub fn pull(
         }
 
         let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
+        let packs_dir = format!("{remote_root_dir}{device_id}/packs/");
 
         let last_pulled_key = format!("sync.last_pulled_seq:{scope_id}:{device_id}");
         let last_pulled_seq = kv_get_i64(conn, &last_pulled_key)?.unwrap_or(0);
@@ -537,18 +726,17 @@ pub fn pull(
         let mut new_last_pulled = last_pulled_seq;
         let mut seq = last_pulled_seq + 1;
 
-        let mut tried_discover_start_seq = false;
+        let mut tried_discover_pack_start = false;
         loop {
-            let path = format!("{ops_dir}op_{seq}.json");
-            let blob = match remote.get(&path) {
-                Ok(blob) => blob,
+            let chunk_start = ops_pack_chunk_start(seq);
+            let pack_path = format!("{packs_dir}pack_{chunk_start}.bin");
+            let pack_bytes = match remote.get(&pack_path) {
+                Ok(bytes) => bytes,
                 Err(e) if e.is::<NotFound>() => {
-                    // If remote ops were pruned/reset, a new device might not have `op_1.json`.
-                    // Try to discover the first available seq once (without relying exclusively on listing).
-                    if !tried_discover_start_seq && last_pulled_seq == 0 && seq == 1 {
-                        tried_discover_start_seq = true;
+                    if !tried_discover_pack_start && last_pulled_seq == 0 && seq == 1 {
+                        tried_discover_pack_start = true;
                         if let Some(start_seq) =
-                            discover_first_available_seq(remote, &ops_dir, 500)?
+                            discover_first_available_pack_chunk_start(remote, &packs_dir)?
                         {
                             seq = start_seq;
                             continue;
@@ -558,40 +746,194 @@ pub fn pull(
                 }
                 Err(e) => return Err(e),
             };
-            let plaintext = decrypt_bytes(
-                sync_key,
-                &blob,
-                format!("sync.ops:{device_id}:{seq}").as_bytes(),
-            )?;
-            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-            let op_id = op_json["op_id"]
-                .as_str()
-                .ok_or_else(|| anyhow!("sync op missing op_id"))?
-                .to_string();
 
-            let seen: Option<i64> = conn
-                .query_row(
-                    r#"SELECT 1 FROM oplog WHERE op_id = ?1"#,
-                    params![op_id.as_str()],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if seen.is_none() {
-                apply_op(conn, db_key, &op_json)?;
-                insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-                applied += 1;
+            let entries = match decode_ops_pack(&pack_bytes) {
+                Ok(entries) => entries,
+                Err(_) => break,
+            };
+            if entries.is_empty() {
+                break;
             }
 
-            new_last_pulled = seq;
-            seq += 1;
+            let mut pack_applied = 0u64;
+            let mut max_seq_in_pack = new_last_pulled;
+            with_immediate_transaction(conn, || {
+                for (entry_seq, blob) in &entries {
+                    max_seq_in_pack = max_seq_in_pack.max(*entry_seq);
+                    if *entry_seq < seq {
+                        continue;
+                    }
+
+                    let plaintext = decrypt_bytes(
+                        sync_key,
+                        blob,
+                        format!("sync.ops:{device_id}:{entry_seq}").as_bytes(),
+                    )?;
+                    let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+                    let inserted = insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+                    if inserted {
+                        apply_op(conn, db_key, &op_json)?;
+                        pack_applied += 1;
+                    }
+                }
+
+                kv_set_i64(conn, &last_pulled_key, max_seq_in_pack)?;
+                Ok(())
+            })?;
+
+            applied += pack_applied;
+            new_last_pulled = max_seq_in_pack;
+            seq = new_last_pulled + 1;
+
+            let chunk_end = chunk_start + OPS_PACK_CHUNK_SIZE - 1;
+            if max_seq_in_pack < chunk_end {
+                break;
+            }
         }
 
-        if new_last_pulled > last_pulled_seq {
-            kv_set_i64(conn, &last_pulled_key, new_last_pulled)?;
+        let mut tried_discover_start_seq = false;
+        loop {
+            let batch = fetch_ops_batch(
+                remote,
+                &ops_dir,
+                seq,
+                OPS_PREFETCH_BATCH_SIZE,
+                OPS_PREFETCH_CONCURRENCY,
+            )?;
+
+            let mut blobs: Vec<(i64, Vec<u8>)> = Vec::with_capacity(batch.len());
+            let mut hit_not_found = false;
+            for (seq, blob) in batch {
+                match blob {
+                    Some(blob) => blobs.push((seq, blob)),
+                    None => {
+                        hit_not_found = true;
+                        break;
+                    }
+                }
+            }
+
+            if blobs.is_empty() {
+                // If remote ops were pruned/reset, a new device might not have `op_1.json`.
+                // Try to discover the first available seq once (without relying exclusively on listing).
+                if !tried_discover_start_seq && last_pulled_seq == 0 && seq == 1 {
+                    tried_discover_start_seq = true;
+                    if let Some(start_seq) = discover_first_available_seq(remote, &ops_dir, 500)? {
+                        seq = start_seq;
+                        continue;
+                    }
+                }
+                break;
+            }
+
+            // Apply in a single transaction to avoid per-op auto-commit overhead.
+            let mut batch_applied = 0u64;
+            let mut batch_last_seq = new_last_pulled;
+            with_immediate_transaction(conn, || {
+                for (seq, blob) in &blobs {
+                    let plaintext = decrypt_bytes(
+                        sync_key,
+                        blob,
+                        format!("sync.ops:{device_id}:{seq}").as_bytes(),
+                    )?;
+                    let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+                    let inserted = insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+                    if inserted {
+                        apply_op(conn, db_key, &op_json)?;
+                        batch_applied += 1;
+                    }
+
+                    batch_last_seq = *seq;
+                }
+
+                kv_set_i64(conn, &last_pulled_key, batch_last_seq)?;
+                Ok(())
+            })?;
+
+            applied += batch_applied;
+            new_last_pulled = batch_last_seq;
+            seq = new_last_pulled + 1;
+
+            if hit_not_found {
+                break;
+            }
         }
     }
 
     Ok(applied)
+}
+
+fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    match f() {
+        Ok(v) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(v)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+fn fetch_ops_batch(
+    remote: &impl RemoteStore,
+    ops_dir: &str,
+    start_seq: i64,
+    batch_size: usize,
+    concurrency: usize,
+) -> Result<Vec<(i64, Option<Vec<u8>>)>> {
+    if batch_size == 0 {
+        return Ok(vec![]);
+    }
+
+    let concurrency = concurrency.max(1).min(batch_size);
+    let mut buckets: Vec<Vec<i64>> = vec![Vec::new(); concurrency];
+    for i in 0..batch_size {
+        buckets[i % concurrency].push(start_seq + i as i64);
+    }
+
+    let mut out: Vec<(i64, Option<Vec<u8>>)> = Vec::with_capacity(batch_size);
+    thread::scope(|scope| -> Result<()> {
+        let mut handles = Vec::with_capacity(concurrency);
+        for bucket in buckets {
+            handles.push(scope.spawn(move || -> Result<Vec<(i64, Option<Vec<u8>>)>> {
+                let mut chunk: Vec<(i64, Option<Vec<u8>>)> = Vec::with_capacity(bucket.len());
+                let mut hit_not_found = false;
+                for seq in bucket {
+                    if hit_not_found {
+                        chunk.push((seq, None));
+                        continue;
+                    }
+
+                    let path = format!("{ops_dir}op_{seq}.json");
+                    match remote.get(&path) {
+                        Ok(bytes) => chunk.push((seq, Some(bytes))),
+                        Err(e) if e.is::<NotFound>() => {
+                            chunk.push((seq, None));
+                            // Ops are expected to be contiguous; if this seq is missing, all higher
+                            // seqs are also missing (for this device).
+                            hit_not_found = true;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(chunk)
+            }));
+        }
+
+        for handle in handles {
+            let chunk = handle
+                .join()
+                .map_err(|_| anyhow!("fetch op batch thread panicked"))??;
+            out.extend(chunk);
+        }
+        Ok(())
+    })?;
+
+    out.sort_by_key(|(seq, _)| *seq);
+    Ok(out)
 }
 
 fn discover_first_available_seq(
@@ -640,6 +982,120 @@ fn discover_first_available_seq(
     }
 
     Ok(None)
+}
+
+fn discover_first_available_pack_chunk_start(
+    remote: &impl RemoteStore,
+    packs_dir: &str,
+) -> Result<Option<i64>> {
+    fn parse_chunk_start_from_path(packs_dir: &str, entry: &str) -> Option<i64> {
+        let rest = entry.strip_prefix(packs_dir)?;
+        let rest = rest.strip_prefix("pack_")?;
+        let rest = rest.strip_suffix(".bin")?;
+        if rest.is_empty() {
+            return None;
+        }
+        if rest.bytes().any(|b| !b.is_ascii_digit()) {
+            return None;
+        }
+        rest.parse::<i64>().ok()
+    }
+
+    if let Ok(entries) = remote.list(packs_dir) {
+        let mut min_seq: Option<i64> = None;
+        for entry in entries {
+            let Some(seq) = parse_chunk_start_from_path(packs_dir, &entry) else {
+                continue;
+            };
+            min_seq = Some(match min_seq {
+                Some(existing) => existing.min(seq),
+                None => seq,
+            });
+        }
+        if min_seq.is_some() {
+            return Ok(min_seq);
+        }
+    }
+
+    Ok(None)
+}
+
+fn ops_pack_chunk_start(seq: i64) -> i64 {
+    if seq <= 1 {
+        return 1;
+    }
+    ((seq - 1) / OPS_PACK_CHUNK_SIZE) * OPS_PACK_CHUNK_SIZE + 1
+}
+
+fn encode_ops_pack(entries: &[(i64, Vec<u8>)]) -> Result<Vec<u8>> {
+    let count: u32 = entries
+        .len()
+        .try_into()
+        .map_err(|_| anyhow!("too many ops in pack"))?;
+
+    let mut out: Vec<u8> = Vec::new();
+    out.extend_from_slice(OPS_PACK_MAGIC_V1);
+    out.extend_from_slice(&count.to_le_bytes());
+
+    for (seq, blob) in entries {
+        out.extend_from_slice(&seq.to_le_bytes());
+        let len: u32 = blob
+            .len()
+            .try_into()
+            .map_err(|_| anyhow!("op blob too large"))?;
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend_from_slice(blob);
+    }
+
+    Ok(out)
+}
+
+fn decode_ops_pack(bytes: &[u8]) -> Result<Vec<(i64, Vec<u8>)>> {
+    if bytes.len() < OPS_PACK_MAGIC_V1.len() + 4 {
+        return Err(anyhow!("invalid pack: too short"));
+    }
+    if &bytes[..OPS_PACK_MAGIC_V1.len()] != OPS_PACK_MAGIC_V1 {
+        return Err(anyhow!("invalid pack: bad magic"));
+    }
+
+    let mut cursor = OPS_PACK_MAGIC_V1.len();
+    let count = u32::from_le_bytes(
+        bytes[cursor..cursor + 4]
+            .try_into()
+            .map_err(|_| anyhow!("invalid pack: count"))?,
+    ) as usize;
+    cursor += 4;
+
+    let mut out: Vec<(i64, Vec<u8>)> = Vec::with_capacity(count);
+    for _ in 0..count {
+        if cursor + 8 + 4 > bytes.len() {
+            return Err(anyhow!("invalid pack: truncated header"));
+        }
+
+        let seq = i64::from_le_bytes(
+            bytes[cursor..cursor + 8]
+                .try_into()
+                .map_err(|_| anyhow!("invalid pack: seq"))?,
+        );
+        cursor += 8;
+
+        let len = u32::from_le_bytes(
+            bytes[cursor..cursor + 4]
+                .try_into()
+                .map_err(|_| anyhow!("invalid pack: len"))?,
+        ) as usize;
+        cursor += 4;
+
+        if cursor + len > bytes.len() {
+            return Err(anyhow!("invalid pack: truncated body"));
+        }
+        let blob = bytes[cursor..cursor + len].to_vec();
+        cursor += len;
+
+        out.push((seq, blob));
+    }
+
+    Ok(out)
 }
 
 fn get_or_create_device_id(conn: &Connection) -> Result<String> {
@@ -697,7 +1153,7 @@ fn insert_remote_oplog(
     db_key: &[u8; 32],
     op_plaintext_json: &[u8],
     op_json: &serde_json::Value,
-) -> Result<()> {
+) -> Result<bool> {
     let op_id = op_json["op_id"]
         .as_str()
         .ok_or_else(|| anyhow!("oplog missing op_id"))?;
@@ -716,12 +1172,13 @@ fn insert_remote_oplog(
         op_plaintext_json,
         format!("oplog.op_json:{op_id}").as_bytes(),
     )?;
-    conn.execute(
+
+    let mut stmt = conn.prepare_cached(
         r#"INSERT OR IGNORE INTO oplog(op_id, device_id, seq, op_json, created_at)
            VALUES (?1, ?2, ?3, ?4, ?5)"#,
-        params![op_id, device_id, seq, blob, created_at],
     )?;
-    Ok(())
+    let changed = stmt.execute(params![op_id, device_id, seq, blob, created_at])?;
+    Ok(changed > 0)
 }
 
 fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Result<()> {
@@ -762,36 +1219,55 @@ fn apply_conversation_upsert(
         .as_i64()
         .ok_or_else(|| anyhow!("conversation op missing updated_at_ms"))?;
 
-    let existing_updated_at: Option<i64> = conn
-        .query_row(
-            r#"SELECT updated_at FROM conversations WHERE id = ?1"#,
-            params![conversation_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-
-    if existing_updated_at.is_none() {
-        let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"conversation.title")?;
-        conn.execute(
-            r#"INSERT INTO conversations(id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)"#,
-            params![conversation_id, title_blob, created_at_ms, updated_at_ms],
-        )?;
-        return Ok(());
-    }
-
-    let Some(existing_updated_at) = existing_updated_at else {
-        return Ok(());
-    };
-    if updated_at_ms <= existing_updated_at {
-        return Ok(());
-    }
-
     let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"conversation.title")?;
+    let title_updated_at_key = format!("conversation.title_updated_at:{conversation_id}");
+    let existing_title_updated_at = kv_get_i64(conn, &title_updated_at_key)?.unwrap_or(0);
+    let should_update_title = updated_at_ms > existing_title_updated_at;
     conn.execute(
-        r#"UPDATE conversations SET title = ?2, updated_at = ?3 WHERE id = ?1"#,
-        params![conversation_id, title_blob, updated_at_ms],
+        r#"
+INSERT INTO conversations(id, title, created_at, updated_at)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT(id) DO UPDATE SET
+  title = CASE WHEN ?5 = 1 THEN excluded.title ELSE conversations.title END,
+  created_at = min(conversations.created_at, excluded.created_at),
+  updated_at = max(conversations.updated_at, excluded.updated_at)
+"#,
+        params![
+            conversation_id,
+            title_blob,
+            created_at_ms,
+            updated_at_ms,
+            if should_update_title { 1 } else { 0 }
+        ],
+    )?;
+    if should_update_title {
+        kv_set_i64(conn, &title_updated_at_key, updated_at_ms)?;
+    }
+    Ok(())
+}
+
+fn ensure_placeholder_conversation_row(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    conversation_id: &str,
+    created_at_ms: i64,
+) -> Result<()> {
+    let title_blob = encrypt_bytes(db_key, b"", b"conversation.title")?;
+    conn.execute(
+        r#"INSERT OR IGNORE INTO conversations(id, title, created_at, updated_at)
+           VALUES (?1, ?2, ?3, 0)"#,
+        params![conversation_id, title_blob, created_at_ms],
     )?;
     Ok(())
+}
+
+fn is_foreign_key_constraint(err: &rusqlite::Error) -> bool {
+    match err {
+        rusqlite::Error::SqliteFailure(e, _) => {
+            e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_FOREIGNKEY
+        }
+        _ => false,
+    }
 }
 
 fn apply_todo_upsert(
@@ -821,66 +1297,39 @@ fn apply_todo_upsert(
     let next_review_at_ms = payload["next_review_at_ms"].as_i64();
     let last_review_at_ms = payload["last_review_at_ms"].as_i64();
 
-    let existing_updated_at: Option<i64> = conn
-        .query_row(
-            r#"SELECT updated_at_ms FROM todos WHERE id = ?1"#,
-            params![todo_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if let Some(existing_updated_at) = existing_updated_at {
-        if updated_at_ms <= existing_updated_at {
-            return Ok(());
-        }
-    }
-
     let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"todo.title")?;
-    if existing_updated_at.is_some() {
-        conn.execute(
-            r#"UPDATE todos
-               SET title = ?2,
-                   due_at_ms = ?3,
-                   status = ?4,
-                   source_entry_id = ?5,
-                   updated_at_ms = ?6,
-                   review_stage = ?7,
-                   next_review_at_ms = ?8,
-                   last_review_at_ms = ?9,
-                   needs_embedding = 1
-               WHERE id = ?1"#,
-            params![
-                todo_id,
-                title_blob,
-                due_at_ms,
-                status,
-                source_entry_id,
-                updated_at_ms,
-                review_stage,
-                next_review_at_ms,
-                last_review_at_ms,
-            ],
-        )?;
-    } else {
-        conn.execute(
-            r#"INSERT INTO todos(
-                 id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms,
-                 review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
-               )
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)"#,
-            params![
-                todo_id,
-                title_blob,
-                due_at_ms,
-                status,
-                source_entry_id,
-                created_at_ms,
-                updated_at_ms,
-                review_stage,
-                next_review_at_ms,
-                last_review_at_ms,
-            ],
-        )?;
-    }
+    conn.execute(
+        r#"
+INSERT INTO todos(
+  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms,
+  review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
+)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)
+ON CONFLICT(id) DO UPDATE SET
+  title = excluded.title,
+  due_at_ms = excluded.due_at_ms,
+  status = excluded.status,
+  source_entry_id = excluded.source_entry_id,
+  updated_at_ms = excluded.updated_at_ms,
+  review_stage = excluded.review_stage,
+  next_review_at_ms = excluded.next_review_at_ms,
+  last_review_at_ms = excluded.last_review_at_ms,
+  needs_embedding = 1
+WHERE excluded.updated_at_ms > todos.updated_at_ms
+"#,
+        params![
+            todo_id,
+            title_blob,
+            due_at_ms,
+            status,
+            source_entry_id,
+            created_at_ms,
+            updated_at_ms,
+            review_stage,
+            next_review_at_ms,
+            last_review_at_ms,
+        ],
+    )?;
 
     Ok(())
 }
@@ -1056,58 +1505,33 @@ fn apply_event_upsert(
 
     let source_entry_id = payload["source_entry_id"].as_str();
 
-    let existing_updated_at: Option<i64> = conn
-        .query_row(
-            r#"SELECT updated_at_ms FROM events WHERE id = ?1"#,
-            params![event_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if let Some(existing_updated_at) = existing_updated_at {
-        if updated_at_ms <= existing_updated_at {
-            return Ok(());
-        }
-    }
-
     let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"event.title")?;
-    if existing_updated_at.is_some() {
-        conn.execute(
-            r#"UPDATE events
-               SET title = ?2,
-                   start_at_ms = ?3,
-                   end_at_ms = ?4,
-                   tz = ?5,
-                   source_entry_id = ?6,
-                   updated_at_ms = ?7
-               WHERE id = ?1"#,
-            params![
-                event_id,
-                title_blob,
-                start_at_ms,
-                end_at_ms,
-                tz,
-                source_entry_id,
-                updated_at_ms
-            ],
-        )?;
-    } else {
-        conn.execute(
-            r#"INSERT INTO events(
-                 id, title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
-               )
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
-            params![
-                event_id,
-                title_blob,
-                start_at_ms,
-                end_at_ms,
-                tz,
-                source_entry_id,
-                created_at_ms,
-                updated_at_ms
-            ],
-        )?;
-    }
+    conn.execute(
+        r#"
+INSERT INTO events(
+  id, title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
+)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+ON CONFLICT(id) DO UPDATE SET
+  title = excluded.title,
+  start_at_ms = excluded.start_at_ms,
+  end_at_ms = excluded.end_at_ms,
+  tz = excluded.tz,
+  source_entry_id = excluded.source_entry_id,
+  updated_at_ms = excluded.updated_at_ms
+WHERE excluded.updated_at_ms > events.updated_at_ms
+"#,
+        params![
+            event_id,
+            title_blob,
+            start_at_ms,
+            end_at_ms,
+            tz,
+            source_entry_id,
+            created_at_ms,
+            updated_at_ms
+        ],
+    )?;
 
     Ok(())
 }
@@ -1143,36 +1567,48 @@ fn apply_message_insert(
         .as_bool()
         .unwrap_or_else(|| role != "assistant");
 
-    let conversation_exists: Option<i64> = conn
-        .query_row(
-            r#"SELECT 1 FROM conversations WHERE id = ?1"#,
-            params![conversation_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if conversation_exists.is_none() {
-        return Err(anyhow!(
-            "missing conversation for message: {conversation_id}"
-        ));
-    }
-
     let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
-    conn.execute(
-        r#"INSERT OR IGNORE INTO messages
+    let insert_result = conn.execute(
+        r#"INSERT INTO messages
            (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9)"#,
+           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9)
+           ON CONFLICT(id) DO NOTHING"#,
         params![
             message_id,
             conversation_id,
             role,
-            content_blob,
+            content_blob.as_slice(),
             created_at_ms,
             device_id,
             seq,
             if is_memory { 1 } else { 0 },
             if is_memory { 1 } else { 0 }
         ],
-    )?;
+    );
+    match insert_result {
+        Ok(_) => {}
+        Err(e) if is_foreign_key_constraint(&e) => {
+            ensure_placeholder_conversation_row(conn, db_key, conversation_id, created_at_ms)?;
+            conn.execute(
+                r#"INSERT INTO messages
+                   (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9)
+                   ON CONFLICT(id) DO NOTHING"#,
+                params![
+                    message_id,
+                    conversation_id,
+                    role,
+                    content_blob.as_slice(),
+                    created_at_ms,
+                    device_id,
+                    seq,
+                    if is_memory { 1 } else { 0 },
+                    if is_memory { 1 } else { 0 }
+                ],
+            )?;
+        }
+        Err(e) => return Err(e.into()),
+    }
 
     // Heuristic for legacy Ask AI flows: when an assistant message is marked non-memory, treat the
     // immediately preceding user message (same device/seq ordering) as non-memory too.
@@ -1319,23 +1755,10 @@ fn apply_message_set_v2(
             ],
         )?;
     } else {
-        let conversation_exists: Option<i64> = conn
-            .query_row(
-                r#"SELECT 1 FROM conversations WHERE id = ?1"#,
-                params![conversation_id.as_str()],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if conversation_exists.is_none() {
-            return Err(anyhow!(
-                "missing conversation for message: {conversation_id}"
-            ));
-        }
-
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
         let is_memory = incoming_is_memory.unwrap_or_else(|| role != "assistant");
         let needs_embedding = !is_deleted && is_memory;
-        conn.execute(
+        let insert_result = conn.execute(
             r#"INSERT INTO messages
                (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
@@ -1343,7 +1766,7 @@ fn apply_message_set_v2(
                 message_id,
                 conversation_id.as_str(),
                 role,
-                content_blob,
+                content_blob.as_slice(),
                 created_at_ms,
                 updated_at_ms,
                 device_id,
@@ -1352,7 +1775,37 @@ fn apply_message_set_v2(
                 if needs_embedding { 1 } else { 0 },
                 if is_memory { 1 } else { 0 }
             ],
-        )?;
+        );
+        match insert_result {
+            Ok(_) => {}
+            Err(e) if is_foreign_key_constraint(&e) => {
+                ensure_placeholder_conversation_row(
+                    conn,
+                    db_key,
+                    conversation_id.as_str(),
+                    created_at_ms,
+                )?;
+                conn.execute(
+                    r#"INSERT INTO messages
+                       (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
+                       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
+                    params![
+                        message_id,
+                        conversation_id.as_str(),
+                        role,
+                        content_blob.as_slice(),
+                        created_at_ms,
+                        updated_at_ms,
+                        device_id,
+                        seq,
+                        if is_deleted { 1 } else { 0 },
+                        if needs_embedding { 1 } else { 0 },
+                        if is_memory { 1 } else { 0 }
+                    ],
+                )?;
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 
     conn.execute(

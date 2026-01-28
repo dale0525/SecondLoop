@@ -535,6 +535,23 @@ Future<BigInt> syncWebdavPush(
         password: password,
         remoteRoot: remoteRoot);
 
+Future<BigInt> syncWebdavPushOpsOnly(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavPushOpsOnly(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot);
+
 Future<BigInt> syncWebdavPull(
         {required String appDir,
         required List<int> key,
@@ -562,6 +579,25 @@ Future<void> syncWebdavDownloadAttachmentBytes(
         required String remoteRoot,
         required String sha256}) =>
     RustLib.instance.api.crateApiCoreSyncWebdavDownloadAttachmentBytes(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        username: username,
+        password: password,
+        remoteRoot: remoteRoot,
+        sha256: sha256);
+
+Future<bool> syncWebdavUploadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        String? username,
+        String? password,
+        required String remoteRoot,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreSyncWebdavUploadAttachmentBytes(
         appDir: appDir,
         key: key,
         syncKey: syncKey,
@@ -600,6 +636,19 @@ Future<BigInt> syncLocaldirPush(
         localDir: localDir,
         remoteRoot: remoteRoot);
 
+Future<BigInt> syncLocaldirPushOpsOnly(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String localDir,
+        required String remoteRoot}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirPushOpsOnly(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        localDir: localDir,
+        remoteRoot: remoteRoot);
+
 Future<BigInt> syncLocaldirPull(
         {required String appDir,
         required List<int> key,
@@ -621,6 +670,21 @@ Future<void> syncLocaldirDownloadAttachmentBytes(
         required String remoteRoot,
         required String sha256}) =>
     RustLib.instance.api.crateApiCoreSyncLocaldirDownloadAttachmentBytes(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        localDir: localDir,
+        remoteRoot: remoteRoot,
+        sha256: sha256);
+
+Future<bool> syncLocaldirUploadAttachmentBytes(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String localDir,
+        required String remoteRoot,
+        required String sha256}) =>
+    RustLib.instance.api.crateApiCoreSyncLocaldirUploadAttachmentBytes(
         appDir: appDir,
         key: key,
         syncKey: syncKey,

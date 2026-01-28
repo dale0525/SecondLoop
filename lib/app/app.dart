@@ -24,6 +24,7 @@ import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
 import '../features/share/share_ingest_gate.dart';
 import '../features/share/share_intent_listener.dart';
+import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
 
 class SecondLoopApp extends StatefulWidget {
@@ -234,11 +235,14 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 child: ShareIntentListener(
                                   child: LockGate(
                                     child: SyncEngineGate(
-                                      child: ShareIngestGate(
-                                        child: QuickCaptureOverlay(
-                                          navigatorKey: _navigatorKey,
-                                          child:
-                                              child ?? const SizedBox.shrink(),
+                                      child: CloudSyncSwitchPromptGate(
+                                        navigatorKey: _navigatorKey,
+                                        child: ShareIngestGate(
+                                          child: QuickCaptureOverlay(
+                                            navigatorKey: _navigatorKey,
+                                            child: child ??
+                                                const SizedBox.shrink(),
+                                          ),
                                         ),
                                       ),
                                     ),

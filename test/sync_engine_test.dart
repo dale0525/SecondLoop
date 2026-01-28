@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -62,6 +63,42 @@ void main() {
       engine.stop();
     });
   });
+
+  test('notifies changes periodically during long pull', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      var changeNotifications = 0;
+      engine.changes.addListener(() => changeNotifications++);
+
+      engine.start();
+      async.flushMicrotasks();
+
+      expect(runner.pullCalls, 1);
+      expect(changeNotifications, 0);
+
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+
+      expect(
+        changeNotifications,
+        greaterThan(0),
+        reason: 'expected periodic change notifications during long pull',
+      );
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+      engine.stop();
+    });
+  });
 }
 
 SyncConfig _webdavConfig() => SyncConfig.webdav(
@@ -86,5 +123,24 @@ final class _FakeRunner implements SyncRunner {
   Future<int> pull(SyncConfig config) async {
     pullCalls++;
     return 0;
+  }
+}
+
+final class _BlockingPullRunner implements SyncRunner {
+  int pullCalls = 0;
+  Completer<int>? _pullCompleter;
+
+  void completePull({required int applied}) {
+    _pullCompleter?.complete(applied);
+  }
+
+  @override
+  Future<int> push(SyncConfig config) async => 0;
+
+  @override
+  Future<int> pull(SyncConfig config) {
+    pullCalls++;
+    _pullCompleter ??= Completer<int>();
+    return _pullCompleter!.future;
   }
 }

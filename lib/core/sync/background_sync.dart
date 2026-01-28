@@ -158,31 +158,62 @@ final class BackgroundSync {
         useMediaQueue: mediaQueueEnabled,
       );
 
-      if (mediaQueueEnabled &&
-          config.backendType == SyncBackendType.managedVault) {
-        final token = idToken;
-        if (token != null && token.trim().isNotEmpty) {
-          final wifiOnly = await store.readCloudMediaBackupWifiOnly();
-          final runner = CloudMediaBackupRunner(
-            store: BackendCloudMediaBackupStore(
-              backend: backend,
-              sessionKey: sessionKey,
-            ),
-            client: ManagedVaultCloudMediaBackupClient(
-              backend: backend,
-              sessionKey: sessionKey,
-              syncKey: config.syncKey,
-              baseUrl: config.baseUrl ?? '',
-              vaultId: config.remoteRoot,
-              idToken: token,
-            ),
-            settings: CloudMediaBackupRunnerSettings(
-              enabled: true,
-              wifiOnly: wifiOnly,
-            ),
-            getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
-          );
-          await runner.runOnce(allowCellular: false);
+      if (mediaQueueEnabled) {
+        final wifiOnly = await store.readCloudMediaBackupWifiOnly();
+        switch (config.backendType) {
+          case SyncBackendType.webdav:
+            final baseUrl = config.baseUrl;
+            if (baseUrl != null && baseUrl.trim().isNotEmpty) {
+              final runner = CloudMediaBackupRunner(
+                store: BackendCloudMediaBackupStore(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                ),
+                client: WebDavCloudMediaBackupClient(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: config.syncKey,
+                  baseUrl: baseUrl,
+                  username: config.username,
+                  password: config.password,
+                  remoteRoot: config.remoteRoot,
+                ),
+                settings: CloudMediaBackupRunnerSettings(
+                  enabled: true,
+                  wifiOnly: wifiOnly,
+                ),
+                getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
+              );
+              await runner.runOnce(allowCellular: false);
+            }
+            break;
+          case SyncBackendType.managedVault:
+            final token = idToken;
+            if (token != null && token.trim().isNotEmpty) {
+              final runner = CloudMediaBackupRunner(
+                store: BackendCloudMediaBackupStore(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                ),
+                client: ManagedVaultCloudMediaBackupClient(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: config.syncKey,
+                  baseUrl: config.baseUrl ?? '',
+                  vaultId: config.remoteRoot,
+                  idToken: token,
+                ),
+                settings: CloudMediaBackupRunnerSettings(
+                  enabled: true,
+                  wifiOnly: wifiOnly,
+                ),
+                getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
+              );
+              await runner.runOnce(allowCellular: false);
+            }
+            break;
+          case SyncBackendType.localDir:
+            break;
         }
       }
 
@@ -245,14 +276,23 @@ final class BackgroundSync {
     required bool useMediaQueue,
   }) async {
     return switch (config.backendType) {
-      SyncBackendType.webdav => backend.syncWebdavPush(
-          sessionKey,
-          config.syncKey,
-          baseUrl: config.baseUrl ?? '',
-          username: config.username,
-          password: config.password,
-          remoteRoot: config.remoteRoot,
-        ),
+      SyncBackendType.webdav => useMediaQueue
+          ? backend.syncWebdavPushOpsOnly(
+              sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              username: config.username,
+              password: config.password,
+              remoteRoot: config.remoteRoot,
+            )
+          : backend.syncWebdavPush(
+              sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              username: config.username,
+              password: config.password,
+              remoteRoot: config.remoteRoot,
+            ),
       SyncBackendType.localDir => backend.syncLocaldirPush(
           sessionKey,
           config.syncKey,

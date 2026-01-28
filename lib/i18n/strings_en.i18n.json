@@ -446,7 +446,7 @@
       "automation": "Auto sync",
       "backend": "Sync method",
       "mediaPreview": "Media previews",
-      "mediaBackup": "Media backup",
+      "mediaBackup": "Media uploads",
       "securityActions": "Security & manual sync"
     },
     "autoSync": {
@@ -460,28 +460,28 @@
       "chatThumbnailsWifiOnlySubtitle": "If a photo isn't on this device yet, download its preview only on Wi‑Fi"
     },
     "mediaBackup": {
-      "title": "Media backup (Cloud)",
-      "subtitle": "Backs up photos and files in the background",
-      "wifiOnlyTitle": "Back up on Wi‑Fi only",
-      "wifiOnlySubtitle": "Save mobile data by backing up only on Wi‑Fi",
-      "description": "Securely backs up photos and files. It’s not a cloud drive. If a file is missing on this device, it can be downloaded when needed after it’s backed up.",
-      "stats": "Waiting $pending · Failed $failed · Backed up $uploaded",
-      "lastUploaded": "Last backup: $at",
+      "title": "Media uploads",
+      "subtitle": "Uploads encrypted images for cross‑device viewing and memory recall",
+      "wifiOnlyTitle": "Upload on Wi‑Fi only",
+      "wifiOnlySubtitle": "Avoid using mobile data for large uploads",
+      "description": "Uploads encrypted image attachments to your sync storage. Images are downloaded on demand when viewing on another device.",
+      "stats": "Queued $pending · Failed $failed · Uploaded $uploaded",
+      "lastUploaded": "Last upload: $at",
       "lastError": "Last error: $error",
       "lastErrorWithTime": "Last error ($at): $error",
-      "backfillButton": "Back up existing photos",
-      "uploadNowButton": "Back up now",
-      "backfillEnqueued": "Queued $count photos for backup",
-      "backfillFailed": "Couldn't queue old photos: $error",
-      "notEnabled": "Turn on Media backup first.",
-      "managedVaultOnly": "Media backup is available with SecondLoop Cloud sync.",
+      "backfillButton": "Queue existing images",
+      "uploadNowButton": "Upload now",
+      "backfillEnqueued": "Queued $count images for upload",
+      "backfillFailed": "Couldn't queue existing images: $error",
+      "notEnabled": "Turn on Media uploads first.",
+      "managedVaultOnly": "Media uploads are available with WebDAV or SecondLoop Cloud sync.",
       "wifiOnlyBlocked": "Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.",
-      "uploaded": "Backup complete",
-      "nothingToUpload": "Nothing to back up",
-      "uploadFailed": "Backup failed: $error",
+      "uploaded": "Upload complete",
+      "nothingToUpload": "Nothing to upload",
+      "uploadFailed": "Upload failed: $error",
       "cellularDialog": {
         "title": "Use mobile data?",
-        "message": "Wi‑Fi only is on. Backing up over mobile data may use a lot of data.",
+        "message": "Wi‑Fi only is on. Uploading over mobile data may use a lot of data.",
         "confirm": "Use mobile data"
       }
     },
@@ -494,7 +494,17 @@
       "paymentRequired": "Cloud sync is paused. Renew your subscription to continue syncing.",
       "graceReadonlyUntil": "Cloud sync is read-only until $until.",
       "storageQuotaExceeded": "Cloud storage is full. Uploads are paused.",
-      "storageQuotaExceededWithUsage": "Cloud storage is full ($used / $limit). Uploads are paused."
+      "storageQuotaExceededWithUsage": "Cloud storage is full ($used / $limit). Uploads are paused.",
+      "switchDialog": {
+        "title": "Switch to SecondLoop Cloud sync?",
+        "message": "Your subscription is active. Switch your sync method to SecondLoop Cloud? You can change this anytime.",
+        "cancel": "Not now",
+        "confirm": "Switch"
+      },
+      "setPassphraseDialog": {
+        "title": "Set sync passphrase",
+        "confirm": "Save passphrase"
+      }
     },
     "remoteRootRequired": "Folder name is required",
     "baseUrlRequired": "Server address is required",

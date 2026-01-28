@@ -797,6 +797,28 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<int> syncWebdavPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    final appDir = await _getAppDir();
+    final pushed = await rust_core.syncWebdavPushOpsOnly(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
+    return pushed.toInt();
+  }
+
+  @override
   Future<int> syncWebdavPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -830,6 +852,29 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }) async {
     final appDir = await _getAppDir();
     await rust_core.syncWebdavDownloadAttachmentBytes(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+      sha256: sha256,
+    );
+  }
+
+  @override
+  Future<bool> syncWebdavUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.syncWebdavUploadAttachmentBytes(
       appDir: appDir,
       key: key,
       syncKey: syncKey,

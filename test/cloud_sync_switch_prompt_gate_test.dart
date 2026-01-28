@@ -4,92 +4,236 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
+import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
-import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Sync settings shows Wi‑Fi only auto sync toggle (webdav)',
+  testWidgets(
+      'Entitled subscription prompts switching to SecondLoop Cloud sync',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
 
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.unknown);
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
-          home: AppBackendScope(
-            backend: _Backend(),
-            child: Scaffold(body: SyncSettingsPage(configStore: store)),
+          home: CloudAuthScope(
+            controller: cloudAuth,
+            child: SubscriptionScope(
+              controller: subscription,
+              child: CloudSyncSwitchPromptGate(
+                configStore: store,
+                child: const Scaffold(body: Text('home')),
+              ),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('sync_auto_wifi_only')),
-      findsOneWidget,
-    );
+    expect(find.byType(AlertDialog), findsNothing);
+
+    subscription.setStatus(SubscriptionStatus.entitled);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
   });
 
-  testWidgets('Sync settings shows chat thumbnail Wi‑Fi only toggle (webdav)',
+  testWidgets('Already-entitled subscription prompts immediately',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
 
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
-          home: AppBackendScope(
-            backend: _Backend(),
-            child: Scaffold(body: SyncSettingsPage(configStore: store)),
+          home: CloudAuthScope(
+            controller: cloudAuth,
+            child: SubscriptionScope(
+              controller: subscription,
+              child: CloudSyncSwitchPromptGate(
+                configStore: store,
+                child: const Scaffold(body: Text('home')),
+              ),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -800));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('sync_chat_thumbnails_wifi_only')),
-      findsOneWidget,
-    );
+    expect(find.byType(AlertDialog), findsOneWidget);
   });
 
-  testWidgets('Sync settings shows media backup section (webdav)',
+  testWidgets('Prompt works when gate is above Navigator (MaterialApp.builder)',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
 
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.unknown);
+
     await tester.pumpWidget(
       wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: _Backend(),
-            child: Scaffold(body: SyncSettingsPage(configStore: store)),
+        CloudAuthScope(
+          controller: cloudAuth,
+          child: SubscriptionScope(
+            controller: subscription,
+            child: MaterialApp(
+              navigatorKey: navigatorKey,
+              home: const Scaffold(body: Text('home')),
+              builder: (context, child) {
+                return CloudSyncSwitchPromptGate(
+                  navigatorKey: navigatorKey,
+                  configStore: store,
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -1200));
+    expect(find.byType(AlertDialog), findsNothing);
+
+    subscription.setStatus(SubscriptionStatus.entitled);
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('sync_media_backup_enabled')),
-      findsOneWidget,
-    );
+    expect(find.byType(AlertDialog), findsOneWidget);
   });
+
+  testWidgets('Switching to Cloud requires sync passphrase if missing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+
+    final backend = _Backend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.unknown);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: SubscriptionScope(
+                controller: subscription,
+                child: CloudSyncSwitchPromptGate(
+                  configStore: store,
+                  child: const Scaffold(body: Text('home')),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    subscription.setStatus(SubscriptionStatus.entitled);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set sync passphrase'), findsOneWidget);
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Sync passphrase',
+      ),
+      'passphrase',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save passphrase'));
+    await tester.pumpAndSettle();
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid_1');
+    final syncKey = await store.readSyncKey();
+    expect(syncKey, isNotNull);
+    expect(syncKey!.length, 32);
+  });
+}
+
+final class _FakeSubscriptionController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FakeSubscriptionController(this._status);
+
+  SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
+
+  void setStatus(SubscriptionStatus next) {
+    _status = next;
+    notifyListeners();
+  }
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<String?> getIdToken() async => 'test-id-token';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
 }
 
 final class _Backend extends AppBackend {
@@ -126,14 +270,15 @@ final class _Backend extends AppBackend {
       Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
-  Future<List<Conversation>> listConversations(Uint8List key) async => const [];
+  Future<List<Conversation>> listConversations(Uint8List key) async =>
+      const <Conversation>[];
 
   @override
-  Future<Conversation> createConversation(Uint8List key, String title) =>
+  Future<Conversation> createConversation(Uint8List key, String title) async =>
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override
@@ -147,7 +292,7 @@ final class _Backend extends AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -225,19 +370,6 @@ final class _Backend extends AppBackend {
       const Stream<String>.empty();
 
   @override
-  Stream<String> askAiStreamCloudGateway(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
-  }) =>
-      const Stream<String>.empty();
-
-  @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
       Uint8List.fromList(List<int>.filled(32, 9));
 
@@ -306,26 +438,6 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) async =>
-      0;
-
-  @override
-  Future<int> syncManagedVaultPush(
-    Uint8List key,
-    Uint8List syncKey, {
-    required String baseUrl,
-    required String vaultId,
-    required String idToken,
-  }) async =>
-      0;
-
-  @override
-  Future<int> syncManagedVaultPull(
-    Uint8List key,
-    Uint8List syncKey, {
-    required String baseUrl,
-    required String vaultId,
-    required String idToken,
   }) async =>
       0;
 }
