@@ -378,6 +378,9 @@
     "viewFull": "查看全文",
     "messageActions": {
       "convertToTodo": "转化为待办项",
+      "convertTodoToInfo": "转为普通信息",
+      "convertTodoToInfoConfirmTitle": "转为普通信息？",
+      "convertTodoToInfoConfirmBody": "这会移除该事项，但保留原消息内容。",
       "openTodo": "跳转到事项",
       "linkOtherTodo": "关联到其他事项"
     },

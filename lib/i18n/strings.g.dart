@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 732 (366 per locale)
+/// Strings: 738 (369 per locale)
 ///
-/// Built on 2026-01-28 at 09:02 UTC
+/// Built on 2026-01-29 at 05:40 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -963,6 +963,10 @@ class _StringsChatMessageActionsEn {
 
   // Translations
   String get convertToTodo => 'Convert to task';
+  String get convertTodoToInfo => 'Convert to note';
+  String get convertTodoToInfoConfirmTitle => 'Convert to note?';
+  String get convertTodoToInfoConfirmBody =>
+      'This will remove the task, but keep the original message.';
   String get openTodo => 'Jump to task';
   String get linkOtherTodo => 'Link to another task';
 }
@@ -3048,6 +3052,12 @@ class _StringsChatMessageActionsZhCn extends _StringsChatMessageActionsEn {
   @override
   String get convertToTodo => '转化为待办项';
   @override
+  String get convertTodoToInfo => '转为普通信息';
+  @override
+  String get convertTodoToInfoConfirmTitle => '转为普通信息？';
+  @override
+  String get convertTodoToInfoConfirmBody => '这会移除该事项，但保留原消息内容。';
+  @override
   String get openTodo => '跳转到事项';
   @override
   String get linkOtherTodo => '关联到其他事项';
@@ -4796,6 +4806,12 @@ extension on Translations {
         return 'View full';
       case 'chat.messageActions.convertToTodo':
         return 'Convert to task';
+      case 'chat.messageActions.convertTodoToInfo':
+        return 'Convert to note';
+      case 'chat.messageActions.convertTodoToInfoConfirmTitle':
+        return 'Convert to note?';
+      case 'chat.messageActions.convertTodoToInfoConfirmBody':
+        return 'This will remove the task, but keep the original message.';
       case 'chat.messageActions.openTodo':
         return 'Jump to task';
       case 'chat.messageActions.linkOtherTodo':
@@ -5556,6 +5572,12 @@ extension on _StringsZhCn {
         return '查看全文';
       case 'chat.messageActions.convertToTodo':
         return '转化为待办项';
+      case 'chat.messageActions.convertTodoToInfo':
+        return '转为普通信息';
+      case 'chat.messageActions.convertTodoToInfoConfirmTitle':
+        return '转为普通信息？';
+      case 'chat.messageActions.convertTodoToInfoConfirmBody':
+        return '这会移除该事项，但保留原消息内容。';
       case 'chat.messageActions.openTodo':
         return '跳转到事项';
       case 'chat.messageActions.linkOtherTodo':

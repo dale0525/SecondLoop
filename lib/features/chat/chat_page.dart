@@ -40,6 +40,7 @@ import '../actions/suggestions_parser.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
 import '../actions/todo/todo_thread_match.dart';
+import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
@@ -207,7 +208,7 @@ class _ChatPageState extends State<ChatPage> {
                       onTap: () =>
                           Navigator.of(context).pop(_MessageAction.convertTodo),
                     )
-                  else
+                  else ...[
                     ListTile(
                       key: const ValueKey('message_action_open_todo'),
                       leading: const Icon(Icons.chevron_right_rounded),
@@ -215,6 +216,16 @@ class _ChatPageState extends State<ChatPage> {
                       onTap: () =>
                           Navigator.of(context).pop(_MessageAction.openTodo),
                     ),
+                    if (linkedTodo.isSourceEntry)
+                      ListTile(
+                        key: const ValueKey('message_action_convert_to_info'),
+                        leading: const Icon(Icons.undo_rounded),
+                        title: Text(
+                            context.t.chat.messageActions.convertTodoToInfo),
+                        onTap: () => Navigator.of(context)
+                            .pop(_MessageAction.convertTodoToInfo),
+                      ),
+                  ],
                   if (canEdit)
                     ListTile(
                       key: const ValueKey('message_action_edit'),
@@ -264,6 +275,9 @@ class _ChatPageState extends State<ChatPage> {
         break;
       case _MessageAction.convertTodo:
         await _convertMessageToTodo(message);
+        break;
+      case _MessageAction.convertTodoToInfo:
+        await _convertMessageTodoToInfo(message, linkedTodo?.todo);
         break;
       case _MessageAction.openTodo:
         await _openLinkedTodo(linkedTodo?.todo);
@@ -396,6 +410,12 @@ class _ChatPageState extends State<ChatPage> {
             value: _MessageAction.openTodo,
             child: Text(context.t.chat.messageActions.openTodo),
           ),
+        if (linkedTodo != null && linkedTodo.isSourceEntry)
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_convert_to_info'),
+            value: _MessageAction.convertTodoToInfo,
+            child: Text(context.t.chat.messageActions.convertTodoToInfo),
+          ),
         if (canEdit)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_edit'),
@@ -429,6 +449,9 @@ class _ChatPageState extends State<ChatPage> {
         break;
       case _MessageAction.convertTodo:
         await _convertMessageToTodo(message);
+        break;
+      case _MessageAction.convertTodoToInfo:
+        await _convertMessageTodoToInfo(message, linkedTodo?.todo);
         break;
       case _MessageAction.openTodo:
         await _openLinkedTodo(linkedTodo?.todo);
@@ -497,17 +520,105 @@ class _ChatPageState extends State<ChatPage> {
     final sessionKey = SessionScope.of(context).sessionKey;
     final todoId = 'todo:${message.id}';
 
+    final locale = Localizations.localeOf(context);
+    final settings = await ActionsSettingsStore.load();
+    if (!mounted) return;
+
+    final nowLocal = DateTime.now();
+    final timeResolution = LocalTimeResolver.resolve(
+      trimmed,
+      nowLocal,
+      locale: locale,
+      dayEndMinutes: settings.dayEndMinutes,
+    );
+
+    DateTime? dueAtLocal;
+    final candidates = timeResolution?.candidates ?? const <DueCandidate>[];
+    if (candidates.isNotEmpty) {
+      dueAtLocal = candidates.first.dueAtLocal;
+    } else {
+      final initialLocal = DateTime(
+        nowLocal.year,
+        nowLocal.month,
+        nowLocal.day,
+        settings.dayEndTime.hour,
+        settings.dayEndTime.minute,
+      );
+      dueAtLocal = await showSlDateTimePickerDialog(
+        context,
+        initialLocal: initialLocal,
+        firstDate: DateTime(nowLocal.year - 1),
+        lastDate: DateTime(nowLocal.year + 3),
+        title: context.t.actions.calendar.pickCustom,
+        surfaceKey: ValueKey('message_convert_todo_due_picker_${message.id}'),
+      );
+    }
+
+    if (dueAtLocal == null || !mounted) return;
+
     try {
       await backend.upsertTodo(
         sessionKey,
         id: todoId,
         title: trimmed,
-        dueAtMs: null,
+        dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
         status: 'open',
         sourceEntryId: message.id,
         reviewStage: null,
         nextReviewAtMs: null,
         lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted) return;
+    _refresh();
+  }
+
+  Future<void> _convertMessageTodoToInfo(
+      Message message, Todo? linkedTodo) async {
+    if (linkedTodo == null) return;
+    if (linkedTodo.sourceEntryId != message.id) return;
+    if (!mounted) return;
+
+    final shouldConvert = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title:
+              Text(context.t.chat.messageActions.convertTodoToInfoConfirmTitle),
+          content:
+              Text(context.t.chat.messageActions.convertTodoToInfoConfirmBody),
+          actions: [
+            SlButton(
+              variant: SlButtonVariant.outline,
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.t.common.actions.cancel),
+            ),
+            SlButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(context.t.common.fields.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (shouldConvert != true || !mounted) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    try {
+      await backend.upsertTodo(
+        sessionKey,
+        id: linkedTodo.id,
+        title: linkedTodo.title,
+        dueAtMs: null,
+        status: 'dismissed',
+        sourceEntryId: null,
+        reviewStage: null,
+        nextReviewAtMs: null,
+        lastReviewAtMs: linkedTodo.lastReviewAtMs,
       );
     } catch (_) {
       return;
@@ -3904,6 +4015,7 @@ final class _TodoAgendaSummary {
 enum _MessageAction {
   copy,
   convertTodo,
+  convertTodoToInfo,
   openTodo,
   edit,
   linkTodo,

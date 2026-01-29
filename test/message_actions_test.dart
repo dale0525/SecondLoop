@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -12,6 +13,10 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('Long press message -> delete removes it', (tester) async {
     final backend = MessageActionsBackend(
       messages: [
@@ -245,7 +250,18 @@ void main() {
         .tap(find.byKey(const ValueKey('message_context_convert_todo')));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('message_convert_todo_due_picker_m1')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
     expect(backend.upsertedTodos.map((t) => t.id), contains('todo:m1'));
+    final created = backend.upsertedTodos.firstWhere((t) => t.id == 'todo:m1');
+    expect(created.dueAtMs, isNotNull);
 
     debugDefaultTargetPlatformOverride = null;
   });
@@ -276,7 +292,18 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_convert_todo')));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('message_convert_todo_due_picker_m1')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
     expect(backend.upsertedTodos.map((t) => t.id), contains('todo:m1'));
+    final created = backend.upsertedTodos.firstWhere((t) => t.id == 'todo:m1');
+    expect(created.dueAtMs, isNotNull);
   });
 
   testWidgets('Message already linked to todo shows Jump to todo',
@@ -314,6 +341,8 @@ void main() {
         findsNothing);
     expect(
         find.byKey(const ValueKey('message_action_open_todo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_action_convert_to_info')),
+        findsOneWidget);
     expect(
         find.byKey(const ValueKey('message_action_link_todo')), findsNothing);
 
@@ -321,6 +350,58 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
+  });
+
+  testWidgets('Can convert linked todo back to info', (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task',
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('message_action_convert_to_info')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Convert to note?'), findsOneWidget);
+
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    final updated = backend.upsertedTodos.firstWhere((t) => t.id == 't1');
+    expect(updated.status, 'dismissed');
+    expect(updated.sourceEntryId, isNull);
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_action_convert_todo')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('message_action_open_todo')), findsNothing);
   });
 
   testWidgets('Linked note message shows Link to another task', (tester) async {

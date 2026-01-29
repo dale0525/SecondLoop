@@ -378,6 +378,9 @@
     "viewFull": "View full",
     "messageActions": {
       "convertToTodo": "Convert to task",
+      "convertTodoToInfo": "Convert to note",
+      "convertTodoToInfoConfirmTitle": "Convert to note?",
+      "convertTodoToInfoConfirmBody": "This will remove the task, but keep the original message.",
       "openTodo": "Jump to task",
       "linkOtherTodo": "Link to another task"
     },
