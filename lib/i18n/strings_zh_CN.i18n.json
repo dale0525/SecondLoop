@@ -423,6 +423,8 @@
   },
   "attachments": {
     "metadata": {
+      "format": "格式",
+      "size": "大小",
       "capturedAt": "拍摄时间",
       "location": "地点"
     }

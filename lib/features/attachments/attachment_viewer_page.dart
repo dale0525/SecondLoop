@@ -78,21 +78,56 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }
   }
 
-  Widget _buildExifCard(
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    final mb = kb / 1024;
+    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
+    final gb = mb / 1024;
+    return '${gb.toStringAsFixed(1)} GB';
+  }
+
+  Widget _buildMetadataCard(
     BuildContext context, {
+    required String mimeType,
+    required int byteLen,
     required DateTime? capturedAt,
     required double? latitude,
     required double? longitude,
   }) {
-    final hasLocation = latitude != null && longitude != null;
-    if (capturedAt == null && !hasLocation) return const SizedBox.shrink();
+    final hasLocation = latitude != null &&
+        longitude != null &&
+        !(latitude == 0.0 && longitude == 0.0);
 
     return SlSurface(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            context.t.attachments.metadata.format,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            mimeType,
+            key: const ValueKey('attachment_metadata_format'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            context.t.attachments.metadata.size,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatBytes(byteLen),
+            key: const ValueKey('attachment_metadata_size'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           if (capturedAt != null) ...[
+            const SizedBox(height: 10),
             Text(
               context.t.attachments.metadata.capturedAt,
               style: Theme.of(context).textTheme.labelMedium,
@@ -104,8 +139,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
-          if (capturedAt != null && hasLocation) const SizedBox(height: 10),
           if (hasLocation) ...[
+            const SizedBox(height: 10),
             Text(
               context.t.attachments.metadata.location,
               style: Theme.of(context).textTheme.labelMedium,
@@ -175,10 +210,32 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   return const Center(child: Icon(Icons.attach_file));
                 }
 
-                final metadata = tryReadImageExifMetadata(bytes);
+                final exifFromBytes = tryReadImageExifMetadata(bytes);
 
-                final exifFromBytes = metadata;
-                if (exifFromBytes != null) {
+                Widget buildContent(AttachmentExifMetadata? persisted) {
+                  final persistedCapturedAtMs = persisted?.capturedAtMs;
+                  final persistedCapturedAt = persistedCapturedAtMs == null
+                      ? null
+                      : DateTime.fromMillisecondsSinceEpoch(
+                          persistedCapturedAtMs.toInt(),
+                          isUtc: true,
+                        ).toLocal();
+
+                  final persistedLatitude = persisted?.latitude;
+                  final persistedLongitude = persisted?.longitude;
+                  final hasPersistedLocation = persistedLatitude != null &&
+                      persistedLongitude != null &&
+                      !(persistedLatitude == 0.0 && persistedLongitude == 0.0);
+
+                  final capturedAt =
+                      persistedCapturedAt ?? exifFromBytes?.capturedAt;
+                  final latitude = hasPersistedLocation
+                      ? persistedLatitude
+                      : exifFromBytes?.latitude;
+                  final longitude = hasPersistedLocation
+                      ? persistedLongitude
+                      : exifFromBytes?.longitude;
+
                   return Column(
                     children: [
                       Expanded(
@@ -192,11 +249,13 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                         top: false,
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: _buildExifCard(
+                          child: _buildMetadataCard(
                             context,
-                            capturedAt: exifFromBytes.capturedAt,
-                            latitude: exifFromBytes.latitude,
-                            longitude: exifFromBytes.longitude,
+                            mimeType: widget.attachment.mimeType,
+                            byteLen: widget.attachment.byteLen.toInt(),
+                            capturedAt: capturedAt,
+                            latitude: latitude,
+                            longitude: longitude,
                           ),
                         ),
                       ),
@@ -205,48 +264,13 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 }
 
                 if (exifFuture == null) {
-                  return Center(
-                    child: InteractiveViewer(
-                      child: Image.memory(bytes, fit: BoxFit.contain),
-                    ),
-                  );
+                  return buildContent(null);
                 }
 
                 return FutureBuilder<AttachmentExifMetadata?>(
                   future: exifFuture,
                   builder: (context, metaSnapshot) {
-                    final meta = metaSnapshot.data;
-                    final capturedAtMs = meta?.capturedAtMs;
-                    final capturedAt = capturedAtMs == null
-                        ? null
-                        : DateTime.fromMillisecondsSinceEpoch(
-                            capturedAtMs.toInt(),
-                            isUtc: true,
-                          ).toLocal();
-                    return Column(
-                      children: [
-                        Expanded(
-                          child: Center(
-                            child: InteractiveViewer(
-                              child: Image.memory(bytes, fit: BoxFit.contain),
-                            ),
-                          ),
-                        ),
-                        if (meta != null)
-                          SafeArea(
-                            top: false,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: _buildExifCard(
-                                context,
-                                capturedAt: capturedAt,
-                                latitude: meta.latitude,
-                                longitude: meta.longitude,
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
+                    return buildContent(metaSnapshot.data);
                   },
                 );
               },

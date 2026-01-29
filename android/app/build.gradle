@@ -88,4 +88,6 @@ flutter {
     source '../..'
 }
 
-dependencies {}
+dependencies {
+    implementation "androidx.exifinterface:exifinterface:1.3.7"
+}

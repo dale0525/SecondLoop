@@ -309,9 +309,12 @@ fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) 
 }
 
 const KV_ATTACHMENTS_OPLOG_BACKFILLED: &str = "oplog.backfill.attachments.v1";
+const KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED: &str = "oplog.backfill.attachment_exif.v1";
 
 pub fn backfill_attachments_oplog_if_needed(conn: &Connection, key: &[u8; 32]) -> Result<u64> {
-    if kv_get_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED)?.is_some() {
+    let attachments_backfilled = kv_get_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED)?.is_some();
+    let exif_backfilled = kv_get_string(conn, KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED)?.is_some();
+    if attachments_backfilled && exif_backfilled {
         return Ok(0);
     }
 
@@ -319,7 +322,7 @@ pub fn backfill_attachments_oplog_if_needed(conn: &Connection, key: &[u8; 32]) -
 
     let mut ops_inserted = 0u64;
 
-    {
+    if !attachments_backfilled {
         let mut stmt = conn.prepare(
             r#"
 SELECT sha256, mime_type, byte_len, created_at
@@ -353,7 +356,7 @@ ORDER BY created_at ASC, sha256 ASC
         }
     }
 
-    {
+    if !attachments_backfilled {
         let mut stmt = conn.prepare(
             r#"
 SELECT message_id, attachment_sha256, created_at
@@ -385,7 +388,52 @@ ORDER BY created_at ASC, message_id ASC, attachment_sha256 ASC
         }
     }
 
-    kv_set_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED, "1")?;
+    if !attachments_backfilled {
+        kv_set_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED, "1")?;
+    }
+
+    if !exif_backfilled {
+        let mut stmt = conn.prepare(
+            r#"
+SELECT attachment_sha256, metadata, created_at_ms, updated_at_ms
+FROM attachment_exif
+ORDER BY updated_at_ms ASC, attachment_sha256 ASC
+"#,
+        )?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let attachment_sha256: String = row.get(0)?;
+            let blob: Vec<u8> = row.get(1)?;
+            let created_at_ms: i64 = row.get(2)?;
+            let updated_at_ms: i64 = row.get(3)?;
+
+            let aad = format!("attachment.exif:{attachment_sha256}");
+            let json = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            let metadata: AttachmentExifMetadata = serde_json::from_slice(&json)?;
+
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id.as_str(),
+                "seq": seq,
+                "ts_ms": updated_at_ms,
+                "type": "attachment.exif.upsert.v1",
+                "payload": {
+                    "attachment_sha256": attachment_sha256,
+                    "captured_at_ms": metadata.captured_at_ms,
+                    "latitude": metadata.latitude,
+                    "longitude": metadata.longitude,
+                    "created_at_ms": created_at_ms,
+                    "updated_at_ms": updated_at_ms,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            ops_inserted += 1;
+        }
+
+        kv_set_string(conn, KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED, "1")?;
+    }
+
     Ok(ops_inserted)
 }
 
@@ -3309,6 +3357,7 @@ pub fn upsert_attachment_exif_metadata(
     latitude: Option<f64>,
     longitude: Option<f64>,
 ) -> Result<()> {
+    backfill_attachments_oplog_if_needed(conn, key)?;
     if captured_at_ms.is_none() && latitude.is_none() && longitude.is_none() {
         return Ok(());
     }
@@ -3331,6 +3380,33 @@ pub fn upsert_attachment_exif_metadata(
              updated_at_ms = excluded.updated_at_ms"#,
         params![attachment_sha256, blob, now, now],
     )?;
+
+    let (stored_created_at_ms, stored_updated_at_ms): (i64, i64) = conn.query_row(
+        r#"SELECT created_at_ms, updated_at_ms
+           FROM attachment_exif
+           WHERE attachment_sha256 = ?1"#,
+        params![attachment_sha256],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": stored_updated_at_ms,
+        "type": "attachment.exif.upsert.v1",
+        "payload": {
+            "attachment_sha256": attachment_sha256,
+            "captured_at_ms": captured_at_ms,
+            "latitude": latitude,
+            "longitude": longitude,
+            "created_at_ms": stored_created_at_ms,
+            "updated_at_ms": stored_updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
 
     Ok(())
 }

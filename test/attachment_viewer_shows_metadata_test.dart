@@ -14,7 +14,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Attachment viewer hides metadata when no EXIF', (tester) async {
+  testWidgets('Attachment viewer shows basic metadata when no EXIF',
+      (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
     );
@@ -42,6 +43,24 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('attachment_metadata_format')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('attachment_metadata_size')), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+              find.byKey(const ValueKey('attachment_metadata_format')))
+          .data,
+      'image/png',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('attachment_metadata_size')))
+          .data,
+      '67 B',
+    );
 
     expect(find.byKey(const ValueKey('attachment_metadata_captured_at')),
         findsNothing);
@@ -130,6 +149,92 @@ void main() {
     expect(find.text('2026-01-27 10:23'), findsOneWidget);
     expect(find.text('37.76667 N, 122.41667 W'), findsOneWidget);
   });
+
+  testWidgets(
+      'Attachment viewer prefers persisted location when bytes EXIF is wrong',
+      (tester) async {
+    final backend = _Backend(
+      bytesBySha: {'abc': _tinyJpegWithExifAtOrigin()},
+      exifBySha: {
+        'abc': AttachmentExifMetadata(
+          capturedAtMs:
+              DateTime(2026, 1, 27, 10, 23, 45).toUtc().millisecondsSinceEpoch,
+          latitude: 37.76667,
+          longitude: -122.41667,
+        ),
+      },
+    );
+
+    const attachment = Attachment(
+      sha256: 'abc',
+      mimeType: 'image/jpeg',
+      path: 'attachments/abc.bin',
+      byteLen: 123,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(attachment: attachment),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('37.76667 N, 122.41667 W'), findsOneWidget);
+    expect(find.text('0.00000 N, 0.00000 E'), findsNothing);
+  });
+
+  testWidgets(
+      'Attachment viewer ignores persisted (0,0) location and uses bytes EXIF',
+      (tester) async {
+    final backend = _Backend(
+      bytesBySha: {'abc': _tinyJpegWithExif()},
+      exifBySha: {
+        'abc': AttachmentExifMetadata(
+          capturedAtMs:
+              DateTime(2026, 1, 27, 10, 23, 45).toUtc().millisecondsSinceEpoch,
+          latitude: 0,
+          longitude: 0,
+        ),
+      },
+    );
+
+    const attachment = Attachment(
+      sha256: 'abc',
+      mimeType: 'image/jpeg',
+      path: 'attachments/abc.bin',
+      byteLen: 123,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(attachment: attachment),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('37.76667 N, 122.41667 W'), findsOneWidget);
+    expect(find.text('0.00000 N, 0.00000 E'), findsNothing);
+  });
 }
 
 Uint8List _tinyPngBytes() {
@@ -154,6 +259,27 @@ Uint8List _tinyJpegWithExif() {
   exif.gpsIfd['GPSLongitude'] = _gpsCoordinateValue(
     degrees: 122,
     minutes: 25,
+    seconds: 0,
+  );
+
+  return img.injectJpgExif(base, exif) ?? base;
+}
+
+Uint8List _tinyJpegWithExifAtOrigin() {
+  final base = img.encodeJpg(img.Image(width: 1, height: 1), quality: 90);
+
+  final exif = img.ExifData();
+  exif.exifIfd['DateTimeOriginal'] = '2026:01:27 10:23:45';
+  exif.gpsIfd['GPSLatitudeRef'] = img.IfdValueAscii('N');
+  exif.gpsIfd['GPSLatitude'] = _gpsCoordinateValue(
+    degrees: 0,
+    minutes: 0,
+    seconds: 0,
+  );
+  exif.gpsIfd['GPSLongitudeRef'] = img.IfdValueAscii('E');
+  exif.gpsIfd['GPSLongitude'] = _gpsCoordinateValue(
+    degrees: 0,
+    minutes: 0,
     seconds: 0,
   );
 

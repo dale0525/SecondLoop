@@ -19,6 +19,8 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
+import '../../core/platform/android_media_location_permission.dart';
+import '../../core/platform/platform_location.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_button.dart';
@@ -45,11 +47,13 @@ import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../attachments/image_exif_metadata.dart';
+import '../attachments/platform_exif_metadata.dart';
 import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
 import '../settings/settings_page.dart';
 import 'chat_image_attachment_thumbnail.dart';
+import 'deferred_attachment_location_upsert.dart';
 import 'message_viewer_page.dart';
 
 class ChatPage extends StatefulWidget {
@@ -1149,9 +1153,35 @@ class _ChatPageState extends State<ChatPage> {
 
     setState(() => _sending = true);
     try {
-      final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        requestFullMetadata: true,
+      );
       if (picked == null) return;
+      if (!mounted) return;
 
+      final backendAny = AppBackendScope.of(context);
+      final backend = backendAny is NativeAppBackend ? backendAny : null;
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
+
+      final platformExif =
+          await PlatformExifReader.tryReadImageMetadataFromPath(picked.path);
+      final hasValidExifLocation = platformExif != null &&
+          platformExif.hasLocation &&
+          !(platformExif.latitude == 0.0 && platformExif.longitude == 0.0) &&
+          !(platformExif.latitude?.isNaN ?? false) &&
+          !(platformExif.longitude?.isNaN ?? false);
+
+      final Future<PlatformLocation?>? locationFuture = hasValidExifLocation
+          ? null
+          : PlatformLocationReader.tryGetCurrentLocation();
+      PlatformExifMetadata? platformExifToSend = platformExif;
+      if (!hasValidExifLocation) {
+        // Many camera implementations don't embed GPS EXIF when saving to an
+        // app-scoped file. We request location now (may prompt permission),
+        // but we don't block sending. Location will be backfilled later.
+      }
       final rawBytes = await picked.readAsBytes();
       final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
       int? fallbackCapturedAtMs;
@@ -1159,11 +1189,37 @@ class _ChatPageState extends State<ChatPage> {
         fallbackCapturedAtMs =
             (await picked.lastModified()).toUtc().millisecondsSinceEpoch;
       } catch (_) {}
-      await _sendImageAttachment(
+      final sent = await _sendImageAttachment(
         rawBytes,
         inferredMimeType,
         fallbackCapturedAtMs: fallbackCapturedAtMs,
+        platformExif: platformExifToSend,
       );
+
+      if (locationFuture != null && sent != null && backend != null) {
+        unawaited(
+          deferAttachmentLocationUpsert(
+            locationFuture: locationFuture,
+            capturedAtMs: sent.capturedAtMs,
+            upsert: ({
+              required int? capturedAtMs,
+              required double latitude,
+              required double longitude,
+            }) async {
+              await backend.upsertAttachmentExifMetadata(
+                sessionKey,
+                sha256: sent.sha256,
+                capturedAtMs: capturedAtMs,
+                latitude: latitude,
+                longitude: longitude,
+              );
+              syncEngine?.notifyLocalMutation();
+              if (!mounted) return;
+              _refresh();
+            },
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1181,9 +1237,15 @@ class _ChatPageState extends State<ChatPage> {
 
     setState(() => _sending = true);
     try {
-      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      await AndroidMediaLocationPermission.requestIfNeeded();
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        requestFullMetadata: true,
+      );
       if (picked == null) return;
 
+      final platformExif =
+          await PlatformExifReader.tryReadImageMetadataFromPath(picked.path);
       final rawBytes = await picked.readAsBytes();
       final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
       int? fallbackCapturedAtMs;
@@ -1195,6 +1257,7 @@ class _ChatPageState extends State<ChatPage> {
         rawBytes,
         inferredMimeType,
         fallbackCapturedAtMs: fallbackCapturedAtMs,
+        platformExif: platformExif,
       );
     } catch (e) {
       if (!mounted) return;
@@ -1237,13 +1300,14 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _sendImageAttachment(
+  Future<({String sha256, int? capturedAtMs})?> _sendImageAttachment(
     Uint8List rawBytes,
     String inferredMimeType, {
     int? fallbackCapturedAtMs,
+    PlatformExifMetadata? platformExif,
   }) async {
     final backendAny = AppBackendScope.of(context);
-    if (backendAny is! NativeAppBackend) return;
+    if (backendAny is! NativeAppBackend) return null;
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
@@ -1252,11 +1316,25 @@ class _ChatPageState extends State<ChatPage> {
         await compressImageForStorage(rawBytes, mimeType: inferredMimeType);
     final rawExif = tryReadImageExifMetadata(rawBytes);
     final storedExif = tryReadImageExifMetadata(compressed.bytes);
-    final capturedAtMs = rawExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
+    final capturedAtMs = platformExif?.capturedAtMsUtc ??
+        rawExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
         storedExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
         fallbackCapturedAtMs;
-    final latitude = rawExif?.latitude ?? storedExif?.latitude;
-    final longitude = rawExif?.longitude ?? storedExif?.longitude;
+
+    (double, double)? pickLatLon(ImageExifMetadata? meta) {
+      final lat = meta?.latitude;
+      final lon = meta?.longitude;
+      if (lat == null || lon == null) return null;
+      if (lat == 0.0 && lon == 0.0) return null;
+      if (lat.isNaN || lon.isNaN) return null;
+      return (lat, lon);
+    }
+
+    final latLon = pickLatLon(platformExif?.toImageExifMetadata()) ??
+        pickLatLon(rawExif) ??
+        pickLatLon(storedExif);
+    final latitude = latLon?.$1;
+    final longitude = latLon?.$2;
 
     final attachment = await backend.insertAttachment(
       sessionKey,
@@ -1290,7 +1368,9 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     syncEngine?.notifyLocalMutation();
-    if (!mounted) return;
+    if (!mounted) {
+      return (sha256: attachment.sha256, capturedAtMs: capturedAtMs);
+    }
     _refresh();
 
     if (_usePagination) {
@@ -1306,6 +1386,8 @@ class _ChatPageState extends State<ChatPage> {
         );
       });
     }
+
+    return (sha256: attachment.sha256, capturedAtMs: capturedAtMs);
   }
 
   Future<void> _maybeSuggestTodoFromCapture(

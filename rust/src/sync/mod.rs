@@ -1190,6 +1190,7 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "message.insert.v1" => apply_message_insert(conn, db_key, op),
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
         "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
+        "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),
         "message.attachment.link.v1" => apply_message_attachment_link(conn, db_key, &op["payload"]),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
@@ -1910,6 +1911,76 @@ fn apply_message_attachment_link(
     );
 
     if message_exists.is_none() || attachment_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    insert_result?;
+    Ok(())
+}
+
+fn apply_attachment_exif_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let attachment_sha256 = payload["attachment_sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment exif op missing attachment_sha256"))?;
+    let created_at_ms = payload["created_at_ms"].as_i64().unwrap_or(0);
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment exif op missing updated_at_ms"))?;
+
+    let captured_at_ms = payload.get("captured_at_ms").and_then(|v| v.as_i64());
+    let latitude = payload.get("latitude").and_then(|v| v.as_f64());
+    let longitude = payload.get("longitude").and_then(|v| v.as_f64());
+
+    let existing_updated_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at_ms FROM attachment_exif WHERE attachment_sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing_updated_at_ms.unwrap_or(0) >= updated_at_ms {
+        return Ok(());
+    }
+
+    let meta = crate::db::AttachmentExifMetadata {
+        captured_at_ms,
+        latitude,
+        longitude,
+    };
+    let json = serde_json::to_vec(&meta)?;
+    let aad = format!("attachment.exif:{attachment_sha256}");
+    let blob = encrypt_bytes(db_key, &json, aad.as_bytes())?;
+
+    let attachment_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if attachment_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. We'll accept orphan EXIF rows
+        // temporarily; they'll resolve once the attachment arrives.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let insert_result = conn.execute(
+        r#"
+INSERT INTO attachment_exif(attachment_sha256, metadata, created_at_ms, updated_at_ms)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  metadata = excluded.metadata,
+  created_at_ms = min(attachment_exif.created_at_ms, excluded.created_at_ms),
+  updated_at_ms = max(attachment_exif.updated_at_ms, excluded.updated_at_ms)
+"#,
+        params![attachment_sha256, blob, created_at_ms, updated_at_ms],
+    );
+
+    if attachment_exists.is_none() {
         let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
     }
 

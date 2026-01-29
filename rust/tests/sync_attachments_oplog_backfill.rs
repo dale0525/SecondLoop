@@ -58,6 +58,22 @@ fn sync_push_backfills_attachment_ops_for_legacy_rows() {
         )
         .expect("insert message attachment link");
 
+    let exif = db::AttachmentExifMetadata {
+        captured_at_ms: Some(1_700_000_123_000),
+        latitude: Some(37.76667),
+        longitude: Some(-122.41667),
+    };
+    let exif_json = serde_json::to_vec(&exif).expect("serialize exif");
+    let exif_aad = format!("attachment.exif:{sha256}");
+    let exif_blob = encrypt_bytes(&key_a, &exif_json, exif_aad.as_bytes()).expect("encrypt exif");
+    conn_a
+        .execute(
+            r#"INSERT INTO attachment_exif(attachment_sha256, metadata, created_at_ms, updated_at_ms)
+               VALUES (?1, ?2, ?3, ?4)"#,
+            rusqlite::params![sha256, exif_blob, now, now],
+        )
+        .expect("insert attachment exif metadata");
+
     // Sanity: local bytes decrypt to original.
     let stored = fs::read(&full_path).expect("read attachment blob");
     let plain = decrypt_bytes(&key_a, &stored, aad.as_bytes()).expect("decrypt attachment blob");
@@ -86,4 +102,11 @@ fn sync_push_backfills_attachment_ops_for_legacy_rows() {
     let listed = db::list_message_attachments(&conn_b, &key_b, &message.id).expect("list B");
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].sha256, sha256);
+
+    let read_exif = db::read_attachment_exif_metadata(&conn_b, &key_b, &sha256)
+        .expect("read exif")
+        .expect("exif present");
+    assert_eq!(read_exif.captured_at_ms, exif.captured_at_ms);
+    assert!((read_exif.latitude.unwrap() - exif.latitude.unwrap()).abs() < 1e-9);
+    assert!((read_exif.longitude.unwrap() - exif.longitude.unwrap()).abs() < 1e-9);
 }

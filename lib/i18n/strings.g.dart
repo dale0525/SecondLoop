@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 738 (369 per locale)
+/// Strings: 742 (371 per locale)
 ///
-/// Built on 2026-01-29 at 05:40 UTC
+/// Built on 2026-01-29 at 06:25 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1042,6 +1042,8 @@ class _StringsAttachmentsMetadataEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
+  String get format => 'Format';
+  String get size => 'Size';
   String get capturedAt => 'Captured';
   String get location => 'Location';
 }
@@ -3164,6 +3166,10 @@ class _StringsAttachmentsMetadataZhCn extends _StringsAttachmentsMetadataEn {
 
   // Translations
   @override
+  String get format => '格式';
+  @override
+  String get size => '大小';
+  @override
   String get capturedAt => '拍摄时间';
   @override
   String get location => '地点';
@@ -4856,6 +4862,10 @@ extension on Translations {
         return 'SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.';
       case 'chat.askAiConsent.dontShowAgain':
         return 'Don\'t show again';
+      case 'attachments.metadata.format':
+        return 'Format';
+      case 'attachments.metadata.size':
+        return 'Size';
       case 'attachments.metadata.capturedAt':
         return 'Captured';
       case 'attachments.metadata.location':
@@ -5622,6 +5632,10 @@ extension on _StringsZhCn {
         return 'SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。';
       case 'chat.askAiConsent.dontShowAgain':
         return '不再提示';
+      case 'attachments.metadata.format':
+        return '格式';
+      case 'attachments.metadata.size':
+        return '大小';
       case 'attachments.metadata.capturedAt':
         return '拍摄时间';
       case 'attachments.metadata.location':
