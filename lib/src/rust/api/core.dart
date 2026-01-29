@@ -129,6 +129,13 @@ Future<Todo> dbSetTodoStatus(
         newStatus: newStatus,
         sourceMessageId: sourceMessageId);
 
+Future<BigInt> dbDeleteTodoAndAssociatedMessages(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbDeleteTodoAndAssociatedMessages(
+        appDir: appDir, key: key, todoId: todoId);
+
 Future<TodoActivity> dbAppendTodoNote(
         {required String appDir,
         required List<int> key,
@@ -216,6 +223,18 @@ Future<void> dbSetMessageDeleted(
         required bool isDeleted}) =>
     RustLib.instance.api.crateApiCoreDbSetMessageDeleted(
         appDir: appDir, key: key, messageId: messageId, isDeleted: isDeleted);
+
+Future<BigInt> dbPurgeMessageAttachments(
+        {required String appDir,
+        required List<int> key,
+        required String messageId}) =>
+    RustLib.instance.api.crateApiCoreDbPurgeMessageAttachments(
+        appDir: appDir, key: key, messageId: messageId);
+
+Future<void> dbClearLocalAttachmentCache(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbClearLocalAttachmentCache(appDir: appDir, key: key);
 
 Future<Attachment> dbInsertAttachment(
         {required String appDir,

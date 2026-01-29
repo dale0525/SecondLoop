@@ -6,6 +6,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
 import '../../../core/session/session_scope.dart';
+import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
@@ -138,6 +139,50 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     if (!mounted) return;
     setState(() => _todo = updated);
     _refreshActivities();
+  }
+
+  Future<void> _deleteTodo() async {
+    final t = context.t;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.actions.todoDelete.dialog.title),
+          content: Text(t.actions.todoDelete.dialog.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              key: const ValueKey('todo_delete_confirm'),
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: Text(t.actions.todoDelete.dialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (confirmed != true) return;
+
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      await backend.deleteTodo(sessionKey, todoId: _todo.id);
+      if (!mounted) return;
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.errors.loadFailed(error: '$e'))),
+      );
+    }
   }
 
   Future<void> _appendNote() async {
@@ -471,7 +516,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                                           ? 0.32
                                           : 0.22,
                                     ),
-                            onPressed: () => unawaited(_setStatus('dismissed')),
+                            onPressed: () => unawaited(_deleteTodo()),
                           ),
                         ],
                       ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/backend/app_backend.dart';
 import '../../../core/session/session_scope.dart';
+import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
@@ -125,14 +126,39 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
   }
 
   Future<void> _dismiss(Todo todo) async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    await backend.setTodoStatus(
-      sessionKey,
-      todoId: todo.id,
-      newStatus: _kTodoStatusDismissed,
+    final t = context.t;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.actions.todoDelete.dialog.title),
+          content: Text(t.actions.todoDelete.dialog.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              key: ValueKey('review_queue_delete_confirm_${todo.id}'),
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: Text(t.actions.todoDelete.dialog.confirm),
+            ),
+          ],
+        );
+      },
     );
     if (!mounted) return;
+    if (confirmed != true) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    await backend.deleteTodo(sessionKey, todoId: todo.id);
+    if (!mounted) return;
+    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     await _refresh();
   }
 

@@ -335,6 +335,7 @@ fn push_internal(
     let mut ops: Vec<PushOp> = Vec::new();
     let mut max_seq = last_pushed_seq;
     let mut uploaded_attachments: BTreeSet<String> = BTreeSet::new();
+    let mut deleted_attachments: BTreeSet<String> = BTreeSet::new();
 
     while let Some(row) = rows.next()? {
         let op_id: String = row.get(0)?;
@@ -347,23 +348,29 @@ fn push_internal(
             format!("oplog.op_json:{op_id}").as_bytes(),
         )?;
 
-        if upload_attachment_bytes {
-            if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
-                if op_json["type"].as_str() == Some("attachment.upsert.v1") {
-                    if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
-                        if uploaded_attachments.insert(sha256.to_string()) {
-                            let mime_type = op_json["payload"]["mime_type"]
-                                .as_str()
-                                .unwrap_or("application/octet-stream");
-                            let created_at_ms =
-                                op_json["payload"]["created_at_ms"].as_i64().unwrap_or(0);
-                            let _ = upload_attachment_bytes_if_present(
-                                &upload_ctx,
-                                sha256,
-                                mime_type,
-                                created_at_ms,
-                            )?;
-                        }
+        if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
+            if upload_attachment_bytes && op_json["type"].as_str() == Some("attachment.upsert.v1") {
+                if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                    if uploaded_attachments.insert(sha256.to_string()) {
+                        let mime_type = op_json["payload"]["mime_type"]
+                            .as_str()
+                            .unwrap_or("application/octet-stream");
+                        let created_at_ms =
+                            op_json["payload"]["created_at_ms"].as_i64().unwrap_or(0);
+                        let _ = upload_attachment_bytes_if_present(
+                            &upload_ctx,
+                            sha256,
+                            mime_type,
+                            created_at_ms,
+                        )?;
+                    }
+                }
+            }
+
+            if op_json["type"].as_str() == Some("attachment.delete.v1") {
+                if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                    if deleted_attachments.insert(sha256.to_string()) {
+                        delete_remote_attachment_bytes(&upload_ctx, sha256)?;
                     }
                 }
             }
@@ -412,6 +419,26 @@ fn push_internal(
 
     let pushed = max_seq.saturating_sub(last_pushed_seq);
     Ok(pushed as u64)
+}
+
+fn delete_remote_attachment_bytes(ctx: &AttachmentUploadContext<'_>, sha256: &str) -> Result<()> {
+    let endpoint = url(
+        ctx.base_url,
+        &format!("/v1/vaults/{}/attachments/{sha256}", ctx.vault_id),
+    )?;
+    let resp = ctx.http.delete(endpoint).bearer_auth(ctx.id_token).send()?;
+
+    let status = resp.status();
+    if status.as_u16() == 404 {
+        return Ok(());
+    }
+    if !status.is_success() {
+        let text = resp.text().unwrap_or_default();
+        return Err(anyhow!(
+            "managed-vault delete attachment failed: HTTP {status} {text}"
+        ));
+    }
+    Ok(())
 }
 
 pub fn upload_attachment_bytes(

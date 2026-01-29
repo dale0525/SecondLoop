@@ -65,8 +65,12 @@ abstract class AppBackend {
   Future<void> editMessage(Uint8List key, String messageId, String content);
   Future<void> setMessageDeleted(
       Uint8List key, String messageId, bool isDeleted);
+  Future<void> purgeMessageAttachments(Uint8List key, String messageId) =>
+      setMessageDeleted(key, messageId, true);
 
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key);
+
+  Future<void> clearLocalAttachmentCache(Uint8List key) async {}
 
   Future<String> getOrCreateDeviceId() {
     throw UnimplementedError('getOrCreateDeviceId');
@@ -105,6 +109,17 @@ abstract class AppBackend {
     String? sourceMessageId,
   }) {
     throw UnimplementedError('setTodoStatus');
+  }
+
+  Future<void> deleteTodo(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    await setTodoStatus(
+      key,
+      todoId: todoId,
+      newStatus: 'dismissed',
+    );
   }
 
   Future<TodoActivity> appendTodoNote(

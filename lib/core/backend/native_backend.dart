@@ -399,9 +399,28 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<void> purgeMessageAttachments(Uint8List key, String messageId) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbPurgeMessageAttachments(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+    );
+  }
+
+  @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     final appDir = await _getAppDir();
     await rust_core.dbResetVaultDataPreservingLlmProfiles(
+      appDir: appDir,
+      key: key,
+    );
+  }
+
+  @override
+  Future<void> clearLocalAttachmentCache(Uint8List key) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbClearLocalAttachmentCache(
       appDir: appDir,
       key: key,
     );
@@ -469,6 +488,19 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       todoId: todoId,
       newStatus: newStatus,
       sourceMessageId: sourceMessageId,
+    );
+  }
+
+  @override
+  Future<void> deleteTodo(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbDeleteTodoAndAssociatedMessages(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
     );
   }
 

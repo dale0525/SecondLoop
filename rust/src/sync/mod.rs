@@ -318,6 +318,7 @@ fn push_internal(
         let mut pushed: u64 = 0;
         let mut max_seq = after_seq;
         let mut uploaded_attachments: BTreeSet<String> = BTreeSet::new();
+        let mut deleted_attachments: BTreeSet<String> = BTreeSet::new();
         let mut touched_pack_chunks: BTreeSet<i64> = BTreeSet::new();
 
         while let Some(row) = rows.next()? {
@@ -331,20 +332,33 @@ fn push_internal(
                 format!("oplog.op_json:{op_id}").as_bytes(),
             )?;
 
-            if ctx.upload_attachment_bytes {
-                if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
-                    if op_json["type"].as_str() == Some("attachment.upsert.v1") {
-                        if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
-                            if uploaded_attachments.insert(sha256.to_string()) {
-                                let _ = upload_attachment_bytes_if_present(
-                                    ctx.conn,
-                                    ctx.db_key,
-                                    ctx.sync_key,
-                                    ctx.remote,
-                                    ctx.attachments_dir,
-                                    ctx.app_dir,
-                                    sha256,
-                                )?;
+            if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
+                if ctx.upload_attachment_bytes
+                    && op_json["type"].as_str() == Some("attachment.upsert.v1")
+                {
+                    if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                        if uploaded_attachments.insert(sha256.to_string()) {
+                            let _ = upload_attachment_bytes_if_present(
+                                ctx.conn,
+                                ctx.db_key,
+                                ctx.sync_key,
+                                ctx.remote,
+                                ctx.attachments_dir,
+                                ctx.app_dir,
+                                sha256,
+                            )?;
+                        }
+                    }
+                }
+
+                if op_json["type"].as_str() == Some("attachment.delete.v1") {
+                    if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                        if deleted_attachments.insert(sha256.to_string()) {
+                            let remote_path = format!("{}{}.bin", ctx.attachments_dir, sha256);
+                            match ctx.remote.delete(&remote_path) {
+                                Ok(()) => {}
+                                Err(e) if e.is::<NotFound>() => {}
+                                Err(e) => return Err(e),
                             }
                         }
                     }
@@ -1190,9 +1204,11 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "message.insert.v1" => apply_message_insert(conn, db_key, op),
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
         "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
+        "attachment.delete.v1" => apply_attachment_delete(conn, db_key, op),
         "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),
         "message.attachment.link.v1" => apply_message_attachment_link(conn, db_key, &op["payload"]),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
+        "todo.delete.v1" => apply_todo_delete(conn, op),
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
         "todo.activity_attachment.link.v1" => {
             apply_todo_activity_attachment_link(conn, db_key, &op["payload"])
@@ -1292,6 +1308,25 @@ fn apply_todo_upsert(
         .as_i64()
         .ok_or_else(|| anyhow!("todo op missing updated_at_ms"))?;
 
+    let existing_delete: Option<i64> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(deleted_at_ms) = existing_delete {
+        // Ignore upserts that are older than (or equal to) the delete tombstone.
+        if updated_at_ms <= deleted_at_ms {
+            return Ok(());
+        }
+        // Allow resurrection when the new todo is updated after the deletion.
+        conn.execute(
+            r#"DELETE FROM todo_deletions WHERE todo_id = ?1"#,
+            params![todo_id],
+        )?;
+    }
+
     let due_at_ms = payload["due_at_ms"].as_i64();
     let source_entry_id = payload["source_entry_id"].as_str();
     let review_stage = payload["review_stage"].as_i64();
@@ -1335,6 +1370,151 @@ WHERE excluded.updated_at_ms > todos.updated_at_ms
     Ok(())
 }
 
+fn apply_todo_delete(conn: &Connection, op: &serde_json::Value) -> Result<()> {
+    let device_id = op["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.delete.v1 missing device_id"))?;
+    let seq = op["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.delete.v1 missing seq"))?;
+    let payload = &op["payload"];
+
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.delete.v1 missing todo_id"))?;
+    let deleted_at_ms = payload["deleted_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.delete.v1 missing deleted_at_ms"))?;
+
+    let existing_delete: Option<i64> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    let should_update_tombstone = match existing_delete {
+        None => true,
+        Some(existing_at) => deleted_at_ms > existing_at,
+    };
+    if should_update_tombstone {
+        conn.execute(
+            r#"
+INSERT INTO todo_deletions(todo_id, deleted_at_ms)
+VALUES (?1, ?2)
+ON CONFLICT(todo_id) DO UPDATE SET
+  deleted_at_ms = excluded.deleted_at_ms
+"#,
+            params![todo_id, deleted_at_ms],
+        )?;
+    }
+
+    // Best-effort: delete messages linked to this todo.
+    // - The todo's source_entry_id message (if present)
+    // - Any messages linked via todo_activities.source_message_id
+    let mut message_ids: BTreeSet<String> = BTreeSet::new();
+
+    let source_entry_id: Option<Option<String>> = conn
+        .query_row(
+            r#"SELECT source_entry_id FROM todos WHERE id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(Some(source_entry_id)) = source_entry_id {
+        let trimmed = source_entry_id.trim();
+        if !trimmed.is_empty() {
+            message_ids.insert(trimmed.to_string());
+        }
+    }
+
+    let mut stmt = conn.prepare(
+        r#"SELECT DISTINCT source_message_id
+           FROM todo_activities
+           WHERE todo_id = ?1
+             AND source_message_id IS NOT NULL
+             AND source_message_id != ''"#,
+    )?;
+    let mut rows = stmt.query(params![todo_id])?;
+    while let Some(row) = rows.next()? {
+        let message_id: String = row.get(0)?;
+        let trimmed = message_id.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        message_ids.insert(trimmed.to_string());
+    }
+
+    for message_id in message_ids {
+        let existing: Option<(String, i64, String, i64)> = conn
+            .query_row(
+                r#"SELECT conversation_id, updated_at, updated_by_device_id, updated_by_seq
+                   FROM messages
+                   WHERE id = ?1"#,
+                params![message_id.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        let Some((conversation_id, existing_updated_at, existing_device_id, existing_seq)) =
+            existing
+        else {
+            continue;
+        };
+
+        if !message_version_newer(
+            deleted_at_ms,
+            device_id,
+            seq,
+            existing_updated_at,
+            &existing_device_id,
+            existing_seq,
+        ) {
+            continue;
+        }
+
+        let _ = conn.execute(
+            r#"UPDATE messages
+               SET updated_at = ?2,
+                   updated_by_device_id = ?3,
+                   updated_by_seq = ?4,
+                   is_deleted = 1,
+                   needs_embedding = 0
+               WHERE id = ?1"#,
+            params![message_id, deleted_at_ms, device_id, seq],
+        )?;
+        let _ = conn.execute(
+            r#"UPDATE conversations
+               SET updated_at = CASE WHEN updated_at < ?2 THEN ?2 ELSE updated_at END
+               WHERE id = ?1"#,
+            params![conversation_id, deleted_at_ms],
+        )?;
+    }
+
+    // Remove todo and related data (including orphaned rows from cross-device ordering).
+    let _ = conn.execute(
+        r#"DELETE FROM todo_activity_attachments
+           WHERE activity_id IN (SELECT id FROM todo_activities WHERE todo_id = ?1)"#,
+        params![todo_id],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM todo_activities WHERE todo_id = ?1"#,
+        params![todo_id],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM todo_activity_embeddings WHERE todo_id = ?1"#,
+        params![todo_id],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM todo_embeddings WHERE todo_id = ?1"#,
+        params![todo_id],
+    )?;
+
+    conn.execute(r#"DELETE FROM todos WHERE id = ?1"#, params![todo_id])?;
+
+    Ok(())
+}
+
 fn apply_todo_activity_append(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -1352,6 +1532,20 @@ fn apply_todo_activity_append(
     let created_at_ms = payload["created_at_ms"]
         .as_i64()
         .ok_or_else(|| anyhow!("todo activity op missing created_at_ms"))?;
+
+    let deleted_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(deleted_at_ms) = deleted_at_ms {
+        // Ignore older activity ops for deleted todos.
+        if created_at_ms <= deleted_at_ms {
+            return Ok(());
+        }
+    }
 
     let from_status = payload["from_status"].as_str();
     let to_status = payload["to_status"].as_str();
@@ -1428,6 +1622,29 @@ fn apply_todo_activity_attachment_link(
     let created_at_ms = payload["created_at_ms"]
         .as_i64()
         .ok_or_else(|| anyhow!("todo activity attachment op missing created_at_ms"))?;
+
+    // Best-effort: ignore old links for deleted todos (when the activity is present locally).
+    let activity_todo_id: Option<String> = conn
+        .query_row(
+            r#"SELECT todo_id FROM todo_activities WHERE id = ?1"#,
+            params![activity_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(todo_id) = activity_todo_id {
+        let deleted_at_ms: Option<i64> = conn
+            .query_row(
+                r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
+                params![todo_id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(deleted_at_ms) = deleted_at_ms {
+            if created_at_ms <= deleted_at_ms {
+                return Ok(());
+            }
+        }
+    }
 
     let existing: Option<i64> = conn
         .query_row(
@@ -1837,6 +2054,28 @@ fn apply_attachment_upsert(
         .as_i64()
         .ok_or_else(|| anyhow!("attachment op missing created_at_ms"))?;
 
+    let existing_delete: Option<(i64, String, i64)> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms, deleted_by_device_id, deleted_by_seq
+               FROM attachment_deletions
+               WHERE sha256 = ?1"#,
+            params![sha256],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    if let Some((deleted_at_ms, _, _)) = existing_delete {
+        // Ignore upserts that are older than (or equal to) the delete tombstone.
+        if created_at_ms <= deleted_at_ms {
+            return Ok(());
+        }
+        // Allow resurrection when the new attachment is created after the deletion.
+        conn.execute(
+            r#"DELETE FROM attachment_deletions WHERE sha256 = ?1"#,
+            params![sha256],
+        )?;
+    }
+
     let path = format!("attachments/{sha256}.bin");
 
     conn.execute(
@@ -1850,6 +2089,149 @@ ON CONFLICT(sha256) DO UPDATE SET
   created_at = min(attachments.created_at, excluded.created_at)
 "#,
         params![sha256, mime_type, path, byte_len, created_at_ms],
+    )?;
+
+    Ok(())
+}
+
+fn apply_attachment_delete(
+    conn: &Connection,
+    _db_key: &[u8; 32],
+    op: &serde_json::Value,
+) -> Result<()> {
+    let device_id = op["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment.delete.v1 missing device_id"))?;
+    let seq = op["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment.delete.v1 missing seq"))?;
+    let payload = &op["payload"];
+
+    let sha256 = payload["sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment.delete.v1 missing sha256"))?;
+    let deleted_at_ms = payload["deleted_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment.delete.v1 missing deleted_at_ms"))?;
+
+    let existing_delete: Option<(i64, String, i64)> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms, deleted_by_device_id, deleted_by_seq
+               FROM attachment_deletions
+               WHERE sha256 = ?1"#,
+            params![sha256],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    let should_update_tombstone = match existing_delete {
+        None => true,
+        Some((existing_at, existing_device, existing_seq)) => message_version_newer(
+            deleted_at_ms,
+            device_id,
+            seq,
+            existing_at,
+            &existing_device,
+            existing_seq,
+        ),
+    };
+
+    if should_update_tombstone {
+        conn.execute(
+            r#"
+INSERT INTO attachment_deletions(sha256, deleted_at_ms, deleted_by_device_id, deleted_by_seq)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT(sha256) DO UPDATE SET
+  deleted_at_ms = excluded.deleted_at_ms,
+  deleted_by_device_id = excluded.deleted_by_device_id,
+  deleted_by_seq = excluded.deleted_by_seq
+"#,
+            params![sha256, deleted_at_ms, device_id, seq],
+        )?;
+    }
+
+    // Best-effort: delete local cached files.
+    if let Ok(app_dir) = app_dir_from_conn(conn) {
+        let _ = fs::remove_file(app_dir.join(format!("attachments/{sha256}.bin")));
+        let _ = fs::remove_dir_all(app_dir.join(format!("attachments/variants/{sha256}")));
+    }
+
+    // Best-effort: delete any messages referencing this attachment.
+    let mut stmt = conn.prepare(
+        r#"SELECT message_id
+           FROM message_attachments
+           WHERE attachment_sha256 = ?1"#,
+    )?;
+    let mut rows = stmt.query(params![sha256])?;
+    let mut message_ids: Vec<String> = Vec::new();
+    while let Some(row) = rows.next()? {
+        let message_id: String = row.get(0)?;
+        message_ids.push(message_id);
+    }
+
+    for message_id in message_ids {
+        let existing: Option<(i64, String, i64)> = conn
+            .query_row(
+                r#"SELECT updated_at, updated_by_device_id, updated_by_seq
+                   FROM messages
+                   WHERE id = ?1"#,
+                params![message_id.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        let Some((existing_updated_at, existing_device_id, existing_seq)) = existing else {
+            continue;
+        };
+
+        if !message_version_newer(
+            deleted_at_ms,
+            device_id,
+            seq,
+            existing_updated_at,
+            &existing_device_id,
+            existing_seq,
+        ) {
+            continue;
+        }
+
+        let _ = conn.execute(
+            r#"UPDATE messages
+               SET updated_at = ?2,
+                   updated_by_device_id = ?3,
+                   updated_by_seq = ?4,
+                   is_deleted = 1,
+                   needs_embedding = 0
+               WHERE id = ?1"#,
+            params![message_id, deleted_at_ms, device_id, seq],
+        )?;
+    }
+
+    // Remove attachment metadata and any orphaned links (in case they were inserted with
+    // foreign_keys temporarily disabled).
+    let _ = conn.execute(
+        r#"DELETE FROM message_attachments WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM todo_activity_attachments WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_variants WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_exif WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM cloud_media_backup WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+
+    conn.execute(
+        r#"DELETE FROM attachments WHERE sha256 = ?1"#,
+        params![sha256],
     )?;
 
     Ok(())

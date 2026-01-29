@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 742 (371 per locale)
+/// Strings: 762 (381 per locale)
 ///
-/// Built on 2026-01-29 at 06:25 UTC
+/// Built on 2026-01-29 at 11:31 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -260,6 +260,8 @@ class _StringsActionsEn {
       _StringsActionsTodoNoteLinkEn._(_root);
   late final _StringsActionsTodoDetailEn todoDetail =
       _StringsActionsTodoDetailEn._(_root);
+  late final _StringsActionsTodoDeleteEn todoDelete =
+      _StringsActionsTodoDeleteEn._(_root);
   late final _StringsActionsHistoryEn history =
       _StringsActionsHistoryEn._(_root);
   late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
@@ -433,6 +435,8 @@ class _StringsSyncEn {
       _StringsSyncMediaPreviewEn._(_root);
   late final _StringsSyncMediaBackupEn mediaBackup =
       _StringsSyncMediaBackupEn._(_root);
+  late final _StringsSyncLocalCacheEn localCache =
+      _StringsSyncLocalCacheEn._(_root);
   String get backendLabel => 'Sync method';
   String get backendWebdav => 'WebDAV (your server)';
   String get backendLocalDir => 'Folder on this computer (desktop)';
@@ -641,6 +645,17 @@ class _StringsActionsTodoDetailEn {
   String get pickAttachment => 'Choose an attachment';
   String get noAttachments => 'No attachments yet';
   String get attachmentNoteDefault => 'Added attachment';
+}
+
+// Path: actions.todoDelete
+class _StringsActionsTodoDeleteEn {
+  _StringsActionsTodoDeleteEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsActionsTodoDeleteDialogEn dialog =
+      _StringsActionsTodoDeleteDialogEn._(_root);
 }
 
 // Path: actions.history
@@ -1129,6 +1144,22 @@ class _StringsSyncMediaBackupEn {
       _StringsSyncMediaBackupCellularDialogEn._(_root);
 }
 
+// Path: sync.localCache
+class _StringsSyncLocalCacheEn {
+  _StringsSyncLocalCacheEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get button => 'Clear local storage';
+  String get subtitle =>
+      'Deletes cached attachment files on this device (remote copies are kept and can be re-downloaded). Make sure sync/upload has completed.';
+  String get cleared => 'Cleared local cache';
+  String failed({required Object error}) => 'Clear failed: ${error}';
+  late final _StringsSyncLocalCacheDialogEn dialog =
+      _StringsSyncLocalCacheDialogEn._(_root);
+}
+
 // Path: sync.cloudManagedVault
 class _StringsSyncCloudManagedVaultEn {
   _StringsSyncCloudManagedVaultEn._(this._root);
@@ -1240,6 +1271,19 @@ class _StringsActionsReviewQueueActionsEn {
   String get start => 'Start';
   String get done => 'Done';
   String get dismiss => 'Dismiss';
+}
+
+// Path: actions.todoDelete.dialog
+class _StringsActionsTodoDeleteDialogEn {
+  _StringsActionsTodoDeleteDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete task?';
+  String get message =>
+      'This will permanently delete this task and all linked chat messages.';
+  String get confirm => 'Delete';
 }
 
 // Path: actions.history.presets
@@ -1592,6 +1636,19 @@ class _StringsSyncMediaBackupCellularDialogEn {
   String get message =>
       'Wi‑Fi only is on. Uploading over mobile data may use a lot of data.';
   String get confirm => 'Use mobile data';
+}
+
+// Path: sync.localCache.dialog
+class _StringsSyncLocalCacheDialogEn {
+  _StringsSyncLocalCacheDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Clear local storage?';
+  String get message =>
+      'This deletes cached photos and files on this device to save space. Your remote sync storage keeps a copy; items will be re-downloaded on demand when viewed again.';
+  String get confirm => 'Clear';
 }
 
 // Path: sync.cloudManagedVault.switchDialog
@@ -1980,6 +2037,9 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsTodoDetailZhCn todoDetail =
       _StringsActionsTodoDetailZhCn._(_root);
   @override
+  late final _StringsActionsTodoDeleteZhCn todoDelete =
+      _StringsActionsTodoDeleteZhCn._(_root);
+  @override
   late final _StringsActionsHistoryZhCn history =
       _StringsActionsHistoryZhCn._(_root);
   @override
@@ -2240,6 +2300,9 @@ class _StringsSyncZhCn extends _StringsSyncEn {
   @override
   late final _StringsSyncMediaBackupZhCn mediaBackup =
       _StringsSyncMediaBackupZhCn._(_root);
+  @override
+  late final _StringsSyncLocalCacheZhCn localCache =
+      _StringsSyncLocalCacheZhCn._(_root);
   @override
   String get backendLabel => '同步方式';
   @override
@@ -2575,6 +2638,21 @@ class _StringsActionsTodoDetailZhCn extends _StringsActionsTodoDetailEn {
   String get noAttachments => '暂无附件';
   @override
   String get attachmentNoteDefault => '添加了附件';
+}
+
+// Path: actions.todoDelete
+class _StringsActionsTodoDeleteZhCn extends _StringsActionsTodoDeleteEn {
+  _StringsActionsTodoDeleteZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsActionsTodoDeleteDialogZhCn dialog =
+      _StringsActionsTodoDeleteDialogZhCn._(_root);
 }
 
 // Path: actions.history
@@ -3292,6 +3370,29 @@ class _StringsSyncMediaBackupZhCn extends _StringsSyncMediaBackupEn {
       _StringsSyncMediaBackupCellularDialogZhCn._(_root);
 }
 
+// Path: sync.localCache
+class _StringsSyncLocalCacheZhCn extends _StringsSyncLocalCacheEn {
+  _StringsSyncLocalCacheZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get button => '清理本地存储';
+  @override
+  String get subtitle => '删除本机缓存的附件文件（远端保留，需要时可重新下载）。请确保已完成同步/上传。';
+  @override
+  String get cleared => '已清理本地缓存';
+  @override
+  String failed({required Object error}) => '清理失败：${error}';
+  @override
+  late final _StringsSyncLocalCacheDialogZhCn dialog =
+      _StringsSyncLocalCacheDialogZhCn._(_root);
+}
+
 // Path: sync.cloudManagedVault
 class _StringsSyncCloudManagedVaultZhCn
     extends _StringsSyncCloudManagedVaultEn {
@@ -3457,6 +3558,25 @@ class _StringsActionsReviewQueueActionsZhCn
   String get done => '完成';
   @override
   String get dismiss => '忽略';
+}
+
+// Path: actions.todoDelete.dialog
+class _StringsActionsTodoDeleteDialogZhCn
+    extends _StringsActionsTodoDeleteDialogEn {
+  _StringsActionsTodoDeleteDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除待办？';
+  @override
+  String get message => '这将永久删除该待办，并删除所有关联的聊天消息。';
+  @override
+  String get confirm => '删除';
 }
 
 // Path: actions.history.presets
@@ -3994,6 +4114,24 @@ class _StringsSyncMediaBackupCellularDialogZhCn
   String get confirm => '仍然使用';
 }
 
+// Path: sync.localCache.dialog
+class _StringsSyncLocalCacheDialogZhCn extends _StringsSyncLocalCacheDialogEn {
+  _StringsSyncLocalCacheDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '清理本地存储？';
+  @override
+  String get message => '这将删除本机缓存的照片与文件，以节省本地空间。远端同步存储会保留副本；之后查看时会按需重新下载。';
+  @override
+  String get confirm => '清理';
+}
+
 // Path: sync.cloudManagedVault.switchDialog
 class _StringsSyncCloudManagedVaultSwitchDialogZhCn
     extends _StringsSyncCloudManagedVaultSwitchDialogEn {
@@ -4482,6 +4620,12 @@ extension on Translations {
         return 'No attachments yet';
       case 'actions.todoDetail.attachmentNoteDefault':
         return 'Added attachment';
+      case 'actions.todoDelete.dialog.title':
+        return 'Delete task?';
+      case 'actions.todoDelete.dialog.message':
+        return 'This will permanently delete this task and all linked chat messages.';
+      case 'actions.todoDelete.dialog.confirm':
+        return 'Delete';
       case 'actions.history.title':
         return 'History';
       case 'actions.history.empty':
@@ -4975,6 +5119,20 @@ extension on Translations {
         return 'Wi‑Fi only is on. Uploading over mobile data may use a lot of data.';
       case 'sync.mediaBackup.cellularDialog.confirm':
         return 'Use mobile data';
+      case 'sync.localCache.button':
+        return 'Clear local storage';
+      case 'sync.localCache.subtitle':
+        return 'Deletes cached attachment files on this device (remote copies are kept and can be re-downloaded). Make sure sync/upload has completed.';
+      case 'sync.localCache.cleared':
+        return 'Cleared local cache';
+      case 'sync.localCache.failed':
+        return ({required Object error}) => 'Clear failed: ${error}';
+      case 'sync.localCache.dialog.title':
+        return 'Clear local storage?';
+      case 'sync.localCache.dialog.message':
+        return 'This deletes cached photos and files on this device to save space. Your remote sync storage keeps a copy; items will be re-downloaded on demand when viewed again.';
+      case 'sync.localCache.dialog.confirm':
+        return 'Clear';
       case 'sync.backendLabel':
         return 'Sync method';
       case 'sync.backendWebdav':
@@ -5256,6 +5414,12 @@ extension on _StringsZhCn {
         return '暂无附件';
       case 'actions.todoDetail.attachmentNoteDefault':
         return '添加了附件';
+      case 'actions.todoDelete.dialog.title':
+        return '删除待办？';
+      case 'actions.todoDelete.dialog.message':
+        return '这将永久删除该待办，并删除所有关联的聊天消息。';
+      case 'actions.todoDelete.dialog.confirm':
+        return '删除';
       case 'actions.history.title':
         return '回溯';
       case 'actions.history.empty':
@@ -5741,6 +5905,20 @@ extension on _StringsZhCn {
         return '已开启仅 Wi‑Fi。使用蜂窝数据上传可能消耗较多流量。';
       case 'sync.mediaBackup.cellularDialog.confirm':
         return '仍然使用';
+      case 'sync.localCache.button':
+        return '清理本地存储';
+      case 'sync.localCache.subtitle':
+        return '删除本机缓存的附件文件（远端保留，需要时可重新下载）。请确保已完成同步/上传。';
+      case 'sync.localCache.cleared':
+        return '已清理本地缓存';
+      case 'sync.localCache.failed':
+        return ({required Object error}) => '清理失败：${error}';
+      case 'sync.localCache.dialog.title':
+        return '清理本地存储？';
+      case 'sync.localCache.dialog.message':
+        return '这将删除本机缓存的照片与文件，以节省本地空间。远端同步存储会保留副本；之后查看时会按需重新下载。';
+      case 'sync.localCache.dialog.confirm':
+        return '清理';
       case 'sync.backendLabel':
         return '同步方式';
       case 'sync.backendWebdav':

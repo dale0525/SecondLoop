@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -914,6 +915,38 @@ CREATE TABLE IF NOT EXISTS attachment_exif (
 CREATE INDEX IF NOT EXISTS idx_attachment_exif_updated_at_ms
   ON attachment_exif(updated_at_ms);
 PRAGMA user_version = 15;
+"#,
+        )?;
+    }
+
+    if user_version < 16 {
+        // v16: attachment deletion tombstones for cross-device purge.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_deletions (
+  sha256 TEXT PRIMARY KEY,
+  deleted_at_ms INTEGER NOT NULL,
+  deleted_by_device_id TEXT NOT NULL,
+  deleted_by_seq INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_deletions_deleted_at_ms
+  ON attachment_deletions(deleted_at_ms);
+PRAGMA user_version = 16;
+"#,
+        )?;
+    }
+
+    if user_version < 17 {
+        // v17: todo deletion tombstones for cross-device hard delete.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS todo_deletions (
+  todo_id TEXT PRIMARY KEY,
+  deleted_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_todo_deletions_deleted_at_ms
+  ON todo_deletions(deleted_at_ms);
+PRAGMA user_version = 17;
 "#,
         )?;
     }
@@ -3349,6 +3382,160 @@ pub fn read_attachment_bytes(
     decrypt_bytes(key, &blob, aad.as_bytes())
 }
 
+fn version_newer(
+    incoming_updated_at: i64,
+    incoming_device_id: &str,
+    incoming_seq: i64,
+    existing_updated_at: i64,
+    existing_device_id: &str,
+    existing_seq: i64,
+) -> bool {
+    if incoming_updated_at != existing_updated_at {
+        return incoming_updated_at > existing_updated_at;
+    }
+    if incoming_device_id != existing_device_id {
+        return incoming_device_id > existing_device_id;
+    }
+    incoming_seq > existing_seq
+}
+
+fn best_effort_remove_file(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn best_effort_remove_dir_all(path: &Path) -> Result<()> {
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn purge_attachment(conn: &Connection, key: &[u8; 32], app_dir: &Path, sha256: &str) -> Result<()> {
+    let now = now_ms();
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "attachment.delete.v1",
+        "payload": {
+            "sha256": sha256,
+            "deleted_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    let existing_delete: Option<(i64, String, i64)> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms, deleted_by_device_id, deleted_by_seq
+               FROM attachment_deletions
+               WHERE sha256 = ?1"#,
+            params![sha256],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    let should_update_tombstone = match existing_delete {
+        None => true,
+        Some((existing_at, existing_device, existing_seq)) => version_newer(
+            now,
+            &device_id,
+            seq,
+            existing_at,
+            &existing_device,
+            existing_seq,
+        ),
+    };
+    if should_update_tombstone {
+        conn.execute(
+            r#"
+INSERT INTO attachment_deletions(sha256, deleted_at_ms, deleted_by_device_id, deleted_by_seq)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT(sha256) DO UPDATE SET
+  deleted_at_ms = excluded.deleted_at_ms,
+  deleted_by_device_id = excluded.deleted_by_device_id,
+  deleted_by_seq = excluded.deleted_by_seq
+"#,
+            params![sha256, now, device_id, seq],
+        )?;
+    }
+
+    best_effort_remove_file(&app_dir.join(format!("attachments/{sha256}.bin")))?;
+    best_effort_remove_dir_all(&app_dir.join(format!("attachments/variants/{sha256}")))?;
+
+    conn.execute(
+        r#"DELETE FROM attachments WHERE sha256 = ?1"#,
+        params![sha256],
+    )?;
+
+    Ok(())
+}
+
+pub fn purge_message_attachments(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    message_id: &str,
+) -> Result<u64> {
+    let mut stmt = conn.prepare(
+        r#"SELECT attachment_sha256
+           FROM message_attachments
+           WHERE message_id = ?1
+           ORDER BY created_at ASC"#,
+    )?;
+
+    let mut rows = stmt.query(params![message_id])?;
+    let mut attachment_sha256s: BTreeSet<String> = BTreeSet::new();
+    while let Some(row) = rows.next()? {
+        let sha: String = row.get(0)?;
+        attachment_sha256s.insert(sha);
+    }
+
+    if attachment_sha256s.is_empty() {
+        set_message_deleted(conn, key, message_id, true)?;
+        return Ok(0);
+    }
+
+    let mut message_ids_to_delete: BTreeSet<String> = BTreeSet::new();
+    for sha in &attachment_sha256s {
+        let mut stmt = conn.prepare(
+            r#"SELECT message_id
+               FROM message_attachments
+               WHERE attachment_sha256 = ?1"#,
+        )?;
+        let mut rows = stmt.query(params![sha])?;
+        while let Some(row) = rows.next()? {
+            let id: String = row.get(0)?;
+            message_ids_to_delete.insert(id);
+        }
+    }
+
+    // Delete all referencing messages (including the original message).
+    for id in message_ids_to_delete {
+        let _ = set_message_deleted(conn, key, &id, true);
+    }
+
+    for sha in &attachment_sha256s {
+        purge_attachment(conn, key, app_dir, sha)?;
+    }
+
+    Ok(attachment_sha256s.len() as u64)
+}
+
+pub fn clear_local_attachment_cache(conn: &Connection, app_dir: &Path) -> Result<()> {
+    best_effort_remove_dir_all(&app_dir.join("attachments"))?;
+    let _ = conn.execute(r#"DELETE FROM attachment_variants"#, []);
+    Ok(())
+}
+
 pub fn upsert_attachment_exif_metadata(
     conn: &Connection,
     key: &[u8; 32],
@@ -4486,6 +4673,188 @@ VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
         Ok(todo) => {
             conn.execute_batch("COMMIT;")?;
             Ok(todo)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+pub fn delete_todo_and_associated_messages(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    todo_id: &str,
+) -> Result<u64> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<u64> = (|| {
+        let todo_source_entry_id: Option<Option<String>> = conn
+            .query_row(
+                r#"SELECT source_entry_id FROM todos WHERE id = ?1"#,
+                params![todo_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(source_entry_id) = todo_source_entry_id else {
+            return Ok(0);
+        };
+
+        let mut direct_message_ids: BTreeSet<String> = BTreeSet::new();
+        if let Some(source_entry_id) = source_entry_id {
+            let trimmed = source_entry_id.trim();
+            if !trimmed.is_empty() {
+                direct_message_ids.insert(trimmed.to_string());
+            }
+        }
+
+        // Messages linked via todo activities.
+        let mut stmt_activity_messages = conn.prepare(
+            r#"SELECT DISTINCT source_message_id
+               FROM todo_activities
+               WHERE todo_id = ?1
+                 AND source_message_id IS NOT NULL
+                 AND source_message_id != ''
+               ORDER BY source_message_id ASC"#,
+        )?;
+        let mut rows = stmt_activity_messages.query(params![todo_id])?;
+        while let Some(row) = rows.next()? {
+            let id: String = row.get(0)?;
+            let trimmed = id.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            direct_message_ids.insert(trimmed.to_string());
+        }
+
+        // Collect attachments from:
+        // - direct messages (message_attachments)
+        // - todo activities (todo_activity_attachments)
+        let mut attachment_sha256s: BTreeSet<String> = BTreeSet::new();
+
+        if !direct_message_ids.is_empty() {
+            let mut stmt_message_attachments = conn.prepare(
+                r#"SELECT attachment_sha256
+                   FROM message_attachments
+                   WHERE message_id = ?1
+                   ORDER BY created_at ASC"#,
+            )?;
+            for message_id in &direct_message_ids {
+                let mut rows = stmt_message_attachments.query(params![message_id])?;
+                while let Some(row) = rows.next()? {
+                    let sha: String = row.get(0)?;
+                    let trimmed = sha.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    attachment_sha256s.insert(trimmed.to_string());
+                }
+            }
+        }
+
+        let mut stmt_todo_activity_attachments = conn.prepare(
+            r#"SELECT DISTINCT attachment_sha256
+               FROM todo_activity_attachments
+               WHERE activity_id IN (SELECT id FROM todo_activities WHERE todo_id = ?1)
+               ORDER BY attachment_sha256 ASC"#,
+        )?;
+        let mut rows = stmt_todo_activity_attachments.query(params![todo_id])?;
+        while let Some(row) = rows.next()? {
+            let sha: String = row.get(0)?;
+            let trimmed = sha.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            attachment_sha256s.insert(trimmed.to_string());
+        }
+
+        // Delete all messages referencing the attachments (including the direct messages).
+        let mut message_ids_to_delete: BTreeSet<String> = BTreeSet::new();
+        message_ids_to_delete.extend(direct_message_ids.iter().cloned());
+
+        if !attachment_sha256s.is_empty() {
+            let mut stmt_attachment_messages = conn.prepare(
+                r#"SELECT message_id
+                   FROM message_attachments
+                   WHERE attachment_sha256 = ?1"#,
+            )?;
+            for sha in &attachment_sha256s {
+                let mut rows = stmt_attachment_messages.query(params![sha])?;
+                while let Some(row) = rows.next()? {
+                    let id: String = row.get(0)?;
+                    let trimmed = id.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    message_ids_to_delete.insert(trimmed.to_string());
+                }
+            }
+        }
+
+        // Best-effort: delete linked messages with their own oplog operations.
+        for message_id in &message_ids_to_delete {
+            let _ = set_message_deleted(conn, key, message_id, true);
+        }
+
+        // Purge attachment bytes and emit attachment.delete.v1 ops.
+        for sha in &attachment_sha256s {
+            purge_attachment(conn, key, app_dir, sha)?;
+        }
+
+        let now = now_ms();
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.delete.v1",
+            "payload": {
+                "todo_id": todo_id,
+                "deleted_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+
+        conn.execute(
+            r#"
+INSERT INTO todo_deletions(todo_id, deleted_at_ms)
+VALUES (?1, ?2)
+ON CONFLICT(todo_id) DO UPDATE SET
+  deleted_at_ms = max(todo_deletions.deleted_at_ms, excluded.deleted_at_ms)
+"#,
+            params![todo_id, now],
+        )?;
+
+        let _ = conn.execute(
+            r#"DELETE FROM todo_activity_attachments
+               WHERE activity_id IN (SELECT id FROM todo_activities WHERE todo_id = ?1)"#,
+            params![todo_id],
+        )?;
+        let _ = conn.execute(
+            r#"DELETE FROM todo_activities WHERE todo_id = ?1"#,
+            params![todo_id],
+        )?;
+        let _ = conn.execute(
+            r#"DELETE FROM todo_activity_embeddings WHERE todo_id = ?1"#,
+            params![todo_id],
+        )?;
+        let _ = conn.execute(
+            r#"DELETE FROM todo_embeddings WHERE todo_id = ?1"#,
+            params![todo_id],
+        )?;
+
+        conn.execute(r#"DELETE FROM todos WHERE id = ?1"#, params![todo_id])?;
+
+        Ok(direct_message_ids.len() as u64)
+    })();
+
+    match result {
+        Ok(deleted_messages) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(deleted_messages)
         }
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK;");

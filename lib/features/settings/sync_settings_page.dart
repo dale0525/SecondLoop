@@ -676,6 +676,47 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     }
   }
 
+  Future<void> _clearLocalAttachmentCache() async {
+    if (_busy) return;
+
+    final t = context.t;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.sync.localCache.dialog.title),
+          content: Text(t.sync.localCache.dialog.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(t.sync.localCache.dialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      await backend.clearLocalAttachmentCache(sessionKey);
+      if (!mounted) return;
+      _showSnack(t.sync.localCache.cleared);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(t.sync.localCache.failed(error: '$e'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final engine = SyncEngineScope.maybeOf(context);
@@ -686,6 +727,14 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         _remoteRootController.text != cloudUid) {
       _remoteRootController.text = cloudUid;
     }
+
+    final canClearLocalCache = switch (_backendType) {
+      SyncBackendType.webdav =>
+        _requiredTrimmed(_baseUrlController).isNotEmpty &&
+            _requiredTrimmed(_remoteRootController).isNotEmpty,
+      SyncBackendType.managedVault => cloudUid != null && cloudUid.isNotEmpty,
+      _ => false,
+    };
 
     Widget sectionTitle(String title) {
       return Padding(
@@ -1201,6 +1250,19 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       );
                     },
                   ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy || !canClearLocalCache
+                      ? null
+                      : _clearLocalAttachmentCache,
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: Text(context.t.sync.localCache.button),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  context.t.sync.localCache.subtitle,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),

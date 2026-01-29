@@ -293,7 +293,7 @@ class _ChatPageState extends State<ChatPage> {
         await _linkMessageToTodo(message);
         break;
       case _MessageAction.delete:
-        await _deleteMessage(message);
+        await _deleteMessage(message, linkedTodo: linkedTodo?.todo);
         break;
       case null:
         break;
@@ -467,7 +467,7 @@ class _ChatPageState extends State<ChatPage> {
         await _linkMessageToTodo(message);
         break;
       case _MessageAction.delete:
-        await _deleteMessage(message);
+        await _deleteMessage(message, linkedTodo: linkedTodo?.todo);
         break;
       case null:
         break;
@@ -698,24 +698,72 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _deleteMessage(Message message) async {
+  Future<void> _deleteMessage(
+    Message message, {
+    Todo? linkedTodo,
+  }) async {
+    final t = context.t;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
       final messenger = ScaffoldMessenger.of(context);
 
-      await backend.setMessageDeleted(sessionKey, message.id, true);
+      Todo? targetTodo = linkedTodo;
+      if (targetTodo == null) {
+        targetTodo = (await _resolveLinkedTodoInfo(message))?.todo;
+        if (!mounted) return;
+      }
+
+      if (targetTodo != null) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text(t.actions.todoDelete.dialog.title),
+              content: Text(t.actions.todoDelete.dialog.message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(t.common.actions.cancel),
+                ),
+                FilledButton(
+                  key: const ValueKey('chat_delete_todo_confirm'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  ),
+                  child: Text(t.actions.todoDelete.dialog.confirm),
+                ),
+              ],
+            );
+          },
+        );
+        if (!mounted) return;
+        if (confirmed != true) return;
+
+        await backend.deleteTodo(sessionKey, todoId: targetTodo.id);
+        if (!mounted) return;
+        syncEngine?.notifyLocalMutation();
+        _refresh();
+        messenger.showSnackBar(
+          SnackBar(content: Text(t.chat.messageDeleted)),
+        );
+        return;
+      }
+
+      await backend.purgeMessageAttachments(sessionKey, message.id);
       if (!mounted) return;
       syncEngine?.notifyLocalMutation();
       _refresh();
       messenger.showSnackBar(
-        SnackBar(content: Text(context.t.chat.messageDeleted)),
+        SnackBar(content: Text(t.chat.messageDeleted)),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.chat.deleteFailed(error: '$e'))),
+        SnackBar(content: Text(t.chat.deleteFailed(error: '$e'))),
       );
     }
   }

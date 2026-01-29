@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/backend/app_backend.dart';
 import '../../../core/session/session_scope.dart';
+import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_icon_button.dart';
@@ -71,6 +72,50 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
     );
     if (!mounted) return;
     _refresh();
+  }
+
+  Future<void> _deleteTodo(Todo todo) async {
+    final t = context.t;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.actions.todoDelete.dialog.title),
+          content: Text(t.actions.todoDelete.dialog.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              key: ValueKey('todo_agenda_delete_confirm_${todo.id}'),
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: Text(t.actions.todoDelete.dialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (confirmed != true) return;
+
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      await backend.deleteTodo(sessionKey, todoId: todo.id);
+      if (!mounted) return;
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.errors.loadFailed(error: '$e'))),
+      );
+    }
   }
 
   Future<void> _editDue(Todo todo) async {
@@ -270,8 +315,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                             ? 0.32
                                             : 0.22,
                                       ),
-                                      onPressed: () =>
-                                          _setStatus(todo, 'dismissed'),
+                                      onPressed: () => _deleteTodo(todo),
                                     ),
                                     const SizedBox(width: 8),
                                     Icon(

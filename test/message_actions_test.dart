@@ -47,6 +47,50 @@ void main() {
     expect(backend.deletedMessageIds, contains('m1'));
   });
 
+  testWidgets('Deleting a todo-linked message deletes the todo',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task',
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello'), findsOneWidget);
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_delete')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chat_delete_todo_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello'), findsNothing);
+    expect(backend.deletedTodoIds, contains('t1'));
+  });
+
   testWidgets('Long press message -> edit updates content', (tester) async {
     final backend = MessageActionsBackend(
       messages: [
@@ -521,6 +565,7 @@ class MessageActionsBackend extends AppBackend {
 
   final List<String> editedMessageIds = [];
   final List<String> deletedMessageIds = [];
+  final List<String> deletedTodoIds = [];
   final List<Todo> upsertedTodos = [];
 
   @override
@@ -604,6 +649,21 @@ class MessageActionsBackend extends AppBackend {
       Uint8List key, String messageId, bool isDeleted) async {
     deletedMessageIds.add(messageId);
     _messages.removeWhere((m) => m.id == messageId);
+  }
+
+  @override
+  Future<void> deleteTodo(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    deletedTodoIds.add(todoId);
+
+    final todoIndex = _todos.indexWhere((t) => t.id == todoId);
+    final sourceEntryId = todoIndex >= 0 ? _todos[todoIndex].sourceEntryId : '';
+    _todos.removeWhere((t) => t.id == todoId);
+    _activities.removeWhere((a) => a.todoId == todoId);
+
+    _messages.removeWhere((m) => m.id == sourceEntryId);
   }
 
   @override

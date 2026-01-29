@@ -212,6 +212,18 @@ pub fn db_set_todo_status(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_delete_todo_and_associated_messages(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let app_dir_path = Path::new(&app_dir);
+    let conn = db::open(app_dir_path)?;
+    db::delete_todo_and_associated_messages(&conn, &key, app_dir_path, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_append_todo_note(
     app_dir: String,
     key: Vec<u8>,
@@ -330,6 +342,24 @@ pub fn db_set_message_deleted(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::set_message_deleted(&conn, &key, &message_id, is_deleted)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_purge_message_attachments(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+) -> Result<u64> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::purge_message_attachments(&conn, &key, Path::new(&app_dir), &message_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_clear_local_attachment_cache(app_dir: String, key: Vec<u8>) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::clear_local_attachment_cache(&conn, Path::new(&app_dir))
 }
 
 #[flutter_rust_bridge::frb]
