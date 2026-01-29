@@ -353,6 +353,20 @@ class _FakeBackend extends AppBackend {
   }
 
   @override
+  Future<int> syncWebdavPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    final completer = webdavPushCompleter;
+    if (completer != null) return completer.future;
+    return 0;
+  }
+
+  @override
   Future<int> syncWebdavPull(
     Uint8List key,
     Uint8List syncKey, {

@@ -176,7 +176,7 @@ final class SyncConfigStore {
 
   Future<bool> readCloudMediaBackupEnabled() async {
     final v = (await _loadConfigMap())[kCloudMediaBackupEnabled];
-    if (v == null) return false;
+    if (v == null) return true;
     return v == '1';
   }
 

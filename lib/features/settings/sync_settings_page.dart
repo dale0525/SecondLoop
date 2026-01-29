@@ -49,7 +49,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   bool _autoEnabled = true;
   bool _autoWifiOnly = false;
   bool _chatThumbnailsWifiOnly = true;
-  bool _cloudMediaBackupEnabled = false;
+  bool _cloudMediaBackupEnabled = true;
   bool _cloudMediaBackupWifiOnly = true;
   Future<CloudMediaBackupSummary>? _cloudMediaBackupSummary;
 
@@ -111,7 +111,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final chatThumbnailsWifiOnly =
         (all[SyncConfigStore.kChatThumbnailsWifiOnly] ?? '1') == '1';
     final cloudMediaBackupEnabled =
-        (all[SyncConfigStore.kCloudMediaBackupEnabled] ?? '') == '1';
+        (all[SyncConfigStore.kCloudMediaBackupEnabled] ?? '1') == '1';
     final cloudMediaBackupWifiOnly =
         (all[SyncConfigStore.kCloudMediaBackupWifiOnly] ?? '1') == '1';
 
@@ -323,25 +323,15 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         return;
       }
 
-      final useMediaQueue = await _store.readCloudMediaBackupEnabled();
       final pushed = await (switch (_backendType) {
-        SyncBackendType.webdav => useMediaQueue
-            ? backend.syncWebdavPushOpsOnly(
-                sessionKey,
-                syncKey,
-                baseUrl: _requiredTrimmed(_baseUrlController),
-                username: _optionalTrimmed(_usernameController),
-                password: _optionalTrimmed(_passwordController),
-                remoteRoot: _requiredTrimmed(_remoteRootController),
-              )
-            : backend.syncWebdavPush(
-                sessionKey,
-                syncKey,
-                baseUrl: _requiredTrimmed(_baseUrlController),
-                username: _optionalTrimmed(_usernameController),
-                password: _optionalTrimmed(_passwordController),
-                remoteRoot: _requiredTrimmed(_remoteRootController),
-              ),
+        SyncBackendType.webdav => backend.syncWebdavPushOpsOnly(
+            sessionKey,
+            syncKey,
+            baseUrl: _requiredTrimmed(_baseUrlController),
+            username: _optionalTrimmed(_usernameController),
+            password: _optionalTrimmed(_passwordController),
+            remoteRoot: _requiredTrimmed(_remoteRootController),
+          ),
         SyncBackendType.localDir => backend.syncLocaldirPush(
             sessionKey,
             syncKey,
@@ -359,16 +349,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             if (baseUrl == null || baseUrl.trim().isEmpty) {
               throw StateError('missing_managed_vault_base_url');
             }
-            if (useMediaQueue) {
-              return backend.syncManagedVaultPushOpsOnly(
-                sessionKey,
-                syncKey,
-                baseUrl: baseUrl,
-                vaultId: vaultId,
-                idToken: idToken,
-              );
-            }
-            return backend.syncManagedVaultPush(
+            return backend.syncManagedVaultPushOpsOnly(
               sessionKey,
               syncKey,
               baseUrl: baseUrl,

@@ -6,8 +6,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use base64::engine::general_purpose::STANDARD as B64_STD;
+use base64::Engine as _;
 use secondloop_rust::auth;
-use secondloop_rust::crypto::{derive_root_key, KdfParams};
+use secondloop_rust::crypto::{derive_root_key, encrypt_bytes, KdfParams};
 use secondloop_rust::db;
 use secondloop_rust::sync;
 
@@ -298,6 +300,139 @@ fn start_mock_managed_vault_server() -> (
     });
 
     (format!("http://{}", addr), stop_tx, state, handle)
+}
+
+#[test]
+fn managed_vault_pull_does_not_fail_on_cross_device_fk_ordering() {
+    let (base_url, stop_tx, state, handle) = start_mock_managed_vault_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    // Device B registers first (so the server returns B's ops first).
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+    conn_b
+        .execute(
+            r#"INSERT INTO kv(key, value) VALUES ('device_id', 'devB')
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            [],
+        )
+        .expect("force device_id devB");
+    let _ = sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull B (register)");
+
+    // Device A registers second.
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    conn_a
+        .execute(
+            r#"INSERT INTO kv(key, value) VALUES ('device_id', 'devA')
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            [],
+        )
+        .expect("force device_id devA");
+    let _ = sync::managed_vault::pull(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull A (register)");
+
+    // Remote has a todo activity from devB referencing a todo that is created by devA.
+    let todo_id = "todo:fk-order";
+    let activity_id = "activity:fk-order";
+
+    let op_b1 = serde_json::json!({
+        "op_id": "opB1",
+        "device_id": "devB",
+        "seq": 1,
+        "ts_ms": 2000,
+        "type": "todo.activity.append.v1",
+        "payload": {
+            "activity_id": activity_id,
+            "todo_id": todo_id,
+            "activity_type": "status_change",
+            "from_status": "in_progress",
+            "to_status": "done",
+            "created_at_ms": 2000,
+        }
+    });
+    let op_a1 = serde_json::json!({
+        "op_id": "opA1",
+        "device_id": "devA",
+        "seq": 1,
+        "ts_ms": 1000,
+        "type": "todo.upsert.v1",
+        "payload": {
+            "todo_id": todo_id,
+            "title": "hello",
+            "status": "in_progress",
+            "created_at_ms": 1000,
+            "updated_at_ms": 1000,
+        }
+    });
+
+    let make_stored = |device_id: &str, seq: i64, op_json: &serde_json::Value| -> StoredOp {
+        let plaintext = serde_json::to_vec(op_json).expect("op json");
+        let aad = format!("sync.ops:{device_id}:{seq}");
+        let ciphertext = encrypt_bytes(&sync_key, &plaintext, aad.as_bytes()).expect("encrypt");
+        StoredOp {
+            device_id: device_id.to_string(),
+            seq,
+            op_id: op_json["op_id"].as_str().unwrap_or("").to_string(),
+            ciphertext_b64: B64_STD.encode(ciphertext),
+        }
+    };
+
+    {
+        let mut st = state.lock().expect("lock");
+        st.ops
+            .entry((vault_id.clone(), "devB".to_string()))
+            .or_default()
+            .push(make_stored("devB", 1, &op_b1));
+        st.ops
+            .entry((vault_id.clone(), "devA".to_string()))
+            .or_default()
+            .push(make_stored("devA", 1, &op_a1));
+    }
+
+    // Device C is a fresh install; pulling should not error even if devB's op arrives before devA's.
+    let temp_c = tempfile::tempdir().expect("tempdir C");
+    let app_dir_c = temp_c.path().join("secondloop_c");
+    let key_c =
+        auth::init_master_password(&app_dir_c, "pw-c", KdfParams::for_test()).expect("init C");
+    let conn_c = db::open(&app_dir_c).expect("open C db");
+    conn_c
+        .execute(
+            r#"INSERT INTO kv(key, value) VALUES ('device_id', 'devC')
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            [],
+        )
+        .expect("force device_id devC");
+
+    let applied =
+        sync::managed_vault::pull(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull C");
+    assert!(applied > 0);
+
+    // The todo exists and the activity is present.
+    let todo = db::get_todo(&conn_c, &key_c, todo_id).expect("get todo C");
+    assert_eq!(todo.id, todo_id);
+    let activities = db::list_todo_activities(&conn_c, &key_c, todo_id).expect("list activities");
+    assert_eq!(activities.len(), 1);
+    assert_eq!(activities[0].id, activity_id);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
 }
 
 #[test]

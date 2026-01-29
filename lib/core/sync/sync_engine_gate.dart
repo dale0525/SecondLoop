@@ -8,6 +8,7 @@ import '../ai/ai_routing.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
+import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 
@@ -187,23 +188,97 @@ final class _AppBackendSyncRunner implements SyncRunner {
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
 
+  Future<CloudMediaBackupNetwork> _safeGetCloudMediaBackupNetwork({
+    required bool wifiOnly,
+  }) async {
+    try {
+      return await ConnectivityCloudMediaBackupNetworkProvider().call();
+    } catch (_) {
+      // Be conservative: if we can't determine connectivity, assume cellular so
+      // Wi‑Fi only mode won't upload unexpectedly.
+      return wifiOnly
+          ? CloudMediaBackupNetwork.cellular
+          : CloudMediaBackupNetwork.unknown;
+    }
+  }
+
+  Future<void> _runCloudMediaBackupIfEnabled(SyncConfig config) async {
+    if (config.backendType == SyncBackendType.localDir) return;
+
+    final enabled = await _configStore.readCloudMediaBackupEnabled();
+    if (!enabled) return;
+
+    final wifiOnly = await _configStore.readCloudMediaBackupWifiOnly();
+
+    final mediaStore = BackendCloudMediaBackupStore(
+      backend: backend,
+      sessionKey: _sessionKey,
+    );
+
+    CloudMediaBackupRunner? runner;
+    switch (config.backendType) {
+      case SyncBackendType.webdav:
+        final baseUrl = config.baseUrl;
+        if (baseUrl == null || baseUrl.trim().isEmpty) return;
+        runner = CloudMediaBackupRunner(
+          store: mediaStore,
+          client: WebDavCloudMediaBackupClient(
+            backend: backend,
+            sessionKey: _sessionKey,
+            syncKey: config.syncKey,
+            baseUrl: baseUrl,
+            username: config.username,
+            password: config.password,
+            remoteRoot: config.remoteRoot,
+          ),
+          settings: CloudMediaBackupRunnerSettings(
+            enabled: true,
+            wifiOnly: wifiOnly,
+          ),
+          getNetwork: () => _safeGetCloudMediaBackupNetwork(wifiOnly: wifiOnly),
+        );
+        break;
+      case SyncBackendType.managedVault:
+        final getter = _idTokenGetter;
+        if (getter == null) return;
+        final idToken = await getter();
+        if (idToken == null || idToken.trim().isEmpty) return;
+        final baseUrl = config.baseUrl;
+        if (baseUrl == null || baseUrl.trim().isEmpty) return;
+        runner = CloudMediaBackupRunner(
+          store: mediaStore,
+          client: ManagedVaultCloudMediaBackupClient(
+            backend: backend,
+            sessionKey: _sessionKey,
+            syncKey: config.syncKey,
+            baseUrl: baseUrl,
+            vaultId: config.remoteRoot,
+            idToken: idToken,
+          ),
+          settings: CloudMediaBackupRunnerSettings(
+            enabled: true,
+            wifiOnly: wifiOnly,
+          ),
+          getNetwork: () => _safeGetCloudMediaBackupNetwork(wifiOnly: wifiOnly),
+        );
+        break;
+      case SyncBackendType.localDir:
+        return;
+    }
+
+    try {
+      await runner.runOnce(allowCellular: false);
+    } catch (_) {
+      // Best-effort: media uploads should not block normal sync.
+      return;
+    }
+  }
+
   @override
   Future<int> push(SyncConfig config) async {
     return switch (config.backendType) {
       SyncBackendType.webdav => () async {
-          final useMediaQueue =
-              await _configStore.readCloudMediaBackupEnabled();
-          if (useMediaQueue) {
-            return backend.syncWebdavPushOpsOnly(
-              _sessionKey,
-              config.syncKey,
-              baseUrl: config.baseUrl ?? '',
-              username: config.username,
-              password: config.password,
-              remoteRoot: config.remoteRoot,
-            );
-          }
-          return backend.syncWebdavPush(
+          final pushed = await backend.syncWebdavPushOpsOnly(
             _sessionKey,
             config.syncKey,
             baseUrl: config.baseUrl ?? '',
@@ -211,6 +286,8 @@ final class _AppBackendSyncRunner implements SyncRunner {
             password: config.password,
             remoteRoot: config.remoteRoot,
           );
+          await _runCloudMediaBackupIfEnabled(config);
+          return pushed;
         }(),
       SyncBackendType.localDir => backend.syncLocaldirPush(
           _sessionKey,
@@ -223,31 +300,22 @@ final class _AppBackendSyncRunner implements SyncRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          final useMediaQueue =
-              await _configStore.readCloudMediaBackupEnabled();
-          if (useMediaQueue) {
-            return backend.syncManagedVaultPushOpsOnly(
-              _sessionKey,
-              config.syncKey,
-              baseUrl: config.baseUrl ?? '',
-              vaultId: config.remoteRoot,
-              idToken: idToken,
-            );
-          }
-          return backend.syncManagedVaultPush(
+          final pushed = await backend.syncManagedVaultPushOpsOnly(
             _sessionKey,
             config.syncKey,
             baseUrl: config.baseUrl ?? '',
             vaultId: config.remoteRoot,
             idToken: idToken,
           );
+          await _runCloudMediaBackupIfEnabled(config);
+          return pushed;
         }(),
     };
   }
 
   @override
   Future<int> pull(SyncConfig config) async {
-    return switch (config.backendType) {
+    final applied = await switch (config.backendType) {
       SyncBackendType.webdav => backend.syncWebdavPull(
           _sessionKey,
           config.syncKey,
@@ -276,5 +344,7 @@ final class _AppBackendSyncRunner implements SyncRunner {
           );
         }(),
     };
+    await _runCloudMediaBackupIfEnabled(config);
+    return applied;
   }
 }

@@ -257,6 +257,20 @@ final class _CaptureManagedVaultPushBackend extends AppBackend {
     lastIdToken = idToken;
     return 1;
   }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    lastBaseUrl = baseUrl;
+    lastVaultId = vaultId;
+    lastIdToken = idToken;
+    return 1;
+  }
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {

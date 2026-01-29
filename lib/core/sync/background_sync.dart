@@ -123,7 +123,7 @@ final class BackgroundSync {
 
     await backend.init();
 
-    final mediaQueueEnabled = await store.readCloudMediaBackupEnabled();
+    final mediaUploadsEnabled = await store.readCloudMediaBackupEnabled();
 
     try {
       String? idToken;
@@ -155,10 +155,9 @@ final class BackgroundSync {
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
-        useMediaQueue: mediaQueueEnabled,
       );
 
-      if (mediaQueueEnabled) {
+      if (mediaUploadsEnabled) {
         final wifiOnly = await store.readCloudMediaBackupWifiOnly();
         switch (config.backendType) {
           case SyncBackendType.webdav:
@@ -273,26 +272,16 @@ final class BackgroundSync {
     required Uint8List sessionKey,
     required SyncConfig config,
     required String? managedVaultIdToken,
-    required bool useMediaQueue,
   }) async {
     return switch (config.backendType) {
-      SyncBackendType.webdav => useMediaQueue
-          ? backend.syncWebdavPushOpsOnly(
-              sessionKey,
-              config.syncKey,
-              baseUrl: config.baseUrl ?? '',
-              username: config.username,
-              password: config.password,
-              remoteRoot: config.remoteRoot,
-            )
-          : backend.syncWebdavPush(
-              sessionKey,
-              config.syncKey,
-              baseUrl: config.baseUrl ?? '',
-              username: config.username,
-              password: config.password,
-              remoteRoot: config.remoteRoot,
-            ),
+      SyncBackendType.webdav => backend.syncWebdavPushOpsOnly(
+          sessionKey,
+          config.syncKey,
+          baseUrl: config.baseUrl ?? '',
+          username: config.username,
+          password: config.password,
+          remoteRoot: config.remoteRoot,
+        ),
       SyncBackendType.localDir => backend.syncLocaldirPush(
           sessionKey,
           config.syncKey,
@@ -303,16 +292,7 @@ final class BackgroundSync {
           final idToken = managedVaultIdToken;
           if (idToken == null || idToken.trim().isEmpty) return 0;
           try {
-            if (useMediaQueue) {
-              return await backend.syncManagedVaultPushOpsOnly(
-                sessionKey,
-                config.syncKey,
-                baseUrl: config.baseUrl ?? '',
-                vaultId: config.remoteRoot,
-                idToken: idToken,
-              );
-            }
-            return await backend.syncManagedVaultPush(
+            return await backend.syncManagedVaultPushOpsOnly(
               sessionKey,
               config.syncKey,
               baseUrl: config.baseUrl ?? '',

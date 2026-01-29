@@ -142,6 +142,112 @@ fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, 
     Ok(out)
 }
 
+fn load_pending_apply_op_ids(conn: &Connection, scope_id: &str) -> Result<BTreeSet<String>> {
+    let prefix = format!("managed_vault.pending_apply:{scope_id}:");
+    let pattern = format!("{prefix}%");
+
+    let mut stmt = conn.prepare(r#"SELECT key FROM kv WHERE key LIKE ?1"#)?;
+    let mut rows = stmt.query(params![pattern])?;
+
+    let mut out: BTreeSet<String> = BTreeSet::new();
+    while let Some(row) = rows.next()? {
+        let key: String = row.get(0)?;
+        let Some(op_id) = key.strip_prefix(&prefix) else {
+            continue;
+        };
+        if op_id.trim().is_empty() {
+            continue;
+        }
+        out.insert(op_id.to_string());
+    }
+    Ok(out)
+}
+
+fn pending_apply_key(scope_id: &str, op_id: &str) -> String {
+    format!("managed_vault.pending_apply:{scope_id}:{op_id}")
+}
+
+fn is_foreign_key_constraint_error(err: &anyhow::Error) -> bool {
+    if let Some(e) = err.downcast_ref::<rusqlite::Error>() {
+        return matches!(
+            e,
+            rusqlite::Error::SqliteFailure(e, _) if e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_FOREIGNKEY
+        );
+    }
+    let msg = err.to_string().to_ascii_lowercase();
+    msg.contains("foreign key constraint failed")
+}
+
+fn try_apply_pending_op(conn: &Connection, db_key: &[u8; 32], op_id: &str) -> Result<Option<bool>> {
+    let op_json_blob: Option<Vec<u8>> = conn
+        .query_row(
+            r#"SELECT op_json FROM oplog WHERE op_id = ?1"#,
+            params![op_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(op_json_blob) = op_json_blob else {
+        return Ok(None);
+    };
+
+    let plaintext = decrypt_bytes(
+        db_key,
+        &op_json_blob,
+        format!("oplog.op_json:{op_id}").as_bytes(),
+    )?;
+    let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+
+    match super::apply_op(conn, db_key, &op_json) {
+        Ok(_) => Ok(Some(true)),
+        Err(e) if is_foreign_key_constraint_error(&e) => Ok(Some(false)),
+        Err(e) => Err(e),
+    }
+}
+
+fn apply_pending_ops_until_stable(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    scope_id: &str,
+    pending: &mut BTreeSet<String>,
+) -> Result<()> {
+    // Bound the amount of work per pull batch, while still allowing progress on most dependency chains.
+    const MAX_PASSES: usize = 10;
+    for _ in 0..MAX_PASSES {
+        let mut progressed = false;
+
+        let op_ids: Vec<String> = pending.iter().cloned().collect();
+        for op_id in op_ids {
+            match try_apply_pending_op(conn, db_key, &op_id)? {
+                None => {
+                    // Op no longer exists locally; drop the pending marker.
+                    let _ = conn.execute(
+                        r#"DELETE FROM kv WHERE key = ?1"#,
+                        params![pending_apply_key(scope_id, &op_id)],
+                    )?;
+                    pending.remove(&op_id);
+                    progressed = true;
+                }
+                Some(true) => {
+                    let _ = conn.execute(
+                        r#"DELETE FROM kv WHERE key = ?1"#,
+                        params![pending_apply_key(scope_id, &op_id)],
+                    )?;
+                    pending.remove(&op_id);
+                    progressed = true;
+                }
+                Some(false) => {
+                    // Still waiting on dependencies.
+                }
+            }
+        }
+
+        if !progressed {
+            break;
+        }
+    }
+    Ok(())
+}
+
 fn update_since_map(conn: &Connection, scope_id: &str, next: &BTreeMap<String, i64>) -> Result<()> {
     for (device_id, last_seq) in next {
         let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
@@ -885,6 +991,7 @@ pub fn pull(
 
                 let mut batch_applied = 0u64;
                 with_immediate_transaction(conn, || {
+                    let mut pending = load_pending_apply_op_ids(conn, &scope_id)?;
                     for op in &ops {
                         let plaintext = decrypt_bytes(
                             sync_key,
@@ -909,9 +1016,19 @@ pub fn pull(
                             continue;
                         }
 
-                        super::apply_op(conn, db_key, &op_json)?;
-                        batch_applied += 1;
+                        match super::apply_op(conn, db_key, &op_json) {
+                            Ok(_) => {
+                                batch_applied += 1;
+                            }
+                            Err(e) if is_foreign_key_constraint_error(&e) => {
+                                pending.insert(op_id.to_string());
+                                super::kv_set_i64(conn, &pending_apply_key(&scope_id, op_id), 1)?;
+                            }
+                            Err(e) => return Err(e),
+                        }
                     }
+
+                    apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
 
                     if next_since != since {
                         update_since_map(conn, &scope_id, &next_since)?;
@@ -955,6 +1072,7 @@ pub fn pull(
 
         let mut batch_applied = 0u64;
         with_immediate_transaction(conn, || {
+            let mut pending = load_pending_apply_op_ids(conn, &scope_id)?;
             for op in &parsed.ops {
                 let ciphertext = B64_STD
                     .decode(op.ciphertext_b64.as_bytes())
@@ -981,9 +1099,19 @@ pub fn pull(
                     continue;
                 }
 
-                super::apply_op(conn, db_key, &op_json)?;
-                batch_applied += 1;
+                match super::apply_op(conn, db_key, &op_json) {
+                    Ok(_) => {
+                        batch_applied += 1;
+                    }
+                    Err(e) if is_foreign_key_constraint_error(&e) => {
+                        pending.insert(op_id.to_string());
+                        super::kv_set_i64(conn, &pending_apply_key(&scope_id, op_id), 1)?;
+                    }
+                    Err(e) => return Err(e),
+                }
             }
+
+            apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
 
             if next_since != since {
                 update_since_map(conn, &scope_id, &next_since)?;
