@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zerocopy::IntoBytes;
 
@@ -92,6 +93,13 @@ pub struct AttachmentVariant {
     pub path: String,
     pub byte_len: i64,
     pub created_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AttachmentExifMetadata {
+    pub captured_at_ms: Option<i64>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -840,6 +848,24 @@ CREATE TABLE IF NOT EXISTS cloud_media_backup (
 CREATE INDEX IF NOT EXISTS idx_cloud_media_backup_status_retry
   ON cloud_media_backup(status, next_retry_at);
 PRAGMA user_version = 14;
+"#,
+        )?;
+    }
+
+    if user_version < 15 {
+        // v15: attachment EXIF metadata (captured time/location) persisted separately from bytes.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_exif (
+  attachment_sha256 TEXT PRIMARY KEY,
+  metadata BLOB NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_exif_updated_at_ms
+  ON attachment_exif(updated_at_ms);
+PRAGMA user_version = 15;
 "#,
         )?;
     }
@@ -3273,6 +3299,64 @@ pub fn read_attachment_bytes(
     let blob = fs::read(app_dir.join(stored_path))?;
     let aad = format!("attachment.bytes:{sha256}");
     decrypt_bytes(key, &blob, aad.as_bytes())
+}
+
+pub fn upsert_attachment_exif_metadata(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+    captured_at_ms: Option<i64>,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
+) -> Result<()> {
+    if captured_at_ms.is_none() && latitude.is_none() && longitude.is_none() {
+        return Ok(());
+    }
+
+    let now = now_ms();
+    let metadata = AttachmentExifMetadata {
+        captured_at_ms,
+        latitude,
+        longitude,
+    };
+    let json = serde_json::to_vec(&metadata)?;
+    let aad = format!("attachment.exif:{attachment_sha256}");
+    let blob = encrypt_bytes(key, &json, aad.as_bytes())?;
+
+    conn.execute(
+        r#"INSERT INTO attachment_exif(attachment_sha256, metadata, created_at_ms, updated_at_ms)
+           VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT(attachment_sha256) DO UPDATE SET
+             metadata = excluded.metadata,
+             updated_at_ms = excluded.updated_at_ms"#,
+        params![attachment_sha256, blob, now, now],
+    )?;
+
+    Ok(())
+}
+
+pub fn read_attachment_exif_metadata(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<Option<AttachmentExifMetadata>> {
+    let blob: Option<Vec<u8>> = conn
+        .query_row(
+            r#"SELECT metadata FROM attachment_exif WHERE attachment_sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    let blob = match blob {
+        Some(blob) => blob,
+        None => return Ok(None),
+    };
+
+    let aad = format!("attachment.exif:{attachment_sha256}");
+    let json = decrypt_bytes(key, &blob, aad.as_bytes())?;
+    let metadata: AttachmentExifMetadata = serde_json::from_slice(&json)?;
+    Ok(Some(metadata))
 }
 
 pub fn link_attachment_to_message(

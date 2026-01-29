@@ -121,6 +121,13 @@ final class _Backend implements AttachmentsBackend {
   final Completer<void> readCalled = Completer<void>();
 
   @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
   Future<List<Attachment>> listRecentAttachments(
     Uint8List key, {
     int limit = 50,

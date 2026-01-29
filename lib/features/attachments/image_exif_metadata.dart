@@ -58,13 +58,26 @@ img.ExifData? _tryReadExif(Uint8List bytes) {
   final webpExif = _tryExtractWebpExif(bytes);
   if (webpExif != null && webpExif.isNotEmpty) {
     try {
-      return img.ExifData.fromInputBuffer(img.InputBuffer(webpExif));
+      final normalized = _stripExifHeaderIfPresent(webpExif);
+      return img.ExifData.fromInputBuffer(img.InputBuffer(normalized));
     } catch (_) {
       return null;
     }
   }
 
   return null;
+}
+
+Uint8List _stripExifHeaderIfPresent(Uint8List bytes) {
+  if (bytes.length < 6) return bytes;
+  final isExifHeader = bytes[0] == 0x45 && // 'E'
+      bytes[1] == 0x78 && // 'x'
+      bytes[2] == 0x69 && // 'i'
+      bytes[3] == 0x66 && // 'f'
+      bytes[4] == 0x00 &&
+      bytes[5] == 0x00;
+  if (!isExifHeader) return bytes;
+  return Uint8List.sublistView(bytes, 6);
 }
 
 Uint8List? _tryExtractWebpExif(Uint8List bytes) {
@@ -120,7 +133,7 @@ DateTime? _tryReadCapturedAt(img.ExifData exif) {
   ];
 
   for (final raw in candidates) {
-    final value = raw?.trim();
+    final value = raw?.split('\u0000').first.trim();
     if (value == null || value.isEmpty) continue;
     final parsed = _tryParseExifDateTime(value);
     if (parsed != null) return parsed;
@@ -129,7 +142,7 @@ DateTime? _tryReadCapturedAt(img.ExifData exif) {
 }
 
 DateTime? _tryParseExifDateTime(String value) {
-  final match = RegExp(r'^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$')
+  final match = RegExp(r'(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})')
       .firstMatch(value);
   if (match == null) return null;
 

@@ -43,9 +43,11 @@ import '../actions/todo/todo_thread_match.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
+import '../attachments/image_exif_metadata.dart';
 import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
+import '../settings/settings_page.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'message_viewer_page.dart';
 
@@ -990,6 +992,11 @@ class _ChatPageState extends State<ChatPage> {
     if (_asking) return;
     if (!_supportsImageUpload) return;
 
+    if (_isDesktopPlatform) {
+      await _pickAndSendImageFromFile();
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1036,7 +1043,16 @@ class _ChatPageState extends State<ChatPage> {
 
       final rawBytes = await picked.readAsBytes();
       final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
-      await _sendImageAttachment(rawBytes, inferredMimeType);
+      int? fallbackCapturedAtMs;
+      try {
+        fallbackCapturedAtMs =
+            (await picked.lastModified()).toUtc().millisecondsSinceEpoch;
+      } catch (_) {}
+      await _sendImageAttachment(
+        rawBytes,
+        inferredMimeType,
+        fallbackCapturedAtMs: fallbackCapturedAtMs,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1059,7 +1075,16 @@ class _ChatPageState extends State<ChatPage> {
 
       final rawBytes = await picked.readAsBytes();
       final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
-      await _sendImageAttachment(rawBytes, inferredMimeType);
+      int? fallbackCapturedAtMs;
+      try {
+        fallbackCapturedAtMs =
+            (await picked.lastModified()).toUtc().millisecondsSinceEpoch;
+      } catch (_) {}
+      await _sendImageAttachment(
+        rawBytes,
+        inferredMimeType,
+        fallbackCapturedAtMs: fallbackCapturedAtMs,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1103,8 +1128,9 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendImageAttachment(
     Uint8List rawBytes,
-    String inferredMimeType,
-  ) async {
+    String inferredMimeType, {
+    int? fallbackCapturedAtMs,
+  }) async {
     final backendAny = AppBackendScope.of(context);
     if (backendAny is! NativeAppBackend) return;
     final backend = backendAny;
@@ -1113,12 +1139,28 @@ class _ChatPageState extends State<ChatPage> {
 
     final compressed =
         await compressImageForStorage(rawBytes, mimeType: inferredMimeType);
+    final rawExif = tryReadImageExifMetadata(rawBytes);
+    final storedExif = tryReadImageExifMetadata(compressed.bytes);
+    final capturedAtMs = rawExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
+        storedExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
+        fallbackCapturedAtMs;
+    final latitude = rawExif?.latitude ?? storedExif?.latitude;
+    final longitude = rawExif?.longitude ?? storedExif?.longitude;
 
     final attachment = await backend.insertAttachment(
       sessionKey,
       bytes: compressed.bytes,
       mimeType: compressed.mimeType,
     );
+    if (capturedAtMs != null || latitude != null || longitude != null) {
+      await backend.upsertAttachmentExifMetadata(
+        sessionKey,
+        sha256: attachment.sha256,
+        capturedAtMs: capturedAtMs,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
     unawaited(_maybeEnqueueCloudMediaBackup(
       backend,
       sessionKey,
@@ -1827,6 +1869,69 @@ class _ChatPageState extends State<ChatPage> {
     return '$sign$hh:$mm';
   }
 
+  static String _formatMessageTimestamp(BuildContext context, int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+    final localizations = MaterialLocalizations.of(context);
+    final alwaysUse24HourFormat = MediaQuery.of(context).alwaysUse24HourFormat;
+    final time = localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(dt),
+      alwaysUse24HourFormat: alwaysUse24HourFormat,
+    );
+    return time;
+  }
+
+  static DateTime? _messageLocalDay(int ms) {
+    if (ms <= 0) return null;
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+    return DateTime(dt.year, dt.month, dt.day);
+  }
+
+  static String _formatMessageDateDividerLabel(
+    BuildContext context,
+    DateTime dayLocal,
+  ) {
+    final localizations = MaterialLocalizations.of(context);
+    final nowLocal = DateTime.now();
+    if (dayLocal.year != nowLocal.year) {
+      return localizations.formatMediumDate(dayLocal);
+    }
+    return localizations.formatShortMonthDay(dayLocal);
+  }
+
+  static Widget _buildMessageDateDividerChip(
+    BuildContext context,
+    DateTime dayLocal, {
+    required Key key,
+  }) {
+    final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final label = _formatMessageDateDividerLabel(context, dayLocal);
+
+    return Center(
+      child: Container(
+        key: key,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: tokens.surface.withOpacity(isDark ? 0.72 : 0.9),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: tokens.borderSubtle.withOpacity(isDark ? 0.78 : 1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant.withOpacity(
+                  isDark ? 0.9 : 0.82,
+                ),
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _stopAsk() async {
     final sub = _askSub;
     if (!_asking || _stopRequested) return;
@@ -2264,11 +2369,72 @@ class _ChatPageState extends State<ChatPage> {
     _attachSyncEngine();
   }
 
+  Widget _buildComposerInlineButton(
+    BuildContext context, {
+    required Key key,
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    Color? borderColor,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final isEnabled = onPressed != null;
+
+    final effectiveBackground =
+        isEnabled ? backgroundColor : backgroundColor.withOpacity(0.52);
+    final effectiveForeground =
+        isEnabled ? foregroundColor : foregroundColor.withOpacity(0.62);
+
+    final borderRadius = BorderRadius.circular(999);
+    final borderSide =
+        borderColor == null ? BorderSide.none : BorderSide(color: borderColor);
+
+    return Semantics(
+      key: key,
+      button: true,
+      label: label,
+      child: Material(
+        color: effectiveBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: borderRadius,
+          side: borderSide,
+        ),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: borderRadius,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 18, color: effectiveForeground),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: effectiveForeground,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = SlTokens.of(context);
     final isDesktopPlatform = _isDesktopPlatform;
+    final useCompactComposer = !isDesktopPlatform;
     final title = widget.conversation.id == 'main_stream'
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
@@ -2304,6 +2470,22 @@ class _ChatPageState extends State<ChatPage> {
               icon: Icons.filter_alt_rounded,
             ),
           ),
+          if (!isDesktopPlatform)
+            IconButton(
+              key: const ValueKey('chat_open_settings'),
+              tooltip: context.t.app.tabs.settings,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => Scaffold(
+                      appBar: AppBar(title: Text(context.t.settings.title)),
+                      body: const SettingsPage(),
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.settings_outlined),
+            ),
         ],
       ),
       body: Column(
@@ -2430,6 +2612,74 @@ class _ChatPageState extends State<ChatPage> {
                             : null;
                         final sessionKey = SessionScope.of(context).sessionKey;
 
+                        Message? messageAt(int targetIndex) {
+                          if (_usePagination) {
+                            if (targetIndex < extraCount) {
+                              var extraIndex = targetIndex;
+                              if (hasPendingAssistant) {
+                                if (extraIndex == 0) {
+                                  return Message(
+                                    id: 'pending_assistant',
+                                    conversationId: widget.conversation.id,
+                                    role: 'assistant',
+                                    content: '',
+                                    createdAtMs: 0,
+                                    isMemory: false,
+                                  );
+                                }
+                                extraIndex -= 1;
+                              }
+                              if (pendingQuestion != null && extraIndex == 0) {
+                                return Message(
+                                  id: 'pending_user',
+                                  conversationId: widget.conversation.id,
+                                  role: 'user',
+                                  content: pendingQuestion,
+                                  createdAtMs: 0,
+                                  isMemory: false,
+                                );
+                              }
+                              return null;
+                            }
+                            final messageIndex = targetIndex - extraCount;
+                            if (messageIndex < 0 ||
+                                messageIndex >= messages.length) {
+                              return null;
+                            }
+                            return messages[messageIndex];
+                          }
+
+                          if (targetIndex < messages.length) {
+                            return messages[targetIndex];
+                          }
+
+                          var extraIndex = targetIndex - messages.length;
+                          if (pendingQuestion != null) {
+                            if (extraIndex == 0) {
+                              return Message(
+                                id: 'pending_user',
+                                conversationId: widget.conversation.id,
+                                role: 'user',
+                                content: pendingQuestion,
+                                createdAtMs: 0,
+                                isMemory: false,
+                              );
+                            }
+                            extraIndex -= 1;
+                          }
+                          if (_asking && !_stopRequested && extraIndex == 0) {
+                            return Message(
+                              id: 'pending_assistant',
+                              conversationId: widget.conversation.id,
+                              role: 'assistant',
+                              content: '',
+                              createdAtMs: 0,
+                              isMemory: false,
+                            );
+                          }
+                          return null;
+                        }
+
                         Message? msg;
                         String? textOverride;
                         if (_usePagination) {
@@ -2506,6 +2756,32 @@ class _ChatPageState extends State<ChatPage> {
                         final stableMsg = msg;
                         if (stableMsg == null) {
                           return const SizedBox.shrink();
+                        }
+
+                        final itemCount = messages.length + extraCount;
+                        final dayLocal =
+                            _messageLocalDay(stableMsg.createdAtMs);
+                        var showDateDivider = false;
+                        if (dayLocal != null &&
+                            !stableMsg.id.startsWith('pending_')) {
+                          final step = _usePagination ? 1 : -1;
+                          var neighborIndex = index + step;
+                          DateTime? neighborDay;
+                          while (
+                              neighborIndex >= 0 && neighborIndex < itemCount) {
+                            final neighborMsg = messageAt(neighborIndex);
+                            if (neighborMsg == null) break;
+                            final neighborDayLocal =
+                                _messageLocalDay(neighborMsg.createdAtMs);
+                            if (neighborDayLocal != null &&
+                                !neighborMsg.id.startsWith('pending_')) {
+                              neighborDay = neighborDayLocal;
+                              break;
+                            }
+                            neighborIndex += step;
+                          }
+                          showDateDivider =
+                              neighborDay == null || neighborDay != dayLocal;
                         }
 
                         final isUser = stableMsg.role == 'user';
@@ -2649,244 +2925,306 @@ class _ChatPageState extends State<ChatPage> {
                                     horizontal: 14,
                                     vertical: 12,
                                   ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  child: Stack(
                                     children: [
-                                      if (!stableMsg.isMemory)
-                                        Padding(
-                                          key: ValueKey(
-                                            'message_ask_ai_badge_${stableMsg.id}',
-                                          ),
-                                          padding:
-                                              const EdgeInsets.only(bottom: 6),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.auto_awesome_rounded,
-                                                size: 14,
-                                                color: colorScheme.secondary,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                context.t.common.actions.askAi,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .labelSmall
-                                                    ?.copyWith(
+                                      Padding(
+                                        padding: EdgeInsets.only(
+                                          right: (!isPending &&
+                                                  stableMsg.createdAtMs > 0)
+                                              ? 54
+                                              : 0,
+                                          bottom: (!isPending &&
+                                                  stableMsg.createdAtMs > 0)
+                                              ? 16
+                                              : 0,
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (!stableMsg.isMemory)
+                                              Padding(
+                                                key: ValueKey(
+                                                  'message_ask_ai_badge_${stableMsg.id}',
+                                                ),
+                                                padding: const EdgeInsets.only(
+                                                    bottom: 6),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .auto_awesome_rounded,
+                                                      size: 14,
                                                       color:
                                                           colorScheme.secondary,
-                                                      fontWeight:
-                                                          FontWeight.w600,
                                                     ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      if (shouldCollapse)
-                                        SizedBox(
-                                          height: _kCollapsedMessageHeight,
-                                          child: ClipRect(
-                                            child: Stack(
-                                              children: [
-                                                SingleChildScrollView(
-                                                  physics:
-                                                      const NeverScrollableScrollPhysics(),
-                                                  child: _buildMessageMarkdown(
-                                                    displayText,
-                                                    isDesktopPlatform:
-                                                        isDesktopPlatform,
-                                                  ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      context.t.common.actions
+                                                          .askAi,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                            color: colorScheme
+                                                                .secondary,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                Positioned(
-                                                  left: 0,
-                                                  right: 0,
-                                                  bottom: 0,
-                                                  height: 32,
-                                                  child: DecoratedBox(
-                                                    decoration: BoxDecoration(
-                                                      gradient: LinearGradient(
-                                                        begin:
-                                                            Alignment.topCenter,
-                                                        end: Alignment
-                                                            .bottomCenter,
-                                                        colors: [
-                                                          bubbleColor
-                                                              .withOpacity(0),
-                                                          bubbleColor,
-                                                        ],
+                                              ),
+                                            if (shouldCollapse)
+                                              SizedBox(
+                                                height:
+                                                    _kCollapsedMessageHeight,
+                                                child: ClipRect(
+                                                  child: Stack(
+                                                    children: [
+                                                      SingleChildScrollView(
+                                                        physics:
+                                                            const NeverScrollableScrollPhysics(),
+                                                        child:
+                                                            _buildMessageMarkdown(
+                                                          displayText,
+                                                          isDesktopPlatform:
+                                                              isDesktopPlatform,
+                                                        ),
                                                       ),
-                                                    ),
+                                                      Positioned(
+                                                        left: 0,
+                                                        right: 0,
+                                                        bottom: 0,
+                                                        height: 32,
+                                                        child: DecoratedBox(
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            gradient:
+                                                                LinearGradient(
+                                                              begin: Alignment
+                                                                  .topCenter,
+                                                              end: Alignment
+                                                                  .bottomCenter,
+                                                              colors: [
+                                                                bubbleColor
+                                                                    .withOpacity(
+                                                                        0),
+                                                                bubbleColor,
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        displayText.trim().isEmpty
-                                            ? const SizedBox.shrink()
-                                            : _buildMessageMarkdown(
-                                                displayText,
-                                                isDesktopPlatform:
-                                                    isDesktopPlatform,
-                                              ),
-                                      if (shouldCollapse)
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: TextButton(
-                                            key: ValueKey(
-                                              'message_view_full_${stableMsg.id}',
-                                            ),
-                                            onPressed: () => unawaited(
-                                              _openMessageViewer(displayText),
-                                            ),
-                                            child:
-                                                Text(context.t.chat.viewFull),
-                                          ),
-                                        ),
-                                      if (actionSuggestions.isNotEmpty)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 8),
-                                          child: Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            children: [
-                                              for (var i = 0;
-                                                  i < actionSuggestions.length;
-                                                  i++)
-                                                SlButton(
-                                                  variant:
-                                                      SlButtonVariant.outline,
-                                                  onPressed: () =>
-                                                      _handleAssistantSuggestion(
-                                                    stableMsg,
-                                                    actionSuggestions[i],
-                                                    i,
+                                              )
+                                            else
+                                              displayText.trim().isEmpty
+                                                  ? const SizedBox.shrink()
+                                                  : _buildMessageMarkdown(
+                                                      displayText,
+                                                      isDesktopPlatform:
+                                                          isDesktopPlatform,
+                                                    ),
+                                            if (shouldCollapse)
+                                              Align(
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: TextButton(
+                                                  key: ValueKey(
+                                                    'message_view_full_${stableMsg.id}',
                                                   ),
-                                                  icon: Icon(
-                                                    actionSuggestions[i].type ==
-                                                            'event'
-                                                        ? Icons.event_rounded
-                                                        : Icons
-                                                            .check_circle_outline_rounded,
-                                                    size: 18,
+                                                  onPressed: () => unawaited(
+                                                    _openMessageViewer(
+                                                        displayText),
                                                   ),
                                                   child: Text(
-                                                    actionSuggestions[i]
-                                                                .whenText
-                                                                ?.trim()
-                                                                .isNotEmpty ==
-                                                            true
-                                                        ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
-                                                        : actionSuggestions[i]
-                                                            .title,
-                                                  ),
+                                                      context.t.chat.viewFull),
                                                 ),
-                                            ],
-                                          ),
-                                        ),
-                                      if (supportsAttachments)
-                                        FutureBuilder(
-                                          initialData:
-                                              _attachmentsCacheByMessageId[
-                                                  stableMsg.id],
-                                          future: _attachmentsFuturesByMessageId
-                                              .putIfAbsent(
-                                            stableMsg.id,
-                                            () => attachmentsBackend
-                                                .listMessageAttachments(
-                                              sessionKey,
-                                              stableMsg.id,
-                                            )
-                                                .then((items) {
-                                              _attachmentsCacheByMessageId[
-                                                  stableMsg.id] = items;
-                                              return items;
-                                            }),
-                                          ),
-                                          builder: (context, snapshot) {
-                                            final items = snapshot.data ??
-                                                const <Attachment>[];
-                                            if (items.isEmpty) {
-                                              return const SizedBox.shrink();
-                                            }
-
-                                            return Padding(
-                                              padding: EdgeInsets.only(
-                                                top: hasContentAboveAttachments
-                                                    ? 8
-                                                    : 0,
                                               ),
-                                              child: SingleChildScrollView(
-                                                scrollDirection:
-                                                    Axis.horizontal,
-                                                child: Row(
+                                            if (actionSuggestions.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 8),
+                                                child: Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
                                                   children: [
-                                                    for (final attachment
-                                                        in items)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                          right: 8,
+                                                    for (var i = 0;
+                                                        i <
+                                                            actionSuggestions
+                                                                .length;
+                                                        i++)
+                                                      SlButton(
+                                                        variant: SlButtonVariant
+                                                            .outline,
+                                                        onPressed: () =>
+                                                            _handleAssistantSuggestion(
+                                                          stableMsg,
+                                                          actionSuggestions[i],
+                                                          i,
                                                         ),
-                                                        child: attachment
-                                                                .mimeType
-                                                                .startsWith(
-                                                                    'image/')
-                                                            ? ChatImageAttachmentThumbnail(
-                                                                key: ValueKey(
-                                                                  'chat_attachment_image_${attachment.sha256}',
-                                                                ),
-                                                                attachment:
-                                                                    attachment,
-                                                                attachmentsBackend:
-                                                                    attachmentsBackend,
-                                                                onTap: () {
-                                                                  Navigator.of(
-                                                                          context)
-                                                                      .push(
-                                                                    MaterialPageRoute(
-                                                                      builder:
-                                                                          (context) {
-                                                                        return AttachmentViewerPage(
-                                                                          attachment:
-                                                                              attachment,
-                                                                        );
-                                                                      },
-                                                                    ),
-                                                                  );
-                                                                },
-                                                              )
-                                                            : AttachmentCard(
-                                                                attachment:
-                                                                    attachment,
-                                                                onTap: () {
-                                                                  Navigator.of(
-                                                                          context)
-                                                                      .push(
-                                                                    MaterialPageRoute(
-                                                                      builder:
-                                                                          (context) {
-                                                                        return AttachmentViewerPage(
-                                                                          attachment:
-                                                                              attachment,
-                                                                        );
-                                                                      },
-                                                                    ),
-                                                                  );
-                                                                },
-                                                              ),
+                                                        icon: Icon(
+                                                          actionSuggestions[i]
+                                                                      .type ==
+                                                                  'event'
+                                                              ? Icons
+                                                                  .event_rounded
+                                                              : Icons
+                                                                  .check_circle_outline_rounded,
+                                                          size: 18,
+                                                        ),
+                                                        child: Text(
+                                                          actionSuggestions[i]
+                                                                      .whenText
+                                                                      ?.trim()
+                                                                      .isNotEmpty ==
+                                                                  true
+                                                              ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
+                                                              : actionSuggestions[
+                                                                      i]
+                                                                  .title,
+                                                        ),
                                                       ),
                                                   ],
                                                 ),
                                               ),
-                                            );
-                                          },
+                                            if (supportsAttachments)
+                                              FutureBuilder(
+                                                initialData:
+                                                    _attachmentsCacheByMessageId[
+                                                        stableMsg.id],
+                                                future:
+                                                    _attachmentsFuturesByMessageId
+                                                        .putIfAbsent(
+                                                  stableMsg.id,
+                                                  () => attachmentsBackend
+                                                      .listMessageAttachments(
+                                                    sessionKey,
+                                                    stableMsg.id,
+                                                  )
+                                                      .then((items) {
+                                                    _attachmentsCacheByMessageId[
+                                                        stableMsg.id] = items;
+                                                    return items;
+                                                  }),
+                                                ),
+                                                builder: (context, snapshot) {
+                                                  final items = snapshot.data ??
+                                                      const <Attachment>[];
+                                                  if (items.isEmpty) {
+                                                    return const SizedBox
+                                                        .shrink();
+                                                  }
+
+                                                  return Padding(
+                                                    padding: EdgeInsets.only(
+                                                      top:
+                                                          hasContentAboveAttachments
+                                                              ? 8
+                                                              : 0,
+                                                    ),
+                                                    child:
+                                                        SingleChildScrollView(
+                                                      scrollDirection:
+                                                          Axis.horizontal,
+                                                      child: Row(
+                                                        children: [
+                                                          for (final attachment
+                                                              in items)
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                right: 8,
+                                                              ),
+                                                              child: attachment
+                                                                      .mimeType
+                                                                      .startsWith(
+                                                                          'image/')
+                                                                  ? ChatImageAttachmentThumbnail(
+                                                                      key:
+                                                                          ValueKey(
+                                                                        'chat_attachment_image_${attachment.sha256}',
+                                                                      ),
+                                                                      attachment:
+                                                                          attachment,
+                                                                      attachmentsBackend:
+                                                                          attachmentsBackend,
+                                                                      onTap:
+                                                                          () {
+                                                                        Navigator.of(context)
+                                                                            .push(
+                                                                          MaterialPageRoute(
+                                                                            builder:
+                                                                                (context) {
+                                                                              return AttachmentViewerPage(
+                                                                                attachment: attachment,
+                                                                              );
+                                                                            },
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                    )
+                                                                  : AttachmentCard(
+                                                                      attachment:
+                                                                          attachment,
+                                                                      onTap:
+                                                                          () {
+                                                                        Navigator.of(context)
+                                                                            .push(
+                                                                          MaterialPageRoute(
+                                                                            builder:
+                                                                                (context) {
+                                                                              return AttachmentViewerPage(
+                                                                                attachment: attachment,
+                                                                              );
+                                                                            },
+                                                                          ),
+                                                                        );
+                                                                      },
+                                                                    ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (!isPending &&
+                                          stableMsg.createdAtMs > 0)
+                                        Positioned(
+                                          right: 0,
+                                          bottom: 0,
+                                          child: Text(
+                                            _formatMessageTimestamp(
+                                              context,
+                                              stableMsg.createdAtMs,
+                                            ),
+                                            key: ValueKey(
+                                              'message_timestamp_${stableMsg.id}',
+                                            ),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: isUser
+                                                      ? colorScheme
+                                                          .onPrimaryContainer
+                                                          .withOpacity(0.62)
+                                                      : colorScheme
+                                                          .onSurfaceVariant
+                                                          .withOpacity(0.78),
+                                                ),
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -2902,32 +3240,50 @@ class _ChatPageState extends State<ChatPage> {
                             horizontal: 16,
                             vertical: 4,
                           ),
-                          child: MouseRegion(
-                            onEnter: isPending
-                                ? null
-                                : (_) => setState(
-                                      () {
-                                        _hoverActionsEnabled = true;
-                                        _hoveredMessageId = stableMsg.id;
-                                      },
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showDateDivider && dayLocal != null)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: _buildMessageDateDividerChip(
+                                    context,
+                                    dayLocal,
+                                    key: ValueKey(
+                                      'message_date_divider_${stableMsg.id}',
                                     ),
-                            onExit: isPending
-                                ? null
-                                : (_) => setState(() {
-                                      if (_hoveredMessageId == stableMsg.id) {
-                                        _hoveredMessageId = null;
-                                      }
-                                    }),
-                            child: Row(
-                              mainAxisAlignment: isUser
-                                  ? MainAxisAlignment.end
-                                  : MainAxisAlignment.start,
-                              children: [
-                                if (isUser) hoverMenuSlot,
-                                Flexible(child: bubble),
-                                if (!isUser) hoverMenuSlot,
-                              ],
-                            ),
+                                  ),
+                                ),
+                              MouseRegion(
+                                onEnter: isPending
+                                    ? null
+                                    : (_) => setState(
+                                          () {
+                                            _hoverActionsEnabled = true;
+                                            _hoveredMessageId = stableMsg.id;
+                                          },
+                                        ),
+                                onExit: isPending
+                                    ? null
+                                    : (_) => setState(() {
+                                          if (_hoveredMessageId ==
+                                              stableMsg.id) {
+                                            _hoveredMessageId = null;
+                                          }
+                                        }),
+                                child: Row(
+                                  mainAxisAlignment: isUser
+                                      ? MainAxisAlignment.end
+                                      : MainAxisAlignment.start,
+                                  children: [
+                                    if (isUser) hoverMenuSlot,
+                                    Flexible(child: bubble),
+                                    if (!isUser) hoverMenuSlot,
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -2957,242 +3313,567 @@ class _ChatPageState extends State<ChatPage> {
                 constraints: const BoxConstraints(maxWidth: 880),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: SlFocusRing(
-                    key: const ValueKey('chat_input_ring'),
-                    borderRadius: BorderRadius.circular(tokens.radiusLg),
-                    child: SlSurface(
-                      color: tokens.surface2,
-                      borderColor: tokens.borderSubtle,
-                      borderRadius: BorderRadius.circular(tokens.radiusLg),
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Focus(
-                              // ignore: deprecated_member_use
-                              onKey: (node, event) {
-                                // ignore: deprecated_member_use
-                                if (event is! RawKeyDownEvent) {
-                                  return KeyEventResult.ignored;
-                                }
+                  child: useCompactComposer
+                      ? SlFocusRing(
+                          key: const ValueKey('chat_input_ring'),
+                          borderRadius: BorderRadius.circular(tokens.radiusLg),
+                          child: SlSurface(
+                            color: tokens.surface2,
+                            borderColor: tokens.borderSubtle,
+                            borderRadius:
+                                BorderRadius.circular(tokens.radiusLg),
+                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (_supportsImageUpload) ...[
+                                  SlIconButton(
+                                    key: const ValueKey('chat_attach'),
+                                    icon: Icons.add_rounded,
+                                    size: 44,
+                                    iconSize: 22,
+                                    tooltip: context.t.chat.attachTooltip,
+                                    onPressed: (_sending || _asking)
+                                        ? null
+                                        : _openAttachmentSheet,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Focus(
+                                    // ignore: deprecated_member_use
+                                    onKey: (node, event) {
+                                      // ignore: deprecated_member_use
+                                      if (event is! RawKeyDownEvent) {
+                                        return KeyEventResult.ignored;
+                                      }
 
-                                final key = event.logicalKey;
-                                final composing = _controller.value.composing;
-                                final isComposing =
-                                    composing.isValid && !composing.isCollapsed;
+                                      final key = event.logicalKey;
+                                      final composing =
+                                          _controller.value.composing;
+                                      final isComposing = composing.isValid &&
+                                          !composing.isCollapsed;
 
-                                // ignore: deprecated_member_use
-                                final metaPressed = event.isMetaPressed;
-                                // ignore: deprecated_member_use
-                                final controlPressed = event.isControlPressed;
-                                // ignore: deprecated_member_use
-                                final shiftPressed = event.isShiftPressed;
+                                      final hardware =
+                                          HardwareKeyboard.instance;
+                                      final metaPressed =
+                                          hardware.isMetaPressed;
+                                      final controlPressed =
+                                          hardware.isControlPressed;
+                                      final shiftPressed =
+                                          hardware.isShiftPressed;
 
-                                final isPaste =
-                                    key == LogicalKeyboardKey.paste ||
-                                        (key == LogicalKeyboardKey.keyV &&
-                                            (metaPressed || controlPressed));
-                                if (isPaste) {
-                                  unawaited(_pasteIntoChatInput());
-                                  return KeyEventResult.handled;
-                                }
+                                      final isPaste = key ==
+                                              LogicalKeyboardKey.paste ||
+                                          (key == LogicalKeyboardKey.keyV &&
+                                              (metaPressed || controlPressed));
+                                      if (isPaste) {
+                                        unawaited(_pasteIntoChatInput());
+                                        return KeyEventResult.handled;
+                                      }
 
-                                final isSelectAll =
-                                    key == LogicalKeyboardKey.keyA &&
-                                        (metaPressed || controlPressed);
-                                if (isSelectAll) {
-                                  final textLength =
-                                      _controller.value.text.length;
-                                  _controller.selection = TextSelection(
-                                    baseOffset: 0,
-                                    extentOffset: textLength,
-                                  );
-                                  return KeyEventResult.handled;
-                                }
+                                      final isSelectAll =
+                                          key == LogicalKeyboardKey.keyA &&
+                                              (metaPressed || controlPressed);
+                                      if (isSelectAll) {
+                                        final textLength =
+                                            _controller.value.text.length;
+                                        _controller.selection = TextSelection(
+                                          baseOffset: 0,
+                                          extentOffset: textLength,
+                                        );
+                                        return KeyEventResult.handled;
+                                      }
 
-                                final isCopy =
-                                    (key == LogicalKeyboardKey.copy ||
-                                            key == LogicalKeyboardKey.keyC) &&
-                                        (metaPressed || controlPressed);
-                                if (isCopy) {
-                                  final value = _controller.value;
-                                  final selection = value.selection;
-                                  if (selection.isValid &&
-                                      !selection.isCollapsed) {
-                                    final start = selection.start;
-                                    final end = selection.end;
-                                    final normalizedStart =
-                                        start < end ? start : end;
-                                    final normalizedEnd =
-                                        start < end ? end : start;
-                                    final selectedText = value.text.substring(
-                                      normalizedStart,
-                                      normalizedEnd,
-                                    );
-                                    unawaited(
-                                      Clipboard.setData(
-                                        ClipboardData(text: selectedText),
+                                      final isCopy = (key ==
+                                                  LogicalKeyboardKey.copy ||
+                                              key == LogicalKeyboardKey.keyC) &&
+                                          (metaPressed || controlPressed);
+                                      if (isCopy) {
+                                        final value = _controller.value;
+                                        final selection = value.selection;
+                                        if (selection.isValid &&
+                                            !selection.isCollapsed) {
+                                          final start = selection.start;
+                                          final end = selection.end;
+                                          final normalizedStart =
+                                              start < end ? start : end;
+                                          final normalizedEnd =
+                                              start < end ? end : start;
+                                          final selectedText =
+                                              value.text.substring(
+                                            normalizedStart,
+                                            normalizedEnd,
+                                          );
+                                          unawaited(
+                                            Clipboard.setData(
+                                              ClipboardData(text: selectedText),
+                                            ),
+                                          );
+                                        }
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      final isCut = (key ==
+                                                  LogicalKeyboardKey.cut ||
+                                              key == LogicalKeyboardKey.keyX) &&
+                                          (metaPressed || controlPressed);
+                                      if (isCut) {
+                                        final value = _controller.value;
+                                        final selection = value.selection;
+                                        if (selection.isValid &&
+                                            !selection.isCollapsed) {
+                                          final start = selection.start;
+                                          final end = selection.end;
+                                          final normalizedStart =
+                                              start < end ? start : end;
+                                          final normalizedEnd =
+                                              start < end ? end : start;
+                                          final selectedText =
+                                              value.text.substring(
+                                            normalizedStart,
+                                            normalizedEnd,
+                                          );
+                                          unawaited(
+                                            Clipboard.setData(
+                                              ClipboardData(text: selectedText),
+                                            ),
+                                          );
+                                          final updatedText =
+                                              value.text.replaceRange(
+                                            normalizedStart,
+                                            normalizedEnd,
+                                            '',
+                                          );
+                                          _controller.value = value.copyWith(
+                                            text: updatedText,
+                                            selection: TextSelection.collapsed(
+                                              offset: normalizedStart,
+                                            ),
+                                            composing: TextRange.empty,
+                                          );
+                                        }
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      if (key != LogicalKeyboardKey.enter &&
+                                          key !=
+                                              LogicalKeyboardKey.numpadEnter) {
+                                        return KeyEventResult.ignored;
+                                      }
+
+                                      if (event.repeat) {
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      if (isComposing) {
+                                        return KeyEventResult.ignored;
+                                      }
+
+                                      if (shiftPressed) {
+                                        final value = _controller.value;
+                                        final selection = value.selection;
+                                        final start = selection.isValid
+                                            ? selection.start
+                                            : value.text.length;
+                                        final end = selection.isValid
+                                            ? selection.end
+                                            : value.text.length;
+                                        final normalizedStart =
+                                            start < end ? start : end;
+                                        final normalizedEnd =
+                                            start < end ? end : start;
+                                        final updatedText =
+                                            value.text.replaceRange(
+                                          normalizedStart,
+                                          normalizedEnd,
+                                          '\n',
+                                        );
+                                        _controller.value = value.copyWith(
+                                          text: updatedText,
+                                          selection: TextSelection.collapsed(
+                                            offset: normalizedStart + 1,
+                                          ),
+                                          composing: TextRange.empty,
+                                        );
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      unawaited(_send());
+                                      return KeyEventResult.handled;
+                                    },
+                                    child: TextField(
+                                      key: const ValueKey('chat_input'),
+                                      focusNode: _inputFocusNode,
+                                      controller: _controller,
+                                      decoration: InputDecoration(
+                                        hintText:
+                                            context.t.common.fields.message,
+                                        border: InputBorder.none,
+                                        filled: false,
+                                        isDense: true,
                                       ),
-                                    );
-                                  }
-                                  return KeyEventResult.handled;
-                                }
-
-                                final isCut = (key == LogicalKeyboardKey.cut ||
-                                        key == LogicalKeyboardKey.keyX) &&
-                                    (metaPressed || controlPressed);
-                                if (isCut) {
-                                  final value = _controller.value;
-                                  final selection = value.selection;
-                                  if (selection.isValid &&
-                                      !selection.isCollapsed) {
-                                    final start = selection.start;
-                                    final end = selection.end;
-                                    final normalizedStart =
-                                        start < end ? start : end;
-                                    final normalizedEnd =
-                                        start < end ? end : start;
-                                    final selectedText = value.text.substring(
-                                      normalizedStart,
-                                      normalizedEnd,
-                                    );
-                                    unawaited(
-                                      Clipboard.setData(
-                                        ClipboardData(text: selectedText),
-                                      ),
-                                    );
-                                    final updatedText = value.text.replaceRange(
-                                      normalizedStart,
-                                      normalizedEnd,
-                                      '',
-                                    );
-                                    _controller.value = value.copyWith(
-                                      text: updatedText,
-                                      selection: TextSelection.collapsed(
-                                        offset: normalizedStart,
-                                      ),
-                                      composing: TextRange.empty,
-                                    );
-                                  }
-                                  return KeyEventResult.handled;
-                                }
-
-                                if (key != LogicalKeyboardKey.enter &&
-                                    key != LogicalKeyboardKey.numpadEnter) {
-                                  return KeyEventResult.ignored;
-                                }
-
-                                if (event.repeat) {
-                                  return KeyEventResult.handled;
-                                }
-
-                                if (isComposing) {
-                                  return KeyEventResult.ignored;
-                                }
-
-                                if (shiftPressed) {
-                                  final value = _controller.value;
-                                  final selection = value.selection;
-                                  final start = selection.isValid
-                                      ? selection.start
-                                      : value.text.length;
-                                  final end = selection.isValid
-                                      ? selection.end
-                                      : value.text.length;
-                                  final normalizedStart =
-                                      start < end ? start : end;
-                                  final normalizedEnd =
-                                      start < end ? end : start;
-                                  final updatedText = value.text.replaceRange(
-                                    normalizedStart,
-                                    normalizedEnd,
-                                    '\n',
-                                  );
-                                  _controller.value = value.copyWith(
-                                    text: updatedText,
-                                    selection: TextSelection.collapsed(
-                                      offset: normalizedStart + 1,
+                                      keyboardType: TextInputType.multiline,
+                                      textInputAction: TextInputAction.newline,
+                                      minLines: 1,
+                                      maxLines: 6,
                                     ),
-                                    composing: TextRange.empty,
-                                  );
-                                  return KeyEventResult.handled;
-                                }
-
-                                unawaited(_send());
-                                return KeyEventResult.handled;
-                              },
-                              child: TextField(
-                                key: const ValueKey('chat_input'),
-                                focusNode: _inputFocusNode,
-                                controller: _controller,
-                                decoration: InputDecoration(
-                                  hintText: context.t.common.fields.message,
-                                  border: InputBorder.none,
-                                  filled: false,
+                                  ),
                                 ),
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                minLines: 1,
-                                maxLines: 6,
-                              ),
+                                ValueListenableBuilder<TextEditingValue>(
+                                  valueListenable: _controller,
+                                  builder: (context, value, child) {
+                                    final hasText =
+                                        value.text.trim().isNotEmpty;
+
+                                    if (_asking) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(left: 8),
+                                        child: _buildComposerInlineButton(
+                                          context,
+                                          key: const ValueKey('chat_stop'),
+                                          label: _stopRequested
+                                              ? context
+                                                  .t.common.actions.stopping
+                                              : context.t.common.actions.stop,
+                                          icon: Icons.stop_circle_outlined,
+                                          onPressed:
+                                              _stopRequested ? null : _stopAsk,
+                                          backgroundColor: Colors.transparent,
+                                          foregroundColor:
+                                              colorScheme.onSurface,
+                                          borderColor: tokens.borderSubtle,
+                                        ),
+                                      );
+                                    }
+
+                                    if (!hasText) {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(left: 8),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _buildComposerInlineButton(
+                                            context,
+                                            key: const ValueKey('chat_ask_ai'),
+                                            label:
+                                                context.t.common.actions.askAi,
+                                            icon: Icons.auto_awesome_rounded,
+                                            onPressed: (_sending || _asking)
+                                                ? null
+                                                : _askAi,
+                                            backgroundColor:
+                                                colorScheme.secondaryContainer,
+                                            foregroundColor: colorScheme
+                                                .onSecondaryContainer,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          _buildComposerInlineButton(
+                                            context,
+                                            key: const ValueKey('chat_send'),
+                                            label:
+                                                context.t.common.actions.send,
+                                            icon: Icons.send_rounded,
+                                            onPressed: (_sending || _asking)
+                                                ? null
+                                                : _send,
+                                            backgroundColor:
+                                                colorScheme.primary,
+                                            foregroundColor:
+                                                colorScheme.onPrimary,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          if (_supportsImageUpload) ...[
-                            Semantics(
-                              label: context.t.chat.attachTooltip,
-                              button: true,
-                              child: SlIconButton(
-                                key: const ValueKey('chat_attach'),
-                                icon: Icons.add_rounded,
-                                size: 44,
-                                iconSize: 22,
-                                tooltip: context.t.chat.attachTooltip,
-                                onPressed: (_sending || _asking)
-                                    ? null
-                                    : _openAttachmentSheet,
-                              ),
+                        )
+                      : SlFocusRing(
+                          key: const ValueKey('chat_input_ring'),
+                          borderRadius: BorderRadius.circular(tokens.radiusLg),
+                          child: SlSurface(
+                            color: tokens.surface2,
+                            borderColor: tokens.borderSubtle,
+                            borderRadius:
+                                BorderRadius.circular(tokens.radiusLg),
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Focus(
+                                    // ignore: deprecated_member_use
+                                    onKey: (node, event) {
+                                      // ignore: deprecated_member_use
+                                      if (event is! RawKeyDownEvent) {
+                                        return KeyEventResult.ignored;
+                                      }
+
+                                      final key = event.logicalKey;
+                                      final composing =
+                                          _controller.value.composing;
+                                      final isComposing = composing.isValid &&
+                                          !composing.isCollapsed;
+
+                                      final hardware =
+                                          HardwareKeyboard.instance;
+                                      final metaPressed =
+                                          hardware.isMetaPressed;
+                                      final controlPressed =
+                                          hardware.isControlPressed;
+                                      final shiftPressed =
+                                          hardware.isShiftPressed;
+
+                                      final isPaste = key ==
+                                              LogicalKeyboardKey.paste ||
+                                          (key == LogicalKeyboardKey.keyV &&
+                                              (metaPressed || controlPressed));
+                                      if (isPaste) {
+                                        unawaited(_pasteIntoChatInput());
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      final isSelectAll =
+                                          key == LogicalKeyboardKey.keyA &&
+                                              (metaPressed || controlPressed);
+                                      if (isSelectAll) {
+                                        final textLength =
+                                            _controller.value.text.length;
+                                        _controller.selection = TextSelection(
+                                          baseOffset: 0,
+                                          extentOffset: textLength,
+                                        );
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      final isCopy = (key ==
+                                                  LogicalKeyboardKey.copy ||
+                                              key == LogicalKeyboardKey.keyC) &&
+                                          (metaPressed || controlPressed);
+                                      if (isCopy) {
+                                        final value = _controller.value;
+                                        final selection = value.selection;
+                                        if (selection.isValid &&
+                                            !selection.isCollapsed) {
+                                          final start = selection.start;
+                                          final end = selection.end;
+                                          final normalizedStart =
+                                              start < end ? start : end;
+                                          final normalizedEnd =
+                                              start < end ? end : start;
+                                          final selectedText =
+                                              value.text.substring(
+                                            normalizedStart,
+                                            normalizedEnd,
+                                          );
+                                          unawaited(
+                                            Clipboard.setData(
+                                              ClipboardData(text: selectedText),
+                                            ),
+                                          );
+                                        }
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      final isCut = (key ==
+                                                  LogicalKeyboardKey.cut ||
+                                              key == LogicalKeyboardKey.keyX) &&
+                                          (metaPressed || controlPressed);
+                                      if (isCut) {
+                                        final value = _controller.value;
+                                        final selection = value.selection;
+                                        if (selection.isValid &&
+                                            !selection.isCollapsed) {
+                                          final start = selection.start;
+                                          final end = selection.end;
+                                          final normalizedStart =
+                                              start < end ? start : end;
+                                          final normalizedEnd =
+                                              start < end ? end : start;
+                                          final selectedText =
+                                              value.text.substring(
+                                            normalizedStart,
+                                            normalizedEnd,
+                                          );
+                                          unawaited(
+                                            Clipboard.setData(
+                                              ClipboardData(text: selectedText),
+                                            ),
+                                          );
+                                          final updatedText =
+                                              value.text.replaceRange(
+                                            normalizedStart,
+                                            normalizedEnd,
+                                            '',
+                                          );
+                                          _controller.value = value.copyWith(
+                                            text: updatedText,
+                                            selection: TextSelection.collapsed(
+                                              offset: normalizedStart,
+                                            ),
+                                            composing: TextRange.empty,
+                                          );
+                                        }
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      if (key != LogicalKeyboardKey.enter &&
+                                          key !=
+                                              LogicalKeyboardKey.numpadEnter) {
+                                        return KeyEventResult.ignored;
+                                      }
+
+                                      if (event.repeat) {
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      if (isComposing) {
+                                        return KeyEventResult.ignored;
+                                      }
+
+                                      if (shiftPressed) {
+                                        final value = _controller.value;
+                                        final selection = value.selection;
+                                        final start = selection.isValid
+                                            ? selection.start
+                                            : value.text.length;
+                                        final end = selection.isValid
+                                            ? selection.end
+                                            : value.text.length;
+                                        final normalizedStart =
+                                            start < end ? start : end;
+                                        final normalizedEnd =
+                                            start < end ? end : start;
+                                        final updatedText =
+                                            value.text.replaceRange(
+                                          normalizedStart,
+                                          normalizedEnd,
+                                          '\n',
+                                        );
+                                        _controller.value = value.copyWith(
+                                          text: updatedText,
+                                          selection: TextSelection.collapsed(
+                                            offset: normalizedStart + 1,
+                                          ),
+                                          composing: TextRange.empty,
+                                        );
+                                        return KeyEventResult.handled;
+                                      }
+
+                                      unawaited(_send());
+                                      return KeyEventResult.handled;
+                                    },
+                                    child: TextField(
+                                      key: const ValueKey('chat_input'),
+                                      focusNode: _inputFocusNode,
+                                      controller: _controller,
+                                      decoration: InputDecoration(
+                                        hintText:
+                                            context.t.common.fields.message,
+                                        border: InputBorder.none,
+                                        filled: false,
+                                      ),
+                                      keyboardType: TextInputType.multiline,
+                                      textInputAction: TextInputAction.newline,
+                                      minLines: 1,
+                                      maxLines: 6,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (_supportsImageUpload) ...[
+                                  Semantics(
+                                    label: context.t.chat.attachTooltip,
+                                    button: true,
+                                    child: SlIconButton(
+                                      key: const ValueKey('chat_attach'),
+                                      icon: Icons.add_rounded,
+                                      size: 44,
+                                      iconSize: 22,
+                                      tooltip: context.t.chat.attachTooltip,
+                                      onPressed: (_sending || _asking)
+                                          ? null
+                                          : _openAttachmentSheet,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                ValueListenableBuilder<TextEditingValue>(
+                                  valueListenable: _controller,
+                                  builder: (context, value, child) {
+                                    final hasText =
+                                        value.text.trim().isNotEmpty;
+
+                                    if (_asking) {
+                                      return SlButton(
+                                        buttonKey: const ValueKey('chat_stop'),
+                                        icon: const Icon(
+                                          Icons.stop_circle_outlined,
+                                          size: 18,
+                                        ),
+                                        variant: SlButtonVariant.outline,
+                                        onPressed:
+                                            _stopRequested ? null : _stopAsk,
+                                        child: Text(
+                                          _stopRequested
+                                              ? context
+                                                  .t.common.actions.stopping
+                                              : context.t.common.actions.stop,
+                                        ),
+                                      );
+                                    }
+
+                                    if (!hasText) {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SlButton(
+                                          buttonKey:
+                                              const ValueKey('chat_ask_ai'),
+                                          icon: const Icon(
+                                            Icons.auto_awesome_rounded,
+                                            size: 18,
+                                          ),
+                                          variant: SlButtonVariant.secondary,
+                                          onPressed: (_sending || _asking)
+                                              ? null
+                                              : _askAi,
+                                          child: Text(
+                                            context.t.common.actions.askAi,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SlButton(
+                                          buttonKey:
+                                              const ValueKey('chat_send'),
+                                          icon: const Icon(
+                                            Icons.send_rounded,
+                                            size: 18,
+                                          ),
+                                          variant: SlButtonVariant.primary,
+                                          onPressed: (_sending || _asking)
+                                              ? null
+                                              : _send,
+                                          child: Text(
+                                            context.t.common.actions.send,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                          ],
-                          SlButton(
-                            buttonKey: const ValueKey('chat_send'),
-                            icon: const Icon(Icons.send_rounded, size: 18),
-                            variant: SlButtonVariant.primary,
-                            onPressed: (_sending || _asking) ? null : _send,
-                            child: Text(context.t.common.actions.send),
                           ),
-                          const SizedBox(width: 8),
-                          if (_asking)
-                            SlButton(
-                              buttonKey: const ValueKey('chat_stop'),
-                              icon: const Icon(
-                                Icons.stop_circle_outlined,
-                                size: 18,
-                              ),
-                              variant: SlButtonVariant.outline,
-                              onPressed: _stopRequested ? null : _stopAsk,
-                              child: Text(
-                                _stopRequested
-                                    ? context.t.common.actions.stopping
-                                    : context.t.common.actions.stop,
-                              ),
-                            )
-                          else
-                            SlButton(
-                              buttonKey: const ValueKey('chat_ask_ai'),
-                              icon: const Icon(
-                                Icons.auto_awesome_rounded,
-                                size: 18,
-                              ),
-                              variant: SlButtonVariant.secondary,
-                              onPressed: (_sending || _asking) ? null : _askAi,
-                              child: Text(context.t.common.actions.askAi),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+                        ),
                 ),
               ),
             ),

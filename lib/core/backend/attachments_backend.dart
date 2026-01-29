@@ -3,6 +3,11 @@ import 'dart:typed_data';
 import '../../src/rust/db.dart';
 
 abstract class AttachmentsBackend {
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  });
+
   Future<List<Attachment>> listRecentAttachments(
     Uint8List key, {
     int limit = 50,

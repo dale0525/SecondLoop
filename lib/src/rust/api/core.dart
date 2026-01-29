@@ -255,6 +255,28 @@ Future<Uint8List> dbReadAttachmentBytes(
     RustLib.instance.api.crateApiCoreDbReadAttachmentBytes(
         appDir: appDir, key: key, sha256: sha256);
 
+Future<void> dbUpsertAttachmentExifMetadata(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        PlatformInt64? capturedAtMs,
+        double? latitude,
+        double? longitude}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertAttachmentExifMetadata(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        capturedAtMs: capturedAtMs,
+        latitude: latitude,
+        longitude: longitude);
+
+Future<AttachmentExifMetadata?> dbReadAttachmentExifMetadata(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256}) =>
+    RustLib.instance.api.crateApiCoreDbReadAttachmentExifMetadata(
+        appDir: appDir, key: key, attachmentSha256: attachmentSha256);
+
 Future<AttachmentVariant> dbUpsertAttachmentVariant(
         {required String appDir,
         required List<int> key,

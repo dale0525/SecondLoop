@@ -41,6 +41,31 @@ class Attachment {
           createdAtMs == other.createdAtMs;
 }
 
+class AttachmentExifMetadata {
+  final PlatformInt64? capturedAtMs;
+  final double? latitude;
+  final double? longitude;
+
+  const AttachmentExifMetadata({
+    this.capturedAtMs,
+    this.latitude,
+    this.longitude,
+  });
+
+  @override
+  int get hashCode =>
+      capturedAtMs.hashCode ^ latitude.hashCode ^ longitude.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AttachmentExifMetadata &&
+          runtimeType == other.runtimeType &&
+          capturedAtMs == other.capturedAtMs &&
+          latitude == other.latitude &&
+          longitude == other.longitude;
+}
+
 class AttachmentVariant {
   final String attachmentSha256;
   final String variant;

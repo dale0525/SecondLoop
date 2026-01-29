@@ -36,6 +36,7 @@ void main() {
 
     await tester.enterText(
         find.byKey(const ValueKey('chat_input')), 'met the client');
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('chat_send')));
     await tester.pump();
     for (var i = 0;

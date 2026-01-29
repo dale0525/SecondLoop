@@ -168,6 +168,13 @@ final class _ShareBackend extends AppBackend implements AttachmentsBackend {
       Uint8List(0);
 
   @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
   Future<void> editMessage(
           Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();

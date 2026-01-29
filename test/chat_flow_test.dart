@@ -32,6 +32,7 @@ void main() {
     expect(find.text('Main Stream'), findsWidgets);
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
+    await tester.pump();
     await tester.tap(find.byKey(MemoryBackend.kChatSend));
     await tester.pumpAndSettle();
 
@@ -67,6 +68,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pump();
     for (var i = 0;
@@ -82,7 +84,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_stop')));
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_stop')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_send')), findsNothing);
     expect(find.text('Stopping…'), findsNothing);
   });
 

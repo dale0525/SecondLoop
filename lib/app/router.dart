@@ -42,13 +42,15 @@ class _AppShellState extends State<AppShell> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final useRail = constraints.maxWidth >= 720;
-        final content = IndexedStack(
-          index: _selectedIndex,
-          children: const <Widget>[
-            _MainStreamTab(),
-            _SettingsTab(),
-          ],
-        );
+        final content = useRail
+            ? IndexedStack(
+                index: _selectedIndex,
+                children: const <Widget>[
+                  _MainStreamTab(),
+                  _SettingsTab(),
+                ],
+              )
+            : const _MainStreamTab();
 
         return Scaffold(
           body: useRail
@@ -105,34 +107,7 @@ class _AppShellState extends State<AppShell> {
                     ),
                   ),
                 ),
-          bottomNavigationBar: useRail
-              ? null
-              : Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    12,
-                    0,
-                    12,
-                    12 + mediaQuery.viewPadding.bottom,
-                  ),
-                  child: SlGlass(
-                    borderRadius: BorderRadius.circular(tokens.radiusLg),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: NavigationBar(
-                      selectedIndex: _selectedIndex,
-                      destinations: [
-                        for (final t in AppTab.values)
-                          NavigationDestination(
-                            icon: Icon(t.icon),
-                            selectedIcon: Icon(t.selectedIcon),
-                            label: t.label(context),
-                          ),
-                      ],
-                      onDestinationSelected: (index) {
-                        setState(() => _selectedIndex = index);
-                      },
-                    ),
-                  ),
-                ),
+          bottomNavigationBar: null,
         );
       },
     );

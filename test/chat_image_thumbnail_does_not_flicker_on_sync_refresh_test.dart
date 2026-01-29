@@ -177,4 +177,11 @@ final class _Backend extends TestAppBackend implements AttachmentsBackend {
   }) async {
     return _attachmentBytesBySha[sha256] ?? Uint8List(0);
   }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
 }

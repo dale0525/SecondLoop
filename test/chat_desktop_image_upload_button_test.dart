@@ -14,7 +14,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Desktop: camera button uploads image attachment',
+  testWidgets('Desktop: attach button uploads image attachment',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     final oldPicker = FilePicker.platform;
@@ -60,12 +60,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('chat_attach_pick_media')),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.byKey(const ValueKey('chat_attach_pick_media')));
-      await tester.pumpAndSettle();
+          find.byKey(const ValueKey('chat_attach_pick_media')), findsNothing);
 
       expect(backend.insertAttachmentCalls, 1);
       expect(backend.linkCalls, 1);

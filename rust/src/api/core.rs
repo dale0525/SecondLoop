@@ -386,6 +386,38 @@ pub fn db_read_attachment_bytes(app_dir: String, key: Vec<u8>, sha256: String) -
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_upsert_attachment_exif_metadata(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    captured_at_ms: Option<i64>,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_attachment_exif_metadata(
+        &conn,
+        &key,
+        &attachment_sha256,
+        captured_at_ms,
+        latitude,
+        longitude,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_read_attachment_exif_metadata(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+) -> Result<Option<db::AttachmentExifMetadata>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::read_attachment_exif_metadata(&conn, &key, &attachment_sha256)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_upsert_attachment_variant(
     app_dir: String,
     key: Vec<u8>,

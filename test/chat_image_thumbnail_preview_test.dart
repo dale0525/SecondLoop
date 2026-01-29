@@ -365,4 +365,11 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
     if (bytes == null) throw StateError('missing_bytes');
     return bytes;
   }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
 }

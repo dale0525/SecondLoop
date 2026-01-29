@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
@@ -338,6 +339,38 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       appDir: appDir,
       key: key,
       sha256: sha256,
+    );
+  }
+
+  Future<void> upsertAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+    int? capturedAtMs,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpsertAttachmentExifMetadata(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: sha256,
+      capturedAtMs:
+          capturedAtMs == null ? null : PlatformInt64Util.from(capturedAtMs),
+      latitude: latitude,
+      longitude: longitude,
+    );
+  }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbReadAttachmentExifMetadata(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: sha256,
     );
   }
 

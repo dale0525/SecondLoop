@@ -7,13 +7,25 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Chat input uses SlSurface container', (tester) async {
-    final backend = _Backend();
+  testWidgets('Chat message bubbles show send timestamp', (tester) async {
+    final createdAt = DateTime.now().millisecondsSinceEpoch;
+    final backend = _Backend(
+      messages: [
+        Message(
+          id: 'm1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Hello',
+          createdAtMs: createdAt,
+          isMemory: true,
+        ),
+      ],
+    );
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -24,8 +36,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'c1',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -35,80 +47,22 @@ void main() {
         ),
       ),
     );
+
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
-    final input =
-        tester.widget<TextField>(find.byKey(const ValueKey('chat_input')));
-    expect(input.keyboardType, TextInputType.multiline);
-    expect(input.textInputAction, TextInputAction.newline);
-    expect(input.minLines, 1);
-    expect(input.maxLines, 6);
-    expect(find.byKey(const ValueKey('chat_input_ring')), findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_input_ring')),
-        matching: find.byKey(const ValueKey('chat_input')),
-      ),
+      find.byKey(const ValueKey('message_timestamp_m1')),
       findsOneWidget,
-    );
-
-    expect(find.byKey(const ValueKey('chat_filter_menu')), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(const ValueKey('chat_filter_menu'))),
-      const Size(40, 40),
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_filter_menu')),
-        matching: find.byIcon(Icons.filter_alt_rounded),
-      ),
-      findsOneWidget,
-    );
-
-    expect(find.byKey(const ValueKey('chat_send')), findsNothing);
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
-
-    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello');
-    await tester.pump();
-
-    expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_send')),
-        matching: find.byIcon(Icons.send_rounded),
-      ),
-      findsOneWidget,
-    );
-    final sendSize = tester.getSize(find.byKey(const ValueKey('chat_send')));
-    expect(sendSize.width, greaterThanOrEqualTo(44));
-    expect(sendSize.height, greaterThanOrEqualTo(44));
-
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('chat_ask_ai')),
-        matching: find.byIcon(Icons.auto_awesome_rounded),
-      ),
-      findsOneWidget,
-    );
-    final askSize = tester.getSize(find.byKey(const ValueKey('chat_ask_ai')));
-    expect(askSize.width, greaterThanOrEqualTo(44));
-    expect(askSize.height, greaterThanOrEqualTo(44));
-
-    expect(find.byType(SlSurface), findsWidgets);
-    expect(
-      find.byWidgetPredicate((widget) {
-        if (widget is! DecoratedBox) return false;
-        final decoration = widget.decoration;
-        return decoration is BoxDecoration && decoration.gradient != null;
-      }),
-      findsNothing,
     );
   });
 }
 
 final class _Backend extends AppBackend {
+  _Backend({required List<Message> messages})
+      : _messages = List<Message>.from(messages);
+
+  final List<Message> _messages;
+
   @override
   Future<void> init() async {}
 
@@ -156,7 +110,7 @@ final class _Backend extends AppBackend {
   @override
   Future<List<Message>> listMessages(
           Uint8List key, String conversationId) async =>
-      const <Message>[];
+      _messages;
 
   @override
   Future<Message> insertMessage(
@@ -238,25 +192,11 @@ final class _Backend extends AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) =>
-      const Stream<String>.empty();
-
-  @override
-  Stream<String> askAiStreamCloudGateway(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
-  }) =>
-      const Stream<String>.empty();
+  }) async* {}
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 2));
+      Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<void> syncWebdavTestConnection({
@@ -264,8 +204,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<void> syncWebdavClearRemoteRoot({
@@ -273,8 +212,7 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<int> syncWebdavPush(
@@ -284,8 +222,8 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async =>
+      0;
 
   @override
   Future<int> syncWebdavPull(
@@ -295,22 +233,20 @@ final class _Backend extends AppBackend {
     String? username,
     String? password,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async =>
+      0;
 
   @override
   Future<void> syncLocaldirTestConnection({
     required String localDir,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<void> syncLocaldirClearRemoteRoot({
     required String localDir,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<int> syncLocaldirPush(
@@ -318,8 +254,8 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async =>
+      0;
 
   @override
   Future<int> syncLocaldirPull(
@@ -327,6 +263,6 @@ final class _Backend extends AppBackend {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) =>
-      throw UnimplementedError();
+  }) async =>
+      0;
 }

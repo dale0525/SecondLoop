@@ -84,6 +84,52 @@ void main() {
     expect(find.text('2026-01-27 10:23'), findsOneWidget);
     expect(find.text('37.76667 N, 122.41667 W'), findsOneWidget);
   });
+
+  testWidgets('Attachment viewer falls back to persisted metadata',
+      (tester) async {
+    final backend = _Backend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      exifBySha: {
+        'abc': AttachmentExifMetadata(
+          capturedAtMs:
+              DateTime(2026, 1, 27, 10, 23, 45).toUtc().millisecondsSinceEpoch,
+          latitude: 37.76667,
+          longitude: -122.41667,
+        ),
+      },
+    );
+
+    const attachment = Attachment(
+      sha256: 'abc',
+      mimeType: 'image/png',
+      path: 'attachments/abc.bin',
+      byteLen: 67,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(attachment: attachment),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('attachment_metadata_captured_at')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_metadata_location')),
+        findsOneWidget);
+    expect(find.text('2026-01-27 10:23'), findsOneWidget);
+    expect(find.text('37.76667 N, 122.41667 W'), findsOneWidget);
+  });
 }
 
 Uint8List _tinyPngBytes() {
@@ -133,10 +179,14 @@ img.IfdValueRational _gpsCoordinateValue({
 }
 
 final class _Backend extends AppBackend implements AttachmentsBackend {
-  _Backend({required Map<String, Uint8List> bytesBySha})
-      : _bytesBySha = Map<String, Uint8List>.from(bytesBySha);
+  _Backend({
+    required Map<String, Uint8List> bytesBySha,
+    Map<String, AttachmentExifMetadata>? exifBySha,
+  })  : _bytesBySha = Map<String, Uint8List>.from(bytesBySha),
+        _exifBySha = Map<String, AttachmentExifMetadata>.from(exifBySha ?? {});
 
   final Map<String, Uint8List> _bytesBySha;
+  final Map<String, AttachmentExifMetadata> _exifBySha;
 
   @override
   Future<void> init() async {}
@@ -405,4 +455,11 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
     if (bytes == null) throw StateError('missing_bytes');
     return bytes;
   }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      _exifBySha[sha256];
 }

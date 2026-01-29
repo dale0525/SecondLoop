@@ -72,6 +72,7 @@ void main() {
       final stateBefore = tester.state(thumbnailFinder);
 
       await tester.enterText(find.byKey(const ValueKey('chat_input')), 'Hello');
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('chat_send')));
       await tester.pumpAndSettle();
 
@@ -123,4 +124,11 @@ final class _Backend extends TestAppBackend implements AttachmentsBackend {
     // Not needed for this regression (we only care about State identity).
     return Uint8List(0);
   }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
 }
