@@ -24,6 +24,61 @@ class AppTheme {
   static const _radiusMd = 14.0;
   static const _radiusLg = 18.0;
 
+  static dynamic _cardThemeForThemeData({
+    required bool isDark,
+    required Color surface,
+    required Color outline,
+  }) {
+    final dynamic cardTheme = CardTheme(
+      color: surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_radiusLg),
+        side: BorderSide(
+          color: isDark ? outline.withOpacity(0.65) : outline.withOpacity(0.9),
+        ),
+      ),
+    );
+
+    // Flutter has evolved the ThemeData API:
+    // - Newer versions expect a `CardThemeData` object.
+    // - Older versions expect a `CardTheme` object.
+    //
+    // `CardTheme` in newer versions can produce the needed `CardThemeData` via
+    // its `data` getter. In older versions, `data` doesn't exist. Keep this
+    // compatible without version checks.
+    try {
+      return cardTheme.data;
+    } on NoSuchMethodError {
+      return cardTheme;
+    }
+  }
+
+  static dynamic _dialogThemeForThemeData({required Color surface}) {
+    final dynamic dialogTheme = DialogTheme(
+      backgroundColor: surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_radiusLg),
+      ),
+    );
+
+    // Flutter has evolved the ThemeData API:
+    // - Newer versions expect a `DialogThemeData` object.
+    // - Older versions expect a `DialogTheme` object.
+    //
+    // `DialogTheme` in newer versions can produce the needed `DialogThemeData`
+    // via its `data` getter. In older versions, `data` doesn't exist. Keep
+    // this compatible without version checks.
+    try {
+      return dialogTheme.data;
+    } on NoSuchMethodError {
+      return dialogTheme;
+    }
+  }
+
   static ThemeData light({Locale? locale, TargetPlatform? platform}) {
     return _build(
         brightness: Brightness.light, locale: locale, platform: platform);
@@ -80,26 +135,12 @@ class AppTheme {
         space: 1,
         thickness: 1,
       ),
-      cardTheme: CardTheme(
-        color: surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusLg),
-          side: BorderSide(
-            color:
-                isDark ? outline.withOpacity(0.65) : outline.withOpacity(0.9),
-          ),
-        ),
+      cardTheme: _cardThemeForThemeData(
+        isDark: isDark,
+        surface: surface,
+        outline: outline,
       ),
-      dialogTheme: DialogTheme(
-        backgroundColor: surface,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusLg),
-        ),
-      ),
+      dialogTheme: _dialogThemeForThemeData(surface: surface),
       popupMenuTheme: PopupMenuThemeData(
         color: surface,
         surfaceTintColor: Colors.transparent,

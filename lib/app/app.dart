@@ -139,36 +139,98 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                           }
 
                           final key = event.logicalKey;
+                          bool isTextEditingShortcutChar(String char) =>
+                              char == 'a' ||
+                              char == 'c' ||
+                              char == 'v' ||
+                              char == 'x' ||
+                              char == 'z' ||
+                              char == 'y';
+
+                          String? keyChar;
+                          final keyLabel = event.data.keyLabel;
+                          if (keyLabel.length == 1) {
+                            final lowered = keyLabel.toLowerCase();
+                            if (isTextEditingShortcutChar(lowered)) {
+                              keyChar = lowered;
+                            }
+                          }
+                          if (keyChar == null) {
+                            final rawChar = event.character;
+                            if (rawChar != null && rawChar.length == 1) {
+                              final lowered = rawChar.toLowerCase();
+                              if (isTextEditingShortcutChar(lowered)) {
+                                keyChar = lowered;
+                              }
+                            }
+                          }
 
                           Intent? intent;
-                          if (key == LogicalKeyboardKey.keyA) {
-                            intent = const SelectAllTextIntent(
-                              SelectionChangedCause.keyboard,
-                            );
-                          } else if (key == LogicalKeyboardKey.keyC ||
-                              key == LogicalKeyboardKey.copy) {
-                            intent = CopySelectionTextIntent.copy;
-                          } else if (key == LogicalKeyboardKey.keyX ||
-                              key == LogicalKeyboardKey.cut) {
-                            intent = const CopySelectionTextIntent.cut(
-                              SelectionChangedCause.keyboard,
-                            );
-                          } else if (key == LogicalKeyboardKey.keyV ||
-                              key == LogicalKeyboardKey.paste) {
-                            intent = const PasteTextIntent(
-                              SelectionChangedCause.keyboard,
-                            );
-                          } else if (key == LogicalKeyboardKey.keyZ &&
-                              !shiftPressed) {
-                            intent = const UndoTextIntent(
-                              SelectionChangedCause.keyboard,
-                            );
-                          } else if (key == LogicalKeyboardKey.keyY ||
-                              (key == LogicalKeyboardKey.keyZ &&
-                                  shiftPressed)) {
-                            intent = const RedoTextIntent(
-                              SelectionChangedCause.keyboard,
-                            );
+                          switch (keyChar) {
+                            case 'a':
+                              intent = const SelectAllTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                              break;
+                            case 'c':
+                              intent = CopySelectionTextIntent.copy;
+                              break;
+                            case 'x':
+                              intent = const CopySelectionTextIntent.cut(
+                                SelectionChangedCause.keyboard,
+                              );
+                              break;
+                            case 'v':
+                              intent = const PasteTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                              break;
+                            case 'z':
+                              intent = shiftPressed
+                                  ? const RedoTextIntent(
+                                      SelectionChangedCause.keyboard,
+                                    )
+                                  : const UndoTextIntent(
+                                      SelectionChangedCause.keyboard,
+                                    );
+                              break;
+                            case 'y':
+                              intent = const RedoTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                              break;
+                          }
+
+                          if (intent == null) {
+                            if (key == LogicalKeyboardKey.keyA) {
+                              intent = const SelectAllTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                            } else if (key == LogicalKeyboardKey.keyC ||
+                                key == LogicalKeyboardKey.copy) {
+                              intent = CopySelectionTextIntent.copy;
+                            } else if (key == LogicalKeyboardKey.keyX ||
+                                key == LogicalKeyboardKey.cut) {
+                              intent = const CopySelectionTextIntent.cut(
+                                SelectionChangedCause.keyboard,
+                              );
+                            } else if (key == LogicalKeyboardKey.keyV ||
+                                key == LogicalKeyboardKey.paste) {
+                              intent = const PasteTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                            } else if (key == LogicalKeyboardKey.keyZ &&
+                                !shiftPressed) {
+                              intent = const UndoTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                            } else if (key == LogicalKeyboardKey.keyY ||
+                                (key == LogicalKeyboardKey.keyZ &&
+                                    shiftPressed)) {
+                              intent = const RedoTextIntent(
+                                SelectionChangedCause.keyboard,
+                              );
+                            }
                           }
 
                           if (intent == null) {
@@ -194,12 +256,20 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                         },
                         child: Shortcuts(
                           shortcuts: const <ShortcutActivator, Intent>{
+                            CharacterActivator('c', control: true):
+                                CopySelectionTextIntent.copy,
+                            CharacterActivator('c', meta: true):
+                                CopySelectionTextIntent.copy,
                             SingleActivator(LogicalKeyboardKey.keyC,
                                 control: true): CopySelectionTextIntent.copy,
                             SingleActivator(LogicalKeyboardKey.keyC,
                                 meta: true): CopySelectionTextIntent.copy,
                             SingleActivator(LogicalKeyboardKey.copy):
                                 CopySelectionTextIntent.copy,
+                            CharacterActivator('v', control: true):
+                                PasteTextIntent(SelectionChangedCause.keyboard),
+                            CharacterActivator('v', meta: true):
+                                PasteTextIntent(SelectionChangedCause.keyboard),
                             SingleActivator(LogicalKeyboardKey.keyV,
                                     control: true):
                                 PasteTextIntent(SelectionChangedCause.keyboard),
@@ -208,6 +278,14 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 PasteTextIntent(SelectionChangedCause.keyboard),
                             SingleActivator(LogicalKeyboardKey.paste):
                                 PasteTextIntent(SelectionChangedCause.keyboard),
+                            CharacterActivator('x', control: true):
+                                CopySelectionTextIntent.cut(
+                              SelectionChangedCause.keyboard,
+                            ),
+                            CharacterActivator('x', meta: true):
+                                CopySelectionTextIntent.cut(
+                              SelectionChangedCause.keyboard,
+                            ),
                             SingleActivator(LogicalKeyboardKey.keyX,
                                 control: true): CopySelectionTextIntent.cut(
                               SelectionChangedCause.keyboard,
@@ -220,14 +298,14 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 CopySelectionTextIntent.cut(
                               SelectionChangedCause.keyboard,
                             ),
-                            SingleActivator(LogicalKeyboardKey.keyA,
-                                    control: true):
+                            CharacterActivator('a', control: true):
                                 SelectAllTextIntent(
-                                    SelectionChangedCause.keyboard),
-                            SingleActivator(LogicalKeyboardKey.keyA,
-                                    meta: true):
+                              SelectionChangedCause.keyboard,
+                            ),
+                            CharacterActivator('a', meta: true):
                                 SelectAllTextIntent(
-                                    SelectionChangedCause.keyboard),
+                              SelectionChangedCause.keyboard,
+                            ),
                           },
                           child: SlBackground(
                             child: AppBootstrap(

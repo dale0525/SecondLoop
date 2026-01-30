@@ -3723,6 +3723,30 @@ class _ChatPageState extends State<ChatPage> {
                                       }
 
                                       final key = event.logicalKey;
+                                      bool isShortcutChar(String char) =>
+                                          char == 'a' ||
+                                          char == 'c' ||
+                                          char == 'v' ||
+                                          char == 'x';
+
+                                      String? keyChar;
+                                      final keyLabel = event.data.keyLabel;
+                                      if (keyLabel.length == 1) {
+                                        final lowered = keyLabel.toLowerCase();
+                                        if (isShortcutChar(lowered)) {
+                                          keyChar = lowered;
+                                        }
+                                      }
+                                      if (keyChar == null) {
+                                        final rawChar = event.character;
+                                        if (rawChar != null &&
+                                            rawChar.length == 1) {
+                                          final lowered = rawChar.toLowerCase();
+                                          if (isShortcutChar(lowered)) {
+                                            keyChar = lowered;
+                                          }
+                                        }
+                                      }
                                       final composing =
                                           _controller.value.composing;
                                       final isComposing = composing.isValid &&
@@ -3736,19 +3760,26 @@ class _ChatPageState extends State<ChatPage> {
                                           hardware.isControlPressed;
                                       final shiftPressed =
                                           hardware.isShiftPressed;
+                                      final hasModifier =
+                                          metaPressed || controlPressed;
 
-                                      final isPaste = key ==
-                                              LogicalKeyboardKey.paste ||
-                                          (key == LogicalKeyboardKey.keyV &&
-                                              (metaPressed || controlPressed));
+                                      final isPaste =
+                                          key == LogicalKeyboardKey.paste ||
+                                              ((keyChar == 'v' ||
+                                                      key ==
+                                                          LogicalKeyboardKey
+                                                              .keyV) &&
+                                                  hasModifier);
                                       if (isPaste) {
                                         unawaited(_pasteIntoChatInput());
                                         return KeyEventResult.handled;
                                       }
 
-                                      final isSelectAll =
-                                          key == LogicalKeyboardKey.keyA &&
-                                              (metaPressed || controlPressed);
+                                      final isSelectAll = hasModifier &&
+                                          (keyChar == 'a' ||
+                                              (keyChar == null &&
+                                                  key ==
+                                                      LogicalKeyboardKey.keyA));
                                       if (isSelectAll) {
                                         final textLength =
                                             _controller.value.text.length;
@@ -3761,8 +3792,9 @@ class _ChatPageState extends State<ChatPage> {
 
                                       final isCopy = (key ==
                                                   LogicalKeyboardKey.copy ||
+                                              keyChar == 'c' ||
                                               key == LogicalKeyboardKey.keyC) &&
-                                          (metaPressed || controlPressed);
+                                          hasModifier;
                                       if (isCopy) {
                                         final value = _controller.value;
                                         final selection = value.selection;
@@ -3790,8 +3822,9 @@ class _ChatPageState extends State<ChatPage> {
 
                                       final isCut = (key ==
                                                   LogicalKeyboardKey.cut ||
+                                              keyChar == 'x' ||
                                               key == LogicalKeyboardKey.keyX) &&
-                                          (metaPressed || controlPressed);
+                                          hasModifier;
                                       if (isCut) {
                                         final value = _controller.value;
                                         final selection = value.selection;
@@ -3989,6 +4022,30 @@ class _ChatPageState extends State<ChatPage> {
                                       }
 
                                       final key = event.logicalKey;
+                                      bool isShortcutChar(String char) =>
+                                          char == 'a' ||
+                                          char == 'c' ||
+                                          char == 'v' ||
+                                          char == 'x';
+
+                                      String? keyChar;
+                                      final keyLabel = event.data.keyLabel;
+                                      if (keyLabel.length == 1) {
+                                        final lowered = keyLabel.toLowerCase();
+                                        if (isShortcutChar(lowered)) {
+                                          keyChar = lowered;
+                                        }
+                                      }
+                                      if (keyChar == null) {
+                                        final rawChar = event.character;
+                                        if (rawChar != null &&
+                                            rawChar.length == 1) {
+                                          final lowered = rawChar.toLowerCase();
+                                          if (isShortcutChar(lowered)) {
+                                            keyChar = lowered;
+                                          }
+                                        }
+                                      }
                                       final composing =
                                           _controller.value.composing;
                                       final isComposing = composing.isValid &&
@@ -4002,19 +4059,26 @@ class _ChatPageState extends State<ChatPage> {
                                           hardware.isControlPressed;
                                       final shiftPressed =
                                           hardware.isShiftPressed;
+                                      final hasModifier =
+                                          metaPressed || controlPressed;
 
-                                      final isPaste = key ==
-                                              LogicalKeyboardKey.paste ||
-                                          (key == LogicalKeyboardKey.keyV &&
-                                              (metaPressed || controlPressed));
+                                      final isPaste =
+                                          key == LogicalKeyboardKey.paste ||
+                                              ((keyChar == 'v' ||
+                                                      key ==
+                                                          LogicalKeyboardKey
+                                                              .keyV) &&
+                                                  hasModifier);
                                       if (isPaste) {
                                         unawaited(_pasteIntoChatInput());
                                         return KeyEventResult.handled;
                                       }
 
-                                      final isSelectAll =
-                                          key == LogicalKeyboardKey.keyA &&
-                                              (metaPressed || controlPressed);
+                                      final isSelectAll = hasModifier &&
+                                          (keyChar == 'a' ||
+                                              (keyChar == null &&
+                                                  key ==
+                                                      LogicalKeyboardKey.keyA));
                                       if (isSelectAll) {
                                         final textLength =
                                             _controller.value.text.length;
@@ -4027,8 +4091,9 @@ class _ChatPageState extends State<ChatPage> {
 
                                       final isCopy = (key ==
                                                   LogicalKeyboardKey.copy ||
+                                              keyChar == 'c' ||
                                               key == LogicalKeyboardKey.keyC) &&
-                                          (metaPressed || controlPressed);
+                                          hasModifier;
                                       if (isCopy) {
                                         final value = _controller.value;
                                         final selection = value.selection;
@@ -4056,8 +4121,9 @@ class _ChatPageState extends State<ChatPage> {
 
                                       final isCut = (key ==
                                                   LogicalKeyboardKey.cut ||
+                                              keyChar == 'x' ||
                                               key == LogicalKeyboardKey.keyX) &&
-                                          (metaPressed || controlPressed);
+                                          hasModifier;
                                       if (isCut) {
                                         final value = _controller.value;
                                         final selection = value.selection;
