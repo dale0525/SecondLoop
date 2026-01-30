@@ -75,6 +75,16 @@ class TestAppBackend extends AppBackend {
       List<Message>.from(_messagesByConversation[conversationId] ?? const []);
 
   @override
+  Future<Message?> getMessageById(Uint8List key, String messageId) async {
+    for (final list in _messagesByConversation.values) {
+      for (final msg in list) {
+        if (msg.id == messageId) return msg;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<Message> insertMessage(
     Uint8List key,
     String conversationId, {

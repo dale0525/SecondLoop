@@ -54,6 +54,7 @@ import '../settings/llm_profiles_page.dart';
 import '../settings/settings_page.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
+import 'chat_markdown_sanitizer.dart';
 import 'message_viewer_page.dart';
 
 class ChatPage extends StatefulWidget {
@@ -130,11 +131,16 @@ class _ChatPageState extends State<ChatPage> {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final atBottom = position.pixels <= _kBottomThresholdPx;
+    final shouldRefreshOnReturnToBottom =
+        atBottom && !_isAtBottom && _hasUnseenNewMessages;
     if (atBottom != _isAtBottom) {
       setState(() {
         _isAtBottom = atBottom;
         if (atBottom) _hasUnseenNewMessages = false;
       });
+      if (shouldRefreshOnReturnToBottom) {
+        _refresh();
+      }
     }
 
     if (!_usePagination) return;
@@ -181,6 +187,8 @@ class _ChatPageState extends State<ChatPage> {
     if (message.id.startsWith('pending_')) return;
     final canEdit = message.role == 'user';
     final linkedTodo = await _resolveLinkedTodoInfo(message);
+    final canConvertToTodo =
+        linkedTodo == null && _displayTextForMessage(message).trim().isNotEmpty;
     if (!mounted) return;
 
     final action = await showModalBottomSheet<_MessageAction>(
@@ -204,7 +212,7 @@ class _ChatPageState extends State<ChatPage> {
                     title: Text(context.t.common.actions.copy),
                     onTap: () => Navigator.of(context).pop(_MessageAction.copy),
                   ),
-                  if (linkedTodo == null)
+                  if (canConvertToTodo)
                     ListTile(
                       key: const ValueKey('message_action_convert_todo'),
                       leading: const Icon(Icons.task_alt_rounded),
@@ -212,7 +220,7 @@ class _ChatPageState extends State<ChatPage> {
                       onTap: () =>
                           Navigator.of(context).pop(_MessageAction.convertTodo),
                     )
-                  else ...[
+                  else if (linkedTodo != null) ...[
                     ListTile(
                       key: const ValueKey('message_action_open_todo'),
                       leading: const Icon(Icons.chevron_right_rounded),
@@ -362,7 +370,11 @@ class _ChatPageState extends State<ChatPage> {
     String content, {
     required bool isDesktopPlatform,
   }) {
-    final markdown = MarkdownBody(data: content, selectable: false);
+    final normalized = sanitizeChatMarkdown(content);
+    final markdown = MarkdownBody(
+      data: normalized,
+      selectable: false,
+    );
     if (!isDesktopPlatform) return markdown;
 
     return SelectionArea(
@@ -375,7 +387,8 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _openMessageViewer(String content) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => MessageViewerPage(content: content),
+        builder: (context) =>
+            MessageViewerPage(content: sanitizeChatMarkdown(content)),
       ),
     );
   }
@@ -387,6 +400,8 @@ class _ChatPageState extends State<ChatPage> {
     if (message.id.startsWith('pending_')) return;
     final canEdit = message.role == 'user';
     final linkedTodo = await _resolveLinkedTodoInfo(message);
+    final canConvertToTodo =
+        linkedTodo == null && _displayTextForMessage(message).trim().isNotEmpty;
     if (!mounted) return;
 
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -402,13 +417,13 @@ class _ChatPageState extends State<ChatPage> {
           value: _MessageAction.copy,
           child: Text(context.t.common.actions.copy),
         ),
-        if (linkedTodo == null)
+        if (canConvertToTodo)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_convert_todo'),
             value: _MessageAction.convertTodo,
             child: Text(context.t.chat.messageActions.convertToTodo),
           )
-        else
+        else if (linkedTodo != null)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_open_todo'),
             value: _MessageAction.openTodo,
@@ -938,6 +953,7 @@ class _ChatPageState extends State<ChatPage> {
 
     final nowLocal = DateTime.now();
     final due = <({Todo todo, DateTime dueLocal})>[];
+    final upcoming = <({Todo todo, DateTime dueLocal})>[];
     for (final todo in todos) {
       final dueMs = todo.dueAtMs;
       if (dueMs == null) continue;
@@ -947,20 +963,36 @@ class _ChatPageState extends State<ChatPage> {
           DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true).toLocal();
       final isOverdue = dueLocal.isBefore(nowLocal);
       final isToday = _isSameLocalDate(dueLocal, nowLocal);
-      if (!isOverdue && !isToday) continue;
-      due.add((todo: todo, dueLocal: dueLocal));
+      if (isOverdue || isToday) {
+        due.add((todo: todo, dueLocal: dueLocal));
+        continue;
+      }
+
+      // Upcoming preview: only show future todos that haven't started yet.
+      if (todo.status == 'open') {
+        upcoming.add((todo: todo, dueLocal: dueLocal));
+      }
     }
 
     due.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
-    if (due.isEmpty) return const _TodoAgendaSummary.empty();
+    upcoming.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
+    if (due.isEmpty && upcoming.isEmpty) {
+      return const _TodoAgendaSummary.empty();
+    }
 
     final overdueCount = due.where((e) => e.dueLocal.isBefore(nowLocal)).length;
-    final previewTodos = due.take(2).map((e) => e.todo).toList(growable: false);
+    const duePreviewLimit = 2;
+    const upcomingPreviewLimit = 2;
+    final previewTodos = <Todo>[
+      ...due.take(duePreviewLimit).map((e) => e.todo),
+      ...upcoming.take(upcomingPreviewLimit).map((e) => e.todo),
+    ];
 
     return _TodoAgendaSummary(
       dueCount: due.length,
       overdueCount: overdueCount,
-      previewTodos: previewTodos,
+      upcomingCount: upcoming.length,
+      previewTodos: previewTodos.toList(growable: false),
     );
   }
 
@@ -1779,43 +1811,76 @@ class _ChatPageState extends State<ChatPage> {
     return showModalBottomSheet<String>(
       context: context,
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: SlSurface(
-              key: const ValueKey('todo_note_link_sheet'),
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.t.actions.todoNoteLink.title,
-                    style: Theme.of(context).textTheme.titleMedium,
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setState) {
+            List<TodoLinkCandidate> filtered = candidates;
+            final trimmed = query.trim();
+            if (trimmed.isNotEmpty) {
+              final q = trimmed.toLowerCase();
+              filtered = candidates
+                  .where((c) => c.target.title.toLowerCase().contains(q))
+                  .toList(growable: false);
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: SlSurface(
+                  key: const ValueKey('todo_note_link_sheet'),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t.actions.todoNoteLink.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(context.t.actions.todoNoteLink.subtitle),
+                      const SizedBox(height: 12),
+                      TextField(
+                        key: const ValueKey('todo_note_link_search'),
+                        decoration: InputDecoration(
+                          hintText: context.t.common.actions.search,
+                          prefixIcon: const Icon(Icons.search_rounded),
+                        ),
+                        onChanged: (value) => setState(() => query = value),
+                      ),
+                      const SizedBox(height: 12),
+                      Flexible(
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Text(
+                                  context.t.actions.todoNoteLink.noMatches,
+                                ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 6),
+                                itemBuilder: (context, index) {
+                                  final c = filtered[index];
+                                  return ListTile(
+                                    title: Text(c.target.title),
+                                    subtitle: Text(_todoStatusLabel(
+                                      context,
+                                      c.target.status,
+                                    )),
+                                    onTap: () =>
+                                        Navigator.of(context).pop(c.target.id),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(context.t.actions.todoNoteLink.subtitle),
-                  const SizedBox(height: 12),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: candidates.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder: (context, index) {
-                        final c = candidates[index];
-                        return ListTile(
-                          title: Text(c.target.title),
-                          subtitle:
-                              Text(_todoStatusLabel(context, c.target.status)),
-                          onTap: () => Navigator.of(context).pop(c.target.id),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -2738,6 +2803,7 @@ class _ChatPageState extends State<ChatPage> {
               return TodoAgendaBanner(
                 dueCount: summary.dueCount,
                 overdueCount: summary.overdueCount,
+                upcomingCount: summary.upcomingCount,
                 previewTodos: summary.previewTodos,
                 onViewAll: () async {
                   await Navigator.of(context).push(
@@ -3152,7 +3218,7 @@ class _ChatPageState extends State<ChatPage> {
                                       );
                                     },
                               child: InkWell(
-                                onTap: shouldCollapse
+                                onTap: shouldCollapse && !isDesktopPlatform
                                     ? () => unawaited(
                                           _openMessageViewer(displayText),
                                         )
@@ -3226,14 +3292,24 @@ class _ChatPageState extends State<ChatPage> {
                                                 child: ClipRect(
                                                   child: Stack(
                                                     children: [
-                                                      SingleChildScrollView(
-                                                        physics:
-                                                            const NeverScrollableScrollPhysics(),
+                                                      ScrollConfiguration(
+                                                        behavior:
+                                                            ScrollConfiguration
+                                                                    .of(context)
+                                                                .copyWith(
+                                                          scrollbars: false,
+                                                          overscroll: false,
+                                                        ),
                                                         child:
-                                                            _buildMessageMarkdown(
-                                                          displayText,
-                                                          isDesktopPlatform:
-                                                              isDesktopPlatform,
+                                                            SingleChildScrollView(
+                                                          physics:
+                                                              const NeverScrollableScrollPhysics(),
+                                                          child:
+                                                              _buildMessageMarkdown(
+                                                            displayText,
+                                                            isDesktopPlatform:
+                                                                isDesktopPlatform,
+                                                          ),
                                                         ),
                                                       ),
                                                       Positioned(
@@ -4129,16 +4205,19 @@ final class _TodoAgendaSummary {
   const _TodoAgendaSummary({
     required this.dueCount,
     required this.overdueCount,
+    required this.upcomingCount,
     required this.previewTodos,
   });
 
   const _TodoAgendaSummary.empty()
       : dueCount = 0,
         overdueCount = 0,
+        upcomingCount = 0,
         previewTodos = const <Todo>[];
 
   final int dueCount;
   final int overdueCount;
+  final int upcomingCount;
   final List<Todo> previewTodos;
 }
 

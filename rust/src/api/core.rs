@@ -131,6 +131,17 @@ pub fn db_list_messages_page(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_get_message_by_id(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+) -> Result<Option<db::Message>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::get_message_by_id_optional(&conn, &key, &message_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_insert_message(
     app_dir: String,
     key: Vec<u8>,

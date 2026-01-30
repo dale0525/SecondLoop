@@ -350,6 +350,72 @@ void main() {
     expect(created.dueAtMs, isNotNull);
   });
 
+  testWidgets('Photo placeholder message hides convert-to-todo action',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'Photo',
+          createdAtMs: 1,
+          isMemory: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('message_bubble_m1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_actions_sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_action_convert_todo')),
+        findsNothing);
+    expect(
+        find.byKey(const ValueKey('message_action_link_todo')), findsOneWidget);
+  });
+
+  testWidgets('Photo placeholder message hides convert-to-todo context menu',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'Photo',
+          createdAtMs: 1,
+          isMemory: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    final pos =
+        tester.getCenter(find.byKey(const ValueKey('message_bubble_m1')));
+    final gesture = await tester.startGesture(
+      pos,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_context_copy')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_context_convert_todo')),
+        findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('Message already linked to todo shows Jump to todo',
       (tester) async {
     final backend = MessageActionsBackend(
@@ -530,6 +596,10 @@ void main() {
 Widget _wrapChat({required AppBackend backend}) {
   return wrapWithI18n(
     MaterialApp(
+      theme: ThemeData(
+        useMaterial3: true,
+        splashFactory: InkRipple.splashFactory,
+      ),
       home: AppBackendScope(
         backend: backend,
         child: SessionScope(

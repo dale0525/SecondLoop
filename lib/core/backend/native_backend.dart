@@ -239,6 +239,16 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<Message?> getMessageById(Uint8List key, String messageId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetMessageById(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+    );
+  }
+
+  @override
   Future<List<Message>> listMessagesPage(
     Uint8List key,
     String conversationId, {

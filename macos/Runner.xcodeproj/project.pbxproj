@@ -362,7 +362,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n";
+			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n\n# Workaround: Flutter may bundle a plain JSON file as a \"native assets\" marker\n# under Contents/Frameworks. codesign treats everything in Contents/Frameworks\n# as a nested code object and fails if it is unsigned.\nNATIVE_ASSETS_JSON=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Frameworks/native_assets.json\"\nif [ -f \"$NATIVE_ASSETS_JSON\" ] && [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then\n  /usr/bin/codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --timestamp=none \"$NATIVE_ASSETS_JSON\" || exit 1\nfi\n";
 		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;

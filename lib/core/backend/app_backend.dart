@@ -28,6 +28,10 @@ abstract class AppBackend {
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key);
 
   Future<List<Message>> listMessages(Uint8List key, String conversationId);
+  Future<Message?> getMessageById(Uint8List key, String messageId) {
+    throw UnimplementedError('getMessageById');
+  }
+
   Future<List<Message>> listMessagesPage(
     Uint8List key,
     String conversationId, {

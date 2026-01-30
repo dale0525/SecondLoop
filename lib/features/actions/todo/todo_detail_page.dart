@@ -6,6 +6,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
 import '../../../core/session/session_scope.dart';
+import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
@@ -16,6 +17,7 @@ import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
 import '../../attachments/attachment_viewer_page.dart';
+import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 
 class TodoDetailPage extends StatefulWidget {
@@ -34,14 +36,23 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   late Todo _todo = widget.initialTodo;
   Future<List<TodoActivity>>? _activitiesFuture;
   final _noteController = TextEditingController();
+  final Map<String, Future<Message?>> _messageFuturesById =
+      <String, Future<Message?>>{};
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByActivityId =
       <String, Future<List<Attachment>>>{};
   final List<Attachment> _pendingAttachments = <Attachment>[];
+  SyncEngine? _syncEngine;
+  VoidCallback? _syncListener;
 
   @override
   void dispose() {
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
     _noteController.dispose();
     super.dispose();
   }
@@ -50,6 +61,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _activitiesFuture ??= _loadActivities();
+    _attachSyncEngine();
   }
 
   Future<List<TodoActivity>> _loadActivities() async {
@@ -61,9 +73,35 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   void _refreshActivities() {
     setState(() {
       _activitiesFuture = _loadActivities();
+      _messageFuturesById.clear();
       _attachmentsFuturesByMessageId.clear();
       _attachmentsFuturesByActivityId.clear();
     });
+  }
+
+  void _attachSyncEngine() {
+    final engine = SyncEngineScope.maybeOf(context);
+    if (identical(engine, _syncEngine)) return;
+
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
+
+    _syncEngine = engine;
+    if (engine == null) {
+      _syncListener = null;
+      return;
+    }
+
+    void onSyncChange() {
+      if (!mounted) return;
+      _refreshActivities();
+    }
+
+    _syncListener = onSyncChange;
+    engine.changes.addListener(onSyncChange);
   }
 
   String _statusLabel(BuildContext context, String status) => switch (status) {
@@ -192,25 +230,73 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     _noteController.clear();
 
     final backend = AppBackendScope.of(context);
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final attachmentsBackend =
+        backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
     final sessionKey = SessionScope.of(context).sessionKey;
     final content = text.isNotEmpty
         ? text
         : context.t.actions.todoDetail.attachmentNoteDefault;
-    final activity = await backend.appendTodoNote(
-      sessionKey,
-      todoId: _todo.id,
-      content: content,
-    );
-    for (final attachment in pending) {
-      await backend.linkAttachmentToTodoActivity(
+    late final TodoActivity activity;
+    try {
+      activity = await backend.appendTodoNote(
         sessionKey,
-        activityId: activity.id,
-        attachmentSha256: attachment.sha256,
+        todoId: _todo.id,
+        content: content,
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.errors.loadFailed(error: '$e'))),
+      );
+      return;
+    }
+
+    syncEngine?.notifyLocalMutation();
+
+    final activityMessageId = activity.sourceMessageId;
+    for (final attachment in pending) {
+      try {
+        if (attachmentsBackend != null && activityMessageId != null) {
+          await attachmentsBackend.linkAttachmentToMessage(
+            sessionKey,
+            activityMessageId,
+            attachmentSha256: attachment.sha256,
+          );
+        } else {
+          await backend.linkAttachmentToTodoActivity(
+            sessionKey,
+            activityId: activity.id,
+            attachmentSha256: attachment.sha256,
+          );
+        }
+      } catch (_) {
+        // ignore
+      }
     }
     if (!mounted) return;
     setState(_pendingAttachments.clear);
     _refreshActivities();
+    syncEngine?.notifyLocalMutation();
+  }
+
+  Future<Message?> _loadMessage(String messageId) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    try {
+      return await backend.getMessageById(sessionKey, messageId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _displayTextForMessage(Message message) {
+    final raw = message.content;
+    final actions =
+        message.role == 'assistant' ? parseAssistantMessageActions(raw) : null;
+    final text = (actions?.displayText ?? raw).trim();
+    if (text == 'Photo' || text == '照片') return '';
+    return text;
   }
 
   Future<List<Attachment>> _loadMessageAttachments(String messageId) async {
@@ -241,9 +327,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     };
 
     final sourceMessageId = activity.sourceMessageId;
-    final isMarkdown = activity.activityType == 'note' ||
-        activity.activityType == 'summary' ||
-        (activity.activityType != 'status_change' && title.contains('\n'));
 
     final icon = switch (activity.activityType) {
       'note' => Icons.notes_rounded,
@@ -251,6 +334,41 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       'status_change' => Icons.sync_rounded,
       _ => Icons.bolt_rounded,
     };
+
+    Widget contentForText(String text) {
+      final isMarkdown = activity.activityType == 'note' ||
+          activity.activityType == 'summary' ||
+          (activity.activityType != 'status_change' && text.contains('\n'));
+      if (isMarkdown) {
+        return MarkdownBody(
+          data: text,
+          selectable: true,
+          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+            p: theme.textTheme.bodyLarge,
+          ),
+        );
+      }
+      return Text(text, style: theme.textTheme.bodyLarge);
+    }
+
+    final contentWidget =
+        (sourceMessageId != null && activity.activityType != 'status_change')
+            ? FutureBuilder<Message?>(
+                future: _messageFuturesById.putIfAbsent(
+                  sourceMessageId,
+                  () => _loadMessage(sourceMessageId),
+                ),
+                builder: (context, snapshot) {
+                  final message = snapshot.data;
+                  final messageText =
+                      message == null ? null : _displayTextForMessage(message);
+                  final effective = messageText == null || messageText.isEmpty
+                      ? title
+                      : messageText;
+                  return contentForText(effective);
+                },
+              )
+            : contentForText(title);
 
     return SlSurface(
       padding: const EdgeInsets.all(12),
@@ -274,16 +392,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (isMarkdown)
-                  MarkdownBody(
-                    data: title,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                      p: theme.textTheme.bodyLarge,
-                    ),
-                  )
-                else
-                  Text(title, style: theme.textTheme.bodyLarge),
+                contentWidget,
                 const SizedBox(height: 6),
                 Text(
                   timeText,
@@ -481,25 +590,21 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      SelectableText(
+                        _todo.title,
+                        key: const ValueKey('todo_detail_title'),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 10),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Expanded(
-                            child: Text(
-                              _todo.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
                           _TodoStatusButton(
                             label: _statusLabel(context, _todo.status),
                             onPressed: () => unawaited(
                               _setStatus(_nextStatusForTap(_todo.status)),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const Spacer(),
                           SlIconButton(
                             key: const ValueKey('todo_detail_delete'),
                             tooltip: context.t.common.actions.delete,

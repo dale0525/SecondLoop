@@ -2738,6 +2738,47 @@ pub fn list_messages_page(
     Ok(result)
 }
 
+pub fn get_message_by_id_optional(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+) -> Result<Option<Message>> {
+    let row: Option<(String, String, Vec<u8>, i64, i64)> = conn
+        .query_row(
+            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
+               FROM messages
+               WHERE id = ?1 AND COALESCE(is_deleted, 0) = 0"#,
+            params![id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    let Some((conversation_id, role, content_blob, created_at_ms, is_memory_i64)) = row else {
+        return Ok(None);
+    };
+
+    let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+    let content = String::from_utf8(content_bytes)
+        .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+    Ok(Some(Message {
+        id: id.to_string(),
+        conversation_id,
+        role,
+        content,
+        created_at_ms,
+        is_memory: is_memory_i64 != 0,
+    }))
+}
+
 fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Message> {
     let (conversation_id, role, content_blob, created_at_ms, is_memory_i64): (
         String,
@@ -4437,8 +4478,61 @@ pub fn append_todo_note(
     content: &str,
     source_message_id: Option<&str>,
 ) -> Result<TodoActivity> {
+    let mut source_message_id = source_message_id
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    if source_message_id.is_none() {
+        // If this note is created outside of chat (e.g. Todo detail follow-up),
+        // create a chat message so it shows up in the conversation list and can
+        // carry attachments.
+        let todo_source_entry_id: Option<Option<String>> = conn
+            .query_row(
+                r#"SELECT source_entry_id FROM todos WHERE id = ?1"#,
+                params![todo_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        let mut conversation_id: Option<String> = None;
+        if let Some(Some(source_entry_id)) = todo_source_entry_id {
+            let trimmed = source_entry_id.trim();
+            if !trimmed.is_empty() {
+                conversation_id = conn
+                    .query_row(
+                        r#"SELECT conversation_id FROM messages WHERE id = ?1"#,
+                        params![trimmed],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+            }
+        }
+
+        let conversation_id =
+            conversation_id.unwrap_or_else(|| MAIN_STREAM_CONVERSATION_ID.to_string());
+        if conversation_id == MAIN_STREAM_CONVERSATION_ID {
+            // Ensure the main stream exists before inserting.
+            get_or_create_main_stream_conversation(conn, key)?;
+        }
+
+        let msg = insert_message(conn, key, &conversation_id, "user", content)?;
+        source_message_id = Some(msg.id);
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
+    let created_at_ms = match source_message_id.as_deref() {
+        Some(message_id) => conn
+            .query_row(
+                r#"SELECT created_at FROM messages WHERE id = ?1"#,
+                params![message_id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(now),
+        None => now,
+    };
     let aad = format!("todo_activity.content:{id}");
     let content_blob = encrypt_bytes(key, content.as_bytes(), aad.as_bytes())?;
 
@@ -4449,7 +4543,13 @@ INSERT INTO todo_activities(
 )
 VALUES (?1, ?2, 'note', NULL, NULL, ?3, ?4, ?5, 1)
 "#,
-        params![id, todo_id, content_blob, source_message_id, now],
+        params![
+            id,
+            todo_id,
+            content_blob,
+            source_message_id.as_deref(),
+            created_at_ms
+        ],
     )?;
 
     let activity = get_todo_activity_by_id(conn, key, &id)?;

@@ -42,8 +42,9 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: const MaterialApp(
-              home: ChatPage(
+            child: MaterialApp(
+              theme: ThemeData(splashFactory: InkRipple.splashFactory),
+              home: const ChatPage(
                 conversation: Conversation(
                   id: 'main_stream',
                   title: 'Main Stream',

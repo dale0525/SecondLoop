@@ -57,8 +57,12 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: const MaterialApp(
-              home: ChatPage(
+            child: MaterialApp(
+              theme: ThemeData(
+                useMaterial3: true,
+                splashFactory: InkRipple.splashFactory,
+              ),
+              home: const ChatPage(
                 conversation: Conversation(
                   id: 'main_stream',
                   title: 'Main Stream',
@@ -107,6 +111,73 @@ void main() {
     );
     expect(find.text('分析对标账户的直播内容'), findsOneWidget);
     expect(find.text('买狗狗的口粮'), findsOneWidget);
+  });
+
+  testWidgets('Todo agenda banner shows upcoming todos when none due today',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final nowLocal = DateTime.now();
+    final tomorrowNoonLocal =
+        DateTime(nowLocal.year, nowLocal.month, nowLocal.day, 12)
+            .add(const Duration(days: 1));
+
+    final backend = _AgendaBackend(
+      todos: [
+        Todo(
+          id: 'todo:tomorrow',
+          title: '跟进客户会议',
+          dueAtMs: tomorrowNoonLocal.toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              theme: ThemeData(
+                useMaterial3: true,
+                splashFactory: InkRipple.splashFactory,
+              ),
+              home: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_agenda_banner')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('todo_agenda_banner')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_todo:tomorrow')),
+      findsOneWidget,
+    );
+    expect(find.text('跟进客户会议'), findsOneWidget);
+
+    expect(find.byKey(const ValueKey('todo_agenda_view_all')), findsOneWidget);
   });
 }
 

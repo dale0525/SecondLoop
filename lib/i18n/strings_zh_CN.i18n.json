@@ -84,6 +84,7 @@
       "actionShort": "关联",
       "title": "要关联到哪个待办？",
       "subtitle": "将这条消息作为跟进记录添加",
+      "noMatches": "没有匹配的待办",
       "suggest": "要把这条消息关联到待办吗？",
       "linked": "已关联到「$title」"
     },
@@ -127,6 +128,7 @@
     "agenda": {
       "title": "待办",
       "summary": "今天 $due 条 · 逾期 $overdue 条",
+      "upcomingSummary": "接下来 $count 条",
       "viewAll": "查看全部",
       "empty": "暂无待办"
     },

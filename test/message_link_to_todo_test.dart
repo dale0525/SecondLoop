@@ -52,11 +52,76 @@ void main() {
       (todoId: 't1', content: 'hello', sourceMessageId: 'm1'),
     ]);
   });
+
+  testWidgets('Todo link sheet supports searching', (tester) async {
+    final backend = _Backend(
+      messages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task A',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        Todo(
+          id: 't2',
+          title: 'Task B',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_link_todo')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_note_link_sheet')), findsOneWidget);
+    expect(find.byKey(const ValueKey('todo_note_link_search')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('todo_note_link_search')),
+      'B',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Task A'), findsNothing);
+    expect(find.text('Task B'), findsOneWidget);
+
+    await tester.tap(find.text('Task B'));
+    await tester.pumpAndSettle();
+
+    expect(backend.noteLinks.last, (
+      todoId: 't2',
+      content: 'hello',
+      sourceMessageId: 'm1',
+    ));
+  });
 }
 
 Widget _wrapChat({required AppBackend backend}) {
   return wrapWithI18n(
     MaterialApp(
+      theme: ThemeData(
+        useMaterial3: true,
+        splashFactory: InkRipple.splashFactory,
+      ),
       home: AppBackendScope(
         backend: backend,
         child: SessionScope(

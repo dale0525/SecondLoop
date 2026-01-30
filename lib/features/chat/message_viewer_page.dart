@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../i18n/strings.g.dart';
+import 'chat_markdown_sanitizer.dart';
 
 class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({required this.content, super.key});
@@ -11,6 +12,7 @@ class MessageViewerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalized = sanitizeChatMarkdown(content);
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
       appBar: AppBar(
@@ -22,7 +24,7 @@ class MessageViewerPage extends StatelessWidget {
             icon: const Icon(Icons.copy_all_rounded),
             onPressed: () async {
               try {
-                await Clipboard.setData(ClipboardData(text: content.trim()));
+                await Clipboard.setData(ClipboardData(text: normalized.trim()));
               } catch (_) {
                 return;
               }
@@ -36,7 +38,7 @@ class MessageViewerPage extends StatelessWidget {
         ],
       ),
       body: Markdown(
-        data: content,
+        data: normalized,
         selectable: true,
       ),
     );

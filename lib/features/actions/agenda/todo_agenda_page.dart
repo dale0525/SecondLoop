@@ -33,8 +33,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
     final todos = await backend.listTodos(sessionKey);
 
     final filtered = todos
-        .where((t) =>
-            t.dueAtMs != null && t.status != 'done' && t.status != 'dismissed')
+        .where((t) => t.dueAtMs != null && t.status != 'dismissed')
         .toList(growable: false);
     filtered.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
     return filtered;
@@ -205,12 +204,56 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                 return Center(child: Text(context.t.actions.agenda.empty));
               }
 
+              final inProgress = <Todo>[];
+              final open = <Todo>[];
+              final done = <Todo>[];
+
+              for (final todo in todos) {
+                switch (todo.status) {
+                  case 'in_progress':
+                    inProgress.add(todo);
+                    break;
+                  case 'done':
+                    done.add(todo);
+                    break;
+                  default:
+                    open.add(todo);
+                }
+              }
+
+              inProgress.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
+              open.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
+              done.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
+
+              final entries = <Object>[];
+              void addSection(String label, List<Todo> items) {
+                if (items.isEmpty) return;
+                entries.add(label);
+                entries.addAll(items);
+              }
+
+              addSection(_statusLabel(context, 'in_progress'), inProgress);
+              addSection(_statusLabel(context, 'open'), open);
+              addSection(_statusLabel(context, 'done'), done);
+
               return ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: todos.length,
+                itemCount: entries.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final todo = todos[index];
+                  final entry = entries[index];
+                  if (entry is String) {
+                    return Text(
+                      entry,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    );
+                  }
+
+                  final todo = entry as Todo;
                   final dueText = _formatDue(context, todo);
                   final dueAtMs = todo.dueAtMs;
                   final dueAtLocal = dueAtMs == null

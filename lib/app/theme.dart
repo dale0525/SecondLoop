@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../ui/sl_tokens.dart';
 
 class AppTheme {
+  @visibleForTesting
+  static bool disableInkSparkleForTests = false;
+
   static const _primary = Color(0xFF6366F1); // Indigo
   static const _accent = Color(0xFFA78BFA); // Violet
 
@@ -49,6 +52,9 @@ class AppTheme {
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
+      splashFactory: disableInkSparkleForTests
+          ? InkRipple.splashFactory
+          : InkSparkle.splashFactory,
       platform: effectivePlatform,
       fontFamily: fontFamily,
       fontFamilyFallback: fontFamilyFallback,

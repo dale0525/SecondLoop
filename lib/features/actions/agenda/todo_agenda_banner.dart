@@ -9,6 +9,7 @@ class TodoAgendaBanner extends StatefulWidget {
   const TodoAgendaBanner({
     required this.dueCount,
     required this.overdueCount,
+    required this.upcomingCount,
     required this.previewTodos,
     this.onViewAll,
     super.key,
@@ -16,6 +17,7 @@ class TodoAgendaBanner extends StatefulWidget {
 
   final int dueCount;
   final int overdueCount;
+  final int upcomingCount;
   final List<Todo> previewTodos;
   final VoidCallback? onViewAll;
 
@@ -28,14 +30,18 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.dueCount <= 0) return const SizedBox.shrink();
+    final hasDue = widget.dueCount > 0;
+    final hasUpcoming = widget.upcomingCount > 0;
+    if (!hasDue && !hasUpcoming) return const SizedBox.shrink();
 
     final tokens = SlTokens.of(context);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final todos = widget.previewTodos;
-    final summaryText = context.t.actions.agenda
-        .summary(due: widget.dueCount, overdue: widget.overdueCount);
+    final summaryText = hasDue
+        ? context.t.actions.agenda
+            .summary(due: widget.dueCount, overdue: widget.overdueCount)
+        : context.t.actions.agenda.upcomingSummary(count: widget.upcomingCount);
     final nextTitle = todos.isEmpty ? null : todos.first.title;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),

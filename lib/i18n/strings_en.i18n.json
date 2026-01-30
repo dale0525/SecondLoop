@@ -84,6 +84,7 @@
       "actionShort": "Link",
       "title": "Link to which task?",
       "subtitle": "Add this message as a follow-up note",
+      "noMatches": "No matching tasks",
       "suggest": "Link this message to a task?",
       "linked": "Linked to \"$title\""
     },
@@ -127,6 +128,7 @@
     "agenda": {
       "title": "Tasks",
       "summary": "Today $due • Overdue $overdue",
+      "upcomingSummary": "Upcoming $count",
       "viewAll": "View all",
       "empty": "No scheduled tasks"
     },

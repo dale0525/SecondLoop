@@ -65,6 +65,13 @@ Future<List<Message>> dbListMessagesPage(
         beforeId: beforeId,
         limit: limit);
 
+Future<Message?> dbGetMessageById(
+        {required String appDir,
+        required List<int> key,
+        required String messageId}) =>
+    RustLib.instance.api.crateApiCoreDbGetMessageById(
+        appDir: appDir, key: key, messageId: messageId);
+
 Future<Message> dbInsertMessage(
         {required String appDir,
         required List<int> key,

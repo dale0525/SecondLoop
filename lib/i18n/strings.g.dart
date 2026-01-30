@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 762 (381 per locale)
+/// Strings: 766 (383 per locale)
 ///
-/// Built on 2026-01-29 at 11:31 UTC
+/// Built on 2026-01-30 at 02:29 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -626,6 +626,7 @@ class _StringsActionsTodoNoteLinkEn {
   String get actionShort => 'Link';
   String get title => 'Link to which task?';
   String get subtitle => 'Add this message as a follow-up note';
+  String get noMatches => 'No matching tasks';
   String get suggest => 'Link this message to a task?';
   String linked({required Object title}) => 'Linked to "${title}"';
 }
@@ -685,6 +686,7 @@ class _StringsActionsAgendaEn {
   String get title => 'Tasks';
   String summary({required Object due, required Object overdue}) =>
       'Today ${due} • Overdue ${overdue}';
+  String upcomingSummary({required Object count}) => 'Upcoming ${count}';
   String get viewAll => 'View all';
   String get empty => 'No scheduled tasks';
 }
@@ -2607,6 +2609,8 @@ class _StringsActionsTodoNoteLinkZhCn extends _StringsActionsTodoNoteLinkEn {
   @override
   String get subtitle => '将这条消息作为跟进记录添加';
   @override
+  String get noMatches => '没有匹配的待办';
+  @override
   String get suggest => '要把这条消息关联到待办吗？';
   @override
   String linked({required Object title}) => '已关联到「${title}」';
@@ -2695,6 +2699,8 @@ class _StringsActionsAgendaZhCn extends _StringsActionsAgendaEn {
   @override
   String summary({required Object due, required Object overdue}) =>
       '今天 ${due} 条 · 逾期 ${overdue} 条';
+  @override
+  String upcomingSummary({required Object count}) => '接下来 ${count} 条';
   @override
   String get viewAll => '查看全部';
   @override
@@ -4600,6 +4606,8 @@ extension on Translations {
         return 'Link to which task?';
       case 'actions.todoNoteLink.subtitle':
         return 'Add this message as a follow-up note';
+      case 'actions.todoNoteLink.noMatches':
+        return 'No matching tasks';
       case 'actions.todoNoteLink.suggest':
         return 'Link this message to a task?';
       case 'actions.todoNoteLink.linked':
@@ -4655,6 +4663,8 @@ extension on Translations {
       case 'actions.agenda.summary':
         return ({required Object due, required Object overdue}) =>
             'Today ${due} • Overdue ${overdue}';
+      case 'actions.agenda.upcomingSummary':
+        return ({required Object count}) => 'Upcoming ${count}';
       case 'actions.agenda.viewAll':
         return 'View all';
       case 'actions.agenda.empty':
@@ -5394,6 +5404,8 @@ extension on _StringsZhCn {
         return '要关联到哪个待办？';
       case 'actions.todoNoteLink.subtitle':
         return '将这条消息作为跟进记录添加';
+      case 'actions.todoNoteLink.noMatches':
+        return '没有匹配的待办';
       case 'actions.todoNoteLink.suggest':
         return '要把这条消息关联到待办吗？';
       case 'actions.todoNoteLink.linked':
@@ -5449,6 +5461,8 @@ extension on _StringsZhCn {
       case 'actions.agenda.summary':
         return ({required Object due, required Object overdue}) =>
             '今天 ${due} 条 · 逾期 ${overdue} 条';
+      case 'actions.agenda.upcomingSummary':
+        return ({required Object count}) => '接下来 ${count} 条';
       case 'actions.agenda.viewAll':
         return '查看全部';
       case 'actions.agenda.empty':
