@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.secondloop" "\0"
-            VALUE "FileDescription", "secondloop" "\0"
+            VALUE "FileDescription", "SecondLoop" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "secondloop" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.secondloop. All rights reserved." "\0"
             VALUE "OriginalFilename", "secondloop.exe" "\0"
-            VALUE "ProductName", "secondloop" "\0"
+            VALUE "ProductName", "SecondLoop" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
