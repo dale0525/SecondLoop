@@ -4375,11 +4375,16 @@ pub fn list_todo_activities(
 ) -> Result<Vec<TodoActivity>> {
     let mut stmt = conn.prepare(
         r#"
-SELECT id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
-FROM todo_activities
-WHERE todo_id = ?1
-ORDER BY created_at_ms ASC, id ASC
-"#,
+	SELECT a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content, a.source_message_id, a.created_at_ms
+	FROM todo_activities a
+	LEFT JOIN messages m ON m.id = a.source_message_id
+	WHERE a.todo_id = ?1
+	  AND NOT (
+	    a.type IN ('note', 'summary')
+	    AND COALESCE(m.is_deleted, 0) != 0
+	  )
+	ORDER BY a.created_at_ms ASC, a.id ASC
+	"#,
     )?;
 
     let mut rows = stmt.query(params![todo_id])?;
@@ -4427,11 +4432,16 @@ pub fn list_todo_activities_in_range(
 ) -> Result<Vec<TodoActivity>> {
     let mut stmt = conn.prepare(
         r#"
-SELECT id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms
-FROM todo_activities
-WHERE created_at_ms >= ?1 AND created_at_ms < ?2
-ORDER BY created_at_ms ASC, id ASC
-"#,
+	SELECT a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content, a.source_message_id, a.created_at_ms
+	FROM todo_activities a
+	LEFT JOIN messages m ON m.id = a.source_message_id
+	WHERE a.created_at_ms >= ?1 AND a.created_at_ms < ?2
+	  AND NOT (
+	    a.type IN ('note', 'summary')
+	    AND COALESCE(m.is_deleted, 0) != 0
+	  )
+	ORDER BY a.created_at_ms ASC, a.id ASC
+	"#,
     )?;
 
     let mut rows = stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive])?;
@@ -4576,6 +4586,66 @@ VALUES (?1, ?2, 'note', NULL, NULL, ?3, ?4, ?5, 1)
     insert_oplog(conn, key, &op)?;
 
     Ok(activity)
+}
+
+pub fn move_todo_activity(
+    conn: &Connection,
+    key: &[u8; 32],
+    activity_id: &str,
+    to_todo_id: &str,
+) -> Result<TodoActivity> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<TodoActivity> = (|| {
+        let activity = get_todo_activity_by_id(conn, key, activity_id)?;
+        if activity.todo_id == to_todo_id {
+            return Ok(activity);
+        }
+
+        let now = now_ms();
+        conn.execute(
+            r#"UPDATE todo_activities
+               SET todo_id = ?2,
+                   needs_embedding = 1
+               WHERE id = ?1"#,
+            params![activity_id, to_todo_id],
+        )?;
+
+        // Persist move metadata to prevent older remote ops overriding local moves.
+        let moved_at_key = format!("todo_activity.todo_id_updated_at:{activity_id}");
+        kv_set_string(conn, &moved_at_key, &now.to_string())?;
+        let todo_id_override_key = format!("todo_activity.todo_id_override:{activity_id}");
+        kv_set_string(conn, &todo_id_override_key, to_todo_id)?;
+
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.activity.move.v1",
+            "payload": {
+                "activity_id": activity_id,
+                "to_todo_id": to_todo_id,
+                "moved_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+
+        get_todo_activity_by_id(conn, key, activity_id)
+    })();
+
+    match result {
+        Ok(activity) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(activity)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
 }
 
 pub fn link_attachment_to_todo_activity(

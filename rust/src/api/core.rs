@@ -254,6 +254,18 @@ pub fn db_append_todo_note(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_move_todo_activity(
+    app_dir: String,
+    key: Vec<u8>,
+    activity_id: String,
+    to_todo_id: String,
+) -> Result<db::TodoActivity> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::move_todo_activity(&conn, &key, &activity_id, &to_todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_todo_activities(
     app_dir: String,
     key: Vec<u8>,

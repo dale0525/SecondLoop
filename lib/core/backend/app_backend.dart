@@ -135,6 +135,14 @@ abstract class AppBackend {
     throw UnimplementedError('appendTodoNote');
   }
 
+  Future<TodoActivity> moveTodoActivity(
+    Uint8List key, {
+    required String activityId,
+    required String toTodoId,
+  }) {
+    throw UnimplementedError('moveTodoActivity');
+  }
+
   Future<List<TodoActivity>> listTodoActivities(
     Uint8List key,
     String todoId,

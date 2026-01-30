@@ -301,7 +301,7 @@ class _ChatPageState extends State<ChatPage> {
         await _linkMessageToTodo(message);
         break;
       case _MessageAction.delete:
-        await _deleteMessage(message, linkedTodo: linkedTodo?.todo);
+        await _deleteMessage(message, linkedTodoInfo: linkedTodo);
         break;
       case null:
         break;
@@ -482,7 +482,7 @@ class _ChatPageState extends State<ChatPage> {
         await _linkMessageToTodo(message);
         break;
       case _MessageAction.delete:
-        await _deleteMessage(message, linkedTodo: linkedTodo?.todo);
+        await _deleteMessage(message, linkedTodoInfo: linkedTodo);
         break;
       case null:
         break;
@@ -715,7 +715,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _deleteMessage(
     Message message, {
-    Todo? linkedTodo,
+    ({Todo todo, bool isSourceEntry})? linkedTodoInfo,
   }) async {
     final t = context.t;
     try {
@@ -724,13 +724,15 @@ class _ChatPageState extends State<ChatPage> {
       final syncEngine = SyncEngineScope.maybeOf(context);
       final messenger = ScaffoldMessenger.of(context);
 
-      Todo? targetTodo = linkedTodo;
-      if (targetTodo == null) {
-        targetTodo = (await _resolveLinkedTodoInfo(message))?.todo;
+      var resolvedLinkedTodoInfo = linkedTodoInfo;
+      if (resolvedLinkedTodoInfo == null) {
+        resolvedLinkedTodoInfo = await _resolveLinkedTodoInfo(message);
         if (!mounted) return;
       }
 
-      if (targetTodo != null) {
+      final targetTodo = resolvedLinkedTodoInfo?.todo;
+      final isSourceEntry = resolvedLinkedTodoInfo?.isSourceEntry == true;
+      if (targetTodo != null && isSourceEntry) {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) {
@@ -1708,6 +1710,11 @@ class _ChatPageState extends State<ChatPage> {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
 
+    final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
+    if (!mounted) return;
+    final shouldMoveExisting =
+        linkedTodoInfo != null && !linkedTodoInfo.isSourceEntry;
+
     late final List<Todo> todos;
     try {
       todos = await backend.listTodos(sessionKey);
@@ -1753,34 +1760,84 @@ class _ChatPageState extends State<ChatPage> {
     final selected = todosById[selectedTodoId];
     if (selected == null) return;
 
-    late final TodoActivity activity;
     try {
-      activity = await backend.appendTodoNote(
-        sessionKey,
-        todoId: selected.id,
-        content: message.content.trim(),
-        sourceMessageId: message.id,
-      );
+      if (shouldMoveExisting && linkedTodoInfo.todo.id != selected.id) {
+        String? sourceActivityId;
+        try {
+          final activities = await backend.listTodoActivities(
+              sessionKey, linkedTodoInfo.todo.id);
+          for (final activity in activities) {
+            if (activity.sourceMessageId == message.id) {
+              sourceActivityId = activity.id;
+              break;
+            }
+          }
+        } catch (_) {
+          sourceActivityId = null;
+        }
+
+        if (sourceActivityId != null) {
+          await backend.moveTodoActivity(
+            sessionKey,
+            activityId: sourceActivityId,
+            toTodoId: selected.id,
+          );
+        } else {
+          final activity = await backend.appendTodoNote(
+            sessionKey,
+            todoId: selected.id,
+            content: message.content.trim(),
+            sourceMessageId: message.id,
+          );
+
+          final attachmentsBackend = backend is AttachmentsBackend
+              ? backend as AttachmentsBackend
+              : null;
+          if (attachmentsBackend != null) {
+            try {
+              final attachments = await attachmentsBackend
+                  .listMessageAttachments(sessionKey, message.id);
+              for (final attachment in attachments) {
+                await backend.linkAttachmentToTodoActivity(
+                  sessionKey,
+                  activityId: activity.id,
+                  attachmentSha256: attachment.sha256,
+                );
+              }
+            } catch (_) {
+              // ignore
+            }
+          }
+        }
+      } else {
+        final activity = await backend.appendTodoNote(
+          sessionKey,
+          todoId: selected.id,
+          content: message.content.trim(),
+          sourceMessageId: message.id,
+        );
+
+        final attachmentsBackend = backend is AttachmentsBackend
+            ? backend as AttachmentsBackend
+            : null;
+        if (attachmentsBackend != null) {
+          try {
+            final attachments = await attachmentsBackend.listMessageAttachments(
+                sessionKey, message.id);
+            for (final attachment in attachments) {
+              await backend.linkAttachmentToTodoActivity(
+                sessionKey,
+                activityId: activity.id,
+                attachmentSha256: attachment.sha256,
+              );
+            }
+          } catch (_) {
+            // ignore
+          }
+        }
+      }
     } catch (_) {
       return;
-    }
-
-    final attachmentsBackend =
-        backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
-    if (attachmentsBackend != null) {
-      try {
-        final attachments = await attachmentsBackend.listMessageAttachments(
-            sessionKey, message.id);
-        for (final attachment in attachments) {
-          await backend.linkAttachmentToTodoActivity(
-            sessionKey,
-            activityId: activity.id,
-            attachmentSha256: attachment.sha256,
-          );
-        }
-      } catch (_) {
-        // ignore
-      }
     }
 
     if (!mounted) return;

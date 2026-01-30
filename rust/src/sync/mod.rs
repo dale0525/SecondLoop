@@ -1144,11 +1144,30 @@ fn kv_get_i64(conn: &Connection, key: &str) -> Result<Option<i64>> {
     Ok(value.and_then(|v| v.parse::<i64>().ok()))
 }
 
+fn kv_get_string(conn: &Connection, key: &str) -> Result<Option<String>> {
+    conn.query_row(
+        r#"SELECT value FROM kv WHERE key = ?1"#,
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
 fn kv_set_i64(conn: &Connection, key: &str, value: i64) -> Result<()> {
     conn.execute(
         r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
            ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
         params![key, value.to_string()],
+    )?;
+    Ok(())
+}
+
+fn kv_set_string(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![key, value],
     )?;
     Ok(())
 }
@@ -1210,6 +1229,7 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.delete.v1" => apply_todo_delete(conn, op),
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
+        "todo.activity.move.v1" => apply_todo_activity_move(conn, op),
         "todo.activity_attachment.link.v1" => {
             apply_todo_activity_attachment_link(conn, db_key, &op["payload"])
         }
@@ -1526,6 +1546,14 @@ fn apply_todo_activity_append(
     let todo_id = payload["todo_id"]
         .as_str()
         .ok_or_else(|| anyhow!("todo activity op missing todo_id"))?;
+    let mut todo_id = todo_id.to_string();
+    let todo_id_override_key = format!("todo_activity.todo_id_override:{activity_id}");
+    if let Some(override_todo_id) = kv_get_string(conn, &todo_id_override_key)? {
+        let trimmed = override_todo_id.trim();
+        if !trimmed.is_empty() {
+            todo_id = trimmed.to_string();
+        }
+    }
     let activity_type = payload["activity_type"]
         .as_str()
         .ok_or_else(|| anyhow!("todo activity op missing activity_type"))?;
@@ -1536,7 +1564,7 @@ fn apply_todo_activity_append(
     let deleted_at_ms: Option<i64> = conn
         .query_row(
             r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
-            params![todo_id],
+            params![todo_id.as_str()],
             |row| row.get(0),
         )
         .optional()?;
@@ -1573,7 +1601,7 @@ fn apply_todo_activity_append(
     let todo_exists: Option<i64> = conn
         .query_row(
             r#"SELECT 1 FROM todos WHERE id = ?1"#,
-            params![todo_id],
+            params![todo_id.as_str()],
             |row| row.get(0),
         )
         .optional()?;
@@ -1590,7 +1618,7 @@ fn apply_todo_activity_append(
            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)"#,
         params![
             activity_id,
-            todo_id,
+            todo_id.as_str(),
             activity_type,
             from_status,
             to_status,
@@ -1605,6 +1633,72 @@ fn apply_todo_activity_append(
     }
 
     insert_result?;
+    Ok(())
+}
+
+fn apply_todo_activity_move(conn: &Connection, op: &serde_json::Value) -> Result<()> {
+    let payload = &op["payload"];
+    let activity_id = payload["activity_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity move op missing activity_id"))?;
+    let to_todo_id = payload["to_todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo activity move op missing to_todo_id"))?;
+    let moved_at_ms = payload["moved_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo activity move op missing moved_at_ms"))?;
+
+    let deleted_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
+            params![to_todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(deleted_at_ms) = deleted_at_ms {
+        // Ignore moves targeting deleted todos (when the move is older than the delete tombstone).
+        if moved_at_ms <= deleted_at_ms {
+            return Ok(());
+        }
+    }
+
+    let moved_at_key = format!("todo_activity.todo_id_updated_at:{activity_id}");
+    let existing_moved_at = kv_get_i64(conn, &moved_at_key)?.unwrap_or(0);
+    if moved_at_ms <= existing_moved_at {
+        return Ok(());
+    }
+    kv_set_i64(conn, &moved_at_key, moved_at_ms)?;
+
+    // Store the latest target todo_id so append ops can respect out-of-order moves.
+    let todo_id_override_key = format!("todo_activity.todo_id_override:{activity_id}");
+    kv_set_string(conn, &todo_id_override_key, to_todo_id)?;
+
+    let todo_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM todos WHERE id = ?1"#,
+            params![to_todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if todo_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. We'll accept an orphan activity
+        // temporarily; if the todo arrives later, it will become valid.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let update_result = conn.execute(
+        r#"UPDATE todo_activities
+           SET todo_id = ?2,
+               needs_embedding = 1
+           WHERE id = ?1"#,
+        params![activity_id, to_todo_id],
+    );
+
+    if todo_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    update_result?;
     Ok(())
 }
 

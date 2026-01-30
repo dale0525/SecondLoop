@@ -156,6 +156,14 @@ Future<TodoActivity> dbAppendTodoNote(
         content: content,
         sourceMessageId: sourceMessageId);
 
+Future<TodoActivity> dbMoveTodoActivity(
+        {required String appDir,
+        required List<int> key,
+        required String activityId,
+        required String toTodoId}) =>
+    RustLib.instance.api.crateApiCoreDbMoveTodoActivity(
+        appDir: appDir, key: key, activityId: activityId, toTodoId: toTodoId);
+
 Future<List<TodoActivity>> dbListTodoActivities(
         {required String appDir,
         required List<int> key,
