@@ -51,7 +51,10 @@ void main() {
   testWidgets(
       'Ask AI shows verify-email prompt when cloud returns email_not_verified',
       (tester) async {
-    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+    SharedPreferences.setMockInitialValues({
+      'ask_ai_data_consent_v1': true,
+      'embeddings_data_consent_v1': false,
+    });
 
     final backend = _EmailNotVerifiedBackend();
     final cloudAuth = _FakeCloudAuthController(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ai/ai_routing.dart';
 import '../backend/app_backend.dart';
@@ -40,8 +41,13 @@ final class _CloudSyncSwitchPromptGateState
   bool _promptedForUid = false;
   bool _dialogShowing = false;
   bool _promptScheduled = false;
+  bool _embeddingsPromptScheduled = false;
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+
+  static const _kCloudEmbeddingsEnabledPrefsKey = 'embeddings_data_consent_v1';
+  static const _kCloudEmbeddingsUpgradePromptedUidPrefsKey =
+      'cloud_embeddings_upgrade_prompted_uid_v1';
 
   @override
   void dispose() {
@@ -129,6 +135,17 @@ final class _CloudSyncSwitchPromptGateState
     });
   }
 
+  void _scheduleEmbeddingsPrompt() {
+    if (!mounted) return;
+    if (_embeddingsPromptScheduled) return;
+
+    _embeddingsPromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _embeddingsPromptScheduled = false;
+      unawaited(_maybePromptEnableCloudEmbeddings());
+    });
+  }
+
   Future<void> _maybePromptSwitchToCloud() async {
     if (!mounted) return;
     if (_dialogShowing) return;
@@ -139,7 +156,11 @@ final class _CloudSyncSwitchPromptGateState
 
     final backendType = await _store.readBackendType();
     if (!mounted) return;
-    if (backendType == SyncBackendType.managedVault) return;
+    if (backendType == SyncBackendType.managedVault) {
+      _promptedForUid = true;
+      await _maybePromptEnableCloudEmbeddings();
+      return;
+    }
 
     final dialogContext = widget.navigatorKey?.currentContext;
     if (widget.navigatorKey != null && dialogContext == null) {
@@ -177,9 +198,70 @@ final class _CloudSyncSwitchPromptGateState
     _promptedForUid = true;
 
     if (!mounted) return;
-    if (shouldSwitch != true) return;
+    if (shouldSwitch == true) {
+      await _switchToCloud(uid);
+    }
 
-    await _switchToCloud(uid);
+    await _maybePromptEnableCloudEmbeddings();
+  }
+
+  Future<void> _maybePromptEnableCloudEmbeddings() async {
+    if (!mounted) return;
+
+    final uid = _lastUid?.trim();
+    if (uid == null || uid.isEmpty) return;
+
+    final subscriptionStatus =
+        _subscriptionController?.status ?? SubscriptionStatus.unknown;
+    if (subscriptionStatus != SubscriptionStatus.entitled) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyPromptedUid =
+        (prefs.getString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey) ?? '')
+            .trim();
+    if (alreadyPromptedUid == uid) return;
+    if ((prefs.getBool(_kCloudEmbeddingsEnabledPrefsKey) ?? false) == true) {
+      await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
+      return;
+    }
+    if (!mounted) return;
+
+    final dialogContext = widget.navigatorKey?.currentContext;
+    if (widget.navigatorKey != null && dialogContext == null) {
+      _scheduleEmbeddingsPrompt();
+      return;
+    }
+    final effectiveContext = dialogContext ?? context;
+    if (!effectiveContext.mounted) {
+      _scheduleEmbeddingsPrompt();
+      return;
+    }
+
+    final t = effectiveContext.t;
+    _dialogShowing = true;
+    final enable = await showDialog<bool>(
+      context: effectiveContext,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.chat.embeddingsConsent.title),
+          content: Text(t.chat.embeddingsConsent.body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.chat.embeddingsConsent.actions.useLocal),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(t.chat.embeddingsConsent.actions.enableCloud),
+            ),
+          ],
+        );
+      },
+    );
+    _dialogShowing = false;
+
+    await prefs.setBool(_kCloudEmbeddingsEnabledPrefsKey, enable == true);
+    await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
   }
 
   Future<void> _switchToCloud(String uid) async {

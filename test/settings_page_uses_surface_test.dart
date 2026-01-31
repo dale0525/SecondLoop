@@ -28,6 +28,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sync'), findsOneWidget);
+    expect(find.text('Embeddings (BYOK)'), findsOneWidget);
     expect(find.byType(SlSurface), findsWidgets);
   });
 }

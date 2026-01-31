@@ -191,6 +191,22 @@
       "title": "AI 配置",
       "subtitle": "添加你自己的 API Key（用于问 AI）"
     },
+    "embeddingProfiles": {
+      "title": "向量配置（自带 Key）",
+      "subtitle": "添加你自己的 API Key（用于语义检索）"
+    },
+    "cloudEmbeddings": {
+      "title": "云端向量（Embeddings）",
+      "subtitleEnabled": "已开启，会消耗 Cloud 使用额度。",
+      "subtitleDisabled": "已关闭，不会生成云端向量。",
+      "subtitleUnset": "尚未设置，首次需要时会询问。",
+      "subtitleRequiresPro": "需要 SecondLoop Pro。",
+      "dialogTitle": "开启云端向量？",
+      "dialogBody": "这会将少量文本片段（消息/待办标题/跟进）上传到 SecondLoop Cloud 以生成向量。\n\n文本会被保密处理（不写入日志/存储），不会上传你的 vault key 或 sync key。\n\n云端向量会消耗 Cloud 使用额度。",
+      "dialogActions": {
+        "enable": "开启"
+      }
+    },
     "cloudAccount": {
       "title": "Cloud 账号",
       "subtitle": "登录 SecondLoop Cloud",
@@ -247,6 +263,8 @@
         "gatewayNotConfigured": "当前版本暂不支持查看云端用量。",
         "signInRequired": "登录后才能查看用量。",
         "usage": "用量：",
+        "askAiUsage": "Ask AI：",
+        "embeddingsUsage": "云端向量：",
         "inputTokensUsed30d": "输入 Tokens（30 天）：",
         "outputTokensUsed30d": "输出 Tokens（30 天）：",
         "tokensUsed30d": "Tokens（30 天）：",
@@ -424,10 +442,20 @@
         "generic": "Cloud 请求失败。"
       }
     },
+    "askAiFailedTemporary": "问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。",
     "askAiConsent": {
       "title": "发送前确认",
       "body": "SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。",
       "dontShowAgain": "不再提示"
+    },
+    "embeddingsConsent": {
+      "title": "是否使用云端向量进行语义检索？",
+      "body": "好处：\n- 跨语言/同义改写召回更好\n- 待办关联建议更准确\n\n隐私：\n- 仅上传生成向量所需的最小文本片段\n- 文本会上传到 SecondLoop Cloud，并会被保密处理（不写入日志/存储）\n- 不会上传你的 vault key 或 sync key\n\n用量：\n- 云端向量会消耗 Cloud 使用额度",
+      "dontShowAgain": "记住我的选择",
+      "actions": {
+        "useLocal": "使用本地",
+        "enableCloud": "开启云端向量"
+      }
     }
   },
   "attachments": {
@@ -600,6 +628,42 @@
       "openaiCompatible": "OpenAI 兼容",
       "geminiCompatible": "Gemini",
       "anthropicCompatible": "Anthropic"
+    },
+    "savedActivated": "已保存并设为当前配置",
+    "actions": {
+      "saveActivate": "保存并启用",
+      "cancel": "取消",
+      "delete": "删除"
+    }
+  },
+  "embeddingProfiles": {
+    "title": "向量配置",
+    "refreshTooltip": "刷新",
+    "activeProfileHelp": "当前选择的配置将用于 embeddings（语义检索 / RAG）。",
+    "noProfilesYet": "暂无配置。",
+    "addProfile": "添加配置",
+    "deleted": "向量配置已删除",
+    "validationError": "名称、API Key 和模型名称为必填项。",
+    "reindexDialog": {
+      "title": "重新索引向量？",
+      "message": "启用该配置可能会使用你的 API key/额度重新向量化本地内容（可能耗时并产生费用）。",
+      "actions": {
+        "continueLabel": "继续"
+      }
+    },
+    "deleteDialog": {
+      "title": "删除配置？",
+      "message": "确定删除「$name」？该操作会从本设备移除。"
+    },
+    "fields": {
+      "name": "名称",
+      "provider": "提供商",
+      "baseUrlOptional": "接口地址（可选）",
+      "modelName": "模型名称",
+      "apiKey": "API Key"
+    },
+    "providers": {
+      "openaiCompatible": "OpenAI 兼容"
     },
     "savedActivated": "已保存并设为当前配置",
     "actions": {

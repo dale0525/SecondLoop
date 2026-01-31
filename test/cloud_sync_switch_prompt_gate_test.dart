@@ -184,6 +184,56 @@ void main() {
     expect(syncKey, isNotNull);
     expect(syncKey!.length, 32);
   });
+
+  testWidgets('Cloud sync switch prompt continues to cloud embeddings prompt',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      // Can be set by previous Ask AI / settings interactions.
+      'embeddings_data_consent_v1': false,
+    });
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+
+    final navigatorKey = GlobalKey<NavigatorState>();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: Text('home')),
+          builder: (context, child) {
+            return CloudAuthScope(
+              controller: cloudAuth,
+              child: SubscriptionScope(
+                controller: subscription,
+                child: CloudSyncSwitchPromptGate(
+                  navigatorKey: navigatorKey,
+                  configStore: store,
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextButton),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
 }
 
 final class _FakeSubscriptionController extends ChangeNotifier

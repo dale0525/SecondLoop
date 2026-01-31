@@ -13,9 +13,10 @@ use crate::crypto::{decrypt_bytes, encrypt_bytes};
 use crate::embedding::Embedder;
 use crate::vector;
 
-const MESSAGE_EMBEDDING_DIM: usize = 384;
+const DEFAULT_EMBEDDING_DIM: usize = crate::embedding::DEFAULT_EMBED_DIM;
 const MAIN_STREAM_CONVERSATION_ID: &str = "main_stream";
 const KV_ACTIVE_EMBEDDING_MODEL_NAME: &str = "embedding.active_model_name";
+const KV_ACTIVE_EMBEDDING_DIM: &str = "embedding.active_dim";
 
 #[derive(Clone, Debug)]
 pub struct Conversation {
@@ -71,6 +72,26 @@ pub struct LlmProfile {
 
 #[derive(Clone, Debug)]
 pub struct LlmProfileConfig {
+    pub provider_type: String,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model_name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct EmbeddingProfile {
+    pub id: String,
+    pub name: String,
+    pub provider_type: String,
+    pub base_url: Option<String>,
+    pub model_name: String,
+    pub is_active: bool,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct EmbeddingProfileConfig {
     pub provider_type: String,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
@@ -209,9 +230,102 @@ pub fn get_active_embedding_model_name(conn: &Connection) -> Result<Option<Strin
     Ok(existing)
 }
 
-pub fn set_active_embedding_model_name(conn: &Connection, model_name: &str) -> Result<bool> {
-    let existing = get_active_embedding_model_name(conn)?;
-    if existing.as_deref() == Some(model_name) {
+fn parse_vec_dim_from_column_type(column_type: &str) -> Option<usize> {
+    let type_lc = column_type.trim().to_ascii_lowercase();
+    let rest = type_lc.strip_prefix("float[")?;
+    let digits = rest.strip_suffix(']')?;
+    digits.parse::<usize>().ok()
+}
+
+fn vec0_dim_from_table(conn: &Connection, table: &str) -> Result<Option<usize>> {
+    let stmt = match table {
+        "message_embeddings" => "PRAGMA table_info(message_embeddings)",
+        "todo_embeddings" => "PRAGMA table_info(todo_embeddings)",
+        "todo_activity_embeddings" => "PRAGMA table_info(todo_activity_embeddings)",
+        _ => return Err(anyhow!("unknown vec0 table: {table}")),
+    };
+
+    let mut stmt = conn.prepare(stmt)?;
+    let mut rows = stmt.query([])?;
+
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name != "embedding" {
+            continue;
+        }
+        let column_type: String = row.get(2)?;
+        return Ok(parse_vec_dim_from_column_type(&column_type));
+    }
+
+    Ok(None)
+}
+
+pub fn get_active_embedding_dim(conn: &Connection) -> Result<Option<usize>> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            params![KV_ACTIVE_EMBEDDING_DIM],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    let Some(raw) = existing else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let dim = trimmed
+        .parse::<usize>()
+        .map_err(|_| anyhow!("invalid {KV_ACTIVE_EMBEDDING_DIM}: {raw}"))?;
+    Ok(Some(dim))
+}
+
+fn current_embedding_dim(conn: &Connection) -> Result<usize> {
+    if let Some(dim) = get_active_embedding_dim(conn)? {
+        return Ok(dim);
+    }
+    if let Some(dim) = vec0_dim_from_table(conn, "message_embeddings")? {
+        return Ok(dim);
+    }
+    Ok(DEFAULT_EMBEDDING_DIM)
+}
+
+fn recreate_vec_tables(conn: &Connection, dim: usize) -> Result<()> {
+    if dim == 0 || dim > 8192 {
+        return Err(anyhow!("invalid embedding dim: {dim}"));
+    }
+    conn.execute_batch(&format!(
+        r#"
+DROP TABLE IF EXISTS message_embeddings;
+DROP TABLE IF EXISTS todo_embeddings;
+DROP TABLE IF EXISTS todo_activity_embeddings;
+CREATE VIRTUAL TABLE IF NOT EXISTS message_embeddings USING vec0(
+  embedding float[{dim}],
+  +message_id TEXT,
+  model_name TEXT
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS todo_embeddings USING vec0(
+  embedding float[{dim}],
+  todo_id TEXT,
+  model_name TEXT
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS todo_activity_embeddings USING vec0(
+  embedding float[{dim}],
+  activity_id TEXT,
+  todo_id TEXT,
+  model_name TEXT
+);
+"#
+    ))?;
+    Ok(())
+}
+
+pub fn set_active_embedding_model(conn: &Connection, model_name: &str, dim: usize) -> Result<bool> {
+    let existing_model = get_active_embedding_model_name(conn)?;
+    let existing_dim = get_active_embedding_dim(conn)?;
+    if existing_model.as_deref() == Some(model_name) && existing_dim == Some(dim) {
         return Ok(false);
     }
 
@@ -224,12 +338,17 @@ pub fn set_active_embedding_model_name(conn: &Connection, model_name: &str) -> R
                ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
             params![KV_ACTIVE_EMBEDDING_MODEL_NAME, model_name],
         )?;
+        conn.execute(
+            r#"INSERT INTO kv(key, value)
+               VALUES (?1, ?2)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            params![KV_ACTIVE_EMBEDDING_DIM, dim.to_string()],
+        )?;
+
+        recreate_vec_tables(conn, dim)?;
 
         conn.execute_batch(
             r#"
-DELETE FROM message_embeddings;
-DELETE FROM todo_embeddings;
-DELETE FROM todo_activity_embeddings;
 UPDATE messages
 SET needs_embedding = CASE
   WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
@@ -255,6 +374,16 @@ SET needs_embedding = 1;
             Err(e)
         }
     }
+}
+
+pub fn set_active_embedding_model_name(conn: &Connection, model_name: &str) -> Result<bool> {
+    let dim = match model_name {
+        crate::embedding::DEFAULT_MODEL_NAME | crate::embedding::PRODUCTION_MODEL_NAME => {
+            DEFAULT_EMBEDDING_DIM
+        }
+        _ => current_embedding_dim(conn)?,
+    };
+    set_active_embedding_model(conn, model_name, dim)
 }
 
 fn next_device_seq(conn: &Connection, device_id: &str) -> Result<i64> {
@@ -949,6 +1078,28 @@ CREATE INDEX IF NOT EXISTS idx_todo_deletions_deleted_at_ms
 PRAGMA user_version = 17;
 "#,
         )?;
+        user_version = 17;
+    }
+
+    if user_version < 18 {
+        // v18: BYOK embedding profiles (encrypted at rest).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS embedding_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  provider_type TEXT NOT NULL,
+  base_url TEXT,
+  api_key BLOB,
+  model_name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_embedding_profiles_active ON embedding_profiles(is_active);
+PRAGMA user_version = 18;
+"#,
+        )?;
     }
 
     Ok(())
@@ -1415,6 +1566,62 @@ pub fn create_llm_profile(
     })
 }
 
+pub fn create_embedding_profile(
+    conn: &Connection,
+    key: &[u8; 32],
+    name: &str,
+    provider_type: &str,
+    base_url: Option<&str>,
+    api_key: Option<&str>,
+    model_name: &str,
+    set_active: bool,
+) -> Result<EmbeddingProfile> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms();
+
+    let api_key_blob: Option<Vec<u8>> = api_key
+        .map(|v| {
+            encrypt_bytes(
+                key,
+                v.as_bytes(),
+                format!("embedding.api_key:{id}").as_bytes(),
+            )
+        })
+        .transpose()?;
+
+    if set_active {
+        conn.execute_batch("UPDATE embedding_profiles SET is_active = 0;")?;
+    }
+
+    conn.execute(
+        r#"INSERT INTO embedding_profiles
+           (id, name, provider_type, base_url, api_key, model_name, is_active, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+        params![
+            id,
+            name,
+            provider_type,
+            base_url,
+            api_key_blob,
+            model_name,
+            if set_active { 1 } else { 0 },
+            now,
+            now
+        ],
+    )?;
+
+    Ok(EmbeddingProfile {
+        id,
+        name: name.to_string(),
+        provider_type: provider_type.to_string(),
+        base_url: base_url.map(|v| v.to_string()),
+        model_name: model_name.to_string(),
+        is_active: set_active,
+        created_at_ms: now,
+        updated_at_ms: now,
+    })
+}
+
 pub fn list_llm_profiles(conn: &Connection) -> Result<Vec<LlmProfile>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, name, provider_type, base_url, model_name, is_active, created_at, updated_at
@@ -1427,6 +1634,32 @@ pub fn list_llm_profiles(conn: &Connection) -> Result<Vec<LlmProfile>> {
 
     while let Some(row) = rows.next()? {
         out.push(LlmProfile {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            provider_type: row.get(2)?,
+            base_url: row.get(3)?,
+            model_name: row.get(4)?,
+            is_active: row.get::<_, i64>(5)? != 0,
+            created_at_ms: row.get(6)?,
+            updated_at_ms: row.get(7)?,
+        });
+    }
+
+    Ok(out)
+}
+
+pub fn list_embedding_profiles(conn: &Connection) -> Result<Vec<EmbeddingProfile>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT id, name, provider_type, base_url, model_name, is_active, created_at, updated_at
+           FROM embedding_profiles
+           ORDER BY updated_at DESC"#,
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut out: Vec<EmbeddingProfile> = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        out.push(EmbeddingProfile {
             id: row.get(0)?,
             name: row.get(1)?,
             provider_type: row.get(2)?,
@@ -1478,6 +1711,43 @@ pub fn set_active_llm_profile(conn: &Connection, profile_id: &str) -> Result<()>
     }
 }
 
+pub fn set_active_embedding_profile(conn: &Connection, profile_id: &str) -> Result<()> {
+    let now = now_ms();
+
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<()> = (|| {
+        let updated = conn.execute(
+            r#"UPDATE embedding_profiles
+               SET is_active = 1, updated_at = ?2
+               WHERE id = ?1"#,
+            params![profile_id, now],
+        )?;
+
+        if updated == 0 {
+            return Err(anyhow!("embedding profile not found: {profile_id}"));
+        }
+
+        conn.execute(
+            r#"UPDATE embedding_profiles SET is_active = 0 WHERE id != ?1"#,
+            params![profile_id],
+        )?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
 pub fn delete_llm_profile(conn: &Connection, profile_id: &str) -> Result<()> {
     let deleted = conn.execute(
         r#"DELETE FROM llm_profiles WHERE id = ?1"#,
@@ -1486,6 +1756,19 @@ pub fn delete_llm_profile(conn: &Connection, profile_id: &str) -> Result<()> {
 
     if deleted == 0 {
         return Err(anyhow!("llm profile not found: {profile_id}"));
+    }
+
+    Ok(())
+}
+
+pub fn delete_embedding_profile(conn: &Connection, profile_id: &str) -> Result<()> {
+    let deleted = conn.execute(
+        r#"DELETE FROM embedding_profiles WHERE id = ?1"#,
+        params![profile_id],
+    )?;
+
+    if deleted == 0 {
+        return Err(anyhow!("embedding profile not found: {profile_id}"));
     }
 
     Ok(())
@@ -1534,6 +1817,58 @@ pub fn load_active_llm_profile_config(
     Ok(Some((
         id,
         LlmProfileConfig {
+            provider_type,
+            base_url,
+            api_key,
+            model_name,
+        },
+    )))
+}
+
+pub fn load_active_embedding_profile_config(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<Option<(String, EmbeddingProfileConfig)>> {
+    let row = conn
+        .query_row(
+            r#"SELECT id, provider_type, base_url, api_key, model_name
+               FROM embedding_profiles
+               WHERE is_active = 1
+               ORDER BY updated_at DESC
+               LIMIT 1"#,
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<Vec<u8>>>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    let Some((id, provider_type, base_url, api_key_blob, model_name)) = row else {
+        return Ok(None);
+    };
+
+    let api_key = match api_key_blob {
+        Some(blob) => {
+            let api_key_bytes =
+                decrypt_bytes(key, &blob, format!("embedding.api_key:{id}").as_bytes())?;
+
+            Some(
+                String::from_utf8(api_key_bytes)
+                    .map_err(|_| anyhow!("embedding api_key is not valid utf-8"))?,
+            )
+        }
+        None => None,
+    };
+
+    Ok(Some((
+        id,
+        EmbeddingProfileConfig {
             provider_type,
             base_url,
             api_key,
@@ -1648,7 +1983,7 @@ fn desired_embedding_model_name(conn: &Connection) -> Result<&'static str> {
 }
 
 fn default_embed_text(text: &str) -> Vec<f32> {
-    let mut v = vec![0.0f32; MESSAGE_EMBEDDING_DIM];
+    let mut v = vec![0.0f32; DEFAULT_EMBEDDING_DIM];
     let t = text.to_lowercase();
 
     if t.contains("apple") {
@@ -1987,13 +2322,7 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
     embedder: &E,
     limit: usize,
 ) -> Result<usize> {
-    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
-        return Err(anyhow!(
-            "embedder dim mismatch: expected {}, got {}",
-            MESSAGE_EMBEDDING_DIM,
-            embedder.dim()
-        ));
-    }
+    let expected_dim = current_embedding_dim(conn)?;
 
     let mut stmt = conn.prepare(
         r#"SELECT rowid, id, content
@@ -2036,6 +2365,15 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
             embeddings.len()
         ));
     }
+    for embedding in &embeddings {
+        if embedding.len() != expected_dim {
+            return Err(anyhow!(
+                "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+                embedding.len(),
+                embedder.model_name()
+            ));
+        }
+    }
 
     for i in 0..message_ids.len() {
         let updated = conn.execute(
@@ -2076,13 +2414,7 @@ pub fn process_pending_todo_embeddings<E: Embedder + ?Sized>(
     embedder: &E,
     limit: usize,
 ) -> Result<usize> {
-    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
-        return Err(anyhow!(
-            "embedder dim mismatch: expected {}, got {}",
-            MESSAGE_EMBEDDING_DIM,
-            embedder.dim()
-        ));
-    }
+    let expected_dim = current_embedding_dim(conn)?;
 
     let mut stmt = conn.prepare(
         r#"SELECT rowid, id, title, status, due_at_ms
@@ -2130,6 +2462,15 @@ pub fn process_pending_todo_embeddings<E: Embedder + ?Sized>(
             plaintexts.len(),
             embeddings.len()
         ));
+    }
+    for embedding in &embeddings {
+        if embedding.len() != expected_dim {
+            return Err(anyhow!(
+                "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+                embedding.len(),
+                embedder.model_name()
+            ));
+        }
     }
 
     for i in 0..todo_ids.len() {
@@ -2182,13 +2523,7 @@ pub fn process_pending_todo_activity_embeddings<E: Embedder + ?Sized>(
     embedder: &E,
     limit: usize,
 ) -> Result<usize> {
-    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
-        return Err(anyhow!(
-            "embedder dim mismatch: expected {}, got {}",
-            MESSAGE_EMBEDDING_DIM,
-            embedder.dim()
-        ));
-    }
+    let expected_dim = current_embedding_dim(conn)?;
 
     let mut stmt = conn.prepare(
         r#"SELECT a.rowid, a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content
@@ -2258,6 +2593,15 @@ pub fn process_pending_todo_activity_embeddings<E: Embedder + ?Sized>(
             plaintexts.len(),
             embeddings.len()
         ));
+    }
+    for embedding in &embeddings {
+        if embedding.len() != expected_dim {
+            return Err(anyhow!(
+                "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+                embedding.len(),
+                embedder.model_name()
+            ));
+        }
     }
 
     for i in 0..activity_ids.len() {
@@ -2335,10 +2679,10 @@ pub fn process_pending_message_embeddings_default(
 
     for i in 0..message_ids.len() {
         let embedding = default_embed_text(&plaintexts[i]);
-        if embedding.len() != MESSAGE_EMBEDDING_DIM {
+        if embedding.len() != DEFAULT_EMBEDDING_DIM {
             return Err(anyhow!(
                 "default embed dim mismatch: expected {}, got {}",
-                MESSAGE_EMBEDDING_DIM,
+                DEFAULT_EMBEDDING_DIM,
                 embedding.len()
             ));
         }
@@ -2421,10 +2765,10 @@ pub fn process_pending_todo_embeddings_default(
 
     for i in 0..todo_ids.len() {
         let embedding = default_embed_text(&plaintexts[i]);
-        if embedding.len() != MESSAGE_EMBEDDING_DIM {
+        if embedding.len() != DEFAULT_EMBEDDING_DIM {
             return Err(anyhow!(
                 "default embed dim mismatch: expected {}, got {}",
-                MESSAGE_EMBEDDING_DIM,
+                DEFAULT_EMBEDDING_DIM,
                 embedding.len()
             ));
         }
@@ -2530,10 +2874,10 @@ pub fn process_pending_todo_activity_embeddings_default(
 
     for i in 0..activity_ids.len() {
         let embedding = default_embed_text(&plaintexts[i]);
-        if embedding.len() != MESSAGE_EMBEDDING_DIM {
+        if embedding.len() != DEFAULT_EMBEDDING_DIM {
             return Err(anyhow!(
                 "default embed dim mismatch: expected {}, got {}",
-                MESSAGE_EMBEDDING_DIM,
+                DEFAULT_EMBEDDING_DIM,
                 embedding.len()
             ));
         }
@@ -2871,13 +3215,7 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
-    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
-        return Err(anyhow!(
-            "embedder dim mismatch: expected {}, got {}",
-            MESSAGE_EMBEDDING_DIM,
-            embedder.dim()
-        ));
-    }
+    let expected_dim = current_embedding_dim(conn)?;
 
     let top_k = top_k.max(1);
     let candidate_k = (top_k.saturating_mul(10)).min(1000);
@@ -2891,6 +3229,13 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
         ));
     }
     let query_vector = vectors.remove(0);
+    if query_vector.len() != expected_dim {
+        return Err(anyhow!(
+            "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+            query_vector.len(),
+            embedder.model_name()
+        ));
+    }
 
     let mut stmt = conn.prepare(
         r#"SELECT message_id, distance
@@ -2949,13 +3294,7 @@ pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarTodoThread>> {
-    if embedder.dim() != MESSAGE_EMBEDDING_DIM {
-        return Err(anyhow!(
-            "embedder dim mismatch: expected {}, got {}",
-            MESSAGE_EMBEDDING_DIM,
-            embedder.dim()
-        ));
-    }
+    let expected_dim = current_embedding_dim(conn)?;
 
     let top_k = top_k.max(1);
     let candidate_k = (top_k.saturating_mul(10)).min(1000);
@@ -2969,6 +3308,13 @@ pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
         ));
     }
     let query_vector = vectors.remove(0);
+    if query_vector.len() != expected_dim {
+        return Err(anyhow!(
+            "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+            query_vector.len(),
+            embedder.model_name()
+        ));
+    }
 
     let mut best: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
 

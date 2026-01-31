@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use std::path::Path;
 
 use crate::db;
@@ -279,10 +279,6 @@ pub fn ask_ai_with_provider(
     let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
 
-    let user_message = db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-    let assistant_message =
-        db::insert_message_non_memory(conn, key, conversation_id, "assistant", "")?;
-
     let mut has_text = false;
     let mut assistant_text = String::new();
     let result = provider.stream_answer(&prompt, &mut |ev| {
@@ -301,51 +297,26 @@ pub fn ask_ai_with_provider(
     match result {
         Ok(()) => {
             if !has_text {
-                conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                )?;
                 return Err(anyhow!("empty response from LLM"));
             }
-            db::edit_message(conn, key, &assistant_message.id, &assistant_text)?;
-        }
-        Err(e) => {
-            if e.is::<StreamCancelled>() {
-                let _ = conn.execute(
-                    r#"DELETE FROM message_embeddings WHERE message_id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM message_embeddings WHERE message_id = ?1"#,
-                    params![user_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![user_message.id.as_str()],
-                );
-                return Err(e);
-            }
 
-            if !has_text {
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-            } else {
-                let _ = db::edit_message(conn, key, &assistant_message.id, &assistant_text);
-            }
-            return Err(e);
+            let user_message =
+                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
+            let assistant_message = db::insert_message_non_memory(
+                conn,
+                key,
+                conversation_id,
+                "assistant",
+                &assistant_text,
+            )?;
+
+            Ok(AskAiResult {
+                user_message_id: user_message.id,
+                assistant_message_id: assistant_message.id,
+            })
         }
+        Err(e) => Err(e),
     }
-
-    Ok(AskAiResult {
-        user_message_id: user_message.id,
-        assistant_message_id: assistant_message.id,
-    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -360,52 +331,60 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
-    db::set_active_embedding_model_name(conn, embedder.model_name())?;
-    db::process_pending_message_embeddings(conn, key, embedder, 1024)?;
-    db::process_pending_todo_embeddings(conn, key, embedder, 1024)?;
-    db::process_pending_todo_activity_embeddings(conn, key, embedder, 1024)?;
-
-    let top_k = top_k.max(1);
-
-    let similar_messages = match focus {
-        Focus::AllMemories => db::search_similar_messages(conn, key, embedder, question, top_k)?,
-        Focus::ThisThread => db::search_similar_messages_in_conversation(
-            conn,
-            key,
-            embedder,
-            conversation_id,
-            question,
-            top_k,
-        )?,
-    };
-
-    let similar_todos = db::search_similar_todo_threads(conn, key, embedder, question, top_k)?;
-
-    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
-    for sm in similar_messages {
-        contexts_with_distance.push((sm.distance, sm.message.content));
-    }
-    let mut seen_todos = std::collections::HashSet::new();
-    for st in similar_todos {
-        if !seen_todos.insert(st.todo_id.clone()) {
-            continue;
+    let mut contexts: Vec<String> = Vec::new();
+    if top_k > 0 {
+        // Avoid wiping the current index if the embedder is misconfigured/unreachable.
+        let probe = embedder.embed(&[format!("query: {question}")])?;
+        let dim = probe.first().map(|v| v.len()).unwrap_or(0);
+        if dim == 0 {
+            return Err(anyhow!("embedder returned empty embeddings"));
         }
-        let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
-        contexts_with_distance.push((st.distance, ctx));
+
+        db::set_active_embedding_model(conn, embedder.model_name(), dim)?;
+        db::process_pending_message_embeddings(conn, key, embedder, 1024)?;
+        db::process_pending_todo_embeddings(conn, key, embedder, 1024)?;
+        db::process_pending_todo_activity_embeddings(conn, key, embedder, 1024)?;
+
+        let top_k = top_k.max(1);
+
+        let similar_messages = match focus {
+            Focus::AllMemories => {
+                db::search_similar_messages(conn, key, embedder, question, top_k)?
+            }
+            Focus::ThisThread => db::search_similar_messages_in_conversation(
+                conn,
+                key,
+                embedder,
+                conversation_id,
+                question,
+                top_k,
+            )?,
+        };
+
+        let similar_todos = db::search_similar_todo_threads(conn, key, embedder, question, top_k)?;
+
+        let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+        for sm in similar_messages {
+            contexts_with_distance.push((sm.distance, sm.message.content));
+        }
+        let mut seen_todos = std::collections::HashSet::new();
+        for st in similar_todos {
+            if !seen_todos.insert(st.todo_id.clone()) {
+                continue;
+            }
+            let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+            contexts_with_distance.push((st.distance, ctx));
+        }
+        contexts_with_distance
+            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        contexts_with_distance.truncate(top_k);
+        contexts = contexts_with_distance
+            .into_iter()
+            .map(|(_, ctx)| ctx)
+            .collect();
     }
-    contexts_with_distance
-        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    contexts_with_distance.truncate(top_k);
-    let contexts: Vec<String> = contexts_with_distance
-        .into_iter()
-        .map(|(_, ctx)| ctx)
-        .collect();
     let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
-
-    let user_message = db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-    let assistant_message =
-        db::insert_message_non_memory(conn, key, conversation_id, "assistant", "")?;
 
     let mut has_text = false;
     let mut assistant_text = String::new();
@@ -425,51 +404,26 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     match result {
         Ok(()) => {
             if !has_text {
-                conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                )?;
                 return Err(anyhow!("empty response from LLM"));
             }
-            db::edit_message(conn, key, &assistant_message.id, &assistant_text)?;
-        }
-        Err(e) => {
-            if e.is::<StreamCancelled>() {
-                let _ = conn.execute(
-                    r#"DELETE FROM message_embeddings WHERE message_id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM message_embeddings WHERE message_id = ?1"#,
-                    params![user_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![user_message.id.as_str()],
-                );
-                return Err(e);
-            }
 
-            if !has_text {
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-            } else {
-                let _ = db::edit_message(conn, key, &assistant_message.id, &assistant_text);
-            }
-            return Err(e);
+            let user_message =
+                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
+            let assistant_message = db::insert_message_non_memory(
+                conn,
+                key,
+                conversation_id,
+                "assistant",
+                &assistant_text,
+            )?;
+
+            Ok(AskAiResult {
+                user_message_id: user_message.id,
+                assistant_message_id: assistant_message.id,
+            })
         }
+        Err(e) => Err(e),
     }
-
-    Ok(AskAiResult {
-        user_message_id: user_message.id,
-        assistant_message_id: assistant_message.id,
-    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -484,54 +438,53 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
-    db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
-    db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
-    db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
+    let mut contexts: Vec<String> = Vec::new();
+    if top_k > 0 {
+        db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
+        db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
+        db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
 
-    let top_k = top_k.max(1);
+        let top_k = top_k.max(1);
 
-    let similar_messages = match focus {
-        Focus::AllMemories => {
-            db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
+        let similar_messages = match focus {
+            Focus::AllMemories => {
+                db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
+            }
+            Focus::ThisThread => db::search_similar_messages_in_conversation_active(
+                conn,
+                key,
+                app_dir,
+                conversation_id,
+                question,
+                top_k,
+            )?,
+        };
+
+        let similar_todos =
+            db::search_similar_todo_threads_active(conn, key, app_dir, question, top_k)?;
+
+        let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+        for sm in similar_messages {
+            contexts_with_distance.push((sm.distance, sm.message.content));
         }
-        Focus::ThisThread => db::search_similar_messages_in_conversation_active(
-            conn,
-            key,
-            app_dir,
-            conversation_id,
-            question,
-            top_k,
-        )?,
-    };
-
-    let similar_todos =
-        db::search_similar_todo_threads_active(conn, key, app_dir, question, top_k)?;
-
-    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
-    for sm in similar_messages {
-        contexts_with_distance.push((sm.distance, sm.message.content));
-    }
-    let mut seen_todos = std::collections::HashSet::new();
-    for st in similar_todos {
-        if !seen_todos.insert(st.todo_id.clone()) {
-            continue;
+        let mut seen_todos = std::collections::HashSet::new();
+        for st in similar_todos {
+            if !seen_todos.insert(st.todo_id.clone()) {
+                continue;
+            }
+            let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+            contexts_with_distance.push((st.distance, ctx));
         }
-        let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
-        contexts_with_distance.push((st.distance, ctx));
+        contexts_with_distance
+            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        contexts_with_distance.truncate(top_k);
+        contexts = contexts_with_distance
+            .into_iter()
+            .map(|(_, ctx)| ctx)
+            .collect();
     }
-    contexts_with_distance
-        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    contexts_with_distance.truncate(top_k);
-    let contexts: Vec<String> = contexts_with_distance
-        .into_iter()
-        .map(|(_, ctx)| ctx)
-        .collect();
     let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
-
-    let user_message = db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-    let assistant_message =
-        db::insert_message_non_memory(conn, key, conversation_id, "assistant", "")?;
 
     let mut has_text = false;
     let mut assistant_text = String::new();
@@ -551,49 +504,24 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     match result {
         Ok(()) => {
             if !has_text {
-                conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                )?;
                 return Err(anyhow!("empty response from LLM"));
             }
-            db::edit_message(conn, key, &assistant_message.id, &assistant_text)?;
-        }
-        Err(e) => {
-            if e.is::<StreamCancelled>() {
-                let _ = conn.execute(
-                    r#"DELETE FROM message_embeddings WHERE message_id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM message_embeddings WHERE message_id = ?1"#,
-                    params![user_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![user_message.id.as_str()],
-                );
-                return Err(e);
-            }
 
-            if !has_text {
-                let _ = conn.execute(
-                    r#"DELETE FROM messages WHERE id = ?1"#,
-                    params![assistant_message.id.as_str()],
-                );
-            } else {
-                let _ = db::edit_message(conn, key, &assistant_message.id, &assistant_text);
-            }
-            return Err(e);
+            let user_message =
+                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
+            let assistant_message = db::insert_message_non_memory(
+                conn,
+                key,
+                conversation_id,
+                "assistant",
+                &assistant_text,
+            )?;
+
+            Ok(AskAiResult {
+                user_message_id: user_message.id,
+                assistant_message_id: assistant_message.id,
+            })
         }
+        Err(e) => Err(e),
     }
-
-    Ok(AskAiResult {
-        user_message_id: user_message.id,
-        assistant_message_id: assistant_message.id,
-    })
 }

@@ -87,15 +87,21 @@ class _ChatPageState extends State<ChatPage> {
   bool _stopRequested = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
+  bool _cloudEmbeddingsConsented = false;
   String? _hoveredMessageId;
   String? _pendingQuestion;
   String _streamingAnswer = '';
   String? _askError;
+  String? _askFailureMessage;
+  String? _askFailureQuestion;
+  Timer? _askFailureTimer;
   StreamSubscription<String>? _askSub;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
 
   static const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
+  static const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
+  static const _kCloudEmbeddingsModelName = 'baai/bge-m3';
   static const _kAskAiCloudFallbackSnackKey = ValueKey(
     'ask_ai_cloud_fallback_snack',
   );
@@ -125,6 +131,16 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    unawaited(_loadEmbeddingsDataConsentPreference());
+  }
+
+  Future<void> _loadEmbeddingsDataConsentPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) return;
+
+    final value = prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
+    if (!mounted) return;
+    setState(() => _cloudEmbeddingsConsented = value);
   }
 
   void _onScroll() {
@@ -793,10 +809,49 @@ class _ChatPageState extends State<ChatPage> {
       oldEngine.changes.removeListener(oldListener);
     }
     _askSub?.cancel();
+    _askFailureTimer?.cancel();
     _controller.dispose();
     _inputFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _showAskAiFailure(String question) {
+    _askFailureTimer?.cancel();
+    final failureMessage = context.t.chat.askAiFailedTemporary;
+
+    setState(() {
+      _askError = null;
+      _askSub = null;
+      _asking = false;
+      _stopRequested = false;
+      _pendingQuestion = question;
+      _streamingAnswer = '';
+      _askFailureQuestion = question;
+      _askFailureMessage = failureMessage;
+    });
+
+    _askFailureTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      final stillSameAttempt = _askFailureQuestion == question;
+      if (!stillSameAttempt) return;
+
+      final shouldRestoreInput = _controller.text.trim().isEmpty;
+      setState(() {
+        if (_pendingQuestion == question) {
+          _pendingQuestion = null;
+        }
+        _askFailureQuestion = null;
+        _askFailureMessage = null;
+      });
+
+      if (!shouldRestoreInput) return;
+      _controller.text = question;
+      _controller.selection = TextSelection.collapsed(offset: question.length);
+      if (_isDesktopPlatform) {
+        _inputFocusNode.requestFocus();
+      }
+    });
   }
 
   Future<List<Message>> _loadMessages() async {
@@ -1044,11 +1099,63 @@ class _ChatPageState extends State<ChatPage> {
 
     List<TodoThreadMatch> semantic = const <TodoThreadMatch>[];
     try {
-      semantic = await backend.searchSimilarTodoThreads(
-        sessionKey,
-        query,
-        topK: limit,
-      );
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final cloudGatewayConfig =
+          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      String? cloudIdToken;
+      try {
+        cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+      } catch (_) {
+        cloudIdToken = null;
+      }
+
+      final cloudAvailable =
+          subscriptionStatus == SubscriptionStatus.entitled &&
+              cloudIdToken != null &&
+              cloudIdToken.trim().isNotEmpty &&
+              cloudGatewayConfig.baseUrl.trim().isNotEmpty;
+
+      if (cloudAvailable) {
+        final allowCloudEmbeddings =
+            _cloudEmbeddingsConsented || await _ensureEmbeddingsDataConsent();
+        if (allowCloudEmbeddings) {
+          semantic = await backend.searchSimilarTodoThreadsCloudGateway(
+            sessionKey,
+            query,
+            topK: limit,
+            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+            idToken: cloudIdToken,
+            modelName: _kCloudEmbeddingsModelName,
+          );
+        } else {
+          semantic = await backend.searchSimilarTodoThreads(
+            sessionKey,
+            query,
+            topK: limit,
+          );
+        }
+      } else {
+        if (_cloudEmbeddingsConsented &&
+            subscriptionStatus != SubscriptionStatus.notEntitled) {
+          semantic = const <TodoThreadMatch>[];
+        } else {
+          try {
+            semantic = await backend.searchSimilarTodoThreadsBrok(
+              sessionKey,
+              query,
+              topK: limit,
+            );
+          } catch (_) {
+            semantic = await backend.searchSimilarTodoThreads(
+              sessionKey,
+              query,
+              topK: limit,
+            );
+          }
+        }
+      }
     } catch (_) {
       semantic = const <TodoThreadMatch>[];
     }
@@ -2322,6 +2429,9 @@ class _ChatPageState extends State<ChatPage> {
     final question = _controller.text.trim();
     if (question.isEmpty) return;
 
+    _askFailureTimer?.cancel();
+    _askFailureTimer = null;
+
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final cloudAuthScope = CloudAuthScope.maybeOf(context);
@@ -2354,54 +2464,86 @@ class _ChatPageState extends State<ChatPage> {
     final consented = await _ensureAskAiDataConsent();
     if (!consented) return;
 
+    final allowCloudEmbeddings = route == AskAiRouteKind.cloudGateway &&
+        await _ensureEmbeddingsDataConsent();
+    final hasBrokEmbeddings = route == AskAiRouteKind.byok &&
+        await _hasActiveEmbeddingProfile(backend, sessionKey);
+    final cloudEmbeddingsSelected = _cloudEmbeddingsConsented &&
+        subscriptionStatus != SubscriptionStatus.notEntitled;
+    final avoidEmbeddingsIndexing =
+        cloudEmbeddingsSelected && route != AskAiRouteKind.cloudGateway;
+    final effectiveTopK = avoidEmbeddingsIndexing ? 0 : 10;
+    final effectiveHasBrokEmbeddings =
+        avoidEmbeddingsIndexing ? false : hasBrokEmbeddings;
+
     setState(() {
       _asking = true;
       _stopRequested = false;
       _askError = null;
+      _askFailureMessage = null;
+      _askFailureQuestion = null;
       _pendingQuestion = question;
       _streamingAnswer = '';
     });
     _controller.clear();
 
     try {
-      await _prepareEmbeddingsForAskAi(backend, sessionKey);
+      if (effectiveTopK > 0 &&
+          !(route == AskAiRouteKind.cloudGateway && allowCloudEmbeddings) &&
+          !effectiveHasBrokEmbeddings) {
+        await _prepareEmbeddingsForAskAi(backend, sessionKey);
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _askError = '$e';
-        _askSub = null;
-        _asking = false;
-        _pendingQuestion = null;
-        _streamingAnswer = '';
-      });
-      _refresh();
-      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      _showAskAiFailure(question);
       return;
     }
 
     Stream<String> stream;
     switch (route) {
       case AskAiRouteKind.cloudGateway:
-        stream = backend.askAiStreamCloudGateway(
-          sessionKey,
-          widget.conversation.id,
-          question: question,
-          topK: 10,
-          thisThreadOnly: _thisThreadOnly,
-          gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-          idToken: cloudIdToken ?? '',
-          modelName: cloudGatewayConfig.modelName,
-        );
+        if (allowCloudEmbeddings) {
+          stream = backend.askAiStreamCloudGatewayWithEmbeddings(
+            sessionKey,
+            widget.conversation.id,
+            question: question,
+            topK: effectiveTopK,
+            thisThreadOnly: _thisThreadOnly,
+            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+            idToken: cloudIdToken ?? '',
+            modelName: cloudGatewayConfig.modelName,
+            embeddingsModelName: _kCloudEmbeddingsModelName,
+          );
+        } else {
+          stream = backend.askAiStreamCloudGateway(
+            sessionKey,
+            widget.conversation.id,
+            question: question,
+            topK: effectiveTopK,
+            thisThreadOnly: _thisThreadOnly,
+            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+            idToken: cloudIdToken ?? '',
+            modelName: cloudGatewayConfig.modelName,
+          );
+        }
         break;
       case AskAiRouteKind.byok:
       case AskAiRouteKind.needsSetup:
-        stream = backend.askAiStream(
-          sessionKey,
-          widget.conversation.id,
-          question: question,
-          topK: 10,
-          thisThreadOnly: _thisThreadOnly,
-        );
+        stream = effectiveHasBrokEmbeddings
+            ? backend.askAiStreamWithBrokEmbeddings(
+                sessionKey,
+                widget.conversation.id,
+                question: question,
+                topK: effectiveTopK,
+                thisThreadOnly: _thisThreadOnly,
+              )
+            : backend.askAiStream(
+                sessionKey,
+                widget.conversation.id,
+                question: question,
+                topK: effectiveTopK,
+                thisThreadOnly: _thisThreadOnly,
+              );
         break;
     }
 
@@ -2437,15 +2579,7 @@ class _ChatPageState extends State<ChatPage> {
             );
 
             if (!mounted) return;
-            setState(() {
-              _askError = null;
-              _askSub = null;
-              _asking = false;
-              _pendingQuestion = null;
-              _streamingAnswer = '';
-            });
-            _refresh();
-            SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+            _showAskAiFailure(question);
             return;
           }
 
@@ -2474,38 +2608,37 @@ class _ChatPageState extends State<ChatPage> {
               _streamingAnswer = '';
             });
 
-            final byokStream = backend.askAiStream(
-              sessionKey,
-              widget.conversation.id,
-              question: question,
-              topK: 10,
-              thisThreadOnly: _thisThreadOnly,
-            );
+            final hasBrokEmbeddings =
+                await _hasActiveEmbeddingProfile(backend, sessionKey);
+            final byokStream = hasBrokEmbeddings
+                ? backend.askAiStreamWithBrokEmbeddings(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: 10,
+                    thisThreadOnly: _thisThreadOnly,
+                  )
+                : backend.askAiStream(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: 10,
+                    thisThreadOnly: _thisThreadOnly,
+                  );
             await startStream(byokStream, fromCloud: false);
             return;
           }
 
           if (!mounted) return;
-          setState(() {
-            _askError = fromCloud
-                ? switch (cloudStatus) {
-                    401 => context.t.chat.cloudGateway.errors.auth,
-                    402 => context.t.chat.cloudGateway.errors.entitlement,
-                    429 => context.t.chat.cloudGateway.errors.rateLimited,
-                    _ => context.t.chat.cloudGateway.errors.generic,
-                  }
-                : '$e';
-            _askSub = null;
-            _asking = false;
-            _pendingQuestion = null;
-            _streamingAnswer = '';
-          });
-          _refresh();
-          SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+          _showAskAiFailure(question);
         },
         onDone: () {
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
+          if (_streamingAnswer.trim().isEmpty) {
+            _showAskAiFailure(question);
+            return;
+          }
           setState(() {
             _askSub = null;
             _asking = false;
@@ -2540,6 +2673,7 @@ class _ChatPageState extends State<ChatPage> {
           builder: (context, setState) {
             return AlertDialog(
               key: const ValueKey('ask_ai_consent_dialog'),
+              scrollable: true,
               title: Text(t.chat.askAiConsent.title),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2581,6 +2715,86 @@ class _ChatPageState extends State<ChatPage> {
       await prefs.setBool(_kAskAiDataConsentPrefsKey, true);
     }
     return true;
+  }
+
+  Future<bool> _ensureEmbeddingsDataConsent() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) {
+      final value = prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
+      _cloudEmbeddingsConsented = value;
+      return value;
+    }
+    if (!mounted) return false;
+
+    var dontShowAgain = true;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final t = context.t;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              key: const ValueKey('embeddings_consent_dialog'),
+              scrollable: true,
+              title: Text(t.chat.embeddingsConsent.title),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t.chat.embeddingsConsent.body),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    key: const ValueKey('embeddings_consent_dont_show_again'),
+                    contentPadding: EdgeInsets.zero,
+                    value: dontShowAgain,
+                    onChanged: (value) {
+                      setState(() => dontShowAgain = value ?? true);
+                    },
+                    title: Text(t.chat.embeddingsConsent.dontShowAgain),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(t.chat.embeddingsConsent.actions.useLocal),
+                ),
+                FilledButton(
+                  key: const ValueKey('embeddings_consent_continue'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(t.chat.embeddingsConsent.actions.enableCloud),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (approved != true) {
+      await prefs.setBool(_kEmbeddingsDataConsentPrefsKey, false);
+      _cloudEmbeddingsConsented = false;
+      return false;
+    }
+
+    _cloudEmbeddingsConsented = true;
+    if (dontShowAgain) {
+      await prefs.setBool(_kEmbeddingsDataConsentPrefsKey, true);
+    }
+    return true;
+  }
+
+  Future<bool> _hasActiveEmbeddingProfile(
+    AppBackend backend,
+    Uint8List sessionKey,
+  ) async {
+    try {
+      final profiles = await backend.listEmbeddingProfiles(sessionKey);
+      return profiles.any((p) => p.isActive);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> _ensureAskAiConfigured(
@@ -2673,15 +2887,12 @@ class _ChatPageState extends State<ChatPage> {
                 ValueListenableBuilder<String>(
                   valueListenable: status,
                   builder: (context, value, child) {
-                    return Row(
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(value)),
+                        Text(value),
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(minHeight: 4),
                       ],
                     );
                   },
@@ -2905,7 +3116,11 @@ class _ChatPageState extends State<ChatPage> {
                         ? _paginatedMessages
                         : snapshot.data ?? const <Message>[];
                     final pendingQuestion = _pendingQuestion;
-                    final hasPendingAssistant = _asking && !_stopRequested;
+                    final pendingFailureMessage = _askFailureMessage;
+                    final hasPendingAssistant = (_asking && !_stopRequested) ||
+                        pendingFailureMessage != null;
+                    final pendingAssistantText = pendingFailureMessage ??
+                        (_streamingAnswer.isEmpty ? '…' : _streamingAnswer);
                     final extraCount = (hasPendingAssistant ? 1 : 0) +
                         (pendingQuestion == null ? 0 : 1);
                     if (messages.isEmpty && extraCount == 0) {
@@ -3059,9 +3274,7 @@ class _ChatPageState extends State<ChatPage> {
                                   createdAtMs: 0,
                                   isMemory: false,
                                 );
-                                textOverride = _streamingAnswer.isEmpty
-                                    ? '…'
-                                    : _streamingAnswer;
+                                textOverride = pendingAssistantText;
                               }
                               extraIndex -= 1;
                             }
@@ -3099,8 +3312,7 @@ class _ChatPageState extends State<ChatPage> {
                               extraIndex -= 1;
                             }
                             if (msg == null &&
-                                _asking &&
-                                !_stopRequested &&
+                                hasPendingAssistant &&
                                 extraIndex == 0) {
                               msg = Message(
                                 id: 'pending_assistant',
@@ -3110,9 +3322,7 @@ class _ChatPageState extends State<ChatPage> {
                                 createdAtMs: 0,
                                 isMemory: false,
                               );
-                              textOverride = _streamingAnswer.isEmpty
-                                  ? '…'
-                                  : _streamingAnswer;
+                              textOverride = pendingAssistantText;
                             }
                           }
                         }

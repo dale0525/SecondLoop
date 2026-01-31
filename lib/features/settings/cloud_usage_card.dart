@@ -36,17 +36,25 @@ class CloudUsageSummaryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = summary.usagePercent.clamp(0, 100);
+    final askAiPercent = summary.askAiUsagePercent.clamp(0, 100);
+    final embeddingsPercent = summary.embeddingsUsagePercent.clamp(0, 100);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _usageRow(
-          context.t.settings.cloudUsage.labels.usage,
-          '$percent%',
+          context.t.settings.cloudUsage.labels.askAiUsage,
+          '$askAiPercent%',
         ),
         const SizedBox(height: 8),
-        LinearProgressIndicator(value: percent / 100),
+        LinearProgressIndicator(value: askAiPercent / 100),
+        const SizedBox(height: 12),
+        _usageRow(
+          context.t.settings.cloudUsage.labels.embeddingsUsage,
+          '$embeddingsPercent%',
+        ),
         const SizedBox(height: 8),
+        LinearProgressIndicator(value: embeddingsPercent / 100),
+        const SizedBox(height: 12),
         _usageRow(
           context.t.settings.cloudUsage.labels.resetAt,
           _formatResetAt(context, summary.resetAtMs),

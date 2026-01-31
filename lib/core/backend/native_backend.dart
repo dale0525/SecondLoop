@@ -657,6 +657,42 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<List<SimilarMessage>> searchSimilarMessagesCloudGateway(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSearchSimilarMessagesCloudGateway(
+      appDir: appDir,
+      key: key,
+      query: query,
+      topK: topK,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
+  Future<List<SimilarMessage>> searchSimilarMessagesBrok(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSearchSimilarMessagesBrok(
+      appDir: appDir,
+      key: key,
+      query: query,
+      topK: topK,
+    );
+  }
+
+  @override
   Future<List<TodoThreadMatch>> searchSimilarTodoThreads(
     Uint8List key,
     String query, {
@@ -664,6 +700,58 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }) async {
     final appDir = await _getAppDir();
     final matches = await rust_core.dbSearchSimilarTodoThreads(
+      appDir: appDir,
+      key: key,
+      query: query,
+      topK: topK,
+    );
+    return matches
+        .map(
+          (m) => TodoThreadMatch(
+            todoId: m.todoId,
+            distance: m.distance,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<TodoThreadMatch>> searchSimilarTodoThreadsCloudGateway(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    final matches = await rust_core.dbSearchSimilarTodoThreadsCloudGateway(
+      appDir: appDir,
+      key: key,
+      query: query,
+      topK: topK,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+    return matches
+        .map(
+          (m) => TodoThreadMatch(
+            todoId: m.todoId,
+            distance: m.distance,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<TodoThreadMatch>> searchSimilarTodoThreadsBrok(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+  }) async {
+    final appDir = await _getAppDir();
+    final matches = await rust_core.dbSearchSimilarTodoThreadsBrok(
       appDir: appDir,
       key: key,
       query: query,
@@ -714,6 +802,56 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       appDir: appDir,
       key: key,
       modelName: modelName,
+    );
+  }
+
+  @override
+  Future<List<EmbeddingProfile>> listEmbeddingProfiles(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListEmbeddingProfiles(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<EmbeddingProfile> createEmbeddingProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCreateEmbeddingProfile(
+      appDir: appDir,
+      key: key,
+      name: name,
+      providerType: providerType,
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      modelName: modelName,
+      setActive: setActive,
+    );
+  }
+
+  @override
+  Future<void> setActiveEmbeddingProfile(
+      Uint8List key, String profileId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSetActiveEmbeddingProfile(
+      appDir: appDir,
+      key: key,
+      profileId: profileId,
+    );
+  }
+
+  @override
+  Future<void> deleteEmbeddingProfile(Uint8List key, String profileId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbDeleteEmbeddingProfile(
+      appDir: appDir,
+      key: key,
+      profileId: profileId,
     );
   }
 
@@ -805,6 +943,27 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Stream<String> askAiStreamWithBrokEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) async* {
+    final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
+    yield* rust_core.ragAskAiStreamWithBrokEmbeddings(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      localDay: localDay,
+    );
+  }
+
+  @override
   Stream<String> askAiStreamCloudGateway(
     Uint8List key,
     String conversationId, {
@@ -826,6 +985,33 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_core.ragAskAiStreamCloudGatewayWithEmbeddings(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+      embeddingsModelName: embeddingsModelName,
     );
   }
 

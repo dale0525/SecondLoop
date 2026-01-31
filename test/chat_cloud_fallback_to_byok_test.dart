@@ -16,7 +16,10 @@ import 'test_i18n.dart';
 void main() {
   testWidgets('Ask AI falls back to BYOK when cloud returns 402',
       (tester) async {
-    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+    SharedPreferences.setMockInitialValues({
+      'ask_ai_data_consent_v1': true,
+      'embeddings_data_consent_v1': false,
+    });
 
     final backend = _CloudFallbackBackend();
     final cloudAuth = _FakeCloudAuthController(idToken: 'test-id-token');

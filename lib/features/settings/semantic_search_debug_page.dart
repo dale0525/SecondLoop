@@ -198,15 +198,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                 ValueListenableBuilder<String>(
                   valueListenable: status,
                   builder: (context, value, child) {
-                    return Row(
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(value)),
+                        Text(value),
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(minHeight: 4),
                       ],
                     );
                   },

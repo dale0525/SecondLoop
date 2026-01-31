@@ -6,11 +6,13 @@ import 'package:flutter/foundation.dart';
 @immutable
 class CloudUsageSummary {
   const CloudUsageSummary({
-    required this.usagePercent,
+    required this.askAiUsagePercent,
+    required this.embeddingsUsagePercent,
     required this.resetAtMs,
   });
 
-  final int usagePercent;
+  final int askAiUsagePercent;
+  final int embeddingsUsagePercent;
   final int? resetAtMs;
 }
 
@@ -50,14 +52,19 @@ final class CloudUsageClient {
     }
 
     final usagePercent = _parseInt(decoded['usage_percent']);
+    final askAiUsagePercent =
+        _parseInt(decoded['ask_ai_usage_percent']) ?? usagePercent;
+    final embeddingsUsagePercent =
+        _parseInt(decoded['embeddings_usage_percent']) ?? 0;
     final resetAtMs = _parseInt(decoded['reset_at_ms']);
 
-    if (usagePercent == null) {
+    if (askAiUsagePercent == null) {
       throw const FormatException('invalid_usage_response_fields');
     }
 
     return CloudUsageSummary(
-      usagePercent: usagePercent,
+      askAiUsagePercent: askAiUsagePercent,
+      embeddingsUsagePercent: embeddingsUsagePercent,
       resetAtMs: resetAtMs,
     );
   }

@@ -7,55 +7,42 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
-import 'package:secondloop/core/cloud/cloud_usage_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/cloud_usage_card.dart';
-import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Settings does not show Cloud usage card', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(
-      AppBackendScope(
-        backend: _FakeBackend(),
-        child: CloudAuthScope(
-          controller: _FakeCloudAuthController(idToken: ''),
-          gatewayConfig: const CloudGatewayConfig(
-            baseUrl: 'https://gateway.test',
-            modelName: 'cloud',
-          ),
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: wrapWithI18n(
-              const MaterialApp(home: Scaffold(body: SettingsPage())),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Cloud usage'), findsNothing);
-  });
-
-  testWidgets('Cloud usage summary shows Ask AI + embeddings usage',
+  testWidgets('Cloud embeddings shows data consent dialog before using',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+
+    final backend = _EmbeddingsConsentBackend();
+    final cloudAuth = _FakeCloudAuthController(idToken: 'test-id-token');
 
     await tester.pumpWidget(
       wrapWithI18n(
-        const MaterialApp(
-          home: Scaffold(
-            body: CloudUsageSummaryView(
-              summary: CloudUsageSummary(
-                askAiUsagePercent: 60,
-                embeddingsUsagePercent: 20,
-                resetAtMs: 1700006400000,
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.test',
+                modelName: 'gpt-test',
+              ),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
               ),
             ),
           ),
@@ -64,124 +51,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Ask AI:'), findsOneWidget);
-    expect(find.text('60%'), findsOneWidget);
-    expect(find.text('Cloud embeddings:'), findsOneWidget);
-    expect(find.text('20%'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
-    expect(find.text('Resets on:'), findsOneWidget);
-  });
-
-  testWidgets('Cloud account page shows Cloud usage card', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(
-      AppBackendScope(
-        backend: _FakeBackend(),
-        child: CloudAuthScope(
-          controller: _FakeCloudAuthController(idToken: ''),
-          gatewayConfig: const CloudGatewayConfig(
-            baseUrl: 'https://gateway.test',
-            modelName: 'cloud',
-          ),
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: wrapWithI18n(
-              const MaterialApp(home: Scaffold(body: SettingsPage())),
-            ),
-          ),
-        ),
-      ),
-    );
+    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Cloud account'));
+    expect(find.byKey(const ValueKey('embeddings_consent_dialog')),
+        findsOneWidget);
+    expect(backend.calls,
+        isNot(contains('askAiStreamCloudGatewayWithEmbeddings')));
+
+    await tester.tap(find.byKey(const ValueKey('embeddings_consent_continue')));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('cloud_usage_refresh')),
-      200,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Cloud usage'), findsOneWidget);
-  });
-
-  testWidgets('Cloud account page shows Vault storage card', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(
-      AppBackendScope(
-        backend: _FakeBackend(),
-        child: CloudAuthScope(
-          controller: _FakeCloudAuthController(idToken: ''),
-          gatewayConfig: const CloudGatewayConfig(
-            baseUrl: 'https://gateway.test',
-            modelName: 'cloud',
-          ),
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: wrapWithI18n(
-              const MaterialApp(home: Scaffold(body: SettingsPage())),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Cloud account'));
-    await tester.pumpAndSettle();
-
-    await tester.drag(find.byType(ListView), const Offset(0, -1200));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Vault storage'), findsOneWidget);
+    expect(backend.calls, contains('askAiStreamCloudGatewayWithEmbeddings'));
   });
 }
 
-final class _FakeCloudAuthController implements CloudAuthController {
-  _FakeCloudAuthController({this.idToken});
+final class _EmbeddingsConsentBackend extends AppBackend {
+  final List<String> calls = <String>[];
 
-  final String? idToken;
-
-  @override
-  String? get uid => 'uid_1';
-
-  @override
-  String? get email => null;
-
-  @override
-  bool? get emailVerified => null;
-
-  @override
-  Future<String?> getIdToken() async => idToken;
-
-  @override
-  Future<void> refreshUserInfo() async {}
-
-  @override
-  Future<void> sendEmailVerification() async {}
-
-  @override
-  Future<void> signInWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signUpWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signOut() async {}
-}
-
-final class _FakeBackend extends AppBackend {
   @override
   Future<void> init() async {}
 
@@ -219,7 +108,7 @@ final class _FakeBackend extends AppBackend {
       const <Conversation>[];
 
   @override
-  Future<Conversation> createConversation(Uint8List key, String title) =>
+  Future<Conversation> createConversation(Uint8List key, String title) async =>
       throw UnimplementedError();
 
   @override
@@ -232,8 +121,9 @@ final class _FakeBackend extends AppBackend {
       );
 
   @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) =>
-      Future<List<Message>>.value(const <Message>[]);
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
+      const <Message>[];
 
   @override
   Future<Message> insertMessage(
@@ -241,16 +131,17 @@ final class _FakeBackend extends AppBackend {
     String conversationId, {
     required String role,
     required String content,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
-  Future<void> editMessage(Uint8List key, String messageId, String content) =>
+  Future<void> editMessage(
+          Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();
 
   @override
   Future<void> setMessageDeleted(
-          Uint8List key, String messageId, bool isDeleted) =>
+          Uint8List key, String messageId, bool isDeleted) async =>
       throw UnimplementedError();
 
   @override
@@ -280,7 +171,7 @@ final class _FakeBackend extends AppBackend {
 
   @override
   Future<List<String>> listEmbeddingModelNames(Uint8List key) async =>
-      const <String>['secondloop-default-embed-v0'];
+      const <String>[];
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async =>
@@ -288,11 +179,22 @@ final class _FakeBackend extends AppBackend {
 
   @override
   Future<bool> setActiveEmbeddingModelName(Uint8List key, String modelName) =>
-      Future<bool>.value(modelName != 'secondloop-default-embed-v0');
+      Future<bool>.value(false);
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -303,7 +205,7 @@ final class _FakeBackend extends AppBackend {
     String? apiKey,
     required String modelName,
     bool setActive = true,
-  }) =>
+  }) async =>
       throw UnimplementedError();
 
   @override
@@ -323,7 +225,7 @@ final class _FakeBackend extends AppBackend {
       const Stream<String>.empty();
 
   @override
-  Stream<String> askAiStreamCloudGateway(
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
     Uint8List key,
     String conversationId, {
     required String question,
@@ -332,12 +234,15 @@ final class _FakeBackend extends AppBackend {
     required String gatewayBaseUrl,
     required String idToken,
     required String modelName,
-  }) =>
-      const Stream<String>.empty();
+    required String embeddingsModelName,
+  }) {
+    calls.add('askAiStreamCloudGatewayWithEmbeddings');
+    return const Stream<String>.empty();
+  }
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 1));
+      Uint8List.fromList(List<int>.filled(32, 2));
 
   @override
   Future<void> syncWebdavTestConnection({
@@ -406,4 +311,43 @@ final class _FakeBackend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  _FakeCloudAuthController({required this.idToken});
+
+  final String idToken;
+
+  @override
+  Future<String?> getIdToken() async => idToken;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
 }

@@ -64,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Conversation dco_decode_conversation(dynamic raw);
 
   @protected
+  EmbeddingProfile dco_decode_embedding_profile(dynamic raw);
+
+  @protected
   Event dco_decode_event(dynamic raw);
 
   @protected
@@ -83,6 +86,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Conversation> dco_decode_list_conversation(dynamic raw);
+
+  @protected
+  List<EmbeddingProfile> dco_decode_list_embedding_profile(dynamic raw);
 
   @protected
   List<Event> dco_decode_list_event(dynamic raw);
@@ -210,6 +216,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Conversation sse_decode_conversation(SseDeserializer deserializer);
 
   @protected
+  EmbeddingProfile sse_decode_embedding_profile(SseDeserializer deserializer);
+
+  @protected
   Event sse_decode_event(SseDeserializer deserializer);
 
   @protected
@@ -230,6 +239,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Conversation> sse_decode_list_conversation(SseDeserializer deserializer);
+
+  @protected
+  List<EmbeddingProfile> sse_decode_list_embedding_profile(
+      SseDeserializer deserializer);
 
   @protected
   List<Event> sse_decode_list_event(SseDeserializer deserializer);
@@ -370,6 +383,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_conversation(Conversation self, SseSerializer serializer);
 
   @protected
+  void sse_encode_embedding_profile(
+      EmbeddingProfile self, SseSerializer serializer);
+
+  @protected
   void sse_encode_event(Event self, SseSerializer serializer);
 
   @protected
@@ -392,6 +409,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_conversation(
       List<Conversation> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_embedding_profile(
+      List<EmbeddingProfile> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_event(List<Event> self, SseSerializer serializer);

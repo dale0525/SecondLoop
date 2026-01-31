@@ -200,12 +200,46 @@ abstract class AppBackend {
     int topK = 10,
   });
 
+  Future<List<SimilarMessage>> searchSimilarMessagesCloudGateway(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async =>
+      searchSimilarMessages(key, query, topK: topK);
+
+  Future<List<SimilarMessage>> searchSimilarMessagesBrok(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+  }) async =>
+      searchSimilarMessages(key, query, topK: topK);
+
   Future<List<TodoThreadMatch>> searchSimilarTodoThreads(
     Uint8List key,
     String query, {
     int topK = 10,
   }) async =>
       const <TodoThreadMatch>[];
+
+  Future<List<TodoThreadMatch>> searchSimilarTodoThreadsCloudGateway(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async =>
+      searchSimilarTodoThreads(key, query, topK: topK);
+
+  Future<List<TodoThreadMatch>> searchSimilarTodoThreadsBrok(
+    Uint8List key,
+    String query, {
+    int topK = 10,
+  }) async =>
+      searchSimilarTodoThreads(key, query, topK: topK);
 
   Future<int> rebuildMessageEmbeddings(
     Uint8List key, {
@@ -229,6 +263,30 @@ abstract class AppBackend {
   Future<void> setActiveLlmProfile(Uint8List key, String profileId);
   Future<void> deleteLlmProfile(Uint8List key, String profileId);
 
+  Future<List<EmbeddingProfile>> listEmbeddingProfiles(Uint8List key) {
+    throw UnimplementedError('listEmbeddingProfiles');
+  }
+
+  Future<EmbeddingProfile> createEmbeddingProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  }) {
+    throw UnimplementedError('createEmbeddingProfile');
+  }
+
+  Future<void> setActiveEmbeddingProfile(Uint8List key, String profileId) {
+    throw UnimplementedError('setActiveEmbeddingProfile');
+  }
+
+  Future<void> deleteEmbeddingProfile(Uint8List key, String profileId) {
+    throw UnimplementedError('deleteEmbeddingProfile');
+  }
+
   Future<List<LlmUsageAggregate>> sumLlmUsageDailyByPurpose(
     Uint8List key,
     String profileId, {
@@ -246,6 +304,21 @@ abstract class AppBackend {
     bool thisThreadOnly = false,
   });
 
+  Stream<String> askAiStreamWithBrokEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) =>
+      askAiStream(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+      );
+
   Stream<String> askAiStreamCloudGateway(
     Uint8List key,
     String conversationId, {
@@ -257,6 +330,20 @@ abstract class AppBackend {
     required String modelName,
   }) {
     throw UnimplementedError('askAiStreamCloudGateway');
+  }
+
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) {
+    throw UnimplementedError('askAiStreamCloudGatewayWithEmbeddings');
   }
 
   Future<Uint8List> deriveSyncKey(String passphrase);

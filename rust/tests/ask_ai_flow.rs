@@ -148,11 +148,9 @@ fn ask_ai_error_does_not_leave_empty_assistant_message() {
     assert!(err.to_string().contains("boom"));
 
     let messages = db::list_messages(&conn, &key, &conversation.id).expect("list");
-    assert_eq!(messages.len(), 2);
+    assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].role, "user");
     assert_eq!(messages[0].content, "apple pie");
-    assert_eq!(messages[1].role, "user");
-    assert_eq!(messages[1].content, "apple");
 }
 
 #[test]

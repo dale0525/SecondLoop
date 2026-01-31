@@ -445,6 +445,44 @@ Future<void> dbDeleteLlmProfile(
     RustLib.instance.api.crateApiCoreDbDeleteLlmProfile(
         appDir: appDir, key: key, profileId: profileId);
 
+Future<EmbeddingProfile> dbCreateEmbeddingProfile(
+        {required String appDir,
+        required List<int> key,
+        required String name,
+        required String providerType,
+        String? baseUrl,
+        String? apiKey,
+        required String modelName,
+        required bool setActive}) =>
+    RustLib.instance.api.crateApiCoreDbCreateEmbeddingProfile(
+        appDir: appDir,
+        key: key,
+        name: name,
+        providerType: providerType,
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        modelName: modelName,
+        setActive: setActive);
+
+Future<List<EmbeddingProfile>> dbListEmbeddingProfiles(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbListEmbeddingProfiles(appDir: appDir, key: key);
+
+Future<void> dbSetActiveEmbeddingProfile(
+        {required String appDir,
+        required List<int> key,
+        required String profileId}) =>
+    RustLib.instance.api.crateApiCoreDbSetActiveEmbeddingProfile(
+        appDir: appDir, key: key, profileId: profileId);
+
+Future<void> dbDeleteEmbeddingProfile(
+        {required String appDir,
+        required List<int> key,
+        required String profileId}) =>
+    RustLib.instance.api.crateApiCoreDbDeleteEmbeddingProfile(
+        appDir: appDir, key: key, profileId: profileId);
+
 Future<int> dbProcessPendingMessageEmbeddings(
         {required String appDir, required List<int> key, required int limit}) =>
     RustLib.instance.api.crateApiCoreDbProcessPendingMessageEmbeddings(
@@ -458,12 +496,62 @@ Future<List<SimilarMessage>> dbSearchSimilarMessages(
     RustLib.instance.api.crateApiCoreDbSearchSimilarMessages(
         appDir: appDir, key: key, query: query, topK: topK);
 
+Future<List<SimilarMessage>> dbSearchSimilarMessagesCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String query,
+        required int topK,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreDbSearchSimilarMessagesCloudGateway(
+        appDir: appDir,
+        key: key,
+        query: query,
+        topK: topK,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
+
+Future<List<SimilarMessage>> dbSearchSimilarMessagesBrok(
+        {required String appDir,
+        required List<int> key,
+        required String query,
+        required int topK}) =>
+    RustLib.instance.api.crateApiCoreDbSearchSimilarMessagesBrok(
+        appDir: appDir, key: key, query: query, topK: topK);
+
 Future<List<SimilarTodoThread>> dbSearchSimilarTodoThreads(
         {required String appDir,
         required List<int> key,
         required String query,
         required int topK}) =>
     RustLib.instance.api.crateApiCoreDbSearchSimilarTodoThreads(
+        appDir: appDir, key: key, query: query, topK: topK);
+
+Future<List<SimilarTodoThread>> dbSearchSimilarTodoThreadsCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String query,
+        required int topK,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreDbSearchSimilarTodoThreadsCloudGateway(
+        appDir: appDir,
+        key: key,
+        query: query,
+        topK: topK,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
+
+Future<List<SimilarTodoThread>> dbSearchSimilarTodoThreadsBrok(
+        {required String appDir,
+        required List<int> key,
+        required String query,
+        required int topK}) =>
+    RustLib.instance.api.crateApiCoreDbSearchSimilarTodoThreadsBrok(
         appDir: appDir, key: key, query: query, topK: topK);
 
 Future<int> dbRebuildMessageEmbeddings(
@@ -539,6 +627,23 @@ Stream<String> ragAskAiStream(
         thisThreadOnly: thisThreadOnly,
         localDay: localDay);
 
+Stream<String> ragAskAiStreamWithBrokEmbeddings(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required String localDay}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStreamWithBrokEmbeddings(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        localDay: localDay);
+
 Stream<String> ragAskAiStreamCloudGateway(
         {required String appDir,
         required List<int> key,
@@ -559,6 +664,29 @@ Stream<String> ragAskAiStreamCloudGateway(
         gatewayBaseUrl: gatewayBaseUrl,
         firebaseIdToken: firebaseIdToken,
         modelName: modelName);
+
+Stream<String> ragAskAiStreamCloudGatewayWithEmbeddings(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName,
+        required String embeddingsModelName}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStreamCloudGatewayWithEmbeddings(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName,
+        embeddingsModelName: embeddingsModelName);
 
 Future<Uint8List> syncDeriveKey({required String passphrase}) =>
     RustLib.instance.api.crateApiCoreSyncDeriveKey(passphrase: passphrase);

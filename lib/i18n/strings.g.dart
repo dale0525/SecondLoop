@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 766 (383 per locale)
+/// Strings: 846 (423 per locale)
 ///
-/// Built on 2026-01-30 at 02:29 UTC
+/// Built on 2026-01-31 at 11:08 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -202,6 +202,8 @@ class Translations implements BaseTranslations<AppLocale, Translations> {
       _StringsSemanticSearchDebugEn._(_root);
   late final _StringsSyncEn sync = _StringsSyncEn._(_root);
   late final _StringsLlmProfilesEn llmProfiles = _StringsLlmProfilesEn._(_root);
+  late final _StringsEmbeddingProfilesEn embeddingProfiles =
+      _StringsEmbeddingProfilesEn._(_root);
   late final _StringsInboxEn inbox = _StringsInboxEn._(_root);
 }
 
@@ -291,6 +293,10 @@ class _StringsSettingsEn {
       _StringsSettingsLockNowEn._(_root);
   late final _StringsSettingsLlmProfilesEn llmProfiles =
       _StringsSettingsLlmProfilesEn._(_root);
+  late final _StringsSettingsEmbeddingProfilesEn embeddingProfiles =
+      _StringsSettingsEmbeddingProfilesEn._(_root);
+  late final _StringsSettingsCloudEmbeddingsEn cloudEmbeddings =
+      _StringsSettingsCloudEmbeddingsEn._(_root);
   late final _StringsSettingsCloudAccountEn cloudAccount =
       _StringsSettingsCloudAccountEn._(_root);
   late final _StringsSettingsCloudUsageEn cloudUsage =
@@ -368,8 +374,12 @@ class _StringsChatEn {
       _StringsChatAskAiSetupEn._(_root);
   late final _StringsChatCloudGatewayEn cloudGateway =
       _StringsChatCloudGatewayEn._(_root);
+  String get askAiFailedTemporary =>
+      'Ask AI failed. Please try again. This message will be removed in 3 seconds.';
   late final _StringsChatAskAiConsentEn askAiConsent =
       _StringsChatAskAiConsentEn._(_root);
+  late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
+      _StringsChatEmbeddingsConsentEn._(_root);
 }
 
 // Path: attachments
@@ -482,6 +492,34 @@ class _StringsLlmProfilesEn {
   String get savedActivated => 'AI profile saved and activated';
   late final _StringsLlmProfilesActionsEn actions =
       _StringsLlmProfilesActionsEn._(_root);
+}
+
+// Path: embeddingProfiles
+class _StringsEmbeddingProfilesEn {
+  _StringsEmbeddingProfilesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Embedding profiles';
+  String get refreshTooltip => 'Refresh';
+  String get activeProfileHelp =>
+      'Active profile is used for embeddings (semantic search / RAG).';
+  String get noProfilesYet => 'No profiles yet.';
+  String get addProfile => 'Add profile';
+  String get deleted => 'Embedding profile deleted';
+  String get validationError => 'Name, API key, and model are required.';
+  late final _StringsEmbeddingProfilesReindexDialogEn reindexDialog =
+      _StringsEmbeddingProfilesReindexDialogEn._(_root);
+  late final _StringsEmbeddingProfilesDeleteDialogEn deleteDialog =
+      _StringsEmbeddingProfilesDeleteDialogEn._(_root);
+  late final _StringsEmbeddingProfilesFieldsEn fields =
+      _StringsEmbeddingProfilesFieldsEn._(_root);
+  late final _StringsEmbeddingProfilesProvidersEn providers =
+      _StringsEmbeddingProfilesProvidersEn._(_root);
+  String get savedActivated => 'Embedding profile saved and activated';
+  late final _StringsEmbeddingProfilesActionsEn actions =
+      _StringsEmbeddingProfilesActionsEn._(_root);
 }
 
 // Path: inbox
@@ -795,6 +833,38 @@ class _StringsSettingsLlmProfilesEn {
   String get subtitle => 'Use your own API key for Ask AI';
 }
 
+// Path: settings.embeddingProfiles
+class _StringsSettingsEmbeddingProfilesEn {
+  _StringsSettingsEmbeddingProfilesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Embeddings (BYOK)';
+  String get subtitle => 'Use your own API key for semantic search';
+}
+
+// Path: settings.cloudEmbeddings
+class _StringsSettingsCloudEmbeddingsEn {
+  _StringsSettingsCloudEmbeddingsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Cloud embeddings';
+  String get subtitleEnabled => 'Enabled. Uses your cloud usage quota.';
+  String get subtitleDisabled =>
+      'Disabled. No cloud embeddings will be generated.';
+  String get subtitleUnset =>
+      'Not configured. We\'ll ask when it\'s first needed.';
+  String get subtitleRequiresPro => 'Requires SecondLoop Pro.';
+  String get dialogTitle => 'Enable cloud embeddings?';
+  String get dialogBody =>
+      'This uploads small text snippets (messages/todo titles/notes) to SecondLoop Cloud to generate embeddings.\n\nThe snippets are kept confidential (not logged or stored). It does not upload your vault key or sync key.\n\nCloud embeddings consume your cloud usage quota.';
+  late final _StringsSettingsCloudEmbeddingsDialogActionsEn dialogActions =
+      _StringsSettingsCloudEmbeddingsDialogActionsEn._(_root);
+}
+
 // Path: settings.cloudAccount
 class _StringsSettingsCloudAccountEn {
   _StringsSettingsCloudAccountEn._(this._root);
@@ -1052,6 +1122,21 @@ class _StringsChatAskAiConsentEn {
   String get dontShowAgain => 'Don\'t show again';
 }
 
+// Path: chat.embeddingsConsent
+class _StringsChatEmbeddingsConsentEn {
+  _StringsChatEmbeddingsConsentEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Use cloud embeddings for semantic search?';
+  String get body =>
+      'Benefits:\n- Better cross-language recall\n- Better todo linking suggestions\n\nPrivacy:\n- We only upload the minimum text needed to generate embeddings\n- The snippets are sent to SecondLoop Cloud Gateway and kept confidential (not logged or stored)\n- We never upload your vault key or sync key\n\nUsage:\n- Cloud embeddings count toward your cloud usage quota';
+  String get dontShowAgain => 'Remember my choice';
+  late final _StringsChatEmbeddingsConsentActionsEn actions =
+      _StringsChatEmbeddingsConsentActionsEn._(_root);
+}
+
 // Path: attachments.metadata
 class _StringsAttachmentsMetadataEn {
   _StringsAttachmentsMetadataEn._(this._root);
@@ -1261,6 +1346,68 @@ class _StringsLlmProfilesActionsEn {
   String get delete => 'Delete';
 }
 
+// Path: embeddingProfiles.reindexDialog
+class _StringsEmbeddingProfilesReindexDialogEn {
+  _StringsEmbeddingProfilesReindexDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Rebuild embeddings index?';
+  String get message =>
+      'Activating this profile may rebuild your local embeddings index using your API key/credits. This may take a while and can incur costs.';
+  late final _StringsEmbeddingProfilesReindexDialogActionsEn actions =
+      _StringsEmbeddingProfilesReindexDialogActionsEn._(_root);
+}
+
+// Path: embeddingProfiles.deleteDialog
+class _StringsEmbeddingProfilesDeleteDialogEn {
+  _StringsEmbeddingProfilesDeleteDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete profile?';
+  String message({required Object name}) =>
+      'Delete "${name}"? This removes it from this device.';
+}
+
+// Path: embeddingProfiles.fields
+class _StringsEmbeddingProfilesFieldsEn {
+  _StringsEmbeddingProfilesFieldsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get name => 'Name';
+  String get provider => 'Provider';
+  String get baseUrlOptional => 'API endpoint (optional)';
+  String get modelName => 'Model';
+  String get apiKey => 'API key';
+}
+
+// Path: embeddingProfiles.providers
+class _StringsEmbeddingProfilesProvidersEn {
+  _StringsEmbeddingProfilesProvidersEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get openaiCompatible => 'OpenAI-compatible';
+}
+
+// Path: embeddingProfiles.actions
+class _StringsEmbeddingProfilesActionsEn {
+  _StringsEmbeddingProfilesActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get saveActivate => 'Save & Activate';
+  String get cancel => 'Cancel';
+  String get delete => 'Delete';
+}
+
 // Path: actions.reviewQueue.actions
 class _StringsActionsReviewQueueActionsEn {
   _StringsActionsReviewQueueActionsEn._(this._root);
@@ -1371,6 +1518,16 @@ class _StringsSettingsLanguageOptionsEn {
   String get zhCn => 'Simplified Chinese';
 }
 
+// Path: settings.cloudEmbeddings.dialogActions
+class _StringsSettingsCloudEmbeddingsDialogActionsEn {
+  _StringsSettingsCloudEmbeddingsDialogActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get enable => 'Enable';
+}
+
 // Path: settings.cloudAccount.benefits
 class _StringsSettingsCloudAccountBenefitsEn {
   _StringsSettingsCloudAccountBenefitsEn._(this._root);
@@ -1456,6 +1613,8 @@ class _StringsSettingsCloudUsageLabelsEn {
       'Cloud usage isn\'t available in this build.';
   String get signInRequired => 'Sign in to view usage.';
   String get usage => 'Usage:';
+  String get askAiUsage => 'Ask AI:';
+  String get embeddingsUsage => 'Cloud embeddings:';
   String get inputTokensUsed30d => 'Input tokens (30d):';
   String get outputTokensUsed30d => 'Output tokens (30d):';
   String get tokensUsed30d => 'Tokens (30d):';
@@ -1627,6 +1786,17 @@ class _StringsChatCloudGatewayErrorsEn {
   String get generic => 'Cloud request failed.';
 }
 
+// Path: chat.embeddingsConsent.actions
+class _StringsChatEmbeddingsConsentActionsEn {
+  _StringsChatEmbeddingsConsentActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get useLocal => 'Use local';
+  String get enableCloud => 'Enable cloud embeddings';
+}
+
 // Path: sync.mediaBackup.cellularDialog
 class _StringsSyncMediaBackupCellularDialogEn {
   _StringsSyncMediaBackupCellularDialogEn._(this._root);
@@ -1765,6 +1935,16 @@ class _StringsSyncFieldsPassphraseEn {
   String get label => 'Sync passphrase';
   String get helper =>
       'Use the same passphrase on all devices. It’s never uploaded.';
+}
+
+// Path: embeddingProfiles.reindexDialog.actions
+class _StringsEmbeddingProfilesReindexDialogActionsEn {
+  _StringsEmbeddingProfilesReindexDialogActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get continueLabel => 'Continue';
 }
 
 // Path: settings.cloudAccount.benefits.items
@@ -1950,6 +2130,9 @@ class _StringsZhCn extends Translations {
   late final _StringsLlmProfilesZhCn llmProfiles =
       _StringsLlmProfilesZhCn._(_root);
   @override
+  late final _StringsEmbeddingProfilesZhCn embeddingProfiles =
+      _StringsEmbeddingProfilesZhCn._(_root);
+  @override
   late final _StringsInboxZhCn inbox = _StringsInboxZhCn._(_root);
 }
 
@@ -2086,6 +2269,12 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsLlmProfilesZhCn llmProfiles =
       _StringsSettingsLlmProfilesZhCn._(_root);
   @override
+  late final _StringsSettingsEmbeddingProfilesZhCn embeddingProfiles =
+      _StringsSettingsEmbeddingProfilesZhCn._(_root);
+  @override
+  late final _StringsSettingsCloudEmbeddingsZhCn cloudEmbeddings =
+      _StringsSettingsCloudEmbeddingsZhCn._(_root);
+  @override
   late final _StringsSettingsCloudAccountZhCn cloudAccount =
       _StringsSettingsCloudAccountZhCn._(_root);
   @override
@@ -2207,8 +2396,13 @@ class _StringsChatZhCn extends _StringsChatEn {
   late final _StringsChatCloudGatewayZhCn cloudGateway =
       _StringsChatCloudGatewayZhCn._(_root);
   @override
+  String get askAiFailedTemporary => '问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。';
+  @override
   late final _StringsChatAskAiConsentZhCn askAiConsent =
       _StringsChatAskAiConsentZhCn._(_root);
+  @override
+  late final _StringsChatEmbeddingsConsentZhCn embeddingsConsent =
+      _StringsChatEmbeddingsConsentZhCn._(_root);
 }
 
 // Path: attachments
@@ -2382,6 +2576,49 @@ class _StringsLlmProfilesZhCn extends _StringsLlmProfilesEn {
   @override
   late final _StringsLlmProfilesActionsZhCn actions =
       _StringsLlmProfilesActionsZhCn._(_root);
+}
+
+// Path: embeddingProfiles
+class _StringsEmbeddingProfilesZhCn extends _StringsEmbeddingProfilesEn {
+  _StringsEmbeddingProfilesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '向量配置';
+  @override
+  String get refreshTooltip => '刷新';
+  @override
+  String get activeProfileHelp => '当前选择的配置将用于 embeddings（语义检索 / RAG）。';
+  @override
+  String get noProfilesYet => '暂无配置。';
+  @override
+  String get addProfile => '添加配置';
+  @override
+  String get deleted => '向量配置已删除';
+  @override
+  String get validationError => '名称、API Key 和模型名称为必填项。';
+  @override
+  late final _StringsEmbeddingProfilesReindexDialogZhCn reindexDialog =
+      _StringsEmbeddingProfilesReindexDialogZhCn._(_root);
+  @override
+  late final _StringsEmbeddingProfilesDeleteDialogZhCn deleteDialog =
+      _StringsEmbeddingProfilesDeleteDialogZhCn._(_root);
+  @override
+  late final _StringsEmbeddingProfilesFieldsZhCn fields =
+      _StringsEmbeddingProfilesFieldsZhCn._(_root);
+  @override
+  late final _StringsEmbeddingProfilesProvidersZhCn providers =
+      _StringsEmbeddingProfilesProvidersZhCn._(_root);
+  @override
+  String get savedActivated => '已保存并设为当前配置';
+  @override
+  late final _StringsEmbeddingProfilesActionsZhCn actions =
+      _StringsEmbeddingProfilesActionsZhCn._(_root);
 }
 
 // Path: inbox
@@ -2860,6 +3097,54 @@ class _StringsSettingsLlmProfilesZhCn extends _StringsSettingsLlmProfilesEn {
   String get subtitle => '添加你自己的 API Key（用于问 AI）';
 }
 
+// Path: settings.embeddingProfiles
+class _StringsSettingsEmbeddingProfilesZhCn
+    extends _StringsSettingsEmbeddingProfilesEn {
+  _StringsSettingsEmbeddingProfilesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '向量配置（自带 Key）';
+  @override
+  String get subtitle => '添加你自己的 API Key（用于语义检索）';
+}
+
+// Path: settings.cloudEmbeddings
+class _StringsSettingsCloudEmbeddingsZhCn
+    extends _StringsSettingsCloudEmbeddingsEn {
+  _StringsSettingsCloudEmbeddingsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '云端向量（Embeddings）';
+  @override
+  String get subtitleEnabled => '已开启，会消耗 Cloud 使用额度。';
+  @override
+  String get subtitleDisabled => '已关闭，不会生成云端向量。';
+  @override
+  String get subtitleUnset => '尚未设置，首次需要时会询问。';
+  @override
+  String get subtitleRequiresPro => '需要 SecondLoop Pro。';
+  @override
+  String get dialogTitle => '开启云端向量？';
+  @override
+  String get dialogBody =>
+      '这会将少量文本片段（消息/待办标题/跟进）上传到 SecondLoop Cloud 以生成向量。\n\n文本会被保密处理（不写入日志/存储），不会上传你的 vault key 或 sync key。\n\n云端向量会消耗 Cloud 使用额度。';
+  @override
+  late final _StringsSettingsCloudEmbeddingsDialogActionsZhCn dialogActions =
+      _StringsSettingsCloudEmbeddingsDialogActionsZhCn._(_root);
+}
+
 // Path: settings.cloudAccount
 class _StringsSettingsCloudAccountZhCn extends _StringsSettingsCloudAccountEn {
   _StringsSettingsCloudAccountZhCn._(_StringsZhCn root)
@@ -3239,6 +3524,29 @@ class _StringsChatAskAiConsentZhCn extends _StringsChatAskAiConsentEn {
   String get dontShowAgain => '不再提示';
 }
 
+// Path: chat.embeddingsConsent
+class _StringsChatEmbeddingsConsentZhCn
+    extends _StringsChatEmbeddingsConsentEn {
+  _StringsChatEmbeddingsConsentZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '是否使用云端向量进行语义检索？';
+  @override
+  String get body =>
+      '好处：\n- 跨语言/同义改写召回更好\n- 待办关联建议更准确\n\n隐私：\n- 仅上传生成向量所需的最小文本片段\n- 文本会上传到 SecondLoop Cloud，并会被保密处理（不写入日志/存储）\n- 不会上传你的 vault key 或 sync key\n\n用量：\n- 云端向量会消耗 Cloud 使用额度';
+  @override
+  String get dontShowAgain => '记住我的选择';
+  @override
+  late final _StringsChatEmbeddingsConsentActionsZhCn actions =
+      _StringsChatEmbeddingsConsentActionsZhCn._(_root);
+}
+
 // Path: attachments.metadata
 class _StringsAttachmentsMetadataZhCn extends _StringsAttachmentsMetadataEn {
   _StringsAttachmentsMetadataZhCn._(_StringsZhCn root)
@@ -3543,6 +3851,100 @@ class _StringsLlmProfilesActionsZhCn extends _StringsLlmProfilesActionsEn {
   String get delete => '删除';
 }
 
+// Path: embeddingProfiles.reindexDialog
+class _StringsEmbeddingProfilesReindexDialogZhCn
+    extends _StringsEmbeddingProfilesReindexDialogEn {
+  _StringsEmbeddingProfilesReindexDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '重新索引向量？';
+  @override
+  String get message => '启用该配置可能会使用你的 API key/额度重新向量化本地内容（可能耗时并产生费用）。';
+  @override
+  late final _StringsEmbeddingProfilesReindexDialogActionsZhCn actions =
+      _StringsEmbeddingProfilesReindexDialogActionsZhCn._(_root);
+}
+
+// Path: embeddingProfiles.deleteDialog
+class _StringsEmbeddingProfilesDeleteDialogZhCn
+    extends _StringsEmbeddingProfilesDeleteDialogEn {
+  _StringsEmbeddingProfilesDeleteDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除配置？';
+  @override
+  String message({required Object name}) => '确定删除「${name}」？该操作会从本设备移除。';
+}
+
+// Path: embeddingProfiles.fields
+class _StringsEmbeddingProfilesFieldsZhCn
+    extends _StringsEmbeddingProfilesFieldsEn {
+  _StringsEmbeddingProfilesFieldsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get name => '名称';
+  @override
+  String get provider => '提供商';
+  @override
+  String get baseUrlOptional => '接口地址（可选）';
+  @override
+  String get modelName => '模型名称';
+  @override
+  String get apiKey => 'API Key';
+}
+
+// Path: embeddingProfiles.providers
+class _StringsEmbeddingProfilesProvidersZhCn
+    extends _StringsEmbeddingProfilesProvidersEn {
+  _StringsEmbeddingProfilesProvidersZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get openaiCompatible => 'OpenAI 兼容';
+}
+
+// Path: embeddingProfiles.actions
+class _StringsEmbeddingProfilesActionsZhCn
+    extends _StringsEmbeddingProfilesActionsEn {
+  _StringsEmbeddingProfilesActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get saveActivate => '保存并启用';
+  @override
+  String get cancel => '取消';
+  @override
+  String get delete => '删除';
+}
+
 // Path: actions.reviewQueue.actions
 class _StringsActionsReviewQueueActionsZhCn
     extends _StringsActionsReviewQueueActionsEn {
@@ -3716,6 +4118,21 @@ class _StringsSettingsLanguageOptionsZhCn
   String get zhCn => '简体中文';
 }
 
+// Path: settings.cloudEmbeddings.dialogActions
+class _StringsSettingsCloudEmbeddingsDialogActionsZhCn
+    extends _StringsSettingsCloudEmbeddingsDialogActionsEn {
+  _StringsSettingsCloudEmbeddingsDialogActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get enable => '开启';
+}
+
 // Path: settings.cloudAccount.benefits
 class _StringsSettingsCloudAccountBenefitsZhCn
     extends _StringsSettingsCloudAccountBenefitsEn {
@@ -3846,6 +4263,10 @@ class _StringsSettingsCloudUsageLabelsZhCn
   String get signInRequired => '登录后才能查看用量。';
   @override
   String get usage => '用量：';
+  @override
+  String get askAiUsage => 'Ask AI：';
+  @override
+  String get embeddingsUsage => '云端向量：';
   @override
   String get inputTokensUsed30d => '输入 Tokens（30 天）：';
   @override
@@ -4101,6 +4522,23 @@ class _StringsChatCloudGatewayErrorsZhCn
   String get generic => 'Cloud 请求失败。';
 }
 
+// Path: chat.embeddingsConsent.actions
+class _StringsChatEmbeddingsConsentActionsZhCn
+    extends _StringsChatEmbeddingsConsentActionsEn {
+  _StringsChatEmbeddingsConsentActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get useLocal => '使用本地';
+  @override
+  String get enableCloud => '开启云端向量';
+}
+
 // Path: sync.mediaBackup.cellularDialog
 class _StringsSyncMediaBackupCellularDialogZhCn
     extends _StringsSyncMediaBackupCellularDialogEn {
@@ -4301,6 +4739,21 @@ class _StringsSyncFieldsPassphraseZhCn extends _StringsSyncFieldsPassphraseEn {
   String get label => '同步口令';
   @override
   String get helper => '所有设备请使用同一口令。口令不会被上传。';
+}
+
+// Path: embeddingProfiles.reindexDialog.actions
+class _StringsEmbeddingProfilesReindexDialogActionsZhCn
+    extends _StringsEmbeddingProfilesReindexDialogActionsEn {
+  _StringsEmbeddingProfilesReindexDialogActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get continueLabel => '继续';
 }
 
 // Path: settings.cloudAccount.benefits.items
@@ -4735,6 +5188,26 @@ extension on Translations {
         return 'AI profiles';
       case 'settings.llmProfiles.subtitle':
         return 'Use your own API key for Ask AI';
+      case 'settings.embeddingProfiles.title':
+        return 'Embeddings (BYOK)';
+      case 'settings.embeddingProfiles.subtitle':
+        return 'Use your own API key for semantic search';
+      case 'settings.cloudEmbeddings.title':
+        return 'Cloud embeddings';
+      case 'settings.cloudEmbeddings.subtitleEnabled':
+        return 'Enabled. Uses your cloud usage quota.';
+      case 'settings.cloudEmbeddings.subtitleDisabled':
+        return 'Disabled. No cloud embeddings will be generated.';
+      case 'settings.cloudEmbeddings.subtitleUnset':
+        return 'Not configured. We\'ll ask when it\'s first needed.';
+      case 'settings.cloudEmbeddings.subtitleRequiresPro':
+        return 'Requires SecondLoop Pro.';
+      case 'settings.cloudEmbeddings.dialogTitle':
+        return 'Enable cloud embeddings?';
+      case 'settings.cloudEmbeddings.dialogBody':
+        return 'This uploads small text snippets (messages/todo titles/notes) to SecondLoop Cloud to generate embeddings.\n\nThe snippets are kept confidential (not logged or stored). It does not upload your vault key or sync key.\n\nCloud embeddings consume your cloud usage quota.';
+      case 'settings.cloudEmbeddings.dialogActions.enable':
+        return 'Enable';
       case 'settings.cloudAccount.title':
         return 'Cloud account';
       case 'settings.cloudAccount.subtitle':
@@ -4792,6 +5265,10 @@ extension on Translations {
         return 'Sign in to view usage.';
       case 'settings.cloudUsage.labels.usage':
         return 'Usage:';
+      case 'settings.cloudUsage.labels.askAiUsage':
+        return 'Ask AI:';
+      case 'settings.cloudUsage.labels.embeddingsUsage':
+        return 'Cloud embeddings:';
       case 'settings.cloudUsage.labels.inputTokensUsed30d':
         return 'Input tokens (30d):';
       case 'settings.cloudUsage.labels.outputTokensUsed30d':
@@ -5010,12 +5487,24 @@ extension on Translations {
         return 'Cloud is rate limited. Please try again later.';
       case 'chat.cloudGateway.errors.generic':
         return 'Cloud request failed.';
+      case 'chat.askAiFailedTemporary':
+        return 'Ask AI failed. Please try again. This message will be removed in 3 seconds.';
       case 'chat.askAiConsent.title':
         return 'Before you ask';
       case 'chat.askAiConsent.body':
         return 'SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.';
       case 'chat.askAiConsent.dontShowAgain':
         return 'Don\'t show again';
+      case 'chat.embeddingsConsent.title':
+        return 'Use cloud embeddings for semantic search?';
+      case 'chat.embeddingsConsent.body':
+        return 'Benefits:\n- Better cross-language recall\n- Better todo linking suggestions\n\nPrivacy:\n- We only upload the minimum text needed to generate embeddings\n- The snippets are sent to SecondLoop Cloud Gateway and kept confidential (not logged or stored)\n- We never upload your vault key or sync key\n\nUsage:\n- Cloud embeddings count toward your cloud usage quota';
+      case 'chat.embeddingsConsent.dontShowAgain':
+        return 'Remember my choice';
+      case 'chat.embeddingsConsent.actions.useLocal':
+        return 'Use local';
+      case 'chat.embeddingsConsent.actions.enableCloud':
+        return 'Enable cloud embeddings';
       case 'attachments.metadata.format':
         return 'Format';
       case 'attachments.metadata.size':
@@ -5271,6 +5760,51 @@ extension on Translations {
       case 'llmProfiles.actions.cancel':
         return 'Cancel';
       case 'llmProfiles.actions.delete':
+        return 'Delete';
+      case 'embeddingProfiles.title':
+        return 'Embedding profiles';
+      case 'embeddingProfiles.refreshTooltip':
+        return 'Refresh';
+      case 'embeddingProfiles.activeProfileHelp':
+        return 'Active profile is used for embeddings (semantic search / RAG).';
+      case 'embeddingProfiles.noProfilesYet':
+        return 'No profiles yet.';
+      case 'embeddingProfiles.addProfile':
+        return 'Add profile';
+      case 'embeddingProfiles.deleted':
+        return 'Embedding profile deleted';
+      case 'embeddingProfiles.validationError':
+        return 'Name, API key, and model are required.';
+      case 'embeddingProfiles.reindexDialog.title':
+        return 'Rebuild embeddings index?';
+      case 'embeddingProfiles.reindexDialog.message':
+        return 'Activating this profile may rebuild your local embeddings index using your API key/credits. This may take a while and can incur costs.';
+      case 'embeddingProfiles.reindexDialog.actions.continueLabel':
+        return 'Continue';
+      case 'embeddingProfiles.deleteDialog.title':
+        return 'Delete profile?';
+      case 'embeddingProfiles.deleteDialog.message':
+        return ({required Object name}) =>
+            'Delete "${name}"? This removes it from this device.';
+      case 'embeddingProfiles.fields.name':
+        return 'Name';
+      case 'embeddingProfiles.fields.provider':
+        return 'Provider';
+      case 'embeddingProfiles.fields.baseUrlOptional':
+        return 'API endpoint (optional)';
+      case 'embeddingProfiles.fields.modelName':
+        return 'Model';
+      case 'embeddingProfiles.fields.apiKey':
+        return 'API key';
+      case 'embeddingProfiles.providers.openaiCompatible':
+        return 'OpenAI-compatible';
+      case 'embeddingProfiles.savedActivated':
+        return 'Embedding profile saved and activated';
+      case 'embeddingProfiles.actions.saveActivate':
+        return 'Save & Activate';
+      case 'embeddingProfiles.actions.cancel':
+        return 'Cancel';
+      case 'embeddingProfiles.actions.delete':
         return 'Delete';
       case 'inbox.defaultTitle':
         return 'Inbox';
@@ -5533,6 +6067,26 @@ extension on _StringsZhCn {
         return 'AI 配置';
       case 'settings.llmProfiles.subtitle':
         return '添加你自己的 API Key（用于问 AI）';
+      case 'settings.embeddingProfiles.title':
+        return '向量配置（自带 Key）';
+      case 'settings.embeddingProfiles.subtitle':
+        return '添加你自己的 API Key（用于语义检索）';
+      case 'settings.cloudEmbeddings.title':
+        return '云端向量（Embeddings）';
+      case 'settings.cloudEmbeddings.subtitleEnabled':
+        return '已开启，会消耗 Cloud 使用额度。';
+      case 'settings.cloudEmbeddings.subtitleDisabled':
+        return '已关闭，不会生成云端向量。';
+      case 'settings.cloudEmbeddings.subtitleUnset':
+        return '尚未设置，首次需要时会询问。';
+      case 'settings.cloudEmbeddings.subtitleRequiresPro':
+        return '需要 SecondLoop Pro。';
+      case 'settings.cloudEmbeddings.dialogTitle':
+        return '开启云端向量？';
+      case 'settings.cloudEmbeddings.dialogBody':
+        return '这会将少量文本片段（消息/待办标题/跟进）上传到 SecondLoop Cloud 以生成向量。\n\n文本会被保密处理（不写入日志/存储），不会上传你的 vault key 或 sync key。\n\n云端向量会消耗 Cloud 使用额度。';
+      case 'settings.cloudEmbeddings.dialogActions.enable':
+        return '开启';
       case 'settings.cloudAccount.title':
         return 'Cloud 账号';
       case 'settings.cloudAccount.subtitle':
@@ -5589,6 +6143,10 @@ extension on _StringsZhCn {
         return '登录后才能查看用量。';
       case 'settings.cloudUsage.labels.usage':
         return '用量：';
+      case 'settings.cloudUsage.labels.askAiUsage':
+        return 'Ask AI：';
+      case 'settings.cloudUsage.labels.embeddingsUsage':
+        return '云端向量：';
       case 'settings.cloudUsage.labels.inputTokensUsed30d':
         return '输入 Tokens（30 天）：';
       case 'settings.cloudUsage.labels.outputTokensUsed30d':
@@ -5804,12 +6362,24 @@ extension on _StringsZhCn {
         return 'Cloud 触发限速，请稍后再试。';
       case 'chat.cloudGateway.errors.generic':
         return 'Cloud 请求失败。';
+      case 'chat.askAiFailedTemporary':
+        return '问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。';
       case 'chat.askAiConsent.title':
         return '发送前确认';
       case 'chat.askAiConsent.body':
         return 'SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。';
       case 'chat.askAiConsent.dontShowAgain':
         return '不再提示';
+      case 'chat.embeddingsConsent.title':
+        return '是否使用云端向量进行语义检索？';
+      case 'chat.embeddingsConsent.body':
+        return '好处：\n- 跨语言/同义改写召回更好\n- 待办关联建议更准确\n\n隐私：\n- 仅上传生成向量所需的最小文本片段\n- 文本会上传到 SecondLoop Cloud，并会被保密处理（不写入日志/存储）\n- 不会上传你的 vault key 或 sync key\n\n用量：\n- 云端向量会消耗 Cloud 使用额度';
+      case 'chat.embeddingsConsent.dontShowAgain':
+        return '记住我的选择';
+      case 'chat.embeddingsConsent.actions.useLocal':
+        return '使用本地';
+      case 'chat.embeddingsConsent.actions.enableCloud':
+        return '开启云端向量';
       case 'attachments.metadata.format':
         return '格式';
       case 'attachments.metadata.size':
@@ -6059,6 +6629,50 @@ extension on _StringsZhCn {
       case 'llmProfiles.actions.cancel':
         return '取消';
       case 'llmProfiles.actions.delete':
+        return '删除';
+      case 'embeddingProfiles.title':
+        return '向量配置';
+      case 'embeddingProfiles.refreshTooltip':
+        return '刷新';
+      case 'embeddingProfiles.activeProfileHelp':
+        return '当前选择的配置将用于 embeddings（语义检索 / RAG）。';
+      case 'embeddingProfiles.noProfilesYet':
+        return '暂无配置。';
+      case 'embeddingProfiles.addProfile':
+        return '添加配置';
+      case 'embeddingProfiles.deleted':
+        return '向量配置已删除';
+      case 'embeddingProfiles.validationError':
+        return '名称、API Key 和模型名称为必填项。';
+      case 'embeddingProfiles.reindexDialog.title':
+        return '重新索引向量？';
+      case 'embeddingProfiles.reindexDialog.message':
+        return '启用该配置可能会使用你的 API key/额度重新向量化本地内容（可能耗时并产生费用）。';
+      case 'embeddingProfiles.reindexDialog.actions.continueLabel':
+        return '继续';
+      case 'embeddingProfiles.deleteDialog.title':
+        return '删除配置？';
+      case 'embeddingProfiles.deleteDialog.message':
+        return ({required Object name}) => '确定删除「${name}」？该操作会从本设备移除。';
+      case 'embeddingProfiles.fields.name':
+        return '名称';
+      case 'embeddingProfiles.fields.provider':
+        return '提供商';
+      case 'embeddingProfiles.fields.baseUrlOptional':
+        return '接口地址（可选）';
+      case 'embeddingProfiles.fields.modelName':
+        return '模型名称';
+      case 'embeddingProfiles.fields.apiKey':
+        return 'API Key';
+      case 'embeddingProfiles.providers.openaiCompatible':
+        return 'OpenAI 兼容';
+      case 'embeddingProfiles.savedActivated':
+        return '已保存并设为当前配置';
+      case 'embeddingProfiles.actions.saveActivate':
+        return '保存并启用';
+      case 'embeddingProfiles.actions.cancel':
+        return '取消';
+      case 'embeddingProfiles.actions.delete':
         return '删除';
       case 'inbox.defaultTitle':
         return '收件箱';

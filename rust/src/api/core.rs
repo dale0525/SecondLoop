@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::crypto::{derive_root_key, KdfParams};
 use crate::embedding;
+use crate::embedding::Embedder;
 use crate::frb_generated::StreamSink;
 use crate::sync;
 use crate::sync::RemoteStore;
@@ -652,6 +653,63 @@ pub fn db_delete_llm_profile(app_dir: String, key: Vec<u8>, profile_id: String) 
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_create_embedding_profile(
+    app_dir: String,
+    key: Vec<u8>,
+    name: String,
+    provider_type: String,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    model_name: String,
+    set_active: bool,
+) -> Result<db::EmbeddingProfile> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::create_embedding_profile(
+        &conn,
+        &key,
+        &name,
+        &provider_type,
+        base_url.as_deref(),
+        api_key.as_deref(),
+        &model_name,
+        set_active,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_embedding_profiles(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<Vec<db::EmbeddingProfile>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_embedding_profiles(&conn)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_set_active_embedding_profile(
+    app_dir: String,
+    key: Vec<u8>,
+    profile_id: String,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::set_active_embedding_profile(&conn, &profile_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_delete_embedding_profile(
+    app_dir: String,
+    key: Vec<u8>,
+    profile_id: String,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::delete_embedding_profile(&conn, &profile_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_process_pending_message_embeddings(
     app_dir: String,
     key: Vec<u8>,
@@ -681,6 +739,96 @@ pub fn db_search_similar_messages(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_search_similar_messages_cloud_gateway(
+    app_dir: String,
+    key: Vec<u8>,
+    query: String,
+    top_k: u32,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+) -> Result<Vec<db::SimilarMessage>> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+    if model_name.trim().is_empty() {
+        return Err(anyhow!("missing model_name"));
+    }
+
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let embedder =
+        embedding::CloudGatewayEmbedder::new(gateway_base_url, firebase_id_token, model_name);
+
+    // Avoid wiping the current index if the embedder is misconfigured/unreachable.
+    let probe = embedder.embed(&[format!("query: {query}")])?;
+    let dim = probe.first().map(|v| v.len()).unwrap_or(0);
+    if dim == 0 {
+        return Err(anyhow!("cloud-gateway embedder returned empty embeddings"));
+    }
+
+    // Best-effort: keep the index reasonably fresh without blocking too long.
+    db::set_active_embedding_model(&conn, embedder.model_name(), dim)?;
+    db::process_pending_message_embeddings(&conn, &key, &embedder, 64)?;
+    db::process_pending_todo_embeddings(&conn, &key, &embedder, 64)?;
+    db::process_pending_todo_activity_embeddings(&conn, &key, &embedder, 128)?;
+
+    db::search_similar_messages(&conn, &key, &embedder, &query, top_k as usize)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_search_similar_messages_brok(
+    app_dir: String,
+    key: Vec<u8>,
+    query: String,
+    top_k: u32,
+) -> Result<Vec<db::SimilarMessage>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let (_profile_id, profile) = db::load_active_embedding_profile_config(&conn, &key)?
+        .ok_or_else(|| anyhow!("no active embedding profile configured"))?;
+
+    if profile.provider_type != "openai-compatible" {
+        return Err(anyhow!(
+            "unsupported embedding provider_type: {}",
+            profile.provider_type
+        ));
+    }
+
+    let base_url = profile
+        .base_url
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| anyhow!("missing embedding base_url"))?;
+    let api_key = profile
+        .api_key
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| anyhow!("missing embedding api_key"))?;
+    let model_name = profile.model_name;
+
+    let embedder = embedding::BrokEmbedder::new(base_url, api_key, model_name);
+
+    // Avoid wiping the current index if the embedder is misconfigured/unreachable.
+    let probe = embedder.embed(&[format!("query: {query}")])?;
+    let dim = probe.first().map(|v| v.len()).unwrap_or(0);
+    if dim == 0 {
+        return Err(anyhow!("brok embedder returned empty embeddings"));
+    }
+
+    // Best-effort: keep the index reasonably fresh without blocking too long.
+    db::set_active_embedding_model(&conn, embedder.model_name(), dim)?;
+    db::process_pending_message_embeddings(&conn, &key, &embedder, 64)?;
+    db::process_pending_todo_embeddings(&conn, &key, &embedder, 64)?;
+    db::process_pending_todo_activity_embeddings(&conn, &key, &embedder, 128)?;
+
+    db::search_similar_messages(&conn, &key, &embedder, &query, top_k as usize)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_search_similar_todo_threads(
     app_dir: String,
     key: Vec<u8>,
@@ -696,6 +844,94 @@ pub fn db_search_similar_todo_threads(
     db::process_pending_todo_activity_embeddings_active(&conn, &key, Path::new(&app_dir), 128)?;
 
     db::search_similar_todo_threads_active(&conn, &key, Path::new(&app_dir), &query, top_k as usize)
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_search_similar_todo_threads_cloud_gateway(
+    app_dir: String,
+    key: Vec<u8>,
+    query: String,
+    top_k: u32,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+) -> Result<Vec<db::SimilarTodoThread>> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+    if model_name.trim().is_empty() {
+        return Err(anyhow!("missing model_name"));
+    }
+
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let embedder =
+        embedding::CloudGatewayEmbedder::new(gateway_base_url, firebase_id_token, model_name);
+
+    // Avoid wiping the current index if the embedder is misconfigured/unreachable.
+    let probe = embedder.embed(&[format!("query: {query}")])?;
+    let dim = probe.first().map(|v| v.len()).unwrap_or(0);
+    if dim == 0 {
+        return Err(anyhow!("cloud-gateway embedder returned empty embeddings"));
+    }
+
+    // Best-effort: keep the index reasonably fresh without blocking too long.
+    db::set_active_embedding_model(&conn, embedder.model_name(), dim)?;
+    db::process_pending_todo_embeddings(&conn, &key, &embedder, 64)?;
+    db::process_pending_todo_activity_embeddings(&conn, &key, &embedder, 128)?;
+
+    db::search_similar_todo_threads(&conn, &key, &embedder, &query, top_k as usize)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_search_similar_todo_threads_brok(
+    app_dir: String,
+    key: Vec<u8>,
+    query: String,
+    top_k: u32,
+) -> Result<Vec<db::SimilarTodoThread>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let (_profile_id, profile) = db::load_active_embedding_profile_config(&conn, &key)?
+        .ok_or_else(|| anyhow!("no active embedding profile configured"))?;
+
+    if profile.provider_type != "openai-compatible" {
+        return Err(anyhow!(
+            "unsupported embedding provider_type: {}",
+            profile.provider_type
+        ));
+    }
+
+    let base_url = profile
+        .base_url
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| anyhow!("missing embedding base_url"))?;
+    let api_key = profile
+        .api_key
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| anyhow!("missing embedding api_key"))?;
+    let model_name = profile.model_name;
+
+    let embedder = embedding::BrokEmbedder::new(base_url, api_key, model_name);
+
+    // Avoid wiping the current index if the embedder is misconfigured/unreachable.
+    let probe = embedder.embed(&[format!("query: {query}")])?;
+    let dim = probe.first().map(|v| v.len()).unwrap_or(0);
+    if dim == 0 {
+        return Err(anyhow!("brok embedder returned empty embeddings"));
+    }
+
+    // Best-effort: keep the index reasonably fresh without blocking too long.
+    db::set_active_embedding_model(&conn, embedder.model_name(), dim)?;
+    db::process_pending_todo_embeddings(&conn, &key, &embedder, 64)?;
+    db::process_pending_todo_activity_embeddings(&conn, &key, &embedder, 128)?;
+
+    db::search_similar_todo_threads(&conn, &key, &embedder, &query, top_k as usize)
 }
 
 #[flutter_rust_bridge::frb]
@@ -884,6 +1120,105 @@ pub fn rag_ask_ai_stream(
     }
 }
 
+#[flutter_rust_bridge::frb]
+pub fn rag_ask_ai_stream_with_brok_embeddings(
+    app_dir: String,
+    key: Vec<u8>,
+    conversation_id: String,
+    question: String,
+    top_k: u32,
+    this_thread_only: bool,
+    local_day: String,
+    sink: StreamSink<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let (profile_id, profile) = db::load_active_llm_profile_config(&conn, &key)?
+        .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
+
+    let (_emb_profile_id, emb_profile) = db::load_active_embedding_profile_config(&conn, &key)?
+        .ok_or_else(|| anyhow!("no active embedding profile configured"))?;
+
+    if emb_profile.provider_type != "openai-compatible" {
+        return Err(anyhow!(
+            "unsupported embedding provider_type: {}",
+            emb_profile.provider_type
+        ));
+    }
+
+    let embeddings_base_url = emb_profile
+        .base_url
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| anyhow!("missing embedding base_url"))?;
+    let embeddings_api_key = emb_profile
+        .api_key
+        .filter(|v| !v.trim().is_empty())
+        .ok_or_else(|| anyhow!("missing embedding api_key"))?;
+    let embeddings_model_name = emb_profile.model_name;
+
+    let embedder = embedding::BrokEmbedder::new(
+        embeddings_base_url,
+        embeddings_api_key,
+        embeddings_model_name,
+    );
+
+    let focus = if this_thread_only {
+        rag::Focus::ThisThread
+    } else {
+        rag::Focus::AllMemories
+    };
+
+    let provider = llm::answer_provider_from_profile(&profile)?;
+
+    let result = rag::ask_ai_with_provider_using_embedder(
+        &conn,
+        &key,
+        &embedder,
+        &conversation_id,
+        &question,
+        top_k as usize,
+        focus,
+        provider.as_ref(),
+        &mut |ev| {
+            if ev.done {
+                if sink.add(String::new()).is_err() {
+                    return Err(rag::StreamCancelled.into());
+                }
+                return Ok(());
+            }
+            if ev.text_delta.is_empty() {
+                return Ok(());
+            }
+            if sink.add(ev.text_delta).is_err() {
+                return Err(rag::StreamCancelled.into());
+            }
+            Ok(())
+        },
+    )
+    .map(|_| ());
+
+    match result {
+        Ok(()) => {
+            let day = local_day.trim();
+            if !day.is_empty() {
+                let _ =
+                    db::record_llm_usage_daily(&conn, day, &profile_id, "ask_ai", None, None, None);
+            }
+            Ok(())
+        }
+        Err(e) if e.is::<rag::StreamCancelled>() => Ok(()),
+        Err(e) => {
+            let day = local_day.trim();
+            if !day.is_empty() {
+                let _ =
+                    db::record_llm_usage_daily(&conn, day, &profile_id, "ask_ai", None, None, None);
+            }
+            Err(e)
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 #[flutter_rust_bridge::frb]
 pub fn rag_ask_ai_stream_cloud_gateway(
@@ -925,6 +1260,86 @@ pub fn rag_ask_ai_stream_cloud_gateway(
         &conn,
         &key,
         Path::new(&app_dir),
+        &conversation_id,
+        &question,
+        top_k as usize,
+        focus,
+        &provider,
+        &mut |ev| {
+            if ev.done {
+                if sink.add(String::new()).is_err() {
+                    return Err(rag::StreamCancelled.into());
+                }
+                return Ok(());
+            }
+            if ev.text_delta.is_empty() {
+                return Ok(());
+            }
+            if sink.add(ev.text_delta).is_err() {
+                return Err(rag::StreamCancelled.into());
+            }
+            Ok(())
+        },
+    )
+    .map(|_| ());
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) if e.is::<rag::StreamCancelled>() => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[flutter_rust_bridge::frb]
+pub fn rag_ask_ai_stream_cloud_gateway_with_embeddings(
+    app_dir: String,
+    key: Vec<u8>,
+    conversation_id: String,
+    question: String,
+    top_k: u32,
+    this_thread_only: bool,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+    embeddings_model_name: String,
+    sink: StreamSink<String>,
+) -> Result<()> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+    if embeddings_model_name.trim().is_empty() {
+        return Err(anyhow!("missing embeddings_model_name"));
+    }
+
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let focus = if this_thread_only {
+        rag::Focus::ThisThread
+    } else {
+        rag::Focus::AllMemories
+    };
+
+    let embedder = embedding::CloudGatewayEmbedder::new(
+        gateway_base_url.clone(),
+        firebase_id_token.clone(),
+        embeddings_model_name,
+    );
+    let provider = llm::gateway::CloudGatewayProvider::new(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+        None,
+    );
+
+    let result = rag::ask_ai_with_provider_using_embedder(
+        &conn,
+        &key,
+        &embedder,
         &conversation_id,
         &question,
         top_k as usize,

@@ -191,6 +191,22 @@
       "title": "AI profiles",
       "subtitle": "Use your own API key for Ask AI"
     },
+    "embeddingProfiles": {
+      "title": "Embeddings (BYOK)",
+      "subtitle": "Use your own API key for semantic search"
+    },
+    "cloudEmbeddings": {
+      "title": "Cloud embeddings",
+      "subtitleEnabled": "Enabled. Uses your cloud usage quota.",
+      "subtitleDisabled": "Disabled. No cloud embeddings will be generated.",
+      "subtitleUnset": "Not configured. We'll ask when it's first needed.",
+      "subtitleRequiresPro": "Requires SecondLoop Pro.",
+      "dialogTitle": "Enable cloud embeddings?",
+      "dialogBody": "This uploads small text snippets (messages/todo titles/notes) to SecondLoop Cloud to generate embeddings.\n\nThe snippets are kept confidential (not logged or stored). It does not upload your vault key or sync key.\n\nCloud embeddings consume your cloud usage quota.",
+      "dialogActions": {
+        "enable": "Enable"
+      }
+    },
     "cloudAccount": {
       "title": "Cloud account",
       "subtitle": "Sign in to SecondLoop Cloud",
@@ -247,6 +263,8 @@
         "gatewayNotConfigured": "Cloud usage isn't available in this build.",
         "signInRequired": "Sign in to view usage.",
         "usage": "Usage:",
+        "askAiUsage": "Ask AI:",
+        "embeddingsUsage": "Cloud embeddings:",
         "inputTokensUsed30d": "Input tokens (30d):",
         "outputTokensUsed30d": "Output tokens (30d):",
         "tokensUsed30d": "Tokens (30d):",
@@ -424,10 +442,20 @@
         "generic": "Cloud request failed."
       }
     },
+    "askAiFailedTemporary": "Ask AI failed. Please try again. This message will be removed in 3 seconds.",
     "askAiConsent": {
       "title": "Before you ask",
       "body": "SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.",
       "dontShowAgain": "Don't show again"
+    },
+    "embeddingsConsent": {
+      "title": "Use cloud embeddings for semantic search?",
+      "body": "Benefits:\n- Better cross-language recall\n- Better todo linking suggestions\n\nPrivacy:\n- We only upload the minimum text needed to generate embeddings\n- The snippets are sent to SecondLoop Cloud Gateway and kept confidential (not logged or stored)\n- We never upload your vault key or sync key\n\nUsage:\n- Cloud embeddings count toward your cloud usage quota",
+      "dontShowAgain": "Remember my choice",
+      "actions": {
+        "useLocal": "Use local",
+        "enableCloud": "Enable cloud embeddings"
+      }
     }
   },
   "attachments": {
@@ -602,6 +630,42 @@
       "anthropicCompatible": "Anthropic"
     },
     "savedActivated": "AI profile saved and activated",
+    "actions": {
+      "saveActivate": "Save & Activate",
+      "cancel": "Cancel",
+      "delete": "Delete"
+    }
+  },
+  "embeddingProfiles": {
+    "title": "Embedding profiles",
+    "refreshTooltip": "Refresh",
+    "activeProfileHelp": "Active profile is used for embeddings (semantic search / RAG).",
+    "noProfilesYet": "No profiles yet.",
+    "addProfile": "Add profile",
+    "deleted": "Embedding profile deleted",
+    "validationError": "Name, API key, and model are required.",
+    "reindexDialog": {
+      "title": "Rebuild embeddings index?",
+      "message": "Activating this profile may rebuild your local embeddings index using your API key/credits. This may take a while and can incur costs.",
+      "actions": {
+        "continueLabel": "Continue"
+      }
+    },
+    "deleteDialog": {
+      "title": "Delete profile?",
+      "message": "Delete \"$name\"? This removes it from this device."
+    },
+    "fields": {
+      "name": "Name",
+      "provider": "Provider",
+      "baseUrlOptional": "API endpoint (optional)",
+      "modelName": "Model",
+      "apiKey": "API key"
+    },
+    "providers": {
+      "openaiCompatible": "OpenAI-compatible"
+    },
+    "savedActivated": "Embedding profile saved and activated",
     "actions": {
       "saveActivate": "Save & Activate",
       "cancel": "Cancel",

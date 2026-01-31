@@ -73,6 +73,7 @@ impl crate::rag::AnswerProvider for CloudGatewayProvider {
             .client
             .post(url)
             .bearer_auth(&self.id_token)
+            .header("x-secondloop-purpose", "ask_ai")
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
             .send()?;

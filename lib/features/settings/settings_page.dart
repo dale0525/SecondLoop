@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/subscription/subscription_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -14,6 +19,7 @@ import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
+import 'embedding_profiles_page.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
@@ -29,12 +35,21 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool? _appLockEnabled;
   bool? _biometricUnlockEnabled;
+  bool? _cloudEmbeddingsEnabled;
+  bool _cloudEmbeddingsConfigured = false;
   AppLocale? _localeOverride;
   ActionsSettings? _actionsSettings;
   bool _busy = false;
 
+  SubscriptionStatusController? _subscriptionController;
+  SubscriptionStatus _lastSubscriptionStatus = SubscriptionStatus.unknown;
+  CloudAuthController? _cloudAuthController;
+  Listenable? _cloudAuthListenable;
+  String? _lastCloudUid;
+
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
+  static const _kCloudEmbeddingsEnabledPrefsKey = 'embeddings_data_consent_v1';
 
   bool _defaultSystemUnlockEnabled() {
     if (kIsWeb) return false;
@@ -163,11 +178,23 @@ class _SettingsPageState extends State<SettingsPage> {
     lock();
   }
 
+  @override
+  void dispose() {
+    _subscriptionController?.removeListener(_onSubscriptionChanged);
+    _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
     final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
         _defaultSystemUnlockEnabled();
+    final cloudEmbeddingsConfigured =
+        prefs.containsKey(_kCloudEmbeddingsEnabledPrefsKey);
+    final cloudEmbeddingsEnabled = cloudEmbeddingsConfigured
+        ? (prefs.getBool(_kCloudEmbeddingsEnabledPrefsKey) ?? false)
+        : false;
     final rawLocaleOverride = prefs.getString(kAppLocaleOverridePrefsKey);
     AppLocale? localeOverride;
     if (rawLocaleOverride != null && rawLocaleOverride.trim().isNotEmpty) {
@@ -183,9 +210,88 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _appLockEnabled = enabled;
       _biometricUnlockEnabled = biometricEnabled;
+      _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled;
+      _cloudEmbeddingsConfigured = cloudEmbeddingsConfigured;
       _localeOverride = localeOverride;
       _actionsSettings = actionsSettings;
     });
+  }
+
+  void _onSubscriptionChanged() {
+    final controller = _subscriptionController;
+    if (controller == null) return;
+
+    final next = controller.status;
+    if (next == _lastSubscriptionStatus) return;
+    _lastSubscriptionStatus = next;
+    unawaited(_maybeDisableCloudEmbeddingsIfNotAllowed());
+  }
+
+  void _onCloudAuthChanged() {
+    final controller = _cloudAuthController;
+    if (controller == null) return;
+
+    final uid = controller.uid;
+    if (uid == _lastCloudUid) return;
+
+    _lastCloudUid = uid;
+    unawaited(_maybeDisableCloudEmbeddingsIfNotAllowed());
+  }
+
+  Future<void> _maybeDisableCloudEmbeddingsIfNotAllowed() async {
+    final subscriptionStatus =
+        _subscriptionController?.status ?? SubscriptionStatus.unknown;
+    final cloudUid = (_cloudAuthController?.uid ?? '').trim();
+
+    final allowed = subscriptionStatus == SubscriptionStatus.entitled &&
+        cloudUid.isNotEmpty;
+    if (allowed) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool(_kCloudEmbeddingsEnabledPrefsKey);
+    if (enabled != true) return;
+
+    await prefs.setBool(_kCloudEmbeddingsEnabledPrefsKey, false);
+    if (!mounted) return;
+    await _load();
+  }
+
+  Future<void> _setCloudEmbeddingsEnabled(bool enabled) async {
+    if (_busy) return;
+
+    if (enabled) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          final t = context.t;
+          return AlertDialog(
+            title: Text(t.settings.cloudEmbeddings.dialogTitle),
+            content: Text(t.settings.cloudEmbeddings.dialogBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(t.common.actions.cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(t.settings.cloudEmbeddings.dialogActions.enable),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kCloudEmbeddingsEnabledPrefsKey, enabled);
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   String _localeLabel(BuildContext context, AppLocale locale) {
@@ -322,21 +428,57 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    final subscriptionController = SubscriptionScope.maybeOf(context);
+    if (!identical(subscriptionController, _subscriptionController)) {
+      _subscriptionController?.removeListener(_onSubscriptionChanged);
+      _subscriptionController = subscriptionController;
+      _lastSubscriptionStatus =
+          subscriptionController?.status ?? SubscriptionStatus.unknown;
+      _subscriptionController?.addListener(_onSubscriptionChanged);
+    }
+
+    final cloudAuthController = CloudAuthScope.maybeOf(context)?.controller;
+    if (!identical(cloudAuthController, _cloudAuthController)) {
+      _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
+      _cloudAuthController = cloudAuthController;
+      final listenable = cloudAuthController is Listenable
+          ? cloudAuthController as Listenable
+          : null;
+      _cloudAuthListenable = listenable;
+      listenable?.addListener(_onCloudAuthChanged);
+      _lastCloudUid = cloudAuthController?.uid;
+    }
+
     _appLockEnabled ??= false;
     _biometricUnlockEnabled ??= _defaultSystemUnlockEnabled();
     _load();
+    unawaited(_maybeDisableCloudEmbeddingsIfNotAllowed());
   }
 
   @override
   Widget build(BuildContext context) {
     final enabled = _appLockEnabled;
     final biometricEnabled = _biometricUnlockEnabled;
+    final cloudEmbeddingsEnabled = _cloudEmbeddingsEnabled;
     final isMobile = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
+    final showCloudEmbeddingsToggle = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
     final isDesktop = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows);
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudUid = (_cloudAuthController?.uid ?? '').trim();
+    final hasCloudAccount = cloudUid.isNotEmpty;
+    final canUseCloudEmbeddings =
+        hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
@@ -440,6 +582,35 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
           ),
+          if (showCloudEmbeddingsToggle)
+            SwitchListTile(
+              title: Text(context.t.settings.cloudEmbeddings.title),
+              subtitle: Text(
+                subscriptionStatus == SubscriptionStatus.notEntitled
+                    ? context.t.settings.cloudEmbeddings.subtitleRequiresPro
+                    : !_cloudEmbeddingsConfigured
+                        ? context.t.settings.cloudEmbeddings.subtitleUnset
+                        : (cloudEmbeddingsEnabled ?? false)
+                            ? context.t.settings.cloudEmbeddings.subtitleEnabled
+                            : context
+                                .t.settings.cloudEmbeddings.subtitleDisabled,
+              ),
+              value: cloudEmbeddingsEnabled ?? false,
+              onChanged: (_busy || cloudEmbeddingsEnabled == null)
+                  ? null
+                  : (value) async {
+                      if (value && !canUseCloudEmbeddings) {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CloudAccountPage(),
+                          ),
+                        );
+                        return;
+                      }
+
+                      await _setCloudEmbeddingsEnabled(value);
+                    },
+            ),
           ListTile(
             title: Text(context.t.settings.llmProfiles.title),
             subtitle: Text(context.t.settings.llmProfiles.subtitle),
@@ -449,6 +620,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const LlmProfilesPage(),
+                      ),
+                    );
+                  },
+          ),
+          ListTile(
+            title: Text(context.t.settings.embeddingProfiles.title),
+            subtitle: Text(context.t.settings.embeddingProfiles.subtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EmbeddingProfilesPage(),
                       ),
                     );
                   },
