@@ -74,14 +74,11 @@ pub fn parse_openai_embeddings_response(
         out[item.index] = Some(item.embedding);
     }
 
-    let mut finalized = Vec::with_capacity(expected_len);
-    for i in 0..expected_len {
-        finalized.push(
-            out[i]
-                .take()
-                .ok_or_else(|| anyhow!("missing embedding at index {i}"))?,
-        );
-    }
+    let finalized = out
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| v.ok_or_else(|| anyhow!("missing embedding at index {i}")))
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(ParsedOpenAiEmbeddings {
         dim: dim.unwrap_or(0),
