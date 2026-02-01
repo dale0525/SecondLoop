@@ -41,6 +41,7 @@ import '../actions/suggestions_card.dart';
 import '../actions/suggestions_parser.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
+import '../actions/todo/message_action_resolver.dart';
 import '../actions/todo/todo_thread_match.dart';
 import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
@@ -56,6 +57,7 @@ import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'message_viewer_page.dart';
+import 'ask_ai_intent_resolver.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({required this.conversation, super.key});
@@ -114,6 +116,8 @@ class _ChatPageState extends State<ChatPage> {
   static const _kMessagePageSize = 60;
   static const _kLoadMoreThresholdPx = 200.0;
   static const _kBottomThresholdPx = 60.0;
+  static const _kTodoAutoSemanticTimeout = Duration(milliseconds: 280);
+  static const _kTodoLinkSheetRerankTimeout = Duration(milliseconds: 5000);
 
   bool get _usePagination => widget.conversation.id == 'main_stream';
   bool get _isDesktopPlatform =>
@@ -1086,6 +1090,122 @@ class _ChatPageState extends State<ChatPage> {
     return (base * factor).round();
   }
 
+  static List<TodoLinkCandidate> _mergeTodoCandidatesWithSemanticMatches({
+    required String query,
+    required List<TodoLinkTarget> targets,
+    required DateTime nowLocal,
+    required List<TodoThreadMatch> semanticMatches,
+    required int limit,
+  }) {
+    final ranked =
+        rankTodoCandidates(query, targets, nowLocal: nowLocal, limit: limit);
+    if (semanticMatches.isEmpty) return ranked;
+
+    final targetsById = <String, TodoLinkTarget>{};
+    for (final t in targets) {
+      targetsById[t.id] = t;
+    }
+
+    final scoreByTodoId = <String, int>{};
+    for (final c in ranked) {
+      scoreByTodoId[c.target.id] = c.score;
+    }
+
+    for (var i = 0; i < semanticMatches.length && i < limit; i++) {
+      final match = semanticMatches[i];
+      final target = targetsById[match.todoId];
+      if (target == null) continue;
+
+      final boost = _semanticBoost(i, match.distance);
+      if (boost <= 0) continue;
+
+      final existing = scoreByTodoId[target.id];
+      final base = existing ?? _dueBoost(target.dueLocal, nowLocal);
+      scoreByTodoId[target.id] = base + boost;
+    }
+
+    final merged = <TodoLinkCandidate>[];
+    scoreByTodoId.forEach((id, score) {
+      final target = targetsById[id];
+      if (target == null) return;
+      merged.add(TodoLinkCandidate(target: target, score: score));
+    });
+    merged.sort((a, b) => b.score.compareTo(a.score));
+    if (merged.length <= limit) return merged;
+    return merged.sublist(0, limit);
+  }
+
+  Future<List<TodoThreadMatch>> _resolveTodoSemanticMatchesForSendFlow(
+    AppBackend backend,
+    Uint8List sessionKey, {
+    required String query,
+    required int topK,
+    bool requireCloud = false,
+  }) async {
+    Future<List<TodoThreadMatch>> resolveSemanticMatches() async {
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final cloudGatewayConfig =
+          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+
+      String? cloudIdToken;
+      try {
+        cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+      } catch (_) {
+        cloudIdToken = null;
+      }
+
+      final cloudAvailable =
+          subscriptionStatus == SubscriptionStatus.entitled &&
+              cloudIdToken != null &&
+              cloudIdToken.trim().isNotEmpty &&
+              cloudGatewayConfig.baseUrl.trim().isNotEmpty;
+
+      if (cloudAvailable) {
+        if (requireCloud && !_cloudEmbeddingsConsented) {
+          return const <TodoThreadMatch>[];
+        }
+
+        // Avoid prompting for consent during send flow.
+        if (_cloudEmbeddingsConsented) {
+          return backend.searchSimilarTodoThreadsCloudGateway(
+            sessionKey,
+            query,
+            topK: topK,
+            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+            idToken: cloudIdToken,
+            modelName: _kCloudEmbeddingsModelName,
+          );
+        }
+        return backend.searchSimilarTodoThreads(sessionKey, query, topK: topK);
+      }
+
+      if (requireCloud) return const <TodoThreadMatch>[];
+
+      if (_cloudEmbeddingsConsented &&
+          subscriptionStatus != SubscriptionStatus.notEntitled) {
+        return const <TodoThreadMatch>[];
+      }
+
+      try {
+        return await backend.searchSimilarTodoThreadsBrok(
+          sessionKey,
+          query,
+          topK: topK,
+        );
+      } catch (_) {
+        return backend.searchSimilarTodoThreads(sessionKey, query, topK: topK);
+      }
+    }
+
+    try {
+      return await resolveSemanticMatches();
+    } catch (_) {
+      return const <TodoThreadMatch>[];
+    }
+  }
+
   Future<List<TodoLinkCandidate>> _rankTodoCandidatesWithSemanticMatches(
     AppBackend backend,
     Uint8List sessionKey, {
@@ -1246,8 +1366,7 @@ class _ChatPageState extends State<ChatPage> {
           );
         });
       }
-      unawaited(_maybeSuggestTodoFromCapture(message, text));
-      unawaited(_maybeLinkMessageToExistingTodo(message, text));
+      unawaited(_handleMessageAutoActions(message, text));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1579,108 +1698,31 @@ class _ChatPageState extends State<ChatPage> {
     return (sha256: attachment.sha256, capturedAtMs: capturedAtMs);
   }
 
-  Future<void> _maybeSuggestTodoFromCapture(
+  Future<void> _handleMessageAutoActions(
       Message message, String rawText) async {
     if (!mounted) return;
-    final locale = Localizations.localeOf(context);
-    final settings = await ActionsSettingsStore.load();
-
-    final timeResolution = LocalTimeResolver.resolve(
-      rawText,
-      DateTime.now(),
-      locale: locale,
-      dayEndMinutes: settings.dayEndMinutes,
-    );
-    final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
-    if (timeResolution == null && !looksLikeReview) return;
-
-    if (!mounted) return;
-    final decision = await showCaptureTodoSuggestionSheet(
-      context,
-      title: rawText.trim(),
-      timeResolution: timeResolution,
-    );
-    if (decision == null || !mounted) return;
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final todoId = 'todo:${message.id}';
-
-    switch (decision) {
-      case CaptureTodoScheduleDecision(:final dueAtLocal):
-        try {
-          await backend.upsertTodo(
-            sessionKey,
-            id: todoId,
-            title: rawText.trim(),
-            dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
-            status: 'open',
-            sourceEntryId: message.id,
-            reviewStage: null,
-            nextReviewAtMs: null,
-            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-          );
-        } catch (_) {
-          return;
-        }
-        break;
-      case CaptureTodoReviewDecision():
-        final nextLocal = ReviewBackoff.initialNextReviewAt(
-          DateTime.now(),
-          settings,
-        );
-        try {
-          await backend.upsertTodo(
-            sessionKey,
-            id: todoId,
-            title: rawText.trim(),
-            dueAtMs: null,
-            status: 'inbox',
-            sourceEntryId: message.id,
-            reviewStage: 0,
-            nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
-            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-          );
-        } catch (_) {
-          return;
-        }
-        break;
-      case CaptureTodoNoThanksDecision():
-        return;
-    }
-
-    if (!mounted) return;
-    _refresh();
-  }
-
-  Future<void> _maybeLinkMessageToExistingTodo(
-    Message message,
-    String rawText,
-  ) async {
-    if (!mounted) return;
 
     final locale = Localizations.localeOf(context);
-    final settings = await ActionsSettingsStore.load();
-    final timeResolution = LocalTimeResolver.resolve(
-      rawText,
-      DateTime.now(),
-      locale: locale,
-      dayEndMinutes: settings.dayEndMinutes,
-    );
-    final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
-    if (timeResolution != null || looksLikeReview) return;
-
-    if (!mounted) return;
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    late final List<Todo> todos;
-    try {
-      todos = await backend.listTodos(sessionKey);
-    } catch (_) {
-      return;
-    }
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final settingsFuture = ActionsSettingsStore.load();
+    final todosFuture =
+        Future<List<Todo>>.sync(() => backend.listTodos(sessionKey))
+            .catchError((_) => const <Todo>[]);
+
+    final settings = await settingsFuture;
+    if (!mounted) return;
+    final todos = await todosFuture;
 
     final nowLocal = DateTime.now();
+    final timeResolution = LocalTimeResolver.resolve(
+      rawText,
+      nowLocal,
+      locale: locale,
+      dayEndMinutes: settings.dayEndMinutes,
+    );
+    final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
     final targets = <TodoLinkTarget>[];
     final todosById = <String, Todo>{};
     for (final todo in todos) {
@@ -1699,15 +1741,232 @@ class _ChatPageState extends State<ChatPage> {
         ),
       );
     }
+
+    var semanticMatches = const <TodoThreadMatch>[];
+    var semanticTimedOut = false;
+    if (targets.isNotEmpty && timeResolution == null && !looksLikeReview) {
+      try {
+        semanticMatches = await _resolveTodoSemanticMatchesForSendFlow(
+          backend,
+          sessionKey,
+          query: rawText,
+          topK: 5,
+        ).timeout(
+          _kTodoAutoSemanticTimeout,
+          onTimeout: () {
+            semanticTimedOut = true;
+            return const <TodoThreadMatch>[];
+          },
+        );
+      } catch (_) {
+        semanticMatches = const <TodoThreadMatch>[];
+        semanticTimedOut = true;
+      }
+    }
+
+    final decision = MessageActionResolver.resolve(
+      rawText,
+      locale: locale,
+      nowLocal: nowLocal,
+      dayEndMinutes: settings.dayEndMinutes,
+      openTodoTargets: targets,
+      semanticMatches: semanticMatches,
+    );
+
+    switch (decision) {
+      case MessageActionFollowUpDecision(:final todoId, :final newStatus):
+        final selected = todosById[todoId];
+        if (selected == null) return;
+
+        final previousStatus = selected.status;
+        try {
+          await backend.setTodoStatus(
+            sessionKey,
+            todoId: selected.id,
+            newStatus: newStatus,
+            sourceMessageId: message.id,
+          );
+          syncEngine?.notifyLocalMutation();
+        } catch (_) {
+          return;
+        }
+
+        try {
+          final activity = await backend.appendTodoNote(
+            sessionKey,
+            todoId: selected.id,
+            content: rawText.trim(),
+            sourceMessageId: message.id,
+          );
+          final attachmentsBackend = backend is AttachmentsBackend
+              ? backend as AttachmentsBackend
+              : null;
+          if (attachmentsBackend != null) {
+            final attachments = await attachmentsBackend.listMessageAttachments(
+              sessionKey,
+              message.id,
+            );
+            for (final attachment in attachments) {
+              await backend.linkAttachmentToTodoActivity(
+                sessionKey,
+                activityId: activity.id,
+                attachmentSha256: attachment.sha256,
+              );
+            }
+          }
+        } catch (_) {
+          // ignore
+        }
+
+        if (!mounted) return;
+        _refresh();
+
+        final snackText = context.t.actions.todoLink.updated(
+          title: selected.title,
+          status: _todoStatusLabel(context, newStatus),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(snackText),
+            action: SnackBarAction(
+              label: context.t.common.actions.undo,
+              onPressed: () async {
+                try {
+                  await backend.setTodoStatus(
+                    sessionKey,
+                    todoId: selected.id,
+                    newStatus: previousStatus,
+                  );
+                  syncEngine?.notifyLocalMutation();
+                } catch (_) {
+                  return;
+                }
+                if (!mounted) return;
+                _refresh();
+              },
+            ),
+          ),
+        );
+        return;
+      case MessageActionCreateDecision(
+          :final title,
+          :final status,
+          :final dueAtLocal,
+        ):
+        final todoId = 'todo:${message.id}';
+        try {
+          await backend.upsertTodo(
+            sessionKey,
+            id: todoId,
+            title: title,
+            dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
+            status: status,
+            sourceEntryId: message.id,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+          syncEngine?.notifyLocalMutation();
+        } catch (_) {
+          return;
+        }
+
+        if (!mounted) return;
+        _refresh();
+
+        final snackText = context.t.actions.todoAuto.created(title: title);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(snackText),
+            action: SnackBarAction(
+              label: context.t.common.actions.undo,
+              onPressed: () async {
+                try {
+                  await backend.deleteTodo(sessionKey, todoId: todoId);
+                  syncEngine?.notifyLocalMutation();
+                } catch (_) {
+                  return;
+                }
+                if (!mounted) return;
+                _refresh();
+              },
+            ),
+          ),
+        );
+        return;
+      case MessageActionNoneDecision():
+        break;
+    }
+
+    // Fallback: keep legacy prompts for non-auto cases.
+    if (timeResolution != null || looksLikeReview) {
+      if (!mounted) return;
+      final decision = await showCaptureTodoSuggestionSheet(
+        context,
+        title: rawText.trim(),
+        timeResolution: timeResolution,
+      );
+      if (decision == null || !mounted) return;
+
+      final todoId = 'todo:${message.id}';
+      switch (decision) {
+        case CaptureTodoScheduleDecision(:final dueAtLocal):
+          try {
+            await backend.upsertTodo(
+              sessionKey,
+              id: todoId,
+              title: rawText.trim(),
+              dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+              status: 'open',
+              sourceEntryId: message.id,
+              reviewStage: null,
+              nextReviewAtMs: null,
+              lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+            );
+            syncEngine?.notifyLocalMutation();
+          } catch (_) {
+            return;
+          }
+          break;
+        case CaptureTodoReviewDecision():
+          final nextLocal = ReviewBackoff.initialNextReviewAt(
+            DateTime.now(),
+            settings,
+          );
+          try {
+            await backend.upsertTodo(
+              sessionKey,
+              id: todoId,
+              title: rawText.trim(),
+              dueAtMs: null,
+              status: 'inbox',
+              sourceEntryId: message.id,
+              reviewStage: 0,
+              nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
+              lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+            );
+            syncEngine?.notifyLocalMutation();
+          } catch (_) {
+            return;
+          }
+          break;
+        case CaptureTodoNoThanksDecision():
+          return;
+      }
+
+      if (!mounted) return;
+      _refresh();
+      return;
+    }
+
     if (targets.isEmpty) return;
 
     final intent = inferTodoUpdateIntent(rawText);
-    final ranked = await _rankTodoCandidatesWithSemanticMatches(
-      backend,
-      sessionKey,
+    final ranked = _mergeTodoCandidatesWithSemanticMatches(
       query: rawText,
       targets: targets,
       nowLocal: nowLocal,
+      semanticMatches: semanticMatches,
       limit: 5,
     );
     if (ranked.isEmpty) return;
@@ -1737,8 +1996,14 @@ class _ChatPageState extends State<ChatPage> {
     final selectedTodoId = isHighConfidence
         ? top.target.id
         : await _showTodoLinkSheet(
+            backend: backend,
+            sessionKey: sessionKey,
+            query: rawText,
+            targets: targets,
+            nowLocal: nowLocal,
             ranked: ranked,
             defaultActionStatus: intent.newStatus,
+            allowAsyncRerank: semanticTimedOut,
           );
     if (selectedTodoId == null || !mounted) return;
 
@@ -1754,6 +2019,7 @@ class _ChatPageState extends State<ChatPage> {
         newStatus: intent.newStatus,
         sourceMessageId: message.id,
       );
+      syncEngine?.notifyLocalMutation();
     } catch (_) {
       return;
     }
@@ -1801,6 +2067,7 @@ class _ChatPageState extends State<ChatPage> {
                 todoId: selected.id,
                 newStatus: previousStatus,
               );
+              syncEngine?.notifyLocalMutation();
             } catch (_) {
               return;
             }
@@ -2061,48 +2328,87 @@ class _ChatPageState extends State<ChatPage> {
       };
 
   Future<String?> _showTodoLinkSheet({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required String query,
+    required List<TodoLinkTarget> targets,
+    required DateTime nowLocal,
     required List<TodoLinkCandidate> ranked,
     required String defaultActionStatus,
+    required bool allowAsyncRerank,
   }) async {
     return showModalBottomSheet<String>(
       context: context,
-      builder: (context) {
-        final statusLabel = _todoStatusLabel(context, defaultActionStatus);
+      builder: (sheetContext) {
+        final statusLabel = _todoStatusLabel(sheetContext, defaultActionStatus);
+        final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+            SubscriptionStatus.unknown;
+        final cloudAuthScope = CloudAuthScope.maybeOf(context);
+        final cloudGatewayConfig =
+            cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+        final showEnableCloudButton = !_cloudEmbeddingsConsented &&
+            subscriptionStatus == SubscriptionStatus.entitled &&
+            cloudAuthScope != null &&
+            cloudGatewayConfig.baseUrl.trim().isNotEmpty;
+
+        Future<List<TodoLinkCandidate>>? rerankFuture() {
+          if (!allowAsyncRerank) return null;
+          return _resolveTodoSemanticMatchesForSendFlow(
+            backend,
+            sessionKey,
+            query: query,
+            topK: 5,
+          )
+              .timeout(
+            _kTodoLinkSheetRerankTimeout,
+            onTimeout: () => const <TodoThreadMatch>[],
+          )
+              .then((matches) {
+            if (matches.isEmpty) return ranked;
+            return _mergeTodoCandidatesWithSemanticMatches(
+              query: query,
+              targets: targets,
+              nowLocal: nowLocal,
+              semanticMatches: matches,
+              limit: 5,
+            );
+          });
+        }
+
+        Future<List<TodoLinkCandidate>?> rerankWithCloudEmbeddings() async {
+          final matches = await _resolveTodoSemanticMatchesForSendFlow(
+            backend,
+            sessionKey,
+            query: query,
+            topK: 5,
+            requireCloud: true,
+          ).timeout(
+            _kTodoLinkSheetRerankTimeout,
+            onTimeout: () => const <TodoThreadMatch>[],
+          );
+          if (matches.isEmpty) return null;
+          return _mergeTodoCandidatesWithSemanticMatches(
+            query: query,
+            targets: targets,
+            nowLocal: nowLocal,
+            semanticMatches: matches,
+            limit: 5,
+          );
+        }
+
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: SlSurface(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.t.actions.todoLink.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                      context.t.actions.todoLink.subtitle(status: statusLabel)),
-                  const SizedBox(height: 12),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: ranked.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder: (context, index) {
-                        final c = ranked[index];
-                        return ListTile(
-                          title: Text(c.target.title),
-                          subtitle:
-                              Text(_todoStatusLabel(context, c.target.status)),
-                          onTap: () => Navigator.of(context).pop(c.target.id),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+            child: _TodoLinkSheet(
+              initialRanked: ranked,
+              statusLabel: statusLabel,
+              requestImprovedRanked: rerankFuture(),
+              showEnableCloudButton: showEnableCloudButton,
+              ensureCloudEmbeddingsConsented: () =>
+                  _ensureEmbeddingsDataConsent(forceDialog: true),
+              requestCloudRanked: rerankWithCloudEmbeddings,
+              todoStatusLabel: (status) =>
+                  _todoStatusLabel(sheetContext, status),
             ),
           ),
         );
@@ -2499,51 +2805,113 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
 
+    if (!mounted) return;
+    final locale = Localizations.localeOf(context);
+    final firstDayOfWeekIndex =
+        MaterialLocalizations.of(context).firstDayOfWeekIndex;
+    final intent = AskAiIntentResolver.resolve(
+      question,
+      DateTime.now(),
+      locale: locale,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+    );
+    final timeRange = intent.timeRange;
+    final timeStartMs = timeRange?.startLocal.toUtc().millisecondsSinceEpoch;
+    final timeEndMs = timeRange?.endLocal.toUtc().millisecondsSinceEpoch;
+    final hasTimeWindow = timeStartMs != null && timeEndMs != null;
+
     Stream<String> stream;
     switch (route) {
       case AskAiRouteKind.cloudGateway:
         if (allowCloudEmbeddings) {
-          stream = backend.askAiStreamCloudGatewayWithEmbeddings(
-            sessionKey,
-            widget.conversation.id,
-            question: question,
-            topK: effectiveTopK,
-            thisThreadOnly: _thisThreadOnly,
-            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-            idToken: cloudIdToken ?? '',
-            modelName: cloudGatewayConfig.modelName,
-            embeddingsModelName: _kCloudEmbeddingsModelName,
-          );
+          stream = hasTimeWindow
+              ? backend.askAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+                  sessionKey,
+                  widget.conversation.id,
+                  question: question,
+                  timeStartMs: timeStartMs,
+                  timeEndMs: timeEndMs,
+                  topK: effectiveTopK,
+                  thisThreadOnly: _thisThreadOnly,
+                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                  idToken: cloudIdToken ?? '',
+                  modelName: cloudGatewayConfig.modelName,
+                  embeddingsModelName: _kCloudEmbeddingsModelName,
+                )
+              : backend.askAiStreamCloudGatewayWithEmbeddings(
+                  sessionKey,
+                  widget.conversation.id,
+                  question: question,
+                  topK: effectiveTopK,
+                  thisThreadOnly: _thisThreadOnly,
+                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                  idToken: cloudIdToken ?? '',
+                  modelName: cloudGatewayConfig.modelName,
+                  embeddingsModelName: _kCloudEmbeddingsModelName,
+                );
         } else {
-          stream = backend.askAiStreamCloudGateway(
-            sessionKey,
-            widget.conversation.id,
-            question: question,
-            topK: effectiveTopK,
-            thisThreadOnly: _thisThreadOnly,
-            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-            idToken: cloudIdToken ?? '',
-            modelName: cloudGatewayConfig.modelName,
-          );
+          stream = hasTimeWindow
+              ? backend.askAiStreamCloudGatewayTimeWindow(
+                  sessionKey,
+                  widget.conversation.id,
+                  question: question,
+                  timeStartMs: timeStartMs,
+                  timeEndMs: timeEndMs,
+                  topK: effectiveTopK,
+                  thisThreadOnly: _thisThreadOnly,
+                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                  idToken: cloudIdToken ?? '',
+                  modelName: cloudGatewayConfig.modelName,
+                )
+              : backend.askAiStreamCloudGateway(
+                  sessionKey,
+                  widget.conversation.id,
+                  question: question,
+                  topK: effectiveTopK,
+                  thisThreadOnly: _thisThreadOnly,
+                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                  idToken: cloudIdToken ?? '',
+                  modelName: cloudGatewayConfig.modelName,
+                );
         }
         break;
       case AskAiRouteKind.byok:
       case AskAiRouteKind.needsSetup:
         stream = effectiveHasBrokEmbeddings
-            ? backend.askAiStreamWithBrokEmbeddings(
-                sessionKey,
-                widget.conversation.id,
-                question: question,
-                topK: effectiveTopK,
-                thisThreadOnly: _thisThreadOnly,
-              )
-            : backend.askAiStream(
-                sessionKey,
-                widget.conversation.id,
-                question: question,
-                topK: effectiveTopK,
-                thisThreadOnly: _thisThreadOnly,
-              );
+            ? (hasTimeWindow
+                ? backend.askAiStreamWithBrokEmbeddingsTimeWindow(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    timeStartMs: timeStartMs,
+                    timeEndMs: timeEndMs,
+                    topK: effectiveTopK,
+                    thisThreadOnly: _thisThreadOnly,
+                  )
+                : backend.askAiStreamWithBrokEmbeddings(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: effectiveTopK,
+                    thisThreadOnly: _thisThreadOnly,
+                  ))
+            : (hasTimeWindow
+                ? backend.askAiStreamTimeWindow(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    timeStartMs: timeStartMs,
+                    timeEndMs: timeEndMs,
+                    topK: effectiveTopK,
+                    thisThreadOnly: _thisThreadOnly,
+                  )
+                : backend.askAiStream(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: effectiveTopK,
+                    thisThreadOnly: _thisThreadOnly,
+                  ));
         break;
     }
 
@@ -2717,12 +3085,16 @@ class _ChatPageState extends State<ChatPage> {
     return true;
   }
 
-  Future<bool> _ensureEmbeddingsDataConsent() async {
+  Future<bool> _ensureEmbeddingsDataConsent({bool forceDialog = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) {
-      final value = prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
-      _cloudEmbeddingsConsented = value;
-      return value;
+    final existing = prefs.getBool(_kEmbeddingsDataConsentPrefsKey);
+    if (existing == true) {
+      _cloudEmbeddingsConsented = true;
+      return true;
+    }
+    if (existing == false && !forceDialog) {
+      _cloudEmbeddingsConsented = false;
+      return false;
     }
     if (!mounted) return false;
 
@@ -2779,9 +3151,7 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     _cloudEmbeddingsConsented = true;
-    if (dontShowAgain) {
-      await prefs.setBool(_kEmbeddingsDataConsentPrefsKey, true);
-    }
+    await prefs.setBool(_kEmbeddingsDataConsentPrefsKey, true);
     return true;
   }
 
@@ -4526,6 +4896,149 @@ class _ChatPageState extends State<ChatPage> {
                         ),
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _TodoLinkSheet extends StatefulWidget {
+  const _TodoLinkSheet({
+    required this.initialRanked,
+    required this.statusLabel,
+    required this.todoStatusLabel,
+    required this.showEnableCloudButton,
+    this.requestImprovedRanked,
+    this.ensureCloudEmbeddingsConsented,
+    this.requestCloudRanked,
+  });
+
+  final List<TodoLinkCandidate> initialRanked;
+  final String statusLabel;
+  final String Function(String status) todoStatusLabel;
+  final bool showEnableCloudButton;
+  final Future<List<TodoLinkCandidate>>? requestImprovedRanked;
+  final Future<bool> Function()? ensureCloudEmbeddingsConsented;
+  final Future<List<TodoLinkCandidate>?> Function()? requestCloudRanked;
+
+  @override
+  State<_TodoLinkSheet> createState() => _TodoLinkSheetState();
+}
+
+final class _TodoLinkSheetState extends State<_TodoLinkSheet> {
+  late List<TodoLinkCandidate> _ranked;
+  bool _improving = false;
+  late bool _showEnableCloudButton;
+
+  @override
+  void initState() {
+    super.initState();
+    _ranked = widget.initialRanked;
+    _showEnableCloudButton = widget.showEnableCloudButton;
+
+    final future = widget.requestImprovedRanked;
+    if (future != null) {
+      _improving = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        List<TodoLinkCandidate> improved = _ranked;
+        try {
+          improved = await future;
+        } catch (_) {
+          improved = _ranked;
+        }
+        if (!mounted) return;
+        setState(() {
+          _ranked = improved;
+          _improving = false;
+        });
+      });
+    }
+  }
+
+  Future<void> _enableCloudEmbeddings() async {
+    final ensureConsent = widget.ensureCloudEmbeddingsConsented;
+    final requestCloudRanked = widget.requestCloudRanked;
+    if (ensureConsent == null || requestCloudRanked == null) return;
+
+    final consented = await ensureConsent();
+    if (!consented || !mounted) return;
+
+    setState(() {
+      _showEnableCloudButton = false;
+      _improving = true;
+    });
+
+    List<TodoLinkCandidate>? improved;
+    try {
+      improved = await requestCloudRanked();
+    } catch (_) {
+      improved = null;
+    }
+    if (!mounted) return;
+
+    setState(() {
+      if (improved != null) {
+        _ranked = improved;
+      }
+      _improving = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlSurface(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.t.actions.todoLink.title,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(context.t.actions.todoLink.subtitle(status: widget.statusLabel)),
+          if (_showEnableCloudButton) ...[
+            const SizedBox(height: 10),
+            FilledButton(
+              key: const ValueKey('todo_link_sheet_enable_cloud'),
+              onPressed: _improving ? null : _enableCloudEmbeddings,
+              child: Text(context.t.chat.embeddingsConsent.actions.enableCloud),
+            ),
+          ],
+          if (_improving) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  context.t.settings.byokUsage.loading,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _ranked.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (context, index) {
+                final c = _ranked[index];
+                return ListTile(
+                  title: Text(c.target.title),
+                  subtitle: Text(widget.todoStatusLabel(c.target.status)),
+                  onTap: () => Navigator.of(context).pop(c.target.id),
+                );
+              },
             ),
           ),
         ],

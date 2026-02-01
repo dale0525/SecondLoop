@@ -194,6 +194,38 @@ abstract class AppBackend {
     int limit = 32,
   });
 
+  Future<int> processPendingTodoThreadEmbeddings(
+    Uint8List key, {
+    int todoLimit = 32,
+    int activityLimit = 64,
+  }) async =>
+      0;
+
+  Future<int> processPendingTodoThreadEmbeddingsCloudGateway(
+    Uint8List key, {
+    int todoLimit = 32,
+    int activityLimit = 64,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async =>
+      processPendingTodoThreadEmbeddings(
+        key,
+        todoLimit: todoLimit,
+        activityLimit: activityLimit,
+      );
+
+  Future<int> processPendingTodoThreadEmbeddingsBrok(
+    Uint8List key, {
+    int todoLimit = 32,
+    int activityLimit = 64,
+  }) async =>
+      processPendingTodoThreadEmbeddings(
+        key,
+        todoLimit: todoLimit,
+        activityLimit: activityLimit,
+      );
+
   Future<List<SimilarMessage>> searchSimilarMessages(
     Uint8List key,
     String query, {
@@ -345,6 +377,88 @@ abstract class AppBackend {
   }) {
     throw UnimplementedError('askAiStreamCloudGatewayWithEmbeddings');
   }
+
+  Stream<String> askAiStreamTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) =>
+      askAiStream(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+      );
+
+  Stream<String> askAiStreamWithBrokEmbeddingsTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) =>
+      askAiStreamWithBrokEmbeddings(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+      );
+
+  Stream<String> askAiStreamCloudGatewayTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) =>
+      askAiStreamCloudGateway(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      );
+
+  Stream<String> askAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) =>
+      askAiStreamCloudGatewayWithEmbeddings(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+        embeddingsModelName: embeddingsModelName,
+      );
 
   Future<Uint8List> deriveSyncKey(String passphrase);
 

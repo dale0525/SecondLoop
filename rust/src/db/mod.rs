@@ -3082,6 +3082,73 @@ pub fn list_messages_page(
     Ok(result)
 }
 
+pub fn list_memory_messages_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: Option<&str>,
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+    limit: i64,
+) -> Result<Vec<Message>> {
+    let limit = limit.clamp(1, 2000);
+
+    let mut stmt = match conversation_id {
+        Some(_) => conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE conversation_id = ?1
+                 AND created_at >= ?2 AND created_at < ?3
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at ASC, id ASC
+               LIMIT ?4"#,
+        )?,
+        None => conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE created_at >= ?1 AND created_at < ?2
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at ASC, id ASC
+               LIMIT ?3"#,
+        )?,
+    };
+
+    let mut rows = match conversation_id {
+        Some(cid) => stmt.query(params![
+            cid,
+            start_at_ms_inclusive,
+            end_at_ms_exclusive,
+            limit
+        ])?,
+        None => stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive, limit])?,
+    };
+
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let conversation_id: String = row.get(1)?;
+        let role: String = row.get(2)?;
+        let content_blob: Vec<u8> = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+
+        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+        result.push(Message {
+            id,
+            conversation_id,
+            role,
+            content,
+            created_at_ms,
+            is_memory: true,
+        });
+    }
+
+    Ok(result)
+}
+
 pub fn get_message_by_id_optional(
     conn: &Connection,
     key: &[u8; 32],
@@ -3294,10 +3361,7 @@ pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarTodoThread>> {
-    let expected_dim = current_embedding_dim(conn)?;
-
     let top_k = top_k.max(1);
-    let candidate_k = (top_k.saturating_mul(10)).min(1000);
 
     let query = format!("query: {query}");
     let mut vectors = embedder.embed(&[query])?;
@@ -3308,13 +3372,26 @@ pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
         ));
     }
     let query_vector = vectors.remove(0);
+    search_similar_todo_threads_by_embedding(conn, embedder.model_name(), &query_vector, top_k)
+}
+
+pub fn search_similar_todo_threads_by_embedding(
+    conn: &Connection,
+    model_name: &str,
+    query_vector: &[f32],
+    top_k: usize,
+) -> Result<Vec<SimilarTodoThread>> {
+    let expected_dim = current_embedding_dim(conn)?;
     if query_vector.len() != expected_dim {
         return Err(anyhow!(
-            "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+            "query vector dim mismatch: expected {expected_dim}, got {} (model_name={})",
             query_vector.len(),
-            embedder.model_name()
+            model_name
         ));
     }
+
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(10)).min(1000);
 
     let mut best: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
 
@@ -3331,7 +3408,7 @@ pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
         let mut rows = stmt.query(params![
             query_vector.as_bytes(),
             i64::try_from(candidate_k).unwrap_or(i64::MAX),
-            embedder.model_name()
+            model_name
         ])?;
 
         while let Some(row) = rows.next()? {
@@ -3356,7 +3433,7 @@ pub fn search_similar_todo_threads<E: Embedder + ?Sized>(
         let mut rows = stmt.query(params![
             query_vector.as_bytes(),
             i64::try_from(candidate_k).unwrap_or(i64::MAX),
-            embedder.model_name()
+            model_name
         ])?;
 
         while let Some(row) = rows.next()? {
@@ -5500,6 +5577,51 @@ ORDER BY start_at_ms ASC, end_at_ms ASC
     )?;
 
     let mut rows = stmt.query([])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let title_blob: Vec<u8> = row.get(1)?;
+        let start_at_ms: i64 = row.get(2)?;
+        let end_at_ms: i64 = row.get(3)?;
+        let tz: String = row.get(4)?;
+        let source_entry_id: Option<String> = row.get(5)?;
+        let created_at_ms: i64 = row.get(6)?;
+        let updated_at_ms: i64 = row.get(7)?;
+
+        let title_bytes = decrypt_bytes(key, &title_blob, b"event.title")?;
+        let title = String::from_utf8(title_bytes)
+            .map_err(|_| anyhow!("event title is not valid utf-8"))?;
+
+        result.push(Event {
+            id,
+            title,
+            start_at_ms,
+            end_at_ms,
+            tz,
+            source_entry_id,
+            created_at_ms,
+            updated_at_ms,
+        });
+    }
+    Ok(result)
+}
+
+pub fn list_events_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+) -> Result<Vec<Event>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
+FROM events
+WHERE start_at_ms < ?2 AND end_at_ms > ?1
+ORDER BY start_at_ms ASC, end_at_ms ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive])?;
     let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         let id: String = row.get(0)?;

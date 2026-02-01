@@ -642,6 +642,57 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Future<int> processPendingTodoThreadEmbeddings(
+    Uint8List key, {
+    int todoLimit = 32,
+    int activityLimit = 64,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbProcessPendingTodoThreadEmbeddings(
+      appDir: appDir,
+      key: key,
+      todoLimit: todoLimit,
+      activityLimit: activityLimit,
+    );
+  }
+
+  @override
+  Future<int> processPendingTodoThreadEmbeddingsCloudGateway(
+    Uint8List key, {
+    int todoLimit = 32,
+    int activityLimit = 64,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbProcessPendingTodoThreadEmbeddingsCloudGateway(
+      appDir: appDir,
+      key: key,
+      todoLimit: todoLimit,
+      activityLimit: activityLimit,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
+  Future<int> processPendingTodoThreadEmbeddingsBrok(
+    Uint8List key, {
+    int todoLimit = 32,
+    int activityLimit = 64,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbProcessPendingTodoThreadEmbeddingsBrok(
+      appDir: appDir,
+      key: key,
+      todoLimit: todoLimit,
+      activityLimit: activityLimit,
+    );
+  }
+
+  @override
   Future<List<SimilarMessage>> searchSimilarMessages(
     Uint8List key,
     String query, {
@@ -943,6 +994,31 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Stream<String> askAiStreamTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) async* {
+    final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
+    yield* rust_core.ragAskAiStreamTimeWindow(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
+      localDay: localDay,
+    );
+  }
+
+  @override
   Stream<String> askAiStreamWithBrokEmbeddings(
     Uint8List key,
     String conversationId, {
@@ -959,6 +1035,31 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
+      localDay: localDay,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamWithBrokEmbeddingsTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) async* {
+    final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
+    yield* rust_core.ragAskAiStreamWithBrokEmbeddingsTimeWindow(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
       localDay: localDay,
     );
   }
@@ -989,6 +1090,35 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Stream<String> askAiStreamCloudGatewayTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_core.ragAskAiStreamCloudGatewayTimeWindow(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
   Stream<String> askAiStreamCloudGatewayWithEmbeddings(
     Uint8List key,
     String conversationId, {
@@ -1008,6 +1138,37 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+      embeddingsModelName: embeddingsModelName,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_core.ragAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,

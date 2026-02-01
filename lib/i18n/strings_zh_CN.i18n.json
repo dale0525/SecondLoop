@@ -88,6 +88,9 @@
       "suggest": "要把这条消息关联到待办吗？",
       "linked": "已关联到「$title」"
     },
+    "todoAuto": {
+      "created": "已创建「$title」"
+    },
     "todoDetail": {
       "title": "待办详情",
       "emptyTimeline": "暂无跟进记录",

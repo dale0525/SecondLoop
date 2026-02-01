@@ -59,7 +59,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -1495238297;
+  int get rustContentHash => 1622317541;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -276,6 +276,27 @@ abstract class RustLibApi extends BaseApi {
   Future<int> crateApiCoreDbProcessPendingMessageEmbeddings(
       {required String appDir, required List<int> key, required int limit});
 
+  Future<int> crateApiCoreDbProcessPendingTodoThreadEmbeddings(
+      {required String appDir,
+      required List<int> key,
+      required int todoLimit,
+      required int activityLimit});
+
+  Future<int> crateApiCoreDbProcessPendingTodoThreadEmbeddingsBrok(
+      {required String appDir,
+      required List<int> key,
+      required int todoLimit,
+      required int activityLimit});
+
+  Future<int> crateApiCoreDbProcessPendingTodoThreadEmbeddingsCloudGateway(
+      {required String appDir,
+      required List<int> key,
+      required int todoLimit,
+      required int activityLimit,
+      required String gatewayBaseUrl,
+      required String firebaseIdToken,
+      required String modelName});
+
   Future<BigInt> crateApiCoreDbPurgeMessageAttachments(
       {required String appDir,
       required List<int> key,
@@ -449,6 +470,19 @@ abstract class RustLibApi extends BaseApi {
       required String firebaseIdToken,
       required String modelName});
 
+  Stream<String> crateApiCoreRagAskAiStreamCloudGatewayTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String gatewayBaseUrl,
+      required String firebaseIdToken,
+      required String modelName});
+
   Stream<String> crateApiCoreRagAskAiStreamCloudGatewayWithEmbeddings(
       {required String appDir,
       required List<int> key,
@@ -461,6 +495,31 @@ abstract class RustLibApi extends BaseApi {
       required String modelName,
       required String embeddingsModelName});
 
+  Stream<String> crateApiCoreRagAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String gatewayBaseUrl,
+      required String firebaseIdToken,
+      required String modelName,
+      required String embeddingsModelName});
+
+  Stream<String> crateApiCoreRagAskAiStreamTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String localDay});
+
   Stream<String> crateApiCoreRagAskAiStreamWithBrokEmbeddings(
       {required String appDir,
       required List<int> key,
@@ -468,6 +527,17 @@ abstract class RustLibApi extends BaseApi {
       required String question,
       required int topK,
       required bool thisThreadOnly,
+      required String localDay});
+
+  Stream<String> crateApiCoreRagAskAiStreamWithBrokEmbeddingsTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
       required String localDay});
 
   Future<Uint8List> crateApiCoreSyncDeriveKey({required String passphrase});
@@ -2010,6 +2080,129 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<int> crateApiCoreDbProcessPendingTodoThreadEmbeddings(
+      {required String appDir,
+      required List<int> key,
+      required int todoLimit,
+      required int activityLimit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_u_32(todoLimit, serializer);
+        sse_encode_u_32(activityLimit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 44, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_32,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbProcessPendingTodoThreadEmbeddingsConstMeta,
+      argValues: [appDir, key, todoLimit, activityLimit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreDbProcessPendingTodoThreadEmbeddingsConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_process_pending_todo_thread_embeddings",
+            argNames: ["appDir", "key", "todoLimit", "activityLimit"],
+          );
+
+  @override
+  Future<int> crateApiCoreDbProcessPendingTodoThreadEmbeddingsBrok(
+      {required String appDir,
+      required List<int> key,
+      required int todoLimit,
+      required int activityLimit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_u_32(todoLimit, serializer);
+        sse_encode_u_32(activityLimit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 45, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_32,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreDbProcessPendingTodoThreadEmbeddingsBrokConstMeta,
+      argValues: [appDir, key, todoLimit, activityLimit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreDbProcessPendingTodoThreadEmbeddingsBrokConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_process_pending_todo_thread_embeddings_brok",
+            argNames: ["appDir", "key", "todoLimit", "activityLimit"],
+          );
+
+  @override
+  Future<int> crateApiCoreDbProcessPendingTodoThreadEmbeddingsCloudGateway(
+      {required String appDir,
+      required List<int> key,
+      required int todoLimit,
+      required int activityLimit,
+      required String gatewayBaseUrl,
+      required String firebaseIdToken,
+      required String modelName}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_u_32(todoLimit, serializer);
+        sse_encode_u_32(activityLimit, serializer);
+        sse_encode_String(gatewayBaseUrl, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_String(modelName, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 46, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_32,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiCoreDbProcessPendingTodoThreadEmbeddingsCloudGatewayConstMeta,
+      argValues: [
+        appDir,
+        key,
+        todoLimit,
+        activityLimit,
+        gatewayBaseUrl,
+        firebaseIdToken,
+        modelName
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreDbProcessPendingTodoThreadEmbeddingsCloudGatewayConstMeta =>
+          const TaskConstMeta(
+            debugName:
+                "db_process_pending_todo_thread_embeddings_cloud_gateway",
+            argNames: [
+              "appDir",
+              "key",
+              "todoLimit",
+              "activityLimit",
+              "gatewayBaseUrl",
+              "firebaseIdToken",
+              "modelName"
+            ],
+          );
+
+  @override
   Future<BigInt> crateApiCoreDbPurgeMessageAttachments(
       {required String appDir,
       required List<int> key,
@@ -2021,7 +2214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 44, port: port_);
+            funcId: 47, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -2051,7 +2244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 45, port: port_);
+            funcId: 48, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -2081,7 +2274,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(attachmentSha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 46, port: port_);
+            funcId: 49, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_attachment_exif_metadata,
@@ -2113,7 +2306,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(attachmentSha256, serializer);
         sse_encode_String(variant, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 47, port: port_);
+            funcId: 50, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -2143,7 +2336,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(batchLimit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 48, port: port_);
+            funcId: 51, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -2183,7 +2376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(outputTokens, serializer);
         sse_encode_opt_box_autoadd_i_64(totalTokens, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 49, port: port_);
+            funcId: 52, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2228,7 +2421,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 50, port: port_);
+            funcId: 53, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2261,7 +2454,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 51, port: port_);
+            funcId: 54, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_message,
@@ -2293,7 +2486,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 52, port: port_);
+            funcId: 55, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_message,
@@ -2331,7 +2524,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(modelName, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 53, port: port_);
+            funcId: 56, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_message,
@@ -2379,7 +2572,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 54, port: port_);
+            funcId: 57, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_todo_thread,
@@ -2411,7 +2604,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(topK, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 55, port: port_);
+            funcId: 58, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_todo_thread,
@@ -2450,7 +2643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(modelName, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 56, port: port_);
+            funcId: 59, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_similar_todo_thread,
@@ -2497,7 +2690,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(modelName, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 57, port: port_);
+            funcId: 60, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -2527,7 +2720,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(profileId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 58, port: port_);
+            funcId: 61, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2557,7 +2750,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(profileId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 59, port: port_);
+            funcId: 62, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2589,7 +2782,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_bool(isDeleted, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 60, port: port_);
+            funcId: 63, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2623,7 +2816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(newStatus, serializer);
         sse_encode_opt_String(sourceMessageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 61, port: port_);
+            funcId: 64, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_todo,
@@ -2657,7 +2850,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(startDay, serializer);
         sse_encode_String(endDay, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 62, port: port_);
+            funcId: 65, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_llm_usage_aggregate,
@@ -2693,7 +2886,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_f_64(latitude, serializer);
         sse_encode_opt_box_autoadd_f_64(longitude, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 63, port: port_);
+            funcId: 66, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2743,7 +2936,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(bytes, serializer);
         sse_encode_String(mimeType, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 64, port: port_);
+            funcId: 67, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_attachment_variant,
@@ -2790,7 +2983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(tz, serializer);
         sse_encode_opt_String(sourceEntryId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 65, port: port_);
+            funcId: 68, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_event,
@@ -2851,7 +3044,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(nextReviewAtMs, serializer);
         sse_encode_opt_box_autoadd_i_64(lastReviewAtMs, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 66, port: port_);
+            funcId: 69, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_todo,
@@ -2912,7 +3105,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDay, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 67, port: port_);
+            funcId: 70, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -2974,7 +3167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(modelName, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 68, port: port_);
+            funcId: 71, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3016,6 +3209,82 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Stream<String> crateApiCoreRagAskAiStreamCloudGatewayTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String gatewayBaseUrl,
+      required String firebaseIdToken,
+      required String modelName}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(conversationId, serializer);
+        sse_encode_String(question, serializer);
+        sse_encode_u_32(topK, serializer);
+        sse_encode_bool(thisThreadOnly, serializer);
+        sse_encode_i_64(timeStartMs, serializer);
+        sse_encode_i_64(timeEndMs, serializer);
+        sse_encode_String(gatewayBaseUrl, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_String(modelName, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 72, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreRagAskAiStreamCloudGatewayTimeWindowConstMeta,
+      argValues: [
+        appDir,
+        key,
+        conversationId,
+        question,
+        topK,
+        thisThreadOnly,
+        timeStartMs,
+        timeEndMs,
+        gatewayBaseUrl,
+        firebaseIdToken,
+        modelName,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreRagAskAiStreamCloudGatewayTimeWindowConstMeta =>
+          const TaskConstMeta(
+            debugName: "rag_ask_ai_stream_cloud_gateway_time_window",
+            argNames: [
+              "appDir",
+              "key",
+              "conversationId",
+              "question",
+              "topK",
+              "thisThreadOnly",
+              "timeStartMs",
+              "timeEndMs",
+              "gatewayBaseUrl",
+              "firebaseIdToken",
+              "modelName",
+              "sink"
+            ],
+          );
+
+  @override
   Stream<String> crateApiCoreRagAskAiStreamCloudGatewayWithEmbeddings(
       {required String appDir,
       required List<int> key,
@@ -3043,7 +3312,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(embeddingsModelName, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 69, port: port_);
+            funcId: 73, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3088,6 +3357,155 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Stream<String> crateApiCoreRagAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String gatewayBaseUrl,
+      required String firebaseIdToken,
+      required String modelName,
+      required String embeddingsModelName}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(conversationId, serializer);
+        sse_encode_String(question, serializer);
+        sse_encode_u_32(topK, serializer);
+        sse_encode_bool(thisThreadOnly, serializer);
+        sse_encode_i_64(timeStartMs, serializer);
+        sse_encode_i_64(timeEndMs, serializer);
+        sse_encode_String(gatewayBaseUrl, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_String(modelName, serializer);
+        sse_encode_String(embeddingsModelName, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 74, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiCoreRagAskAiStreamCloudGatewayWithEmbeddingsTimeWindowConstMeta,
+      argValues: [
+        appDir,
+        key,
+        conversationId,
+        question,
+        topK,
+        thisThreadOnly,
+        timeStartMs,
+        timeEndMs,
+        gatewayBaseUrl,
+        firebaseIdToken,
+        modelName,
+        embeddingsModelName,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreRagAskAiStreamCloudGatewayWithEmbeddingsTimeWindowConstMeta =>
+          const TaskConstMeta(
+            debugName:
+                "rag_ask_ai_stream_cloud_gateway_with_embeddings_time_window",
+            argNames: [
+              "appDir",
+              "key",
+              "conversationId",
+              "question",
+              "topK",
+              "thisThreadOnly",
+              "timeStartMs",
+              "timeEndMs",
+              "gatewayBaseUrl",
+              "firebaseIdToken",
+              "modelName",
+              "embeddingsModelName",
+              "sink"
+            ],
+          );
+
+  @override
+  Stream<String> crateApiCoreRagAskAiStreamTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String localDay}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(conversationId, serializer);
+        sse_encode_String(question, serializer);
+        sse_encode_u_32(topK, serializer);
+        sse_encode_bool(thisThreadOnly, serializer);
+        sse_encode_i_64(timeStartMs, serializer);
+        sse_encode_i_64(timeEndMs, serializer);
+        sse_encode_String(localDay, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 75, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiCoreRagAskAiStreamTimeWindowConstMeta,
+      argValues: [
+        appDir,
+        key,
+        conversationId,
+        question,
+        topK,
+        thisThreadOnly,
+        timeStartMs,
+        timeEndMs,
+        localDay,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiCoreRagAskAiStreamTimeWindowConstMeta =>
+      const TaskConstMeta(
+        debugName: "rag_ask_ai_stream_time_window",
+        argNames: [
+          "appDir",
+          "key",
+          "conversationId",
+          "question",
+          "topK",
+          "thisThreadOnly",
+          "timeStartMs",
+          "timeEndMs",
+          "localDay",
+          "sink"
+        ],
+      );
+
+  @override
   Stream<String> crateApiCoreRagAskAiStreamWithBrokEmbeddings(
       {required String appDir,
       required List<int> key,
@@ -3109,7 +3527,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDay, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 70, port: port_);
+            funcId: 76, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3147,13 +3565,82 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Stream<String> crateApiCoreRagAskAiStreamWithBrokEmbeddingsTimeWindow(
+      {required String appDir,
+      required List<int> key,
+      required String conversationId,
+      required String question,
+      required int topK,
+      required bool thisThreadOnly,
+      required PlatformInt64 timeStartMs,
+      required PlatformInt64 timeEndMs,
+      required String localDay}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(conversationId, serializer);
+        sse_encode_String(question, serializer);
+        sse_encode_u_32(topK, serializer);
+        sse_encode_bool(thisThreadOnly, serializer);
+        sse_encode_i_64(timeStartMs, serializer);
+        sse_encode_i_64(timeEndMs, serializer);
+        sse_encode_String(localDay, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 77, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiCoreRagAskAiStreamWithBrokEmbeddingsTimeWindowConstMeta,
+      argValues: [
+        appDir,
+        key,
+        conversationId,
+        question,
+        topK,
+        thisThreadOnly,
+        timeStartMs,
+        timeEndMs,
+        localDay,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiCoreRagAskAiStreamWithBrokEmbeddingsTimeWindowConstMeta =>
+          const TaskConstMeta(
+            debugName: "rag_ask_ai_stream_with_brok_embeddings_time_window",
+            argNames: [
+              "appDir",
+              "key",
+              "conversationId",
+              "question",
+              "topK",
+              "thisThreadOnly",
+              "timeStartMs",
+              "timeEndMs",
+              "localDay",
+              "sink"
+            ],
+          );
+
+  @override
   Future<Uint8List> crateApiCoreSyncDeriveKey({required String passphrase}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(passphrase, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 71, port: port_);
+            funcId: 78, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -3179,7 +3666,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 72, port: port_);
+            funcId: 79, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3215,7 +3702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 73, port: port_);
+            funcId: 80, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3256,7 +3743,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 74, port: port_);
+            funcId: 81, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3290,7 +3777,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 75, port: port_);
+            funcId: 82, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3324,7 +3811,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 76, port: port_);
+            funcId: 83, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3351,7 +3838,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(localDir, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 77, port: port_);
+            funcId: 84, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3387,7 +3874,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 78, port: port_);
+            funcId: 85, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -3426,7 +3913,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(deviceId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 79, port: port_);
+            funcId: 86, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3456,7 +3943,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 80, port: port_);
+            funcId: 87, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3494,7 +3981,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 81, port: port_);
+            funcId: 88, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3547,7 +4034,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 82, port: port_);
+            funcId: 89, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3590,7 +4077,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 83, port: port_);
+            funcId: 90, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3633,7 +4120,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 84, port: port_);
+            funcId: 91, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3678,7 +4165,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 85, port: port_);
+            funcId: 92, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -3727,7 +4214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 86, port: port_);
+            funcId: 93, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3767,7 +4254,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 87, port: port_);
+            funcId: 94, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -3823,7 +4310,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 88, port: port_);
+            funcId: 95, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3876,7 +4363,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 89, port: port_);
+            funcId: 96, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3929,7 +4416,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 90, port: port_);
+            funcId: 97, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_64,
@@ -3977,7 +4464,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(password, serializer);
         sse_encode_String(remoteRoot, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 91, port: port_);
+            funcId: 98, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -4017,7 +4504,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_String(sha256, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 92, port: port_);
+            funcId: 99, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -4059,7 +4546,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 93)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 100)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -4082,7 +4569,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 94, port: port_);
+            funcId: 101, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 846 (423 per locale)
+/// Strings: 848 (424 per locale)
 ///
-/// Built on 2026-01-31 at 11:08 UTC
+/// Built on 2026-01-31 at 13:02 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -260,6 +260,8 @@ class _StringsActionsEn {
       _StringsActionsTodoLinkEn._(_root);
   late final _StringsActionsTodoNoteLinkEn todoNoteLink =
       _StringsActionsTodoNoteLinkEn._(_root);
+  late final _StringsActionsTodoAutoEn todoAuto =
+      _StringsActionsTodoAutoEn._(_root);
   late final _StringsActionsTodoDetailEn todoDetail =
       _StringsActionsTodoDetailEn._(_root);
   late final _StringsActionsTodoDeleteEn todoDelete =
@@ -667,6 +669,16 @@ class _StringsActionsTodoNoteLinkEn {
   String get noMatches => 'No matching tasks';
   String get suggest => 'Link this message to a task?';
   String linked({required Object title}) => 'Linked to "${title}"';
+}
+
+// Path: actions.todoAuto
+class _StringsActionsTodoAutoEn {
+  _StringsActionsTodoAutoEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String created({required Object title}) => 'Created "${title}"';
 }
 
 // Path: actions.todoDetail
@@ -2219,6 +2231,9 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsTodoNoteLinkZhCn todoNoteLink =
       _StringsActionsTodoNoteLinkZhCn._(_root);
   @override
+  late final _StringsActionsTodoAutoZhCn todoAuto =
+      _StringsActionsTodoAutoZhCn._(_root);
+  @override
   late final _StringsActionsTodoDetailZhCn todoDetail =
       _StringsActionsTodoDetailZhCn._(_root);
   @override
@@ -2851,6 +2866,20 @@ class _StringsActionsTodoNoteLinkZhCn extends _StringsActionsTodoNoteLinkEn {
   String get suggest => '要把这条消息关联到待办吗？';
   @override
   String linked({required Object title}) => '已关联到「${title}」';
+}
+
+// Path: actions.todoAuto
+class _StringsActionsTodoAutoZhCn extends _StringsActionsTodoAutoEn {
+  _StringsActionsTodoAutoZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String created({required Object title}) => '已创建「${title}」';
 }
 
 // Path: actions.todoDetail
@@ -5065,6 +5094,8 @@ extension on Translations {
         return 'Link this message to a task?';
       case 'actions.todoNoteLink.linked':
         return ({required Object title}) => 'Linked to "${title}"';
+      case 'actions.todoAuto.created':
+        return ({required Object title}) => 'Created "${title}"';
       case 'actions.todoDetail.title':
         return 'Task';
       case 'actions.todoDetail.emptyTimeline':
@@ -5944,6 +5975,8 @@ extension on _StringsZhCn {
         return '要把这条消息关联到待办吗？';
       case 'actions.todoNoteLink.linked':
         return ({required Object title}) => '已关联到「${title}」';
+      case 'actions.todoAuto.created':
+        return ({required Object title}) => '已创建「${title}」';
       case 'actions.todoDetail.title':
         return '待办详情';
       case 'actions.todoDetail.emptyTimeline':

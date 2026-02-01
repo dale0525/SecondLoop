@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/app_bootstrap.dart';
+import '../core/ai/embeddings_index_gate.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/native_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
@@ -313,13 +314,15 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 child: ShareIntentListener(
                                   child: LockGate(
                                     child: SyncEngineGate(
-                                      child: CloudSyncSwitchPromptGate(
-                                        navigatorKey: _navigatorKey,
-                                        child: ShareIngestGate(
-                                          child: QuickCaptureOverlay(
-                                            navigatorKey: _navigatorKey,
-                                            child: child ??
-                                                const SizedBox.shrink(),
+                                      child: EmbeddingsIndexGate(
+                                        child: CloudSyncSwitchPromptGate(
+                                          navigatorKey: _navigatorKey,
+                                          child: ShareIngestGate(
+                                            child: QuickCaptureOverlay(
+                                              navigatorKey: _navigatorKey,
+                                              child: child ??
+                                                  const SizedBox.shrink(),
+                                            ),
                                           ),
                                         ),
                                       ),

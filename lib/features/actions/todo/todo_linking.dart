@@ -55,6 +55,29 @@ TodoUpdateIntent inferTodoUpdateIntent(String text) {
     '别提醒',
     '删掉',
     '删除',
+    // ja
+    'キャンセル',
+    '中止',
+    'やめた',
+    '不要',
+    '削除',
+    // ko
+    '취소',
+    '삭제',
+    '그만',
+    // es
+    'cancelar',
+    'cancela',
+    'borrar',
+    'eliminar',
+    // fr
+    'annuler',
+    'supprimer',
+    // de
+    'abbrechen',
+    'löschen',
+    'loeschen',
+    'streichen',
     'dismiss',
     'delete',
     'cancel',
@@ -64,6 +87,32 @@ TodoUpdateIntent inferTodoUpdateIntent(String text) {
     '做完',
     '完成',
     '搞定',
+    // ja
+    '完了',
+    '完了した',
+    '終わった',
+    '完了',
+    // ko
+    '완료',
+    '끝냈',
+    '끝남',
+    // es
+    'hecho',
+    'lista',
+    'listo',
+    'terminado',
+    'completado',
+    // fr
+    'fait',
+    'fini',
+    'terminé',
+    'termine',
+    'complété',
+    'complete',
+    // de
+    'fertig',
+    'erledigt',
+    'abgeschlossen',
     'done',
     'finished',
     'complete',
@@ -81,6 +130,26 @@ TodoUpdateIntent inferTodoUpdateIntent(String text) {
     '见到',
     '到场',
     '已到',
+    // ja
+    '開始',
+    '始めた',
+    '進行中',
+    // ko
+    '시작',
+    '진행중',
+    '하는 중',
+    // es
+    'empecé',
+    'empezar',
+    'en progreso',
+    'trabajando en',
+    // fr
+    'commencé',
+    'en cours',
+    // de
+    'begonnen',
+    'in arbeit',
+    'arbeite an',
     'arrived',
     'started',
     'in progress',

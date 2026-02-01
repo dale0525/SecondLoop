@@ -488,6 +488,46 @@ Future<int> dbProcessPendingMessageEmbeddings(
     RustLib.instance.api.crateApiCoreDbProcessPendingMessageEmbeddings(
         appDir: appDir, key: key, limit: limit);
 
+Future<int> dbProcessPendingTodoThreadEmbeddings(
+        {required String appDir,
+        required List<int> key,
+        required int todoLimit,
+        required int activityLimit}) =>
+    RustLib.instance.api.crateApiCoreDbProcessPendingTodoThreadEmbeddings(
+        appDir: appDir,
+        key: key,
+        todoLimit: todoLimit,
+        activityLimit: activityLimit);
+
+Future<int> dbProcessPendingTodoThreadEmbeddingsCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required int todoLimit,
+        required int activityLimit,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api
+        .crateApiCoreDbProcessPendingTodoThreadEmbeddingsCloudGateway(
+            appDir: appDir,
+            key: key,
+            todoLimit: todoLimit,
+            activityLimit: activityLimit,
+            gatewayBaseUrl: gatewayBaseUrl,
+            firebaseIdToken: firebaseIdToken,
+            modelName: modelName);
+
+Future<int> dbProcessPendingTodoThreadEmbeddingsBrok(
+        {required String appDir,
+        required List<int> key,
+        required int todoLimit,
+        required int activityLimit}) =>
+    RustLib.instance.api.crateApiCoreDbProcessPendingTodoThreadEmbeddingsBrok(
+        appDir: appDir,
+        key: key,
+        todoLimit: todoLimit,
+        activityLimit: activityLimit);
+
 Future<List<SimilarMessage>> dbSearchSimilarMessages(
         {required String appDir,
         required List<int> key,
@@ -627,6 +667,27 @@ Stream<String> ragAskAiStream(
         thisThreadOnly: thisThreadOnly,
         localDay: localDay);
 
+Stream<String> ragAskAiStreamTimeWindow(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required PlatformInt64 timeStartMs,
+        required PlatformInt64 timeEndMs,
+        required String localDay}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStreamTimeWindow(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        timeStartMs: timeStartMs,
+        timeEndMs: timeEndMs,
+        localDay: localDay);
+
 Stream<String> ragAskAiStreamWithBrokEmbeddings(
         {required String appDir,
         required List<int> key,
@@ -642,6 +703,27 @@ Stream<String> ragAskAiStreamWithBrokEmbeddings(
         question: question,
         topK: topK,
         thisThreadOnly: thisThreadOnly,
+        localDay: localDay);
+
+Stream<String> ragAskAiStreamWithBrokEmbeddingsTimeWindow(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required PlatformInt64 timeStartMs,
+        required PlatformInt64 timeEndMs,
+        required String localDay}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStreamWithBrokEmbeddingsTimeWindow(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        timeStartMs: timeStartMs,
+        timeEndMs: timeEndMs,
         localDay: localDay);
 
 Stream<String> ragAskAiStreamCloudGateway(
@@ -661,6 +743,31 @@ Stream<String> ragAskAiStreamCloudGateway(
         question: question,
         topK: topK,
         thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
+
+Stream<String> ragAskAiStreamCloudGatewayTimeWindow(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required PlatformInt64 timeStartMs,
+        required PlatformInt64 timeEndMs,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreRagAskAiStreamCloudGatewayTimeWindow(
+        appDir: appDir,
+        key: key,
+        conversationId: conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        timeStartMs: timeStartMs,
+        timeEndMs: timeEndMs,
         gatewayBaseUrl: gatewayBaseUrl,
         firebaseIdToken: firebaseIdToken,
         modelName: modelName);
@@ -687,6 +794,34 @@ Stream<String> ragAskAiStreamCloudGatewayWithEmbeddings(
         firebaseIdToken: firebaseIdToken,
         modelName: modelName,
         embeddingsModelName: embeddingsModelName);
+
+Stream<String> ragAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+        {required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        required PlatformInt64 timeStartMs,
+        required PlatformInt64 timeEndMs,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName,
+        required String embeddingsModelName}) =>
+    RustLib.instance.api
+        .crateApiCoreRagAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+            appDir: appDir,
+            key: key,
+            conversationId: conversationId,
+            question: question,
+            topK: topK,
+            thisThreadOnly: thisThreadOnly,
+            timeStartMs: timeStartMs,
+            timeEndMs: timeEndMs,
+            gatewayBaseUrl: gatewayBaseUrl,
+            firebaseIdToken: firebaseIdToken,
+            modelName: modelName,
+            embeddingsModelName: embeddingsModelName);
 
 Future<Uint8List> syncDeriveKey({required String passphrase}) =>
     RustLib.instance.api.crateApiCoreSyncDeriveKey(passphrase: passphrase);

@@ -243,6 +243,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _subscriptionController?.status ?? SubscriptionStatus.unknown;
     final cloudUid = (_cloudAuthController?.uid ?? '').trim();
 
+    if (subscriptionStatus == SubscriptionStatus.unknown) return;
+
     final allowed = subscriptionStatus == SubscriptionStatus.entitled &&
         cloudUid.isNotEmpty;
     if (allowed) return;

@@ -88,6 +88,9 @@
       "suggest": "Link this message to a task?",
       "linked": "Linked to \"$title\""
     },
+    "todoAuto": {
+      "created": "Created \"$title\""
+    },
     "todoDetail": {
       "title": "Task",
       "emptyTimeline": "No updates yet",
