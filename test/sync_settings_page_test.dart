@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
+import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -257,6 +259,80 @@ void main() {
     engine.stop();
   });
 
+  testWidgets('Manual Download refreshes chat even when pull reports 0 changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _ManualPullUpdatesMessagesBackend();
+    final engine = SyncEngine(
+      syncRunner: _FakeRunner(),
+      loadConfig: () async => _webdavConfig(),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    const conversation = Conversation(
+      id: 'main_stream',
+      title: 'Main Stream',
+      createdAtMs: 0,
+      updatedAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: SyncEngineScope(
+            engine: engine,
+            child: wrapWithI18n(
+              const MaterialApp(
+                home: ChatPage(conversation: conversation),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No messages yet'), findsOneWidget);
+
+    final chatContext = tester.element(find.byType(ChatPage));
+    // ignore: discarded_futures
+    Navigator.of(chatContext).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          body: SyncSettingsPage(configStore: store),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
+    await tester.ensureVisible(downloadButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(downloadButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello from device A'), findsOneWidget);
+    engine.stop();
+  });
+
   testWidgets('Cloud Download shows up-to-date message when no new changes',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -300,6 +376,97 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No new changes'), findsOneWidget);
+  });
+
+  testWidgets('Manual Upload/Download shows progress indicator',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final pushCompleter = Completer<int>();
+    final pullCompleter = Completer<int>();
+    final backend = _DelayedSyncBackend(
+      pushCompleter: pushCompleter,
+      pullCompleter: pullCompleter,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
+      ),
+      'https://example.com/dav',
+    );
+    await tester.pump();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pump();
+
+    expect(tester.widget<OutlinedButton>(uploadButton).onPressed, isNull);
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
+        findsOneWidget);
+    expect(find.text('0%'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 240));
+    expect(find.text('0%'), findsNothing);
+
+    pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+    expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
+        findsNothing);
+
+    final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
+    await tester.dragUntilVisible(
+      downloadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(downloadButton);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
+        findsOneWidget);
+    expect(find.text('0%'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 240));
+    expect(find.text('0%'), findsNothing);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+    expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
+        findsNothing);
   });
 }
 
@@ -600,6 +767,75 @@ class _SyncSettingsBackend extends AppBackend {
     required String idToken,
   }) async =>
       managedVaultPullResult;
+}
+
+final class _ManualPullUpdatesMessagesBackend extends _SyncSettingsBackend {
+  _ManualPullUpdatesMessagesBackend() : super(webdavPullResult: 0);
+
+  bool _pulledOnce = false;
+  final List<Message> _messages = <Message>[];
+
+  @override
+  Future<List<Message>> listMessages(
+          Uint8List key, String conversationId) async =>
+      List<Message>.from(_messages);
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    if (!_pulledOnce) {
+      _pulledOnce = true;
+      _messages.add(
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello from device A',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      );
+    }
+    return 0;
+  }
+}
+
+final class _DelayedSyncBackend extends _SyncSettingsBackend {
+  _DelayedSyncBackend({
+    required this.pushCompleter,
+    required this.pullCompleter,
+  }) : super(webdavPullResult: 0);
+
+  final Completer<int> pushCompleter;
+  final Completer<int> pullCompleter;
+
+  @override
+  Future<int> syncWebdavPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async =>
+      pushCompleter.future;
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async =>
+      pullCompleter.future;
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {

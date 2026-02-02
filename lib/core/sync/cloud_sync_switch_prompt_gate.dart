@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ai/ai_routing.dart';
+import '../ai/embeddings_data_consent_prefs.dart';
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
@@ -45,7 +46,6 @@ final class _CloudSyncSwitchPromptGateState
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
 
-  static const _kCloudEmbeddingsEnabledPrefsKey = 'embeddings_data_consent_v1';
   static const _kCloudEmbeddingsUpgradePromptedUidPrefsKey =
       'cloud_embeddings_upgrade_prompted_uid_v1';
 
@@ -220,7 +220,7 @@ final class _CloudSyncSwitchPromptGateState
         (prefs.getString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey) ?? '')
             .trim();
     if (alreadyPromptedUid == uid) return;
-    if ((prefs.getBool(_kCloudEmbeddingsEnabledPrefsKey) ?? false) == true) {
+    if ((prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false) == true) {
       await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
       return;
     }
@@ -260,7 +260,7 @@ final class _CloudSyncSwitchPromptGateState
     );
     _dialogShowing = false;
 
-    await prefs.setBool(_kCloudEmbeddingsEnabledPrefsKey, enable == true);
+    await EmbeddingsDataConsentPrefs.setEnabled(prefs, enable == true);
     await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
   }
 

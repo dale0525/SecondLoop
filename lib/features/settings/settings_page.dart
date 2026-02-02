@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -46,10 +47,10 @@ class _SettingsPageState extends State<SettingsPage> {
   CloudAuthController? _cloudAuthController;
   Listenable? _cloudAuthListenable;
   String? _lastCloudUid;
+  VoidCallback? _cloudEmbeddingsPrefsListener;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
-  static const _kCloudEmbeddingsEnabledPrefsKey = 'embeddings_data_consent_v1';
 
   bool _defaultSystemUnlockEnabled() {
     if (kIsWeb) return false;
@@ -179,9 +180,30 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+
+    void onCloudEmbeddingsPrefChanged() {
+      if (!mounted) return;
+      final next = EmbeddingsDataConsentPrefs.value.value;
+      setState(() {
+        _cloudEmbeddingsConfigured = next != null;
+        _cloudEmbeddingsEnabled = next ?? false;
+      });
+    }
+
+    _cloudEmbeddingsPrefsListener = onCloudEmbeddingsPrefChanged;
+    EmbeddingsDataConsentPrefs.value.addListener(onCloudEmbeddingsPrefChanged);
+  }
+
+  @override
   void dispose() {
     _subscriptionController?.removeListener(_onSubscriptionChanged);
     _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
+    final listener = _cloudEmbeddingsPrefsListener;
+    if (listener != null) {
+      EmbeddingsDataConsentPrefs.value.removeListener(listener);
+    }
     super.dispose();
   }
 
@@ -191,9 +213,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
         _defaultSystemUnlockEnabled();
     final cloudEmbeddingsConfigured =
-        prefs.containsKey(_kCloudEmbeddingsEnabledPrefsKey);
+        prefs.containsKey(EmbeddingsDataConsentPrefs.prefsKey);
     final cloudEmbeddingsEnabled = cloudEmbeddingsConfigured
-        ? (prefs.getBool(_kCloudEmbeddingsEnabledPrefsKey) ?? false)
+        ? (prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false)
         : false;
     final rawLocaleOverride = prefs.getString(kAppLocaleOverridePrefsKey);
     AppLocale? localeOverride;
@@ -250,10 +272,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (allowed) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final enabled = prefs.getBool(_kCloudEmbeddingsEnabledPrefsKey);
+    final enabled = prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey);
     if (enabled != true) return;
 
-    await prefs.setBool(_kCloudEmbeddingsEnabledPrefsKey, false);
+    await EmbeddingsDataConsentPrefs.setEnabled(prefs, false);
     if (!mounted) return;
     await _load();
   }
@@ -289,7 +311,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _busy = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kCloudEmbeddingsEnabledPrefsKey, enabled);
+      await EmbeddingsDataConsentPrefs.setEnabled(prefs, enabled);
       await _load();
     } finally {
       if (mounted) setState(() => _busy = false);

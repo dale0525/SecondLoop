@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/native_backend.dart';
@@ -3231,13 +3232,13 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     if (approved != true) {
-      await prefs.setBool(_kEmbeddingsDataConsentPrefsKey, false);
+      await EmbeddingsDataConsentPrefs.setEnabled(prefs, false);
       _cloudEmbeddingsConsented = false;
       return false;
     }
 
     _cloudEmbeddingsConsented = true;
-    await prefs.setBool(_kEmbeddingsDataConsentPrefsKey, true);
+    await EmbeddingsDataConsentPrefs.setEnabled(prefs, true);
     return true;
   }
 

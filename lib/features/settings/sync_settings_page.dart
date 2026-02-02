@@ -16,6 +16,11 @@ import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_backup_runner.dart';
 
+enum _ManualSyncAction {
+  push,
+  pull,
+}
+
 class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
     super.key,
@@ -30,6 +35,7 @@ class SyncSettingsPage extends StatefulWidget {
 
 class _SyncSettingsPageState extends State<SyncSettingsPage> {
   static const _kPassphrasePlaceholder = '********';
+  static const _kManualSyncProgressTick = Duration(milliseconds: 120);
 
   final _baseUrlController = TextEditingController();
   final _managedVaultBaseUrlController = TextEditingController();
@@ -40,6 +46,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   final _syncPassphraseController = TextEditingController();
 
   bool _busy = false;
+  _ManualSyncAction? _manualSyncAction;
+  double _manualSyncProgress = 0;
+  Timer? _manualSyncProgressTimer;
   bool _passphraseIsPlaceholder = false;
   bool _showManagedVaultEndpointOverride = false;
 
@@ -61,6 +70,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   @override
   void dispose() {
+    _manualSyncProgressTimer?.cancel();
     _baseUrlController.dispose();
     _managedVaultBaseUrlController.dispose();
     _usernameController.dispose();
@@ -69,6 +79,29 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     _remoteRootController.dispose();
     _syncPassphraseController.dispose();
     super.dispose();
+  }
+
+  void _startManualSyncProgress() {
+    _manualSyncProgressTimer?.cancel();
+    _manualSyncProgress = 0;
+    _manualSyncProgressTimer =
+        Timer.periodic(_kManualSyncProgressTick, (timer) {
+      if (!mounted || _manualSyncAction == null) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() {
+        final next = (_manualSyncProgress + 0.01).clamp(0.0, 0.95);
+        _manualSyncProgress = next;
+      });
+    });
+  }
+
+  void _stopManualSyncProgress() {
+    _manualSyncProgressTimer?.cancel();
+    _manualSyncProgressTimer = null;
+    _manualSyncProgress = 0;
   }
 
   Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary() {
@@ -307,7 +340,11 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   Future<void> _push() async {
     if (_busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _manualSyncAction = _ManualSyncAction.push;
+      _startManualSyncProgress();
+    });
 
     final t = context.t;
     try {
@@ -362,13 +399,26 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     } catch (e) {
       _showSnack(t.sync.pushFailed(error: '$e'));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _stopManualSyncProgress();
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _manualSyncAction = null;
+        });
+      } else {
+        _busy = false;
+        _manualSyncAction = null;
+      }
     }
   }
 
   Future<void> _pull() async {
     if (_busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _manualSyncAction = _ManualSyncAction.pull;
+      _startManualSyncProgress();
+    });
 
     final t = context.t;
     final engine = SyncEngineScope.maybeOf(context);
@@ -420,9 +470,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             );
           }(),
       });
-      if (pulled > 0 && mounted) {
-        engine?.notifyExternalChange();
-      }
+      if (mounted) engine?.notifyExternalChange();
       _showSnack(
         pulled == 0 ? t.sync.noNewChanges : t.sync.pulledOps(count: pulled),
       );
@@ -439,7 +487,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       }
       _showSnack(t.sync.pullFailed(error: '$e'));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _stopManualSyncProgress();
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _manualSyncAction = null;
+        });
+      } else {
+        _busy = false;
+        _manualSyncAction = null;
+      }
     }
   }
 
@@ -1183,6 +1240,46 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
+                Builder(
+                  builder: (context) {
+                    final active = _manualSyncAction != null;
+                    final percent =
+                        (_manualSyncProgress * 100).floor().clamp(0, 100);
+                    final percentText = '$percent%';
+
+                    return SizedBox(
+                      height: active ? 24 : 4,
+                      child: !active
+                          ? const SizedBox.shrink()
+                          : Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 4,
+                                    child: LinearProgressIndicator(
+                                      key: const ValueKey(
+                                          'sync_manual_progress'),
+                                      value: _manualSyncProgress,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 48,
+                                  child: Text(
+                                    percentText,
+                                    key: const ValueKey(
+                                        'sync_manual_progress_percent'),
+                                    textAlign: TextAlign.right,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    );
+                  },
+                ),
                 if (engine == null)
                   Row(
                     children: [

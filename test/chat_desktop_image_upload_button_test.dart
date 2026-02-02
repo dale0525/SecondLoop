@@ -17,7 +17,12 @@ void main() {
   testWidgets('Desktop: attach button uploads image attachment',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
-    final oldPicker = FilePicker.platform;
+    FilePicker? oldPicker;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {
       final backend = _TestBackend();
@@ -66,7 +71,7 @@ void main() {
       expect(backend.linkCalls, 1);
       expect(backend.insertMessageCalls, 1);
     } finally {
-      FilePicker.platform = oldPicker;
+      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
