@@ -635,11 +635,13 @@ fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) 
 
 const KV_ATTACHMENTS_OPLOG_BACKFILLED: &str = "oplog.backfill.attachments.v1";
 const KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED: &str = "oplog.backfill.attachment_exif.v1";
+const KV_ATTACHMENT_PLACES_OPLOG_BACKFILLED: &str = "oplog.backfill.attachment_places.v1";
 
 pub fn backfill_attachments_oplog_if_needed(conn: &Connection, key: &[u8; 32]) -> Result<u64> {
     let attachments_backfilled = kv_get_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED)?.is_some();
     let exif_backfilled = kv_get_string(conn, KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED)?.is_some();
-    if attachments_backfilled && exif_backfilled {
+    let places_backfilled = kv_get_string(conn, KV_ATTACHMENT_PLACES_OPLOG_BACKFILLED)?.is_some();
+    if attachments_backfilled && exif_backfilled && places_backfilled {
         return Ok(0);
     }
 
@@ -757,6 +759,53 @@ ORDER BY updated_at_ms ASC, attachment_sha256 ASC
         }
 
         kv_set_string(conn, KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED, "1")?;
+    }
+
+    if !places_backfilled {
+        let mut stmt = conn.prepare(
+            r#"
+SELECT attachment_sha256, status, lang, payload, created_at, updated_at
+FROM attachment_places
+WHERE status = 'ok' AND payload IS NOT NULL
+ORDER BY updated_at ASC, attachment_sha256 ASC
+"#,
+        )?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let attachment_sha256: String = row.get(0)?;
+            let status: String = row.get(1)?;
+            let lang: String = row.get(2)?;
+            let blob: Vec<u8> = row.get(3)?;
+            let created_at_ms: i64 = row.get(4)?;
+            let updated_at_ms: i64 = row.get(5)?;
+
+            if status != "ok" {
+                continue;
+            }
+            let aad = format!("attachment.place:{attachment_sha256}:{lang}");
+            let json = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            let payload: serde_json::Value = serde_json::from_slice(&json)?;
+
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id.as_str(),
+                "seq": seq,
+                "ts_ms": updated_at_ms,
+                "type": "attachment.place.upsert.v1",
+                "payload": {
+                    "attachment_sha256": attachment_sha256,
+                    "lang": lang,
+                    "payload": payload,
+                    "created_at_ms": created_at_ms,
+                    "updated_at_ms": updated_at_ms,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            ops_inserted += 1;
+        }
+
+        kv_set_string(conn, KV_ATTACHMENT_PLACES_OPLOG_BACKFILLED, "1")?;
     }
 
     Ok(ops_inserted)
@@ -4806,6 +4855,8 @@ pub fn mark_attachment_place_ok(
     payload: &serde_json::Value,
     now_ms: i64,
 ) -> Result<()> {
+    backfill_attachments_oplog_if_needed(conn, key)?;
+
     let lang = lang.trim();
     if lang.is_empty() {
         return Err(anyhow!("lang is required"));
@@ -4839,6 +4890,32 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
 "#,
         params![attachment_sha256, lang, blob, now_ms],
     )?;
+
+    let (stored_created_at_ms, stored_updated_at_ms): (i64, i64) = conn.query_row(
+        r#"SELECT created_at, updated_at
+           FROM attachment_places
+           WHERE attachment_sha256 = ?1"#,
+        params![attachment_sha256],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": stored_updated_at_ms,
+        "type": "attachment.place.upsert.v1",
+        "payload": {
+            "attachment_sha256": attachment_sha256,
+            "lang": lang,
+            "payload": payload,
+            "created_at_ms": stored_created_at_ms,
+            "updated_at_ms": stored_updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
 
     mark_messages_linked_to_attachment_for_reembedding(conn, attachment_sha256)?;
     Ok(())

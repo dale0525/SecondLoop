@@ -1225,6 +1225,7 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
         "attachment.delete.v1" => apply_attachment_delete(conn, db_key, op),
         "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),
+        "attachment.place.upsert.v1" => apply_attachment_place_upsert(conn, db_key, &op["payload"]),
         "message.attachment.link.v1" => apply_message_attachment_link(conn, db_key, &op["payload"]),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.delete.v1" => apply_todo_delete(conn, op),
@@ -2461,5 +2462,107 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
     }
 
     insert_result?;
+    Ok(())
+}
+
+fn apply_attachment_place_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let attachment_sha256 = payload["attachment_sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment place op missing attachment_sha256"))?;
+    let lang = payload["lang"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment place op missing lang"))?;
+    let created_at_ms = payload
+        .get("created_at_ms")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment place op missing updated_at_ms"))?;
+
+    let place_payload = payload
+        .get("payload")
+        .ok_or_else(|| anyhow!("attachment place op missing payload"))?;
+
+    let existing_updated_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at FROM attachment_places WHERE attachment_sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing_updated_at_ms.unwrap_or(0) >= updated_at_ms {
+        return Ok(());
+    }
+
+    let json = serde_json::to_vec(place_payload)?;
+    let aad = format!("attachment.place:{attachment_sha256}:{lang}");
+    let blob = encrypt_bytes(db_key, &json, aad.as_bytes())?;
+
+    let attachment_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if attachment_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. We'll accept orphan place rows
+        // temporarily; they'll resolve once the attachment arrives.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let insert_result = conn.execute(
+        r#"
+INSERT INTO attachment_places(
+  attachment_sha256,
+  status,
+  lang,
+  payload,
+  attempts,
+  next_retry_at,
+  last_error,
+  created_at,
+  updated_at
+)
+VALUES (?1, 'ok', ?2, ?3, 0, NULL, NULL, ?4, ?5)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  status = 'ok',
+  lang = excluded.lang,
+  payload = excluded.payload,
+  attempts = 0,
+  next_retry_at = NULL,
+  last_error = NULL,
+  created_at = min(attachment_places.created_at, excluded.created_at),
+  updated_at = max(attachment_places.updated_at, excluded.updated_at)
+"#,
+        params![attachment_sha256, lang, blob, created_at_ms, updated_at_ms],
+    );
+
+    if attachment_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    insert_result?;
+
+    conn.execute(
+        r#"
+UPDATE messages
+SET needs_embedding = 1
+WHERE id IN (
+  SELECT message_id
+  FROM message_attachments
+  WHERE attachment_sha256 = ?1
+)
+  AND COALESCE(is_deleted, 0) = 0
+  AND COALESCE(is_memory, 1) = 1
+"#,
+        params![attachment_sha256],
+    )?;
+
     Ok(())
 }
