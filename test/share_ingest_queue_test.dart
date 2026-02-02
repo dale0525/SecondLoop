@@ -175,6 +175,20 @@ final class _ShareBackend extends AppBackend implements AttachmentsBackend {
       null;
 
   @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
   Future<void> editMessage(
           Uint8List key, String messageId, String content) async =>
       throw UnimplementedError();

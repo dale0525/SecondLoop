@@ -35,7 +35,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Attachment dco_decode_attachment(dynamic raw);
 
   @protected
+  AttachmentAnnotationJob dco_decode_attachment_annotation_job(dynamic raw);
+
+  @protected
   AttachmentExifMetadata dco_decode_attachment_exif_metadata(dynamic raw);
+
+  @protected
+  AttachmentPlaceJob dco_decode_attachment_place_job(dynamic raw);
 
   @protected
   AttachmentVariant dco_decode_attachment_variant(dynamic raw);
@@ -82,6 +88,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Attachment> dco_decode_list_attachment(dynamic raw);
+
+  @protected
+  List<AttachmentAnnotationJob> dco_decode_list_attachment_annotation_job(
+      dynamic raw);
+
+  @protected
+  List<AttachmentPlaceJob> dco_decode_list_attachment_place_job(dynamic raw);
 
   @protected
   List<CloudMediaBackup> dco_decode_list_cloud_media_backup(dynamic raw);
@@ -185,7 +198,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Attachment sse_decode_attachment(SseDeserializer deserializer);
 
   @protected
+  AttachmentAnnotationJob sse_decode_attachment_annotation_job(
+      SseDeserializer deserializer);
+
+  @protected
   AttachmentExifMetadata sse_decode_attachment_exif_metadata(
+      SseDeserializer deserializer);
+
+  @protected
+  AttachmentPlaceJob sse_decode_attachment_place_job(
       SseDeserializer deserializer);
 
   @protected
@@ -234,6 +255,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Attachment> sse_decode_list_attachment(SseDeserializer deserializer);
+
+  @protected
+  List<AttachmentAnnotationJob> sse_decode_list_attachment_annotation_job(
+      SseDeserializer deserializer);
+
+  @protected
+  List<AttachmentPlaceJob> sse_decode_list_attachment_place_job(
+      SseDeserializer deserializer);
 
   @protected
   List<CloudMediaBackup> sse_decode_list_cloud_media_backup(
@@ -349,8 +378,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_attachment(Attachment self, SseSerializer serializer);
 
   @protected
+  void sse_encode_attachment_annotation_job(
+      AttachmentAnnotationJob self, SseSerializer serializer);
+
+  @protected
   void sse_encode_attachment_exif_metadata(
       AttachmentExifMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_attachment_place_job(
+      AttachmentPlaceJob self, SseSerializer serializer);
 
   @protected
   void sse_encode_attachment_variant(
@@ -403,6 +440,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_attachment(
       List<Attachment> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_attachment_annotation_job(
+      List<AttachmentAnnotationJob> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_attachment_place_job(
+      List<AttachmentPlaceJob> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_cloud_media_backup(

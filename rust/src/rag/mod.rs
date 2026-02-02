@@ -7,6 +7,8 @@ use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
 
 const DEFAULT_MAX_CONTEXT_CHARS: usize = 6000;
+const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
+const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
 const DEFAULT_COMPRESS_SENTENCES: usize = 3;
 const DEFAULT_MMR_LAMBDA: f64 = 0.55;
 
@@ -176,8 +178,24 @@ fn build_actions_context(
 }
 
 fn build_prompt_with_actions(question: &str, contexts: &[String], actions: Option<&str>) -> String {
+    build_prompt_with_actions_and_history(question, contexts, actions, None)
+}
+
+fn build_prompt_with_actions_and_history(
+    question: &str,
+    contexts: &[String],
+    actions: Option<&str>,
+    history: Option<&str>,
+) -> String {
     let mut out = String::new();
     out.push_str("You are SecondLoop, a helpful personal assistant.\n");
+
+    if let Some(history) = history {
+        if !history.trim().is_empty() {
+            out.push_str("\nRecent conversation (most recent last):\n");
+            out.push_str(history);
+        }
+    }
 
     if !contexts.is_empty() {
         out.push_str("\nRelevant memories (quoted):\n");
@@ -207,6 +225,53 @@ fn build_prompt_with_actions(question: &str, contexts: &[String], actions: Optio
     out.push_str(question);
     out.push('\n');
     out
+}
+
+fn build_recent_conversation_history(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+) -> Result<Option<String>> {
+    let page = db::list_messages_page(conn, key, conversation_id, None, None, 32)?;
+
+    let mut kept = Vec::new();
+    for msg in page {
+        let content = msg.content.trim();
+        if content.is_empty() {
+            continue;
+        }
+
+        let role = match msg.role.as_str() {
+            "user" => "User",
+            "assistant" => "Assistant",
+            other => other,
+        };
+
+        let truncated: String = content
+            .chars()
+            .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
+            .collect();
+        kept.push((role.to_string(), truncated));
+        if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
+            break;
+        }
+    }
+
+    if kept.is_empty() {
+        return Ok(None);
+    }
+
+    kept.reverse();
+
+    let mut out = String::new();
+    for (role, content) in kept {
+        out.push_str(&role);
+        out.push_str(": ");
+        out.push_str(&content);
+        out.push('\n');
+    }
+
+    Ok(Some(out))
 }
 
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
@@ -645,7 +710,13 @@ pub fn ask_ai_with_provider(
         .map(|(_, ctx)| ctx)
         .collect();
     let actions = build_actions_context(conn, key, question)?;
-    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
+    let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let prompt = build_prompt_with_actions_and_history(
+        question,
+        &contexts,
+        actions.as_deref(),
+        history.as_deref(),
+    );
 
     let mut has_text = false;
     let mut assistant_text = String::new();
@@ -752,7 +823,13 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             .collect();
     }
     let actions = build_actions_context(conn, key, question)?;
-    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
+    let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let prompt = build_prompt_with_actions_and_history(
+        question,
+        &contexts,
+        actions.as_deref(),
+        history.as_deref(),
+    );
 
     let mut has_text = false;
     let mut assistant_text = String::new();
@@ -873,7 +950,13 @@ pub fn ask_ai_with_provider_using_active_embeddings(
         contexts = build_contexts_v2(question, candidates, top_k);
     }
     let actions = build_actions_context(conn, key, question)?;
-    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
+    let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let prompt = build_prompt_with_actions_and_history(
+        question,
+        &contexts,
+        actions.as_deref(),
+        history.as_deref(),
+    );
 
     let mut has_text = false;
     let mut assistant_text = String::new();
@@ -1027,7 +1110,13 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
     }
 
     let actions = build_actions_context(conn, key, question)?;
-    let prompt = build_prompt_with_actions(question, &contexts, actions.as_deref());
+    let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let prompt = build_prompt_with_actions_and_history(
+        question,
+        &contexts,
+        actions.as_deref(),
+        history.as_deref(),
+    );
 
     let mut has_text = false;
     let mut assistant_text = String::new();

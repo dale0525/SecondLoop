@@ -6,11 +6,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/app_bootstrap.dart';
 import '../core/ai/embeddings_index_gate.dart';
+import '../core/ai/message_embeddings_index_gate.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/native_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/cloud_auth_scope.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
+import '../core/media_enrichment/media_enrichment_gate.dart';
 import '../core/subscription/cloud_subscription_controller.dart';
 import '../core/subscription/subscription_scope.dart';
 import '../core/desktop/desktop_quick_capture_service.dart';
@@ -314,14 +316,18 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 child: ShareIntentListener(
                                   child: LockGate(
                                     child: SyncEngineGate(
-                                      child: EmbeddingsIndexGate(
-                                        child: CloudSyncSwitchPromptGate(
-                                          navigatorKey: _navigatorKey,
-                                          child: ShareIngestGate(
-                                            child: QuickCaptureOverlay(
+                                      child: MediaEnrichmentGate(
+                                        child: MessageEmbeddingsIndexGate(
+                                          child: EmbeddingsIndexGate(
+                                            child: CloudSyncSwitchPromptGate(
                                               navigatorKey: _navigatorKey,
-                                              child: child ??
-                                                  const SizedBox.shrink(),
+                                              child: ShareIngestGate(
+                                                child: QuickCaptureOverlay(
+                                                  navigatorKey: _navigatorKey,
+                                                  child: child ??
+                                                      const SizedBox.shrink(),
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),

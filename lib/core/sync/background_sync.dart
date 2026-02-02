@@ -7,7 +7,9 @@ import 'package:workmanager/workmanager.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
+import '../cloud/cloud_auth_scope.dart';
 import '../cloud/firebase_identity_toolkit.dart';
+import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
@@ -127,20 +129,18 @@ final class BackgroundSync {
 
     try {
       String? idToken;
-      if (config.backendType == SyncBackendType.managedVault) {
-        const webApiKey = String.fromEnvironment(
-          'SECONDLOOP_FIREBASE_WEB_API_KEY',
-          defaultValue: '',
+      const webApiKey = String.fromEnvironment(
+        'SECONDLOOP_FIREBASE_WEB_API_KEY',
+        defaultValue: '',
+      );
+      if (webApiKey.trim().isNotEmpty) {
+        cloudAuth ??= CloudAuthControllerImpl(
+          identityToolkit: FirebaseIdentityToolkitHttp(webApiKey: webApiKey),
         );
-        if (webApiKey.trim().isNotEmpty) {
-          cloudAuth ??= CloudAuthControllerImpl(
-            identityToolkit: FirebaseIdentityToolkitHttp(webApiKey: webApiKey),
-          );
-          try {
-            idToken = await cloudAuth.getIdToken();
-          } catch (_) {
-            idToken = null;
-          }
+        try {
+          idToken = await cloudAuth.getIdToken();
+        } catch (_) {
+          idToken = null;
         }
       }
 
@@ -213,6 +213,35 @@ final class BackgroundSync {
             break;
           case SyncBackendType.localDir:
             break;
+        }
+      }
+
+      final token = idToken;
+      if (token != null && token.trim().isNotEmpty) {
+        final baseUrl = CloudGatewayConfig.defaultConfig.baseUrl;
+        if (baseUrl.trim().isNotEmpty) {
+          final runner = MediaEnrichmentRunner(
+            store: BackendMediaEnrichmentStore(
+              backend: backend,
+              sessionKey: sessionKey,
+            ),
+            client: CloudGatewayMediaEnrichmentClient(
+              backend: backend,
+              gatewayBaseUrl: baseUrl,
+              idToken: token,
+              annotationModelName: 'gpt-4o-mini',
+            ),
+            settings: const MediaEnrichmentRunnerSettings(
+              annotationEnabled: false,
+              annotationWifiOnly: true,
+            ),
+            getNetwork: ConnectivityMediaEnrichmentNetworkProvider().call,
+          );
+          try {
+            await runner.runOnce(allowAnnotationCellular: false);
+          } catch (_) {
+            // Best-effort: enrichment should not block sync.
+          }
         }
       }
 

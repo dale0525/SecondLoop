@@ -12,7 +12,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI prepares embeddings before streaming', (tester) async {
+  testWidgets('Ask AI does not block on embeddings indexing', (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = _AskAiPreparationBackend();
 
@@ -44,12 +44,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('processPending'));
     expect(backend.calls, contains('askAiStream'));
-
-    final processIndex = backend.calls.indexOf('processPending');
-    final askIndex = backend.calls.indexOf('askAiStream');
-    expect(processIndex, lessThan(askIndex));
+    expect(backend.calls, isNot(contains('processPending')));
   });
 }
 

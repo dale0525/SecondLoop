@@ -7,6 +7,7 @@ use crate::frb_generated::StreamSink;
 use crate::sync;
 use crate::sync::RemoteStore;
 use crate::{auth, db};
+use crate::{geo, media_annotation};
 use crate::{llm, rag};
 use anyhow::{anyhow, Result};
 
@@ -469,6 +470,223 @@ pub fn db_read_attachment_exif_metadata(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::read_attachment_exif_metadata(&conn, &key, &attachment_sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_read_attachment_place_display_name(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+) -> Result<Option<String>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::read_attachment_place_display_name(&conn, &key, &attachment_sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_read_attachment_annotation_caption_long(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+) -> Result<Option<String>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::read_attachment_annotation_caption_long(&conn, &key, &attachment_sha256)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_enqueue_attachment_place(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    lang: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::enqueue_attachment_place(&conn, &attachment_sha256, &lang, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_enqueue_attachment_annotation(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    lang: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::enqueue_attachment_annotation(&conn, &attachment_sha256, &lang, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_due_attachment_places(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::AttachmentPlaceJob>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_due_attachment_places(&conn, now_ms, limit as i64)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_due_attachment_annotations(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::AttachmentAnnotationJob>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_due_attachment_annotations(&conn, now_ms, limit as i64)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_attachment_place_failed(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_attachment_place_failed(
+        &conn,
+        &attachment_sha256,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_attachment_annotation_failed(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_attachment_annotation_failed(
+        &conn,
+        &attachment_sha256,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_attachment_place_ok_json(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    lang: String,
+    payload_json: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let payload: serde_json::Value = serde_json::from_str(&payload_json)
+        .map_err(|e| anyhow!("invalid attachment place payload json: {e}"))?;
+    db::mark_attachment_place_ok(&conn, &key, &attachment_sha256, &lang, &payload, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_attachment_annotation_ok_json(
+    app_dir: String,
+    key: Vec<u8>,
+    attachment_sha256: String,
+    lang: String,
+    model_name: String,
+    payload_json: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let payload: serde_json::Value = serde_json::from_str(&payload_json)
+        .map_err(|e| anyhow!("invalid attachment annotation payload json: {e}"))?;
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment_sha256,
+        &lang,
+        &model_name,
+        &payload,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn geo_reverse_cloud_gateway(
+    gateway_base_url: String,
+    firebase_id_token: String,
+    lat: f64,
+    lon: f64,
+    lang: String,
+) -> Result<String> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+    if lang.trim().is_empty() {
+        return Err(anyhow!("missing lang"));
+    }
+
+    let client = geo::CloudGatewayGeoClient::new(gateway_base_url, firebase_id_token);
+    let payload = client.reverse_geocode(lat, lon, &lang)?;
+    Ok(payload.to_string())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn media_annotation_cloud_gateway(
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+    lang: String,
+    mime_type: String,
+    image_bytes: Vec<u8>,
+) -> Result<String> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+    if model_name.trim().is_empty() {
+        return Err(anyhow!("missing model_name"));
+    }
+    if lang.trim().is_empty() {
+        return Err(anyhow!("missing lang"));
+    }
+    if mime_type.trim().is_empty() {
+        return Err(anyhow!("missing mime_type"));
+    }
+    if image_bytes.is_empty() {
+        return Err(anyhow!("missing image_bytes"));
+    }
+
+    let client = media_annotation::CloudGatewayMediaAnnotationClient::new(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+    );
+    let payload = client.annotate_image(&lang, &mime_type, &image_bytes)?;
+    Ok(payload.to_string())
 }
 
 #[flutter_rust_bridge::frb]

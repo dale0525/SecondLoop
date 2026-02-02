@@ -8,6 +8,18 @@ abstract class AttachmentsBackend {
     required String sha256,
   });
 
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
   Future<List<Attachment>> listRecentAttachments(
     Uint8List key, {
     int limit = 50,

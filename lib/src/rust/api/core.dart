@@ -311,6 +311,156 @@ Future<AttachmentExifMetadata?> dbReadAttachmentExifMetadata(
     RustLib.instance.api.crateApiCoreDbReadAttachmentExifMetadata(
         appDir: appDir, key: key, attachmentSha256: attachmentSha256);
 
+Future<String?> dbReadAttachmentPlaceDisplayName(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256}) =>
+    RustLib.instance.api.crateApiCoreDbReadAttachmentPlaceDisplayName(
+        appDir: appDir, key: key, attachmentSha256: attachmentSha256);
+
+Future<String?> dbReadAttachmentAnnotationCaptionLong(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256}) =>
+    RustLib.instance.api.crateApiCoreDbReadAttachmentAnnotationCaptionLong(
+        appDir: appDir, key: key, attachmentSha256: attachmentSha256);
+
+Future<void> dbEnqueueAttachmentPlace(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String lang,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbEnqueueAttachmentPlace(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        nowMs: nowMs);
+
+Future<void> dbEnqueueAttachmentAnnotation(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String lang,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbEnqueueAttachmentAnnotation(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        nowMs: nowMs);
+
+Future<List<AttachmentPlaceJob>> dbListDueAttachmentPlaces(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs,
+        required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListDueAttachmentPlaces(
+        appDir: appDir, key: key, nowMs: nowMs, limit: limit);
+
+Future<List<AttachmentAnnotationJob>> dbListDueAttachmentAnnotations(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs,
+        required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListDueAttachmentAnnotations(
+        appDir: appDir, key: key, nowMs: nowMs, limit: limit);
+
+Future<void> dbMarkAttachmentPlaceFailed(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required PlatformInt64 attempts,
+        required PlatformInt64 nextRetryAtMs,
+        required String lastError,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkAttachmentPlaceFailed(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: lastError,
+        nowMs: nowMs);
+
+Future<void> dbMarkAttachmentAnnotationFailed(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required PlatformInt64 attempts,
+        required PlatformInt64 nextRetryAtMs,
+        required String lastError,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkAttachmentAnnotationFailed(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: lastError,
+        nowMs: nowMs);
+
+Future<void> dbMarkAttachmentPlaceOkJson(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String lang,
+        required String payloadJson,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkAttachmentPlaceOkJson(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        payloadJson: payloadJson,
+        nowMs: nowMs);
+
+Future<void> dbMarkAttachmentAnnotationOkJson(
+        {required String appDir,
+        required List<int> key,
+        required String attachmentSha256,
+        required String lang,
+        required String modelName,
+        required String payloadJson,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkAttachmentAnnotationOkJson(
+        appDir: appDir,
+        key: key,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        modelName: modelName,
+        payloadJson: payloadJson,
+        nowMs: nowMs);
+
+Future<String> geoReverseCloudGateway(
+        {required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required double lat,
+        required double lon,
+        required String lang}) =>
+    RustLib.instance.api.crateApiCoreGeoReverseCloudGateway(
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        lat: lat,
+        lon: lon,
+        lang: lang);
+
+Future<String> mediaAnnotationCloudGateway(
+        {required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName,
+        required String lang,
+        required String mimeType,
+        required List<int> imageBytes}) =>
+    RustLib.instance.api.crateApiCoreMediaAnnotationCloudGateway(
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName,
+        lang: lang,
+        mimeType: mimeType,
+        imageBytes: imageBytes);
+
 Future<AttachmentVariant> dbUpsertAttachmentVariant(
         {required String appDir,
         required List<int> key,

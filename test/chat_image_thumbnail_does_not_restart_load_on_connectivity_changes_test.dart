@@ -158,4 +158,18 @@ final class _Backend implements AttachmentsBackend {
     }
     return _bytesCompleter.future;
   }
+
+  @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
 }

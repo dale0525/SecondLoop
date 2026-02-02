@@ -583,6 +583,20 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
   }
 
   @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
   Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
     Uint8List key, {
     required String sha256,

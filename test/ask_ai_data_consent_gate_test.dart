@@ -53,8 +53,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('ask_ai_consent_continue')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('processPending'));
     expect(backend.calls, contains('askAiStream'));
+    expect(backend.calls, isNot(contains('processPending')));
   });
 }
 

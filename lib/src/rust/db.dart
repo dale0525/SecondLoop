@@ -41,6 +41,57 @@ class Attachment {
           createdAtMs == other.createdAtMs;
 }
 
+class AttachmentAnnotationJob {
+  final String attachmentSha256;
+  final String status;
+  final String lang;
+  final String? modelName;
+  final PlatformInt64 attempts;
+  final PlatformInt64? nextRetryAtMs;
+  final String? lastError;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const AttachmentAnnotationJob({
+    required this.attachmentSha256,
+    required this.status,
+    required this.lang,
+    this.modelName,
+    required this.attempts,
+    this.nextRetryAtMs,
+    this.lastError,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      attachmentSha256.hashCode ^
+      status.hashCode ^
+      lang.hashCode ^
+      modelName.hashCode ^
+      attempts.hashCode ^
+      nextRetryAtMs.hashCode ^
+      lastError.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AttachmentAnnotationJob &&
+          runtimeType == other.runtimeType &&
+          attachmentSha256 == other.attachmentSha256 &&
+          status == other.status &&
+          lang == other.lang &&
+          modelName == other.modelName &&
+          attempts == other.attempts &&
+          nextRetryAtMs == other.nextRetryAtMs &&
+          lastError == other.lastError &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class AttachmentExifMetadata {
   final PlatformInt64? capturedAtMs;
   final double? latitude;
@@ -64,6 +115,53 @@ class AttachmentExifMetadata {
           capturedAtMs == other.capturedAtMs &&
           latitude == other.latitude &&
           longitude == other.longitude;
+}
+
+class AttachmentPlaceJob {
+  final String attachmentSha256;
+  final String status;
+  final String lang;
+  final PlatformInt64 attempts;
+  final PlatformInt64? nextRetryAtMs;
+  final String? lastError;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const AttachmentPlaceJob({
+    required this.attachmentSha256,
+    required this.status,
+    required this.lang,
+    required this.attempts,
+    this.nextRetryAtMs,
+    this.lastError,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      attachmentSha256.hashCode ^
+      status.hashCode ^
+      lang.hashCode ^
+      attempts.hashCode ^
+      nextRetryAtMs.hashCode ^
+      lastError.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AttachmentPlaceJob &&
+          runtimeType == other.runtimeType &&
+          attachmentSha256 == other.attachmentSha256 &&
+          status == other.status &&
+          lang == other.lang &&
+          attempts == other.attempts &&
+          nextRetryAtMs == other.nextRetryAtMs &&
+          lastError == other.lastError &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
 }
 
 class AttachmentVariant {

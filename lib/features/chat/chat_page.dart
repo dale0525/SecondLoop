@@ -42,6 +42,7 @@ import '../actions/suggestions_parser.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
 import '../actions/todo/message_action_resolver.dart';
+import '../actions/todo/message_auto_actions_queue.dart';
 import '../actions/todo/todo_thread_match.dart';
 import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
@@ -79,6 +80,11 @@ class _ChatPageState extends State<ChatPage> {
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
       <String, List<Attachment>>{};
+  final Map<String, Future<_AttachmentEnrichment>>
+      _attachmentEnrichmentFuturesBySha256 =
+      <String, Future<_AttachmentEnrichment>>{};
+  final Map<String, _AttachmentEnrichment> _attachmentEnrichmentCacheBySha256 =
+      <String, _AttachmentEnrichment>{};
   List<Message> _paginatedMessages = <Message>[];
   bool _loadingMoreMessages = false;
   bool _hasMoreMessages = true;
@@ -100,6 +106,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription<String>? _askSub;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  MessageAutoActionsQueue? _messageAutoActionsQueue;
 
   static const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
   static const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
@@ -812,6 +819,7 @@ class _ChatPageState extends State<ChatPage> {
     if (oldEngine != null && oldListener != null) {
       oldEngine.changes.removeListener(oldListener);
     }
+    _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _askFailureTimer?.cancel();
     _controller.dispose();
@@ -1325,6 +1333,7 @@ class _ChatPageState extends State<ChatPage> {
       _reviewCountFuture = _loadReviewQueueCount();
       _agendaFuture = _loadTodoAgendaSummary();
       _attachmentsFuturesByMessageId.clear();
+      _attachmentEnrichmentFuturesBySha256.clear();
     });
   }
 
@@ -1366,7 +1375,16 @@ class _ChatPageState extends State<ChatPage> {
           );
         });
       }
-      unawaited(_handleMessageAutoActions(message, text));
+      _messageAutoActionsQueue ??= MessageAutoActionsQueue(
+        backend: backend,
+        sessionKey: sessionKey,
+        handler: _handleMessageAutoActions,
+      );
+      _messageAutoActionsQueue!.enqueue(
+        message: message,
+        rawText: text,
+        createdAtMs: message.createdAtMs,
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1400,6 +1418,47 @@ class _ChatPageState extends State<ChatPage> {
       attachmentSha256: attachmentSha256,
       desiredVariant: 'original',
       nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> _maybeEnqueueAttachmentPlaceEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256, {
+    required String lang,
+  }) async {
+    try {
+      await backend.enqueueAttachmentPlace(
+        sessionKey,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
+  Future<_AttachmentEnrichment> _loadAttachmentEnrichment(
+    AttachmentsBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256,
+  ) async {
+    final placeFuture = backend
+        .readAttachmentPlaceDisplayName(
+          sessionKey,
+          sha256: attachmentSha256,
+        )
+        .catchError((_) => null);
+    final captionFuture = backend
+        .readAttachmentAnnotationCaptionLong(
+          sessionKey,
+          sha256: attachmentSha256,
+        )
+        .catchError((_) => null);
+    return _AttachmentEnrichment(
+      placeDisplayName: await placeFuture,
+      captionLong: await captionFuture,
     );
   }
 
@@ -1468,6 +1527,7 @@ class _ChatPageState extends State<ChatPage> {
       if (picked == null) return;
       if (!mounted) return;
 
+      final lang = Localizations.localeOf(context).toLanguageTag();
       final backendAny = AppBackendScope.of(context);
       final backend = backendAny is NativeAppBackend ? backendAny : null;
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -1520,6 +1580,14 @@ class _ChatPageState extends State<ChatPage> {
                 capturedAtMs: capturedAtMs,
                 latitude: latitude,
                 longitude: longitude,
+              );
+              unawaited(
+                _maybeEnqueueAttachmentPlaceEnrichment(
+                  backend,
+                  sessionKey,
+                  sent.sha256,
+                  lang: lang,
+                ),
               );
               syncEngine?.notifyLocalMutation();
               if (!mounted) return;
@@ -1619,6 +1687,7 @@ class _ChatPageState extends State<ChatPage> {
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final lang = Localizations.localeOf(context).toLanguageTag();
 
     final compressed =
         await compressImageForStorage(rawBytes, mimeType: inferredMimeType);
@@ -1656,6 +1725,16 @@ class _ChatPageState extends State<ChatPage> {
         capturedAtMs: capturedAtMs,
         latitude: latitude,
         longitude: longitude,
+      );
+    }
+    if (latitude != null && longitude != null) {
+      unawaited(
+        _maybeEnqueueAttachmentPlaceEnrichment(
+          backend,
+          sessionKey,
+          attachment.sha256,
+          lang: lang,
+        ),
       );
     }
     unawaited(_maybeEnqueueCloudMediaBackup(
@@ -2787,18 +2866,6 @@ class _ChatPageState extends State<ChatPage> {
     });
     _controller.clear();
 
-    try {
-      if (topK > 0 &&
-          !(route == AskAiRouteKind.cloudGateway && allowCloudEmbeddings) &&
-          !hasBrokEmbeddings) {
-        await _prepareEmbeddingsForAskAi(backend, sessionKey);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _showAskAiFailure(question);
-      return;
-    }
-
     if (!mounted) return;
     final locale = Localizations.localeOf(context);
     final firstDayOfWeekIndex =
@@ -2918,81 +2985,106 @@ class _ChatPageState extends State<ChatPage> {
           if (!identical(_askSub, sub)) return;
           setState(() => _streamingAnswer += delta);
         },
-        onError: (e) async {
-          if (!mounted) return;
-          if (!identical(_askSub, sub)) return;
+        onError: (e, st) {
+          unawaited(
+            () async {
+              try {
+                if (!mounted) return;
+                if (!identical(_askSub, sub)) return;
 
-          if (fromCloud && isCloudEmailNotVerifiedError(e)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                key: _kAskAiEmailNotVerifiedSnackKey,
-                content: Text(context.t.chat.cloudGateway.emailNotVerified),
-                action: SnackBarAction(
-                  label: context.t.settings.cloudAccount.title,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const CloudAccountPage(),
+                if (fromCloud && isCloudEmailNotVerifiedError(e)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      key: _kAskAiEmailNotVerifiedSnackKey,
+                      content:
+                          Text(context.t.chat.cloudGateway.emailNotVerified),
+                      action: SnackBarAction(
+                        label: context.t.settings.cloudAccount.title,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const CloudAccountPage(),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            );
-
-            if (!mounted) return;
-            _showAskAiFailure(question);
-            return;
-          }
-
-          final cloudStatus = fromCloud ? parseHttpStatusFromError(e) : null;
-
-          final hasByok = await hasActiveLlmProfile(backend, sessionKey);
-          if (!mounted) return;
-          if (fromCloud && hasByok && isCloudFallbackableError(e)) {
-            final message = switch (cloudStatus) {
-              401 => context.t.chat.cloudGateway.fallback.auth,
-              402 => context.t.chat.cloudGateway.fallback.entitlement,
-              429 => context.t.chat.cloudGateway.fallback.rateLimited,
-              _ => context.t.chat.cloudGateway.fallback.generic,
-            };
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                key: _kAskAiCloudFallbackSnackKey,
-                content: Text(message),
-              ),
-            );
-
-            if (!mounted) return;
-            setState(() {
-              _askError = null;
-              _streamingAnswer = '';
-            });
-
-            final hasBrokEmbeddings =
-                await _hasActiveEmbeddingProfile(backend, sessionKey);
-            final byokStream = hasBrokEmbeddings
-                ? backend.askAiStreamWithBrokEmbeddings(
-                    sessionKey,
-                    widget.conversation.id,
-                    question: question,
-                    topK: 10,
-                    thisThreadOnly: _thisThreadOnly,
-                  )
-                : backend.askAiStream(
-                    sessionKey,
-                    widget.conversation.id,
-                    question: question,
-                    topK: 10,
-                    thisThreadOnly: _thisThreadOnly,
+                    ),
                   );
-            await startStream(byokStream, fromCloud: false);
-            return;
-          }
 
-          if (!mounted) return;
-          _showAskAiFailure(question);
+                  if (!mounted) return;
+                  if (!identical(_askSub, sub)) return;
+                  _showAskAiFailure(question);
+                  return;
+                }
+
+                final cloudStatus =
+                    fromCloud ? parseHttpStatusFromError(e) : null;
+
+                bool hasByok;
+                try {
+                  hasByok = await hasActiveLlmProfile(backend, sessionKey);
+                } catch (_) {
+                  hasByok = false;
+                }
+                if (!mounted) return;
+                if (!identical(_askSub, sub)) return;
+
+                if (fromCloud && hasByok && isCloudFallbackableError(e)) {
+                  final message = switch (cloudStatus) {
+                    401 => context.t.chat.cloudGateway.fallback.auth,
+                    402 => context.t.chat.cloudGateway.fallback.entitlement,
+                    429 => context.t.chat.cloudGateway.fallback.rateLimited,
+                    _ => context.t.chat.cloudGateway.fallback.generic,
+                  };
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      key: _kAskAiCloudFallbackSnackKey,
+                      content: Text(message),
+                    ),
+                  );
+
+                  if (!mounted) return;
+                  if (!identical(_askSub, sub)) return;
+                  setState(() {
+                    _askError = null;
+                    _streamingAnswer = '';
+                  });
+
+                  final hasBrokEmbeddings =
+                      await _hasActiveEmbeddingProfile(backend, sessionKey);
+                  if (!mounted) return;
+                  if (!identical(_askSub, sub)) return;
+
+                  final byokStream = hasBrokEmbeddings
+                      ? backend.askAiStreamWithBrokEmbeddings(
+                          sessionKey,
+                          widget.conversation.id,
+                          question: question,
+                          topK: 10,
+                          thisThreadOnly: _thisThreadOnly,
+                        )
+                      : backend.askAiStream(
+                          sessionKey,
+                          widget.conversation.id,
+                          question: question,
+                          topK: 10,
+                          thisThreadOnly: _thisThreadOnly,
+                        );
+                  await startStream(byokStream, fromCloud: false);
+                  return;
+                }
+
+                if (!mounted) return;
+                if (!identical(_askSub, sub)) return;
+                _showAskAiFailure(question);
+              } catch (_) {
+                if (!mounted) return;
+                if (!identical(_askSub, sub)) return;
+                _showAskAiFailure(question);
+              }
+            }(),
+          );
         },
         onDone: () {
           if (!mounted) return;
@@ -3221,81 +3313,6 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     return false;
-  }
-
-  Future<void> _prepareEmbeddingsForAskAi(
-    AppBackend backend,
-    Uint8List sessionKey,
-  ) async {
-    final t = context.t;
-    final status = ValueNotifier<String>(t.semanticSearch.preparing);
-    final elapsedSeconds = ValueNotifier<int>(0);
-    var dialogShown = false;
-
-    final elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      elapsedSeconds.value += 1;
-    });
-
-    final showTimer = Timer(const Duration(milliseconds: 200), () {
-      if (!mounted) return;
-      dialogShown = true;
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) {
-          return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ValueListenableBuilder<String>(
-                  valueListenable: status,
-                  builder: (context, value, child) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(value),
-                        const SizedBox(height: 12),
-                        const LinearProgressIndicator(minHeight: 4),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                ValueListenableBuilder<int>(
-                  valueListenable: elapsedSeconds,
-                  builder: (context, value, child) {
-                    return Text(
-                      context.t.common.labels.elapsedSeconds(seconds: value),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    );
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    });
-
-    try {
-      var totalProcessed = 0;
-      while (true) {
-        final processed = await backend
-            .processPendingMessageEmbeddings(sessionKey, limit: 256);
-        if (processed <= 0) break;
-        totalProcessed += processed;
-        status.value = t.semanticSearch.indexingMessages(count: totalProcessed);
-      }
-    } finally {
-      showTimer.cancel();
-      elapsedTimer.cancel();
-      if (dialogShown && mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
-      status.dispose();
-      elapsedSeconds.dispose();
-    }
   }
 
   @override
@@ -4077,69 +4094,207 @@ class _ChatPageState extends State<ChatPage> {
                                                               ? 8
                                                               : 0,
                                                     ),
-                                                    child:
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
                                                         SingleChildScrollView(
-                                                      scrollDirection:
-                                                          Axis.horizontal,
-                                                      child: Row(
-                                                        children: [
-                                                          for (final attachment
-                                                              in items)
-                                                            Padding(
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .only(
-                                                                right: 8,
+                                                          scrollDirection:
+                                                              Axis.horizontal,
+                                                          child: Row(
+                                                            children: [
+                                                              for (final attachment
+                                                                  in items)
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .only(
+                                                                    right: 8,
+                                                                  ),
+                                                                  child: attachment
+                                                                          .mimeType
+                                                                          .startsWith(
+                                                                              'image/')
+                                                                      ? ChatImageAttachmentThumbnail(
+                                                                          key:
+                                                                              ValueKey(
+                                                                            'chat_attachment_image_${attachment.sha256}',
+                                                                          ),
+                                                                          attachment:
+                                                                              attachment,
+                                                                          attachmentsBackend:
+                                                                              attachmentsBackend,
+                                                                          onTap:
+                                                                              () {
+                                                                            Navigator.of(context).push(
+                                                                              MaterialPageRoute(
+                                                                                builder: (context) {
+                                                                                  return AttachmentViewerPage(
+                                                                                    attachment: attachment,
+                                                                                  );
+                                                                                },
+                                                                              ),
+                                                                            );
+                                                                          },
+                                                                        )
+                                                                      : AttachmentCard(
+                                                                          attachment:
+                                                                              attachment,
+                                                                          onTap:
+                                                                              () {
+                                                                            Navigator.of(context).push(
+                                                                              MaterialPageRoute(
+                                                                                builder: (context) {
+                                                                                  return AttachmentViewerPage(
+                                                                                    attachment: attachment,
+                                                                                  );
+                                                                                },
+                                                                              ),
+                                                                            );
+                                                                          },
+                                                                        ),
+                                                                ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        Builder(
+                                                          builder: (context) {
+                                                            String?
+                                                                firstImageSha256;
+                                                            for (final a
+                                                                in items) {
+                                                              if (a.mimeType
+                                                                  .startsWith(
+                                                                      'image/')) {
+                                                                firstImageSha256 =
+                                                                    a.sha256;
+                                                                break;
+                                                              }
+                                                            }
+                                                            final sha256 =
+                                                                firstImageSha256;
+                                                            if (sha256 ==
+                                                                null) {
+                                                              return const SizedBox
+                                                                  .shrink();
+                                                            }
+
+                                                            return FutureBuilder(
+                                                              initialData:
+                                                                  _attachmentEnrichmentCacheBySha256[
+                                                                      sha256],
+                                                              future:
+                                                                  _attachmentEnrichmentFuturesBySha256
+                                                                      .putIfAbsent(
+                                                                sha256,
+                                                                () =>
+                                                                    _loadAttachmentEnrichment(
+                                                                  attachmentsBackend,
+                                                                  sessionKey,
+                                                                  sha256,
+                                                                ).then((value) {
+                                                                  _attachmentEnrichmentCacheBySha256[
+                                                                          sha256] =
+                                                                      value;
+                                                                  return value;
+                                                                }),
                                                               ),
-                                                              child: attachment
-                                                                      .mimeType
-                                                                      .startsWith(
-                                                                          'image/')
-                                                                  ? ChatImageAttachmentThumbnail(
-                                                                      key:
-                                                                          ValueKey(
-                                                                        'chat_attachment_image_${attachment.sha256}',
-                                                                      ),
-                                                                      attachment:
-                                                                          attachment,
-                                                                      attachmentsBackend:
-                                                                          attachmentsBackend,
-                                                                      onTap:
-                                                                          () {
-                                                                        Navigator.of(context)
-                                                                            .push(
-                                                                          MaterialPageRoute(
-                                                                            builder:
-                                                                                (context) {
-                                                                              return AttachmentViewerPage(
-                                                                                attachment: attachment,
-                                                                              );
-                                                                            },
+                                                              builder: (context,
+                                                                  snapshot) {
+                                                                final enrichment =
+                                                                    snapshot
+                                                                        .data;
+                                                                final place =
+                                                                    enrichment
+                                                                        ?.placeDisplayName
+                                                                        ?.trim();
+                                                                final caption =
+                                                                    enrichment
+                                                                        ?.captionLong
+                                                                        ?.trim();
+
+                                                                final hasPlace =
+                                                                    place !=
+                                                                            null &&
+                                                                        place
+                                                                            .isNotEmpty;
+                                                                final hasCaption =
+                                                                    caption !=
+                                                                            null &&
+                                                                        caption
+                                                                            .isNotEmpty;
+                                                                if (!hasPlace &&
+                                                                    !hasCaption) {
+                                                                  return const SizedBox
+                                                                      .shrink();
+                                                                }
+
+                                                                final textStyle = Theme.of(
+                                                                        context)
+                                                                    .textTheme
+                                                                    .bodySmall
+                                                                    ?.copyWith(
+                                                                      color: isUser
+                                                                          ? colorScheme.onPrimaryContainer.withOpacity(
+                                                                              0.78)
+                                                                          : colorScheme
+                                                                              .onSurfaceVariant
+                                                                              .withOpacity(0.86),
+                                                                    );
+
+                                                                return Padding(
+                                                                  padding:
+                                                                      const EdgeInsets
+                                                                          .only(
+                                                                    top: 6,
+                                                                  ),
+                                                                  child: Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      if (hasPlace)
+                                                                        Text(
+                                                                          place,
+                                                                          key:
+                                                                              ValueKey(
+                                                                            'chat_image_enrichment_location_$sha256',
                                                                           ),
-                                                                        );
-                                                                      },
-                                                                    )
-                                                                  : AttachmentCard(
-                                                                      attachment:
-                                                                          attachment,
-                                                                      onTap:
-                                                                          () {
-                                                                        Navigator.of(context)
-                                                                            .push(
-                                                                          MaterialPageRoute(
-                                                                            builder:
-                                                                                (context) {
-                                                                              return AttachmentViewerPage(
-                                                                                attachment: attachment,
-                                                                              );
-                                                                            },
+                                                                          maxLines:
+                                                                              1,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                          style:
+                                                                              textStyle,
+                                                                        ),
+                                                                      if (hasPlace &&
+                                                                          hasCaption)
+                                                                        const SizedBox(
+                                                                            height:
+                                                                                2),
+                                                                      if (hasCaption)
+                                                                        Text(
+                                                                          caption,
+                                                                          key:
+                                                                              ValueKey(
+                                                                            'chat_image_enrichment_caption_$sha256',
                                                                           ),
-                                                                        );
-                                                                      },
-                                                                    ),
-                                                            ),
-                                                        ],
-                                                      ),
+                                                                          maxLines:
+                                                                              2,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                          style:
+                                                                              textStyle,
+                                                                        ),
+                                                                    ],
+                                                                  ),
+                                                                );
+                                                              },
+                                                            );
+                                                          },
+                                                        ),
+                                                      ],
                                                     ),
                                                   );
                                                 },
@@ -5039,6 +5194,16 @@ final class _TodoLinkSheetState extends State<_TodoLinkSheet> {
       ),
     );
   }
+}
+
+final class _AttachmentEnrichment {
+  const _AttachmentEnrichment({
+    required this.placeDisplayName,
+    required this.captionLong,
+  });
+
+  final String? placeDisplayName;
+  final String? captionLong;
 }
 
 final class _TodoAgendaSummary {

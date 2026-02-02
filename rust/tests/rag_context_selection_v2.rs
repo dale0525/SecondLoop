@@ -29,6 +29,17 @@ impl rag::AnswerProvider for FakeProvider {
     }
 }
 
+fn prompt_memories_section(prompt: &str) -> &str {
+    let start = prompt
+        .find("Relevant memories (quoted):")
+        .expect("memories section start");
+    let rest = &prompt[start..];
+    let end = rest
+        .find("\nAnswer the user's question.")
+        .unwrap_or(rest.len());
+    &rest[..end]
+}
+
 #[test]
 fn rag_v2_compress_excludes_low_score_sentence() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
@@ -67,8 +78,9 @@ fn rag_v2_compress_excludes_low_score_sentence() {
         .unwrap()
         .clone()
         .expect("prompt");
-    assert!(prompt.contains("Phoenix meeting notes"));
-    assert!(!prompt.contains("UNIQUE_TOKEN_SHOULD_NOT_APPEAR"));
+    let memories = prompt_memories_section(&prompt);
+    assert!(memories.contains("Phoenix meeting notes"));
+    assert!(!memories.contains("UNIQUE_TOKEN_SHOULD_NOT_APPEAR"));
 }
 
 #[test]
@@ -123,7 +135,8 @@ fn rag_v2_mmr_promotes_diverse_contexts() {
         .unwrap()
         .clone()
         .expect("prompt");
-    assert!(prompt.contains("CLUSTER_B_"));
+    let memories = prompt_memories_section(&prompt);
+    assert!(memories.contains("CLUSTER_B_"));
 }
 
 #[test]
@@ -175,6 +188,7 @@ fn rag_v2_respects_context_char_budget() {
         .unwrap()
         .clone()
         .expect("prompt");
-    assert!(prompt.contains("CTX1_UNIQUE"));
-    assert!(!prompt.contains("CTX2_UNIQUE"));
+    let memories = prompt_memories_section(&prompt);
+    assert!(memories.contains("CTX1_UNIQUE"));
+    assert!(!memories.contains("CTX2_UNIQUE"));
 }

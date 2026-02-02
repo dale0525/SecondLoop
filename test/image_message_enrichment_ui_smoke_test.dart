@@ -13,7 +13,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Chat bubble renders image attachment thumbnail preview',
+  testWidgets('Image message shows location + caption enrichment',
       (tester) async {
     final backend = _Backend(
       messages: const [
@@ -21,7 +21,7 @@ void main() {
           id: 'm1',
           conversationId: 'main_stream',
           role: 'user',
-          content: 'Photo',
+          content: '',
           createdAtMs: 0,
           isMemory: true,
         ),
@@ -39,6 +39,12 @@ void main() {
       },
       attachmentBytesBySha: {
         'abc': _tinyPngBytes(),
+      },
+      placeDisplayNameBySha: const {
+        'abc': 'Seattle',
+      },
+      captionLongBySha: const {
+        'abc': 'a cat',
       },
     );
 
@@ -65,11 +71,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Photo'), findsNothing);
     expect(
-      find.byKey(const ValueKey('chat_attachment_image_abc')),
+      find.byKey(const ValueKey('chat_image_enrichment_location_abc')),
       findsOneWidget,
     );
+    expect(find.text('Seattle'), findsOneWidget);
+
+    expect(
+      find.byKey(const ValueKey('chat_image_enrichment_caption_abc')),
+      findsOneWidget,
+    );
+    expect(find.text('a cat'), findsOneWidget);
   });
 }
 
@@ -85,6 +97,8 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
     required List<Message> messages,
     required Map<String, List<Attachment>> attachmentsByMessageId,
     required Map<String, Uint8List> attachmentBytesBySha,
+    required Map<String, String?> placeDisplayNameBySha,
+    required Map<String, String?> captionLongBySha,
   })  : _messages = List<Message>.from(messages),
         _attachmentsByMessageId = Map<String, List<Attachment>>.fromEntries(
           attachmentsByMessageId.entries.map(
@@ -92,11 +106,16 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
           ),
         ),
         _attachmentBytesBySha =
-            Map<String, Uint8List>.from(attachmentBytesBySha);
+            Map<String, Uint8List>.from(attachmentBytesBySha),
+        _placeDisplayNameBySha =
+            Map<String, String?>.from(placeDisplayNameBySha),
+        _captionLongBySha = Map<String, String?>.from(captionLongBySha);
 
   final List<Message> _messages;
   final Map<String, List<Attachment>> _attachmentsByMessageId;
   final Map<String, Uint8List> _attachmentBytesBySha;
+  final Map<String, String?> _placeDisplayNameBySha;
+  final Map<String, String?> _captionLongBySha;
 
   @override
   Future<void> init() async {}
@@ -181,8 +200,10 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
       const <SimilarMessage>[];
 
   @override
-  Future<int> rebuildMessageEmbeddings(Uint8List key,
-          {int batchLimit = 256}) async =>
+  Future<int> rebuildMessageEmbeddings(
+    Uint8List key, {
+    int batchLimit = 256,
+  }) async =>
       0;
 
   @override
@@ -335,10 +356,15 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
       0;
 
   @override
-  Future<List<Attachment>> listRecentAttachments(
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
     Uint8List key, {
-    int limit = 50,
+    required String sha256,
   }) async =>
+      null;
+
+  @override
+  Future<List<Attachment>> listRecentAttachments(Uint8List key,
+          {int limit = 50}) async =>
       const <Attachment>[];
 
   @override
@@ -346,8 +372,7 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
     Uint8List key,
     String messageId, {
     required String attachmentSha256,
-  }) async =>
-      throw UnimplementedError();
+  }) async {}
 
   @override
   Future<List<Attachment>> listMessageAttachments(
@@ -362,7 +387,9 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
     required String sha256,
   }) async {
     final bytes = _attachmentBytesBySha[sha256];
-    if (bytes == null) throw StateError('missing_bytes');
+    if (bytes == null) {
+      throw StateError('missing_bytes:$sha256');
+    }
     return bytes;
   }
 
@@ -371,19 +398,12 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
     Uint8List key, {
     required String sha256,
   }) async =>
-      null;
+      _placeDisplayNameBySha[sha256];
 
   @override
   Future<String?> readAttachmentAnnotationCaptionLong(
     Uint8List key, {
     required String sha256,
   }) async =>
-      null;
-
-  @override
-  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
-    Uint8List key, {
-    required String sha256,
-  }) async =>
-      null;
+      _captionLongBySha[sha256];
 }

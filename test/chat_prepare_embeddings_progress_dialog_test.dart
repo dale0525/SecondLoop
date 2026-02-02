@@ -12,7 +12,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI preparation dialog shows elapsed time', (tester) async {
+  testWidgets('Ask AI does not show embeddings preparation dialog',
+      (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = _SlowPrepareBackend();
 
@@ -44,18 +45,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
 
     await tester.pump(const Duration(milliseconds: 250));
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.text('Elapsed: 0s'), findsOneWidget);
-
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Elapsed: 1s'), findsOneWidget);
-
-    await tester.pumpAndSettle(const Duration(seconds: 3));
     expect(find.byType(AlertDialog), findsNothing);
+    expect(backend.calls, contains('askAiStream'));
+    expect(backend.calls, isNot(contains('processPendingMessageEmbeddings')));
   });
 }
 
 final class _SlowPrepareBackend extends AppBackend {
+  final List<String> calls = <String>[];
+
   @override
   Future<void> init() async {}
 
@@ -137,6 +135,7 @@ final class _SlowPrepareBackend extends AppBackend {
     Uint8List key, {
     int limit = 32,
   }) async {
+    calls.add('processPendingMessageEmbeddings');
     await Future<void>.delayed(const Duration(seconds: 2));
     return 0;
   }
@@ -209,7 +208,10 @@ final class _SlowPrepareBackend extends AppBackend {
     int topK = 10,
     bool thisThreadOnly = false,
   }) =>
-      const Stream<String>.empty();
+      () {
+        calls.add('askAiStream');
+        return const Stream<String>.empty();
+      }();
 
   @override
   Stream<String> askAiStreamCloudGateway(

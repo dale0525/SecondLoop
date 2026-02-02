@@ -125,6 +125,31 @@ pub struct AttachmentExifMetadata {
 }
 
 #[derive(Clone, Debug)]
+pub struct AttachmentPlaceJob {
+    pub attachment_sha256: String,
+    pub status: String,
+    pub lang: String,
+    pub attempts: i64,
+    pub next_retry_at_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct AttachmentAnnotationJob {
+    pub attachment_sha256: String,
+    pub status: String,
+    pub lang: String,
+    pub model_name: Option<String>,
+    pub attempts: i64,
+    pub next_retry_at_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct CloudMediaBackup {
     pub attachment_sha256: String,
     pub desired_variant: String,
@@ -1268,6 +1293,45 @@ CREATE TABLE IF NOT EXISTS embedding_profiles (
 );
 CREATE INDEX IF NOT EXISTS idx_embedding_profiles_active ON embedding_profiles(is_active);
 PRAGMA user_version = 18;
+"#,
+        )?;
+    }
+
+    if user_version < 19 {
+        // v19: attachment places + multimodal annotations (encrypted at rest).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_places (
+  attachment_sha256 TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  lang TEXT NOT NULL,
+  payload BLOB,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_places_status_retry
+  ON attachment_places(status, next_retry_at);
+
+CREATE TABLE IF NOT EXISTS attachment_annotations (
+  attachment_sha256 TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  lang TEXT NOT NULL,
+  model_name TEXT,
+  payload BLOB,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_annotations_status_retry
+  ON attachment_annotations(status, next_retry_at);
+PRAGMA user_version = 19;
 "#,
         )?;
     }
@@ -2486,6 +2550,172 @@ pub fn search_similar_todo_threads_active(
     search_similar_todo_threads_default(conn, key, query, top_k)
 }
 
+const MAX_ATTACHMENT_ENRICHMENT_CHARS: usize = 1024;
+
+fn truncate_utf8_to_max_bytes(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
+fn read_attachment_place_display_name_optional(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<Option<String>> {
+    let row: Option<(String, Vec<u8>)> = conn
+        .query_row(
+            r#"SELECT lang, payload
+               FROM attachment_places
+               WHERE attachment_sha256 = ?1
+                 AND status = 'ok'
+                 AND payload IS NOT NULL"#,
+            params![attachment_sha256],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+
+    let Some((lang, payload_blob)) = row else {
+        return Ok(None);
+    };
+
+    let aad = format!("attachment.place:{attachment_sha256}:{lang}");
+    let json = match decrypt_bytes(key, &payload_blob, aad.as_bytes()) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let payload: serde_json::Value = match serde_json::from_slice(&json) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let display_name = payload
+        .get("display_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim();
+
+    if display_name.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(display_name.to_string()))
+}
+
+pub fn read_attachment_place_display_name(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<Option<String>> {
+    read_attachment_place_display_name_optional(conn, key, attachment_sha256)
+}
+
+fn read_attachment_annotation_caption_long_optional(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<Option<String>> {
+    let row: Option<(String, Vec<u8>)> = conn
+        .query_row(
+            r#"SELECT lang, payload
+               FROM attachment_annotations
+               WHERE attachment_sha256 = ?1
+                 AND status = 'ok'
+                 AND payload IS NOT NULL"#,
+            params![attachment_sha256],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+
+    let Some((lang, payload_blob)) = row else {
+        return Ok(None);
+    };
+
+    let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
+    let json = match decrypt_bytes(key, &payload_blob, aad.as_bytes()) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let payload: serde_json::Value = match serde_json::from_slice(&json) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let caption_long = payload
+        .get("caption_long")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim();
+
+    if caption_long.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(caption_long.to_string()))
+}
+
+pub fn read_attachment_annotation_caption_long(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<Option<String>> {
+    read_attachment_annotation_caption_long_optional(conn, key, attachment_sha256)
+}
+
+fn build_message_embedding_plaintext(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    content: &str,
+) -> Result<String> {
+    let mut out = format!("passage: {content}");
+
+    let mut stmt = conn.prepare(
+        r#"SELECT attachment_sha256
+           FROM message_attachments
+           WHERE message_id = ?1
+           ORDER BY created_at ASC"#,
+    )?;
+    let mut rows = stmt.query(params![message_id])?;
+
+    let mut extra = String::new();
+    while let Some(row) = rows.next()? {
+        let attachment_sha256: String = row.get(0)?;
+
+        if let Some(display_name) =
+            read_attachment_place_display_name_optional(conn, key, &attachment_sha256)?
+        {
+            extra.push_str("\nlocation: ");
+            extra.push_str(&display_name);
+        }
+
+        if let Some(caption_long) =
+            read_attachment_annotation_caption_long_optional(conn, key, &attachment_sha256)?
+        {
+            extra.push_str("\nimage_caption: ");
+            extra.push_str(&caption_long);
+        }
+
+        if extra.len() > MAX_ATTACHMENT_ENRICHMENT_CHARS {
+            break;
+        }
+    }
+
+    let extra = truncate_utf8_to_max_bytes(&extra, MAX_ATTACHMENT_ENRICHMENT_CHARS);
+    if !extra.trim().is_empty() {
+        out.push_str(extra);
+    }
+
+    Ok(out)
+}
+
 pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
     conn: &Connection,
     key: &[u8; 32],
@@ -2532,7 +2762,12 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
 
         message_rowids.push(rowid);
         message_ids.push(id);
-        plaintexts.push(format!("passage: {content}"));
+        plaintexts.push(build_message_embedding_plaintext(
+            conn,
+            key,
+            message_ids.last().expect("message_ids non-empty"),
+            &content,
+        )?);
     }
 
     if plaintexts.is_empty() {
@@ -2880,7 +3115,12 @@ pub fn process_pending_message_embeddings_default(
 
         message_rowids.push(rowid);
         message_ids.push(id);
-        plaintexts.push(format!("passage: {content}"));
+        plaintexts.push(build_message_embedding_plaintext(
+            conn,
+            key,
+            message_ids.last().expect("message_ids non-empty"),
+            &content,
+        )?);
     }
 
     if plaintexts.is_empty() {
@@ -4328,6 +4568,354 @@ pub fn read_attachment_exif_metadata(
     let json = decrypt_bytes(key, &blob, aad.as_bytes())?;
     let metadata: AttachmentExifMetadata = serde_json::from_slice(&json)?;
     Ok(Some(metadata))
+}
+
+pub fn enqueue_attachment_place(
+    conn: &Connection,
+    attachment_sha256: &str,
+    lang: &str,
+    now_ms: i64,
+) -> Result<()> {
+    let lang = lang.trim();
+    if lang.is_empty() {
+        return Err(anyhow!("lang is required"));
+    }
+
+    conn.execute(
+        r#"
+INSERT INTO attachment_places(
+  attachment_sha256,
+  status,
+  lang,
+  payload,
+  attempts,
+  next_retry_at,
+  last_error,
+  created_at,
+  updated_at
+)
+VALUES (?1, 'pending', ?2, NULL, 0, NULL, NULL, ?3, ?3)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  status = CASE
+    WHEN attachment_places.status = 'ok' AND attachment_places.lang = excluded.lang THEN 'ok'
+    ELSE 'pending'
+  END,
+  lang = excluded.lang,
+  payload = CASE
+    WHEN attachment_places.status = 'ok' AND attachment_places.lang = excluded.lang THEN attachment_places.payload
+    ELSE NULL
+  END,
+  attempts = CASE
+    WHEN attachment_places.status = 'ok' AND attachment_places.lang = excluded.lang THEN attachment_places.attempts
+    ELSE 0
+  END,
+  next_retry_at = NULL,
+  last_error = NULL,
+  updated_at = excluded.updated_at
+"#,
+        params![attachment_sha256, lang, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn enqueue_attachment_annotation(
+    conn: &Connection,
+    attachment_sha256: &str,
+    lang: &str,
+    now_ms: i64,
+) -> Result<()> {
+    let lang = lang.trim();
+    if lang.is_empty() {
+        return Err(anyhow!("lang is required"));
+    }
+
+    conn.execute(
+        r#"
+INSERT INTO attachment_annotations(
+  attachment_sha256,
+  status,
+  lang,
+  model_name,
+  payload,
+  attempts,
+  next_retry_at,
+  last_error,
+  created_at,
+  updated_at
+)
+VALUES (?1, 'pending', ?2, NULL, NULL, 0, NULL, NULL, ?3, ?3)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  status = CASE
+    WHEN attachment_annotations.status = 'ok' AND attachment_annotations.lang = excluded.lang THEN 'ok'
+    ELSE 'pending'
+  END,
+  lang = excluded.lang,
+  model_name = CASE
+    WHEN attachment_annotations.status = 'ok' AND attachment_annotations.lang = excluded.lang THEN attachment_annotations.model_name
+    ELSE NULL
+  END,
+  payload = CASE
+    WHEN attachment_annotations.status = 'ok' AND attachment_annotations.lang = excluded.lang THEN attachment_annotations.payload
+    ELSE NULL
+  END,
+  attempts = CASE
+    WHEN attachment_annotations.status = 'ok' AND attachment_annotations.lang = excluded.lang THEN attachment_annotations.attempts
+    ELSE 0
+  END,
+  next_retry_at = NULL,
+  last_error = NULL,
+  updated_at = excluded.updated_at
+"#,
+        params![attachment_sha256, lang, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn list_due_attachment_places(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<AttachmentPlaceJob>> {
+    let limit = limit.clamp(1, 500);
+    let mut stmt = conn.prepare(
+        r#"
+SELECT attachment_sha256, status, lang, attempts, next_retry_at, last_error, created_at, updated_at
+FROM attachment_places
+WHERE status != 'ok'
+  AND (next_retry_at IS NULL OR next_retry_at <= ?1)
+ORDER BY updated_at ASC, attachment_sha256 ASC
+LIMIT ?2
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(AttachmentPlaceJob {
+            attachment_sha256: row.get(0)?,
+            status: row.get(1)?,
+            lang: row.get(2)?,
+            attempts: row.get(3)?,
+            next_retry_at_ms: row.get(4)?,
+            last_error: row.get(5)?,
+            created_at_ms: row.get(6)?,
+            updated_at_ms: row.get(7)?,
+        });
+    }
+    Ok(result)
+}
+
+pub fn list_due_attachment_annotations(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<AttachmentAnnotationJob>> {
+    let limit = limit.clamp(1, 500);
+    let mut stmt = conn.prepare(
+        r#"
+SELECT attachment_sha256, status, lang, model_name, attempts, next_retry_at, last_error, created_at, updated_at
+FROM attachment_annotations
+WHERE status != 'ok'
+  AND (next_retry_at IS NULL OR next_retry_at <= ?1)
+ORDER BY updated_at ASC, attachment_sha256 ASC
+LIMIT ?2
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(AttachmentAnnotationJob {
+            attachment_sha256: row.get(0)?,
+            status: row.get(1)?,
+            lang: row.get(2)?,
+            model_name: row.get(3)?,
+            attempts: row.get(4)?,
+            next_retry_at_ms: row.get(5)?,
+            last_error: row.get(6)?,
+            created_at_ms: row.get(7)?,
+            updated_at_ms: row.get(8)?,
+        });
+    }
+    Ok(result)
+}
+
+fn mark_messages_linked_to_attachment_for_reembedding(
+    conn: &Connection,
+    attachment_sha256: &str,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE messages
+SET needs_embedding = 1
+WHERE id IN (
+  SELECT message_id
+  FROM message_attachments
+  WHERE attachment_sha256 = ?1
+)
+  AND COALESCE(is_deleted, 0) = 0
+  AND COALESCE(is_memory, 1) = 1
+"#,
+        params![attachment_sha256],
+    )?;
+    Ok(())
+}
+
+pub fn mark_attachment_place_ok(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+    lang: &str,
+    payload: &serde_json::Value,
+    now_ms: i64,
+) -> Result<()> {
+    let lang = lang.trim();
+    if lang.is_empty() {
+        return Err(anyhow!("lang is required"));
+    }
+
+    let json = serde_json::to_vec(payload)?;
+    let aad = format!("attachment.place:{attachment_sha256}:{lang}");
+    let blob = encrypt_bytes(key, &json, aad.as_bytes())?;
+
+    conn.execute(
+        r#"
+INSERT INTO attachment_places(
+  attachment_sha256,
+  status,
+  lang,
+  payload,
+  attempts,
+  next_retry_at,
+  last_error,
+  created_at,
+  updated_at
+)
+VALUES (?1, 'ok', ?2, ?3, 0, NULL, NULL, ?4, ?4)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  status = 'ok',
+  lang = excluded.lang,
+  payload = excluded.payload,
+  next_retry_at = NULL,
+  last_error = NULL,
+  updated_at = excluded.updated_at
+"#,
+        params![attachment_sha256, lang, blob, now_ms],
+    )?;
+
+    mark_messages_linked_to_attachment_for_reembedding(conn, attachment_sha256)?;
+    Ok(())
+}
+
+pub fn mark_attachment_place_failed(
+    conn: &Connection,
+    attachment_sha256: &str,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE attachment_places
+SET status = 'failed',
+    attempts = ?2,
+    next_retry_at = ?3,
+    last_error = ?4,
+    updated_at = ?5
+WHERE attachment_sha256 = ?1
+"#,
+        params![
+            attachment_sha256,
+            attempts,
+            next_retry_at_ms,
+            last_error,
+            now_ms
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn mark_attachment_annotation_ok(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+    lang: &str,
+    model_name: &str,
+    payload: &serde_json::Value,
+    now_ms: i64,
+) -> Result<()> {
+    let lang = lang.trim();
+    if lang.is_empty() {
+        return Err(anyhow!("lang is required"));
+    }
+    let model_name = model_name.trim();
+    if model_name.is_empty() {
+        return Err(anyhow!("model_name is required"));
+    }
+
+    let json = serde_json::to_vec(payload)?;
+    let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
+    let blob = encrypt_bytes(key, &json, aad.as_bytes())?;
+
+    conn.execute(
+        r#"
+INSERT INTO attachment_annotations(
+  attachment_sha256,
+  status,
+  lang,
+  model_name,
+  payload,
+  attempts,
+  next_retry_at,
+  last_error,
+  created_at,
+  updated_at
+)
+VALUES (?1, 'ok', ?2, ?3, ?4, 0, NULL, NULL, ?5, ?5)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  status = 'ok',
+  lang = excluded.lang,
+  model_name = excluded.model_name,
+  payload = excluded.payload,
+  next_retry_at = NULL,
+  last_error = NULL,
+  updated_at = excluded.updated_at
+"#,
+        params![attachment_sha256, lang, model_name, blob, now_ms],
+    )?;
+
+    mark_messages_linked_to_attachment_for_reembedding(conn, attachment_sha256)?;
+    Ok(())
+}
+
+pub fn mark_attachment_annotation_failed(
+    conn: &Connection,
+    attachment_sha256: &str,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE attachment_annotations
+SET status = 'failed',
+    attempts = ?2,
+    next_retry_at = ?3,
+    last_error = ?4,
+    updated_at = ?5
+WHERE attachment_sha256 = ?1
+"#,
+        params![
+            attachment_sha256,
+            attempts,
+            next_retry_at_ms,
+            last_error,
+            now_ms
+        ],
+    )?;
+    Ok(())
 }
 
 pub fn link_attachment_to_message(
