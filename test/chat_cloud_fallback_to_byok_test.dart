@@ -13,6 +13,8 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+const _kAskAiErrorPrefix = '\u001eSL_ERROR\u001e';
+
 void main() {
   testWidgets('Ask AI falls back to BYOK when cloud returns 402',
       (tester) async {
@@ -242,9 +244,12 @@ final class _CloudFallbackBackend extends AppBackend {
     required String modelName,
   }) {
     calls.add('askAiStreamCloudGateway');
-    return Stream<String>.error(
-      Exception(
-          'cloud-gateway request failed: HTTP 402 {"error":"entitlement_required"}'),
+    return Stream<String>.fromFuture(
+      Future<String>.delayed(
+        const Duration(milliseconds: 10),
+        () =>
+            '${_kAskAiErrorPrefix}cloud-gateway request failed: HTTP 402 {"error":"entitlement_required"}',
+      ),
     );
   }
 

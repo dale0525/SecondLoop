@@ -118,6 +118,7 @@ class _ChatPageState extends State<ChatPage> {
   static const _kAskAiEmailNotVerifiedSnackKey = ValueKey(
     'ask_ai_email_not_verified_snack',
   );
+  static const _kAskAiErrorPrefix = '\u001eSL_ERROR\u001e';
   static const _kCollapsedMessageHeight = 280.0;
   static const _kLongMessageRuneThreshold = 600;
   static const _kLongMessageLineThreshold = 12;
@@ -829,9 +830,9 @@ class _ChatPageState extends State<ChatPage> {
     super.dispose();
   }
 
-  void _showAskAiFailure(String question) {
+  void _showAskAiFailure(String question, {String? message}) {
     _askFailureTimer?.cancel();
-    final failureMessage = context.t.chat.askAiFailedTemporary;
+    final failureMessage = message ?? context.t.chat.askAiFailedTemporary;
 
     setState(() {
       _askError = null;
@@ -2980,116 +2981,144 @@ class _ChatPageState extends State<ChatPage> {
     Future<void> startStream(Stream<String> stream,
         {required bool fromCloud}) async {
       late final StreamSubscription<String> sub;
+      var sawError = false;
+
+      Future<void> handleStreamError(Object e) async {
+        try {
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
+          sawError = true;
+
+          if (!fromCloud) {
+            final message =
+                '${context.t.chat.askAiFailedTemporary}\n\n${e.toString()}';
+            _showAskAiFailure(question, message: message);
+            return;
+          }
+
+          if (fromCloud && isCloudEmailNotVerifiedError(e)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                key: _kAskAiEmailNotVerifiedSnackKey,
+                content: Text(context.t.chat.cloudGateway.emailNotVerified),
+                action: SnackBarAction(
+                  label: context.t.settings.cloudAccount.title,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CloudAccountPage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+
+            if (!mounted) return;
+            if (!identical(_askSub, sub)) return;
+            _showAskAiFailure(question);
+            return;
+          }
+
+          final cloudStatus = fromCloud ? parseHttpStatusFromError(e) : null;
+
+          bool hasByok;
+          try {
+            hasByok = await hasActiveLlmProfile(backend, sessionKey);
+          } catch (_) {
+            hasByok = false;
+          }
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
+
+          if (fromCloud && hasByok && isCloudFallbackableError(e)) {
+            final message = switch (cloudStatus) {
+              401 => context.t.chat.cloudGateway.fallback.auth,
+              402 => context.t.chat.cloudGateway.fallback.entitlement,
+              429 => context.t.chat.cloudGateway.fallback.rateLimited,
+              _ => context.t.chat.cloudGateway.fallback.generic,
+            };
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                key: _kAskAiCloudFallbackSnackKey,
+                content: Text(message),
+              ),
+            );
+
+            if (!mounted) return;
+            if (!identical(_askSub, sub)) return;
+            setState(() {
+              _askError = null;
+              _streamingAnswer = '';
+            });
+
+            final hasBrokEmbeddings =
+                await _hasActiveEmbeddingProfile(backend, sessionKey);
+            if (!mounted) return;
+            if (!identical(_askSub, sub)) return;
+
+            final byokStream = hasBrokEmbeddings
+                ? backend.askAiStreamWithBrokEmbeddings(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: 10,
+                    thisThreadOnly: _thisThreadOnly,
+                  )
+                : backend.askAiStream(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: 10,
+                    thisThreadOnly: _thisThreadOnly,
+                  );
+            await startStream(byokStream, fromCloud: false);
+            return;
+          }
+
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
+          final message = fromCloud
+              ? null
+              : '${context.t.chat.askAiFailedTemporary}\n\n${e.toString()}';
+          _showAskAiFailure(question, message: message);
+        } catch (_) {
+          if (!mounted) return;
+          if (!identical(_askSub, sub)) return;
+          final message = fromCloud
+              ? null
+              : '${context.t.chat.askAiFailedTemporary}\n\n${e.toString()}';
+          _showAskAiFailure(question, message: message);
+        }
+      }
+
       sub = stream.listen(
         (delta) {
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
+          if (delta.startsWith(_kAskAiErrorPrefix)) {
+            sawError = true;
+            final errText = delta.substring(_kAskAiErrorPrefix.length).trim();
+            unawaited(handleStreamError(errText));
+            return;
+          }
           setState(() => _streamingAnswer += delta);
         },
         onError: (e, st) {
+          sawError = true;
           unawaited(
             () async {
-              try {
-                if (!mounted) return;
-                if (!identical(_askSub, sub)) return;
-
-                if (fromCloud && isCloudEmailNotVerifiedError(e)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      key: _kAskAiEmailNotVerifiedSnackKey,
-                      content:
-                          Text(context.t.chat.cloudGateway.emailNotVerified),
-                      action: SnackBarAction(
-                        label: context.t.settings.cloudAccount.title,
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const CloudAccountPage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-
-                  if (!mounted) return;
-                  if (!identical(_askSub, sub)) return;
-                  _showAskAiFailure(question);
-                  return;
-                }
-
-                final cloudStatus =
-                    fromCloud ? parseHttpStatusFromError(e) : null;
-
-                bool hasByok;
-                try {
-                  hasByok = await hasActiveLlmProfile(backend, sessionKey);
-                } catch (_) {
-                  hasByok = false;
-                }
-                if (!mounted) return;
-                if (!identical(_askSub, sub)) return;
-
-                if (fromCloud && hasByok && isCloudFallbackableError(e)) {
-                  final message = switch (cloudStatus) {
-                    401 => context.t.chat.cloudGateway.fallback.auth,
-                    402 => context.t.chat.cloudGateway.fallback.entitlement,
-                    429 => context.t.chat.cloudGateway.fallback.rateLimited,
-                    _ => context.t.chat.cloudGateway.fallback.generic,
-                  };
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      key: _kAskAiCloudFallbackSnackKey,
-                      content: Text(message),
-                    ),
-                  );
-
-                  if (!mounted) return;
-                  if (!identical(_askSub, sub)) return;
-                  setState(() {
-                    _askError = null;
-                    _streamingAnswer = '';
-                  });
-
-                  final hasBrokEmbeddings =
-                      await _hasActiveEmbeddingProfile(backend, sessionKey);
-                  if (!mounted) return;
-                  if (!identical(_askSub, sub)) return;
-
-                  final byokStream = hasBrokEmbeddings
-                      ? backend.askAiStreamWithBrokEmbeddings(
-                          sessionKey,
-                          widget.conversation.id,
-                          question: question,
-                          topK: 10,
-                          thisThreadOnly: _thisThreadOnly,
-                        )
-                      : backend.askAiStream(
-                          sessionKey,
-                          widget.conversation.id,
-                          question: question,
-                          topK: 10,
-                          thisThreadOnly: _thisThreadOnly,
-                        );
-                  await startStream(byokStream, fromCloud: false);
-                  return;
-                }
-
-                if (!mounted) return;
-                if (!identical(_askSub, sub)) return;
-                _showAskAiFailure(question);
-              } catch (_) {
-                if (!mounted) return;
-                if (!identical(_askSub, sub)) return;
-                _showAskAiFailure(question);
-              }
+              await handleStreamError(e);
             }(),
           );
         },
         onDone: () {
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
+          if (sawError) {
+            return;
+          }
           if (_streamingAnswer.trim().isEmpty) {
             _showAskAiFailure(question);
             return;

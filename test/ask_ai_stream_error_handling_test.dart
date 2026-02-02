@@ -48,6 +48,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+    expect(find.textContaining('HTTP 500'), findsOneWidget);
     expect(find.textContaining('removed in 3 seconds'), findsOneWidget);
     expect(find.byKey(const ValueKey('chat_message_row_pending_user')),
         findsOneWidget);

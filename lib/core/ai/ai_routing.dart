@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../backend/app_backend.dart';
@@ -42,15 +43,52 @@ Future<AskAiRouteKind> decideAskAiRoute(
 
 int? parseHttpStatusFromError(Object error) {
   final message = error.toString();
-  final match = RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message);
-  if (match == null) return null;
-  return int.tryParse(match.group(1) ?? '');
+  final patterns = <RegExp>[
+    RegExp(r'\bHTTP\s+(\d{3})\b', caseSensitive: false),
+    RegExp(r'\bStatusCode\s*[:=]\s*(\d{3})\b', caseSensitive: false),
+    RegExp(r'\bstatus(?:\s*code)?\s*[:=]\s*(\d{3})\b', caseSensitive: false),
+    RegExp(r'\bstatus(?:\s*code)?\s+(\d{3})\b', caseSensitive: false),
+  ];
+  for (final pattern in patterns) {
+    final match = pattern.firstMatch(message);
+    if (match == null) continue;
+    final status = int.tryParse(match.group(1) ?? '');
+    if (status != null) return status;
+  }
+  return null;
 }
 
 String? parseCloudErrorCodeFromError(Object error) {
   final message = error.toString();
+  final jsonStart = message.indexOf('{');
+  final jsonEnd = message.lastIndexOf('}');
+  if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart) {
+    final jsonText = message.substring(jsonStart, jsonEnd + 1);
+    try {
+      final decoded = jsonDecode(jsonText);
+      if (decoded is Map) {
+        final errorValue = decoded['error'];
+        if (errorValue is String) return errorValue;
+        if (errorValue is Map) {
+          final codeValue =
+              errorValue['code'] ?? errorValue['error'] ?? errorValue['type'];
+          if (codeValue is String) return codeValue;
+        }
+        final codeValue = decoded['code'] ?? decoded['error_code'];
+        if (codeValue is String) return codeValue;
+      }
+    } catch (_) {
+      // Fall back to regex-based parsing below.
+    }
+  }
+
   final match = RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(message);
-  return match?.group(1);
+  if (match != null) return match.group(1);
+  final nestedMatch = RegExp(
+    r'"error"\s*:\s*\{[^}]*"code"\s*:\s*"([^"]+)"',
+    dotAll: true,
+  ).firstMatch(message);
+  return nestedMatch?.group(1);
 }
 
 bool isCloudEmailNotVerifiedError(Object error) {
@@ -61,5 +99,6 @@ bool isCloudEmailNotVerifiedError(Object error) {
 
 bool isCloudFallbackableError(Object error) {
   final status = parseHttpStatusFromError(error);
-  return status == 401 || status == 402 || status == 429;
+  if (status == null) return false;
+  return status == 401 || status == 402 || status == 429 || status >= 500;
 }

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +12,8 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+
+const _kAskAiErrorPrefix = '\u001eSL_ERROR\u001e';
 
 void main() {
   testWidgets(
@@ -46,7 +49,21 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('chat_input')), question);
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pump();
+
+    final pendingBubble =
+        find.byKey(const ValueKey('message_bubble_pending_assistant'));
+    expect(pendingBubble, findsOneWidget);
+    final pendingMarkdown = find.descendant(
+      of: pendingBubble,
+      matching: find.byType(MarkdownBody),
+    );
+    final pendingMarkdownData =
+        tester.widget<MarkdownBody>(pendingMarkdown).data;
+    expect(pendingMarkdownData, startsWith('Ask AI failed'));
+    expect(pendingMarkdownData, contains('HTTP 500'));
 
     expect(find.byKey(const ValueKey('chat_message_row_pending_user')),
         findsOneWidget);
@@ -132,7 +149,10 @@ final class _FailingAskBackend extends TestAppBackend {
     bool thisThreadOnly = false,
   }) {
     return Stream<String>.fromFuture(
-      Future<String>.error(StateError('HTTP 500')),
+      Future<String>.delayed(
+        const Duration(milliseconds: 10),
+        () => '${_kAskAiErrorPrefix}HTTP 500',
+      ),
     );
   }
 }
