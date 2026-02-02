@@ -68,8 +68,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('processPendingMessageEmbeddings'));
     expect(backend.calls, contains('askAiStream'));
+    expect(backend.calls, isNot(contains('processPendingMessageEmbeddings')));
     expect(backend.lastAskTopK, 10);
   });
 }
