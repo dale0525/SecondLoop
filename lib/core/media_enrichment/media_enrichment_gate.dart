@@ -10,6 +10,8 @@ import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
+import '../sync/sync_engine_gate.dart';
+import 'media_enrichment_availability.dart';
 
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});
@@ -116,17 +118,20 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       } catch (_) {
         idToken = null;
       }
+      if (!mounted) return;
 
-      final cloudAvailable =
-          subscriptionStatus == SubscriptionStatus.entitled &&
-              idToken != null &&
-              idToken.trim().isNotEmpty &&
-              gatewayConfig.baseUrl.trim().isNotEmpty;
-      if (!cloudAvailable) {
+      final availability = resolveMediaEnrichmentAvailability(
+        subscriptionStatus: subscriptionStatus,
+        cloudIdToken: idToken?.trim(),
+        gatewayBaseUrl: gatewayConfig.baseUrl,
+      );
+
+      if (!availability.geoReverseAvailable) {
         _schedule(_kIdleInterval);
         return;
       }
 
+      final syncEngine = SyncEngineScope.maybeOf(context);
       final runner = MediaEnrichmentRunner(
         store: BackendMediaEnrichmentStore(
           backend: backend,
@@ -135,7 +140,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         client: CloudGatewayMediaEnrichmentClient(
           backend: backend,
           gatewayBaseUrl: gatewayConfig.baseUrl,
-          idToken: idToken,
+          idToken: idToken?.trim() ?? '',
           annotationModelName: 'gpt-4o-mini',
         ),
         settings: const MediaEnrichmentRunnerSettings(
@@ -152,8 +157,11 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       );
 
       final result = await runner.runOnce(allowAnnotationCellular: false);
-
       if (!mounted) return;
+      if (result.didEnrichAny) {
+        syncEngine?.notifyExternalChange();
+      }
+
       if (!result.didEnrichAny) {
         _schedule(_kIdleInterval);
         return;

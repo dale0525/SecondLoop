@@ -2598,14 +2598,51 @@ fn read_attachment_place_display_name_optional(
     let display_name = payload
         .get("display_name")
         .and_then(|v| v.as_str())
+        .or_else(|| payload.get("displayName").and_then(|v| v.as_str()))
         .unwrap_or_default()
         .trim();
 
-    if display_name.is_empty() {
+    if !display_name.is_empty() {
+        return Ok(Some(display_name.to_string()));
+    }
+
+    // Backwards-compatible fallback for older payload versions that only
+    // include structured city/district fields.
+    fn normalize_str(value: Option<&str>) -> Option<&str> {
+        let s = value?.trim();
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    }
+
+    let district_name = normalize_str(
+        payload
+            .get("district")
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str()),
+    );
+    let city_name = normalize_str(
+        payload
+            .get("city")
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str()),
+    );
+
+    let mut parts = Vec::new();
+    for candidate in [district_name, city_name].into_iter().flatten() {
+        if parts.iter().any(|existing: &&str| existing == &candidate) {
+            continue;
+        }
+        parts.push(candidate);
+    }
+
+    if parts.is_empty() {
         return Ok(None);
     }
 
-    Ok(Some(display_name.to_string()))
+    Ok(Some(parts.join(", ")))
 }
 
 pub fn read_attachment_place_display_name(

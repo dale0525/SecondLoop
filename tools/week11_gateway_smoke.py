@@ -9,6 +9,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+_DEFAULT_USER_AGENT = os.getenv("SECONDLOOP_SMOKE_UA", "").strip() or "curl/8.4.0"
+
 
 @dataclass(frozen=True)
 class FirebaseSession:
@@ -55,6 +57,16 @@ def _resolve_gateway_base_url(args: argparse.Namespace) -> str:
     from_env = os.getenv("SECONDLOOP_CLOUD_GATEWAY_BASE_URL", "").strip()
     if from_env:
         return from_env
+    cloud_env = os.getenv("SECONDLOOP_CLOUD_ENV", "").strip().lower()
+    if cloud_env:
+        if cloud_env == "staging":
+            derived = os.getenv("SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING", "").strip()
+        elif cloud_env == "prod":
+            derived = os.getenv("SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD", "").strip()
+        else:
+            derived = ""
+        if derived:
+            return derived
     raise SystemExit(
         "Missing gateway base url. Set SECONDLOOP_CLOUD_GATEWAY_BASE_URL or pass --gateway-base-url."
     )
@@ -68,6 +80,7 @@ def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None
         headers={
             "content-type": "application/json",
             "accept": "application/json",
+            "user-agent": _DEFAULT_USER_AGENT,
             **(headers or {}),
         },
         method="POST",
@@ -96,6 +109,7 @@ def _post_json_partial(
         headers={
             "content-type": "application/json",
             "accept": "application/json",
+            "user-agent": _DEFAULT_USER_AGENT,
             **(headers or {}),
         },
         method="POST",
@@ -119,6 +133,7 @@ def _get_json(url: str, headers: dict[str, str] | None = None) -> tuple[int, dic
         url,
         headers={
             "accept": "application/json",
+            "user-agent": _DEFAULT_USER_AGENT,
             **(headers or {}),
         },
         method="GET",
@@ -197,15 +212,29 @@ def _firebase_send_verify_email(api_key: str, id_token: str) -> None:
     _ = body
 
 
-def _gateway_health(base: str) -> None:
-    status, body, text = _get_json(f"{base.rstrip('/')}/health")
-    if status != 200 or body is None or body.get("ok") is not True:
-        raise RuntimeError(f"gateway /health unexpected: HTTP {status} {text[:200]}")
+def _gateway_health(base: str) -> tuple[int, dict[str, Any] | None, str]:
+    return _get_json(f"{base.rstrip('/')}/health")
 
 
 def _gateway_subscription(base: str, id_token: str) -> tuple[int, dict[str, Any] | None, str]:
     return _get_json(
         f"{base.rstrip('/')}/v1/subscription",
+        headers={"authorization": f"Bearer {id_token}"},
+    )
+
+def _gateway_geo_reverse(
+    base: str,
+    id_token: str,
+    *,
+    lat: float,
+    lon: float,
+    lang: str,
+) -> tuple[int, dict[str, Any] | None, str]:
+    from urllib.parse import urlencode
+
+    query = urlencode({"lat": lat, "lon": lon, "lang": lang})
+    return _get_json(
+        f"{base.rstrip('/')}/v1/geo/reverse?{query}",
         headers={"authorization": f"Bearer {id_token}"},
     )
 
@@ -228,11 +257,17 @@ def _gateway_chat(
     accept = "text/event-stream" if stream else "application/json"
     headers = {"authorization": f"Bearer {id_token}", "accept": accept}
 
-    fn = _post_json_partial if stream else _post_json
-    return fn(
+    if stream:
+        return _post_json_partial(
+            f"{base.rstrip('/')}/v1/chat/completions",
+            payload,
+            max_bytes=read_bytes,
+            headers=headers,
+        )
+
+    return _post_json(
         f"{base.rstrip('/')}/v1/chat/completions",
         payload,
-        max_bytes=read_bytes,
         headers=headers,
     )
 
@@ -267,7 +302,7 @@ def _resolve_account_from_env_or_prompt(prefix: str) -> tuple[str, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Week11 staging smoke checks: Firebase REST sign-in + AI Gateway /health,/v1/subscription,/v1/chat/completions",
+        description="Week11 staging smoke checks: Firebase REST sign-in + AI Gateway /health,/v1/subscription,/v1/geo/reverse,/v1/chat/completions",
     )
     parser.add_argument("--gateway-base-url", help="e.g. https://...workers.dev")
     parser.add_argument("--firebase-api-key", help="Firebase web api key (Identity Toolkit)")
@@ -287,13 +322,40 @@ def main() -> int:
         default=2048,
         help="Max bytes to read from /v1/chat/completions response in stream mode",
     )
+    parser.add_argument(
+        "--geo-lat",
+        type=float,
+        default=None,
+        help="If set, also call GET /v1/geo/reverse with this latitude",
+    )
+    parser.add_argument(
+        "--geo-lon",
+        type=float,
+        default=None,
+        help="If set, also call GET /v1/geo/reverse with this longitude",
+    )
+    parser.add_argument(
+        "--geo-lang",
+        default="en",
+        help="Language tag for /v1/geo/reverse (default: en)",
+    )
+    parser.add_argument(
+        "--geo-print-json",
+        action="store_true",
+        help="Print full JSON payload for /v1/geo/reverse",
+    )
     args = parser.parse_args()
 
     api_key = _resolve_api_key(args)
     gateway = _resolve_gateway_base_url(args)
 
-    _gateway_health(gateway)
-    print("gateway /health: ok")
+    health_status, health_body, health_text = _gateway_health(gateway)
+    if health_status == 200 and health_body is not None and health_body.get("ok") is True:
+        print("gateway /health: ok")
+    else:
+        # Some deployments only route the worker under `/v1/*` on a custom domain,
+        # so `/health` might be handled by a different upstream (and may 403).
+        print(f"gateway /health: HTTP {health_status} (skipped)")
 
     accounts = [
         ("ACCOUNT1",) + _resolve_account_from_env_or_prompt("ACCOUNT1"),
@@ -319,6 +381,39 @@ def main() -> int:
         else:
             err = _extract_error(body, text) or text[:200]
             print(f"gateway /v1/subscription: HTTP {status} error={err}")
+
+        if args.geo_lat is not None or args.geo_lon is not None:
+            if args.geo_lat is None or args.geo_lon is None:
+                raise SystemExit("--geo-lat and --geo-lon must be set together")
+
+            status, body, text = _gateway_geo_reverse(
+                gateway,
+                session.id_token,
+                lat=float(args.geo_lat),
+                lon=float(args.geo_lon),
+                lang=str(args.geo_lang or "en"),
+            )
+            if status == 200 and body is not None:
+                display_name = body.get("display_name")
+                city_name = None
+                district_name = None
+                city = body.get("city")
+                district = body.get("district")
+                if isinstance(city, dict):
+                    city_name = city.get("name")
+                if isinstance(district, dict):
+                    district_name = district.get("name")
+
+                print(
+                    "gateway /v1/geo/reverse: HTTP 200 "
+                    f"display_name={repr(display_name)} "
+                    f"district={repr(district_name)} city={repr(city_name)}"
+                )
+                if args.geo_print_json:
+                    print(json.dumps(body, ensure_ascii=False, indent=2))
+            else:
+                err = _extract_error(body, text) or text[:200]
+                print(f"gateway /v1/geo/reverse: HTTP {status} error={err}")
 
         status, body, text = _gateway_chat(
             gateway,
