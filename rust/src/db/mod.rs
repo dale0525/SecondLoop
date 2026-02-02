@@ -292,31 +292,187 @@ fn current_embedding_dim(conn: &Connection) -> Result<usize> {
     Ok(DEFAULT_EMBEDDING_DIM)
 }
 
-fn recreate_vec_tables(conn: &Connection, dim: usize) -> Result<()> {
+fn embedding_space_id(model_name: &str, dim: usize) -> Result<String> {
+    let model_name = model_name.trim();
+    if model_name.is_empty() {
+        return Err(anyhow!("missing embedding model_name"));
+    }
     if dim == 0 || dim > 8192 {
         return Err(anyhow!("invalid embedding dim: {dim}"));
     }
-    conn.execute_batch(&format!(
-        r#"
-DROP TABLE IF EXISTS message_embeddings;
-DROP TABLE IF EXISTS todo_embeddings;
-DROP TABLE IF EXISTS todo_activity_embeddings;
-CREATE VIRTUAL TABLE IF NOT EXISTS message_embeddings USING vec0(
+
+    let mut s = String::new();
+    for ch in model_name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            s.push(ch.to_ascii_lowercase());
+        } else {
+            s.push('_');
+        }
+    }
+    while s.contains("__") {
+        s = s.replace("__", "_");
+    }
+    let s = s.trim_matches('_');
+    let s = if s.is_empty() { "unknown" } else { s };
+    Ok(format!("s_{s}_{dim}"))
+}
+
+fn is_safe_sqlite_ident(name: &str) -> bool {
+    name.chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn sqlite_table_exists(conn: &Connection, name: &str) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        params![name],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+fn vec0_dim_from_sqlite_master(conn: &Connection, table: &str) -> Result<Option<usize>> {
+    let sql: Option<String> = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            params![table],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(sql) = sql else {
+        return Ok(None);
+    };
+    let sql_lc = sql.to_ascii_lowercase();
+    let Some(start) = sql_lc.find("float[") else {
+        return Ok(None);
+    };
+    let after = &sql_lc[start + "float[".len()..];
+    let Some(end) = after.find(']') else {
+        return Ok(None);
+    };
+    let digits = &after[..end];
+    Ok(digits.parse::<usize>().ok())
+}
+
+fn message_embeddings_table(space_id: &str) -> Result<String> {
+    if !is_safe_sqlite_ident(space_id) {
+        return Err(anyhow!("unsafe embedding space_id: {space_id}"));
+    }
+    Ok(format!("message_embeddings__{space_id}"))
+}
+
+fn todo_embeddings_table(space_id: &str) -> Result<String> {
+    if !is_safe_sqlite_ident(space_id) {
+        return Err(anyhow!("unsafe embedding space_id: {space_id}"));
+    }
+    Ok(format!("todo_embeddings__{space_id}"))
+}
+
+fn todo_activity_embeddings_table(space_id: &str) -> Result<String> {
+    if !is_safe_sqlite_ident(space_id) {
+        return Err(anyhow!("unsafe embedding space_id: {space_id}"));
+    }
+    Ok(format!("todo_activity_embeddings__{space_id}"))
+}
+
+fn ensure_vec_tables_for_space(conn: &Connection, space_id: &str, dim: usize) -> Result<()> {
+    if dim == 0 || dim > 8192 {
+        return Err(anyhow!("invalid embedding dim: {dim}"));
+    }
+
+    let message_table = message_embeddings_table(space_id)?;
+    let todo_table = todo_embeddings_table(space_id)?;
+    let activity_table = todo_activity_embeddings_table(space_id)?;
+
+    if !sqlite_table_exists(conn, &message_table)? {
+        conn.execute_batch(&format!(
+            r#"
+CREATE VIRTUAL TABLE "{message_table}" USING vec0(
   embedding float[{dim}],
   +message_id TEXT,
   model_name TEXT
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS todo_embeddings USING vec0(
+"#
+        ))?;
+    }
+    if !sqlite_table_exists(conn, &todo_table)? {
+        conn.execute_batch(&format!(
+            r#"
+CREATE VIRTUAL TABLE "{todo_table}" USING vec0(
   embedding float[{dim}],
   todo_id TEXT,
   model_name TEXT
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS todo_activity_embeddings USING vec0(
+"#
+        ))?;
+    }
+    if !sqlite_table_exists(conn, &activity_table)? {
+        conn.execute_batch(&format!(
+            r#"
+CREATE VIRTUAL TABLE "{activity_table}" USING vec0(
   embedding float[{dim}],
   activity_id TEXT,
   todo_id TEXT,
   model_name TEXT
 );
+"#
+        ))?;
+    }
+
+    let msg_dim = vec0_dim_from_sqlite_master(conn, &message_table)?.unwrap_or(0);
+    if msg_dim != dim {
+        return Err(anyhow!(
+            "message vec0 dim mismatch: expected {dim}, got {msg_dim} (table={message_table})"
+        ));
+    }
+    let todo_dim = vec0_dim_from_sqlite_master(conn, &todo_table)?.unwrap_or(0);
+    if todo_dim != dim {
+        return Err(anyhow!(
+            "todo vec0 dim mismatch: expected {dim}, got {todo_dim} (table={todo_table})"
+        ));
+    }
+    let act_dim = vec0_dim_from_sqlite_master(conn, &activity_table)?.unwrap_or(0);
+    if act_dim != dim {
+        return Err(anyhow!(
+            "todo-activity vec0 dim mismatch: expected {dim}, got {act_dim} (table={activity_table})"
+        ));
+    }
+
+    Ok(())
+}
+
+fn recompute_needs_embedding_for_space(conn: &Connection, space_id: &str) -> Result<()> {
+    let message_table = message_embeddings_table(space_id)?;
+    let todo_table = todo_embeddings_table(space_id)?;
+    let activity_table = todo_activity_embeddings_table(space_id)?;
+
+    conn.execute_batch(&format!(
+        r#"
+UPDATE messages
+SET needs_embedding = CASE
+  WHEN COALESCE(is_deleted, 0) = 0
+   AND COALESCE(is_memory, 1) = 1
+   AND NOT EXISTS (SELECT 1 FROM "{message_table}" me WHERE me.rowid = messages.rowid)
+  THEN 1
+  ELSE 0
+END;
+
+UPDATE todos
+SET needs_embedding = CASE
+  WHEN status != 'dismissed'
+   AND NOT EXISTS (SELECT 1 FROM "{todo_table}" te WHERE te.rowid = todos.rowid)
+  THEN 1
+  ELSE 0
+END;
+
+UPDATE todo_activities
+SET needs_embedding = CASE
+  WHEN NOT EXISTS (
+    SELECT 1 FROM "{activity_table}" tae WHERE tae.rowid = todo_activities.rowid
+  )
+  THEN 1
+  ELSE 0
+END;
 "#
     ))?;
     Ok(())
@@ -329,9 +485,11 @@ pub fn set_active_embedding_model(conn: &Connection, model_name: &str, dim: usiz
         return Ok(false);
     }
 
-    conn.execute_batch("BEGIN;")?;
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
 
     let result = (|| -> Result<bool> {
+        let next_space_id = embedding_space_id(model_name, dim)?;
+
         conn.execute(
             r#"INSERT INTO kv(key, value)
                VALUES (?1, ?2)
@@ -345,21 +503,33 @@ pub fn set_active_embedding_model(conn: &Connection, model_name: &str, dim: usiz
             params![KV_ACTIVE_EMBEDDING_DIM, dim.to_string()],
         )?;
 
-        recreate_vec_tables(conn, dim)?;
-
         conn.execute_batch(
             r#"
-UPDATE messages
-SET needs_embedding = CASE
-  WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
-  ELSE 0
-END;
-UPDATE todos
-SET needs_embedding = CASE WHEN status != 'dismissed' THEN 1 ELSE 0 END;
-UPDATE todo_activities
-SET needs_embedding = 1;
+CREATE TABLE IF NOT EXISTS embedding_spaces (
+  space_id TEXT PRIMARY KEY,
+  model_name TEXT NOT NULL,
+  dim INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_embedding_spaces_updated_at_ms
+  ON embedding_spaces(updated_at_ms);
 "#,
         )?;
+
+        let now = now_ms();
+        conn.execute(
+            r#"INSERT INTO embedding_spaces(space_id, model_name, dim, created_at_ms, updated_at_ms)
+               VALUES (?1, ?2, ?3, ?4, ?4)
+               ON CONFLICT(space_id) DO UPDATE SET
+                 model_name = excluded.model_name,
+                 dim = excluded.dim,
+                 updated_at_ms = excluded.updated_at_ms"#,
+            params![next_space_id, model_name, dim as i64, now],
+        )?;
+
+        ensure_vec_tables_for_space(conn, &next_space_id, dim)?;
+        recompute_needs_embedding_for_space(conn, &next_space_id)?;
 
         Ok(true)
     })();
@@ -2323,6 +2493,18 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
     limit: usize,
 ) -> Result<usize> {
     let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(embedder.model_name(), expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let message_table = message_embeddings_table(&space_id)?;
+    let update_sql = format!(
+        r#"UPDATE "{message_table}"
+           SET embedding = ?2, message_id = ?3, model_name = ?4
+           WHERE rowid = ?1"#
+    );
+    let insert_sql = format!(
+        r#"INSERT INTO "{message_table}"(rowid, embedding, message_id, model_name)
+           VALUES (?1, ?2, ?3, ?4)"#
+    );
 
     let mut stmt = conn.prepare(
         r#"SELECT rowid, id, content
@@ -2377,9 +2559,7 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
 
     for i in 0..message_ids.len() {
         let updated = conn.execute(
-            r#"UPDATE message_embeddings
-               SET embedding = ?2, message_id = ?3, model_name = ?4
-               WHERE rowid = ?1"#,
+            &update_sql,
             params![
                 message_rowids[i],
                 embeddings[i].as_bytes(),
@@ -2389,8 +2569,7 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
         )?;
         if updated == 0 {
             conn.execute(
-                r#"INSERT INTO message_embeddings(rowid, embedding, message_id, model_name)
-                   VALUES (?1, ?2, ?3, ?4)"#,
+                &insert_sql,
                 params![
                     message_rowids[i],
                     embeddings[i].as_bytes(),
@@ -2415,6 +2594,18 @@ pub fn process_pending_todo_embeddings<E: Embedder + ?Sized>(
     limit: usize,
 ) -> Result<usize> {
     let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(embedder.model_name(), expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let todo_table = todo_embeddings_table(&space_id)?;
+    let update_sql = format!(
+        r#"UPDATE "{todo_table}"
+           SET embedding = ?2, todo_id = ?3, model_name = ?4
+           WHERE rowid = ?1"#
+    );
+    let insert_sql = format!(
+        r#"INSERT INTO "{todo_table}"(rowid, embedding, todo_id, model_name)
+           VALUES (?1, ?2, ?3, ?4)"#
+    );
 
     let mut stmt = conn.prepare(
         r#"SELECT rowid, id, title, status, due_at_ms
@@ -2475,9 +2666,7 @@ pub fn process_pending_todo_embeddings<E: Embedder + ?Sized>(
 
     for i in 0..todo_ids.len() {
         let updated = conn.execute(
-            r#"UPDATE todo_embeddings
-               SET embedding = ?2, todo_id = ?3, model_name = ?4
-               WHERE rowid = ?1"#,
+            &update_sql,
             params![
                 todo_rowids[i],
                 embeddings[i].as_bytes(),
@@ -2487,8 +2676,7 @@ pub fn process_pending_todo_embeddings<E: Embedder + ?Sized>(
         )?;
         if updated == 0 {
             conn.execute(
-                r#"INSERT INTO todo_embeddings(rowid, embedding, todo_id, model_name)
-                   VALUES (?1, ?2, ?3, ?4)"#,
+                &insert_sql,
                 params![
                     todo_rowids[i],
                     embeddings[i].as_bytes(),
@@ -2524,6 +2712,18 @@ pub fn process_pending_todo_activity_embeddings<E: Embedder + ?Sized>(
     limit: usize,
 ) -> Result<usize> {
     let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(embedder.model_name(), expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let activity_table = todo_activity_embeddings_table(&space_id)?;
+    let update_sql = format!(
+        r#"UPDATE "{activity_table}"
+           SET embedding = ?2, activity_id = ?3, todo_id = ?4, model_name = ?5
+           WHERE rowid = ?1"#
+    );
+    let insert_sql = format!(
+        r#"INSERT INTO "{activity_table}"(rowid, embedding, activity_id, todo_id, model_name)
+           VALUES (?1, ?2, ?3, ?4, ?5)"#
+    );
 
     let mut stmt = conn.prepare(
         r#"SELECT a.rowid, a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content
@@ -2606,9 +2806,7 @@ pub fn process_pending_todo_activity_embeddings<E: Embedder + ?Sized>(
 
     for i in 0..activity_ids.len() {
         let updated = conn.execute(
-            r#"UPDATE todo_activity_embeddings
-               SET embedding = ?2, activity_id = ?3, todo_id = ?4, model_name = ?5
-               WHERE rowid = ?1"#,
+            &update_sql,
             params![
                 activity_rowids[i],
                 embeddings[i].as_bytes(),
@@ -2619,8 +2817,7 @@ pub fn process_pending_todo_activity_embeddings<E: Embedder + ?Sized>(
         )?;
         if updated == 0 {
             conn.execute(
-                r#"INSERT INTO todo_activity_embeddings(rowid, embedding, activity_id, todo_id, model_name)
-                   VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                &insert_sql,
                 params![
                     activity_rowids[i],
                     embeddings[i].as_bytes(),
@@ -2644,6 +2841,19 @@ pub fn process_pending_message_embeddings_default(
     key: &[u8; 32],
     limit: usize,
 ) -> Result<usize> {
+    let space_id = embedding_space_id(crate::embedding::DEFAULT_MODEL_NAME, DEFAULT_EMBEDDING_DIM)?;
+    ensure_vec_tables_for_space(conn, &space_id, DEFAULT_EMBEDDING_DIM)?;
+    let message_table = message_embeddings_table(&space_id)?;
+    let update_sql = format!(
+        r#"UPDATE "{message_table}"
+           SET embedding = ?2, message_id = ?3, model_name = ?4
+           WHERE rowid = ?1"#
+    );
+    let insert_sql = format!(
+        r#"INSERT INTO "{message_table}"(rowid, embedding, message_id, model_name)
+           VALUES (?1, ?2, ?3, ?4)"#
+    );
+
     let mut stmt = conn.prepare(
         r#"SELECT rowid, id, content
            FROM messages
@@ -2688,9 +2898,7 @@ pub fn process_pending_message_embeddings_default(
         }
 
         let updated = conn.execute(
-            r#"UPDATE message_embeddings
-               SET embedding = ?2, message_id = ?3, model_name = ?4
-               WHERE rowid = ?1"#,
+            &update_sql,
             params![
                 message_rowids[i],
                 embedding.as_bytes(),
@@ -2700,8 +2908,7 @@ pub fn process_pending_message_embeddings_default(
         )?;
         if updated == 0 {
             conn.execute(
-                r#"INSERT INTO message_embeddings(rowid, embedding, message_id, model_name)
-                   VALUES (?1, ?2, ?3, ?4)"#,
+                &insert_sql,
                 params![
                     message_rowids[i],
                     embedding.as_bytes(),
@@ -2724,6 +2931,19 @@ pub fn process_pending_todo_embeddings_default(
     key: &[u8; 32],
     limit: usize,
 ) -> Result<usize> {
+    let space_id = embedding_space_id(crate::embedding::DEFAULT_MODEL_NAME, DEFAULT_EMBEDDING_DIM)?;
+    ensure_vec_tables_for_space(conn, &space_id, DEFAULT_EMBEDDING_DIM)?;
+    let todo_table = todo_embeddings_table(&space_id)?;
+    let update_sql = format!(
+        r#"UPDATE "{todo_table}"
+           SET embedding = ?2, todo_id = ?3, model_name = ?4
+           WHERE rowid = ?1"#
+    );
+    let insert_sql = format!(
+        r#"INSERT INTO "{todo_table}"(rowid, embedding, todo_id, model_name)
+           VALUES (?1, ?2, ?3, ?4)"#
+    );
+
     let mut stmt = conn.prepare(
         r#"SELECT rowid, id, title, status, due_at_ms
            FROM todos
@@ -2774,9 +2994,7 @@ pub fn process_pending_todo_embeddings_default(
         }
 
         let updated = conn.execute(
-            r#"UPDATE todo_embeddings
-               SET embedding = ?2, todo_id = ?3, model_name = ?4
-               WHERE rowid = ?1"#,
+            &update_sql,
             params![
                 todo_rowids[i],
                 embedding.as_bytes(),
@@ -2786,8 +3004,7 @@ pub fn process_pending_todo_embeddings_default(
         )?;
         if updated == 0 {
             conn.execute(
-                r#"INSERT INTO todo_embeddings(rowid, embedding, todo_id, model_name)
-                   VALUES (?1, ?2, ?3, ?4)"#,
+                &insert_sql,
                 params![
                     todo_rowids[i],
                     embedding.as_bytes(),
@@ -2811,6 +3028,19 @@ pub fn process_pending_todo_activity_embeddings_default(
     key: &[u8; 32],
     limit: usize,
 ) -> Result<usize> {
+    let space_id = embedding_space_id(crate::embedding::DEFAULT_MODEL_NAME, DEFAULT_EMBEDDING_DIM)?;
+    ensure_vec_tables_for_space(conn, &space_id, DEFAULT_EMBEDDING_DIM)?;
+    let activity_table = todo_activity_embeddings_table(&space_id)?;
+    let update_sql = format!(
+        r#"UPDATE "{activity_table}"
+           SET embedding = ?2, activity_id = ?3, todo_id = ?4, model_name = ?5
+           WHERE rowid = ?1"#
+    );
+    let insert_sql = format!(
+        r#"INSERT INTO "{activity_table}"(rowid, embedding, activity_id, todo_id, model_name)
+           VALUES (?1, ?2, ?3, ?4, ?5)"#
+    );
+
     let mut stmt = conn.prepare(
         r#"SELECT a.rowid, a.id, a.todo_id, a.type, a.from_status, a.to_status, a.content
            FROM todo_activities a
@@ -2883,9 +3113,7 @@ pub fn process_pending_todo_activity_embeddings_default(
         }
 
         let updated = conn.execute(
-            r#"UPDATE todo_activity_embeddings
-               SET embedding = ?2, activity_id = ?3, todo_id = ?4, model_name = ?5
-               WHERE rowid = ?1"#,
+            &update_sql,
             params![
                 activity_rowids[i],
                 embedding.as_bytes(),
@@ -2896,8 +3124,7 @@ pub fn process_pending_todo_activity_embeddings_default(
         )?;
         if updated == 0 {
             conn.execute(
-                r#"INSERT INTO todo_activity_embeddings(rowid, embedding, activity_id, todo_id, model_name)
-                   VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                &insert_sql,
                 params![
                     activity_rowids[i],
                     embedding.as_bytes(),
@@ -2923,18 +3150,23 @@ pub fn rebuild_message_embeddings<E: Embedder + ?Sized>(
     embedder: &E,
     batch_limit: usize,
 ) -> Result<usize> {
-    conn.execute_batch(
+    let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(embedder.model_name(), expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let message_table = message_embeddings_table(&space_id)?;
+
+    conn.execute_batch(&format!(
         r#"
 BEGIN;
-DELETE FROM message_embeddings;
+DELETE FROM "{message_table}";
 UPDATE messages
 SET needs_embedding = CASE
   WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
   ELSE 0
 END;
 COMMIT;
-"#,
-    )?;
+"#
+    ))?;
 
     let batch_limit = batch_limit.max(1);
     let mut total = 0usize;
@@ -2954,18 +3186,22 @@ pub fn rebuild_message_embeddings_default(
     key: &[u8; 32],
     batch_limit: usize,
 ) -> Result<usize> {
-    conn.execute_batch(
+    let space_id = embedding_space_id(crate::embedding::DEFAULT_MODEL_NAME, DEFAULT_EMBEDDING_DIM)?;
+    ensure_vec_tables_for_space(conn, &space_id, DEFAULT_EMBEDDING_DIM)?;
+    let message_table = message_embeddings_table(&space_id)?;
+
+    conn.execute_batch(&format!(
         r#"
 BEGIN;
-DELETE FROM message_embeddings;
+DELETE FROM "{message_table}";
 UPDATE messages
 SET needs_embedding = CASE
   WHEN COALESCE(is_deleted, 0) = 0 AND COALESCE(is_memory, 1) = 1 THEN 1
   ELSE 0
 END;
 COMMIT;
-"#,
-    )?;
+"#
+    ))?;
 
     let batch_limit = batch_limit.max(1);
     let mut total = 0usize;
@@ -3283,6 +3519,9 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
     let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(embedder.model_name(), expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let message_table = message_embeddings_table(&space_id)?;
 
     let top_k = top_k.max(1);
     let candidate_k = (top_k.saturating_mul(10)).min(1000);
@@ -3304,12 +3543,12 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
         ));
     }
 
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare(&format!(
         r#"SELECT message_id, distance
-           FROM message_embeddings
+           FROM "{message_table}"
            WHERE embedding match ?1 AND k = ?2 AND model_name = ?3
-           ORDER BY distance ASC"#,
-    )?;
+           ORDER BY distance ASC"#
+    ))?;
 
     let mut rows = stmt.query(params![
         query_vector.as_bytes(),
@@ -3382,6 +3621,11 @@ pub fn search_similar_todo_threads_by_embedding(
     top_k: usize,
 ) -> Result<Vec<SimilarTodoThread>> {
     let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(model_name, expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let todo_table = todo_embeddings_table(&space_id)?;
+    let activity_table = todo_activity_embeddings_table(&space_id)?;
+
     if query_vector.len() != expected_dim {
         return Err(anyhow!(
             "query vector dim mismatch: expected {expected_dim}, got {} (model_name={})",
@@ -3396,14 +3640,14 @@ pub fn search_similar_todo_threads_by_embedding(
     let mut best: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
 
     {
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare(&format!(
             r#"SELECT te.todo_id, te.distance
-               FROM todo_embeddings te
+               FROM "{todo_table}" te
                JOIN todos t ON t.id = te.todo_id
                WHERE te.embedding match ?1 AND te.k = ?2 AND te.model_name = ?3
                  AND t.status != 'dismissed'
-               ORDER BY te.distance ASC"#,
-        )?;
+               ORDER BY te.distance ASC"#
+        ))?;
 
         let mut rows = stmt.query(params![
             query_vector.as_bytes(),
@@ -3421,14 +3665,14 @@ pub fn search_similar_todo_threads_by_embedding(
     }
 
     {
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare(&format!(
             r#"SELECT tae.todo_id, tae.distance
-               FROM todo_activity_embeddings tae
+               FROM "{activity_table}" tae
                JOIN todos t ON t.id = tae.todo_id
                WHERE tae.embedding match ?1 AND tae.k = ?2 AND tae.model_name = ?3
                  AND t.status != 'dismissed'
-               ORDER BY tae.distance ASC"#,
-        )?;
+               ORDER BY tae.distance ASC"#
+        ))?;
 
         let mut rows = stmt.query(params![
             query_vector.as_bytes(),

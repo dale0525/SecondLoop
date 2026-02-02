@@ -172,7 +172,6 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       final result = await _processBatch(
         backend,
         sessionKey,
-        subscriptionStatus: subscriptionStatus,
         cloudEmbeddingsSelected: cloudEmbeddingsSelected,
         cloudAvailable: cloudAvailable,
         cloudIdToken: cloudIdToken,
@@ -196,7 +195,6 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
   Future<_IndexBatchResult> _processBatch(
     AppBackend backend,
     Uint8List sessionKey, {
-    required SubscriptionStatus subscriptionStatus,
     required bool cloudEmbeddingsSelected,
     required bool cloudAvailable,
     required String? cloudIdToken,
@@ -215,12 +213,9 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       return _IndexBatchResult(processed: processed, isRemote: true);
     }
 
-    if (cloudEmbeddingsSelected &&
-        subscriptionStatus != SubscriptionStatus.notEntitled) {
-      // Avoid switching the active embeddings provider while cloud embeddings
-      // are selected but temporarily unavailable.
-      return const _IndexBatchResult(processed: 0, isRemote: false);
-    }
+    // If cloud embeddings were selected but are temporarily unavailable, fall
+    // back to local/BYOK indexing. With multi-index embeddings, this doesn't
+    // wipe the cloud index.
 
     try {
       final processed = await backend.processPendingTodoThreadEmbeddingsBrok(

@@ -3,6 +3,23 @@ use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::embedding::{Embedder, DEFAULT_EMBED_DIM};
 use secondloop_rust::{auth, db};
 
+fn space_id(model_name: &str, dim: usize) -> String {
+    let mut s = String::new();
+    for ch in model_name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            s.push(ch.to_ascii_lowercase());
+        } else {
+            s.push('_');
+        }
+    }
+    while s.contains("__") {
+        s = s.replace("__", "_");
+    }
+    let s = s.trim_matches('_');
+    let s = if s.is_empty() { "unknown" } else { s };
+    format!("s_{s}_{dim}")
+}
+
 #[derive(Clone, Debug, Default)]
 struct TestEmbedder;
 
@@ -70,10 +87,14 @@ fn vector_indexing_test() {
         .expect("pending count");
     assert_eq!(pending_after, 0);
 
+    let space = space_id(embedder.model_name(), embedder.dim());
+    let message_table = format!("message_embeddings__{space}");
     let embedding_rows: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            &format!("SELECT COUNT(*) FROM \"{message_table}\""),
+            [],
+            |row| row.get(0),
+        )
         .expect("embedding rows");
     assert_eq!(embedding_rows, 2);
 }

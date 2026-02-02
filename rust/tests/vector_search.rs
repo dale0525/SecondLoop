@@ -4,6 +4,23 @@ use secondloop_rust::embedding::{Embedder, DEFAULT_EMBED_DIM};
 use secondloop_rust::{auth, db};
 use zerocopy::IntoBytes;
 
+fn space_id(model_name: &str, dim: usize) -> String {
+    let mut s = String::new();
+    for ch in model_name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            s.push(ch.to_ascii_lowercase());
+        } else {
+            s.push('_');
+        }
+    }
+    while s.contains("__") {
+        s = s.replace("__", "_");
+    }
+    let s = s.trim_matches('_');
+    let s = if s.is_empty() { "unknown" } else { s };
+    format!("s_{s}_{dim}")
+}
+
 #[derive(Clone, Debug, Default)]
 struct TestEmbedder;
 
@@ -75,6 +92,9 @@ fn vector_search_ignores_other_model() {
     let embedder = TestEmbedder;
     db::process_pending_message_embeddings(&conn, &key, &embedder, 100).expect("index");
 
+    let space = space_id(embedder.model_name(), embedder.dim());
+    let message_table = format!("message_embeddings__{space}");
+
     // Poison one row with a different model_name to simulate another embedding space.
     // Without model_name filtering, this would become the #1 result.
     let m3_rowid: i64 = conn
@@ -87,7 +107,7 @@ fn vector_search_ignores_other_model() {
     let mut query_vecs = embedder.embed(&["apple".to_string()]).expect("embed query");
     let query_vec = query_vecs.remove(0);
     conn.execute(
-        "UPDATE message_embeddings SET embedding = ?1, model_name = ?2 WHERE rowid = ?3",
+        &format!("UPDATE \"{message_table}\" SET embedding = ?1, model_name = ?2 WHERE rowid = ?3"),
         rusqlite::params![query_vec.as_bytes(), "other-model", m3_rowid],
     )
     .expect("insert other-model row");

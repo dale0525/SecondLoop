@@ -2774,13 +2774,7 @@ class _ChatPageState extends State<ChatPage> {
         await _ensureEmbeddingsDataConsent();
     final hasBrokEmbeddings = route == AskAiRouteKind.byok &&
         await _hasActiveEmbeddingProfile(backend, sessionKey);
-    final cloudEmbeddingsSelected = _cloudEmbeddingsConsented &&
-        subscriptionStatus != SubscriptionStatus.notEntitled;
-    final avoidEmbeddingsIndexing =
-        cloudEmbeddingsSelected && route != AskAiRouteKind.cloudGateway;
-    final effectiveTopK = avoidEmbeddingsIndexing ? 0 : 10;
-    final effectiveHasBrokEmbeddings =
-        avoidEmbeddingsIndexing ? false : hasBrokEmbeddings;
+    const topK = 10;
 
     setState(() {
       _asking = true;
@@ -2794,9 +2788,9 @@ class _ChatPageState extends State<ChatPage> {
     _controller.clear();
 
     try {
-      if (effectiveTopK > 0 &&
+      if (topK > 0 &&
           !(route == AskAiRouteKind.cloudGateway && allowCloudEmbeddings) &&
-          !effectiveHasBrokEmbeddings) {
+          !hasBrokEmbeddings) {
         await _prepareEmbeddingsForAskAi(backend, sessionKey);
       }
     } catch (e) {
@@ -2831,7 +2825,7 @@ class _ChatPageState extends State<ChatPage> {
                   question: question,
                   timeStartMs: timeStartMs,
                   timeEndMs: timeEndMs,
-                  topK: effectiveTopK,
+                  topK: topK,
                   thisThreadOnly: _thisThreadOnly,
                   gatewayBaseUrl: cloudGatewayConfig.baseUrl,
                   idToken: cloudIdToken ?? '',
@@ -2842,7 +2836,7 @@ class _ChatPageState extends State<ChatPage> {
                   sessionKey,
                   widget.conversation.id,
                   question: question,
-                  topK: effectiveTopK,
+                  topK: topK,
                   thisThreadOnly: _thisThreadOnly,
                   gatewayBaseUrl: cloudGatewayConfig.baseUrl,
                   idToken: cloudIdToken ?? '',
@@ -2857,7 +2851,7 @@ class _ChatPageState extends State<ChatPage> {
                   question: question,
                   timeStartMs: timeStartMs,
                   timeEndMs: timeEndMs,
-                  topK: effectiveTopK,
+                  topK: topK,
                   thisThreadOnly: _thisThreadOnly,
                   gatewayBaseUrl: cloudGatewayConfig.baseUrl,
                   idToken: cloudIdToken ?? '',
@@ -2867,7 +2861,7 @@ class _ChatPageState extends State<ChatPage> {
                   sessionKey,
                   widget.conversation.id,
                   question: question,
-                  topK: effectiveTopK,
+                  topK: topK,
                   thisThreadOnly: _thisThreadOnly,
                   gatewayBaseUrl: cloudGatewayConfig.baseUrl,
                   idToken: cloudIdToken ?? '',
@@ -2877,7 +2871,7 @@ class _ChatPageState extends State<ChatPage> {
         break;
       case AskAiRouteKind.byok:
       case AskAiRouteKind.needsSetup:
-        stream = effectiveHasBrokEmbeddings
+        stream = hasBrokEmbeddings
             ? (hasTimeWindow
                 ? backend.askAiStreamWithBrokEmbeddingsTimeWindow(
                     sessionKey,
@@ -2885,14 +2879,14 @@ class _ChatPageState extends State<ChatPage> {
                     question: question,
                     timeStartMs: timeStartMs,
                     timeEndMs: timeEndMs,
-                    topK: effectiveTopK,
+                    topK: topK,
                     thisThreadOnly: _thisThreadOnly,
                   )
                 : backend.askAiStreamWithBrokEmbeddings(
                     sessionKey,
                     widget.conversation.id,
                     question: question,
-                    topK: effectiveTopK,
+                    topK: topK,
                     thisThreadOnly: _thisThreadOnly,
                   ))
             : (hasTimeWindow
@@ -2902,14 +2896,14 @@ class _ChatPageState extends State<ChatPage> {
                     question: question,
                     timeStartMs: timeStartMs,
                     timeEndMs: timeEndMs,
-                    topK: effectiveTopK,
+                    topK: topK,
                     thisThreadOnly: _thisThreadOnly,
                   )
                 : backend.askAiStream(
                     sessionKey,
                     widget.conversation.id,
                     question: question,
-                    topK: effectiveTopK,
+                    topK: topK,
                     thisThreadOnly: _thisThreadOnly,
                   ));
         break;

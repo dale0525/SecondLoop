@@ -1,3 +1,4 @@
+use rusqlite::Connection;
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::embedding::{Embedder, DEFAULT_EMBED_DIM};
 use secondloop_rust::{auth, db};
@@ -46,8 +47,32 @@ impl Embedder for FakeEmbedder {
     }
 }
 
+fn space_id(model_name: &str, dim: usize) -> String {
+    let mut s = String::new();
+    for ch in model_name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            s.push(ch.to_ascii_lowercase());
+        } else {
+            s.push('_');
+        }
+    }
+    while s.contains("__") {
+        s = s.replace("__", "_");
+    }
+    let s = s.trim_matches('_');
+    let s = if s.is_empty() { "unknown" } else { s };
+    format!("s_{s}_{dim}")
+}
+
+fn count_rows(conn: &Connection, table: &str) -> i64 {
+    conn.query_row(&format!("SELECT COUNT(*) FROM \"{table}\""), [], |row| {
+        row.get(0)
+    })
+    .expect("count rows")
+}
+
 #[test]
-fn switching_embedding_model_triggers_full_reindex() {
+fn switching_embedding_model_creates_separate_spaces_without_drop() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
 
@@ -72,11 +97,9 @@ fn switching_embedding_model_triggers_full_reindex() {
         .expect("pending count");
     assert_eq!(pending, 0);
 
-    let rows_v1: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
-            row.get(0)
-        })
-        .expect("embeddings count v1");
+    let space_v1 = space_id(embedder_v1.model_name(), embedder_v1.dim());
+    let message_table_v1 = format!("message_embeddings__{space_v1}");
+    let rows_v1 = count_rows(&conn, &message_table_v1);
     assert_eq!(rows_v1, 2);
 
     db::set_active_embedding_model(&conn, embedder_v1.model_name(), embedder_v1.dim())
@@ -88,11 +111,9 @@ fn switching_embedding_model_triggers_full_reindex() {
             .expect("set active model v2");
     assert!(changed);
 
-    let rows_after_switch: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
-            row.get(0)
-        })
-        .expect("embeddings after switch");
+    let space_v2 = space_id(embedder_v2.model_name(), embedder_v2.dim());
+    let message_table_v2 = format!("message_embeddings__{space_v2}");
+    let rows_after_switch = count_rows(&conn, &message_table_v2);
     assert_eq!(rows_after_switch, 0);
 
     let pending_after_switch: i64 = conn
@@ -110,7 +131,7 @@ fn switching_embedding_model_triggers_full_reindex() {
 
     let bad_rows: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM message_embeddings WHERE model_name != ?1",
+            &format!("SELECT COUNT(*) FROM \"{message_table_v2}\" WHERE model_name != ?1"),
             [embedder_v2.model_name()],
             |row| row.get(0),
         )
@@ -122,11 +143,7 @@ fn switching_embedding_model_triggers_full_reindex() {
             .expect("set active model v2 again");
     assert!(!changed_again);
 
-    let rows_after_noop: i64 = conn
-        .query_row("SELECT COUNT(*) FROM message_embeddings", [], |row| {
-            row.get(0)
-        })
-        .expect("embeddings after noop");
+    let rows_after_noop = count_rows(&conn, &message_table_v2);
     assert_eq!(rows_after_noop, 2);
 
     let embedder_v2_wide = FakeEmbedder::new("fake-embed-v2", 10.0, 1024);
@@ -147,4 +164,13 @@ fn switching_embedding_model_triggers_full_reindex() {
         db::process_pending_message_embeddings(&conn, &key, &embedder_v2_wide, 100)
             .expect("process v2 wide");
     assert_eq!(processed_wide, 2);
+
+    let space_v2_wide = space_id(embedder_v2_wide.model_name(), embedder_v2_wide.dim());
+    let message_table_v2_wide = format!("message_embeddings__{space_v2_wide}");
+    let rows_wide = count_rows(&conn, &message_table_v2_wide);
+    assert_eq!(rows_wide, 2);
+
+    // v1 vectors are preserved after switching away and back.
+    let rows_v1_preserved = count_rows(&conn, &message_table_v1);
+    assert_eq!(rows_v1_preserved, 2);
 }

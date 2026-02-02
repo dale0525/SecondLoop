@@ -18,7 +18,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'Ask AI skips local embeddings prep when cloud embeddings enabled but unavailable',
+      'Ask AI falls back to local embeddings when cloud embeddings enabled but unavailable',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'ask_ai_data_consent_v1': true,
@@ -68,9 +68,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, isNot(contains('processPendingMessageEmbeddings')));
+    expect(backend.calls, contains('processPendingMessageEmbeddings'));
     expect(backend.calls, contains('askAiStream'));
-    expect(backend.lastAskTopK, 0);
+    expect(backend.lastAskTopK, 10);
   });
 }
 
