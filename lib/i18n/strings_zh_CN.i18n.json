@@ -145,10 +145,13 @@
   "settings": {
     "title": "设置",
     "sections": {
-      "general": "通用",
-      "actions": "行动",
+      "appearance": "外观",
       "security": "安全",
-      "connections": "连接",
+      "cloud": "SecondLoop Cloud",
+      "aiAdvanced": "高级（自带 API Key）",
+      "storage": "同步与存储",
+      "actions": "行动",
+      "support": "帮助与支持",
       "debug": "调试"
     },
     "actionsReview": {
@@ -176,6 +179,16 @@
         "zhCn": "简体中文"
       }
     },
+    "theme": {
+      "title": "主题",
+      "subtitle": "跟随系统，或选择明亮/深色",
+      "dialogTitle": "主题",
+      "options": {
+        "system": "系统",
+        "light": "明亮",
+        "dark": "深色"
+      }
+    },
     "autoLock": {
       "title": "自动锁定",
       "subtitle": "需要解锁才能访问应用"
@@ -191,21 +204,21 @@
       "subtitle": "返回解锁页面"
     },
     "llmProfiles": {
-      "title": "AI 配置",
-      "subtitle": "添加你自己的 API Key（用于问 AI）"
+      "title": "API Key（问 AI）",
+      "subtitle": "高级：使用你自己的服务商与 Key"
     },
     "embeddingProfiles": {
-      "title": "向量配置（自带 Key）",
-      "subtitle": "添加你自己的 API Key（用于语义检索）"
+      "title": "API Key（语义搜索）",
+      "subtitle": "高级：使用你自己的服务商与 Key"
     },
     "cloudEmbeddings": {
-      "title": "云端向量（Embeddings）",
-      "subtitleEnabled": "已开启，会消耗 Cloud 使用额度。",
-      "subtitleDisabled": "已关闭，不会生成云端向量。",
+      "title": "更智能的搜索",
+      "subtitleEnabled": "已开启。搜索更准，会消耗 Cloud 额度。",
+      "subtitleDisabled": "已关闭。搜索只使用本地数据。",
       "subtitleUnset": "尚未设置，首次需要时会询问。",
       "subtitleRequiresPro": "需要 SecondLoop Pro。",
-      "dialogTitle": "开启云端向量？",
-      "dialogBody": "这会将少量文本片段（消息/待办标题/跟进）上传到 SecondLoop Cloud 以生成向量。\n\n文本会被保密处理（不写入日志/存储），不会上传你的 vault key 或 sync key。\n\n云端向量会消耗 Cloud 使用额度。",
+      "dialogTitle": "开启更智能的搜索？",
+      "dialogBody": "为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成搜索数据。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。",
       "dialogActions": {
         "enable": "开启"
       }
@@ -267,7 +280,7 @@
         "signInRequired": "登录后才能查看用量。",
         "usage": "用量：",
         "askAiUsage": "Ask AI：",
-        "embeddingsUsage": "云端向量：",
+        "embeddingsUsage": "智能搜索：",
         "inputTokensUsed30d": "输入 Tokens（30 天）：",
         "outputTokensUsed30d": "输出 Tokens（30 天）：",
         "tokensUsed30d": "Tokens（30 天）：",
@@ -356,7 +369,7 @@
     },
     "sync": {
       "title": "同步",
-      "subtitle": "选择同步方式，并管理流量选项"
+      "subtitle": "选择同步存储位置（SecondLoop Cloud / WebDAV 网盘 / 本地文件夹）"
     },
     "resetLocalDataThisDeviceOnly": {
       "dialogTitle": "重置本地数据？",

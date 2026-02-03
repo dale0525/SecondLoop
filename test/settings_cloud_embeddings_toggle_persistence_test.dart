@@ -52,7 +52,7 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('embeddings_data_consent_v1'), true);
-    expect(find.text('Cloud embeddings'), findsOneWidget);
+    expect(find.text('Smarter search'), findsOneWidget);
   });
 
   testWidgets('Settings: cloud embeddings toggle updates after consent prompt',
@@ -102,7 +102,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final toggle = find.widgetWithText(SwitchListTile, 'Cloud embeddings');
+    final toggle = find.widgetWithText(SwitchListTile, 'Smarter search');
     await tester.dragUntilVisible(
       toggle,
       find.byType(ListView),

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 848 (424 per locale)
+/// Strings: 866 (433 per locale)
 ///
-/// Built on 2026-01-31 at 13:02 UTC
+/// Built on 2026-02-03 at 07:29 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -287,6 +287,7 @@ class _StringsSettingsEn {
       _StringsSettingsActionsReviewEn._(_root);
   late final _StringsSettingsLanguageEn language =
       _StringsSettingsLanguageEn._(_root);
+  late final _StringsSettingsThemeEn theme = _StringsSettingsThemeEn._(_root);
   late final _StringsSettingsAutoLockEn autoLock =
       _StringsSettingsAutoLockEn._(_root);
   late final _StringsSettingsSystemUnlockEn systemUnlock =
@@ -761,10 +762,13 @@ class _StringsSettingsSectionsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get general => 'General';
-  String get actions => 'Actions';
+  String get appearance => 'Appearance';
   String get security => 'Security';
-  String get connections => 'Connections';
+  String get cloud => 'SecondLoop Cloud';
+  String get aiAdvanced => 'Advanced (API keys)';
+  String get storage => 'Sync & storage';
+  String get actions => 'Actions';
+  String get support => 'Help & support';
   String get debug => 'Debug';
 }
 
@@ -795,6 +799,20 @@ class _StringsSettingsLanguageEn {
   String get dialogTitle => 'Language';
   late final _StringsSettingsLanguageOptionsEn options =
       _StringsSettingsLanguageOptionsEn._(_root);
+}
+
+// Path: settings.theme
+class _StringsSettingsThemeEn {
+  _StringsSettingsThemeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Theme';
+  String get subtitle => 'Follow system, or choose light/dark';
+  String get dialogTitle => 'Theme';
+  late final _StringsSettingsThemeOptionsEn options =
+      _StringsSettingsThemeOptionsEn._(_root);
 }
 
 // Path: settings.autoLock
@@ -841,8 +859,8 @@ class _StringsSettingsLlmProfilesEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'AI profiles';
-  String get subtitle => 'Use your own API key for Ask AI';
+  String get title => 'API keys (Ask AI)';
+  String get subtitle => 'Advanced: use your own provider and key';
 }
 
 // Path: settings.embeddingProfiles
@@ -852,8 +870,8 @@ class _StringsSettingsEmbeddingProfilesEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Embeddings (BYOK)';
-  String get subtitle => 'Use your own API key for semantic search';
+  String get title => 'API keys (Semantic search)';
+  String get subtitle => 'Advanced: use your own provider and key';
 }
 
 // Path: settings.cloudEmbeddings
@@ -863,16 +881,14 @@ class _StringsSettingsCloudEmbeddingsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Cloud embeddings';
-  String get subtitleEnabled => 'Enabled. Uses your cloud usage quota.';
-  String get subtitleDisabled =>
-      'Disabled. No cloud embeddings will be generated.';
-  String get subtitleUnset =>
-      'Not configured. We\'ll ask when it\'s first needed.';
+  String get title => 'Smarter search';
+  String get subtitleEnabled => 'On. Improves search. Uses your Cloud quota.';
+  String get subtitleDisabled => 'Off. Search runs without cloud processing.';
+  String get subtitleUnset => 'Not set. We\'ll ask when it\'s first needed.';
   String get subtitleRequiresPro => 'Requires SecondLoop Pro.';
-  String get dialogTitle => 'Enable cloud embeddings?';
+  String get dialogTitle => 'Turn on smarter search?';
   String get dialogBody =>
-      'This uploads small text snippets (messages/todo titles/notes) to SecondLoop Cloud to generate embeddings.\n\nThe snippets are kept confidential (not logged or stored). It does not upload your vault key or sync key.\n\nCloud embeddings consume your cloud usage quota.';
+      'To improve search and memory recall, SecondLoop can send small pieces of text (message previews, todo titles, follow‑ups) to SecondLoop Cloud to generate search data.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.';
   late final _StringsSettingsCloudEmbeddingsDialogActionsEn dialogActions =
       _StringsSettingsCloudEmbeddingsDialogActionsEn._(_root);
 }
@@ -991,7 +1007,8 @@ class _StringsSettingsSyncEn {
 
   // Translations
   String get title => 'Sync';
-  String get subtitle => 'Choose how to sync and manage data usage';
+  String get subtitle =>
+      'Choose where your data syncs (Cloud / WebDAV / folder)';
 }
 
 // Path: settings.resetLocalDataThisDeviceOnly
@@ -1530,6 +1547,18 @@ class _StringsSettingsLanguageOptionsEn {
   String get zhCn => 'Simplified Chinese';
 }
 
+// Path: settings.theme.options
+class _StringsSettingsThemeOptionsEn {
+  _StringsSettingsThemeOptionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get system => 'System';
+  String get light => 'Light';
+  String get dark => 'Dark';
+}
+
 // Path: settings.cloudEmbeddings.dialogActions
 class _StringsSettingsCloudEmbeddingsDialogActionsEn {
   _StringsSettingsCloudEmbeddingsDialogActionsEn._(this._root);
@@ -1626,7 +1655,7 @@ class _StringsSettingsCloudUsageLabelsEn {
   String get signInRequired => 'Sign in to view usage.';
   String get usage => 'Usage:';
   String get askAiUsage => 'Ask AI:';
-  String get embeddingsUsage => 'Cloud embeddings:';
+  String get embeddingsUsage => 'Smarter search:';
   String get inputTokensUsed30d => 'Input tokens (30d):';
   String get outputTokensUsed30d => 'Output tokens (30d):';
   String get tokensUsed30d => 'Tokens (30d):';
@@ -2271,6 +2300,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsLanguageZhCn language =
       _StringsSettingsLanguageZhCn._(_root);
+  @override
+  late final _StringsSettingsThemeZhCn theme =
+      _StringsSettingsThemeZhCn._(_root);
   @override
   late final _StringsSettingsAutoLockZhCn autoLock =
       _StringsSettingsAutoLockZhCn._(_root);
@@ -3004,13 +3036,19 @@ class _StringsSettingsSectionsZhCn extends _StringsSettingsSectionsEn {
 
   // Translations
   @override
-  String get general => '通用';
-  @override
-  String get actions => '行动';
+  String get appearance => '外观';
   @override
   String get security => '安全';
   @override
-  String get connections => '连接';
+  String get cloud => 'SecondLoop Cloud';
+  @override
+  String get aiAdvanced => '高级（自带 API Key）';
+  @override
+  String get storage => '同步与存储';
+  @override
+  String get actions => '行动';
+  @override
+  String get support => '帮助与支持';
   @override
   String get debug => '调试';
 }
@@ -3056,6 +3094,27 @@ class _StringsSettingsLanguageZhCn extends _StringsSettingsLanguageEn {
   @override
   late final _StringsSettingsLanguageOptionsZhCn options =
       _StringsSettingsLanguageOptionsZhCn._(_root);
+}
+
+// Path: settings.theme
+class _StringsSettingsThemeZhCn extends _StringsSettingsThemeEn {
+  _StringsSettingsThemeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '主题';
+  @override
+  String get subtitle => '跟随系统，或选择明亮/深色';
+  @override
+  String get dialogTitle => '主题';
+  @override
+  late final _StringsSettingsThemeOptionsZhCn options =
+      _StringsSettingsThemeOptionsZhCn._(_root);
 }
 
 // Path: settings.autoLock
@@ -3121,9 +3180,9 @@ class _StringsSettingsLlmProfilesZhCn extends _StringsSettingsLlmProfilesEn {
 
   // Translations
   @override
-  String get title => 'AI 配置';
+  String get title => 'API Key（问 AI）';
   @override
-  String get subtitle => '添加你自己的 API Key（用于问 AI）';
+  String get subtitle => '高级：使用你自己的服务商与 Key';
 }
 
 // Path: settings.embeddingProfiles
@@ -3138,9 +3197,9 @@ class _StringsSettingsEmbeddingProfilesZhCn
 
   // Translations
   @override
-  String get title => '向量配置（自带 Key）';
+  String get title => 'API Key（语义搜索）';
   @override
-  String get subtitle => '添加你自己的 API Key（用于语义检索）';
+  String get subtitle => '高级：使用你自己的服务商与 Key';
 }
 
 // Path: settings.cloudEmbeddings
@@ -3155,20 +3214,20 @@ class _StringsSettingsCloudEmbeddingsZhCn
 
   // Translations
   @override
-  String get title => '云端向量（Embeddings）';
+  String get title => '更智能的搜索';
   @override
-  String get subtitleEnabled => '已开启，会消耗 Cloud 使用额度。';
+  String get subtitleEnabled => '已开启。搜索更准，会消耗 Cloud 额度。';
   @override
-  String get subtitleDisabled => '已关闭，不会生成云端向量。';
+  String get subtitleDisabled => '已关闭。搜索只使用本地数据。';
   @override
   String get subtitleUnset => '尚未设置，首次需要时会询问。';
   @override
   String get subtitleRequiresPro => '需要 SecondLoop Pro。';
   @override
-  String get dialogTitle => '开启云端向量？';
+  String get dialogTitle => '开启更智能的搜索？';
   @override
   String get dialogBody =>
-      '这会将少量文本片段（消息/待办标题/跟进）上传到 SecondLoop Cloud 以生成向量。\n\n文本会被保密处理（不写入日志/存储），不会上传你的 vault key 或 sync key。\n\n云端向量会消耗 Cloud 使用额度。';
+      '为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成搜索数据。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
   @override
   late final _StringsSettingsCloudEmbeddingsDialogActionsZhCn dialogActions =
       _StringsSettingsCloudEmbeddingsDialogActionsZhCn._(_root);
@@ -3345,7 +3404,7 @@ class _StringsSettingsSyncZhCn extends _StringsSettingsSyncEn {
   @override
   String get title => '同步';
   @override
-  String get subtitle => '选择同步方式，并管理流量选项';
+  String get subtitle => '选择同步存储位置（SecondLoop Cloud / WebDAV 网盘 / 本地文件夹）';
 }
 
 // Path: settings.resetLocalDataThisDeviceOnly
@@ -4147,6 +4206,24 @@ class _StringsSettingsLanguageOptionsZhCn
   String get zhCn => '简体中文';
 }
 
+// Path: settings.theme.options
+class _StringsSettingsThemeOptionsZhCn extends _StringsSettingsThemeOptionsEn {
+  _StringsSettingsThemeOptionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get system => '系统';
+  @override
+  String get light => '明亮';
+  @override
+  String get dark => '深色';
+}
+
 // Path: settings.cloudEmbeddings.dialogActions
 class _StringsSettingsCloudEmbeddingsDialogActionsZhCn
     extends _StringsSettingsCloudEmbeddingsDialogActionsEn {
@@ -4295,7 +4372,7 @@ class _StringsSettingsCloudUsageLabelsZhCn
   @override
   String get askAiUsage => 'Ask AI：';
   @override
-  String get embeddingsUsage => '云端向量：';
+  String get embeddingsUsage => '智能搜索：';
   @override
   String get inputTokensUsed30d => '输入 Tokens（30 天）：';
   @override
@@ -5163,14 +5240,20 @@ extension on Translations {
         return 'Pick date & time';
       case 'settings.title':
         return 'Settings';
-      case 'settings.sections.general':
-        return 'General';
-      case 'settings.sections.actions':
-        return 'Actions';
+      case 'settings.sections.appearance':
+        return 'Appearance';
       case 'settings.sections.security':
         return 'Security';
-      case 'settings.sections.connections':
-        return 'Connections';
+      case 'settings.sections.cloud':
+        return 'SecondLoop Cloud';
+      case 'settings.sections.aiAdvanced':
+        return 'Advanced (API keys)';
+      case 'settings.sections.storage':
+        return 'Sync & storage';
+      case 'settings.sections.actions':
+        return 'Actions';
+      case 'settings.sections.support':
+        return 'Help & support';
       case 'settings.sections.debug':
         return 'Debug';
       case 'settings.actionsReview.morningTime.title':
@@ -5199,6 +5282,18 @@ extension on Translations {
         return 'English';
       case 'settings.language.options.zhCn':
         return 'Simplified Chinese';
+      case 'settings.theme.title':
+        return 'Theme';
+      case 'settings.theme.subtitle':
+        return 'Follow system, or choose light/dark';
+      case 'settings.theme.dialogTitle':
+        return 'Theme';
+      case 'settings.theme.options.system':
+        return 'System';
+      case 'settings.theme.options.light':
+        return 'Light';
+      case 'settings.theme.options.dark':
+        return 'Dark';
       case 'settings.autoLock.title':
         return 'Auto lock';
       case 'settings.autoLock.subtitle':
@@ -5216,27 +5311,27 @@ extension on Translations {
       case 'settings.lockNow.subtitle':
         return 'Return to the unlock screen';
       case 'settings.llmProfiles.title':
-        return 'AI profiles';
+        return 'API keys (Ask AI)';
       case 'settings.llmProfiles.subtitle':
-        return 'Use your own API key for Ask AI';
+        return 'Advanced: use your own provider and key';
       case 'settings.embeddingProfiles.title':
-        return 'Embeddings (BYOK)';
+        return 'API keys (Semantic search)';
       case 'settings.embeddingProfiles.subtitle':
-        return 'Use your own API key for semantic search';
+        return 'Advanced: use your own provider and key';
       case 'settings.cloudEmbeddings.title':
-        return 'Cloud embeddings';
+        return 'Smarter search';
       case 'settings.cloudEmbeddings.subtitleEnabled':
-        return 'Enabled. Uses your cloud usage quota.';
+        return 'On. Improves search. Uses your Cloud quota.';
       case 'settings.cloudEmbeddings.subtitleDisabled':
-        return 'Disabled. No cloud embeddings will be generated.';
+        return 'Off. Search runs without cloud processing.';
       case 'settings.cloudEmbeddings.subtitleUnset':
-        return 'Not configured. We\'ll ask when it\'s first needed.';
+        return 'Not set. We\'ll ask when it\'s first needed.';
       case 'settings.cloudEmbeddings.subtitleRequiresPro':
         return 'Requires SecondLoop Pro.';
       case 'settings.cloudEmbeddings.dialogTitle':
-        return 'Enable cloud embeddings?';
+        return 'Turn on smarter search?';
       case 'settings.cloudEmbeddings.dialogBody':
-        return 'This uploads small text snippets (messages/todo titles/notes) to SecondLoop Cloud to generate embeddings.\n\nThe snippets are kept confidential (not logged or stored). It does not upload your vault key or sync key.\n\nCloud embeddings consume your cloud usage quota.';
+        return 'To improve search and memory recall, SecondLoop can send small pieces of text (message previews, todo titles, follow‑ups) to SecondLoop Cloud to generate search data.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.';
       case 'settings.cloudEmbeddings.dialogActions.enable':
         return 'Enable';
       case 'settings.cloudAccount.title':
@@ -5299,7 +5394,7 @@ extension on Translations {
       case 'settings.cloudUsage.labels.askAiUsage':
         return 'Ask AI:';
       case 'settings.cloudUsage.labels.embeddingsUsage':
-        return 'Cloud embeddings:';
+        return 'Smarter search:';
       case 'settings.cloudUsage.labels.inputTokensUsed30d':
         return 'Input tokens (30d):';
       case 'settings.cloudUsage.labels.outputTokensUsed30d':
@@ -5403,7 +5498,7 @@ extension on Translations {
       case 'settings.sync.title':
         return 'Sync';
       case 'settings.sync.subtitle':
-        return 'Choose how to sync and manage data usage';
+        return 'Choose where your data syncs (Cloud / WebDAV / folder)';
       case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return 'Reset local data?';
       case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
@@ -6044,14 +6139,20 @@ extension on _StringsZhCn {
         return '选择日期时间';
       case 'settings.title':
         return '设置';
-      case 'settings.sections.general':
-        return '通用';
-      case 'settings.sections.actions':
-        return '行动';
+      case 'settings.sections.appearance':
+        return '外观';
       case 'settings.sections.security':
         return '安全';
-      case 'settings.sections.connections':
-        return '连接';
+      case 'settings.sections.cloud':
+        return 'SecondLoop Cloud';
+      case 'settings.sections.aiAdvanced':
+        return '高级（自带 API Key）';
+      case 'settings.sections.storage':
+        return '同步与存储';
+      case 'settings.sections.actions':
+        return '行动';
+      case 'settings.sections.support':
+        return '帮助与支持';
       case 'settings.sections.debug':
         return '调试';
       case 'settings.actionsReview.morningTime.title':
@@ -6080,6 +6181,18 @@ extension on _StringsZhCn {
         return 'English';
       case 'settings.language.options.zhCn':
         return '简体中文';
+      case 'settings.theme.title':
+        return '主题';
+      case 'settings.theme.subtitle':
+        return '跟随系统，或选择明亮/深色';
+      case 'settings.theme.dialogTitle':
+        return '主题';
+      case 'settings.theme.options.system':
+        return '系统';
+      case 'settings.theme.options.light':
+        return '明亮';
+      case 'settings.theme.options.dark':
+        return '深色';
       case 'settings.autoLock.title':
         return '自动锁定';
       case 'settings.autoLock.subtitle':
@@ -6097,27 +6210,27 @@ extension on _StringsZhCn {
       case 'settings.lockNow.subtitle':
         return '返回解锁页面';
       case 'settings.llmProfiles.title':
-        return 'AI 配置';
+        return 'API Key（问 AI）';
       case 'settings.llmProfiles.subtitle':
-        return '添加你自己的 API Key（用于问 AI）';
+        return '高级：使用你自己的服务商与 Key';
       case 'settings.embeddingProfiles.title':
-        return '向量配置（自带 Key）';
+        return 'API Key（语义搜索）';
       case 'settings.embeddingProfiles.subtitle':
-        return '添加你自己的 API Key（用于语义检索）';
+        return '高级：使用你自己的服务商与 Key';
       case 'settings.cloudEmbeddings.title':
-        return '云端向量（Embeddings）';
+        return '更智能的搜索';
       case 'settings.cloudEmbeddings.subtitleEnabled':
-        return '已开启，会消耗 Cloud 使用额度。';
+        return '已开启。搜索更准，会消耗 Cloud 额度。';
       case 'settings.cloudEmbeddings.subtitleDisabled':
-        return '已关闭，不会生成云端向量。';
+        return '已关闭。搜索只使用本地数据。';
       case 'settings.cloudEmbeddings.subtitleUnset':
         return '尚未设置，首次需要时会询问。';
       case 'settings.cloudEmbeddings.subtitleRequiresPro':
         return '需要 SecondLoop Pro。';
       case 'settings.cloudEmbeddings.dialogTitle':
-        return '开启云端向量？';
+        return '开启更智能的搜索？';
       case 'settings.cloudEmbeddings.dialogBody':
-        return '这会将少量文本片段（消息/待办标题/跟进）上传到 SecondLoop Cloud 以生成向量。\n\n文本会被保密处理（不写入日志/存储），不会上传你的 vault key 或 sync key。\n\n云端向量会消耗 Cloud 使用额度。';
+        return '为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成搜索数据。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
       case 'settings.cloudEmbeddings.dialogActions.enable':
         return '开启';
       case 'settings.cloudAccount.title':
@@ -6179,7 +6292,7 @@ extension on _StringsZhCn {
       case 'settings.cloudUsage.labels.askAiUsage':
         return 'Ask AI：';
       case 'settings.cloudUsage.labels.embeddingsUsage':
-        return '云端向量：';
+        return '智能搜索：';
       case 'settings.cloudUsage.labels.inputTokensUsed30d':
         return '输入 Tokens（30 天）：';
       case 'settings.cloudUsage.labels.outputTokensUsed30d':
@@ -6280,7 +6393,7 @@ extension on _StringsZhCn {
       case 'settings.sync.title':
         return '同步';
       case 'settings.sync.subtitle':
-        return '选择同步方式，并管理流量选项';
+        return '选择同步存储位置（SecondLoop Cloud / WebDAV 网盘 / 本地文件夹）';
       case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return '重置本地数据？';
       case 'settings.resetLocalDataThisDeviceOnly.dialogBody':

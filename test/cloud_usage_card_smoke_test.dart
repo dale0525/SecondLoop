@@ -66,7 +66,7 @@ void main() {
 
     expect(find.text('Ask AI:'), findsOneWidget);
     expect(find.text('60%'), findsOneWidget);
-    expect(find.text('Cloud embeddings:'), findsOneWidget);
+    expect(find.text('Smarter search:'), findsOneWidget);
     expect(find.text('20%'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
     expect(find.text('Resets on:'), findsOneWidget);

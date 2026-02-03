@@ -31,7 +31,11 @@ void main() {
 
     final diagnosticsFinder =
         find.byKey(const ValueKey('settings_diagnostics'));
-    await tester.ensureVisible(diagnosticsFinder);
+    await tester.scrollUntilVisible(
+      diagnosticsFinder,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
     await tester.pumpAndSettle();
     await tester.tap(diagnosticsFinder);
     await tester.pumpAndSettle();

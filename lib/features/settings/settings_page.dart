@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
@@ -337,6 +338,65 @@ class _SettingsPageState extends State<SettingsPage> {
     return _localeLabel(context, override);
   }
 
+  String _themeModeLabel(BuildContext context, ThemeMode mode) {
+    final t = context.t;
+    return switch (mode) {
+      ThemeMode.system => t.settings.theme.options.system,
+      ThemeMode.light => t.settings.theme.options.light,
+      ThemeMode.dark => t.settings.theme.options.dark,
+    };
+  }
+
+  Future<void> _selectThemeMode() async {
+    if (_busy) return;
+
+    final selected = await showDialog<ThemeMode>(
+      context: context,
+      builder: (context) {
+        final t = context.t;
+        final current = AppThemeModePrefs.value.value;
+        return AlertDialog(
+          title: Text(t.settings.theme.dialogTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<ThemeMode>(
+                title: Text(t.settings.theme.options.system),
+                value: ThemeMode.system,
+                groupValue: current,
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+              RadioListTile<ThemeMode>(
+                title: Text(t.settings.theme.options.light),
+                value: ThemeMode.light,
+                groupValue: current,
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+              RadioListTile<ThemeMode>(
+                title: Text(t.settings.theme.options.dark),
+                value: ThemeMode.dark,
+                groupValue: current,
+                onChanged: (value) => Navigator.of(context).pop(value),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(current),
+              child: Text(t.common.actions.cancel),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    final current = AppThemeModePrefs.value.value;
+    if (selected == null || selected == current) return;
+
+    await AppThemeModePrefs.setThemeMode(selected);
+  }
+
   Future<void> _selectLanguage() async {
     if (_busy) return;
 
@@ -523,7 +583,7 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          context.t.settings.sections.general,
+          context.t.settings.sections.appearance,
           style: Theme.of(context)
               .textTheme
               .titleSmall
@@ -531,6 +591,24 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 8),
         sectionCard([
+          ListTile(
+            title: Text(context.t.settings.theme.title),
+            subtitle: Text(context.t.settings.theme.subtitle),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ValueListenableBuilder(
+                  valueListenable: AppThemeModePrefs.value,
+                  builder: (context, mode, child) {
+                    return Text(_themeModeLabel(context, mode));
+                  },
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+            onTap: _busy ? null : _selectThemeMode,
+          ),
           ListTile(
             title: Text(context.t.settings.language.title),
             subtitle: Text(context.t.settings.language.subtitle),
@@ -586,7 +664,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ]),
         const SizedBox(height: 16),
         Text(
-          context.t.settings.sections.connections,
+          context.t.settings.sections.cloud,
           style: Theme.of(context)
               .textTheme
               .titleSmall
@@ -636,6 +714,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       await _setCloudEmbeddingsEnabled(value);
                     },
             ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          context.t.settings.sections.aiAdvanced,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        sectionCard([
           ListTile(
             title: Text(context.t.settings.llmProfiles.title),
             subtitle: Text(context.t.settings.llmProfiles.subtitle),
@@ -662,6 +751,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
           ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          context.t.settings.sections.storage,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        sectionCard([
           ListTile(
             title: Text(context.t.settings.sync.title),
             subtitle: Text(context.t.settings.sync.subtitle),
@@ -675,6 +775,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
           ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          context.t.settings.sections.support,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        sectionCard([
           ListTile(
             key: const ValueKey('settings_diagnostics'),
             title: Text(context.t.settings.diagnostics.title),

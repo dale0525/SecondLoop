@@ -145,10 +145,13 @@
   "settings": {
     "title": "Settings",
     "sections": {
-      "general": "General",
-      "actions": "Actions",
+      "appearance": "Appearance",
       "security": "Security",
-      "connections": "Connections",
+      "cloud": "SecondLoop Cloud",
+      "aiAdvanced": "Advanced (API keys)",
+      "storage": "Sync & storage",
+      "actions": "Actions",
+      "support": "Help & support",
       "debug": "Debug"
     },
     "actionsReview": {
@@ -176,6 +179,16 @@
         "zhCn": "Simplified Chinese"
       }
     },
+    "theme": {
+      "title": "Theme",
+      "subtitle": "Follow system, or choose light/dark",
+      "dialogTitle": "Theme",
+      "options": {
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      }
+    },
     "autoLock": {
       "title": "Auto lock",
       "subtitle": "Require unlock to access the app"
@@ -191,21 +204,21 @@
       "subtitle": "Return to the unlock screen"
     },
     "llmProfiles": {
-      "title": "AI profiles",
-      "subtitle": "Use your own API key for Ask AI"
+      "title": "API keys (Ask AI)",
+      "subtitle": "Advanced: use your own provider and key"
     },
     "embeddingProfiles": {
-      "title": "Embeddings (BYOK)",
-      "subtitle": "Use your own API key for semantic search"
+      "title": "API keys (Semantic search)",
+      "subtitle": "Advanced: use your own provider and key"
     },
     "cloudEmbeddings": {
-      "title": "Cloud embeddings",
-      "subtitleEnabled": "Enabled. Uses your cloud usage quota.",
-      "subtitleDisabled": "Disabled. No cloud embeddings will be generated.",
-      "subtitleUnset": "Not configured. We'll ask when it's first needed.",
+      "title": "Smarter search",
+      "subtitleEnabled": "On. Improves search. Uses your Cloud quota.",
+      "subtitleDisabled": "Off. Search runs without cloud processing.",
+      "subtitleUnset": "Not set. We'll ask when it's first needed.",
       "subtitleRequiresPro": "Requires SecondLoop Pro.",
-      "dialogTitle": "Enable cloud embeddings?",
-      "dialogBody": "This uploads small text snippets (messages/todo titles/notes) to SecondLoop Cloud to generate embeddings.\n\nThe snippets are kept confidential (not logged or stored). It does not upload your vault key or sync key.\n\nCloud embeddings consume your cloud usage quota.",
+      "dialogTitle": "Turn on smarter search?",
+      "dialogBody": "To improve search and memory recall, SecondLoop can send small pieces of text (message previews, todo titles, follow‑ups) to SecondLoop Cloud to generate search data.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.",
       "dialogActions": {
         "enable": "Enable"
       }
@@ -267,7 +280,7 @@
         "signInRequired": "Sign in to view usage.",
         "usage": "Usage:",
         "askAiUsage": "Ask AI:",
-        "embeddingsUsage": "Cloud embeddings:",
+        "embeddingsUsage": "Smarter search:",
         "inputTokensUsed30d": "Input tokens (30d):",
         "outputTokensUsed30d": "Output tokens (30d):",
         "tokensUsed30d": "Tokens (30d):",
@@ -356,7 +369,7 @@
     },
     "sync": {
       "title": "Sync",
-      "subtitle": "Choose how to sync and manage data usage"
+      "subtitle": "Choose where your data syncs (Cloud / WebDAV / folder)"
     },
     "resetLocalDataThisDeviceOnly": {
       "dialogTitle": "Reset local data?",

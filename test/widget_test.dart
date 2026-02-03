@@ -33,7 +33,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Sync'), findsOneWidget);
+    final syncFinder = find.text('Sync');
+    await tester.scrollUntilVisible(
+      syncFinder,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    expect(syncFinder, findsOneWidget);
   });
 }
 
