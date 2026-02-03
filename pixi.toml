@@ -34,10 +34,14 @@ rust-clippy = "cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-
 i18n-gen = "dart pub global run fvm:main dart run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
 i18n-translate = "python tools/i18n_translate.py"
 i18n-sync = { depends-on = ["i18n-translate", "i18n-gen"] }
+icons-macos-round = "python tools/round_icon.py --in assets/icon/app_icon.png --out assets/icon/app_icon_macos.png"
+icons-macos-check = "python tools/check_icon_corners.py --path assets/icon/app_icon_macos.png"
+icons-update = { cmd = "dart pub global run fvm:main dart run icons_launcher:create", depends-on = ["icons-macos-round", "icons-macos-check"] }
 
 [dependencies]
 rust = "1.85.*"
 python = "3.11.*"
+pillow = ">=10,<12"
 cmake = ">=4.2.1,<5"
 ninja = ">=1.13.2,<2"
 dart-sdk = "2.18.2.*"
