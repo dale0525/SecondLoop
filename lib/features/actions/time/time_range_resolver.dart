@@ -15,6 +15,23 @@ class LocalTimeRangeResolution {
 }
 
 class LocalTimeRangeResolver {
+  static final List<String> _todayTokens = <String>[
+    // en
+    'today',
+    // zh
+    '今天',
+    // ja
+    '今日',
+    // ko
+    '오늘',
+    // es
+    'hoy',
+    // fr
+    "aujourd'hui",
+    // de
+    'heute',
+  ];
+
   static final List<String> _tomorrowTokens = <String>[
     // en
     'tomorrow',
@@ -107,6 +124,18 @@ class LocalTimeRangeResolver {
     if (raw.isEmpty) return null;
 
     final norm = _normalize(raw);
+
+    if (_containsAny(norm, _todayTokens) ||
+        _containsAny(raw, const <String>['今天', '今日', '오늘'])) {
+      final start = _startOfDay(nowLocal);
+      final end = start.add(const Duration(days: 1));
+      return LocalTimeRangeResolution(
+        kind: 'today',
+        matchedText: raw,
+        startLocal: start,
+        endLocal: end,
+      );
+    }
 
     if (_containsAny(norm, _tomorrowTokens) ||
         _containsAny(raw, const <String>['明天', '明日', '내일'])) {

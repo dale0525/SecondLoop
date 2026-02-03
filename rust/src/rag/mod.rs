@@ -189,6 +189,7 @@ fn build_prompt_with_actions_and_history(
 ) -> String {
     let mut out = String::new();
     out.push_str("You are SecondLoop, a helpful personal assistant.\n");
+    out.push_str("IMPORTANT: Reply in the same language as the user's question. Ignore any configured UI language. Only switch languages if the user explicitly asks.\n");
 
     if let Some(history) = history {
         if !history.trim().is_empty() {
@@ -236,6 +237,64 @@ fn build_recent_conversation_history(
 
     let mut kept = Vec::new();
     for msg in page {
+        let content = msg.content.trim();
+        if content.is_empty() {
+            continue;
+        }
+
+        let role = match msg.role.as_str() {
+            "user" => "User",
+            "assistant" => "Assistant",
+            other => other,
+        };
+
+        let truncated: String = content
+            .chars()
+            .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
+            .collect();
+        kept.push((role.to_string(), truncated));
+        if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
+            break;
+        }
+    }
+
+    if kept.is_empty() {
+        return Ok(None);
+    }
+
+    kept.reverse();
+
+    let mut out = String::new();
+    for (role, content) in kept {
+        out.push_str(&role);
+        out.push_str(": ");
+        out.push_str(&content);
+        out.push('\n');
+    }
+
+    Ok(Some(out))
+}
+
+fn build_recent_conversation_history_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+) -> Result<Option<String>> {
+    // Use a larger page so that "last week" (or similar) can skip current messages and still
+    // include enough in-range history.
+    let page = db::list_messages_page(conn, key, conversation_id, None, None, 200)?;
+
+    let mut kept = Vec::new();
+    for msg in page {
+        if msg.created_at_ms < start_at_ms_inclusive {
+            break;
+        }
+        if msg.created_at_ms >= end_at_ms_exclusive {
+            continue;
+        }
+
         let content = msg.content.trim();
         if content.is_empty() {
             continue;
@@ -1110,7 +1169,13 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
     }
 
     let actions = build_actions_context(conn, key, question)?;
-    let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let history = build_recent_conversation_history_in_range(
+        conn,
+        key,
+        conversation_id,
+        time_start_ms,
+        time_end_ms,
+    )?;
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts,

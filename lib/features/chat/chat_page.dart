@@ -30,6 +30,7 @@ import '../../ui/sl_icon_button_frame.dart';
 import '../../ui/sl_icon_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import '../../ui/sl_typing_indicator.dart';
 import '../actions/assistant_message_actions.dart';
 import '../actions/agenda/todo_agenda_banner.dart';
 import '../actions/agenda/todo_agenda_page.dart';
@@ -3865,6 +3866,20 @@ class _ChatPageState extends State<ChatPage> {
 
                             final isPending =
                                 stableMsg.id.startsWith('pending_');
+                            final isPendingAssistant =
+                                stableMsg.id == 'pending_assistant';
+                            final showAskAiWaitingIndicator =
+                                isPendingAssistant &&
+                                    pendingFailureMessage == null &&
+                                    _asking &&
+                                    !_stopRequested &&
+                                    _streamingAnswer.isEmpty;
+                            final showAskAiTypingIndicator =
+                                isPendingAssistant &&
+                                    pendingFailureMessage == null &&
+                                    _asking &&
+                                    !_stopRequested &&
+                                    _streamingAnswer.isNotEmpty;
                             final showHoverMenu =
                                 !isPending && _hoveredMessageId == stableMsg.id;
 
@@ -4103,13 +4118,87 @@ class _ChatPageState extends State<ChatPage> {
                                                     ),
                                                   )
                                                 else
-                                                  displayText.trim().isEmpty
-                                                      ? const SizedBox.shrink()
-                                                      : _buildMessageMarkdown(
-                                                          displayText,
-                                                          isDesktopPlatform:
-                                                              isDesktopPlatform,
-                                                        ),
+                                                  isPendingAssistant &&
+                                                          pendingFailureMessage ==
+                                                              null
+                                                      ? (showAskAiWaitingIndicator
+                                                          ? Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                top: 2,
+                                                              ),
+                                                              child:
+                                                                  SlTypingIndicator(
+                                                                key: const ValueKey(
+                                                                    'ask_ai_waiting_indicator'),
+                                                                dotSize: 7,
+                                                                dotSpacing: 5,
+                                                                color: colorScheme
+                                                                    .onSurfaceVariant
+                                                                    .withOpacity(
+                                                                  Theme.of(context)
+                                                                              .brightness ==
+                                                                          Brightness
+                                                                              .dark
+                                                                      ? 0.72
+                                                                      : 0.6,
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                if (displayText
+                                                                    .trim()
+                                                                    .isNotEmpty)
+                                                                  _buildMessageMarkdown(
+                                                                    displayText,
+                                                                    isDesktopPlatform:
+                                                                        isDesktopPlatform,
+                                                                  ),
+                                                                if (showAskAiTypingIndicator)
+                                                                  Padding(
+                                                                    padding:
+                                                                        const EdgeInsets
+                                                                            .only(
+                                                                      top: 6,
+                                                                    ),
+                                                                    child:
+                                                                        SlTypingIndicator(
+                                                                      key: const ValueKey(
+                                                                          'ask_ai_typing_indicator'),
+                                                                      dotSize:
+                                                                          4,
+                                                                      dotSpacing:
+                                                                          3,
+                                                                      color: colorScheme
+                                                                          .onSurfaceVariant
+                                                                          .withOpacity(
+                                                                        Theme.of(context).brightness ==
+                                                                                Brightness.dark
+                                                                            ? 0.62
+                                                                            : 0.5,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ))
+                                                      : (displayText
+                                                              .trim()
+                                                              .isEmpty
+                                                          ? const SizedBox
+                                                              .shrink()
+                                                          : _buildMessageMarkdown(
+                                                              displayText,
+                                                              isDesktopPlatform:
+                                                                  isDesktopPlatform,
+                                                            )),
                                                 if (shouldCollapse)
                                                   Align(
                                                     alignment:
