@@ -45,12 +45,12 @@ class _AppShellState extends State<AppShell> {
         final content = useRail
             ? IndexedStack(
                 index: _selectedIndex,
-                children: const <Widget>[
-                  _MainStreamTab(),
-                  _SettingsTab(),
+                children: <Widget>[
+                  _MainStreamTab(isActive: _selectedIndex == 0),
+                  const _SettingsTab(),
                 ],
               )
-            : const _MainStreamTab();
+            : const _MainStreamTab(isActive: true);
 
         return Scaffold(
           body: useRail
@@ -115,7 +115,9 @@ class _AppShellState extends State<AppShell> {
 }
 
 final class _MainStreamTab extends StatefulWidget {
-  const _MainStreamTab();
+  const _MainStreamTab({required this.isActive});
+
+  final bool isActive;
 
   @override
   State<_MainStreamTab> createState() => _MainStreamTabState();
@@ -159,7 +161,8 @@ final class _MainStreamTabState extends State<_MainStreamTab> {
             body: Center(child: Text(context.t.errors.missingMainStream)),
           );
         }
-        return ChatPage(conversation: conversation);
+        return ChatPage(
+            conversation: conversation, isTabActive: widget.isActive);
       },
     );
   }

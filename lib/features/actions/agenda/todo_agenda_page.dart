@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/backend/app_backend.dart';
@@ -18,31 +21,133 @@ class TodoAgendaPage extends StatefulWidget {
   State<TodoAgendaPage> createState() => _TodoAgendaPageState();
 }
 
+final class _LoadMoreDoneMarker {
+  const _LoadMoreDoneMarker();
+}
+
+const _loadMoreDoneMarker = _LoadMoreDoneMarker();
+
 class _TodoAgendaPageState extends State<TodoAgendaPage> {
-  Future<List<Todo>>? _todosFuture;
+  static const _kDoneDotColor = Color(0xFF22C55E);
+  static const _kDonePageSize = 20;
+  static const _kLoadMoreThresholdPx = 240.0;
+
+  final ScrollController _scrollController = ScrollController();
+
+  Object? _loadError;
+  var _loading = true;
+  var _loadingMoreDone = false;
+
+  List<Todo> _inProgress = const <Todo>[];
+  List<Todo> _open = const <Todo>[];
+  List<Todo> _done = const <Todo>[];
+  var _doneVisible = 0;
+  var _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_maybeLoadMoreDone);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_maybeLoadMoreDone);
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _todosFuture ??= _loadTodos();
+    if (_initialized) return;
+    _initialized = true;
+    unawaited(_loadTodos());
   }
 
-  Future<List<Todo>> _loadTodos() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final todos = await backend.listTodos(sessionKey);
+  void _maybeLoadMoreDone() {
+    if (_loading) return;
+    if (_loadingMoreDone) return;
+    if (_doneVisible >= _done.length) return;
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.extentAfter > _kLoadMoreThresholdPx) return;
+    unawaited(_loadMoreDone());
+  }
 
-    final filtered = todos
-        .where((t) => t.dueAtMs != null && t.status != 'dismissed')
-        .toList(growable: false);
-    filtered.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
-    return filtered;
+  Future<void> _loadMoreDone() async {
+    if (_loadingMoreDone) return;
+    if (_doneVisible >= _done.length) return;
+
+    setState(() => _loadingMoreDone = true);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+
+    setState(() {
+      _doneVisible = math.min(_doneVisible + _kDonePageSize, _done.length);
+      _loadingMoreDone = false;
+    });
+  }
+
+  Future<void> _loadTodos() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+      _loadingMoreDone = false;
+    });
+
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final todos = await backend.listTodos(sessionKey);
+
+      final scheduled = todos
+          .where((t) => t.dueAtMs != null && t.status != 'dismissed')
+          .toList(growable: false);
+
+      final inProgress = <Todo>[];
+      final open = <Todo>[];
+      final done = <Todo>[];
+      for (final todo in scheduled) {
+        switch (todo.status) {
+          case 'in_progress':
+            inProgress.add(todo);
+            break;
+          case 'done':
+            done.add(todo);
+            break;
+          default:
+            open.add(todo);
+        }
+      }
+
+      int compareByDueAt(Todo a, Todo b) => a.dueAtMs!.compareTo(b.dueAtMs!);
+      inProgress.sort(compareByDueAt);
+      open.sort(compareByDueAt);
+      done.sort(compareByDueAt);
+
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _inProgress = inProgress;
+        _open = open;
+        _done = done;
+        _doneVisible = math.min(_kDonePageSize, done.length);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError = e;
+        _inProgress = const <Todo>[];
+        _open = const <Todo>[];
+        _done = const <Todo>[];
+        _doneVisible = 0;
+      });
+    }
   }
 
   void _refresh() {
-    setState(() {
-      _todosFuture = _loadTodos();
-    });
+    unawaited(_loadTodos());
   }
 
   String _statusLabel(BuildContext context, String status) => switch (status) {
@@ -188,63 +293,124 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 880),
-          child: FutureBuilder<List<Todo>>(
-            future: _todosFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
+          child: Builder(
+            builder: (context) {
+              if (_loading) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (snapshot.hasError) {
+              if (_loadError != null) {
                 return Center(
                   child: Text(
-                    context.t.errors.loadFailed(error: '${snapshot.error}'),
+                    context.t.errors.loadFailed(error: '$_loadError'),
                   ),
                 );
               }
 
-              final todos = snapshot.data ?? const <Todo>[];
-              if (todos.isEmpty) {
+              final hasTodos = _inProgress.isNotEmpty ||
+                  _open.isNotEmpty ||
+                  _doneVisible > 0;
+              if (!hasTodos) {
                 return Center(child: Text(context.t.actions.agenda.empty));
               }
 
-              final inProgress = <Todo>[];
-              final open = <Todo>[];
-              final done = <Todo>[];
+              final sections = <({
+                String label,
+                List<Todo> todos,
+                int visibleCount,
+                bool showLoadMore,
+              })>[];
 
-              for (final todo in todos) {
-                switch (todo.status) {
-                  case 'in_progress':
-                    inProgress.add(todo);
-                    break;
-                  case 'done':
-                    done.add(todo);
-                    break;
-                  default:
-                    open.add(todo);
+              void addSection({
+                required String label,
+                required List<Todo> todos,
+                required int visibleCount,
+                required bool showLoadMore,
+              }) {
+                if (visibleCount <= 0) return;
+                sections.add((
+                  label: label,
+                  todos: todos,
+                  visibleCount: visibleCount,
+                  showLoadMore: showLoadMore,
+                ));
+              }
+
+              addSection(
+                label: _statusLabel(context, 'in_progress'),
+                todos: _inProgress,
+                visibleCount: _inProgress.length,
+                showLoadMore: false,
+              );
+              addSection(
+                label: _statusLabel(context, 'open'),
+                todos: _open,
+                visibleCount: _open.length,
+                showLoadMore: false,
+              );
+              addSection(
+                label: _statusLabel(context, 'done'),
+                todos: _done,
+                visibleCount: _doneVisible,
+                showLoadMore: _doneVisible < _done.length,
+              );
+
+              var itemCount = 0;
+              for (final s in sections) {
+                itemCount += 1 + s.visibleCount + (s.showLoadMore ? 1 : 0);
+              }
+
+              Object entryAt(int index) {
+                var i = index;
+                for (final s in sections) {
+                  if (i == 0) return s.label;
+                  i -= 1;
+
+                  if (i < s.visibleCount) return s.todos[i];
+                  i -= s.visibleCount;
+
+                  if (s.showLoadMore) {
+                    if (i == 0) return _loadMoreDoneMarker;
+                    i -= 1;
+                  }
                 }
+                return '';
               }
 
-              inProgress.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
-              open.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
-              done.sort((a, b) => a.dueAtMs!.compareTo(b.dueAtMs!));
-
-              final entries = <Object>[];
-              void addSection(String label, List<Todo> items) {
-                if (items.isEmpty) return;
-                entries.add(label);
-                entries.addAll(items);
+              Widget buildDoneLoadMoreRow() {
+                final theme = Theme.of(context);
+                return Center(
+                  child: Padding(
+                    key: const ValueKey('todo_agenda_done_load_more'),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: _loadingMoreDone
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: theme.colorScheme.primary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.more_horiz_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                  ),
+                );
               }
-
-              addSection(_statusLabel(context, 'in_progress'), inProgress);
-              addSection(_statusLabel(context, 'open'), open);
-              addSection(_statusLabel(context, 'done'), done);
 
               return ListView.separated(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(16),
-                itemCount: entries.length,
+                itemCount: itemCount,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final entry = entries[index];
+                  final entry = entryAt(index);
+                  if (entry is _LoadMoreDoneMarker) {
+                    return buildDoneLoadMoreRow();
+                  }
+
                   if (entry is String) {
                     return Text(
                       entry,
@@ -257,6 +423,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                   }
 
                   final todo = entry as Todo;
+                  final isDone = todo.status == 'done';
                   final dueText = _formatDue(context, todo);
                   final dueAtMs = todo.dueAtMs;
                   final dueAtLocal = dueAtMs == null
@@ -265,8 +432,9 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                           dueAtMs,
                           isUtc: true,
                         ).toLocal();
-                  final overdue =
-                      dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
+                  final overdue = !isDone &&
+                      dueAtLocal != null &&
+                      dueAtLocal.isBefore(DateTime.now());
                   final radius = BorderRadius.circular(tokens.radiusLg);
                   final colorScheme = Theme.of(context).colorScheme;
                   final overlay = MaterialStateProperty.resolveWith<Color?>(
@@ -281,6 +449,10 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                       return null;
                     },
                   );
+
+                  final dotColor = isDone
+                      ? _kDoneDotColor
+                      : (overdue ? colorScheme.error : colorScheme.primary);
 
                   return MouseRegion(
                     cursor: SystemMouseCursors.click,
@@ -315,9 +487,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                       width: 10,
                                       height: 10,
                                       decoration: BoxDecoration(
-                                        color: overdue
-                                            ? colorScheme.error
-                                            : colorScheme.primary,
+                                        color: dotColor,
                                         borderRadius: BorderRadius.circular(99),
                                       ),
                                     ),

@@ -62,9 +62,14 @@ import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({required this.conversation, super.key});
+  const ChatPage({
+    required this.conversation,
+    this.isTabActive = true,
+    super.key,
+  });
 
   final Conversation conversation;
+  final bool isTabActive;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -108,6 +113,7 @@ class _ChatPageState extends State<ChatPage> {
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
   MessageAutoActionsQueue? _messageAutoActionsQueue;
+  int _todoAgendaBannerCollapseSignal = 0;
 
   static const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
   static const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
@@ -118,6 +124,19 @@ class _ChatPageState extends State<ChatPage> {
   static const _kAskAiEmailNotVerifiedSnackKey = ValueKey(
     'ask_ai_email_not_verified_snack',
   );
+
+  void _collapseTodoAgendaBanner() {
+    setState(() => _todoAgendaBannerCollapseSignal++);
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isTabActive && !oldWidget.isTabActive) {
+      _collapseTodoAgendaBanner();
+    }
+  }
+
   static const _kAskAiErrorPrefix = '\u001eSL_ERROR\u001e';
   static const _kCollapsedMessageHeight = 280.0;
   static const _kLongMessageRuneThreshold = 600;
@@ -3479,15 +3498,6 @@ class _ChatPageState extends State<ChatPage> {
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
     return Scaffold(
-      floatingActionButton: _usePagination && !_isAtBottom
-          ? FloatingActionButton.small(
-              key: const ValueKey('chat_jump_to_latest'),
-              onPressed: _jumpToLatest,
-              backgroundColor: colorScheme.secondaryContainer,
-              foregroundColor: colorScheme.onSecondaryContainer,
-              child: const Icon(Icons.arrow_downward_rounded),
-            )
-          : null,
       appBar: AppBar(
         title: Text(title),
         actions: [
@@ -3539,6 +3549,7 @@ class _ChatPageState extends State<ChatPage> {
                 overdueCount: summary.overdueCount,
                 upcomingCount: summary.upcomingCount,
                 previewTodos: summary.previewTodos,
+                collapseSignal: _todoAgendaBannerCollapseSignal,
                 onViewAll: () async {
                   await Navigator.of(context).push(
                     MaterialPageRoute(
@@ -3546,6 +3557,7 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   );
                   if (!mounted) return;
+                  _collapseTodoAgendaBanner();
                   _refresh();
                 },
               );
@@ -3573,166 +3585,156 @@ class _ChatPageState extends State<ChatPage> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 880),
-                child: FutureBuilder(
-                  future: _messagesFuture,
-                  builder: (context, snapshot) {
-                    final isLoading =
-                        snapshot.connectionState != ConnectionState.done;
-                    final messages = _usePagination
-                        ? _paginatedMessages
-                        : snapshot.data ?? const <Message>[];
-                    final pendingQuestion = _pendingQuestion;
-                    final pendingFailureMessage = _askFailureMessage;
-                    final hasPendingAssistant = (_asking && !_stopRequested) ||
-                        pendingFailureMessage != null;
-                    final pendingAssistantText = pendingFailureMessage ??
-                        (_streamingAnswer.isEmpty ? '…' : _streamingAnswer);
-                    final extraCount = (hasPendingAssistant ? 1 : 0) +
-                        (pendingQuestion == null ? 0 : 1);
-                    if (messages.isEmpty && extraCount == 0) {
-                      if (isLoading) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text(
-                            context.t.errors
-                                .loadFailed(error: '${snapshot.error}'),
-                          ),
-                        );
-                      }
-                      return Center(
-                        child: Text(context.t.chat.noMessagesYet),
-                      );
-                    }
-
-                    final messageIndexById = <String, int>{};
-                    for (var i = 0; i < messages.length; i++) {
-                      messageIndexById[messages[i].id] = i;
-                    }
-
-                    return ListView.builder(
-                      key: _usePagination
-                          ? const ValueKey('chat_message_list')
-                          : null,
-                      controller: _usePagination ? _scrollController : null,
-                      reverse: _usePagination,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      findChildIndexCallback: (key) {
-                        if (key is! ValueKey) return null;
-                        final v = key.value;
-                        if (v is! String) return null;
-                        if (!v.startsWith('chat_message_row_')) return null;
-                        final messageId =
-                            v.substring('chat_message_row_'.length);
-
-                        if (messageId == 'pending_assistant') {
-                          if (!hasPendingAssistant) return null;
-                          if (_usePagination) return 0;
-                          return messages.length +
-                              (pendingQuestion == null ? 0 : 1);
-                        }
-
-                        if (messageId == 'pending_user') {
-                          if (pendingQuestion == null) return null;
-                          if (_usePagination) {
-                            return hasPendingAssistant ? 1 : 0;
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    FutureBuilder(
+                      future: _messagesFuture,
+                      builder: (context, snapshot) {
+                        final isLoading =
+                            snapshot.connectionState != ConnectionState.done;
+                        final messages = _usePagination
+                            ? _paginatedMessages
+                            : snapshot.data ?? const <Message>[];
+                        final pendingQuestion = _pendingQuestion;
+                        final pendingFailureMessage = _askFailureMessage;
+                        final hasPendingAssistant =
+                            (_asking && !_stopRequested) ||
+                                pendingFailureMessage != null;
+                        final pendingAssistantText = pendingFailureMessage ??
+                            (_streamingAnswer.isEmpty ? '…' : _streamingAnswer);
+                        final extraCount = (hasPendingAssistant ? 1 : 0) +
+                            (pendingQuestion == null ? 0 : 1);
+                        if (messages.isEmpty && extraCount == 0) {
+                          if (isLoading) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
                           }
-                          return messages.length;
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                context.t.errors
+                                    .loadFailed(error: '${snapshot.error}'),
+                              ),
+                            );
+                          }
+                          return Center(
+                            child: Text(context.t.chat.noMessagesYet),
+                          );
                         }
 
-                        final messageIndex = messageIndexById[messageId];
-                        if (messageIndex == null) return null;
-                        return _usePagination
-                            ? messageIndex + extraCount
-                            : messageIndex;
-                      },
-                      itemCount: messages.length + extraCount,
-                      itemBuilder: (context, index) {
-                        final backend = AppBackendScope.of(context);
-                        final attachmentsBackend = backend is AttachmentsBackend
-                            ? backend as AttachmentsBackend
-                            : null;
-                        final sessionKey = SessionScope.of(context).sessionKey;
+                        final messageIndexById = <String, int>{};
+                        for (var i = 0; i < messages.length; i++) {
+                          messageIndexById[messages[i].id] = i;
+                        }
 
-                        Message? messageAt(int targetIndex) {
-                          if (_usePagination) {
-                            if (targetIndex < extraCount) {
-                              var extraIndex = targetIndex;
-                              if (hasPendingAssistant) {
+                        return ListView.builder(
+                          key: _usePagination
+                              ? const ValueKey('chat_message_list')
+                              : null,
+                          controller: _usePagination ? _scrollController : null,
+                          reverse: _usePagination,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          findChildIndexCallback: (key) {
+                            if (key is! ValueKey) return null;
+                            final v = key.value;
+                            if (v is! String) return null;
+                            if (!v.startsWith('chat_message_row_')) return null;
+                            final messageId =
+                                v.substring('chat_message_row_'.length);
+
+                            if (messageId == 'pending_assistant') {
+                              if (!hasPendingAssistant) return null;
+                              if (_usePagination) return 0;
+                              return messages.length +
+                                  (pendingQuestion == null ? 0 : 1);
+                            }
+
+                            if (messageId == 'pending_user') {
+                              if (pendingQuestion == null) return null;
+                              if (_usePagination) {
+                                return hasPendingAssistant ? 1 : 0;
+                              }
+                              return messages.length;
+                            }
+
+                            final messageIndex = messageIndexById[messageId];
+                            if (messageIndex == null) return null;
+                            return _usePagination
+                                ? messageIndex + extraCount
+                                : messageIndex;
+                          },
+                          itemCount: messages.length + extraCount,
+                          itemBuilder: (context, index) {
+                            final backend = AppBackendScope.of(context);
+                            final attachmentsBackend =
+                                backend is AttachmentsBackend
+                                    ? backend as AttachmentsBackend
+                                    : null;
+                            final sessionKey =
+                                SessionScope.of(context).sessionKey;
+
+                            Message? messageAt(int targetIndex) {
+                              if (_usePagination) {
+                                if (targetIndex < extraCount) {
+                                  var extraIndex = targetIndex;
+                                  if (hasPendingAssistant) {
+                                    if (extraIndex == 0) {
+                                      return Message(
+                                        id: 'pending_assistant',
+                                        conversationId: widget.conversation.id,
+                                        role: 'assistant',
+                                        content: '',
+                                        createdAtMs: 0,
+                                        isMemory: false,
+                                      );
+                                    }
+                                    extraIndex -= 1;
+                                  }
+                                  if (pendingQuestion != null &&
+                                      extraIndex == 0) {
+                                    return Message(
+                                      id: 'pending_user',
+                                      conversationId: widget.conversation.id,
+                                      role: 'user',
+                                      content: pendingQuestion,
+                                      createdAtMs: 0,
+                                      isMemory: false,
+                                    );
+                                  }
+                                  return null;
+                                }
+                                final messageIndex = targetIndex - extraCount;
+                                if (messageIndex < 0 ||
+                                    messageIndex >= messages.length) {
+                                  return null;
+                                }
+                                return messages[messageIndex];
+                              }
+
+                              if (targetIndex < messages.length) {
+                                return messages[targetIndex];
+                              }
+
+                              var extraIndex = targetIndex - messages.length;
+                              if (pendingQuestion != null) {
                                 if (extraIndex == 0) {
                                   return Message(
-                                    id: 'pending_assistant',
+                                    id: 'pending_user',
                                     conversationId: widget.conversation.id,
-                                    role: 'assistant',
-                                    content: '',
+                                    role: 'user',
+                                    content: pendingQuestion,
                                     createdAtMs: 0,
                                     isMemory: false,
                                   );
                                 }
                                 extraIndex -= 1;
                               }
-                              if (pendingQuestion != null && extraIndex == 0) {
+                              if (_asking &&
+                                  !_stopRequested &&
+                                  extraIndex == 0) {
                                 return Message(
-                                  id: 'pending_user',
-                                  conversationId: widget.conversation.id,
-                                  role: 'user',
-                                  content: pendingQuestion,
-                                  createdAtMs: 0,
-                                  isMemory: false,
-                                );
-                              }
-                              return null;
-                            }
-                            final messageIndex = targetIndex - extraCount;
-                            if (messageIndex < 0 ||
-                                messageIndex >= messages.length) {
-                              return null;
-                            }
-                            return messages[messageIndex];
-                          }
-
-                          if (targetIndex < messages.length) {
-                            return messages[targetIndex];
-                          }
-
-                          var extraIndex = targetIndex - messages.length;
-                          if (pendingQuestion != null) {
-                            if (extraIndex == 0) {
-                              return Message(
-                                id: 'pending_user',
-                                conversationId: widget.conversation.id,
-                                role: 'user',
-                                content: pendingQuestion,
-                                createdAtMs: 0,
-                                isMemory: false,
-                              );
-                            }
-                            extraIndex -= 1;
-                          }
-                          if (_asking && !_stopRequested && extraIndex == 0) {
-                            return Message(
-                              id: 'pending_assistant',
-                              conversationId: widget.conversation.id,
-                              role: 'assistant',
-                              content: '',
-                              createdAtMs: 0,
-                              isMemory: false,
-                            );
-                          }
-                          return null;
-                        }
-
-                        Message? msg;
-                        String? textOverride;
-                        if (_usePagination) {
-                          if (index < extraCount) {
-                            var extraIndex = index;
-                            if (hasPendingAssistant) {
-                              if (extraIndex == 0) {
-                                msg = Message(
                                   id: 'pending_assistant',
                                   conversationId: widget.conversation.id,
                                   role: 'assistant',
@@ -3740,743 +3742,776 @@ class _ChatPageState extends State<ChatPage> {
                                   createdAtMs: 0,
                                   isMemory: false,
                                 );
-                                textOverride = pendingAssistantText;
                               }
-                              extraIndex -= 1;
+                              return null;
                             }
-                            if (msg == null &&
-                                pendingQuestion != null &&
-                                extraIndex == 0) {
-                              msg = Message(
-                                id: 'pending_user',
-                                conversationId: widget.conversation.id,
-                                role: 'user',
-                                content: pendingQuestion,
-                                createdAtMs: 0,
-                                isMemory: false,
-                              );
-                            }
-                          } else {
-                            msg = messages[index - extraCount];
-                          }
-                        } else {
-                          if (index < messages.length) {
-                            msg = messages[index];
-                          } else {
-                            var extraIndex = index - messages.length;
-                            if (pendingQuestion != null) {
-                              if (extraIndex == 0) {
-                                msg = Message(
-                                  id: 'pending_user',
-                                  conversationId: widget.conversation.id,
-                                  role: 'user',
-                                  content: pendingQuestion,
-                                  createdAtMs: 0,
-                                  isMemory: false,
-                                );
+
+                            Message? msg;
+                            String? textOverride;
+                            if (_usePagination) {
+                              if (index < extraCount) {
+                                var extraIndex = index;
+                                if (hasPendingAssistant) {
+                                  if (extraIndex == 0) {
+                                    msg = Message(
+                                      id: 'pending_assistant',
+                                      conversationId: widget.conversation.id,
+                                      role: 'assistant',
+                                      content: '',
+                                      createdAtMs: 0,
+                                      isMemory: false,
+                                    );
+                                    textOverride = pendingAssistantText;
+                                  }
+                                  extraIndex -= 1;
+                                }
+                                if (msg == null &&
+                                    pendingQuestion != null &&
+                                    extraIndex == 0) {
+                                  msg = Message(
+                                    id: 'pending_user',
+                                    conversationId: widget.conversation.id,
+                                    role: 'user',
+                                    content: pendingQuestion,
+                                    createdAtMs: 0,
+                                    isMemory: false,
+                                  );
+                                }
+                              } else {
+                                msg = messages[index - extraCount];
                               }
-                              extraIndex -= 1;
+                            } else {
+                              if (index < messages.length) {
+                                msg = messages[index];
+                              } else {
+                                var extraIndex = index - messages.length;
+                                if (pendingQuestion != null) {
+                                  if (extraIndex == 0) {
+                                    msg = Message(
+                                      id: 'pending_user',
+                                      conversationId: widget.conversation.id,
+                                      role: 'user',
+                                      content: pendingQuestion,
+                                      createdAtMs: 0,
+                                      isMemory: false,
+                                    );
+                                  }
+                                  extraIndex -= 1;
+                                }
+                                if (msg == null &&
+                                    hasPendingAssistant &&
+                                    extraIndex == 0) {
+                                  msg = Message(
+                                    id: 'pending_assistant',
+                                    conversationId: widget.conversation.id,
+                                    role: 'assistant',
+                                    content: '',
+                                    createdAtMs: 0,
+                                    isMemory: false,
+                                  );
+                                  textOverride = pendingAssistantText;
+                                }
+                              }
                             }
-                            if (msg == null &&
-                                hasPendingAssistant &&
-                                extraIndex == 0) {
-                              msg = Message(
-                                id: 'pending_assistant',
-                                conversationId: widget.conversation.id,
-                                role: 'assistant',
-                                content: '',
-                                createdAtMs: 0,
-                                isMemory: false,
-                              );
-                              textOverride = pendingAssistantText;
+
+                            final stableMsg = msg;
+                            if (stableMsg == null) {
+                              return const SizedBox.shrink();
                             }
-                          }
-                        }
 
-                        final stableMsg = msg;
-                        if (stableMsg == null) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final itemCount = messages.length + extraCount;
-                        final dayLocal =
-                            _messageLocalDay(stableMsg.createdAtMs);
-                        var showDateDivider = false;
-                        if (dayLocal != null &&
-                            !stableMsg.id.startsWith('pending_')) {
-                          final step = _usePagination ? 1 : -1;
-                          var neighborIndex = index + step;
-                          DateTime? neighborDay;
-                          while (
-                              neighborIndex >= 0 && neighborIndex < itemCount) {
-                            final neighborMsg = messageAt(neighborIndex);
-                            if (neighborMsg == null) break;
-                            final neighborDayLocal =
-                                _messageLocalDay(neighborMsg.createdAtMs);
-                            if (neighborDayLocal != null &&
-                                !neighborMsg.id.startsWith('pending_')) {
-                              neighborDay = neighborDayLocal;
-                              break;
+                            final itemCount = messages.length + extraCount;
+                            final dayLocal =
+                                _messageLocalDay(stableMsg.createdAtMs);
+                            var showDateDivider = false;
+                            if (dayLocal != null &&
+                                !stableMsg.id.startsWith('pending_')) {
+                              final step = _usePagination ? 1 : -1;
+                              var neighborIndex = index + step;
+                              DateTime? neighborDay;
+                              while (neighborIndex >= 0 &&
+                                  neighborIndex < itemCount) {
+                                final neighborMsg = messageAt(neighborIndex);
+                                if (neighborMsg == null) break;
+                                final neighborDayLocal =
+                                    _messageLocalDay(neighborMsg.createdAtMs);
+                                if (neighborDayLocal != null &&
+                                    !neighborMsg.id.startsWith('pending_')) {
+                                  neighborDay = neighborDayLocal;
+                                  break;
+                                }
+                                neighborIndex += step;
+                              }
+                              showDateDivider = neighborDay == null ||
+                                  neighborDay != dayLocal;
                             }
-                            neighborIndex += step;
-                          }
-                          showDateDivider =
-                              neighborDay == null || neighborDay != dayLocal;
-                        }
 
-                        final isUser = stableMsg.role == 'user';
-                        final bubbleShape = RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          side: BorderSide(
-                            color: isUser
-                                ? colorScheme.primary.withOpacity(
-                                    Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? 0.28
-                                        : 0.22,
+                            final isUser = stableMsg.role == 'user';
+                            final bubbleShape = RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              side: BorderSide(
+                                color: isUser
+                                    ? colorScheme.primary.withOpacity(
+                                        Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? 0.28
+                                            : 0.22,
+                                      )
+                                    : tokens.borderSubtle,
+                              ),
+                            );
+                            final bubbleColor = isUser
+                                ? colorScheme.primaryContainer
+                                : tokens.surface2;
+
+                            final isPending =
+                                stableMsg.id.startsWith('pending_');
+                            final showHoverMenu =
+                                !isPending && _hoveredMessageId == stableMsg.id;
+
+                            final supportsAttachments =
+                                attachmentsBackend != null && !isPending;
+
+                            final rawText = textOverride ?? stableMsg.content;
+                            final assistantActions =
+                                (!isPending && stableMsg.role == 'assistant')
+                                    ? parseAssistantMessageActions(rawText)
+                                    : null;
+                            final rawDisplayText =
+                                assistantActions?.displayText ?? rawText;
+                            final displayText =
+                                _isPhotoPlaceholderText(context, rawDisplayText)
+                                    ? ''
+                                    : rawDisplayText;
+                            final actionSuggestions =
+                                assistantActions?.suggestions?.suggestions ??
+                                    const <ActionSuggestion>[];
+
+                            final shouldCollapse = !isPending &&
+                                _shouldCollapseMessage(displayText) &&
+                                actionSuggestions.isEmpty;
+
+                            final hoverMenuSlot = _hoverActionsEnabled &&
+                                    !isPending
+                                ? Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: SizedBox(
+                                      width: 72,
+                                      height: 32,
+                                      child: showHoverMenu
+                                          ? Row(
+                                              mainAxisAlignment: isUser
+                                                  ? MainAxisAlignment.end
+                                                  : MainAxisAlignment.start,
+                                              children: [
+                                                if (isUser) ...[
+                                                  SlIconButton(
+                                                    key: ValueKey(
+                                                        'message_edit_${stableMsg.id}'),
+                                                    icon: Icons.edit_rounded,
+                                                    onPressed: () =>
+                                                        _editMessage(stableMsg),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                ],
+                                                SlIconButton(
+                                                  key: ValueKey(
+                                                      'message_delete_${stableMsg.id}'),
+                                                  icon: Icons
+                                                      .delete_outline_rounded,
+                                                  color: colorScheme.error,
+                                                  overlayBaseColor:
+                                                      colorScheme.error,
+                                                  borderColor: colorScheme.error
+                                                      .withOpacity(
+                                                    Theme.of(context)
+                                                                .brightness ==
+                                                            Brightness.dark
+                                                        ? 0.32
+                                                        : 0.22,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _deleteMessage(stableMsg),
+                                                ),
+                                              ],
+                                            )
+                                          : const SizedBox.shrink(),
+                                    ),
                                   )
-                                : tokens.borderSubtle,
-                          ),
-                        );
-                        final bubbleColor = isUser
-                            ? colorScheme.primaryContainer
-                            : tokens.surface2;
+                                : const SizedBox.shrink();
 
-                        final isPending = stableMsg.id.startsWith('pending_');
-                        final showHoverMenu =
-                            !isPending && _hoveredMessageId == stableMsg.id;
+                            final hasContentAboveAttachments =
+                                displayText.trim().isNotEmpty ||
+                                    shouldCollapse ||
+                                    actionSuggestions.isNotEmpty ||
+                                    !stableMsg.isMemory;
 
-                        final supportsAttachments =
-                            attachmentsBackend != null && !isPending;
-
-                        final rawText = textOverride ?? stableMsg.content;
-                        final assistantActions =
-                            (!isPending && stableMsg.role == 'assistant')
-                                ? parseAssistantMessageActions(rawText)
-                                : null;
-                        final rawDisplayText =
-                            assistantActions?.displayText ?? rawText;
-                        final displayText =
-                            _isPhotoPlaceholderText(context, rawDisplayText)
-                                ? ''
-                                : rawDisplayText;
-                        final actionSuggestions =
-                            assistantActions?.suggestions?.suggestions ??
-                                const <ActionSuggestion>[];
-
-                        final shouldCollapse = !isPending &&
-                            _shouldCollapseMessage(displayText) &&
-                            actionSuggestions.isEmpty;
-
-                        final hoverMenuSlot = _hoverActionsEnabled && !isPending
-                            ? Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: SizedBox(
-                                  width: 72,
-                                  height: 32,
-                                  child: showHoverMenu
-                                      ? Row(
-                                          mainAxisAlignment: isUser
-                                              ? MainAxisAlignment.end
-                                              : MainAxisAlignment.start,
-                                          children: [
-                                            if (isUser) ...[
-                                              SlIconButton(
-                                                key: ValueKey(
-                                                    'message_edit_${stableMsg.id}'),
-                                                icon: Icons.edit_rounded,
-                                                onPressed: () =>
-                                                    _editMessage(stableMsg),
-                                              ),
-                                              const SizedBox(width: 6),
-                                            ],
-                                            SlIconButton(
-                                              key: ValueKey(
-                                                  'message_delete_${stableMsg.id}'),
-                                              icon:
-                                                  Icons.delete_outline_rounded,
-                                              color: colorScheme.error,
-                                              overlayBaseColor:
-                                                  colorScheme.error,
-                                              borderColor:
-                                                  colorScheme.error.withOpacity(
-                                                Theme.of(context).brightness ==
-                                                        Brightness.dark
-                                                    ? 0.32
-                                                    : 0.22,
-                                              ),
-                                              onPressed: () =>
-                                                  _deleteMessage(stableMsg),
+                            final bubble = ConstrainedBox(
+                              key: ValueKey('message_bubble_${stableMsg.id}'),
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: Material(
+                                color: bubbleColor,
+                                shape: bubbleShape,
+                                child: Listener(
+                                  onPointerDown: isPending
+                                      ? null
+                                      : (event) {
+                                          final kind = event.kind;
+                                          final isPointerKind = kind ==
+                                                  PointerDeviceKind.mouse ||
+                                              kind ==
+                                                  PointerDeviceKind.trackpad;
+                                          if (!isPointerKind) return;
+                                          if (event.buttons &
+                                                  kSecondaryMouseButton ==
+                                              0) {
+                                            return;
+                                          }
+                                          unawaited(
+                                            _showMessageContextMenu(
+                                              stableMsg,
+                                              event.position,
                                             ),
-                                          ],
-                                        )
-                                      : const SizedBox.shrink(),
-                                ),
-                              )
-                            : const SizedBox.shrink();
-
-                        final hasContentAboveAttachments =
-                            displayText.trim().isNotEmpty ||
-                                shouldCollapse ||
-                                actionSuggestions.isNotEmpty ||
-                                !stableMsg.isMemory;
-
-                        final bubble = ConstrainedBox(
-                          key: ValueKey('message_bubble_${stableMsg.id}'),
-                          constraints: const BoxConstraints(maxWidth: 560),
-                          child: Material(
-                            color: bubbleColor,
-                            shape: bubbleShape,
-                            child: Listener(
-                              onPointerDown: isPending
-                                  ? null
-                                  : (event) {
-                                      final kind = event.kind;
-                                      final isPointerKind = kind ==
-                                              PointerDeviceKind.mouse ||
-                                          kind == PointerDeviceKind.trackpad;
-                                      if (!isPointerKind) return;
-                                      if (event.buttons &
-                                              kSecondaryMouseButton ==
-                                          0) {
-                                        return;
-                                      }
-                                      unawaited(
-                                        _showMessageContextMenu(
-                                          stableMsg,
-                                          event.position,
-                                        ),
-                                      );
-                                    },
-                              child: InkWell(
-                                onTap: shouldCollapse && !isDesktopPlatform
-                                    ? () => unawaited(
-                                          _openMessageViewer(displayText),
-                                        )
-                                    : null,
-                                onLongPress: isDesktopPlatform
-                                    ? null
-                                    : () => _showMessageActions(stableMsg),
-                                borderRadius: BorderRadius.circular(18),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          right: (!isPending &&
-                                                  stableMsg.createdAtMs > 0)
-                                              ? 54
-                                              : 0,
-                                          bottom: (!isPending &&
-                                                  stableMsg.createdAtMs > 0)
-                                              ? 16
-                                              : 0,
-                                        ),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            if (!stableMsg.isMemory)
-                                              Padding(
-                                                key: ValueKey(
-                                                  'message_ask_ai_badge_${stableMsg.id}',
-                                                ),
-                                                padding: const EdgeInsets.only(
-                                                    bottom: 6),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      Icons
-                                                          .auto_awesome_rounded,
-                                                      size: 14,
-                                                      color:
-                                                          colorScheme.secondary,
+                                          );
+                                        },
+                                  child: InkWell(
+                                    onTap: shouldCollapse && !isDesktopPlatform
+                                        ? () => unawaited(
+                                              _openMessageViewer(displayText),
+                                            )
+                                        : null,
+                                    onLongPress: isDesktopPlatform
+                                        ? null
+                                        : () => _showMessageActions(stableMsg),
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      child: Stack(
+                                        children: [
+                                          Padding(
+                                            padding: EdgeInsets.only(
+                                              right: (!isPending &&
+                                                      stableMsg.createdAtMs > 0)
+                                                  ? 54
+                                                  : 0,
+                                              bottom: (!isPending &&
+                                                      stableMsg.createdAtMs > 0)
+                                                  ? 16
+                                                  : 0,
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                if (!stableMsg.isMemory)
+                                                  Padding(
+                                                    key: ValueKey(
+                                                      'message_ask_ai_badge_${stableMsg.id}',
                                                     ),
-                                                    const SizedBox(width: 6),
-                                                    Text(
-                                                      context.t.common.actions
-                                                          .askAi,
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .labelSmall
-                                                          ?.copyWith(
-                                                            color: colorScheme
-                                                                .secondary,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            bottom: 6),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          Icons
+                                                              .auto_awesome_rounded,
+                                                          size: 14,
+                                                          color: colorScheme
+                                                              .secondary,
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 6),
+                                                        Text(
+                                                          context.t.common
+                                                              .actions.askAi,
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .labelSmall
+                                                                  ?.copyWith(
+                                                                    color: colorScheme
+                                                                        .secondary,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                            if (shouldCollapse)
-                                              SizedBox(
-                                                height:
-                                                    _kCollapsedMessageHeight,
-                                                child: ClipRect(
-                                                  child: Stack(
-                                                    children: [
-                                                      ScrollConfiguration(
-                                                        behavior:
-                                                            ScrollConfiguration
-                                                                    .of(context)
-                                                                .copyWith(
-                                                          scrollbars: false,
-                                                          overscroll: false,
-                                                        ),
-                                                        child:
-                                                            SingleChildScrollView(
-                                                          physics:
-                                                              const NeverScrollableScrollPhysics(),
-                                                          child:
-                                                              _buildMessageMarkdown(
-                                                            displayText,
-                                                            isDesktopPlatform:
-                                                                isDesktopPlatform,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      Positioned(
-                                                        left: 0,
-                                                        right: 0,
-                                                        bottom: 0,
-                                                        height: 32,
-                                                        child: DecoratedBox(
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            gradient:
-                                                                LinearGradient(
-                                                              begin: Alignment
-                                                                  .topCenter,
-                                                              end: Alignment
-                                                                  .bottomCenter,
-                                                              colors: [
-                                                                bubbleColor
-                                                                    .withOpacity(
-                                                                        0),
-                                                                bubbleColor,
-                                                              ],
+                                                  ),
+                                                if (shouldCollapse)
+                                                  SizedBox(
+                                                    height:
+                                                        _kCollapsedMessageHeight,
+                                                    child: ClipRect(
+                                                      child: Stack(
+                                                        children: [
+                                                          ScrollConfiguration(
+                                                            behavior:
+                                                                ScrollConfiguration.of(
+                                                                        context)
+                                                                    .copyWith(
+                                                              scrollbars: false,
+                                                              overscroll: false,
+                                                            ),
+                                                            child:
+                                                                SingleChildScrollView(
+                                                              physics:
+                                                                  const NeverScrollableScrollPhysics(),
+                                                              child:
+                                                                  _buildMessageMarkdown(
+                                                                displayText,
+                                                                isDesktopPlatform:
+                                                                    isDesktopPlatform,
+                                                              ),
                                                             ),
                                                           ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              )
-                                            else
-                                              displayText.trim().isEmpty
-                                                  ? const SizedBox.shrink()
-                                                  : _buildMessageMarkdown(
-                                                      displayText,
-                                                      isDesktopPlatform:
-                                                          isDesktopPlatform,
-                                                    ),
-                                            if (shouldCollapse)
-                                              Align(
-                                                alignment:
-                                                    Alignment.centerRight,
-                                                child: TextButton(
-                                                  key: ValueKey(
-                                                    'message_view_full_${stableMsg.id}',
-                                                  ),
-                                                  onPressed: () => unawaited(
-                                                    _openMessageViewer(
-                                                        displayText),
-                                                  ),
-                                                  child: Text(
-                                                      context.t.chat.viewFull),
-                                                ),
-                                              ),
-                                            if (actionSuggestions.isNotEmpty)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 8),
-                                                child: Wrap(
-                                                  spacing: 8,
-                                                  runSpacing: 8,
-                                                  children: [
-                                                    for (var i = 0;
-                                                        i <
-                                                            actionSuggestions
-                                                                .length;
-                                                        i++)
-                                                      SlButton(
-                                                        variant: SlButtonVariant
-                                                            .outline,
-                                                        onPressed: () =>
-                                                            _handleAssistantSuggestion(
-                                                          stableMsg,
-                                                          actionSuggestions[i],
-                                                          i,
-                                                        ),
-                                                        icon: Icon(
-                                                          actionSuggestions[i]
-                                                                      .type ==
-                                                                  'event'
-                                                              ? Icons
-                                                                  .event_rounded
-                                                              : Icons
-                                                                  .check_circle_outline_rounded,
-                                                          size: 18,
-                                                        ),
-                                                        child: Text(
-                                                          actionSuggestions[i]
-                                                                      .whenText
-                                                                      ?.trim()
-                                                                      .isNotEmpty ==
-                                                                  true
-                                                              ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
-                                                              : actionSuggestions[
-                                                                      i]
-                                                                  .title,
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                            if (supportsAttachments)
-                                              FutureBuilder(
-                                                initialData:
-                                                    _attachmentsCacheByMessageId[
-                                                        stableMsg.id],
-                                                future:
-                                                    _attachmentsFuturesByMessageId
-                                                        .putIfAbsent(
-                                                  stableMsg.id,
-                                                  () => attachmentsBackend
-                                                      .listMessageAttachments(
-                                                    sessionKey,
-                                                    stableMsg.id,
-                                                  )
-                                                      .then((items) {
-                                                    _attachmentsCacheByMessageId[
-                                                        stableMsg.id] = items;
-                                                    return items;
-                                                  }),
-                                                ),
-                                                builder: (context, snapshot) {
-                                                  final items = snapshot.data ??
-                                                      const <Attachment>[];
-                                                  if (items.isEmpty) {
-                                                    return const SizedBox
-                                                        .shrink();
-                                                  }
-
-                                                  return Padding(
-                                                    padding: EdgeInsets.only(
-                                                      top:
-                                                          hasContentAboveAttachments
-                                                              ? 8
-                                                              : 0,
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        SingleChildScrollView(
-                                                          scrollDirection:
-                                                              Axis.horizontal,
-                                                          child: Row(
-                                                            children: [
-                                                              for (final attachment
-                                                                  in items)
-                                                                Padding(
-                                                                  padding:
-                                                                      const EdgeInsets
-                                                                          .only(
-                                                                    right: 8,
-                                                                  ),
-                                                                  child: attachment
-                                                                          .mimeType
-                                                                          .startsWith(
-                                                                              'image/')
-                                                                      ? ChatImageAttachmentThumbnail(
-                                                                          key:
-                                                                              ValueKey(
-                                                                            'chat_attachment_image_${attachment.sha256}',
-                                                                          ),
-                                                                          attachment:
-                                                                              attachment,
-                                                                          attachmentsBackend:
-                                                                              attachmentsBackend,
-                                                                          onTap:
-                                                                              () {
-                                                                            Navigator.of(context).push(
-                                                                              MaterialPageRoute(
-                                                                                builder: (context) {
-                                                                                  return AttachmentViewerPage(
-                                                                                    attachment: attachment,
-                                                                                  );
-                                                                                },
-                                                                              ),
-                                                                            );
-                                                                          },
-                                                                        )
-                                                                      : AttachmentCard(
-                                                                          attachment:
-                                                                              attachment,
-                                                                          onTap:
-                                                                              () {
-                                                                            Navigator.of(context).push(
-                                                                              MaterialPageRoute(
-                                                                                builder: (context) {
-                                                                                  return AttachmentViewerPage(
-                                                                                    attachment: attachment,
-                                                                                  );
-                                                                                },
-                                                                              ),
-                                                                            );
-                                                                          },
-                                                                        ),
+                                                          Positioned(
+                                                            left: 0,
+                                                            right: 0,
+                                                            bottom: 0,
+                                                            height: 32,
+                                                            child: DecoratedBox(
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                gradient:
+                                                                    LinearGradient(
+                                                                  begin: Alignment
+                                                                      .topCenter,
+                                                                  end: Alignment
+                                                                      .bottomCenter,
+                                                                  colors: [
+                                                                    bubbleColor
+                                                                        .withOpacity(
+                                                                            0),
+                                                                    bubbleColor,
+                                                                  ],
                                                                 ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        Builder(
-                                                          builder: (context) {
-                                                            String?
-                                                                firstImageSha256;
-                                                            for (final a
-                                                                in items) {
-                                                              if (a.mimeType
-                                                                  .startsWith(
-                                                                      'image/')) {
-                                                                firstImageSha256 =
-                                                                    a.sha256;
-                                                                break;
-                                                              }
-                                                            }
-                                                            final sha256 =
-                                                                firstImageSha256;
-                                                            if (sha256 ==
-                                                                null) {
-                                                              return const SizedBox
-                                                                  .shrink();
-                                                            }
-
-                                                            return FutureBuilder(
-                                                              initialData:
-                                                                  _attachmentEnrichmentCacheBySha256[
-                                                                      sha256],
-                                                              future:
-                                                                  _attachmentEnrichmentFuturesBySha256
-                                                                      .putIfAbsent(
-                                                                sha256,
-                                                                () =>
-                                                                    _loadAttachmentEnrichment(
-                                                                  attachmentsBackend,
-                                                                  sessionKey,
-                                                                  sha256,
-                                                                ).then((value) {
-                                                                  _attachmentEnrichmentCacheBySha256[
-                                                                          sha256] =
-                                                                      value;
-                                                                  return value;
-                                                                }),
                                                               ),
-                                                              builder: (context,
-                                                                  snapshot) {
-                                                                final enrichment =
-                                                                    snapshot
-                                                                        .data;
-                                                                final place =
-                                                                    enrichment
-                                                                        ?.placeDisplayName
-                                                                        ?.trim();
-                                                                final caption =
-                                                                    enrichment
-                                                                        ?.captionLong
-                                                                        ?.trim();
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  )
+                                                else
+                                                  displayText.trim().isEmpty
+                                                      ? const SizedBox.shrink()
+                                                      : _buildMessageMarkdown(
+                                                          displayText,
+                                                          isDesktopPlatform:
+                                                              isDesktopPlatform,
+                                                        ),
+                                                if (shouldCollapse)
+                                                  Align(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    child: TextButton(
+                                                      key: ValueKey(
+                                                        'message_view_full_${stableMsg.id}',
+                                                      ),
+                                                      onPressed: () =>
+                                                          unawaited(
+                                                        _openMessageViewer(
+                                                            displayText),
+                                                      ),
+                                                      child: Text(context
+                                                          .t.chat.viewFull),
+                                                    ),
+                                                  ),
+                                                if (actionSuggestions
+                                                    .isNotEmpty)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 8),
+                                                    child: Wrap(
+                                                      spacing: 8,
+                                                      runSpacing: 8,
+                                                      children: [
+                                                        for (var i = 0;
+                                                            i <
+                                                                actionSuggestions
+                                                                    .length;
+                                                            i++)
+                                                          SlButton(
+                                                            variant:
+                                                                SlButtonVariant
+                                                                    .outline,
+                                                            onPressed: () =>
+                                                                _handleAssistantSuggestion(
+                                                              stableMsg,
+                                                              actionSuggestions[
+                                                                  i],
+                                                              i,
+                                                            ),
+                                                            icon: Icon(
+                                                              actionSuggestions[
+                                                                              i]
+                                                                          .type ==
+                                                                      'event'
+                                                                  ? Icons
+                                                                      .event_rounded
+                                                                  : Icons
+                                                                      .check_circle_outline_rounded,
+                                                              size: 18,
+                                                            ),
+                                                            child: Text(
+                                                              actionSuggestions[
+                                                                              i]
+                                                                          .whenText
+                                                                          ?.trim()
+                                                                          .isNotEmpty ==
+                                                                      true
+                                                                  ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
+                                                                  : actionSuggestions[
+                                                                          i]
+                                                                      .title,
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                if (supportsAttachments)
+                                                  FutureBuilder(
+                                                    initialData:
+                                                        _attachmentsCacheByMessageId[
+                                                            stableMsg.id],
+                                                    future:
+                                                        _attachmentsFuturesByMessageId
+                                                            .putIfAbsent(
+                                                      stableMsg.id,
+                                                      () => attachmentsBackend
+                                                          .listMessageAttachments(
+                                                        sessionKey,
+                                                        stableMsg.id,
+                                                      )
+                                                          .then((items) {
+                                                        _attachmentsCacheByMessageId[
+                                                                stableMsg.id] =
+                                                            items;
+                                                        return items;
+                                                      }),
+                                                    ),
+                                                    builder:
+                                                        (context, snapshot) {
+                                                      final items = snapshot
+                                                              .data ??
+                                                          const <Attachment>[];
+                                                      if (items.isEmpty) {
+                                                        return const SizedBox
+                                                            .shrink();
+                                                      }
 
-                                                                final hasPlace =
-                                                                    place !=
-                                                                            null &&
-                                                                        place
-                                                                            .isNotEmpty;
-                                                                final hasCaption =
-                                                                    caption !=
-                                                                            null &&
-                                                                        caption
-                                                                            .isNotEmpty;
-                                                                if (!hasPlace &&
-                                                                    !hasCaption) {
+                                                      return Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                          top:
+                                                              hasContentAboveAttachments
+                                                                  ? 8
+                                                                  : 0,
+                                                        ),
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            SingleChildScrollView(
+                                                              scrollDirection:
+                                                                  Axis.horizontal,
+                                                              child: Row(
+                                                                children: [
+                                                                  for (final attachment
+                                                                      in items)
+                                                                    Padding(
+                                                                      padding:
+                                                                          const EdgeInsets
+                                                                              .only(
+                                                                        right:
+                                                                            8,
+                                                                      ),
+                                                                      child: attachment
+                                                                              .mimeType
+                                                                              .startsWith('image/')
+                                                                          ? ChatImageAttachmentThumbnail(
+                                                                              key: ValueKey(
+                                                                                'chat_attachment_image_${attachment.sha256}',
+                                                                              ),
+                                                                              attachment: attachment,
+                                                                              attachmentsBackend: attachmentsBackend,
+                                                                              onTap: () {
+                                                                                Navigator.of(context).push(
+                                                                                  MaterialPageRoute(
+                                                                                    builder: (context) {
+                                                                                      return AttachmentViewerPage(
+                                                                                        attachment: attachment,
+                                                                                      );
+                                                                                    },
+                                                                                  ),
+                                                                                );
+                                                                              },
+                                                                            )
+                                                                          : AttachmentCard(
+                                                                              attachment: attachment,
+                                                                              onTap: () {
+                                                                                Navigator.of(context).push(
+                                                                                  MaterialPageRoute(
+                                                                                    builder: (context) {
+                                                                                      return AttachmentViewerPage(
+                                                                                        attachment: attachment,
+                                                                                      );
+                                                                                    },
+                                                                                  ),
+                                                                                );
+                                                                              },
+                                                                            ),
+                                                                    ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            Builder(
+                                                              builder:
+                                                                  (context) {
+                                                                String?
+                                                                    firstImageSha256;
+                                                                for (final a
+                                                                    in items) {
+                                                                  if (a.mimeType
+                                                                      .startsWith(
+                                                                          'image/')) {
+                                                                    firstImageSha256 =
+                                                                        a.sha256;
+                                                                    break;
+                                                                  }
+                                                                }
+                                                                final sha256 =
+                                                                    firstImageSha256;
+                                                                if (sha256 ==
+                                                                    null) {
                                                                   return const SizedBox
                                                                       .shrink();
                                                                 }
 
-                                                                final textStyle = Theme.of(
-                                                                        context)
-                                                                    .textTheme
-                                                                    .bodySmall
-                                                                    ?.copyWith(
-                                                                      color: isUser
-                                                                          ? colorScheme.onPrimaryContainer.withOpacity(
-                                                                              0.78)
-                                                                          : colorScheme
-                                                                              .onSurfaceVariant
-                                                                              .withOpacity(0.86),
-                                                                    );
+                                                                return FutureBuilder(
+                                                                  initialData:
+                                                                      _attachmentEnrichmentCacheBySha256[
+                                                                          sha256],
+                                                                  future: _attachmentEnrichmentFuturesBySha256
+                                                                      .putIfAbsent(
+                                                                    sha256,
+                                                                    () =>
+                                                                        _loadAttachmentEnrichment(
+                                                                      attachmentsBackend,
+                                                                      sessionKey,
+                                                                      sha256,
+                                                                    ).then((value) {
+                                                                      _attachmentEnrichmentCacheBySha256[
+                                                                              sha256] =
+                                                                          value;
+                                                                      return value;
+                                                                    }),
+                                                                  ),
+                                                                  builder: (context,
+                                                                      snapshot) {
+                                                                    final enrichment =
+                                                                        snapshot
+                                                                            .data;
+                                                                    final place =
+                                                                        enrichment
+                                                                            ?.placeDisplayName
+                                                                            ?.trim();
+                                                                    final caption =
+                                                                        enrichment
+                                                                            ?.captionLong
+                                                                            ?.trim();
 
-                                                                return Padding(
-                                                                  padding:
-                                                                      const EdgeInsets
-                                                                          .only(
-                                                                    top: 6,
-                                                                  ),
-                                                                  child: Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      if (hasPlace)
-                                                                        Text(
-                                                                          place,
-                                                                          key:
-                                                                              ValueKey(
-                                                                            'chat_image_enrichment_location_$sha256',
-                                                                          ),
-                                                                          maxLines:
-                                                                              1,
-                                                                          overflow:
-                                                                              TextOverflow.ellipsis,
-                                                                          style:
-                                                                              textStyle,
-                                                                        ),
-                                                                      if (hasPlace &&
-                                                                          hasCaption)
-                                                                        const SizedBox(
-                                                                            height:
-                                                                                2),
-                                                                      if (hasCaption)
-                                                                        Text(
-                                                                          caption,
-                                                                          key:
-                                                                              ValueKey(
-                                                                            'chat_image_enrichment_caption_$sha256',
-                                                                          ),
-                                                                          maxLines:
-                                                                              2,
-                                                                          overflow:
-                                                                              TextOverflow.ellipsis,
-                                                                          style:
-                                                                              textStyle,
-                                                                        ),
-                                                                    ],
-                                                                  ),
+                                                                    final hasPlace =
+                                                                        place !=
+                                                                                null &&
+                                                                            place.isNotEmpty;
+                                                                    final hasCaption = caption !=
+                                                                            null &&
+                                                                        caption
+                                                                            .isNotEmpty;
+                                                                    if (!hasPlace &&
+                                                                        !hasCaption) {
+                                                                      return const SizedBox
+                                                                          .shrink();
+                                                                    }
+
+                                                                    final textStyle = Theme.of(
+                                                                            context)
+                                                                        .textTheme
+                                                                        .bodySmall
+                                                                        ?.copyWith(
+                                                                          color: isUser
+                                                                              ? colorScheme.onPrimaryContainer.withOpacity(0.78)
+                                                                              : colorScheme.onSurfaceVariant.withOpacity(0.86),
+                                                                        );
+
+                                                                    return Padding(
+                                                                      padding:
+                                                                          const EdgeInsets
+                                                                              .only(
+                                                                        top: 6,
+                                                                      ),
+                                                                      child:
+                                                                          Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          if (hasPlace)
+                                                                            Text(
+                                                                              place,
+                                                                              key: ValueKey(
+                                                                                'chat_image_enrichment_location_$sha256',
+                                                                              ),
+                                                                              maxLines: 1,
+                                                                              overflow: TextOverflow.ellipsis,
+                                                                              style: textStyle,
+                                                                            ),
+                                                                          if (hasPlace &&
+                                                                              hasCaption)
+                                                                            const SizedBox(height: 2),
+                                                                          if (hasCaption)
+                                                                            Text(
+                                                                              caption,
+                                                                              key: ValueKey(
+                                                                                'chat_image_enrichment_caption_$sha256',
+                                                                              ),
+                                                                              maxLines: 2,
+                                                                              overflow: TextOverflow.ellipsis,
+                                                                              style: textStyle,
+                                                                            ),
+                                                                        ],
+                                                                      ),
+                                                                    );
+                                                                  },
                                                                 );
                                                               },
-                                                            );
-                                                          },
+                                                            ),
+                                                          ],
                                                         ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (!isPending &&
-                                          stableMsg.createdAtMs > 0)
-                                        Positioned(
-                                          right: 0,
-                                          bottom: 0,
-                                          child: Text(
-                                            _formatMessageTimestamp(
-                                              context,
-                                              stableMsg.createdAtMs,
+                                                      );
+                                                    },
+                                                  ),
+                                              ],
                                             ),
-                                            key: ValueKey(
-                                              'message_timestamp_${stableMsg.id}',
-                                            ),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  color: isUser
-                                                      ? colorScheme
-                                                          .onPrimaryContainer
-                                                          .withOpacity(0.62)
-                                                      : colorScheme
-                                                          .onSurfaceVariant
-                                                          .withOpacity(0.78),
-                                                ),
                                           ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-
-                        return Padding(
-                          key: ValueKey('chat_message_row_${stableMsg.id}'),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 4,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (showDateDivider && dayLocal != null)
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 8),
-                                  child: _buildMessageDateDividerChip(
-                                    context,
-                                    dayLocal,
-                                    key: ValueKey(
-                                      'message_date_divider_${stableMsg.id}',
+                                          if (!isPending &&
+                                              stableMsg.createdAtMs > 0)
+                                            Positioned(
+                                              right: 0,
+                                              bottom: 0,
+                                              child: Text(
+                                                _formatMessageTimestamp(
+                                                  context,
+                                                  stableMsg.createdAtMs,
+                                                ),
+                                                key: ValueKey(
+                                                  'message_timestamp_${stableMsg.id}',
+                                                ),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: isUser
+                                                          ? colorScheme
+                                                              .onPrimaryContainer
+                                                              .withOpacity(0.62)
+                                                          : colorScheme
+                                                              .onSurfaceVariant
+                                                              .withOpacity(
+                                                                  0.78),
+                                                    ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              MouseRegion(
-                                onEnter: isPending
-                                    ? null
-                                    : (_) => setState(
-                                          () {
-                                            _hoverActionsEnabled = true;
-                                            _hoveredMessageId = stableMsg.id;
-                                          },
-                                        ),
-                                onExit: isPending
-                                    ? null
-                                    : (_) => setState(() {
-                                          if (_hoveredMessageId ==
-                                              stableMsg.id) {
-                                            _hoveredMessageId = null;
-                                          }
-                                        }),
-                                child: Row(
-                                  mainAxisAlignment: isUser
-                                      ? MainAxisAlignment.end
-                                      : MainAxisAlignment.start,
-                                  children: [
-                                    if (isUser) hoverMenuSlot,
-                                    Flexible(child: bubble),
-                                    if (!isUser) hoverMenuSlot,
-                                  ],
-                                ),
                               ),
-                            ],
-                          ),
+                            );
+
+                            return Padding(
+                              key: ValueKey('chat_message_row_${stableMsg.id}'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (showDateDivider && dayLocal != null)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 8),
+                                      child: _buildMessageDateDividerChip(
+                                        context,
+                                        dayLocal,
+                                        key: ValueKey(
+                                          'message_date_divider_${stableMsg.id}',
+                                        ),
+                                      ),
+                                    ),
+                                  MouseRegion(
+                                    onEnter: isPending
+                                        ? null
+                                        : (_) => setState(
+                                              () {
+                                                _hoverActionsEnabled = true;
+                                                _hoveredMessageId =
+                                                    stableMsg.id;
+                                              },
+                                            ),
+                                    onExit: isPending
+                                        ? null
+                                        : (_) => setState(() {
+                                              if (_hoveredMessageId ==
+                                                  stableMsg.id) {
+                                                _hoveredMessageId = null;
+                                              }
+                                            }),
+                                    child: Row(
+                                      mainAxisAlignment: isUser
+                                          ? MainAxisAlignment.end
+                                          : MainAxisAlignment.start,
+                                      children: [
+                                        if (isUser) hoverMenuSlot,
+                                        Flexible(child: bubble),
+                                        if (!isUser) hoverMenuSlot,
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         );
                       },
-                    );
-                  },
+                    ),
+                    if (_usePagination && !_isAtBottom)
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: FloatingActionButton.small(
+                          key: const ValueKey('chat_jump_to_latest'),
+                          onPressed: _jumpToLatest,
+                          backgroundColor: colorScheme.secondaryContainer,
+                          foregroundColor: colorScheme.onSecondaryContainer,
+                          child: const Icon(Icons.arrow_downward_rounded),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

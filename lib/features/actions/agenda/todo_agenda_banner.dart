@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
@@ -11,6 +13,7 @@ class TodoAgendaBanner extends StatefulWidget {
     required this.overdueCount,
     required this.upcomingCount,
     required this.previewTodos,
+    this.collapseSignal = 0,
     this.onViewAll,
     super.key,
   });
@@ -19,6 +22,7 @@ class TodoAgendaBanner extends StatefulWidget {
   final int overdueCount;
   final int upcomingCount;
   final List<Todo> previewTodos;
+  final int collapseSignal;
   final VoidCallback? onViewAll;
 
   @override
@@ -26,13 +30,52 @@ class TodoAgendaBanner extends StatefulWidget {
 }
 
 class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
+  static const _kDoneDotColor = Color(0xFF22C55E);
+  static const _kAutoCollapseDelay = Duration(seconds: 10);
+
   var _expanded = false;
+  Timer? _autoCollapseTimer;
+
+  void _cancelAutoCollapseTimer() {
+    _autoCollapseTimer?.cancel();
+    _autoCollapseTimer = null;
+  }
+
+  void _setExpanded(bool expanded) {
+    if (_expanded == expanded) return;
+
+    setState(() => _expanded = expanded);
+    _cancelAutoCollapseTimer();
+
+    if (!expanded) return;
+    _autoCollapseTimer = Timer(_kAutoCollapseDelay, () {
+      if (!mounted) return;
+      _setExpanded(false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant TodoAgendaBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.collapseSignal == oldWidget.collapseSignal) return;
+    _cancelAutoCollapseTimer();
+    if (_expanded) setState(() => _expanded = false);
+  }
+
+  @override
+  void dispose() {
+    _cancelAutoCollapseTimer();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final hasDue = widget.dueCount > 0;
     final hasUpcoming = widget.upcomingCount > 0;
-    if (!hasDue && !hasUpcoming) return const SizedBox.shrink();
+    if (!hasDue && !hasUpcoming) {
+      _cancelAutoCollapseTimer();
+      return const SizedBox.shrink();
+    }
 
     final tokens = SlTokens.of(context);
     final theme = Theme.of(context);
@@ -54,7 +97,7 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
             InkWell(
               key: const ValueKey('todo_agenda_banner'),
               borderRadius: BorderRadius.circular(14),
-              onTap: () => setState(() => _expanded = !_expanded),
+              onTap: () => _setExpanded(!_expanded),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -162,11 +205,13 @@ final class _TodoPreviewRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final isDone = todo.status == 'done';
     final dueAtMs = todo.dueAtMs;
     final dueAtLocal = dueAtMs == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
-    final isOverdue = dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
+    final isOverdue =
+        !isDone && dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
 
     final dueText = dueAtLocal == null
         ? null
@@ -182,7 +227,9 @@ final class _TodoPreviewRow extends StatelessWidget {
             width: 10,
             height: 10,
             decoration: BoxDecoration(
-              color: isOverdue ? colorScheme.error : colorScheme.primary,
+              color: isDone
+                  ? _TodoAgendaBannerState._kDoneDotColor
+                  : (isOverdue ? colorScheme.error : colorScheme.primary),
               borderRadius: BorderRadius.circular(99),
             ),
           ),

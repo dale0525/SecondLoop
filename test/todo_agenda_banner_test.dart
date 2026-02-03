@@ -113,6 +113,151 @@ void main() {
     expect(find.text('买狗狗的口粮'), findsOneWidget);
   });
 
+  testWidgets('Todo agenda banner auto-collapses after 10 seconds',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final nowLocal = DateTime.now();
+    final todayNoonLocal =
+        DateTime(nowLocal.year, nowLocal.month, nowLocal.day, 12);
+
+    final backend = _AgendaBackend(
+      todos: [
+        Todo(
+          id: 'todo:today',
+          title: 'Review metrics',
+          dueAtMs: todayNoonLocal.toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              theme: ThemeData(
+                useMaterial3: true,
+                splashFactory: InkRipple.splashFactory,
+              ),
+              home: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('todo_agenda_banner')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_list')),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 9));
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_list')),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_list')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Todo agenda banner collapses when returning to chat page',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final nowLocal = DateTime.now();
+    final todayNoonLocal =
+        DateTime(nowLocal.year, nowLocal.month, nowLocal.day, 12);
+
+    final backend = _AgendaBackend(
+      todos: [
+        Todo(
+          id: 'todo:today',
+          title: 'Review metrics',
+          dueAtMs: todayNoonLocal.toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              theme: ThemeData(
+                useMaterial3: true,
+                splashFactory: InkRipple.splashFactory,
+              ),
+              home: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('todo_agenda_banner')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_list')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('todo_agenda_view_all')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('todo_agenda_page')), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('todo_agenda_preview_list')),
+      findsNothing,
+    );
+  });
+
   testWidgets('Todo agenda banner shows upcoming todos when none due today',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
