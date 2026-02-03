@@ -11,6 +11,7 @@ import 'dart:ffi' as ffi;
 import 'db.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
+import 'semantic_parse.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
@@ -79,6 +80,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
@@ -122,6 +126,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<SemanticParseJob> dco_decode_list_semantic_parse_job(dynamic raw);
+
+  @protected
   List<SimilarMessage> dco_decode_list_similar_message(dynamic raw);
 
   @protected
@@ -132,6 +139,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoActivity> dco_decode_list_todo_activity(dynamic raw);
+
+  @protected
+  List<TodoCandidate> dco_decode_list_todo_candidate(dynamic raw);
 
   @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
@@ -159,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? dco_decode_opt_box_autoadd_message(dynamic raw);
 
   @protected
+  SemanticParseJob dco_decode_semantic_parse_job(dynamic raw);
+
+  @protected
   SimilarMessage dco_decode_similar_message(dynamic raw);
 
   @protected
@@ -169,6 +182,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoActivity dco_decode_todo_activity(dynamic raw);
+
+  @protected
+  TodoCandidate dco_decode_todo_candidate(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -246,6 +262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
@@ -293,6 +312,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<SemanticParseJob> sse_decode_list_semantic_parse_job(
+      SseDeserializer deserializer);
+
+  @protected
   List<SimilarMessage> sse_decode_list_similar_message(
       SseDeserializer deserializer);
 
@@ -305,6 +328,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoActivity> sse_decode_list_todo_activity(
+      SseDeserializer deserializer);
+
+  @protected
+  List<TodoCandidate> sse_decode_list_todo_candidate(
       SseDeserializer deserializer);
 
   @protected
@@ -334,6 +361,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? sse_decode_opt_box_autoadd_message(SseDeserializer deserializer);
 
   @protected
+  SemanticParseJob sse_decode_semantic_parse_job(SseDeserializer deserializer);
+
+  @protected
   SimilarMessage sse_decode_similar_message(SseDeserializer deserializer);
 
   @protected
@@ -347,6 +377,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TodoActivity sse_decode_todo_activity(SseDeserializer deserializer);
 
   @protected
+  TodoCandidate sse_decode_todo_candidate(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer);
 
   @protected
@@ -357,9 +390,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   void sse_encode_AnyhowException(
@@ -430,6 +460,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
@@ -481,6 +514,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_semantic_parse_job(
+      List<SemanticParseJob> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_similar_message(
       List<SimilarMessage> self, SseSerializer serializer);
 
@@ -494,6 +531,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_todo_activity(
       List<TodoActivity> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_candidate(
+      List<TodoCandidate> self, SseSerializer serializer);
 
   @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
@@ -524,6 +565,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Message? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_semantic_parse_job(
+      SemanticParseJob self, SseSerializer serializer);
+
+  @protected
   void sse_encode_similar_message(
       SimilarMessage self, SseSerializer serializer);
 
@@ -538,6 +583,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_todo_activity(TodoActivity self, SseSerializer serializer);
 
   @protected
+  void sse_encode_todo_candidate(TodoCandidate self, SseSerializer serializer);
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
 
   @protected
@@ -548,9 +596,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class

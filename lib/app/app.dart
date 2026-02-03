@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../core/app_bootstrap.dart';
 import '../core/ai/embeddings_index_gate.dart';
 import '../core/ai/message_embeddings_index_gate.dart';
+import '../core/ai/semantic_parse_auto_actions_gate.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/native_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
@@ -328,18 +329,21 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       child: LockGate(
                                         child: SyncEngineGate(
                                           child: MediaEnrichmentGate(
-                                            child: MessageEmbeddingsIndexGate(
-                                              child: EmbeddingsIndexGate(
-                                                child:
-                                                    CloudSyncSwitchPromptGate(
-                                                  navigatorKey: _navigatorKey,
-                                                  child: ShareIngestGate(
-                                                    child: QuickCaptureOverlay(
-                                                      navigatorKey:
-                                                          _navigatorKey,
-                                                      child: child ??
-                                                          const SizedBox
-                                                              .shrink(),
+                                            child: SemanticParseAutoActionsGate(
+                                              child: MessageEmbeddingsIndexGate(
+                                                child: EmbeddingsIndexGate(
+                                                  child:
+                                                      CloudSyncSwitchPromptGate(
+                                                    navigatorKey: _navigatorKey,
+                                                    child: ShareIngestGate(
+                                                      child:
+                                                          QuickCaptureOverlay(
+                                                        navigatorKey:
+                                                            _navigatorKey,
+                                                        child: child ??
+                                                            const SizedBox
+                                                                .shrink(),
+                                                      ),
                                                     ),
                                                   ),
                                                 ),

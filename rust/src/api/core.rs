@@ -8,7 +8,7 @@ use crate::sync;
 use crate::sync::RemoteStore;
 use crate::{auth, db};
 use crate::{geo, media_annotation};
-use crate::{llm, rag};
+use crate::{llm, rag, semantic_parse};
 use anyhow::{anyhow, Result};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
@@ -640,6 +640,137 @@ pub fn db_mark_attachment_annotation_ok_json(
         &payload,
         now_ms,
     )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_enqueue_semantic_parse_job(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::enqueue_semantic_parse_job(&conn, &message_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_due_semantic_parse_jobs(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::SemanticParseJob>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_due_semantic_parse_jobs(&conn, now_ms, limit as i64)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_semantic_parse_jobs_by_message_ids(
+    app_dir: String,
+    key: Vec<u8>,
+    message_ids: Vec<String>,
+) -> Result<Vec<db::SemanticParseJob>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_semantic_parse_jobs_by_message_ids(&conn, &key, &message_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_running(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_running(&conn, &message_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_failed(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_failed(
+        &conn,
+        &message_id,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_retry(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_retry(&conn, &message_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_mark_semantic_parse_job_succeeded(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    applied_action_kind: String,
+    applied_todo_id: Option<String>,
+    applied_todo_title: Option<String>,
+    applied_prev_todo_status: Option<String>,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_succeeded(
+        &conn,
+        &key,
+        &message_id,
+        &applied_action_kind,
+        applied_todo_id.as_deref(),
+        applied_todo_title.as_deref(),
+        applied_prev_todo_status.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_canceled(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_canceled(&conn, &message_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_undone(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_undone(&conn, &message_id, now_ms)
 }
 
 #[flutter_rust_bridge::frb]
@@ -1407,6 +1538,217 @@ pub fn db_sum_llm_usage_daily_by_purpose(
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::sum_llm_usage_daily_by_purpose(&conn, &profile_id, start_day.trim(), end_day.trim())
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn ai_semantic_parse_message_action(
+    app_dir: String,
+    key: Vec<u8>,
+    text: String,
+    now_local_iso: String,
+    locale: String,
+    day_end_minutes: i32,
+    candidates: Vec<semantic_parse::TodoCandidate>,
+    local_day: String,
+) -> Result<String> {
+    let result = (|| -> Result<String> {
+        let key = key_from_bytes(key)?;
+        let conn = db::open(Path::new(&app_dir))?;
+
+        let (profile_id, profile) = db::load_active_llm_profile_config(&conn, &key)?
+            .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
+
+        let provider = llm::answer_provider_from_profile(&profile)?;
+        let result = semantic_parse::semantic_parse_message_action_json(
+            provider.as_ref(),
+            &text,
+            now_local_iso.trim(),
+            locale.trim(),
+            day_end_minutes,
+            &candidates,
+        );
+
+        match result {
+            Ok(json) => {
+                let day = local_day.trim();
+                if !day.is_empty() {
+                    let _ = db::record_llm_usage_daily(
+                        &conn,
+                        day,
+                        &profile_id,
+                        "semantic_parse",
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Ok(json)
+            }
+            Err(e) => {
+                let day = local_day.trim();
+                if !day.is_empty() {
+                    let _ = db::record_llm_usage_daily(
+                        &conn,
+                        day,
+                        &profile_id,
+                        "semantic_parse",
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Err(e)
+            }
+        }
+    })();
+
+    result
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn ai_semantic_parse_message_action_cloud_gateway(
+    app_dir: String,
+    key: Vec<u8>,
+    text: String,
+    now_local_iso: String,
+    locale: String,
+    day_end_minutes: i32,
+    candidates: Vec<semantic_parse::TodoCandidate>,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+) -> Result<String> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+
+    let _key = key_from_bytes(key)?;
+    let _conn = db::open(Path::new(&app_dir))?;
+
+    let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+        None,
+        "semantic_parse".to_string(),
+    );
+
+    semantic_parse::semantic_parse_message_action_json(
+        &provider,
+        &text,
+        now_local_iso.trim(),
+        locale.trim(),
+        day_end_minutes,
+        &candidates,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn ai_semantic_parse_ask_ai_time_window(
+    app_dir: String,
+    key: Vec<u8>,
+    question: String,
+    now_local_iso: String,
+    locale: String,
+    first_day_of_week_index: i32,
+    local_day: String,
+) -> Result<String> {
+    let result = (|| -> Result<String> {
+        let key = key_from_bytes(key)?;
+        let conn = db::open(Path::new(&app_dir))?;
+
+        let (profile_id, profile) = db::load_active_llm_profile_config(&conn, &key)?
+            .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
+
+        let provider = llm::answer_provider_from_profile(&profile)?;
+        let result = semantic_parse::semantic_parse_ask_ai_time_window_json(
+            provider.as_ref(),
+            &question,
+            now_local_iso.trim(),
+            locale.trim(),
+            first_day_of_week_index,
+        );
+
+        match result {
+            Ok(json) => {
+                let day = local_day.trim();
+                if !day.is_empty() {
+                    let _ = db::record_llm_usage_daily(
+                        &conn,
+                        day,
+                        &profile_id,
+                        "semantic_parse",
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Ok(json)
+            }
+            Err(e) => {
+                let day = local_day.trim();
+                if !day.is_empty() {
+                    let _ = db::record_llm_usage_daily(
+                        &conn,
+                        day,
+                        &profile_id,
+                        "semantic_parse",
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Err(e)
+            }
+        }
+    })();
+
+    result
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn ai_semantic_parse_ask_ai_time_window_cloud_gateway(
+    app_dir: String,
+    key: Vec<u8>,
+    question: String,
+    now_local_iso: String,
+    locale: String,
+    first_day_of_week_index: i32,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+) -> Result<String> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+
+    let _key = key_from_bytes(key)?;
+    let _conn = db::open(Path::new(&app_dir))?;
+
+    let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+        None,
+        "semantic_parse".to_string(),
+    );
+
+    semantic_parse::semantic_parse_ask_ai_time_window_json(
+        &provider,
+        &question,
+        now_local_iso.trim(),
+        locale.trim(),
+        first_day_of_week_index,
+    )
 }
 
 #[flutter_rust_bridge::frb]

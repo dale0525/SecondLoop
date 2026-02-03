@@ -46,29 +46,32 @@ void main() {
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: CloudAuthScope(
-              controller: cloudAuth,
-              gatewayConfig: const CloudGatewayConfig(
-                baseUrl: 'https://gateway.test',
-                modelName: 'gpt-test',
-              ),
-              child: SubscriptionScope(
-                controller: subscriptions,
-                child: SessionScope(
-                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                  lock: () {},
-                  child: const ChatPage(
-                    conversation: Conversation(
-                      id: 'main_stream',
-                      title: 'Main Stream',
-                      createdAtMs: 0,
-                      updatedAtMs: 0,
-                    ),
+          builder: (context, child) {
+            return AppBackendScope(
+              backend: backend,
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.test',
+                  modelName: 'gpt-test',
+                ),
+                child: SubscriptionScope(
+                  controller: subscriptions,
+                  child: SessionScope(
+                    sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                    lock: () {},
+                    child: child ?? const SizedBox.shrink(),
                   ),
                 ),
               ),
+            );
+          },
+          home: const ChatPage(
+            conversation: Conversation(
+              id: 'main_stream',
+              title: 'Main Stream',
+              createdAtMs: 0,
+              updatedAtMs: 0,
             ),
           ),
         ),

@@ -535,6 +535,69 @@ class Message {
           isMemory == other.isMemory;
 }
 
+class SemanticParseJob {
+  final String messageId;
+  final String status;
+  final PlatformInt64 attempts;
+  final PlatformInt64? nextRetryAtMs;
+  final String? lastError;
+  final String? appliedActionKind;
+  final String? appliedTodoId;
+  final String? appliedTodoTitle;
+  final String? appliedPrevTodoStatus;
+  final PlatformInt64? undoneAtMs;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const SemanticParseJob({
+    required this.messageId,
+    required this.status,
+    required this.attempts,
+    this.nextRetryAtMs,
+    this.lastError,
+    this.appliedActionKind,
+    this.appliedTodoId,
+    this.appliedTodoTitle,
+    this.appliedPrevTodoStatus,
+    this.undoneAtMs,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      messageId.hashCode ^
+      status.hashCode ^
+      attempts.hashCode ^
+      nextRetryAtMs.hashCode ^
+      lastError.hashCode ^
+      appliedActionKind.hashCode ^
+      appliedTodoId.hashCode ^
+      appliedTodoTitle.hashCode ^
+      appliedPrevTodoStatus.hashCode ^
+      undoneAtMs.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SemanticParseJob &&
+          runtimeType == other.runtimeType &&
+          messageId == other.messageId &&
+          status == other.status &&
+          attempts == other.attempts &&
+          nextRetryAtMs == other.nextRetryAtMs &&
+          lastError == other.lastError &&
+          appliedActionKind == other.appliedActionKind &&
+          appliedTodoId == other.appliedTodoId &&
+          appliedTodoTitle == other.appliedTodoTitle &&
+          appliedPrevTodoStatus == other.appliedPrevTodoStatus &&
+          undoneAtMs == other.undoneAtMs &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class SimilarMessage {
   final Message message;
   final double distance;

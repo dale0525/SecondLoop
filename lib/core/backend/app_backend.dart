@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
+import '../../src/rust/semantic_parse.dart';
 
 abstract class AppBackend {
   Future<void> init();
@@ -459,6 +460,132 @@ abstract class AppBackend {
         modelName: modelName,
         embeddingsModelName: embeddingsModelName,
       );
+
+  Future<String> semanticParseMessageAction(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required List<TodoCandidate> candidates,
+  }) {
+    throw UnimplementedError('semanticParseMessageAction');
+  }
+
+  Future<String> semanticParseMessageActionCloudGateway(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required List<TodoCandidate> candidates,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('semanticParseMessageActionCloudGateway');
+  }
+
+  Future<String> semanticParseAskAiTimeWindow(
+    Uint8List key, {
+    required String question,
+    required String nowLocalIso,
+    required Locale locale,
+    required int firstDayOfWeekIndex,
+  }) {
+    throw UnimplementedError('semanticParseAskAiTimeWindow');
+  }
+
+  Future<String> semanticParseAskAiTimeWindowCloudGateway(
+    Uint8List key, {
+    required String question,
+    required String nowLocalIso,
+    required Locale locale,
+    required int firstDayOfWeekIndex,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('semanticParseAskAiTimeWindowCloudGateway');
+  }
+
+  Future<void> enqueueSemanticParseJob(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('enqueueSemanticParseJob');
+  }
+
+  Future<List<SemanticParseJob>> listDueSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) {
+    throw UnimplementedError('listDueSemanticParseJobs');
+  }
+
+  Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
+    Uint8List key, {
+    required List<String> messageIds,
+  }) {
+    throw UnimplementedError('listSemanticParseJobsByMessageIds');
+  }
+
+  Future<void> markSemanticParseJobRunning(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markSemanticParseJobRunning');
+  }
+
+  Future<void> markSemanticParseJobFailed(
+    Uint8List key, {
+    required String messageId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markSemanticParseJobFailed');
+  }
+
+  Future<void> markSemanticParseJobRetry(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markSemanticParseJobRetry');
+  }
+
+  Future<void> markSemanticParseJobSucceeded(
+    Uint8List key, {
+    required String messageId,
+    required String appliedActionKind,
+    String? appliedTodoId,
+    String? appliedTodoTitle,
+    String? appliedPrevTodoStatus,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markSemanticParseJobSucceeded');
+  }
+
+  Future<void> markSemanticParseJobCanceled(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markSemanticParseJobCanceled');
+  }
+
+  Future<void> markSemanticParseJobUndone(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markSemanticParseJobUndone');
+  }
 
   Future<Uint8List> deriveSyncKey(String passphrase);
 

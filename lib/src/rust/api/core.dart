@@ -5,9 +5,10 @@
 
 import '../db.dart';
 import '../frb_generated.dart';
+import '../semantic_parse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_embedding_model_name_for_platform`, `key_from_bytes`, `normalize_embedding_model_name`, `sync_key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `default_embedding_model_name_for_platform`, `finish_ask_ai_stream`, `key_from_bytes`, `normalize_embedding_model_name`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -433,6 +434,97 @@ Future<void> dbMarkAttachmentAnnotationOkJson(
         payloadJson: payloadJson,
         nowMs: nowMs);
 
+Future<void> dbEnqueueSemanticParseJob(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbEnqueueSemanticParseJob(
+        appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
+Future<List<SemanticParseJob>> dbListDueSemanticParseJobs(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs,
+        required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListDueSemanticParseJobs(
+        appDir: appDir, key: key, nowMs: nowMs, limit: limit);
+
+Future<List<SemanticParseJob>> dbListSemanticParseJobsByMessageIds(
+        {required String appDir,
+        required List<int> key,
+        required List<String> messageIds}) =>
+    RustLib.instance.api.crateApiCoreDbListSemanticParseJobsByMessageIds(
+        appDir: appDir, key: key, messageIds: messageIds);
+
+Future<void> dbMarkSemanticParseJobRunning(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobRunning(
+        appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
+Future<void> dbMarkSemanticParseJobFailed(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 attempts,
+        required PlatformInt64 nextRetryAtMs,
+        required String lastError,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobFailed(
+        appDir: appDir,
+        key: key,
+        messageId: messageId,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: lastError,
+        nowMs: nowMs);
+
+Future<void> dbMarkSemanticParseJobRetry(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobRetry(
+        appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
+Future<void> dbMarkSemanticParseJobSucceeded(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required String appliedActionKind,
+        String? appliedTodoId,
+        String? appliedTodoTitle,
+        String? appliedPrevTodoStatus,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobSucceeded(
+        appDir: appDir,
+        key: key,
+        messageId: messageId,
+        appliedActionKind: appliedActionKind,
+        appliedTodoId: appliedTodoId,
+        appliedTodoTitle: appliedTodoTitle,
+        appliedPrevTodoStatus: appliedPrevTodoStatus,
+        nowMs: nowMs);
+
+Future<void> dbMarkSemanticParseJobCanceled(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobCanceled(
+        appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
+Future<void> dbMarkSemanticParseJobUndone(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobUndone(
+        appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
 Future<String> geoReverseCloudGateway(
         {required String gatewayBaseUrl,
         required String firebaseIdToken,
@@ -799,6 +891,86 @@ Future<List<LlmUsageAggregate>> dbSumLlmUsageDailyByPurpose(
         profileId: profileId,
         startDay: startDay,
         endDay: endDay);
+
+Future<String> aiSemanticParseMessageAction(
+        {required String appDir,
+        required List<int> key,
+        required String text,
+        required String nowLocalIso,
+        required String locale,
+        required int dayEndMinutes,
+        required List<TodoCandidate> candidates,
+        required String localDay}) =>
+    RustLib.instance.api.crateApiCoreAiSemanticParseMessageAction(
+        appDir: appDir,
+        key: key,
+        text: text,
+        nowLocalIso: nowLocalIso,
+        locale: locale,
+        dayEndMinutes: dayEndMinutes,
+        candidates: candidates,
+        localDay: localDay);
+
+Future<String> aiSemanticParseMessageActionCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String text,
+        required String nowLocalIso,
+        required String locale,
+        required int dayEndMinutes,
+        required List<TodoCandidate> candidates,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreAiSemanticParseMessageActionCloudGateway(
+        appDir: appDir,
+        key: key,
+        text: text,
+        nowLocalIso: nowLocalIso,
+        locale: locale,
+        dayEndMinutes: dayEndMinutes,
+        candidates: candidates,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
+
+Future<String> aiSemanticParseAskAiTimeWindow(
+        {required String appDir,
+        required List<int> key,
+        required String question,
+        required String nowLocalIso,
+        required String locale,
+        required int firstDayOfWeekIndex,
+        required String localDay}) =>
+    RustLib.instance.api.crateApiCoreAiSemanticParseAskAiTimeWindow(
+        appDir: appDir,
+        key: key,
+        question: question,
+        nowLocalIso: nowLocalIso,
+        locale: locale,
+        firstDayOfWeekIndex: firstDayOfWeekIndex,
+        localDay: localDay);
+
+Future<String> aiSemanticParseAskAiTimeWindowCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String question,
+        required String nowLocalIso,
+        required String locale,
+        required int firstDayOfWeekIndex,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreAiSemanticParseAskAiTimeWindowCloudGateway(
+        appDir: appDir,
+        key: key,
+        question: question,
+        nowLocalIso: nowLocalIso,
+        locale: locale,
+        firstDayOfWeekIndex: firstDayOfWeekIndex,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
 
 Stream<String> ragAskAiStream(
         {required String appDir,

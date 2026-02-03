@@ -150,6 +150,22 @@ pub struct AttachmentAnnotationJob {
 }
 
 #[derive(Clone, Debug)]
+pub struct SemanticParseJob {
+    pub message_id: String,
+    pub status: String,
+    pub attempts: i64,
+    pub next_retry_at_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub applied_action_kind: Option<String>,
+    pub applied_todo_id: Option<String>,
+    pub applied_todo_title: Option<String>,
+    pub applied_prev_todo_status: Option<String>,
+    pub undone_at_ms: Option<i64>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct CloudMediaBackup {
     pub attachment_sha256: String,
     pub desired_variant: String,
@@ -221,6 +237,10 @@ fn now_ms() -> i64 {
         .as_millis()
         .try_into()
         .unwrap_or(i64::MAX)
+}
+
+fn semantic_parse_job_title_aad(message_id: &str) -> Vec<u8> {
+    format!("semantic_parse_job.title:{message_id}").into_bytes()
 }
 
 pub fn get_or_create_device_id(conn: &Connection) -> Result<String> {
@@ -1381,6 +1401,33 @@ CREATE TABLE IF NOT EXISTS attachment_annotations (
 CREATE INDEX IF NOT EXISTS idx_attachment_annotations_status_retry
   ON attachment_annotations(status, next_retry_at);
 PRAGMA user_version = 19;
+"#,
+        )?;
+    }
+
+    if user_version < 20 {
+        // v20: semantic parse auto-action jobs (local-only, eventually consistent).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS semantic_parse_jobs (
+  message_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  applied_action_kind TEXT,
+  applied_todo_id TEXT,
+  applied_todo_title BLOB,
+  applied_prev_todo_status TEXT,
+  undone_at_ms INTEGER,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_semantic_parse_jobs_status_retry
+  ON semantic_parse_jobs(status, next_retry_at_ms);
+CREATE INDEX IF NOT EXISTS idx_semantic_parse_jobs_updated_at_ms
+  ON semantic_parse_jobs(updated_at_ms);
+PRAGMA user_version = 20;
 "#,
         )?;
     }
@@ -5032,6 +5079,309 @@ WHERE attachment_sha256 = ?1
     Ok(())
 }
 
+pub fn enqueue_semantic_parse_job(conn: &Connection, message_id: &str, now_ms: i64) -> Result<()> {
+    let message_id = message_id.trim();
+    if message_id.is_empty() {
+        return Err(anyhow!("message_id is required"));
+    }
+
+    conn.execute(
+        r#"
+INSERT OR IGNORE INTO semantic_parse_jobs(
+  message_id,
+  status,
+  attempts,
+  next_retry_at_ms,
+  last_error,
+  applied_action_kind,
+  applied_todo_id,
+  applied_todo_title,
+  applied_prev_todo_status,
+  undone_at_ms,
+  created_at_ms,
+  updated_at_ms
+)
+VALUES (?1, 'pending', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?2, ?2)
+"#,
+        params![message_id, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn list_due_semantic_parse_jobs(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<SemanticParseJob>> {
+    let limit = limit.clamp(1, 500);
+    let mut stmt = conn.prepare(
+        r#"
+SELECT message_id,
+       status,
+       attempts,
+       next_retry_at_ms,
+       last_error,
+       applied_action_kind,
+       applied_todo_id,
+       applied_prev_todo_status,
+       undone_at_ms,
+       created_at_ms,
+       updated_at_ms
+FROM semantic_parse_jobs
+WHERE status IN ('pending', 'failed')
+  AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
+ORDER BY updated_at_ms ASC, message_id ASC
+LIMIT ?2
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(SemanticParseJob {
+            message_id: row.get(0)?,
+            status: row.get(1)?,
+            attempts: row.get(2)?,
+            next_retry_at_ms: row.get(3)?,
+            last_error: row.get(4)?,
+            applied_action_kind: row.get(5)?,
+            applied_todo_id: row.get(6)?,
+            applied_todo_title: None,
+            applied_prev_todo_status: row.get(7)?,
+            undone_at_ms: row.get(8)?,
+            created_at_ms: row.get(9)?,
+            updated_at_ms: row.get(10)?,
+        });
+    }
+    Ok(result)
+}
+
+pub fn list_semantic_parse_jobs_by_message_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_ids: &[String],
+) -> Result<Vec<SemanticParseJob>> {
+    if message_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut placeholders = String::new();
+    for i in 0..message_ids.len() {
+        if i > 0 {
+            placeholders.push(',');
+        }
+        placeholders.push('?');
+        placeholders.push_str(&(i + 1).to_string());
+    }
+
+    let sql = format!(
+        r#"
+SELECT message_id,
+       status,
+       attempts,
+       next_retry_at_ms,
+       last_error,
+       applied_action_kind,
+       applied_todo_id,
+       applied_todo_title,
+       applied_prev_todo_status,
+       undone_at_ms,
+       created_at_ms,
+       updated_at_ms
+FROM semantic_parse_jobs
+WHERE message_id IN ({placeholders})
+ORDER BY updated_at_ms ASC, message_id ASC
+"#
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let params = rusqlite::params_from_iter(message_ids.iter());
+    let mut rows = stmt.query(params)?;
+
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let message_id: String = row.get(0)?;
+        let title_blob: Option<Vec<u8>> = row.get(7)?;
+        let applied_todo_title = match title_blob {
+            Some(blob) => {
+                let aad = semantic_parse_job_title_aad(&message_id);
+                let bytes = decrypt_bytes(key, &blob, &aad)?;
+                Some(
+                    String::from_utf8(bytes)
+                        .map_err(|_| anyhow!("job title is not valid utf-8"))?,
+                )
+            }
+            None => None,
+        };
+
+        result.push(SemanticParseJob {
+            message_id,
+            status: row.get(1)?,
+            attempts: row.get(2)?,
+            next_retry_at_ms: row.get(3)?,
+            last_error: row.get(4)?,
+            applied_action_kind: row.get(5)?,
+            applied_todo_id: row.get(6)?,
+            applied_todo_title,
+            applied_prev_todo_status: row.get(8)?,
+            undone_at_ms: row.get(9)?,
+            created_at_ms: row.get(10)?,
+            updated_at_ms: row.get(11)?,
+        });
+    }
+    Ok(result)
+}
+
+pub fn mark_semantic_parse_job_running(
+    conn: &Connection,
+    message_id: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE semantic_parse_jobs
+SET status = 'running',
+    updated_at_ms = ?2
+WHERE message_id = ?1
+  AND status IN ('pending', 'failed')
+"#,
+        params![message_id, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn mark_semantic_parse_job_failed(
+    conn: &Connection,
+    message_id: &str,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE semantic_parse_jobs
+SET status = 'failed',
+    attempts = ?2,
+    next_retry_at_ms = ?3,
+    last_error = ?4,
+    updated_at_ms = ?5
+WHERE message_id = ?1
+"#,
+        params![message_id, attempts, next_retry_at_ms, last_error, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn mark_semantic_parse_job_retry(
+    conn: &Connection,
+    message_id: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE semantic_parse_jobs
+SET status = 'pending',
+    next_retry_at_ms = NULL,
+    last_error = NULL,
+    updated_at_ms = ?2
+WHERE message_id = ?1
+  AND status != 'succeeded'
+"#,
+        params![message_id, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn mark_semantic_parse_job_succeeded(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    applied_action_kind: &str,
+    applied_todo_id: Option<&str>,
+    applied_todo_title: Option<&str>,
+    applied_prev_todo_status: Option<&str>,
+    now_ms: i64,
+) -> Result<()> {
+    let message_id = message_id.trim();
+    if message_id.is_empty() {
+        return Err(anyhow!("message_id is required"));
+    }
+    let applied_action_kind = applied_action_kind.trim();
+    if applied_action_kind.is_empty() {
+        return Err(anyhow!("applied_action_kind is required"));
+    }
+
+    let title_blob = match applied_todo_title {
+        Some(title) if !title.trim().is_empty() => {
+            let aad = semantic_parse_job_title_aad(message_id);
+            Some(encrypt_bytes(key, title.trim().as_bytes(), &aad)?)
+        }
+        _ => None,
+    };
+
+    conn.execute(
+        r#"
+UPDATE semantic_parse_jobs
+SET status = 'succeeded',
+    next_retry_at_ms = NULL,
+    last_error = NULL,
+    applied_action_kind = ?2,
+    applied_todo_id = ?3,
+    applied_todo_title = ?4,
+    applied_prev_todo_status = ?5,
+    updated_at_ms = ?6
+WHERE message_id = ?1
+"#,
+        params![
+            message_id,
+            applied_action_kind,
+            applied_todo_id,
+            title_blob,
+            applied_prev_todo_status,
+            now_ms
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn mark_semantic_parse_job_canceled(
+    conn: &Connection,
+    message_id: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE semantic_parse_jobs
+SET status = 'canceled',
+    next_retry_at_ms = NULL,
+    last_error = NULL,
+    updated_at_ms = ?2
+WHERE message_id = ?1
+  AND status != 'succeeded'
+"#,
+        params![message_id, now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn mark_semantic_parse_job_undone(
+    conn: &Connection,
+    message_id: &str,
+    now_ms: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"
+UPDATE semantic_parse_jobs
+SET undone_at_ms = ?2,
+    updated_at_ms = ?2
+WHERE message_id = ?1
+"#,
+        params![message_id, now_ms],
+    )?;
+    Ok(())
+}
+
 pub fn link_attachment_to_message(
     conn: &Connection,
     key: &[u8; 32],
@@ -6596,3 +6946,6 @@ ORDER BY start_at_ms ASC, end_at_ms ASC
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod semantic_parse_jobs_tests;

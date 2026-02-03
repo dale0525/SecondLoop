@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
+import '../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -44,6 +45,9 @@ class _SettingsPageState extends State<SettingsPage> {
   bool? _biometricUnlockEnabled;
   bool? _cloudEmbeddingsEnabled;
   bool _cloudEmbeddingsConfigured = false;
+  bool? _semanticParseEnabled;
+  bool _semanticParseConfigured = false;
+  bool? _byokConfigured;
   AppLocale? _localeOverride;
   ActionsSettings? _actionsSettings;
   bool _busy = false;
@@ -54,6 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Listenable? _cloudAuthListenable;
   String? _lastCloudUid;
   VoidCallback? _cloudEmbeddingsPrefsListener;
+  VoidCallback? _semanticParsePrefsListener;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
@@ -295,6 +300,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
     _cloudEmbeddingsPrefsListener = onCloudEmbeddingsPrefChanged;
     EmbeddingsDataConsentPrefs.value.addListener(onCloudEmbeddingsPrefChanged);
+
+    void onSemanticParsePrefChanged() {
+      if (!mounted) return;
+      final next = SemanticParseDataConsentPrefs.value.value;
+      setState(() {
+        _semanticParseConfigured = next != null;
+        _semanticParseEnabled = next ?? false;
+      });
+    }
+
+    _semanticParsePrefsListener = onSemanticParsePrefChanged;
+    SemanticParseDataConsentPrefs.value.addListener(onSemanticParsePrefChanged);
   }
 
   @override
@@ -305,10 +322,18 @@ class _SettingsPageState extends State<SettingsPage> {
     if (listener != null) {
       EmbeddingsDataConsentPrefs.value.removeListener(listener);
     }
+    final semanticParseListener = _semanticParsePrefsListener;
+    if (semanticParseListener != null) {
+      SemanticParseDataConsentPrefs.value.removeListener(semanticParseListener);
+    }
     super.dispose();
   }
 
   Future<void> _load() async {
+    final backend =
+        context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
     final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
@@ -318,6 +343,23 @@ class _SettingsPageState extends State<SettingsPage> {
     final cloudEmbeddingsEnabled = cloudEmbeddingsConfigured
         ? (prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false)
         : false;
+    final semanticParseConfigured =
+        prefs.containsKey(SemanticParseDataConsentPrefs.prefsKey);
+    final semanticParseEnabled = semanticParseConfigured
+        ? (prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false)
+        : false;
+
+    bool? byokConfigured;
+    if (backend == null) {
+      byokConfigured = null;
+    } else {
+      try {
+        byokConfigured = await hasActiveLlmProfile(backend, sessionKey);
+      } catch (_) {
+        byokConfigured = null;
+      }
+    }
+
     final rawLocaleOverride = prefs.getString(kAppLocaleOverridePrefsKey);
     AppLocale? localeOverride;
     if (rawLocaleOverride != null && rawLocaleOverride.trim().isNotEmpty) {
@@ -335,6 +377,9 @@ class _SettingsPageState extends State<SettingsPage> {
       _biometricUnlockEnabled = biometricEnabled;
       _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled;
       _cloudEmbeddingsConfigured = cloudEmbeddingsConfigured;
+      _semanticParseEnabled = semanticParseEnabled;
+      _semanticParseConfigured = semanticParseConfigured;
+      _byokConfigured = byokConfigured;
       _localeOverride = localeOverride;
       _actionsSettings = actionsSettings;
     });
@@ -413,6 +458,45 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await EmbeddingsDataConsentPrefs.setEnabled(prefs, enabled);
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setSemanticParseEnabled(bool enabled) async {
+    if (_busy) return;
+
+    if (enabled) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          final t = context.t;
+          return AlertDialog(
+            title: Text(t.settings.semanticParseAutoActions.dialogTitle),
+            content: Text(t.settings.semanticParseAutoActions.dialogBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(t.common.actions.cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(
+                  t.settings.semanticParseAutoActions.dialogActions.enable,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
       await _load();
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -778,6 +862,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final enabled = _appLockEnabled;
     final biometricEnabled = _biometricUnlockEnabled;
     final cloudEmbeddingsEnabled = _cloudEmbeddingsEnabled;
+    final semanticParseEnabled = _semanticParseEnabled;
     final isMobile = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
@@ -800,6 +885,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final hasCloudAccount = cloudUid.isNotEmpty;
     final canUseCloudEmbeddings =
         hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
+    final canUseCloudSemanticParse = canUseCloudEmbeddings;
+    final canUseSemanticParse =
+        canUseCloudSemanticParse || _byokConfigured == true;
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
@@ -985,6 +1073,47 @@ class _SettingsPageState extends State<SettingsPage> {
                         builder: (_) => const EmbeddingProfilesPage(),
                       ),
                     );
+                  },
+          ),
+          SwitchListTile(
+            title: Text(context.t.settings.semanticParseAutoActions.title),
+            subtitle: Text(
+              !canUseSemanticParse
+                  ? context
+                      .t.settings.semanticParseAutoActions.subtitleRequiresSetup
+                  : !_semanticParseConfigured
+                      ? context
+                          .t.settings.semanticParseAutoActions.subtitleUnset
+                      : (semanticParseEnabled ?? false)
+                          ? context.t.settings.semanticParseAutoActions
+                              .subtitleEnabled
+                          : context.t.settings.semanticParseAutoActions
+                              .subtitleDisabled,
+            ),
+            value: semanticParseEnabled ?? false,
+            onChanged: (_busy || semanticParseEnabled == null)
+                ? null
+                : (value) async {
+                    if (value && !canUseSemanticParse) {
+                      if (subscriptionStatus == SubscriptionStatus.entitled &&
+                          !hasCloudAccount) {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CloudAccountPage(),
+                          ),
+                        );
+                        return;
+                      }
+
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LlmProfilesPage(),
+                        ),
+                      );
+                      return;
+                    }
+
+                    await _setSemanticParseEnabled(value);
                   },
           ),
         ]),

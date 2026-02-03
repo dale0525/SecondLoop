@@ -41,6 +41,31 @@ Future<AskAiRouteKind> decideAskAiRoute(
   return AskAiRouteKind.needsSetup;
 }
 
+/// Like [decideAskAiRoute], but for automation/background-ish flows where we
+/// should **not** probe Cloud when entitlement is unknown.
+///
+/// This supports the product policy:
+/// - Free users do not use LLM automatically.
+/// - BYOK works when configured.
+/// - Cloud is only used when explicitly entitled.
+Future<AskAiRouteKind> decideAiAutomationRoute(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required String? cloudIdToken,
+  required String cloudGatewayBaseUrl,
+  SubscriptionStatus subscriptionStatus = SubscriptionStatus.unknown,
+}) async {
+  final hasByok = await hasActiveLlmProfile(backend, sessionKey);
+  final hasCloud = cloudIdToken != null &&
+      cloudIdToken.trim().isNotEmpty &&
+      cloudGatewayBaseUrl.trim().isNotEmpty;
+
+  final allowCloud = subscriptionStatus == SubscriptionStatus.entitled;
+  if (hasCloud && allowCloud) return AskAiRouteKind.cloudGateway;
+  if (hasByok) return AskAiRouteKind.byok;
+  return AskAiRouteKind.needsSetup;
+}
+
 int? parseHttpStatusFromError(Object error) {
   final message = error.toString();
   final patterns = <RegExp>[

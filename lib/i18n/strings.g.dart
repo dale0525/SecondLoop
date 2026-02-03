@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 918 (459 per locale)
+/// Strings: 958 (479 per locale)
 ///
-/// Built on 2026-02-03 at 08:15 UTC
+/// Built on 2026-02-03 at 16:44 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -300,6 +300,9 @@ class _StringsSettingsEn {
       _StringsSettingsLlmProfilesEn._(_root);
   late final _StringsSettingsEmbeddingProfilesEn embeddingProfiles =
       _StringsSettingsEmbeddingProfilesEn._(_root);
+  late final _StringsSettingsSemanticParseAutoActionsEn
+      semanticParseAutoActions =
+      _StringsSettingsSemanticParseAutoActionsEn._(_root);
   late final _StringsSettingsCloudEmbeddingsEn cloudEmbeddings =
       _StringsSettingsCloudEmbeddingsEn._(_root);
   late final _StringsSettingsCloudAccountEn cloudAccount =
@@ -385,6 +388,17 @@ class _StringsChatEn {
       _StringsChatAskAiConsentEn._(_root);
   late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
       _StringsChatEmbeddingsConsentEn._(_root);
+  String get semanticParseStatusRunning => 'AI analyzing…';
+  String get semanticParseStatusSlow =>
+      'AI is taking longer. Continuing in background…';
+  String get semanticParseStatusFailed => 'AI analysis failed';
+  String get semanticParseStatusCanceled => 'AI analysis canceled';
+  String semanticParseStatusCreated({required Object title}) =>
+      'Created task: ${title}';
+  String semanticParseStatusUpdated({required Object title}) =>
+      'Updated task: ${title}';
+  String get semanticParseStatusUpdatedGeneric => 'Updated task';
+  String get semanticParseStatusUndone => 'Undid auto action';
 }
 
 // Path: attachments
@@ -568,6 +582,9 @@ class _StringsCommonActionsEn {
   String get edit => 'Edit';
   String get delete => 'Delete';
   String get undo => 'Undo';
+  String get open => 'Open';
+  String get retry => 'Retry';
+  String get ignore => 'Ignore';
   String get refresh => 'Refresh';
   String get share => 'Share';
   String get search => 'Search';
@@ -896,6 +913,29 @@ class _StringsSettingsEmbeddingProfilesEn {
   String get subtitle => 'Advanced: use your own provider and key';
 }
 
+// Path: settings.semanticParseAutoActions
+class _StringsSettingsSemanticParseAutoActionsEn {
+  _StringsSettingsSemanticParseAutoActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'AI semantic actions';
+  String get subtitleEnabled =>
+      'On. Messages may be sent to AI to create or update todos automatically.';
+  String get subtitleDisabled =>
+      'Off. Messages won\'t be sent for automatic actions.';
+  String get subtitleUnset => 'Not set. Default is off.';
+  String get subtitleRequiresSetup =>
+      'Requires SecondLoop Pro or an API key (BYOK).';
+  String get dialogTitle => 'Turn on AI semantic actions?';
+  String get dialogBody =>
+      'To automatically create or update todos, SecondLoop can send message text to an AI model.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
+  late final _StringsSettingsSemanticParseAutoActionsDialogActionsEn
+      dialogActions =
+      _StringsSettingsSemanticParseAutoActionsDialogActionsEn._(_root);
+}
+
 // Path: settings.cloudEmbeddings
 class _StringsSettingsCloudEmbeddingsEn {
   _StringsSettingsCloudEmbeddingsEn._(this._root);
@@ -1000,6 +1040,8 @@ class _StringsSettingsByokUsageEn {
       _StringsSettingsByokUsageSectionsEn._(_root);
   late final _StringsSettingsByokUsageLabelsEn labels =
       _StringsSettingsByokUsageLabelsEn._(_root);
+  late final _StringsSettingsByokUsagePurposesEn purposes =
+      _StringsSettingsByokUsagePurposesEn._(_root);
 }
 
 // Path: settings.subscription
@@ -1167,9 +1209,9 @@ class _StringsChatAskAiConsentEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Before you ask';
+  String get title => 'Before we use AI';
   String get body =>
-      'SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.';
+      'SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your master password or your full history.';
   String get dontShowAgain => 'Don\'t show again';
 }
 
@@ -1631,6 +1673,16 @@ class _StringsSettingsThemeOptionsEn {
   String get dark => 'Dark';
 }
 
+// Path: settings.semanticParseAutoActions.dialogActions
+class _StringsSettingsSemanticParseAutoActionsDialogActionsEn {
+  _StringsSettingsSemanticParseAutoActionsDialogActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get enable => 'Enable';
+}
+
 // Path: settings.cloudEmbeddings.dialogActions
 class _StringsSettingsCloudEmbeddingsDialogActionsEn {
   _StringsSettingsCloudEmbeddingsDialogActionsEn._(this._root);
@@ -1808,6 +1860,16 @@ class _StringsSettingsByokUsageLabelsEn {
   String requests({required Object purpose}) => '${purpose} requests';
   String tokens({required Object purpose}) =>
       '${purpose} tokens (in/out/total)';
+}
+
+// Path: settings.byokUsage.purposes
+class _StringsSettingsByokUsagePurposesEn {
+  _StringsSettingsByokUsagePurposesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get semanticParse => 'Semantic parse';
 }
 
 // Path: settings.subscription.benefits
@@ -2394,6 +2456,10 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsEmbeddingProfilesZhCn embeddingProfiles =
       _StringsSettingsEmbeddingProfilesZhCn._(_root);
   @override
+  late final _StringsSettingsSemanticParseAutoActionsZhCn
+      semanticParseAutoActions =
+      _StringsSettingsSemanticParseAutoActionsZhCn._(_root);
+  @override
   late final _StringsSettingsCloudEmbeddingsZhCn cloudEmbeddings =
       _StringsSettingsCloudEmbeddingsZhCn._(_root);
   @override
@@ -2525,6 +2591,24 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   late final _StringsChatEmbeddingsConsentZhCn embeddingsConsent =
       _StringsChatEmbeddingsConsentZhCn._(_root);
+  @override
+  String get semanticParseStatusRunning => 'AI 分析中…';
+  @override
+  String get semanticParseStatusSlow => 'AI 分析较慢，后台继续…';
+  @override
+  String get semanticParseStatusFailed => 'AI 分析失败';
+  @override
+  String get semanticParseStatusCanceled => '已取消 AI 分析';
+  @override
+  String semanticParseStatusCreated({required Object title}) =>
+      '已创建待办：${title}';
+  @override
+  String semanticParseStatusUpdated({required Object title}) =>
+      '已更新待办：${title}';
+  @override
+  String get semanticParseStatusUpdatedGeneric => '已更新待办';
+  @override
+  String get semanticParseStatusUndone => '已撤销自动动作';
 }
 
 // Path: attachments
@@ -2809,6 +2893,12 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   String get delete => '删除';
   @override
   String get undo => '撤销';
+  @override
+  String get open => '打开';
+  @override
+  String get retry => '重试';
+  @override
+  String get ignore => '忽略';
   @override
   String get refresh => '刷新';
   @override
@@ -3309,6 +3399,38 @@ class _StringsSettingsEmbeddingProfilesZhCn
   String get subtitle => '高级：使用你自己的服务商与 Key';
 }
 
+// Path: settings.semanticParseAutoActions
+class _StringsSettingsSemanticParseAutoActionsZhCn
+    extends _StringsSettingsSemanticParseAutoActionsEn {
+  _StringsSettingsSemanticParseAutoActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'AI 语义动作';
+  @override
+  String get subtitleEnabled => '已开启。消息可能会发送给 AI 来自动创建或更新待办。';
+  @override
+  String get subtitleDisabled => '已关闭。消息不会用于自动动作。';
+  @override
+  String get subtitleUnset => '尚未设置，默认关闭。';
+  @override
+  String get subtitleRequiresSetup => '需要 SecondLoop Pro 或 API Key（BYOK）。';
+  @override
+  String get dialogTitle => '开启 AI 语义动作？';
+  @override
+  String get dialogBody =>
+      '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。';
+  @override
+  late final _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
+      dialogActions =
+      _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn._(_root);
+}
+
 // Path: settings.cloudEmbeddings
 class _StringsSettingsCloudEmbeddingsZhCn
     extends _StringsSettingsCloudEmbeddingsEn {
@@ -3468,6 +3590,9 @@ class _StringsSettingsByokUsageZhCn extends _StringsSettingsByokUsageEn {
   @override
   late final _StringsSettingsByokUsageLabelsZhCn labels =
       _StringsSettingsByokUsageLabelsZhCn._(_root);
+  @override
+  late final _StringsSettingsByokUsagePurposesZhCn purposes =
+      _StringsSettingsByokUsagePurposesZhCn._(_root);
 }
 
 // Path: settings.subscription
@@ -3711,10 +3836,10 @@ class _StringsChatAskAiConsentZhCn extends _StringsChatAskAiConsentEn {
 
   // Translations
   @override
-  String get title => '发送前确认';
+  String get title => '使用 AI 前确认';
   @override
   String get body =>
-      'SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。';
+      'SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。';
   @override
   String get dontShowAgain => '不再提示';
 }
@@ -4412,6 +4537,21 @@ class _StringsSettingsThemeOptionsZhCn extends _StringsSettingsThemeOptionsEn {
   String get dark => '深色';
 }
 
+// Path: settings.semanticParseAutoActions.dialogActions
+class _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
+    extends _StringsSettingsSemanticParseAutoActionsDialogActionsEn {
+  _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get enable => '开启';
+}
+
 // Path: settings.cloudEmbeddings.dialogActions
 class _StringsSettingsCloudEmbeddingsDialogActionsZhCn
     extends _StringsSettingsCloudEmbeddingsDialogActionsEn {
@@ -4684,6 +4824,21 @@ class _StringsSettingsByokUsageLabelsZhCn
   String requests({required Object purpose}) => '${purpose} 请求数';
   @override
   String tokens({required Object purpose}) => '${purpose} tokens（输入/输出/总计）';
+}
+
+// Path: settings.byokUsage.purposes
+class _StringsSettingsByokUsagePurposesZhCn
+    extends _StringsSettingsByokUsagePurposesEn {
+  _StringsSettingsByokUsagePurposesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get semanticParse => '语义解析';
 }
 
 // Path: settings.subscription.benefits
@@ -5264,6 +5419,12 @@ extension on Translations {
         return 'Delete';
       case 'common.actions.undo':
         return 'Undo';
+      case 'common.actions.open':
+        return 'Open';
+      case 'common.actions.retry':
+        return 'Retry';
+      case 'common.actions.ignore':
+        return 'Ignore';
       case 'common.actions.refresh':
         return 'Refresh';
       case 'common.actions.share':
@@ -5559,6 +5720,22 @@ extension on Translations {
         return 'API keys (Semantic search)';
       case 'settings.embeddingProfiles.subtitle':
         return 'Advanced: use your own provider and key';
+      case 'settings.semanticParseAutoActions.title':
+        return 'AI semantic actions';
+      case 'settings.semanticParseAutoActions.subtitleEnabled':
+        return 'On. Messages may be sent to AI to create or update todos automatically.';
+      case 'settings.semanticParseAutoActions.subtitleDisabled':
+        return 'Off. Messages won\'t be sent for automatic actions.';
+      case 'settings.semanticParseAutoActions.subtitleUnset':
+        return 'Not set. Default is off.';
+      case 'settings.semanticParseAutoActions.subtitleRequiresSetup':
+        return 'Requires SecondLoop Pro or an API key (BYOK).';
+      case 'settings.semanticParseAutoActions.dialogTitle':
+        return 'Turn on AI semantic actions?';
+      case 'settings.semanticParseAutoActions.dialogBody':
+        return 'To automatically create or update todos, SecondLoop can send message text to an AI model.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
+      case 'settings.semanticParseAutoActions.dialogActions.enable':
+        return 'Enable';
       case 'settings.cloudEmbeddings.title':
         return 'Smarter search';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -5704,6 +5881,8 @@ extension on Translations {
       case 'settings.byokUsage.labels.tokens':
         return ({required Object purpose}) =>
             '${purpose} tokens (in/out/total)';
+      case 'settings.byokUsage.purposes.semanticParse':
+        return 'Semantic parse';
       case 'settings.subscription.title':
         return 'Subscription';
       case 'settings.subscription.subtitle':
@@ -5857,9 +6036,9 @@ extension on Translations {
       case 'chat.askAiFailedTemporary':
         return 'Ask AI failed. Please try again. This message will be removed in 3 seconds.';
       case 'chat.askAiConsent.title':
-        return 'Before you ask';
+        return 'Before we use AI';
       case 'chat.askAiConsent.body':
-        return 'SecondLoop will send your question and a few relevant snippets to your chosen AI provider to generate an answer.\n\nIt will not upload your master password or your full history.';
+        return 'SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your master password or your full history.';
       case 'chat.askAiConsent.dontShowAgain':
         return 'Don\'t show again';
       case 'chat.embeddingsConsent.title':
@@ -5872,6 +6051,22 @@ extension on Translations {
         return 'Use local';
       case 'chat.embeddingsConsent.actions.enableCloud':
         return 'Enable cloud embeddings';
+      case 'chat.semanticParseStatusRunning':
+        return 'AI analyzing…';
+      case 'chat.semanticParseStatusSlow':
+        return 'AI is taking longer. Continuing in background…';
+      case 'chat.semanticParseStatusFailed':
+        return 'AI analysis failed';
+      case 'chat.semanticParseStatusCanceled':
+        return 'AI analysis canceled';
+      case 'chat.semanticParseStatusCreated':
+        return ({required Object title}) => 'Created task: ${title}';
+      case 'chat.semanticParseStatusUpdated':
+        return ({required Object title}) => 'Updated task: ${title}';
+      case 'chat.semanticParseStatusUpdatedGeneric':
+        return 'Updated task';
+      case 'chat.semanticParseStatusUndone':
+        return 'Undid auto action';
       case 'attachments.metadata.format':
         return 'Format';
       case 'attachments.metadata.size':
@@ -6216,6 +6411,12 @@ extension on _StringsZhCn {
         return '删除';
       case 'common.actions.undo':
         return '撤销';
+      case 'common.actions.open':
+        return '打开';
+      case 'common.actions.retry':
+        return '重试';
+      case 'common.actions.ignore':
+        return '忽略';
       case 'common.actions.refresh':
         return '刷新';
       case 'common.actions.share':
@@ -6510,6 +6711,22 @@ extension on _StringsZhCn {
         return 'API Key（语义搜索）';
       case 'settings.embeddingProfiles.subtitle':
         return '高级：使用你自己的服务商与 Key';
+      case 'settings.semanticParseAutoActions.title':
+        return 'AI 语义动作';
+      case 'settings.semanticParseAutoActions.subtitleEnabled':
+        return '已开启。消息可能会发送给 AI 来自动创建或更新待办。';
+      case 'settings.semanticParseAutoActions.subtitleDisabled':
+        return '已关闭。消息不会用于自动动作。';
+      case 'settings.semanticParseAutoActions.subtitleUnset':
+        return '尚未设置，默认关闭。';
+      case 'settings.semanticParseAutoActions.subtitleRequiresSetup':
+        return '需要 SecondLoop Pro 或 API Key（BYOK）。';
+      case 'settings.semanticParseAutoActions.dialogTitle':
+        return '开启 AI 语义动作？';
+      case 'settings.semanticParseAutoActions.dialogBody':
+        return '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。';
+      case 'settings.semanticParseAutoActions.dialogActions.enable':
+        return '开启';
       case 'settings.cloudEmbeddings.title':
         return '更智能的搜索';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -6651,6 +6868,8 @@ extension on _StringsZhCn {
         return ({required Object purpose}) => '${purpose} 请求数';
       case 'settings.byokUsage.labels.tokens':
         return ({required Object purpose}) => '${purpose} tokens（输入/输出/总计）';
+      case 'settings.byokUsage.purposes.semanticParse':
+        return '语义解析';
       case 'settings.subscription.title':
         return '订阅';
       case 'settings.subscription.subtitle':
@@ -6804,9 +7023,9 @@ extension on _StringsZhCn {
       case 'chat.askAiFailedTemporary':
         return '问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。';
       case 'chat.askAiConsent.title':
-        return '发送前确认';
+        return '使用 AI 前确认';
       case 'chat.askAiConsent.body':
-        return 'SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。';
+        return 'SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。';
       case 'chat.askAiConsent.dontShowAgain':
         return '不再提示';
       case 'chat.embeddingsConsent.title':
@@ -6819,6 +7038,22 @@ extension on _StringsZhCn {
         return '使用本地';
       case 'chat.embeddingsConsent.actions.enableCloud':
         return '开启云端向量';
+      case 'chat.semanticParseStatusRunning':
+        return 'AI 分析中…';
+      case 'chat.semanticParseStatusSlow':
+        return 'AI 分析较慢，后台继续…';
+      case 'chat.semanticParseStatusFailed':
+        return 'AI 分析失败';
+      case 'chat.semanticParseStatusCanceled':
+        return '已取消 AI 分析';
+      case 'chat.semanticParseStatusCreated':
+        return ({required Object title}) => '已创建待办：${title}';
+      case 'chat.semanticParseStatusUpdated':
+        return ({required Object title}) => '已更新待办：${title}';
+      case 'chat.semanticParseStatusUpdatedGeneric':
+        return '已更新待办';
+      case 'chat.semanticParseStatusUndone':
+        return '已撤销自动动作';
       case 'attachments.metadata.format':
         return '格式';
       case 'attachments.metadata.size':

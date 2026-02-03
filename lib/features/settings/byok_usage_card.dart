@@ -17,6 +17,7 @@ String _formatLocalDay(DateTime value) {
 String _purposeLabel(BuildContext context, LlmUsageAggregate agg) {
   return switch (agg.purpose) {
     'ask_ai' => context.t.common.actions.askAi,
+    'semantic_parse' => context.t.settings.byokUsage.purposes.semanticParse,
     _ => agg.purpose,
   };
 }

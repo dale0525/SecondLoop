@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
+import '../../src/rust/semantic_parse.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
 
@@ -1371,6 +1373,249 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       firebaseIdToken: idToken,
       modelName: modelName,
       embeddingsModelName: embeddingsModelName,
+    );
+  }
+
+  @override
+  Future<String> semanticParseMessageAction(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required List<TodoCandidate> candidates,
+  }) async {
+    final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
+    return rust_core.aiSemanticParseMessageAction(
+      appDir: appDir,
+      key: key,
+      text: text,
+      nowLocalIso: nowLocalIso,
+      locale: locale.toLanguageTag(),
+      dayEndMinutes: dayEndMinutes,
+      candidates: candidates,
+      localDay: localDay,
+    );
+  }
+
+  @override
+  Future<String> semanticParseMessageActionCloudGateway(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required List<TodoCandidate> candidates,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.aiSemanticParseMessageActionCloudGateway(
+      appDir: appDir,
+      key: key,
+      text: text,
+      nowLocalIso: nowLocalIso,
+      locale: locale.toLanguageTag(),
+      dayEndMinutes: dayEndMinutes,
+      candidates: candidates,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
+  Future<String> semanticParseAskAiTimeWindow(
+    Uint8List key, {
+    required String question,
+    required String nowLocalIso,
+    required Locale locale,
+    required int firstDayOfWeekIndex,
+  }) async {
+    final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
+    return rust_core.aiSemanticParseAskAiTimeWindow(
+      appDir: appDir,
+      key: key,
+      question: question,
+      nowLocalIso: nowLocalIso,
+      locale: locale.toLanguageTag(),
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+      localDay: localDay,
+    );
+  }
+
+  @override
+  Future<String> semanticParseAskAiTimeWindowCloudGateway(
+    Uint8List key, {
+    required String question,
+    required String nowLocalIso,
+    required Locale locale,
+    required int firstDayOfWeekIndex,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.aiSemanticParseAskAiTimeWindowCloudGateway(
+      appDir: appDir,
+      key: key,
+      question: question,
+      nowLocalIso: nowLocalIso,
+      locale: locale.toLanguageTag(),
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
+  Future<void> enqueueSemanticParseJob(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbEnqueueSemanticParseJob(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<List<SemanticParseJob>> listDueSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListDueSemanticParseJobs(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
+    Uint8List key, {
+    required List<String> messageIds,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbListSemanticParseJobsByMessageIds(
+      appDir: appDir,
+      key: key,
+      messageIds: messageIds,
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobRunning(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobRunning(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobFailed(
+    Uint8List key, {
+    required String messageId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobFailed(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      attempts: PlatformInt64Util.from(attempts),
+      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
+      lastError: lastError,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobRetry(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobRetry(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobSucceeded(
+    Uint8List key, {
+    required String messageId,
+    required String appliedActionKind,
+    String? appliedTodoId,
+    String? appliedTodoTitle,
+    String? appliedPrevTodoStatus,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobSucceeded(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      appliedActionKind: appliedActionKind,
+      appliedTodoId: appliedTodoId,
+      appliedTodoTitle: appliedTodoTitle,
+      appliedPrevTodoStatus: appliedPrevTodoStatus,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobCanceled(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobCanceled(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobUndone(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobUndone(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
     );
   }
 

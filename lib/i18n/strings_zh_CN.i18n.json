@@ -20,6 +20,9 @@
       "edit": "编辑",
       "delete": "删除",
       "undo": "撤销",
+      "open": "打开",
+      "retry": "重试",
+      "ignore": "忽略",
       "refresh": "刷新",
       "share": "分享",
       "search": "搜索",
@@ -245,6 +248,18 @@
       "title": "API Key（语义搜索）",
       "subtitle": "高级：使用你自己的服务商与 Key"
     },
+    "semanticParseAutoActions": {
+      "title": "AI 语义动作",
+      "subtitleEnabled": "已开启。消息可能会发送给 AI 来自动创建或更新待办。",
+      "subtitleDisabled": "已关闭。消息不会用于自动动作。",
+      "subtitleUnset": "尚未设置，默认关闭。",
+      "subtitleRequiresSetup": "需要 SecondLoop Pro 或 API Key（BYOK）。",
+      "dialogTitle": "开启 AI 语义动作？",
+      "dialogBody": "为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。",
+      "dialogActions": {
+        "enable": "开启"
+      }
+    },
     "cloudEmbeddings": {
       "title": "更智能的搜索",
       "subtitleEnabled": "已开启。搜索更准，会消耗 Cloud 额度。",
@@ -365,6 +380,9 @@
       "labels": {
         "requests": "$purpose 请求数",
         "tokens": "$purpose tokens（输入/输出/总计）"
+      },
+      "purposes": {
+        "semanticParse": "语义解析"
       }
     },
     "subscription": {
@@ -494,8 +512,8 @@
     },
     "askAiFailedTemporary": "问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。",
     "askAiConsent": {
-      "title": "发送前确认",
-      "body": "SecondLoop 会将你的问题与少量相关片段发送到你选择的 AI 服务商以生成回答。\n\n不会上传你的主密码或完整历史。",
+      "title": "使用 AI 前确认",
+      "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。",
       "dontShowAgain": "不再提示"
     },
     "embeddingsConsent": {
@@ -506,7 +524,15 @@
         "useLocal": "使用本地",
         "enableCloud": "开启云端向量"
       }
-    }
+    },
+    "semanticParseStatusRunning": "AI 分析中…",
+    "semanticParseStatusSlow": "AI 分析较慢，后台继续…",
+    "semanticParseStatusFailed": "AI 分析失败",
+    "semanticParseStatusCanceled": "已取消 AI 分析",
+    "semanticParseStatusCreated": "已创建待办：$title",
+    "semanticParseStatusUpdated": "已更新待办：$title",
+    "semanticParseStatusUpdatedGeneric": "已更新待办",
+    "semanticParseStatusUndone": "已撤销自动动作"
   },
   "attachments": {
     "metadata": {

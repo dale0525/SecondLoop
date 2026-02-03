@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 308561317;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -631015319;
 
 // Section: executor
 
@@ -41,6 +41,204 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__core__ai_semantic_parse_ask_ai_time_window_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ai_semantic_parse_ask_ai_time_window",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_question = <String>::sse_decode(&mut deserializer);
+            let api_now_local_iso = <String>::sse_decode(&mut deserializer);
+            let api_locale = <String>::sse_decode(&mut deserializer);
+            let api_first_day_of_week_index = <i32>::sse_decode(&mut deserializer);
+            let api_local_day = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::ai_semantic_parse_ask_ai_time_window(
+                        api_app_dir,
+                        api_key,
+                        api_question,
+                        api_now_local_iso,
+                        api_locale,
+                        api_first_day_of_week_index,
+                        api_local_day,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__ai_semantic_parse_ask_ai_time_window_cloud_gateway_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ai_semantic_parse_ask_ai_time_window_cloud_gateway",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_question = <String>::sse_decode(&mut deserializer);
+            let api_now_local_iso = <String>::sse_decode(&mut deserializer);
+            let api_locale = <String>::sse_decode(&mut deserializer);
+            let api_first_day_of_week_index = <i32>::sse_decode(&mut deserializer);
+            let api_gateway_base_url = <String>::sse_decode(&mut deserializer);
+            let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
+            let api_model_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::ai_semantic_parse_ask_ai_time_window_cloud_gateway(
+                        api_app_dir,
+                        api_key,
+                        api_question,
+                        api_now_local_iso,
+                        api_locale,
+                        api_first_day_of_week_index,
+                        api_gateway_base_url,
+                        api_firebase_id_token,
+                        api_model_name,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__ai_semantic_parse_message_action_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ai_semantic_parse_message_action",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_text = <String>::sse_decode(&mut deserializer);
+            let api_now_local_iso = <String>::sse_decode(&mut deserializer);
+            let api_locale = <String>::sse_decode(&mut deserializer);
+            let api_day_end_minutes = <i32>::sse_decode(&mut deserializer);
+            let api_candidates =
+                <Vec<crate::semantic_parse::TodoCandidate>>::sse_decode(&mut deserializer);
+            let api_local_day = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::ai_semantic_parse_message_action(
+                        api_app_dir,
+                        api_key,
+                        api_text,
+                        api_now_local_iso,
+                        api_locale,
+                        api_day_end_minutes,
+                        api_candidates,
+                        api_local_day,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__ai_semantic_parse_message_action_cloud_gateway_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ai_semantic_parse_message_action_cloud_gateway",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_text = <String>::sse_decode(&mut deserializer);
+            let api_now_local_iso = <String>::sse_decode(&mut deserializer);
+            let api_locale = <String>::sse_decode(&mut deserializer);
+            let api_day_end_minutes = <i32>::sse_decode(&mut deserializer);
+            let api_candidates =
+                <Vec<crate::semantic_parse::TodoCandidate>>::sse_decode(&mut deserializer);
+            let api_gateway_base_url = <String>::sse_decode(&mut deserializer);
+            let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
+            let api_model_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::ai_semantic_parse_message_action_cloud_gateway(
+                        api_app_dir,
+                        api_key,
+                        api_text,
+                        api_now_local_iso,
+                        api_locale,
+                        api_day_end_minutes,
+                        api_candidates,
+                        api_gateway_base_url,
+                        api_firebase_id_token,
+                        api_model_name,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__auth_init_master_password_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -726,6 +924,46 @@ fn wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
         },
     )
 }
+fn wire__crate__api__core__db_enqueue_semantic_parse_job_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_enqueue_semantic_parse_job",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_enqueue_semantic_parse_job(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__db_get_active_embedding_model_name_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1176,6 +1414,46 @@ fn wire__crate__api__core__db_list_due_cloud_media_backups_impl(
         },
     )
 }
+fn wire__crate__api__core__db_list_due_semantic_parse_jobs_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_list_due_semantic_parse_jobs",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_list_due_semantic_parse_jobs(
+                        api_app_dir,
+                        api_key,
+                        api_now_ms,
+                        api_limit,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__db_list_embedding_model_names_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1453,6 +1731,44 @@ fn wire__crate__api__core__db_list_recent_attachments_impl(
             move |context| {
                 transform_result_sse((move || {
                     crate::api::core::db_list_recent_attachments(api_app_dir, api_key, api_limit)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_list_semantic_parse_jobs_by_message_ids_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_list_semantic_parse_jobs_by_message_ids",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_ids = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_list_semantic_parse_jobs_by_message_ids(
+                        api_app_dir,
+                        api_key,
+                        api_message_ids,
+                    )
                 })())
             }
         },
@@ -1904,6 +2220,260 @@ fn wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
                         api_app_dir,
                         api_key,
                         api_attachment_sha256,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_semantic_parse_job_canceled_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_semantic_parse_job_canceled",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_semantic_parse_job_canceled(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_semantic_parse_job_failed_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_semantic_parse_job_failed",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_attempts = <i64>::sse_decode(&mut deserializer);
+            let api_next_retry_at_ms = <i64>::sse_decode(&mut deserializer);
+            let api_last_error = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_semantic_parse_job_failed(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_attempts,
+                        api_next_retry_at_ms,
+                        api_last_error,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_semantic_parse_job_retry_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_semantic_parse_job_retry",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_semantic_parse_job_retry(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_semantic_parse_job_running_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_semantic_parse_job_running",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_semantic_parse_job_running(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_semantic_parse_job_succeeded_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_semantic_parse_job_succeeded",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_applied_action_kind = <String>::sse_decode(&mut deserializer);
+            let api_applied_todo_id = <Option<String>>::sse_decode(&mut deserializer);
+            let api_applied_todo_title = <Option<String>>::sse_decode(&mut deserializer);
+            let api_applied_prev_todo_status = <Option<String>>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_semantic_parse_job_succeeded(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
+                        api_applied_action_kind,
+                        api_applied_todo_id,
+                        api_applied_todo_title,
+                        api_applied_prev_todo_status,
+                        api_now_ms,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__db_mark_semantic_parse_job_undone_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_mark_semantic_parse_job_undone",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_message_id = <String>::sse_decode(&mut deserializer);
+            let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::core::db_mark_semantic_parse_job_undone(
+                        api_app_dir,
+                        api_key,
+                        api_message_id,
                         api_now_ms,
                     )
                 })())
@@ -4911,6 +5481,13 @@ impl SseDecode for f64 {
     }
 }
 
+impl SseDecode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5064,6 +5641,18 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<crate::db::SemanticParseJob> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::db::SemanticParseJob>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::db::SimilarMessage> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5107,6 +5696,20 @@ impl SseDecode for Vec<crate::db::TodoActivity> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::db::TodoActivity>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::semantic_parse::TodoCandidate> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::semantic_parse::TodoCandidate>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -5233,6 +5836,38 @@ impl SseDecode for Option<crate::db::Message> {
     }
 }
 
+impl SseDecode for crate::db::SemanticParseJob {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_messageId = <String>::sse_decode(deserializer);
+        let mut var_status = <String>::sse_decode(deserializer);
+        let mut var_attempts = <i64>::sse_decode(deserializer);
+        let mut var_nextRetryAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_lastError = <Option<String>>::sse_decode(deserializer);
+        let mut var_appliedActionKind = <Option<String>>::sse_decode(deserializer);
+        let mut var_appliedTodoId = <Option<String>>::sse_decode(deserializer);
+        let mut var_appliedTodoTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_appliedPrevTodoStatus = <Option<String>>::sse_decode(deserializer);
+        let mut var_undoneAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_createdAtMs = <i64>::sse_decode(deserializer);
+        let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
+        return crate::db::SemanticParseJob {
+            message_id: var_messageId,
+            status: var_status,
+            attempts: var_attempts,
+            next_retry_at_ms: var_nextRetryAtMs,
+            last_error: var_lastError,
+            applied_action_kind: var_appliedActionKind,
+            applied_todo_id: var_appliedTodoId,
+            applied_todo_title: var_appliedTodoTitle,
+            applied_prev_todo_status: var_appliedPrevTodoStatus,
+            undone_at_ms: var_undoneAtMs,
+            created_at_ms: var_createdAtMs,
+            updated_at_ms: var_updatedAtMs,
+        };
+    }
+}
+
 impl SseDecode for crate::db::SimilarMessage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5309,6 +5944,22 @@ impl SseDecode for crate::db::TodoActivity {
     }
 }
 
+impl SseDecode for crate::semantic_parse::TodoCandidate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_status = <String>::sse_decode(deserializer);
+        let mut var_dueLocalIso = <Option<String>>::sse_decode(deserializer);
+        return crate::semantic_parse::TodoCandidate {
+            id: var_id,
+            title: var_title,
+            status: var_status,
+            due_local_iso: var_dueLocalIso,
+        };
+    }
+}
+
 impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5335,13 +5986,6 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
-impl SseDecode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
-    }
-}
-
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -5351,403 +5995,483 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__core__auth_init_master_password_impl(
+        1 => wire__crate__api__core__ai_semantic_parse_ask_ai_time_window_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        2 => wire__crate__api__core__auth_is_initialized_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__core__auth_unlock_with_password_impl(
+        2 => wire__crate__api__core__ai_semantic_parse_ask_ai_time_window_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__core__auth_validate_key_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__core__db_append_todo_note_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__core__db_backfill_cloud_media_backup_images_impl(
+        3 => wire__crate__api__core__ai_semantic_parse_message_action_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__core__db_clear_local_attachment_cache_impl(
+        4 => wire__crate__api__core__ai_semantic_parse_message_action_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__core__db_cloud_media_backup_summary_impl(
+        5 => wire__crate__api__core__auth_init_master_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__core__db_create_conversation_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__db_create_embedding_profile_impl(
+        6 => wire__crate__api__core__auth_is_initialized_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__core__auth_unlock_with_password_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__core__db_create_llm_profile_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__db_delete_embedding_profile_impl(
+        8 => wire__crate__api__core__auth_validate_key_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__core__db_append_todo_note_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__db_backfill_cloud_media_backup_images_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__core__db_delete_llm_profile_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__db_delete_todo_and_associated_messages_impl(
+        11 => wire__crate__api__core__db_clear_local_attachment_cache_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__core__db_edit_message_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__db_enqueue_attachment_annotation_impl(
+        12 => wire__crate__api__core__db_cloud_media_backup_summary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__core__db_enqueue_attachment_place_impl(
+        13 => {
+            wire__crate__api__core__db_create_conversation_impl(port, ptr, rust_vec_len, data_len)
+        }
+        14 => wire__crate__api__core__db_create_embedding_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
+        15 => wire__crate__api__core__db_create_llm_profile_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__db_delete_embedding_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__core__db_get_active_embedding_model_name_impl(
+        17 => wire__crate__api__core__db_delete_llm_profile_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__db_delete_todo_and_associated_messages_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__core__db_get_message_by_id_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__db_get_or_create_device_id_impl(
+        19 => wire__crate__api__core__db_edit_message_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__db_enqueue_attachment_annotation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+        21 => wire__crate__api__core__db_enqueue_attachment_place_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__core__db_insert_attachment_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__db_insert_message_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__db_link_attachment_to_message_impl(
+        22 => wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__api__core__db_link_attachment_to_todo_activity_impl(
+        23 => wire__crate__api__core__db_enqueue_semantic_parse_job_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__core__db_list_conversations_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__db_list_due_attachment_annotations_impl(
+        24 => wire__crate__api__core__db_get_active_embedding_model_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__core__db_list_due_attachment_places_impl(
+        25 => wire__crate__api__core__db_get_message_by_id_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__db_get_or_create_device_id_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__core__db_list_due_cloud_media_backups_impl(
+        27 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__core__db_list_embedding_model_names_impl(
+        28 => wire__crate__api__core__db_insert_attachment_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__db_insert_message_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__db_link_attachment_to_message_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__core__db_list_embedding_profiles_impl(
+        31 => wire__crate__api__core__db_link_attachment_to_todo_activity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__core__db_list_events_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__core__db_list_llm_profiles_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__core__db_list_message_attachments_impl(
+        32 => wire__crate__api__core__db_list_conversations_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__db_list_due_attachment_annotations_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__core__db_list_messages_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__core__db_list_messages_page_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__core__db_list_recent_attachments_impl(
+        34 => wire__crate__api__core__db_list_due_attachment_places_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => {
+        35 => wire__crate__api__core__db_list_due_cloud_media_backups_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        36 => wire__crate__api__core__db_list_due_semantic_parse_jobs_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        37 => wire__crate__api__core__db_list_embedding_model_names_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        38 => wire__crate__api__core__db_list_embedding_profiles_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        39 => wire__crate__api__core__db_list_events_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__core__db_list_llm_profiles_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__core__db_list_message_attachments_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        42 => wire__crate__api__core__db_list_messages_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__core__db_list_messages_page_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__core__db_list_recent_attachments_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        45 => wire__crate__api__core__db_list_semantic_parse_jobs_by_message_ids_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        46 => {
             wire__crate__api__core__db_list_todo_activities_impl(port, ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__api__core__db_list_todo_activities_in_range_impl(
+        47 => wire__crate__api__core__db_list_todo_activities_in_range_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__core__db_list_todo_activity_attachments_impl(
+        48 => wire__crate__api__core__db_list_todo_activity_attachments_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__core__db_list_todos_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__core__db_list_todos_created_in_range_impl(
+        49 => wire__crate__api__core__db_list_todos_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__core__db_list_todos_created_in_range_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__core__db_mark_attachment_annotation_failed_impl(
+        51 => wire__crate__api__core__db_mark_attachment_annotation_failed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__core__db_mark_attachment_annotation_ok_json_impl(
+        52 => wire__crate__api__core__db_mark_attachment_annotation_ok_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__core__db_mark_attachment_place_failed_impl(
+        53 => wire__crate__api__core__db_mark_attachment_place_failed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__core__db_mark_attachment_place_ok_json_impl(
+        54 => wire__crate__api__core__db_mark_attachment_place_ok_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__core__db_mark_cloud_media_backup_failed_impl(
+        55 => wire__crate__api__core__db_mark_cloud_media_backup_failed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
+        56 => wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__core__db_move_todo_activity_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__core__db_process_pending_message_embeddings_impl(
+        57 => wire__crate__api__core__db_mark_semantic_parse_job_canceled_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__core__db_process_pending_todo_thread_embeddings_impl(
+        58 => wire__crate__api__core__db_mark_semantic_parse_job_failed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__core__db_process_pending_todo_thread_embeddings_brok_impl(
+        59 => wire__crate__api__core__db_mark_semantic_parse_job_retry_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__core__db_process_pending_todo_thread_embeddings_cloud_gateway_impl(
+        60 => wire__crate__api__core__db_mark_semantic_parse_job_running_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__core__db_purge_message_attachments_impl(
+        61 => wire__crate__api__core__db_mark_semantic_parse_job_succeeded_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__core__db_read_attachment_annotation_caption_long_impl(
+        62 => wire__crate__api__core__db_mark_semantic_parse_job_undone_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => {
+        63 => wire__crate__api__core__db_move_todo_activity_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__core__db_process_pending_message_embeddings_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        65 => wire__crate__api__core__db_process_pending_todo_thread_embeddings_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        66 => wire__crate__api__core__db_process_pending_todo_thread_embeddings_brok_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        67 => wire__crate__api__core__db_process_pending_todo_thread_embeddings_cloud_gateway_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        68 => wire__crate__api__core__db_purge_message_attachments_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        69 => wire__crate__api__core__db_read_attachment_annotation_caption_long_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        70 => {
             wire__crate__api__core__db_read_attachment_bytes_impl(port, ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__api__core__db_read_attachment_exif_metadata_impl(
+        71 => wire__crate__api__core__db_read_attachment_exif_metadata_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__core__db_read_attachment_place_display_name_impl(
+        72 => wire__crate__api__core__db_read_attachment_place_display_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__core__db_read_attachment_variant_bytes_impl(
+        73 => wire__crate__api__core__db_read_attachment_variant_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__core__db_rebuild_message_embeddings_impl(
+        74 => wire__crate__api__core__db_rebuild_message_embeddings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__core__db_record_llm_usage_daily_impl(
+        75 => wire__crate__api__core__db_record_llm_usage_daily_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__core__db_reset_vault_data_preserving_llm_profiles_impl(
+        76 => wire__crate__api__core__db_reset_vault_data_preserving_llm_profiles_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__core__db_search_similar_messages_impl(
+        77 => wire__crate__api__core__db_search_similar_messages_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__core__db_search_similar_messages_brok_impl(
+        78 => wire__crate__api__core__db_search_similar_messages_brok_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__core__db_search_similar_messages_cloud_gateway_impl(
+        79 => wire__crate__api__core__db_search_similar_messages_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__api__core__db_search_similar_todo_threads_impl(
+        80 => wire__crate__api__core__db_search_similar_todo_threads_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__core__db_search_similar_todo_threads_brok_impl(
+        81 => wire__crate__api__core__db_search_similar_todo_threads_brok_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__core__db_search_similar_todo_threads_cloud_gateway_impl(
+        82 => wire__crate__api__core__db_search_similar_todo_threads_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__api__core__db_set_active_embedding_model_name_impl(
+        83 => wire__crate__api__core__db_set_active_embedding_model_name_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => wire__crate__api__core__db_set_active_embedding_profile_impl(
+        84 => wire__crate__api__core__db_set_active_embedding_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__core__db_set_active_llm_profile_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        73 => {
-            wire__crate__api__core__db_set_message_deleted_impl(port, ptr, rust_vec_len, data_len)
-        }
-        74 => wire__crate__api__core__db_set_todo_status_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__core__db_sum_llm_usage_daily_by_purpose_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        76 => wire__crate__api__core__db_upsert_attachment_exif_metadata_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        77 => wire__crate__api__core__db_upsert_attachment_variant_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        78 => wire__crate__api__core__db_upsert_event_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__core__db_upsert_todo_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__core__geo_reverse_cloud_gateway_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        81 => wire__crate__api__core__media_annotation_cloud_gateway_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        82 => wire__crate__api__core__rag_ask_ai_stream_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        84 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_time_window_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        85 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_with_embeddings_impl(
+        85 => wire__crate__api__core__db_set_active_llm_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         86 => {
+            wire__crate__api__core__db_set_message_deleted_impl(port, ptr, rust_vec_len, data_len)
+        }
+        87 => wire__crate__api__core__db_set_todo_status_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__core__db_sum_llm_usage_daily_by_purpose_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        89 => wire__crate__api__core__db_upsert_attachment_exif_metadata_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        90 => wire__crate__api__core__db_upsert_attachment_variant_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        91 => wire__crate__api__core__db_upsert_event_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__core__db_upsert_todo_impl(port, ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__core__geo_reverse_cloud_gateway_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        94 => wire__crate__api__core__media_annotation_cloud_gateway_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        95 => wire__crate__api__core__rag_ask_ai_stream_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        97 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_time_window_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        98 => wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_with_embeddings_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        99 => {
             wire__crate__api__core__rag_ask_ai_stream_cloud_gateway_with_embeddings_time_window_impl(
                 port,
                 ptr,
@@ -5755,126 +6479,126 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        87 => wire__crate__api__core__rag_ask_ai_stream_time_window_impl(
+        100 => wire__crate__api__core__rag_ask_ai_stream_time_window_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__core__rag_ask_ai_stream_with_brok_embeddings_impl(
+        101 => wire__crate__api__core__rag_ask_ai_stream_with_brok_embeddings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => wire__crate__api__core__rag_ask_ai_stream_with_brok_embeddings_time_window_impl(
+        102 => wire__crate__api__core__rag_ask_ai_stream_with_brok_embeddings_time_window_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__core__sync_derive_key_impl(port, ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__core__sync_localdir_clear_remote_root_impl(
+        103 => wire__crate__api__core__sync_derive_key_impl(port, ptr, rust_vec_len, data_len),
+        104 => wire__crate__api__core__sync_localdir_clear_remote_root_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__core__sync_localdir_download_attachment_bytes_impl(
+        105 => wire__crate__api__core__sync_localdir_download_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__core__sync_localdir_pull_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__core__sync_localdir_push_impl(port, ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__core__sync_localdir_push_ops_only_impl(
+        106 => wire__crate__api__core__sync_localdir_pull_impl(port, ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__core__sync_localdir_push_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__core__sync_localdir_push_ops_only_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__core__sync_localdir_test_connection_impl(
+        109 => wire__crate__api__core__sync_localdir_test_connection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__core__sync_localdir_upload_attachment_bytes_impl(
+        110 => wire__crate__api__core__sync_localdir_upload_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__api__core__sync_managed_vault_clear_device_impl(
+        111 => wire__crate__api__core__sync_managed_vault_clear_device_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => wire__crate__api__core__sync_managed_vault_clear_vault_impl(
+        112 => wire__crate__api__core__sync_managed_vault_clear_vault_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => wire__crate__api__core__sync_managed_vault_download_attachment_bytes_impl(
+        113 => wire__crate__api__core__sync_managed_vault_download_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => {
+        114 => {
             wire__crate__api__core__sync_managed_vault_pull_impl(port, ptr, rust_vec_len, data_len)
         }
-        102 => {
+        115 => {
             wire__crate__api__core__sync_managed_vault_push_impl(port, ptr, rust_vec_len, data_len)
         }
-        103 => wire__crate__api__core__sync_managed_vault_push_ops_only_impl(
+        116 => wire__crate__api__core__sync_managed_vault_push_ops_only_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__core__sync_managed_vault_upload_attachment_bytes_impl(
+        117 => wire__crate__api__core__sync_managed_vault_upload_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__core__sync_webdav_clear_remote_root_impl(
+        118 => wire__crate__api__core__sync_webdav_clear_remote_root_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__core__sync_webdav_download_attachment_bytes_impl(
+        119 => wire__crate__api__core__sync_webdav_download_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__core__sync_webdav_pull_impl(port, ptr, rust_vec_len, data_len),
-        108 => wire__crate__api__core__sync_webdav_push_impl(port, ptr, rust_vec_len, data_len),
-        109 => wire__crate__api__core__sync_webdav_push_ops_only_impl(
+        120 => wire__crate__api__core__sync_webdav_pull_impl(port, ptr, rust_vec_len, data_len),
+        121 => wire__crate__api__core__sync_webdav_push_impl(port, ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__core__sync_webdav_push_ops_only_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        110 => wire__crate__api__core__sync_webdav_test_connection_impl(
+        123 => wire__crate__api__core__sync_webdav_test_connection_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__core__sync_webdav_upload_attachment_bytes_impl(
+        124 => wire__crate__api__core__sync_webdav_upload_attachment_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5887,7 +6611,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        112 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -6186,6 +6910,34 @@ impl flutter_rust_bridge::IntoIntoDart<crate::db::Message> for crate::db::Messag
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::db::SemanticParseJob {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.message_id.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.attempts.into_into_dart().into_dart(),
+            self.next_retry_at_ms.into_into_dart().into_dart(),
+            self.last_error.into_into_dart().into_dart(),
+            self.applied_action_kind.into_into_dart().into_dart(),
+            self.applied_todo_id.into_into_dart().into_dart(),
+            self.applied_todo_title.into_into_dart().into_dart(),
+            self.applied_prev_todo_status.into_into_dart().into_dart(),
+            self.undone_at_ms.into_into_dart().into_dart(),
+            self.created_at_ms.into_into_dart().into_dart(),
+            self.updated_at_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::SemanticParseJob {}
+impl flutter_rust_bridge::IntoIntoDart<crate::db::SemanticParseJob>
+    for crate::db::SemanticParseJob
+{
+    fn into_into_dart(self) -> crate::db::SemanticParseJob {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::db::SimilarMessage {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6262,6 +7014,29 @@ impl flutter_rust_bridge::IntoDart for crate::db::TodoActivity {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::TodoActivity {}
 impl flutter_rust_bridge::IntoIntoDart<crate::db::TodoActivity> for crate::db::TodoActivity {
     fn into_into_dart(self) -> crate::db::TodoActivity {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::semantic_parse::TodoCandidate {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.due_local_iso.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::semantic_parse::TodoCandidate
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::semantic_parse::TodoCandidate>
+    for crate::semantic_parse::TodoCandidate
+{
+    fn into_into_dart(self) -> crate::semantic_parse::TodoCandidate {
         self
     }
 }
@@ -6425,6 +7200,13 @@ impl SseEncode for f64 {
     }
 }
 
+impl SseEncode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6552,6 +7334,16 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<crate::db::SemanticParseJob> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::db::SemanticParseJob>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::db::SimilarMessage> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6588,6 +7380,16 @@ impl SseEncode for Vec<crate::db::TodoActivity> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::db::TodoActivity>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::semantic_parse::TodoCandidate> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::semantic_parse::TodoCandidate>::sse_encode(item, serializer);
         }
     }
 }
@@ -6680,6 +7482,24 @@ impl SseEncode for Option<crate::db::Message> {
     }
 }
 
+impl SseEncode for crate::db::SemanticParseJob {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.message_id, serializer);
+        <String>::sse_encode(self.status, serializer);
+        <i64>::sse_encode(self.attempts, serializer);
+        <Option<i64>>::sse_encode(self.next_retry_at_ms, serializer);
+        <Option<String>>::sse_encode(self.last_error, serializer);
+        <Option<String>>::sse_encode(self.applied_action_kind, serializer);
+        <Option<String>>::sse_encode(self.applied_todo_id, serializer);
+        <Option<String>>::sse_encode(self.applied_todo_title, serializer);
+        <Option<String>>::sse_encode(self.applied_prev_todo_status, serializer);
+        <Option<i64>>::sse_encode(self.undone_at_ms, serializer);
+        <i64>::sse_encode(self.created_at_ms, serializer);
+        <i64>::sse_encode(self.updated_at_ms, serializer);
+    }
+}
+
 impl SseEncode for crate::db::SimilarMessage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6726,6 +7546,16 @@ impl SseEncode for crate::db::TodoActivity {
     }
 }
 
+impl SseEncode for crate::semantic_parse::TodoCandidate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <String>::sse_encode(self.status, serializer);
+        <Option<String>>::sse_encode(self.due_local_iso, serializer);
+    }
+}
+
 impl SseEncode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6750,13 +7580,6 @@ impl SseEncode for u8 {
 impl SseEncode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
-}
-
-impl SseEncode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
-    }
 }
 
 #[cfg(not(target_family = "wasm"))]

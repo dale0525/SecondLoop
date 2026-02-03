@@ -8,5 +8,6 @@ pub mod geo;
 pub mod llm;
 pub mod media_annotation;
 pub mod rag;
+pub mod semantic_parse;
 pub mod sync;
 pub mod vector; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */

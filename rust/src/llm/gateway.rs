@@ -33,6 +33,7 @@ pub struct CloudGatewayProvider {
     id_token: String,
     model_name: String,
     temperature: Option<f32>,
+    purpose_header: String,
 }
 
 impl CloudGatewayProvider {
@@ -42,12 +43,29 @@ impl CloudGatewayProvider {
         model_name: String,
         temperature: Option<f32>,
     ) -> Self {
+        Self::new_with_purpose(
+            gateway_base_url,
+            id_token,
+            model_name,
+            temperature,
+            "ask_ai".to_string(),
+        )
+    }
+
+    pub fn new_with_purpose(
+        gateway_base_url: String,
+        id_token: String,
+        model_name: String,
+        temperature: Option<f32>,
+        purpose_header: String,
+    ) -> Self {
         Self {
             client: Client::new(),
             gateway_base_url,
             id_token,
             model_name,
             temperature,
+            purpose_header,
         }
     }
 }
@@ -73,7 +91,7 @@ impl crate::rag::AnswerProvider for CloudGatewayProvider {
             .client
             .post(url)
             .bearer_auth(&self.id_token)
-            .header("x-secondloop-purpose", "ask_ai")
+            .header("x-secondloop-purpose", &self.purpose_header)
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
             .send()?;
