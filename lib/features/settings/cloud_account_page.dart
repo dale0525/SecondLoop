@@ -202,6 +202,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
             context.t.settings.cloudAccount.emailVerification.messages
                 .verificationEmailSent,
           ),
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
@@ -212,6 +213,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
             context.t.settings.cloudAccount.emailVerification.messages
                 .verificationEmailSendFailed(error: '$e'),
           ),
+          duration: const Duration(seconds: 3),
         ),
       );
     } finally {

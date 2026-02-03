@@ -112,7 +112,10 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.errors.loadFailed(error: '$e'))),
+        SnackBar(
+          content: Text(t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }

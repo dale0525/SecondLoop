@@ -83,6 +83,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                 ? context.t.semanticSearchDebug.switchedModelReindex
                 : context.t.semanticSearchDebug.modelAlreadyActive,
           ),
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
@@ -110,6 +111,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
           content: Text(
             context.t.semanticSearchDebug.processedPending(count: processed),
           ),
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
@@ -136,6 +138,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.t.semanticSearchDebug.rebuilt(count: rebuilt)),
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {

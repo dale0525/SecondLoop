@@ -132,7 +132,10 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       await Clipboard.setData(ClipboardData(text: json));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.settings.diagnostics.messages.copied)),
+        SnackBar(
+          content: Text(t.settings.diagnostics.messages.copied),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -141,6 +144,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           content: Text(
             t.settings.diagnostics.messages.copyFailed(error: '$e'),
           ),
+          duration: const Duration(seconds: 3),
         ),
       );
     } finally {
@@ -170,6 +174,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           content: Text(
             t.settings.diagnostics.messages.shareFailed(error: '$e'),
           ),
+          duration: const Duration(seconds: 3),
         ),
       );
     } finally {

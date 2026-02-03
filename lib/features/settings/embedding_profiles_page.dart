@@ -163,7 +163,10 @@ class _EmbeddingProfilesPageState extends State<EmbeddingProfilesPage> {
       await _loadProfiles();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.embeddingProfiles.deleted)),
+        SnackBar(
+          content: Text(context.t.embeddingProfiles.deleted),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -209,7 +212,10 @@ class _EmbeddingProfilesPageState extends State<EmbeddingProfilesPage> {
       await _loadProfiles();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.embeddingProfiles.savedActivated)),
+        SnackBar(
+          content: Text(context.t.embeddingProfiles.savedActivated),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');

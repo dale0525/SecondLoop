@@ -100,7 +100,10 @@ class _TodoHistoryPageState extends State<TodoHistoryPage> {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t.actions.history.actions.copied)),
+      SnackBar(
+        content: Text(context.t.actions.history.actions.copied),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 

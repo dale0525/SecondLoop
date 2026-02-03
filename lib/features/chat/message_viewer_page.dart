@@ -31,7 +31,9 @@ class MessageViewerPage extends StatelessWidget {
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text(context.t.actions.history.actions.copied)),
+                  content: Text(context.t.actions.history.actions.copied),
+                  duration: const Duration(seconds: 3),
+                ),
               );
             },
           ),

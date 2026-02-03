@@ -230,7 +230,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.errors.loadFailed(error: '$e'))),
+        SnackBar(
+          content: Text(t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -259,7 +262,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.errors.loadFailed(error: '$e'))),
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
       return;
     }
@@ -321,7 +327,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t.actions.history.actions.copied)),
+      SnackBar(
+        content: Text(context.t.actions.history.actions.copied),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 
@@ -372,11 +381,17 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       syncEngine?.notifyLocalMutation();
       _refreshActivities();
       messenger.showSnackBar(
-        SnackBar(content: Text(context.t.chat.messageUpdated)),
+        SnackBar(
+          content: Text(context.t.chat.messageUpdated),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(context.t.chat.editFailed(error: '$e'))),
+        SnackBar(
+          content: Text(context.t.chat.editFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -468,8 +483,12 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
           Navigator.of(context).pop(true);
         } else {
           _refreshActivities();
-          messenger
-              .showSnackBar(SnackBar(content: Text(t.chat.messageDeleted)));
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(t.chat.messageDeleted),
+              duration: const Duration(seconds: 3),
+            ),
+          );
         }
         return;
       }
@@ -479,12 +498,18 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       syncEngine?.notifyLocalMutation();
       _refreshActivities();
       messenger.showSnackBar(
-        SnackBar(content: Text(t.chat.messageDeleted)),
+        SnackBar(
+          content: Text(t.chat.messageDeleted),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.chat.deleteFailed(error: '$e'))),
+        SnackBar(
+          content: Text(t.chat.deleteFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -791,6 +816,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       SnackBar(
         content:
             Text(context.t.actions.todoNoteLink.linked(title: selected.title)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

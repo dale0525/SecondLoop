@@ -252,6 +252,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         content: Text(message),
         behavior: SnackBarBehavior.floating,
         margin: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

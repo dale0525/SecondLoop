@@ -215,10 +215,14 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _showMessageActions(Message message) async {
     if (message.id.startsWith('pending_')) return;
     final canEdit = message.role == 'user';
-    final linkedTodo = await _resolveLinkedTodoInfo(message);
-    final canConvertToTodo =
-        linkedTodo == null && _displayTextForMessage(message).trim().isNotEmpty;
+    final displayText = _displayTextForMessage(message).trim();
     if (!mounted) return;
+
+    ({Todo todo, bool isSourceEntry})? linkedTodo;
+    final linkedTodoFuture = _resolveLinkedTodoInfo(message).then((value) {
+      linkedTodo = value;
+      return value;
+    });
 
     final action = await showModalBottomSheet<_MessageAction>(
       context: context,
@@ -232,75 +236,91 @@ class _ChatPageState extends State<ChatPage> {
               key: const ValueKey('message_actions_sheet'),
               color: tokens.surface2,
               padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    key: const ValueKey('message_action_copy'),
-                    leading: const Icon(Icons.copy_all_rounded),
-                    title: Text(context.t.common.actions.copy),
-                    onTap: () => Navigator.of(context).pop(_MessageAction.copy),
-                  ),
-                  if (canConvertToTodo)
-                    ListTile(
-                      key: const ValueKey('message_action_convert_todo'),
-                      leading: const Icon(Icons.task_alt_rounded),
-                      title: Text(context.t.chat.messageActions.convertToTodo),
-                      onTap: () =>
-                          Navigator.of(context).pop(_MessageAction.convertTodo),
-                    )
-                  else if (linkedTodo != null) ...[
-                    ListTile(
-                      key: const ValueKey('message_action_open_todo'),
-                      leading: const Icon(Icons.chevron_right_rounded),
-                      title: Text(context.t.chat.messageActions.openTodo),
-                      onTap: () =>
-                          Navigator.of(context).pop(_MessageAction.openTodo),
-                    ),
-                    if (linkedTodo.isSourceEntry)
+              child: FutureBuilder<({Todo todo, bool isSourceEntry})?>(
+                future: linkedTodoFuture,
+                builder: (context, snapshot) {
+                  final resolvedTodo =
+                      snapshot.connectionState == ConnectionState.done
+                          ? snapshot.data
+                          : null;
+                  final canConvertToTodo = resolvedTodo == null &&
+                      displayText.isNotEmpty &&
+                      snapshot.connectionState == ConnectionState.done;
+
+                  final showLinkTodo = resolvedTodo == null ||
+                      resolvedTodo.isSourceEntry == false;
+                  final linkTodoTitle = resolvedTodo == null
+                      ? context.t.actions.todoNoteLink.action
+                      : context.t.chat.messageActions.linkOtherTodo;
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       ListTile(
-                        key: const ValueKey('message_action_convert_to_info'),
-                        leading: const Icon(Icons.undo_rounded),
-                        title: Text(
-                            context.t.chat.messageActions.convertTodoToInfo),
-                        onTap: () => Navigator.of(context)
-                            .pop(_MessageAction.convertTodoToInfo),
+                        key: const ValueKey('message_action_copy'),
+                        leading: const Icon(Icons.copy_all_rounded),
+                        title: Text(context.t.common.actions.copy),
+                        onTap: () =>
+                            Navigator.of(context).pop(_MessageAction.copy),
                       ),
-                  ],
-                  if (canEdit)
-                    ListTile(
-                      key: const ValueKey('message_action_edit'),
-                      leading: const Icon(Icons.edit_rounded),
-                      title: Text(context.t.common.actions.edit),
-                      onTap: () =>
-                          Navigator.of(context).pop(_MessageAction.edit),
-                    ),
-                  if (linkedTodo == null)
-                    ListTile(
-                      key: const ValueKey('message_action_link_todo'),
-                      leading: const Icon(Icons.link_rounded),
-                      title: Text(context.t.actions.todoNoteLink.action),
-                      onTap: () =>
-                          Navigator.of(context).pop(_MessageAction.linkTodo),
-                    )
-                  else if (!linkedTodo.isSourceEntry)
-                    ListTile(
-                      key: const ValueKey('message_action_link_todo'),
-                      leading: const Icon(Icons.link_rounded),
-                      title: Text(context.t.chat.messageActions.linkOtherTodo),
-                      onTap: () =>
-                          Navigator.of(context).pop(_MessageAction.linkTodo),
-                    ),
-                  ListTile(
-                    key: const ValueKey('message_action_delete'),
-                    leading: const Icon(Icons.delete_outline_rounded),
-                    iconColor: colorScheme.error,
-                    textColor: colorScheme.error,
-                    title: Text(context.t.common.actions.delete),
-                    onTap: () =>
-                        Navigator.of(context).pop(_MessageAction.delete),
-                  ),
-                ],
+                      if (snapshot.connectionState == ConnectionState.done) ...[
+                        if (canConvertToTodo)
+                          ListTile(
+                            key: const ValueKey('message_action_convert_todo'),
+                            leading: const Icon(Icons.task_alt_rounded),
+                            title: Text(
+                                context.t.chat.messageActions.convertToTodo),
+                            onTap: () => Navigator.of(context)
+                                .pop(_MessageAction.convertTodo),
+                          )
+                        else if (resolvedTodo != null) ...[
+                          ListTile(
+                            key: const ValueKey('message_action_open_todo'),
+                            leading: const Icon(Icons.chevron_right_rounded),
+                            title: Text(context.t.chat.messageActions.openTodo),
+                            onTap: () => Navigator.of(context)
+                                .pop(_MessageAction.openTodo),
+                          ),
+                          if (resolvedTodo.isSourceEntry)
+                            ListTile(
+                              key: const ValueKey(
+                                  'message_action_convert_to_info'),
+                              leading: const Icon(Icons.undo_rounded),
+                              title: Text(context
+                                  .t.chat.messageActions.convertTodoToInfo),
+                              onTap: () => Navigator.of(context)
+                                  .pop(_MessageAction.convertTodoToInfo),
+                            ),
+                        ],
+                      ],
+                      if (canEdit)
+                        ListTile(
+                          key: const ValueKey('message_action_edit'),
+                          leading: const Icon(Icons.edit_rounded),
+                          title: Text(context.t.common.actions.edit),
+                          onTap: () =>
+                              Navigator.of(context).pop(_MessageAction.edit),
+                        ),
+                      if (showLinkTodo)
+                        ListTile(
+                          key: const ValueKey('message_action_link_todo'),
+                          leading: const Icon(Icons.link_rounded),
+                          title: Text(linkTodoTitle),
+                          onTap: () => Navigator.of(context)
+                              .pop(_MessageAction.linkTodo),
+                        ),
+                      ListTile(
+                        key: const ValueKey('message_action_delete'),
+                        leading: const Icon(Icons.delete_outline_rounded),
+                        iconColor: colorScheme.error,
+                        textColor: colorScheme.error,
+                        title: Text(context.t.common.actions.delete),
+                        onTap: () =>
+                            Navigator.of(context).pop(_MessageAction.delete),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -364,7 +384,10 @@ class _ChatPageState extends State<ChatPage> {
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t.actions.history.actions.copied)),
+      SnackBar(
+        content: Text(context.t.actions.history.actions.copied),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 
@@ -733,11 +756,17 @@ class _ChatPageState extends State<ChatPage> {
       syncEngine?.notifyLocalMutation();
       _refresh();
       messenger.showSnackBar(
-        SnackBar(content: Text(context.t.chat.messageUpdated)),
+        SnackBar(
+          content: Text(context.t.chat.messageUpdated),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(context.t.chat.editFailed(error: '$e'))),
+        SnackBar(
+          content: Text(context.t.chat.editFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -794,7 +823,10 @@ class _ChatPageState extends State<ChatPage> {
         syncEngine?.notifyLocalMutation();
         _refresh();
         messenger.showSnackBar(
-          SnackBar(content: Text(t.chat.messageDeleted)),
+          SnackBar(
+            content: Text(t.chat.messageDeleted),
+            duration: const Duration(seconds: 3),
+          ),
         );
         return;
       }
@@ -804,12 +836,18 @@ class _ChatPageState extends State<ChatPage> {
       syncEngine?.notifyLocalMutation();
       _refresh();
       messenger.showSnackBar(
-        SnackBar(content: Text(t.chat.messageDeleted)),
+        SnackBar(
+          content: Text(t.chat.messageDeleted),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.chat.deleteFailed(error: '$e'))),
+        SnackBar(
+          content: Text(t.chat.deleteFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
   }
@@ -1601,7 +1639,10 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.chat.photoFailed(error: '$e'))),
+        SnackBar(
+          content: Text(context.t.chat.photoFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -1640,7 +1681,10 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.chat.photoFailed(error: '$e'))),
+        SnackBar(
+          content: Text(context.t.chat.photoFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -1671,7 +1715,10 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.chat.photoFailed(error: '$e'))),
+        SnackBar(
+          content: Text(context.t.chat.photoFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -1909,6 +1956,7 @@ class _ChatPageState extends State<ChatPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(snackText),
+            duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: context.t.common.actions.undo,
               onPressed: () async {
@@ -1959,6 +2007,7 @@ class _ChatPageState extends State<ChatPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(snackText),
+            duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: context.t.common.actions.undo,
               onPressed: () async {
@@ -2064,6 +2113,7 @@ class _ChatPageState extends State<ChatPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(context.t.actions.todoNoteLink.suggest),
+            duration: const Duration(seconds: 3),
             action: SnackBarAction(
               label: context.t.actions.todoNoteLink.actionShort,
               onPressed: () => unawaited(_linkMessageToTodo(message)),
@@ -2139,6 +2189,7 @@ class _ChatPageState extends State<ChatPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(snackText),
+        duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: context.t.common.actions.undo,
           onPressed: () async {
@@ -2301,6 +2352,7 @@ class _ChatPageState extends State<ChatPage> {
       SnackBar(
         content:
             Text(context.t.actions.todoNoteLink.linked(title: selected.title)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -3001,6 +3053,7 @@ class _ChatPageState extends State<ChatPage> {
               SnackBar(
                 key: _kAskAiEmailNotVerifiedSnackKey,
                 content: Text(context.t.chat.cloudGateway.emailNotVerified),
+                duration: const Duration(seconds: 3),
                 action: SnackBarAction(
                   label: context.t.settings.cloudAccount.title,
                   onPressed: () {
@@ -3043,6 +3096,7 @@ class _ChatPageState extends State<ChatPage> {
               SnackBar(
                 key: _kAskAiCloudFallbackSnackKey,
                 content: Text(message),
+                duration: const Duration(seconds: 3),
               ),
             );
 
@@ -3388,6 +3442,7 @@ class _ChatPageState extends State<ChatPage> {
         ),
         child: InkWell(
           onTap: onPressed,
+          canRequestFocus: false,
           borderRadius: borderRadius,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 44),

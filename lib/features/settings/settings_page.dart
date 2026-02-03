@@ -168,6 +168,7 @@ class _SettingsPageState extends State<SettingsPage> {
           content: Text(clearAllRemoteData
               ? t.settings.resetLocalDataAllDevices.failed(error: '$e')
               : t.settings.resetLocalDataThisDeviceOnly.failed(error: '$e')),
+          duration: const Duration(seconds: 3),
         ),
       );
       return;

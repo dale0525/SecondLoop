@@ -138,7 +138,10 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
       await _loadProfiles();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.llmProfiles.deleted)),
+        SnackBar(
+          content: Text(context.t.llmProfiles.deleted),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -181,7 +184,10 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
       await _loadProfiles();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.llmProfiles.savedActivated)),
+        SnackBar(
+          content: Text(context.t.llmProfiles.savedActivated),
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
