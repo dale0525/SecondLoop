@@ -168,6 +168,40 @@
         "subtitle": "每周提醒时间（周日）"
       }
     },
+    "quickCaptureHotkey": {
+      "title": "快速记录快捷键",
+      "subtitle": "用于从任何地方打开快速记录",
+      "dialogTitle": "快速记录快捷键",
+      "dialogBody": "按下新的按键组合来录制快捷键。",
+      "saved": "快速记录快捷键已更新",
+      "actions": {
+        "resetDefault": "恢复默认"
+      },
+      "validation": {
+        "missingModifier": "至少包含一个修饰键（Ctrl/Alt/Shift 等）",
+        "modifierOnly": "快捷键必须包含一个非修饰键。",
+        "systemConflict": "与系统快捷键冲突：$name"
+      },
+      "conflicts": {
+        "macosSpotlight": "Spotlight",
+        "macosFinderSearch": "Finder 搜索",
+        "macosInputSourceSwitch": "切换输入法",
+        "macosEmojiPicker": "表情与符号",
+        "macosScreenshot": "截屏",
+        "macosAppSwitcher": "应用切换器",
+        "macosForceQuit": "强制退出",
+        "macosLockScreen": "锁定屏幕",
+        "windowsLock": "锁定屏幕",
+        "windowsShowDesktop": "显示桌面",
+        "windowsFileExplorer": "文件资源管理器",
+        "windowsRun": "运行",
+        "windowsSearch": "搜索",
+        "windowsSettings": "设置",
+        "windowsTaskView": "任务视图",
+        "windowsLanguageSwitch": "切换输入法",
+        "windowsAppSwitcher": "应用切换器"
+      }
+    },
     "language": {
       "title": "语言",
       "subtitle": "跟随系统或手动选择语言",

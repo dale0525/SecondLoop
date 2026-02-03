@@ -8,10 +8,12 @@ import 'package:window_manager/window_manager.dart';
 
 import '../quick_capture/quick_capture_controller.dart';
 import '../quick_capture/quick_capture_scope.dart';
+import 'desktop_quick_capture_hotkey_prefs.dart';
 
 abstract class DesktopHotkeyAdapter {
-  Future<void> register({required VoidCallback onPressed});
-  Future<void> unregister();
+  Future<void> register(
+      {required HotKey hotKey, required VoidCallback onPressed});
+  Future<void> unregister(HotKey hotKey);
 }
 
 abstract class DesktopWindowAdapter {
@@ -36,6 +38,20 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
     with WindowListener {
   DesktopQuickCaptureCoordinator? _coordinator;
   bool _enabled = false;
+  VoidCallback? _hotkeyPrefsListener;
+
+  HotKey _defaultHotKey(TargetPlatform platform) => HotKey(
+        identifier: DesktopQuickCaptureHotkeyPrefs.hotKeyIdentifier,
+        key: PhysicalKeyboardKey.keyK,
+        modifiers: [
+          if (platform == TargetPlatform.macOS)
+            HotKeyModifier.meta
+          else
+            HotKeyModifier.control,
+          HotKeyModifier.shift,
+        ],
+        scope: HotKeyScope.system,
+      );
 
   @override
   void didChangeDependencies() {
@@ -55,14 +71,14 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
     _enabled = true;
     final controller = QuickCaptureScope.of(context);
     final window = WindowManagerDesktopWindowAdapter();
-    final hotkey = HotkeyManagerDesktopHotkeyAdapter(
-      platform: defaultTargetPlatform,
-    );
+    final hotkey = HotkeyManagerDesktopHotkeyAdapter();
+    final defaultHotKey = _defaultHotKey(defaultTargetPlatform);
 
     _coordinator = DesktopQuickCaptureCoordinator(
       controller: controller,
       window: window,
       hotkey: hotkey,
+      hotKey: defaultHotKey,
     );
 
     unawaited(_initDesktop());
@@ -71,6 +87,22 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
   Future<void> _initDesktop() async {
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
+
+    await DesktopQuickCaptureHotkeyPrefs.load();
+
+    void onHotkeyPrefChanged() {
+      final coordinator = _coordinator;
+      if (coordinator == null) return;
+
+      final hotKey = DesktopQuickCaptureHotkeyPrefs.value.value ??
+          _defaultHotKey(defaultTargetPlatform);
+      unawaited(coordinator.updateHotKey(hotKey));
+    }
+
+    _hotkeyPrefsListener = onHotkeyPrefChanged;
+    DesktopQuickCaptureHotkeyPrefs.value.addListener(onHotkeyPrefChanged);
+
+    onHotkeyPrefChanged();
     await _coordinator?.init();
   }
 
@@ -78,6 +110,10 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
   void dispose() {
     if (_enabled) {
       windowManager.removeListener(this);
+      final listener = _hotkeyPrefsListener;
+      if (listener != null) {
+        DesktopQuickCaptureHotkeyPrefs.value.removeListener(listener);
+      }
       final coordinator = _coordinator;
       if (coordinator != null) unawaited(coordinator.dispose());
     }
@@ -94,32 +130,20 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
 }
 
 final class HotkeyManagerDesktopHotkeyAdapter implements DesktopHotkeyAdapter {
-  HotkeyManagerDesktopHotkeyAdapter({required TargetPlatform platform})
-      : _hotKey = HotKey(
-          key: LogicalKeyboardKey.keyK,
-          modifiers: [
-            if (platform == TargetPlatform.macOS)
-              HotKeyModifier.meta
-            else
-              HotKeyModifier.control,
-            HotKeyModifier.shift,
-          ],
-          scope: HotKeyScope.system,
-        );
-
-  final HotKey _hotKey;
-
   @override
-  Future<void> register({required VoidCallback onPressed}) async {
+  Future<void> register({
+    required HotKey hotKey,
+    required VoidCallback onPressed,
+  }) async {
     await hotKeyManager.register(
-      _hotKey,
+      hotKey,
       keyDownHandler: (_) => onPressed(),
     );
   }
 
   @override
-  Future<void> unregister() async {
-    await hotKeyManager.unregister(_hotKey);
+  Future<void> unregister(HotKey hotKey) async {
+    await hotKeyManager.unregister(hotKey);
   }
 }
 
@@ -169,7 +193,10 @@ final class DesktopQuickCaptureCoordinator {
     required this.controller,
     required this.window,
     required this.hotkey,
-  });
+    required HotKey hotKey,
+  }) : _hotKey = hotKey;
+
+  HotKey _hotKey;
 
   final QuickCaptureController controller;
   final DesktopWindowAdapter window;
@@ -182,7 +209,16 @@ final class DesktopQuickCaptureCoordinator {
     _initialized = true;
 
     controller.addListener(_onControllerChanged);
-    await hotkey.register(onPressed: controller.toggle);
+    await hotkey.register(hotKey: _hotKey, onPressed: controller.toggle);
+  }
+
+  Future<void> updateHotKey(HotKey hotKey) async {
+    final previous = _hotKey;
+    _hotKey = hotKey;
+    if (!_initialized) return;
+
+    await hotkey.unregister(previous);
+    await hotkey.register(hotKey: _hotKey, onPressed: controller.toggle);
   }
 
   Future<void> dispose() async {
@@ -190,7 +226,7 @@ final class DesktopQuickCaptureCoordinator {
     _initialized = false;
 
     controller.removeListener(_onControllerChanged);
-    await hotkey.unregister();
+    await hotkey.unregister(_hotKey);
   }
 
   void onWindowBlur() {

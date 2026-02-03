@@ -168,6 +168,40 @@
         "subtitle": "Weekly reminder time (Sunday)"
       }
     },
+    "quickCaptureHotkey": {
+      "title": "Quick capture shortcut",
+      "subtitle": "Global shortcut to open Quick capture",
+      "dialogTitle": "Quick capture shortcut",
+      "dialogBody": "Press a key combination to record a new shortcut.",
+      "saved": "Quick capture shortcut updated",
+      "actions": {
+        "resetDefault": "Reset to default"
+      },
+      "validation": {
+        "missingModifier": "Use at least one modifier key (Ctrl/Alt/Shift/etc.)",
+        "modifierOnly": "Shortcut must include a non-modifier key.",
+        "systemConflict": "Conflicts with system shortcut: $name"
+      },
+      "conflicts": {
+        "macosSpotlight": "Spotlight",
+        "macosFinderSearch": "Finder search",
+        "macosInputSourceSwitch": "Switch input source",
+        "macosEmojiPicker": "Emoji & Symbols",
+        "macosScreenshot": "Screenshot",
+        "macosAppSwitcher": "App switcher",
+        "macosForceQuit": "Force Quit",
+        "macosLockScreen": "Lock screen",
+        "windowsLock": "Lock screen",
+        "windowsShowDesktop": "Show desktop",
+        "windowsFileExplorer": "File Explorer",
+        "windowsRun": "Run",
+        "windowsSearch": "Search",
+        "windowsSettings": "Settings",
+        "windowsTaskView": "Task view",
+        "windowsLanguageSwitch": "Switch input language",
+        "windowsAppSwitcher": "App switcher"
+      }
+    },
     "language": {
       "title": "Language",
       "subtitle": "Follow system or choose a language",

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 866 (433 per locale)
+/// Strings: 918 (459 per locale)
 ///
-/// Built on 2026-02-03 at 07:29 UTC
+/// Built on 2026-02-03 at 08:15 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -285,6 +285,8 @@ class _StringsSettingsEn {
       _StringsSettingsSectionsEn._(_root);
   late final _StringsSettingsActionsReviewEn actionsReview =
       _StringsSettingsActionsReviewEn._(_root);
+  late final _StringsSettingsQuickCaptureHotkeyEn quickCaptureHotkey =
+      _StringsSettingsQuickCaptureHotkeyEn._(_root);
   late final _StringsSettingsLanguageEn language =
       _StringsSettingsLanguageEn._(_root);
   late final _StringsSettingsThemeEn theme = _StringsSettingsThemeEn._(_root);
@@ -785,6 +787,26 @@ class _StringsSettingsActionsReviewEn {
       _StringsSettingsActionsReviewDayEndTimeEn._(_root);
   late final _StringsSettingsActionsReviewWeeklyTimeEn weeklyTime =
       _StringsSettingsActionsReviewWeeklyTimeEn._(_root);
+}
+
+// Path: settings.quickCaptureHotkey
+class _StringsSettingsQuickCaptureHotkeyEn {
+  _StringsSettingsQuickCaptureHotkeyEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Quick capture shortcut';
+  String get subtitle => 'Global shortcut to open Quick capture';
+  String get dialogTitle => 'Quick capture shortcut';
+  String get dialogBody => 'Press a key combination to record a new shortcut.';
+  String get saved => 'Quick capture shortcut updated';
+  late final _StringsSettingsQuickCaptureHotkeyActionsEn actions =
+      _StringsSettingsQuickCaptureHotkeyActionsEn._(_root);
+  late final _StringsSettingsQuickCaptureHotkeyValidationEn validation =
+      _StringsSettingsQuickCaptureHotkeyValidationEn._(_root);
+  late final _StringsSettingsQuickCaptureHotkeyConflictsEn conflicts =
+      _StringsSettingsQuickCaptureHotkeyConflictsEn._(_root);
 }
 
 // Path: settings.language
@@ -1532,6 +1554,56 @@ class _StringsSettingsActionsReviewWeeklyTimeEn {
   // Translations
   String get title => 'Weekly review time';
   String get subtitle => 'Weekly reminder time (Sunday)';
+}
+
+// Path: settings.quickCaptureHotkey.actions
+class _StringsSettingsQuickCaptureHotkeyActionsEn {
+  _StringsSettingsQuickCaptureHotkeyActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get resetDefault => 'Reset to default';
+}
+
+// Path: settings.quickCaptureHotkey.validation
+class _StringsSettingsQuickCaptureHotkeyValidationEn {
+  _StringsSettingsQuickCaptureHotkeyValidationEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get missingModifier =>
+      'Use at least one modifier key (Ctrl/Alt/Shift/etc.)';
+  String get modifierOnly => 'Shortcut must include a non-modifier key.';
+  String systemConflict({required Object name}) =>
+      'Conflicts with system shortcut: ${name}';
+}
+
+// Path: settings.quickCaptureHotkey.conflicts
+class _StringsSettingsQuickCaptureHotkeyConflictsEn {
+  _StringsSettingsQuickCaptureHotkeyConflictsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get macosSpotlight => 'Spotlight';
+  String get macosFinderSearch => 'Finder search';
+  String get macosInputSourceSwitch => 'Switch input source';
+  String get macosEmojiPicker => 'Emoji & Symbols';
+  String get macosScreenshot => 'Screenshot';
+  String get macosAppSwitcher => 'App switcher';
+  String get macosForceQuit => 'Force Quit';
+  String get macosLockScreen => 'Lock screen';
+  String get windowsLock => 'Lock screen';
+  String get windowsShowDesktop => 'Show desktop';
+  String get windowsFileExplorer => 'File Explorer';
+  String get windowsRun => 'Run';
+  String get windowsSearch => 'Search';
+  String get windowsSettings => 'Settings';
+  String get windowsTaskView => 'Task view';
+  String get windowsLanguageSwitch => 'Switch input language';
+  String get windowsAppSwitcher => 'App switcher';
 }
 
 // Path: settings.language.options
@@ -2297,6 +2369,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsActionsReviewZhCn actionsReview =
       _StringsSettingsActionsReviewZhCn._(_root);
+  @override
+  late final _StringsSettingsQuickCaptureHotkeyZhCn quickCaptureHotkey =
+      _StringsSettingsQuickCaptureHotkeyZhCn._(_root);
   @override
   late final _StringsSettingsLanguageZhCn language =
       _StringsSettingsLanguageZhCn._(_root);
@@ -3073,6 +3148,38 @@ class _StringsSettingsActionsReviewZhCn
   @override
   late final _StringsSettingsActionsReviewWeeklyTimeZhCn weeklyTime =
       _StringsSettingsActionsReviewWeeklyTimeZhCn._(_root);
+}
+
+// Path: settings.quickCaptureHotkey
+class _StringsSettingsQuickCaptureHotkeyZhCn
+    extends _StringsSettingsQuickCaptureHotkeyEn {
+  _StringsSettingsQuickCaptureHotkeyZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '快速记录快捷键';
+  @override
+  String get subtitle => '用于从任何地方打开快速记录';
+  @override
+  String get dialogTitle => '快速记录快捷键';
+  @override
+  String get dialogBody => '按下新的按键组合来录制快捷键。';
+  @override
+  String get saved => '快速记录快捷键已更新';
+  @override
+  late final _StringsSettingsQuickCaptureHotkeyActionsZhCn actions =
+      _StringsSettingsQuickCaptureHotkeyActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsQuickCaptureHotkeyValidationZhCn validation =
+      _StringsSettingsQuickCaptureHotkeyValidationZhCn._(_root);
+  @override
+  late final _StringsSettingsQuickCaptureHotkeyConflictsZhCn conflicts =
+      _StringsSettingsQuickCaptureHotkeyConflictsZhCn._(_root);
 }
 
 // Path: settings.language
@@ -4185,6 +4292,87 @@ class _StringsSettingsActionsReviewWeeklyTimeZhCn
   String get subtitle => '每周提醒时间（周日）';
 }
 
+// Path: settings.quickCaptureHotkey.actions
+class _StringsSettingsQuickCaptureHotkeyActionsZhCn
+    extends _StringsSettingsQuickCaptureHotkeyActionsEn {
+  _StringsSettingsQuickCaptureHotkeyActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get resetDefault => '恢复默认';
+}
+
+// Path: settings.quickCaptureHotkey.validation
+class _StringsSettingsQuickCaptureHotkeyValidationZhCn
+    extends _StringsSettingsQuickCaptureHotkeyValidationEn {
+  _StringsSettingsQuickCaptureHotkeyValidationZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get missingModifier => '至少包含一个修饰键（Ctrl/Alt/Shift 等）';
+  @override
+  String get modifierOnly => '快捷键必须包含一个非修饰键。';
+  @override
+  String systemConflict({required Object name}) => '与系统快捷键冲突：${name}';
+}
+
+// Path: settings.quickCaptureHotkey.conflicts
+class _StringsSettingsQuickCaptureHotkeyConflictsZhCn
+    extends _StringsSettingsQuickCaptureHotkeyConflictsEn {
+  _StringsSettingsQuickCaptureHotkeyConflictsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get macosSpotlight => 'Spotlight';
+  @override
+  String get macosFinderSearch => 'Finder 搜索';
+  @override
+  String get macosInputSourceSwitch => '切换输入法';
+  @override
+  String get macosEmojiPicker => '表情与符号';
+  @override
+  String get macosScreenshot => '截屏';
+  @override
+  String get macosAppSwitcher => '应用切换器';
+  @override
+  String get macosForceQuit => '强制退出';
+  @override
+  String get macosLockScreen => '锁定屏幕';
+  @override
+  String get windowsLock => '锁定屏幕';
+  @override
+  String get windowsShowDesktop => '显示桌面';
+  @override
+  String get windowsFileExplorer => '文件资源管理器';
+  @override
+  String get windowsRun => '运行';
+  @override
+  String get windowsSearch => '搜索';
+  @override
+  String get windowsSettings => '设置';
+  @override
+  String get windowsTaskView => '任务视图';
+  @override
+  String get windowsLanguageSwitch => '切换输入法';
+  @override
+  String get windowsAppSwitcher => '应用切换器';
+}
+
 // Path: settings.language.options
 class _StringsSettingsLanguageOptionsZhCn
     extends _StringsSettingsLanguageOptionsEn {
@@ -5268,6 +5456,59 @@ extension on Translations {
         return 'Weekly review time';
       case 'settings.actionsReview.weeklyTime.subtitle':
         return 'Weekly reminder time (Sunday)';
+      case 'settings.quickCaptureHotkey.title':
+        return 'Quick capture shortcut';
+      case 'settings.quickCaptureHotkey.subtitle':
+        return 'Global shortcut to open Quick capture';
+      case 'settings.quickCaptureHotkey.dialogTitle':
+        return 'Quick capture shortcut';
+      case 'settings.quickCaptureHotkey.dialogBody':
+        return 'Press a key combination to record a new shortcut.';
+      case 'settings.quickCaptureHotkey.saved':
+        return 'Quick capture shortcut updated';
+      case 'settings.quickCaptureHotkey.actions.resetDefault':
+        return 'Reset to default';
+      case 'settings.quickCaptureHotkey.validation.missingModifier':
+        return 'Use at least one modifier key (Ctrl/Alt/Shift/etc.)';
+      case 'settings.quickCaptureHotkey.validation.modifierOnly':
+        return 'Shortcut must include a non-modifier key.';
+      case 'settings.quickCaptureHotkey.validation.systemConflict':
+        return ({required Object name}) =>
+            'Conflicts with system shortcut: ${name}';
+      case 'settings.quickCaptureHotkey.conflicts.macosSpotlight':
+        return 'Spotlight';
+      case 'settings.quickCaptureHotkey.conflicts.macosFinderSearch':
+        return 'Finder search';
+      case 'settings.quickCaptureHotkey.conflicts.macosInputSourceSwitch':
+        return 'Switch input source';
+      case 'settings.quickCaptureHotkey.conflicts.macosEmojiPicker':
+        return 'Emoji & Symbols';
+      case 'settings.quickCaptureHotkey.conflicts.macosScreenshot':
+        return 'Screenshot';
+      case 'settings.quickCaptureHotkey.conflicts.macosAppSwitcher':
+        return 'App switcher';
+      case 'settings.quickCaptureHotkey.conflicts.macosForceQuit':
+        return 'Force Quit';
+      case 'settings.quickCaptureHotkey.conflicts.macosLockScreen':
+        return 'Lock screen';
+      case 'settings.quickCaptureHotkey.conflicts.windowsLock':
+        return 'Lock screen';
+      case 'settings.quickCaptureHotkey.conflicts.windowsShowDesktop':
+        return 'Show desktop';
+      case 'settings.quickCaptureHotkey.conflicts.windowsFileExplorer':
+        return 'File Explorer';
+      case 'settings.quickCaptureHotkey.conflicts.windowsRun':
+        return 'Run';
+      case 'settings.quickCaptureHotkey.conflicts.windowsSearch':
+        return 'Search';
+      case 'settings.quickCaptureHotkey.conflicts.windowsSettings':
+        return 'Settings';
+      case 'settings.quickCaptureHotkey.conflicts.windowsTaskView':
+        return 'Task view';
+      case 'settings.quickCaptureHotkey.conflicts.windowsLanguageSwitch':
+        return 'Switch input language';
+      case 'settings.quickCaptureHotkey.conflicts.windowsAppSwitcher':
+        return 'App switcher';
       case 'settings.language.title':
         return 'Language';
       case 'settings.language.subtitle':
@@ -6167,6 +6408,58 @@ extension on _StringsZhCn {
         return '每周提醒时间';
       case 'settings.actionsReview.weeklyTime.subtitle':
         return '每周提醒时间（周日）';
+      case 'settings.quickCaptureHotkey.title':
+        return '快速记录快捷键';
+      case 'settings.quickCaptureHotkey.subtitle':
+        return '用于从任何地方打开快速记录';
+      case 'settings.quickCaptureHotkey.dialogTitle':
+        return '快速记录快捷键';
+      case 'settings.quickCaptureHotkey.dialogBody':
+        return '按下新的按键组合来录制快捷键。';
+      case 'settings.quickCaptureHotkey.saved':
+        return '快速记录快捷键已更新';
+      case 'settings.quickCaptureHotkey.actions.resetDefault':
+        return '恢复默认';
+      case 'settings.quickCaptureHotkey.validation.missingModifier':
+        return '至少包含一个修饰键（Ctrl/Alt/Shift 等）';
+      case 'settings.quickCaptureHotkey.validation.modifierOnly':
+        return '快捷键必须包含一个非修饰键。';
+      case 'settings.quickCaptureHotkey.validation.systemConflict':
+        return ({required Object name}) => '与系统快捷键冲突：${name}';
+      case 'settings.quickCaptureHotkey.conflicts.macosSpotlight':
+        return 'Spotlight';
+      case 'settings.quickCaptureHotkey.conflicts.macosFinderSearch':
+        return 'Finder 搜索';
+      case 'settings.quickCaptureHotkey.conflicts.macosInputSourceSwitch':
+        return '切换输入法';
+      case 'settings.quickCaptureHotkey.conflicts.macosEmojiPicker':
+        return '表情与符号';
+      case 'settings.quickCaptureHotkey.conflicts.macosScreenshot':
+        return '截屏';
+      case 'settings.quickCaptureHotkey.conflicts.macosAppSwitcher':
+        return '应用切换器';
+      case 'settings.quickCaptureHotkey.conflicts.macosForceQuit':
+        return '强制退出';
+      case 'settings.quickCaptureHotkey.conflicts.macosLockScreen':
+        return '锁定屏幕';
+      case 'settings.quickCaptureHotkey.conflicts.windowsLock':
+        return '锁定屏幕';
+      case 'settings.quickCaptureHotkey.conflicts.windowsShowDesktop':
+        return '显示桌面';
+      case 'settings.quickCaptureHotkey.conflicts.windowsFileExplorer':
+        return '文件资源管理器';
+      case 'settings.quickCaptureHotkey.conflicts.windowsRun':
+        return '运行';
+      case 'settings.quickCaptureHotkey.conflicts.windowsSearch':
+        return '搜索';
+      case 'settings.quickCaptureHotkey.conflicts.windowsSettings':
+        return '设置';
+      case 'settings.quickCaptureHotkey.conflicts.windowsTaskView':
+        return '任务视图';
+      case 'settings.quickCaptureHotkey.conflicts.windowsLanguageSwitch':
+        return '切换输入法';
+      case 'settings.quickCaptureHotkey.conflicts.windowsAppSwitcher':
+        return '应用切换器';
       case 'settings.language.title':
         return '语言';
       case 'settings.language.subtitle':

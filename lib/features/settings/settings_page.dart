@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/theme_mode_prefs.dart';
@@ -16,6 +18,9 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/desktop/desktop_quick_capture_hotkey_prefs.dart';
+import '../../core/desktop/system_hotkey_conflicts.dart';
+import '../../core/desktop/system_hotkey_recorder.dart';
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
@@ -52,6 +57,100 @@ class _SettingsPageState extends State<SettingsPage> {
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
+
+  HotKey _defaultQuickCaptureHotKey(TargetPlatform platform) => HotKey(
+        identifier: DesktopQuickCaptureHotkeyPrefs.hotKeyIdentifier,
+        key: PhysicalKeyboardKey.keyK,
+        modifiers: [
+          if (platform == TargetPlatform.macOS)
+            HotKeyModifier.meta
+          else
+            HotKeyModifier.control,
+          HotKeyModifier.shift,
+        ],
+        scope: HotKeyScope.system,
+      );
+
+  String _formatHotKey(HotKey hotKey) {
+    final platform = defaultTargetPlatform;
+    final pieces = [
+      for (final HotKeyModifier modifier in hotKey.modifiers ?? const [])
+        switch (modifier) {
+          HotKeyModifier.meta => platform == TargetPlatform.macOS ? '⌘' : 'Win',
+          HotKeyModifier.control =>
+            platform == TargetPlatform.macOS ? '⌃' : 'Ctrl',
+          HotKeyModifier.shift =>
+            platform == TargetPlatform.macOS ? '⇧' : 'Shift',
+          HotKeyModifier.alt => platform == TargetPlatform.macOS ? '⌥' : 'Alt',
+          HotKeyModifier.capsLock => 'Caps',
+          HotKeyModifier.fn => 'Fn',
+        },
+      _hotKeyKeyLabel(hotKey),
+    ];
+    return platform == TargetPlatform.macOS
+        ? pieces.join()
+        : pieces.join(' + ');
+  }
+
+  String _hotKeyKeyLabel(HotKey hotKey) {
+    final keyLabel = hotKey.logicalKey.keyLabel;
+    if (keyLabel.trim().isNotEmpty) {
+      return keyLabel.length == 1 ? keyLabel.toUpperCase() : keyLabel;
+    }
+
+    final debugName = hotKey.physicalKey.debugName ?? 'Unknown';
+    return debugName.replaceFirst('Key ', '').replaceFirst('Digit ', '').trim();
+  }
+
+  String _systemHotkeyConflictName(
+    BuildContext context,
+    SystemHotkeyConflict conflict,
+  ) {
+    final t = context.t.settings.quickCaptureHotkey.conflicts;
+    return switch (conflict) {
+      SystemHotkeyConflict.macosSpotlight => t.macosSpotlight,
+      SystemHotkeyConflict.macosFinderSearch => t.macosFinderSearch,
+      SystemHotkeyConflict.macosInputSourceSwitch => t.macosInputSourceSwitch,
+      SystemHotkeyConflict.macosEmojiPicker => t.macosEmojiPicker,
+      SystemHotkeyConflict.macosScreenshot => t.macosScreenshot,
+      SystemHotkeyConflict.macosAppSwitcher => t.macosAppSwitcher,
+      SystemHotkeyConflict.macosForceQuit => t.macosForceQuit,
+      SystemHotkeyConflict.macosLockScreen => t.macosLockScreen,
+      SystemHotkeyConflict.windowsLock => t.windowsLock,
+      SystemHotkeyConflict.windowsShowDesktop => t.windowsShowDesktop,
+      SystemHotkeyConflict.windowsFileExplorer => t.windowsFileExplorer,
+      SystemHotkeyConflict.windowsRun => t.windowsRun,
+      SystemHotkeyConflict.windowsSearch => t.windowsSearch,
+      SystemHotkeyConflict.windowsSettings => t.windowsSettings,
+      SystemHotkeyConflict.windowsTaskView => t.windowsTaskView,
+      SystemHotkeyConflict.windowsLanguageSwitch => t.windowsLanguageSwitch,
+      SystemHotkeyConflict.windowsAppSwitcher => t.windowsAppSwitcher,
+    };
+  }
+
+  String? _quickCaptureHotkeyError(BuildContext context, HotKey hotKey) {
+    final t = context.t.settings.quickCaptureHotkey;
+
+    final modifiers = hotKey.modifiers ?? [];
+    if (modifiers.isEmpty) return t.validation.missingModifier;
+
+    final isModifierKey = HotKeyModifier.values.any(
+      (m) => m.physicalKeys.contains(hotKey.physicalKey),
+    );
+    if (isModifierKey) return t.validation.modifierOnly;
+
+    final conflict = systemHotkeyConflict(
+      hotKey: hotKey,
+      platform: defaultTargetPlatform,
+    );
+    if (conflict != null) {
+      return t.validation.systemConflict(
+        name: _systemHotkeyConflictName(context, conflict),
+      );
+    }
+
+    return null;
+  }
 
   bool _defaultSystemUnlockEnabled() {
     if (kIsWeb) return false;
@@ -539,6 +638,139 @@ class _SettingsPageState extends State<SettingsPage> {
     _biometricUnlockEnabled ??= _defaultSystemUnlockEnabled();
     _load();
     unawaited(_maybeDisableCloudEmbeddingsIfNotAllowed());
+
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux)) {
+      unawaited(DesktopQuickCaptureHotkeyPrefs.load());
+    }
+  }
+
+  Future<void> _editQuickCaptureHotkey() async {
+    if (_busy) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+
+    await DesktopQuickCaptureHotkeyPrefs.load();
+    if (!mounted) return;
+
+    final defaultHotKey = _defaultQuickCaptureHotKey(defaultTargetPlatform);
+    final existing =
+        DesktopQuickCaptureHotkeyPrefs.value.value ?? defaultHotKey;
+
+    HotKey draft = existing;
+    String? error = _quickCaptureHotkeyError(context, draft);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            void onRecorded(HotKey hotKey) {
+              setDialogState(() {
+                draft = hotKey;
+                error = _quickCaptureHotkeyError(dialogContext, draft);
+              });
+            }
+
+            return AlertDialog(
+              title: Text(t.settings.quickCaptureHotkey.dialogTitle),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t.settings.quickCaptureHotkey.dialogBody),
+                    const SizedBox(height: 12),
+                    Focus(
+                      autofocus: true,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(dialogContext)
+                              .colorScheme
+                              .surfaceVariant,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _formatHotKey(draft),
+                                style: Theme.of(dialogContext)
+                                    .textTheme
+                                    .titleMedium,
+                              ),
+                            ),
+                            Offstage(
+                              offstage: true,
+                              child: SystemHotKeyRecorder(
+                                initialHotKey: draft,
+                                onHotKeyRecorded: onRecorded,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        error!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(t.common.actions.cancel),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await DesktopQuickCaptureHotkeyPrefs.clear();
+                    if (!dialogContext.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(t.settings.quickCaptureHotkey.saved),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  child:
+                      Text(t.settings.quickCaptureHotkey.actions.resetDefault),
+                ),
+                FilledButton(
+                  onPressed: error == null
+                      ? () async {
+                          await DesktopQuickCaptureHotkeyPrefs.setHotKey(draft);
+                          if (!dialogContext.mounted) return;
+                          Navigator.of(dialogContext).pop();
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content:
+                                  Text(t.settings.quickCaptureHotkey.saved),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      : null,
+                  child: Text(t.common.actions.save),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -553,6 +785,10 @@ class _SettingsPageState extends State<SettingsPage> {
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
+    final supportsDesktopHotkey = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows ||
             defaultTargetPlatform == TargetPlatform.linux);
     final isDesktop = !kIsWeb &&
@@ -811,6 +1047,20 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 8),
         sectionCard([
+          if (supportsDesktopHotkey)
+            ListTile(
+              title: Text(context.t.settings.quickCaptureHotkey.title),
+              subtitle: Text(context.t.settings.quickCaptureHotkey.subtitle),
+              trailing: ValueListenableBuilder<HotKey?>(
+                valueListenable: DesktopQuickCaptureHotkeyPrefs.value,
+                builder: (context, override, child) {
+                  final hotKey = override ??
+                      _defaultQuickCaptureHotKey(defaultTargetPlatform);
+                  return Text(_formatHotKey(hotKey));
+                },
+              ),
+              onTap: _busy ? null : _editQuickCaptureHotkey,
+            ),
           ListTile(
             title: Text(context.t.settings.actionsReview.morningTime.title),
             subtitle:

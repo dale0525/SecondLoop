@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 
 import 'package:secondloop/core/desktop/desktop_quick_capture_service.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
@@ -8,15 +10,21 @@ void main() {
     final controller = QuickCaptureController();
     final window = _FakeWindow();
     final hotkey = _FakeHotkey();
+    final initialHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyK,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
 
     final service = DesktopQuickCaptureCoordinator(
       controller: controller,
       window: window,
       hotkey: hotkey,
+      hotKey: initialHotKey,
     );
 
     await service.init();
-    expect(hotkey.registered, true);
+    expect(hotkey.registeredHotKeys, [initialHotKey]);
 
     hotkey.trigger();
     await pumpEventQueue();
@@ -31,15 +39,52 @@ void main() {
     expect(window.exitQuickCaptureCalls, 1);
   });
 
-  test('Blur auto-hides when visible', () async {
+  test('Updating hotkey re-registers', () async {
     final controller = QuickCaptureController();
     final window = _FakeWindow();
     final hotkey = _FakeHotkey();
+    final initialHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyK,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
 
     final service = DesktopQuickCaptureCoordinator(
       controller: controller,
       window: window,
       hotkey: hotkey,
+      hotKey: initialHotKey,
+    );
+
+    await service.init();
+    expect(hotkey.registeredHotKeys, [initialHotKey]);
+
+    final nextHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyJ,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
+
+    await service.updateHotKey(nextHotKey);
+    expect(hotkey.unregisteredHotKeys, [initialHotKey]);
+    expect(hotkey.registeredHotKeys.last, nextHotKey);
+  });
+
+  test('Blur auto-hides when visible', () async {
+    final controller = QuickCaptureController();
+    final window = _FakeWindow();
+    final hotkey = _FakeHotkey();
+    final initialHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyK,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
+
+    final service = DesktopQuickCaptureCoordinator(
+      controller: controller,
+      window: window,
+      hotkey: hotkey,
+      hotKey: initialHotKey,
     );
 
     await service.init();
@@ -55,18 +100,20 @@ void main() {
 }
 
 final class _FakeHotkey implements DesktopHotkeyAdapter {
-  bool registered = false;
+  final List<HotKey> registeredHotKeys = [];
+  final List<HotKey> unregisteredHotKeys = [];
   void Function()? _onPressed;
 
   @override
-  Future<void> register({required void Function() onPressed}) async {
-    registered = true;
+  Future<void> register(
+      {required HotKey hotKey, required void Function() onPressed}) async {
+    registeredHotKeys.add(hotKey);
     _onPressed = onPressed;
   }
 
   @override
-  Future<void> unregister() async {
-    registered = false;
+  Future<void> unregister(HotKey hotKey) async {
+    unregisteredHotKeys.add(hotKey);
     _onPressed = null;
   }
 
