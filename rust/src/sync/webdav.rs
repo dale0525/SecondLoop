@@ -385,7 +385,7 @@ impl super::RemoteStore for WebDavRemoteStore {
         {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            return Err(anyhow!("DELETE failed: HTTP {status} {body}"));
+            Err(anyhow!("DELETE failed: HTTP {status} {body}"))
         }
     }
 }

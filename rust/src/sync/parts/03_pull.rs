@@ -242,7 +242,7 @@ fn pull_internal(
         }
     }
 
-    if let Some(cb) = progress.as_deref_mut() {
+    if let Some(cb) = progress {
         cb(done_ops, total_ops);
     }
 

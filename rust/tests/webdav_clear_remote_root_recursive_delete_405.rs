@@ -32,7 +32,7 @@ fn respond(stream: &mut std::net::TcpStream, status_line: &str) {
 fn respond_xml(stream: &mut std::net::TcpStream, status_line: &str, body: &str) {
     let resp = format!(
         "{status_line}\r\nContent-Type: application/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let _ = stream.write_all(resp.as_bytes());
