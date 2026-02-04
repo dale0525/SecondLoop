@@ -11,6 +11,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/core.dart' as rust_core;
+import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
 import '../../src/rust/semantic_parse.dart';
@@ -1699,6 +1700,27 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Stream<String> syncWebdavPushOpsOnlyProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncWebdavPushOpsOnlyProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
+  }
+
+  @override
   Future<int> syncWebdavPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -1718,6 +1740,27 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       remoteRoot: remoteRoot,
     );
     return pulled.toInt();
+  }
+
+  @override
+  Stream<String> syncWebdavPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncWebdavPullProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
   }
 
   @override
@@ -1807,6 +1850,23 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Stream<String> syncLocaldirPushProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncLocaldirPushProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
+  }
+
+  @override
   Future<int> syncLocaldirPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -1822,6 +1882,23 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       remoteRoot: remoteRoot,
     );
     return pulled.toInt();
+  }
+
+  @override
+  Stream<String> syncLocaldirPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncLocaldirPullProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
   }
 
   @override
@@ -1884,6 +1961,25 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
   }
 
   @override
+  Stream<String> syncManagedVaultPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncManagedVaultPullProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+  }
+
+  @override
   Future<void> syncManagedVaultDownloadAttachmentBytes(
     Uint8List key,
     Uint8List syncKey, {
@@ -1922,6 +2018,25 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
       firebaseIdToken: idToken,
     );
     return pushed.toInt();
+  }
+
+  @override
+  Stream<String> syncManagedVaultPushOpsOnlyProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncManagedVaultPushOpsOnlyProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
   }
 
   @override

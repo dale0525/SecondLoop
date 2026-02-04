@@ -15,3 +15,6 @@ include!("parts/11_events.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;
+
+#[cfg(test)]
+mod cloud_media_backup_tests;

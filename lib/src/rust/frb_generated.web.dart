@@ -8,6 +8,7 @@
 
 import 'api/core.dart';
 import 'api/simple.dart';
+import 'api/sync_progress.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';

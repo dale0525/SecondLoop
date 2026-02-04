@@ -5,6 +5,28 @@ pub fn pull(
     remote: &impl RemoteStore,
     remote_root: &str,
 ) -> Result<u64> {
+    pull_internal(conn, db_key, sync_key, remote, remote_root, None)
+}
+
+pub fn pull_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    pull_internal(conn, db_key, sync_key, remote, remote_root, Some(progress))
+}
+
+fn pull_internal(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    mut progress: Option<&mut dyn FnMut(u64, u64)>,
+) -> Result<u64> {
     const OPS_PREFETCH_BATCH_SIZE: usize = 128;
     const OPS_PREFETCH_CONCURRENCY: usize = 8;
 
@@ -12,9 +34,43 @@ pub fn pull(
     let remote_root_dir = normalize_dir(remote_root);
     let scope_id = sync_scope_id(remote, &remote_root_dir);
 
+    let device_dirs = remote.list(&remote_root_dir)?;
+
+    let total_ops = if progress.is_some() {
+        let mut total = 0u64;
+        for device_dir in device_dirs.iter() {
+            let Some(device_id) = device_id_from_child_dir(&remote_root_dir, device_dir) else {
+                continue;
+            };
+            if device_id == local_device_id {
+                continue;
+            }
+
+            let packs_dir = format!("{remote_root_dir}{device_id}/packs/");
+
+            let last_pulled_key = format!("sync.last_pulled_seq:{scope_id}:{device_id}");
+            let last_pulled_seq = kv_get_i64(conn, &last_pulled_key)?.unwrap_or(0);
+
+            let max_seq = read_remote_cursor_max_seq(remote, &remote_root_dir, &device_id)?
+                .or_else(|| infer_remote_max_seq_from_packs(remote, &packs_dir).ok().flatten())
+                .unwrap_or(last_pulled_seq);
+
+            if max_seq > last_pulled_seq {
+                total += (max_seq - last_pulled_seq) as u64;
+            }
+        }
+        total
+    } else {
+        0u64
+    };
+
+    let mut done_ops = 0u64;
+    if let Some(cb) = progress.as_deref_mut() {
+        cb(0, total_ops);
+    }
+
     let mut applied: u64 = 0;
 
-    let device_dirs = remote.list(&remote_root_dir)?;
     for device_dir in device_dirs {
         let Some(device_id) = device_id_from_child_dir(&remote_root_dir, &device_dir) else {
             continue;
@@ -28,6 +84,8 @@ pub fn pull(
 
         let last_pulled_key = format!("sync.last_pulled_seq:{scope_id}:{device_id}");
         let last_pulled_seq = kv_get_i64(conn, &last_pulled_key)?.unwrap_or(0);
+
+        let mut device_last_reported = last_pulled_seq;
 
         let mut new_last_pulled = last_pulled_seq;
         let mut seq = last_pulled_seq + 1;
@@ -90,6 +148,15 @@ pub fn pull(
             applied += pack_applied;
             new_last_pulled = max_seq_in_pack;
             seq = new_last_pulled + 1;
+
+            if new_last_pulled > device_last_reported {
+                let delta = (new_last_pulled - device_last_reported) as u64;
+                device_last_reported = new_last_pulled;
+                done_ops = (done_ops + delta).min(total_ops);
+                if let Some(cb) = progress.as_deref_mut() {
+                    cb(done_ops, total_ops);
+                }
+            }
 
             let chunk_end = chunk_start + OPS_PACK_CHUNK_SIZE - 1;
             if max_seq_in_pack < chunk_end {
@@ -160,10 +227,23 @@ pub fn pull(
             new_last_pulled = batch_last_seq;
             seq = new_last_pulled + 1;
 
+            if new_last_pulled > device_last_reported {
+                let delta = (new_last_pulled - device_last_reported) as u64;
+                device_last_reported = new_last_pulled;
+                done_ops = (done_ops + delta).min(total_ops);
+                if let Some(cb) = progress.as_deref_mut() {
+                    cb(done_ops, total_ops);
+                }
+            }
+
             if hit_not_found {
                 break;
             }
         }
+    }
+
+    if let Some(cb) = progress.as_deref_mut() {
+        cb(done_ops, total_ops);
     }
 
     Ok(applied)
@@ -288,6 +368,141 @@ fn discover_first_available_seq(
     }
 
     Ok(None)
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct DeviceCursorJson {
+    max_seq: i64,
+}
+
+fn read_remote_cursor_max_seq(
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+    device_id: &str,
+) -> Result<Option<i64>> {
+    let path = format!("{remote_root_dir}{device_id}/cursor.json");
+    match remote.get(&path) {
+        Ok(bytes) => {
+            let parsed: DeviceCursorJson = serde_json::from_slice(&bytes)?;
+            Ok(Some(parsed.max_seq.max(0)))
+        }
+        Err(e) if e.is::<NotFound>() => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+fn infer_remote_max_seq_from_packs(
+    remote: &impl RemoteStore,
+    packs_dir: &str,
+) -> Result<Option<i64>> {
+    let entries = remote.list(packs_dir)?;
+    let mut max_chunk_start: Option<i64> = None;
+    for entry in entries {
+        let Some(rest) = entry.strip_prefix(packs_dir) else {
+            continue;
+        };
+        let Some(chunk_start) = rest
+            .strip_prefix("pack_")
+            .and_then(|s| s.strip_suffix(".bin"))
+            .and_then(|s| s.parse::<i64>().ok())
+        else {
+            continue;
+        };
+        max_chunk_start = Some(max_chunk_start.unwrap_or(chunk_start).max(chunk_start));
+    }
+
+    let Some(chunk_start) = max_chunk_start else {
+        return Ok(None);
+    };
+
+    let pack_path = format!("{packs_dir}pack_{chunk_start}.bin");
+    let bytes = match remote.get(&pack_path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.is::<NotFound>() => return Ok(None),
+        Err(e) => return Err(e),
+    };
+
+    let entries = decode_ops_pack(&bytes)?;
+    Ok(entries.iter().map(|(seq, _)| *seq).max())
+}
+
+#[cfg(test)]
+mod read_cursor_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn read_remote_cursor_max_seq_reads_max_seq() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _conversation =
+            crate::db::create_conversation(&conn, &db_key, "Test").expect("create conversation");
+
+        let remote = InMemoryRemoteStore::new();
+        let _ = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push ops only");
+
+        let device_id: String = conn
+            .query_row(
+                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("device id");
+
+        let remote_root_dir = normalize_dir("SecondLoop");
+        let max_seq =
+            read_remote_cursor_max_seq(&remote, &remote_root_dir, &device_id).expect("read");
+        assert_eq!(max_seq, Some(1));
+    }
+}
+
+#[cfg(test)]
+mod pull_progress_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn pull_with_progress_reports_total_ops_from_cursor_json() {
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+        let remote = InMemoryRemoteStore::new();
+
+        // Device A pushes 1 op + cursor.json to the remote.
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let _conversation =
+            crate::db::create_conversation(&conn_a, &db_key, "Test").expect("create A");
+        let pushed = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push A");
+        assert_eq!(pushed, 1);
+
+        // Device B pulls with progress.
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let applied = pull_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("pull B");
+        assert_eq!(applied, 1);
+
+        assert!(!seen.is_empty());
+        assert_eq!(seen[0].1, 1);
+        assert_eq!(*seen.last().unwrap(), (1, 1));
+    }
 }
 
 fn discover_first_available_pack_chunk_start(
@@ -505,4 +720,3 @@ fn insert_remote_oplog(
     let changed = stmt.execute(params![op_id, device_id, seq, blob, created_at])?;
     Ok(changed > 0)
 }
-

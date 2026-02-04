@@ -543,11 +543,19 @@ pub fn list_due_cloud_media_backups(
     let limit = limit.clamp(1, 500);
     let mut stmt = conn.prepare(
         r#"
-SELECT attachment_sha256, desired_variant, status, attempts, next_retry_at, last_error, updated_at
-FROM cloud_media_backup
+SELECT cmb.attachment_sha256,
+       cmb.desired_variant,
+       COALESCE(a.byte_len, 0) AS byte_len,
+       cmb.status,
+       cmb.attempts,
+       cmb.next_retry_at,
+       cmb.last_error,
+       cmb.updated_at
+FROM cloud_media_backup cmb
+LEFT JOIN attachments a ON a.sha256 = cmb.attachment_sha256
 WHERE status != 'uploaded'
   AND (next_retry_at IS NULL OR next_retry_at <= ?1)
-ORDER BY updated_at ASC, attachment_sha256 ASC
+ORDER BY cmb.updated_at ASC, cmb.attachment_sha256 ASC
 LIMIT ?2
 "#,
     )?;
@@ -558,11 +566,12 @@ LIMIT ?2
         result.push(CloudMediaBackup {
             attachment_sha256: row.get(0)?,
             desired_variant: row.get(1)?,
-            status: row.get(2)?,
-            attempts: row.get(3)?,
-            next_retry_at_ms: row.get(4)?,
-            last_error: row.get(5)?,
-            updated_at_ms: row.get(6)?,
+            byte_len: row.get(2)?,
+            status: row.get(3)?,
+            attempts: row.get(4)?,
+            next_retry_at_ms: row.get(5)?,
+            last_error: row.get(6)?,
+            updated_at_ms: row.get(7)?,
         });
     }
     Ok(result)

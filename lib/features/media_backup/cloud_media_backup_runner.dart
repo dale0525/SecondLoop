@@ -16,6 +16,7 @@ final class CloudMediaBackupItem {
   const CloudMediaBackupItem({
     required this.attachmentSha256,
     required this.desiredVariant,
+    required this.byteLen,
     required this.status,
     required this.attempts,
     required this.nextRetryAtMs,
@@ -23,6 +24,7 @@ final class CloudMediaBackupItem {
 
   final String attachmentSha256;
   final String desiredVariant;
+  final int byteLen;
   final String status;
   final int attempts;
   final int? nextRetryAtMs;
@@ -88,7 +90,8 @@ final class CloudMediaBackupRunner {
   final CloudMediaBackupNowMs _nowMs;
 
   Future<CloudMediaBackupRunResult> runOnce(
-      {bool allowCellular = false}) async {
+      {bool allowCellular = false,
+      void Function(int doneBytes, int totalBytes)? onBytesProgress}) async {
     if (!settings.enabled) {
       return const CloudMediaBackupRunResult(
         didUploadAny: false,
@@ -115,8 +118,14 @@ final class CloudMediaBackupRunner {
       );
     }
 
-    final due = await store.listDue(nowMs: nowMs);
+    final due = await store.listDue(nowMs: nowMs, limit: 500);
     var didUploadAny = false;
+    final totalBytes = due.fold<int>(
+      0,
+      (sum, item) => sum + item.byteLen.clamp(0, 1 << 62),
+    );
+    var doneBytes = 0;
+    onBytesProgress?.call(0, totalBytes);
 
     for (final item in due) {
       if (item.status == 'uploaded') continue;
@@ -141,6 +150,9 @@ final class CloudMediaBackupRunner {
           nowMs: nowMs,
         );
       }
+
+      doneBytes += item.byteLen.clamp(0, 1 << 62);
+      onBytesProgress?.call(doneBytes, totalBytes);
     }
 
     return CloudMediaBackupRunResult(
@@ -180,9 +192,10 @@ final class BackendCloudMediaBackupStore implements CloudMediaBackupStore {
           (r) => CloudMediaBackupItem(
             attachmentSha256: r.attachmentSha256,
             desiredVariant: r.desiredVariant,
+            byteLen: r.byteLen.toInt(),
             status: r.status,
-            attempts: r.attempts,
-            nextRetryAtMs: r.nextRetryAtMs,
+            attempts: r.attempts.toInt(),
+            nextRetryAtMs: r.nextRetryAtMs?.toInt(),
           ),
         )
         .toList(growable: false);
@@ -304,7 +317,16 @@ final class ConnectivityCloudMediaBackupNetworkProvider {
   final Connectivity _connectivity;
 
   Future<CloudMediaBackupNetwork> call() async {
-    final results = await _connectivity.checkConnectivity();
+    final List<ConnectivityResult> results;
+    try {
+      results = await _connectivity
+          .checkConnectivity()
+          .timeout(const Duration(milliseconds: 500));
+    } catch (_) {
+      // In tests (or if the platform channel is unavailable), treat network as
+      // offline so we don't hang the caller or accidentally upload on cellular.
+      return CloudMediaBackupNetwork.offline;
+    }
     if (results.contains(ConnectivityResult.wifi) ||
         results.contains(ConnectivityResult.ethernet)) {
       return CloudMediaBackupNetwork.wifi;

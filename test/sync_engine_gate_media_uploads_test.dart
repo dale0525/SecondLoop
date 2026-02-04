@@ -84,6 +84,7 @@ void main() {
           const CloudMediaBackup(
             attachmentSha256: 'a',
             desiredVariant: 'original',
+            byteLen: 0,
             status: 'pending',
             attempts: 0,
             nextRetryAtMs: null,

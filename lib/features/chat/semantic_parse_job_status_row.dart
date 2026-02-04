@@ -40,9 +40,14 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
   @override
   void initState() {
     super.initState();
-    _maybeEnsureCreateTodoInReviewQueue();
     _scheduleAutoHide();
     _scheduleTickers();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _maybeEnsureCreateTodoInReviewQueue();
   }
 
   @override

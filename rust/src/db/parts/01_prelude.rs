@@ -169,6 +169,7 @@ pub struct SemanticParseJob {
 pub struct CloudMediaBackup {
     pub attachment_sha256: String,
     pub desired_variant: String,
+    pub byte_len: i64,
     pub status: String,
     pub attempts: i64,
     pub next_retry_at_ms: Option<i64>,
@@ -830,4 +831,3 @@ ORDER BY updated_at ASC, attachment_sha256 ASC
 
     Ok(ops_inserted)
 }
-

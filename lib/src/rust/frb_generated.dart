@@ -5,6 +5,7 @@
 
 import 'api/core.dart';
 import 'api/simple.dart';
+import 'api/sync_progress.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -60,7 +61,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -631015319;
+  int get rustContentHash => -636996289;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -891,6 +892,54 @@ abstract class RustLibApi extends BaseApi {
   String crateApiSimpleGreet({required String name});
 
   Future<void> crateApiSimpleInitApp();
+
+  Stream<String> crateApiSyncProgressSyncLocaldirPullProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot});
+
+  Stream<String> crateApiSyncProgressSyncLocaldirPushProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot});
+
+  Stream<String> crateApiSyncProgressSyncManagedVaultPullProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String idToken});
+
+  Stream<String> crateApiSyncProgressSyncManagedVaultPushOpsOnlyProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String idToken});
+
+  Stream<String> crateApiSyncProgressSyncWebdavPullProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot});
+
+  Stream<String> crateApiSyncProgressSyncWebdavPushOpsOnlyProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -5838,6 +5887,310 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: [],
       );
 
+  @override
+  Stream<String> crateApiSyncProgressSyncLocaldirPullProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(localDir, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 127, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiSyncProgressSyncLocaldirPullProgressConstMeta,
+      argValues: [appDir, key, syncKey, localDir, remoteRoot, sink],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiSyncProgressSyncLocaldirPullProgressConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_localdir_pull_progress",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "localDir",
+          "remoteRoot",
+          "sink"
+        ],
+      );
+
+  @override
+  Stream<String> crateApiSyncProgressSyncLocaldirPushProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String localDir,
+      required String remoteRoot}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(localDir, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 128, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiSyncProgressSyncLocaldirPushProgressConstMeta,
+      argValues: [appDir, key, syncKey, localDir, remoteRoot, sink],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiSyncProgressSyncLocaldirPushProgressConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_localdir_push_progress",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "localDir",
+          "remoteRoot",
+          "sink"
+        ],
+      );
+
+  @override
+  Stream<String> crateApiSyncProgressSyncManagedVaultPullProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String idToken}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(idToken, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 129, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiSyncProgressSyncManagedVaultPullProgressConstMeta,
+      argValues: [appDir, key, syncKey, baseUrl, vaultId, idToken, sink],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiSyncProgressSyncManagedVaultPullProgressConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_pull_progress",
+            argNames: [
+              "appDir",
+              "key",
+              "syncKey",
+              "baseUrl",
+              "vaultId",
+              "idToken",
+              "sink"
+            ],
+          );
+
+  @override
+  Stream<String> crateApiSyncProgressSyncManagedVaultPushOpsOnlyProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String idToken}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(idToken, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 130, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiSyncProgressSyncManagedVaultPushOpsOnlyProgressConstMeta,
+      argValues: [appDir, key, syncKey, baseUrl, vaultId, idToken, sink],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiSyncProgressSyncManagedVaultPushOpsOnlyProgressConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_push_ops_only_progress",
+            argNames: [
+              "appDir",
+              "key",
+              "syncKey",
+              "baseUrl",
+              "vaultId",
+              "idToken",
+              "sink"
+            ],
+          );
+
+  @override
+  Stream<String> crateApiSyncProgressSyncWebdavPullProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_opt_String(username, serializer);
+        sse_encode_opt_String(password, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 131, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiSyncProgressSyncWebdavPullProgressConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        username,
+        password,
+        remoteRoot,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiSyncProgressSyncWebdavPullProgressConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_webdav_pull_progress",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "username",
+          "password",
+          "remoteRoot",
+          "sink"
+        ],
+      );
+
+  @override
+  Stream<String> crateApiSyncProgressSyncWebdavPushOpsOnlyProgress(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      String? username,
+      String? password,
+      required String remoteRoot}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_opt_String(username, serializer);
+        sse_encode_opt_String(password, serializer);
+        sse_encode_String(remoteRoot, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 132, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiSyncProgressSyncWebdavPushOpsOnlyProgressConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        username,
+        password,
+        remoteRoot,
+        sink
+      ],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiSyncProgressSyncWebdavPushOpsOnlyProgressConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_webdav_push_ops_only_progress",
+            argNames: [
+              "appDir",
+              "key",
+              "syncKey",
+              "baseUrl",
+              "username",
+              "password",
+              "remoteRoot",
+              "sink"
+            ],
+          );
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -5972,16 +6325,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CloudMediaBackup dco_decode_cloud_media_backup(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return CloudMediaBackup(
       attachmentSha256: dco_decode_String(arr[0]),
       desiredVariant: dco_decode_String(arr[1]),
-      status: dco_decode_String(arr[2]),
-      attempts: dco_decode_i_64(arr[3]),
-      nextRetryAtMs: dco_decode_opt_box_autoadd_i_64(arr[4]),
-      lastError: dco_decode_opt_String(arr[5]),
-      updatedAtMs: dco_decode_i_64(arr[6]),
+      byteLen: dco_decode_i_64(arr[2]),
+      status: dco_decode_String(arr[3]),
+      attempts: dco_decode_i_64(arr[4]),
+      nextRetryAtMs: dco_decode_opt_box_autoadd_i_64(arr[5]),
+      lastError: dco_decode_opt_String(arr[6]),
+      updatedAtMs: dco_decode_i_64(arr[7]),
     );
   }
 
@@ -6544,6 +6898,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_attachmentSha256 = sse_decode_String(deserializer);
     var var_desiredVariant = sse_decode_String(deserializer);
+    var var_byteLen = sse_decode_i_64(deserializer);
     var var_status = sse_decode_String(deserializer);
     var var_attempts = sse_decode_i_64(deserializer);
     var var_nextRetryAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -6552,6 +6907,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return CloudMediaBackup(
         attachmentSha256: var_attachmentSha256,
         desiredVariant: var_desiredVariant,
+        byteLen: var_byteLen,
         status: var_status,
         attempts: var_attempts,
         nextRetryAtMs: var_nextRetryAtMs,
@@ -7252,6 +7608,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.attachmentSha256, serializer);
     sse_encode_String(self.desiredVariant, serializer);
+    sse_encode_i_64(self.byteLen, serializer);
     sse_encode_String(self.status, serializer);
     sse_encode_i_64(self.attempts, serializer);
     sse_encode_opt_box_autoadd_i_64(self.nextRetryAtMs, serializer);

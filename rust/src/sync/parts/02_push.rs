@@ -4,11 +4,40 @@ pub fn clear_remote_root(remote: &impl RemoteStore, remote_root: &str) -> Result
         return Err(anyhow!("refusing to clear remote root '/'"));
     }
 
-    match remote.delete(&remote_root_dir) {
-        Ok(()) => Ok(()),
-        Err(e) if e.is::<NotFound>() => Ok(()),
-        Err(e) => Err(e),
+    fn clear_dir_contents(remote: &impl RemoteStore, dir: &str) -> Result<()> {
+        for entry in remote.list(dir)? {
+            if entry.ends_with('/') {
+                clear_dir_contents(remote, &entry)?;
+                // Best-effort: Some WebDAV servers reject collection deletes (HTTP 405), even when
+                // the directory is empty. Clearing contents is sufficient for reset semantics.
+                match remote.delete(&entry) {
+                    Ok(()) => {}
+                    Err(e) if e.is::<NotFound>() => {}
+                    Err(_) => {}
+                }
+                continue;
+            }
+            remote.delete(&entry)?;
+        }
+        Ok(())
     }
+
+    let delete_err = match remote.delete(&remote_root_dir) {
+        Ok(()) => return Ok(()),
+        Err(e) if e.is::<NotFound>() => return Ok(()),
+        Err(e) => e,
+    };
+
+    // Fallback for servers that don't support recursive DELETE on collections: remove all
+    // descendants using list()+delete(file), then best-effort delete the root directory.
+    clear_dir_contents(remote, &remote_root_dir).map_err(|e| {
+        anyhow!(
+            "failed to clear remote root via recursive delete after initial delete error: {delete_err}; recursive error: {e}"
+        )
+    })?;
+
+    let _ = remote.delete(&remote_root_dir);
+    Ok(())
 }
 
 pub fn push(
@@ -18,7 +47,26 @@ pub fn push(
     remote: &impl RemoteStore,
     remote_root: &str,
 ) -> Result<u64> {
-    push_internal(conn, db_key, sync_key, remote, remote_root, true)
+    push_internal(conn, db_key, sync_key, remote, remote_root, true, None)
+}
+
+pub fn push_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    push_internal(
+        conn,
+        db_key,
+        sync_key,
+        remote,
+        remote_root,
+        true,
+        Some(progress),
+    )
 }
 
 pub fn push_ops_only(
@@ -28,7 +76,26 @@ pub fn push_ops_only(
     remote: &impl RemoteStore,
     remote_root: &str,
 ) -> Result<u64> {
-    push_internal(conn, db_key, sync_key, remote, remote_root, false)
+    push_internal(conn, db_key, sync_key, remote, remote_root, false, None)
+}
+
+pub fn push_ops_only_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    push_internal(
+        conn,
+        db_key,
+        sync_key,
+        remote,
+        remote_root,
+        false,
+        Some(progress),
+    )
 }
 
 fn push_internal(
@@ -38,6 +105,7 @@ fn push_internal(
     remote: &impl RemoteStore,
     remote_root: &str,
     upload_attachment_bytes: bool,
+    mut progress: Option<&mut dyn FnMut(u64, u64)>,
 ) -> Result<u64> {
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
 
@@ -53,6 +121,40 @@ fn push_internal(
 
     let last_pushed_key = format!("sync.last_pushed_seq:{scope_id}");
     let last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
+    let mut total_ops = if progress.is_some() {
+        conn.query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id, last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64
+    } else {
+        0
+    };
+    let mut done_ops = 0u64;
+    let mut force_repush_from_zero = false;
+    if progress.is_some() && total_ops == 0 && last_pushed_seq > 0 {
+        // When there are no new local ops, we may still need to re-push from 0 if the remote
+        // target was cleared/reset. If so, compute progress against the full local oplog.
+        let last_path = format!("{ops_dir}op_{last_pushed_seq}.json");
+        match remote.get(&last_path) {
+            Ok(_) => {}
+            Err(e) if e.is::<NotFound>() => {
+                force_repush_from_zero = true;
+                total_ops = conn
+                    .query_row(
+                        r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > 0"#,
+                        params![device_id],
+                        |row| row.get::<_, i64>(0),
+                    )?
+                    .max(0) as u64;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    if let Some(cb) = progress.as_deref_mut() {
+        cb(0, total_ops);
+    }
 
     let attachments_dir = format!("{remote_root_dir}attachments/");
     remote.mkdir_all(&attachments_dir)?;
@@ -89,10 +191,20 @@ fn push_internal(
         upload_attachment_bytes: bool,
     }
 
-    fn push_ops_after<R: RemoteStore>(
-        ctx: &PushOpsContext<'_, R>,
-        after_seq: i64,
-    ) -> Result<(u64, i64)> {
+    let ctx = PushOpsContext {
+        conn,
+        db_key,
+        sync_key,
+        remote,
+        device_id: &device_id,
+        ops_dir: &ops_dir,
+        packs_dir: &packs_dir,
+        attachments_dir: &attachments_dir,
+        app_dir: app_dir_path,
+        upload_attachment_bytes,
+    };
+
+    let mut push_ops_after = |after_seq: i64| -> Result<(u64, i64)> {
         let mut stmt = ctx.conn.prepare(
             r#"SELECT op_id, seq, op_json
                FROM oplog
@@ -165,6 +277,13 @@ fn push_internal(
             if seq > max_seq {
                 max_seq = seq;
             }
+
+            if progress.is_some() {
+                done_ops = (done_ops + 1).min(total_ops);
+                if let Some(cb) = progress.as_deref_mut() {
+                    cb(done_ops, total_ops);
+                }
+            }
         }
 
         for chunk_start in touched_pack_chunks {
@@ -180,46 +299,54 @@ fn push_internal(
         }
 
         Ok((pushed, max_seq))
-    }
-
-    let ctx = PushOpsContext {
-        conn,
-        db_key,
-        sync_key,
-        remote,
-        device_id: &device_id,
-        ops_dir: &ops_dir,
-        packs_dir: &packs_dir,
-        attachments_dir: &attachments_dir,
-        app_dir: app_dir_path,
-        upload_attachment_bytes,
     };
 
-    let (pushed, max_seq) = push_ops_after(&ctx, last_pushed_seq)?;
-
-    if pushed > 0 {
-        kv_set_i64(conn, &last_pushed_key, max_seq)?;
-        return Ok(pushed);
+    fn write_cursor_json(
+        remote: &impl RemoteStore,
+        remote_root_dir: &str,
+        device_id: &str,
+        max_seq: i64,
+    ) -> Result<()> {
+        let path = format!("{remote_root_dir}{device_id}/cursor.json");
+        let payload = serde_json::json!({ "max_seq": max_seq });
+        remote.put(&path, payload.to_string().into_bytes())?;
+        Ok(())
     }
 
-    // If the remote target was cleared/reset (e.g. user switches directories then comes back),
-    // our cursor may say "up to date" while the remote no longer has the last pushed file.
-    if last_pushed_seq > 0 {
+    let mut pushed_out = 0u64;
+    let mut final_max_seq = last_pushed_seq;
+
+    let (pushed, max_seq) = push_ops_after(if force_repush_from_zero {
+        0
+    } else {
+        last_pushed_seq
+    })?;
+    if pushed > 0 {
+        kv_set_i64(conn, &last_pushed_key, max_seq)?;
+        pushed_out = pushed;
+        final_max_seq = max_seq;
+    } else if last_pushed_seq > 0 {
+        // If the remote target was cleared/reset (e.g. user switches directories then comes back),
+        // our cursor may say "up to date" while the remote no longer has the last pushed file.
         let last_path = format!("{ops_dir}op_{last_pushed_seq}.json");
         match remote.get(&last_path) {
             Ok(_) => {}
             Err(e) if e.is::<NotFound>() => {
-                let (re_pushed, re_max_seq) = push_ops_after(&ctx, 0)?;
+                let (re_pushed, re_max_seq) = push_ops_after(0)?;
                 if re_pushed > 0 {
                     kv_set_i64(conn, &last_pushed_key, re_max_seq)?;
+                    pushed_out = re_pushed;
+                    final_max_seq = re_max_seq;
                 }
-                return Ok(re_pushed);
             }
             Err(e) => return Err(e),
         }
     }
 
-    Ok(0)
+    // Best-effort: this is only metadata for progress reporting.
+    let _ = write_cursor_json(remote, &remote_root_dir, &device_id, final_max_seq);
+
+    Ok(pushed_out)
 }
 
 fn ensure_ops_packs_backfilled(
@@ -492,3 +619,115 @@ fn sha256_hex(bytes: &[u8]) -> String {
     out
 }
 
+#[cfg(test)]
+mod cursor_metadata_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn push_ops_only_writes_cursor_json_with_max_seq() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _conversation =
+            crate::db::create_conversation(&conn, &db_key, "Test").expect("create conversation");
+
+        let remote = InMemoryRemoteStore::new();
+        let pushed = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push ops only");
+        assert_eq!(pushed, 1);
+
+        let device_id: String = conn
+            .query_row(
+                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("device id");
+
+        let cursor_path = format!("/SecondLoop/{device_id}/cursor.json");
+        let cursor_bytes = remote.get(&cursor_path).expect("cursor.json exists");
+        let cursor: serde_json::Value =
+            serde_json::from_slice(&cursor_bytes).expect("cursor json");
+        assert_eq!(cursor["max_seq"].as_i64(), Some(1));
+    }
+}
+
+#[cfg(test)]
+mod push_progress_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn push_ops_only_with_progress_reports_done_and_total() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _c1 = crate::db::create_conversation(&conn, &db_key, "One").expect("c1");
+        let _c2 = crate::db::create_conversation(&conn, &db_key, "Two").expect("c2");
+
+        let remote = InMemoryRemoteStore::new();
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed = push_ops_only_with_progress(
+            &conn,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push ops only with progress");
+        assert_eq!(pushed, 2);
+
+        assert!(!seen.is_empty());
+        assert_eq!(seen[0].1, 2);
+        assert_eq!(*seen.last().unwrap(), (2, 2));
+    }
+
+    #[test]
+    fn push_ops_only_with_progress_reports_total_when_repush_from_zero_needed() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _c1 = crate::db::create_conversation(&conn, &db_key, "One").expect("c1");
+        let _c2 = crate::db::create_conversation(&conn, &db_key, "Two").expect("c2");
+
+        let remote = InMemoryRemoteStore::new();
+        let pushed1 = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push 1");
+        assert_eq!(pushed1, 2);
+
+        // Simulate a user switching remote targets then coming back: local cursor is ahead,
+        // but the remote is missing the last pushed op and requires a re-push from 0.
+        clear_remote_root(&remote, "SecondLoop").expect("clear remote root");
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed2 = push_ops_only_with_progress(
+            &conn,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push 2");
+        assert_eq!(pushed2, 2);
+
+        assert!(!seen.is_empty());
+        assert_eq!(seen[0].1, 2);
+        assert_eq!(*seen.last().unwrap(), (2, 2));
+    }
+}

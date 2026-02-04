@@ -46,6 +46,7 @@ final class _MemStore implements CloudMediaBackupStore {
       items[index] = CloudMediaBackupItem(
         attachmentSha256: existing.attachmentSha256,
         desiredVariant: existing.desiredVariant,
+        byteLen: existing.byteLen,
         status: 'failed',
         attempts: attempts,
         nextRetryAtMs: nextRetryAtMs,
@@ -74,6 +75,7 @@ void main() {
       const CloudMediaBackupItem(
         attachmentSha256: 'a',
         desiredVariant: 'webp_q85',
+        byteLen: 0,
         status: 'pending',
         attempts: 0,
         nextRetryAtMs: null,
@@ -102,6 +104,7 @@ void main() {
       const CloudMediaBackupItem(
         attachmentSha256: 'a',
         desiredVariant: 'webp_q85',
+        byteLen: 0,
         status: 'pending',
         attempts: 0,
         nextRetryAtMs: null,
@@ -130,6 +133,7 @@ void main() {
       const CloudMediaBackupItem(
         attachmentSha256: 'a',
         desiredVariant: 'webp_q85',
+        byteLen: 0,
         status: 'pending',
         attempts: 0,
         nextRetryAtMs: null,
@@ -158,6 +162,7 @@ void main() {
       const CloudMediaBackupItem(
         attachmentSha256: 'a',
         desiredVariant: 'webp_q85',
+        byteLen: 0,
         status: 'pending',
         attempts: 0,
         nextRetryAtMs: null,

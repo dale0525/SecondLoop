@@ -612,7 +612,30 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
+fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
+    let mut stmt = conn.prepare("PRAGMA database_list")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name != "main" {
+            continue;
+        }
+        let file: String = row.get(2)?;
+        if file.trim().is_empty() {
+            break;
+        }
+
+        let path = PathBuf::from(file);
+        let Some(parent) = path.parent() else {
+            break;
+        };
+        return Ok(parent.to_path_buf());
+    }
+    Err(anyhow!("unable to derive app_dir from sqlite connection"))
+}
+
 pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()> {
+    let app_dir = app_dir_from_conn(conn).ok();
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
     let result: Result<()> = (|| {
@@ -621,8 +644,18 @@ pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()>
 DELETE FROM message_embeddings;
 DELETE FROM todo_embeddings;
 DELETE FROM todo_activity_embeddings;
+DELETE FROM semantic_parse_jobs;
+DELETE FROM message_attachments;
+DELETE FROM cloud_media_backup;
+DELETE FROM attachment_variants;
+DELETE FROM attachment_exif;
+DELETE FROM attachment_places;
+DELETE FROM attachment_annotations;
+DELETE FROM attachment_deletions;
+DELETE FROM attachments;
 DELETE FROM messages;
 DELETE FROM conversations;
+DELETE FROM todo_deletions;
 DELETE FROM todos;
 DELETE FROM todo_activity_attachments;
 DELETE FROM todo_activities;
@@ -637,6 +670,9 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
     match result {
         Ok(()) => {
             conn.execute_batch("COMMIT;")?;
+            if let Some(app_dir) = app_dir {
+                let _ = best_effort_remove_dir_all(&app_dir.join("attachments"));
+            }
             Ok(())
         }
         Err(e) => {
@@ -645,4 +681,3 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
         }
     }
 }
-

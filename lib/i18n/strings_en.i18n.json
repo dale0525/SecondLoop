@@ -565,6 +565,7 @@
       "preparing": "Preparing…",
       "pulling": "Downloading changes…",
       "pushing": "Uploading changes…",
+      "uploadingMedia": "Uploading media…",
       "finalizing": "Finalizing…"
     },
     "sections": {

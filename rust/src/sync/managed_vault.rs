@@ -1,6 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::path::Path;
 use std::sync::OnceLock;
 
 use anyhow::{anyhow, Result};
@@ -11,6 +9,12 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
+
+mod attachments;
+mod progress;
+
+pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
+pub use progress::{pull_with_progress, push_ops_only_with_progress};
 
 #[derive(Debug, Serialize)]
 struct RegisterDeviceRequest<'a> {
@@ -87,17 +91,6 @@ struct PullOpBin {
 #[derive(Debug, Serialize)]
 struct ClearDeviceRequest<'a> {
     device_id: &'a str,
-}
-
-struct AttachmentUploadContext<'a> {
-    conn: &'a Connection,
-    db_key: &'a [u8; 32],
-    sync_key: &'a [u8; 32],
-    http: &'a Client,
-    base_url: &'a str,
-    vault_id: &'a str,
-    id_token: &'a str,
-    app_dir: &'a Path,
 }
 
 fn scope_id(base_url: &str, vault_id: &str) -> String {
@@ -425,7 +418,7 @@ fn push_internal(
         super::kv_set_i64(conn, &last_pushed_key, legacy)?;
     }
 
-    let upload_ctx = AttachmentUploadContext {
+    let upload_ctx = attachments::AttachmentUploadContext {
         conn,
         db_key,
         sync_key,
@@ -440,7 +433,7 @@ fn push_internal(
         let attachment_backfill_key =
             format!("managed_vault.attachments.bytes_backfilled:{scope_id}");
         if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
-            upload_all_local_attachment_bytes(&upload_ctx)?;
+            attachments::upload_all_local_attachment_bytes(&upload_ctx)?;
             super::kv_set_i64(conn, &attachment_backfill_key, 1)?;
         }
     }
@@ -487,7 +480,7 @@ fn push_internal(
                                 .unwrap_or("application/octet-stream");
                             let created_at_ms =
                                 op_json["payload"]["created_at_ms"].as_i64().unwrap_or(0);
-                            let _ = upload_attachment_bytes_if_present(
+                            let _ = attachments::upload_attachment_bytes_if_present(
                                 &upload_ctx,
                                 sha256,
                                 mime_type,
@@ -500,7 +493,7 @@ fn push_internal(
                 if op_json["type"].as_str() == Some("attachment.delete.v1") {
                     if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
                         if deleted_attachments.insert(sha256.to_string()) {
-                            delete_remote_attachment_bytes(&upload_ctx, sha256)?;
+                            attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)?;
                         }
                     }
                 }
@@ -736,181 +729,6 @@ fn rebase_local_device_seqs(
 
         Ok(())
     })
-}
-
-fn delete_remote_attachment_bytes(ctx: &AttachmentUploadContext<'_>, sha256: &str) -> Result<()> {
-    let endpoint = url(
-        ctx.base_url,
-        &format!("/v1/vaults/{}/attachments/{sha256}", ctx.vault_id),
-    )?;
-    let resp = ctx.http.delete(endpoint).bearer_auth(ctx.id_token).send()?;
-
-    let status = resp.status();
-    if status.as_u16() == 404 {
-        return Ok(());
-    }
-    if !status.is_success() {
-        let text = resp.text().unwrap_or_default();
-        return Err(anyhow!(
-            "managed-vault delete attachment failed: HTTP {status} {text}"
-        ));
-    }
-    Ok(())
-}
-
-pub fn upload_attachment_bytes(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    sha256: &str,
-) -> Result<bool> {
-    let http = client()?;
-    let app_dir = super::app_dir_from_conn(conn)?;
-
-    let (mime_type, created_at_ms): (String, i64) = conn.query_row(
-        r#"SELECT mime_type, created_at FROM attachments WHERE sha256 = ?1"#,
-        params![sha256],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?;
-
-    let upload_ctx = AttachmentUploadContext {
-        conn,
-        db_key,
-        sync_key,
-        http: &http,
-        base_url,
-        vault_id,
-        id_token,
-        app_dir: app_dir.as_path(),
-    };
-
-    upload_attachment_bytes_if_present(&upload_ctx, sha256, &mime_type, created_at_ms)
-}
-
-pub fn download_attachment_bytes(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    sha256: &str,
-) -> Result<()> {
-    let http = client()?;
-    let app_dir = super::app_dir_from_conn(conn)?;
-
-    let stored_path: Option<String> = conn
-        .query_row(
-            r#"SELECT path FROM attachments WHERE sha256 = ?1"#,
-            params![sha256],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
-
-    let endpoint = url(
-        base_url,
-        &format!("/v1/vaults/{vault_id}/attachments/{sha256}"),
-    )?;
-    let resp = http.get(endpoint).bearer_auth(id_token).send()?;
-
-    let status = resp.status();
-    if status.as_u16() == 404 {
-        return Err(anyhow!("managed-vault attachment not found"));
-    }
-    if !status.is_success() {
-        let text = resp.text().unwrap_or_default();
-        return Err(anyhow!(
-            "managed-vault get attachment failed: HTTP {status} {text}"
-        ));
-    }
-
-    let ciphertext = resp.bytes()?.to_vec();
-    let aad = format!("sync.attachment.bytes:{sha256}");
-    let plaintext = decrypt_bytes(sync_key, &ciphertext, aad.as_bytes())?;
-
-    if super::sha256_hex(&plaintext) != sha256 {
-        return Err(anyhow!("attachment sha256 mismatch after download"));
-    }
-
-    let local_path = app_dir.join(&stored_path);
-    if let Some(parent) = local_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let local_aad = format!("attachment.bytes:{sha256}");
-    let local_cipher = encrypt_bytes(db_key, &plaintext, local_aad.as_bytes())?;
-    fs::write(local_path, local_cipher)?;
-    Ok(())
-}
-
-fn upload_all_local_attachment_bytes(ctx: &AttachmentUploadContext<'_>) -> Result<u64> {
-    let mut stmt = ctx.conn.prepare(
-        r#"SELECT sha256, mime_type, created_at FROM attachments ORDER BY created_at ASC, sha256 ASC"#,
-    )?;
-    let mut rows = stmt.query([])?;
-
-    let mut uploaded = 0u64;
-    while let Some(row) = rows.next()? {
-        let sha256: String = row.get(0)?;
-        let mime_type: String = row.get(1)?;
-        let created_at_ms: i64 = row.get(2)?;
-        match upload_attachment_bytes_if_present(ctx, &sha256, &mime_type, created_at_ms) {
-            Ok(true) => uploaded += 1,
-            Ok(false) => {}
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(uploaded)
-}
-
-fn upload_attachment_bytes_if_present(
-    ctx: &AttachmentUploadContext<'_>,
-    sha256: &str,
-    mime_type: &str,
-    created_at_ms: i64,
-) -> Result<bool> {
-    let plaintext =
-        match crate::db::read_attachment_bytes(ctx.conn, ctx.db_key, ctx.app_dir, sha256) {
-            Ok(bytes) => bytes,
-            Err(e)
-                if e.downcast_ref::<std::io::Error>()
-                    .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
-            {
-                return Ok(false);
-            }
-            Err(e) => return Err(e),
-        };
-
-    let aad = format!("sync.attachment.bytes:{sha256}");
-    let ciphertext = encrypt_bytes(ctx.sync_key, &plaintext, aad.as_bytes())?;
-
-    let endpoint = url(
-        ctx.base_url,
-        &format!("/v1/vaults/{}/attachments/{sha256}", ctx.vault_id),
-    )?;
-    let resp = ctx
-        .http
-        .put(endpoint)
-        .bearer_auth(ctx.id_token)
-        .header("content-type", "application/octet-stream")
-        .header("x-media-byte-len", ciphertext.len().to_string())
-        .header("x-media-mime", mime_type)
-        .header("x-media-created-at-ms", created_at_ms.to_string())
-        .body(ciphertext)
-        .send()?;
-
-    let status = resp.status();
-    let text = resp.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(anyhow!(
-            "managed-vault put attachment failed: HTTP {status} {text}"
-        ));
-    }
-
-    Ok(true)
 }
 
 fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {

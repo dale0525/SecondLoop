@@ -623,6 +623,26 @@ abstract class AppBackend {
     throw UnimplementedError('syncWebdavPushOpsOnly');
   }
 
+  Stream<String> syncWebdavPushOpsOnlyProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pushed = await syncWebdavPushOpsOnly(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
+    yield '{"type":"result","count":$pushed}';
+  }
+
   Future<int> syncWebdavPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -631,6 +651,26 @@ abstract class AppBackend {
     String? password,
     required String remoteRoot,
   });
+
+  Stream<String> syncWebdavPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pulled = await syncWebdavPull(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
+    yield '{"type":"result","count":$pulled}';
+  }
 
   Future<void> syncWebdavDownloadAttachmentBytes(
     Uint8List key,
@@ -673,12 +713,44 @@ abstract class AppBackend {
     required String remoteRoot,
   });
 
+  Stream<String> syncLocaldirPushProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pushed = await syncLocaldirPush(
+      key,
+      syncKey,
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
+    yield '{"type":"result","count":$pushed}';
+  }
+
   Future<int> syncLocaldirPull(
     Uint8List key,
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
   });
+
+  Stream<String> syncLocaldirPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pulled = await syncLocaldirPull(
+      key,
+      syncKey,
+      localDir: localDir,
+      remoteRoot: remoteRoot,
+    );
+    yield '{"type":"result","count":$pulled}';
+  }
 
   Future<void> syncLocaldirDownloadAttachmentBytes(
     Uint8List key,
@@ -710,6 +782,24 @@ abstract class AppBackend {
     throw UnimplementedError('syncManagedVaultPull');
   }
 
+  Stream<String> syncManagedVaultPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pulled = await syncManagedVaultPull(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+    yield '{"type":"result","count":$pulled}';
+  }
+
   Future<void> syncManagedVaultDownloadAttachmentBytes(
     Uint8List key,
     Uint8List syncKey, {
@@ -729,6 +819,24 @@ abstract class AppBackend {
     required String idToken,
   }) {
     throw UnimplementedError('syncManagedVaultPushOpsOnly');
+  }
+
+  Stream<String> syncManagedVaultPushOpsOnlyProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pushed = await syncManagedVaultPushOpsOnly(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+    yield '{"type":"result","count":$pushed}';
   }
 
   Future<bool> syncManagedVaultUploadAttachmentBytes(

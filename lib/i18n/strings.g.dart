@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 958 (479 per locale)
+/// Strings: 970 (485 per locale)
 ///
-/// Built on 2026-02-03 at 16:44 UTC
+/// Built on 2026-02-04 at 10:20 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1256,6 +1256,7 @@ class _StringsSyncProgressDialogEn {
   String get preparing => 'Preparing…';
   String get pulling => 'Downloading changes…';
   String get pushing => 'Uploading changes…';
+  String get uploadingMedia => 'Uploading media…';
   String get finalizing => 'Finalizing…';
 }
 
@@ -3925,6 +3926,8 @@ class _StringsSyncProgressDialogZhCn extends _StringsSyncProgressDialogEn {
   @override
   String get pushing => '正在上传更改…';
   @override
+  String get uploadingMedia => '正在上传媒体…';
+  @override
   String get finalizing => '正在收尾…';
 }
 
@@ -6149,6 +6152,18 @@ extension on Translations {
             'distance=${distance} • role=${role} • convo=${conversationId}';
       case 'sync.title':
         return 'Sync settings';
+      case 'sync.progressDialog.title':
+        return 'Syncing…';
+      case 'sync.progressDialog.preparing':
+        return 'Preparing…';
+      case 'sync.progressDialog.pulling':
+        return 'Downloading changes…';
+      case 'sync.progressDialog.pushing':
+        return 'Uploading changes…';
+      case 'sync.progressDialog.uploadingMedia':
+        return 'Uploading media…';
+      case 'sync.progressDialog.finalizing':
+        return 'Finalizing…';
       case 'sync.sections.automation':
         return 'Auto sync';
       case 'sync.sections.backend':
@@ -7133,6 +7148,18 @@ extension on _StringsZhCn {
             'distance=${distance} • role=${role} • convo=${conversationId}';
       case 'sync.title':
         return '同步设置';
+      case 'sync.progressDialog.title':
+        return '正在同步…';
+      case 'sync.progressDialog.preparing':
+        return '正在准备…';
+      case 'sync.progressDialog.pulling':
+        return '正在下载更改…';
+      case 'sync.progressDialog.pushing':
+        return '正在上传更改…';
+      case 'sync.progressDialog.uploadingMedia':
+        return '正在上传媒体…';
+      case 'sync.progressDialog.finalizing':
+        return '正在收尾…';
       case 'sync.sections.automation':
         return '自动同步';
       case 'sync.sections.backend':

@@ -341,7 +341,8 @@ impl super::RemoteStore for WebDavRemoteStore {
     }
 
     fn delete(&self, path: &str) -> Result<()> {
-        let path = if path.ends_with('/') {
+        let is_dir = path.ends_with('/');
+        let path = if is_dir {
             normalize_dir(path)
         } else {
             path.to_string()
@@ -352,14 +353,39 @@ impl super::RemoteStore for WebDavRemoteStore {
         }
 
         let resp = self.request(Method::DELETE, &path)?.send()?;
-        if resp.status().as_u16() == 404 {
+        let status_u16 = resp.status().as_u16();
+        if status_u16 == 404 {
             return Err(super::NotFound { path }.into());
         }
-        if !resp.status().is_success() {
+
+        if resp.status().is_success() {
+            return Ok(());
+        }
+
+        // Some WebDAV servers reject deleting collections with a trailing slash URL and return
+        // 405 even though they accept the same DELETE without the trailing slash.
+        if is_dir && status_u16 == 405 {
+            let alt_path = path.trim_end_matches('/').to_string();
+            if alt_path != "/" && alt_path != path {
+                let alt_resp = self.request(Method::DELETE, &alt_path)?.send()?;
+                if alt_resp.status().is_success() {
+                    return Ok(());
+                }
+
+                let alt_status = alt_resp.status();
+                let alt_body = alt_resp.text().unwrap_or_default();
+                let status = resp.status();
+                let body = resp.text().unwrap_or_default();
+                return Err(anyhow!(
+                    "DELETE failed: HTTP {status} {body} (also tried without trailing slash: HTTP {alt_status} {alt_body})"
+                ));
+            }
+        }
+
+        {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
             return Err(anyhow!("DELETE failed: HTTP {status} {body}"));
         }
-        Ok(())
     }
 }

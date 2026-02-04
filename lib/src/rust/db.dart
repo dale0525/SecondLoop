@@ -206,6 +206,7 @@ class AttachmentVariant {
 class CloudMediaBackup {
   final String attachmentSha256;
   final String desiredVariant;
+  final PlatformInt64 byteLen;
   final String status;
   final PlatformInt64 attempts;
   final PlatformInt64? nextRetryAtMs;
@@ -215,6 +216,7 @@ class CloudMediaBackup {
   const CloudMediaBackup({
     required this.attachmentSha256,
     required this.desiredVariant,
+    required this.byteLen,
     required this.status,
     required this.attempts,
     this.nextRetryAtMs,
@@ -226,6 +228,7 @@ class CloudMediaBackup {
   int get hashCode =>
       attachmentSha256.hashCode ^
       desiredVariant.hashCode ^
+      byteLen.hashCode ^
       status.hashCode ^
       attempts.hashCode ^
       nextRetryAtMs.hashCode ^
@@ -239,6 +242,7 @@ class CloudMediaBackup {
           runtimeType == other.runtimeType &&
           attachmentSha256 == other.attachmentSha256 &&
           desiredVariant == other.desiredVariant &&
+          byteLen == other.byteLen &&
           status == other.status &&
           attempts == other.attempts &&
           nextRetryAtMs == other.nextRetryAtMs &&

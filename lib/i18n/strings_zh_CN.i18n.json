@@ -565,6 +565,7 @@
       "preparing": "正在准备…",
       "pulling": "正在下载更改…",
       "pushing": "正在上传更改…",
+      "uploadingMedia": "正在上传媒体…",
       "finalizing": "正在收尾…"
     },
     "sections": {

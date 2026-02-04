@@ -4,3 +4,4 @@
 
 pub mod core;
 pub mod simple;
+pub mod sync_progress;

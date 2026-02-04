@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -631015319;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -636996289;
 
 // Section: executor
 
@@ -5232,6 +5232,300 @@ fn wire__crate__api__simple__init_app_impl(
         },
     )
 }
+fn wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_localdir_pull_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_local_dir = <String>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            let api_sink =
+                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_progress::sync_localdir_pull_progress(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_local_dir,
+                        api_remote_root,
+                        api_sink,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_localdir_push_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_local_dir = <String>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            let api_sink =
+                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_progress::sync_localdir_push_progress(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_local_dir,
+                        api_remote_root,
+                        api_sink,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_pull_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_id_token = <String>::sse_decode(&mut deserializer);
+            let api_sink =
+                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_progress::sync_managed_vault_pull_progress(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_id_token,
+                        api_sink,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_push_ops_only_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_id_token = <String>::sse_decode(&mut deserializer);
+            let api_sink =
+                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_progress::sync_managed_vault_push_ops_only_progress(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_id_token,
+                        api_sink,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_webdav_pull_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_username = <Option<String>>::sse_decode(&mut deserializer);
+            let api_password = <Option<String>>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            let api_sink =
+                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_progress::sync_webdav_pull_progress(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_username,
+                        api_password,
+                        api_remote_root,
+                        api_sink,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_webdav_push_ops_only_progress",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_username = <Option<String>>::sse_decode(&mut deserializer);
+            let api_password = <Option<String>>::sse_decode(&mut deserializer);
+            let api_remote_root = <String>::sse_decode(&mut deserializer);
+            let api_sink =
+                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_progress::sync_webdav_push_ops_only_progress(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_username,
+                        api_password,
+                        api_remote_root,
+                        api_sink,
+                    )
+                })())
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -5373,6 +5667,7 @@ impl SseDecode for crate::db::CloudMediaBackup {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_attachmentSha256 = <String>::sse_decode(deserializer);
         let mut var_desiredVariant = <String>::sse_decode(deserializer);
+        let mut var_byteLen = <i64>::sse_decode(deserializer);
         let mut var_status = <String>::sse_decode(deserializer);
         let mut var_attempts = <i64>::sse_decode(deserializer);
         let mut var_nextRetryAtMs = <Option<i64>>::sse_decode(deserializer);
@@ -5381,6 +5676,7 @@ impl SseDecode for crate::db::CloudMediaBackup {
         return crate::db::CloudMediaBackup {
             attachment_sha256: var_attachmentSha256,
             desired_variant: var_desiredVariant,
+            byte_len: var_byteLen,
             status: var_status,
             attempts: var_attempts,
             next_retry_at_ms: var_nextRetryAtMs,
@@ -6599,6 +6895,42 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         126 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        128 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        129 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        130 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        131 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        132 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -6739,6 +7071,7 @@ impl flutter_rust_bridge::IntoDart for crate::db::CloudMediaBackup {
         [
             self.attachment_sha256.into_into_dart().into_dart(),
             self.desired_variant.into_into_dart().into_dart(),
+            self.byte_len.into_into_dart().into_dart(),
             self.status.into_into_dart().into_dart(),
             self.attempts.into_into_dart().into_dart(),
             self.next_retry_at_ms.into_into_dart().into_dart(),
@@ -7135,6 +7468,7 @@ impl SseEncode for crate::db::CloudMediaBackup {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.attachment_sha256, serializer);
         <String>::sse_encode(self.desired_variant, serializer);
+        <i64>::sse_encode(self.byte_len, serializer);
         <String>::sse_encode(self.status, serializer);
         <i64>::sse_encode(self.attempts, serializer);
         <Option<i64>>::sse_encode(self.next_retry_at_ms, serializer);

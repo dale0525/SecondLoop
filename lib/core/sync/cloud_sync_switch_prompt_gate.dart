@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
+import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'cloud_sync_switch_prefs.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
@@ -47,7 +49,6 @@ final class _CloudSyncSwitchPromptGateState
   bool _promptScheduled = false;
   bool _embeddingsPromptScheduled = false;
 
-  static const _kSyncProgressTick = Duration(milliseconds: 120);
   static const _kSyncProgressIndicatorKey =
       ValueKey('cloud_sync_switch_progress');
   static const _kSyncProgressPercentKey =
@@ -155,6 +156,36 @@ final class _CloudSyncSwitchPromptGateState
     });
   }
 
+  Future<int> _consumeRustProgressStream(
+    Stream<String> stream, {
+    required void Function(int done, int total) onProgress,
+  }) async {
+    var count = 0;
+    await for (final msg in stream) {
+      Map<String, dynamic>? ev;
+      try {
+        final decoded = jsonDecode(msg);
+        ev = decoded is Map ? decoded.cast<String, dynamic>() : null;
+      } catch (_) {
+        ev = null;
+      }
+      if (ev == null) continue;
+
+      final type = ev['type'];
+      if (type == 'progress') {
+        final done = (ev['done'] as num?)?.toInt();
+        final total = (ev['total'] as num?)?.toInt();
+        if (done != null && total != null) {
+          onProgress(done, total);
+        }
+      } else if (type == 'result') {
+        final v = (ev['count'] as num?)?.toInt();
+        if (v != null) count = v;
+      }
+    }
+    return count;
+  }
+
   Future<void> _maybePromptSwitchToCloud() async {
     if (!mounted) return;
     if (_dialogShowing) return;
@@ -236,7 +267,9 @@ final class _CloudSyncSwitchPromptGateState
     final alreadyPromptedUid =
         (prefs.getString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey) ?? '')
             .trim();
-    if (alreadyPromptedUid == uid) return;
+    if (alreadyPromptedUid == uid) {
+      return;
+    }
     if ((prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false) == true) {
       await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
       return;
@@ -292,14 +325,10 @@ final class _CloudSyncSwitchPromptGateState
   }) async {
     final t = dialogContext.t;
     final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
+    // Keep progress determinate: an indeterminate LinearProgressIndicator
+    // (value: null) animates continuously and can make widget tests using
+    // pumpAndSettle time out.
     final progress = ValueNotifier<double>(0.0);
-
-    double stageMax = 0.1;
-    Timer? progressTimer;
-    progressTimer = Timer.periodic(_kSyncProgressTick, (_) {
-      final next = (progress.value + 0.01).clamp(0.0, stageMax);
-      progress.value = next;
-    });
 
     bool started = false;
     _dialogShowing = true;
@@ -312,43 +341,86 @@ final class _CloudSyncSwitchPromptGateState
             started = true;
             unawaited(() async {
               try {
-                // Prepare
-                await Future<void>.delayed(const Duration(milliseconds: 150));
-
                 // Pull
                 stage.value = t.sync.progressDialog.pulling;
-                stageMax = 0.6;
-                if (progress.value < 0.1) progress.value = 0.1;
-                await backend.syncManagedVaultPull(
-                  sessionKey,
-                  syncKey,
-                  baseUrl: baseUrl,
-                  vaultId: vaultId,
-                  idToken: idToken,
+                progress.value = 0.0;
+                await _consumeRustProgressStream(
+                  backend.syncManagedVaultPullProgress(
+                    sessionKey,
+                    syncKey,
+                    baseUrl: baseUrl,
+                    vaultId: vaultId,
+                    idToken: idToken,
+                  ),
+                  onProgress: (done, total) {
+                    progress.value =
+                        total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
+                  },
                 );
-                if (progress.value < 0.6) progress.value = 0.6;
 
                 // Push
                 stage.value = t.sync.progressDialog.pushing;
-                stageMax = 0.95;
-                await backend.syncManagedVaultPushOpsOnly(
-                  sessionKey,
-                  syncKey,
-                  baseUrl: baseUrl,
-                  vaultId: vaultId,
-                  idToken: idToken,
+                progress.value = 0.0;
+                await _consumeRustProgressStream(
+                  backend.syncManagedVaultPushOpsOnlyProgress(
+                    sessionKey,
+                    syncKey,
+                    baseUrl: baseUrl,
+                    vaultId: vaultId,
+                    idToken: idToken,
+                  ),
+                  onProgress: (done, total) {
+                    progress.value =
+                        total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
+                  },
                 );
-                if (progress.value < 0.95) progress.value = 0.95;
+
+                // Media uploads (optional)
+                final mediaEnabled = await _store.readCloudMediaBackupEnabled();
+                if (mediaEnabled) {
+                  final wifiOnly = await _store.readCloudMediaBackupWifiOnly();
+                  stage.value = t.sync.progressDialog.uploadingMedia;
+                  progress.value = 0.0;
+
+                  final runner = CloudMediaBackupRunner(
+                    store: BackendCloudMediaBackupStore(
+                      backend: backend,
+                      sessionKey: sessionKey,
+                    ),
+                    client: ManagedVaultCloudMediaBackupClient(
+                      backend: backend,
+                      sessionKey: sessionKey,
+                      syncKey: syncKey,
+                      baseUrl: baseUrl,
+                      vaultId: vaultId,
+                      idToken: idToken,
+                    ),
+                    settings: CloudMediaBackupRunnerSettings(
+                      enabled: true,
+                      wifiOnly: wifiOnly,
+                    ),
+                    getNetwork:
+                        ConnectivityCloudMediaBackupNetworkProvider().call,
+                  );
+                  final result = await runner.runOnce(
+                    allowCellular: false,
+                    onBytesProgress: (doneBytes, totalBytes) {
+                      progress.value = totalBytes <= 0
+                          ? 1.0
+                          : (doneBytes / totalBytes).clamp(0.0, 1.0);
+                    },
+                  );
+                  if (result.needsCellularConfirmation) {
+                    progress.value = 1.0;
+                  }
+                }
 
                 // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
-                stageMax = 1.0;
                 progress.value = 1.0;
               } catch (_) {
                 // Best-effort: avoid blocking the user on transient sync errors.
               } finally {
-                progressTimer?.cancel();
-                progressTimer = null;
                 if (context.mounted) {
                   Navigator.of(context).pop();
                 }
@@ -408,7 +480,6 @@ final class _CloudSyncSwitchPromptGateState
       );
     } finally {
       _dialogShowing = false;
-      progressTimer?.cancel();
       stage.dispose();
       progress.dispose();
     }
