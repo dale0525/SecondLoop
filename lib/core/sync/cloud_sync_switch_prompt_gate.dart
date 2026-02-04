@@ -374,6 +374,7 @@ final class _CloudSyncSwitchPromptGateState
                     builder: (context, value, _) {
                       final percent =
                           (value * 100).floor().clamp(0, 100).toString();
+                      final percentLabel = '$percent%';
                       return Row(
                         children: [
                           Expanded(
@@ -389,7 +390,7 @@ final class _CloudSyncSwitchPromptGateState
                           SizedBox(
                             width: 48,
                             child: Text(
-                              '$percent%',
+                              percentLabel,
                               key: _kSyncProgressPercentKey,
                               textAlign: TextAlign.right,
                               style: Theme.of(context).textTheme.bodySmall,

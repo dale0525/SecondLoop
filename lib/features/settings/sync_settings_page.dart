@@ -364,6 +364,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                     builder: (context, value, _) {
                       final percent =
                           (value * 100).floor().clamp(0, 100).toString();
+                      final percentLabel = '$percent%';
                       return Row(
                         children: [
                           Expanded(
@@ -379,7 +380,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                           SizedBox(
                             width: 48,
                             child: Text(
-                              '$percent%',
+                              percentLabel,
                               key: _kSaveSyncProgressPercentKey,
                               textAlign: TextAlign.right,
                               style: Theme.of(context).textTheme.bodySmall,
