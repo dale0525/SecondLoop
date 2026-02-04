@@ -560,6 +560,13 @@
   },
   "sync": {
     "title": "同步设置",
+    "progressDialog": {
+      "title": "正在同步…",
+      "preparing": "正在准备…",
+      "pulling": "正在下载更改…",
+      "pushing": "正在上传更改…",
+      "finalizing": "正在收尾…"
+    },
     "sections": {
       "automation": "自动同步",
       "backend": "同步方式",

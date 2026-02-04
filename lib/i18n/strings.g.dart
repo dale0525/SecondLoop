@@ -458,6 +458,8 @@ class _StringsSyncEn {
 
   // Translations
   String get title => 'Sync settings';
+  late final _StringsSyncProgressDialogEn progressDialog =
+      _StringsSyncProgressDialogEn._(_root);
   late final _StringsSyncSectionsEn sections = _StringsSyncSectionsEn._(_root);
   late final _StringsSyncAutoSyncEn autoSync = _StringsSyncAutoSyncEn._(_root);
   late final _StringsSyncMediaPreviewEn mediaPreview =
@@ -1241,6 +1243,20 @@ class _StringsAttachmentsMetadataEn {
   String get size => 'Size';
   String get capturedAt => 'Captured';
   String get location => 'Location';
+}
+
+// Path: sync.progressDialog
+class _StringsSyncProgressDialogEn {
+  _StringsSyncProgressDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Syncing…';
+  String get preparing => 'Preparing…';
+  String get pulling => 'Downloading changes…';
+  String get pushing => 'Uploading changes…';
+  String get finalizing => 'Finalizing…';
 }
 
 // Path: sync.sections
@@ -2691,6 +2707,9 @@ class _StringsSyncZhCn extends _StringsSyncEn {
   @override
   String get title => '同步设置';
   @override
+  late final _StringsSyncProgressDialogZhCn progressDialog =
+      _StringsSyncProgressDialogZhCn._(_root);
+  @override
   late final _StringsSyncSectionsZhCn sections =
       _StringsSyncSectionsZhCn._(_root);
   @override
@@ -3885,6 +3904,28 @@ class _StringsAttachmentsMetadataZhCn extends _StringsAttachmentsMetadataEn {
   String get capturedAt => '拍摄时间';
   @override
   String get location => '地点';
+}
+
+// Path: sync.progressDialog
+class _StringsSyncProgressDialogZhCn extends _StringsSyncProgressDialogEn {
+  _StringsSyncProgressDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '正在同步…';
+  @override
+  String get preparing => '正在准备…';
+  @override
+  String get pulling => '正在下载更改…';
+  @override
+  String get pushing => '正在上传更改…';
+  @override
+  String get finalizing => '正在收尾…';
 }
 
 // Path: sync.sections

@@ -560,6 +560,13 @@
   },
   "sync": {
     "title": "Sync settings",
+    "progressDialog": {
+      "title": "Syncing…",
+      "preparing": "Preparing…",
+      "pulling": "Downloading changes…",
+      "pushing": "Uploading changes…",
+      "finalizing": "Finalizing…"
+    },
     "sections": {
       "automation": "Auto sync",
       "backend": "Sync method",

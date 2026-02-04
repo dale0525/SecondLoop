@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -36,6 +38,9 @@ class SyncSettingsPage extends StatefulWidget {
 class _SyncSettingsPageState extends State<SyncSettingsPage> {
   static const _kPassphrasePlaceholder = '********';
   static const _kManualSyncProgressTick = Duration(milliseconds: 120);
+  static const _kSaveSyncProgressKey = ValueKey('sync_save_progress');
+  static const _kSaveSyncProgressPercentKey =
+      ValueKey('sync_save_progress_percent');
 
   final _baseUrlController = TextEditingController();
   final _managedVaultBaseUrlController = TextEditingController();
@@ -282,16 +287,172 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     }
   }
 
+  Future<void> _runSaveSyncWithProgress({
+    required Future<void> Function() pull,
+    required Future<void> Function() push,
+  }) async {
+    final dialogContext = context;
+    final t = dialogContext.t;
+
+    final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
+    final progress = ValueNotifier<double>(0.0);
+
+    double stageMax = 0.1;
+    Timer? progressTimer;
+    progressTimer = Timer.periodic(_kManualSyncProgressTick, (_) {
+      final next = (progress.value + 0.01).clamp(0.0, stageMax);
+      progress.value = next;
+    });
+
+    bool started = false;
+    try {
+      await showDialog<void>(
+        context: dialogContext,
+        barrierDismissible: false,
+        builder: (context) {
+          if (!started) {
+            started = true;
+            unawaited(() async {
+              try {
+                // Prepare
+                await Future<void>.delayed(const Duration(milliseconds: 150));
+
+                // Pull
+                stage.value = t.sync.progressDialog.pulling;
+                stageMax = 0.6;
+                if (progress.value < 0.1) progress.value = 0.1;
+                await pull();
+                if (progress.value < 0.6) progress.value = 0.6;
+
+                // Push
+                stage.value = t.sync.progressDialog.pushing;
+                stageMax = 0.95;
+                await push();
+                if (progress.value < 0.95) progress.value = 0.95;
+
+                // Finalize
+                stage.value = t.sync.progressDialog.finalizing;
+                stageMax = 1.0;
+                progress.value = 1.0;
+              } catch (_) {
+                // Best-effort: sync errors should not block the user.
+              } finally {
+                progressTimer?.cancel();
+                progressTimer = null;
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                }
+              }
+            }());
+          }
+
+          return PopScope(
+            canPop: false,
+            child: AlertDialog(
+              title: Text(t.sync.progressDialog.title),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ValueListenableBuilder(
+                    valueListenable: stage,
+                    builder: (context, value, _) => Text(value),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<double>(
+                    valueListenable: progress,
+                    builder: (context, value, _) {
+                      final percent =
+                          (value * 100).floor().clamp(0, 100).toString();
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 4,
+                              child: LinearProgressIndicator(
+                                key: _kSaveSyncProgressKey,
+                                value: value,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 48,
+                            child: Text(
+                              '$percent%',
+                              key: _kSaveSyncProgressPercentKey,
+                              textAlign: TextAlign.right,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } finally {
+      progressTimer?.cancel();
+      stage.dispose();
+      progress.dispose();
+    }
+  }
+
+  bool _shouldRunSaveSyncForConfigChange({
+    required SyncBackendType oldBackendType,
+    required String oldWebdavBaseUrl,
+    required String oldRemoteRoot,
+    required String oldLocalDir,
+    required SyncBackendType newBackendType,
+    required String newWebdavBaseUrl,
+    required String newRemoteRoot,
+    required String newLocalDir,
+  }) {
+    if (newBackendType == SyncBackendType.webdav) {
+      return oldBackendType != newBackendType ||
+          oldWebdavBaseUrl != newWebdavBaseUrl ||
+          oldRemoteRoot != newRemoteRoot;
+    }
+    if (newBackendType == SyncBackendType.localDir) {
+      return oldBackendType != newBackendType ||
+          oldLocalDir != newLocalDir ||
+          oldRemoteRoot != newRemoteRoot;
+    }
+    if (newBackendType == SyncBackendType.managedVault) {
+      // Specifically requested: switching from WebDAV/local-dir to Cloud should
+      // trigger an immediate sync.
+      return oldBackendType != SyncBackendType.managedVault;
+    }
+    return false;
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     setState(() => _busy = true);
 
     final t = context.t;
     try {
+      final before = await _store.readAll();
+      if (!mounted) return;
+      final oldBackendType = switch (before[SyncConfigStore.kBackendType]) {
+        'localdir' => SyncBackendType.localDir,
+        'managedvault' => SyncBackendType.managedVault,
+        _ => SyncBackendType.webdav,
+      };
+      final oldWebdavBaseUrl =
+          (before[SyncConfigStore.kWebdavBaseUrl] ?? '').trim();
+      final oldRemoteRoot = (before[SyncConfigStore.kRemoteRoot] ?? '').trim();
+      final oldLocalDir = (before[SyncConfigStore.kLocalDir] ?? '').trim();
+
       final backend = AppBackendScope.of(context);
 
       final requiresSyncKey = _backendType == SyncBackendType.webdav ||
-          _backendType == SyncBackendType.managedVault;
+          _backendType == SyncBackendType.managedVault ||
+          _backendType == SyncBackendType.localDir;
       final passphrase = _optionalTrimmed(_syncPassphraseController);
       final hasNewPassphrase = passphrase != null && !_passphraseIsPlaceholder;
       if (requiresSyncKey && !hasNewPassphrase) {
@@ -324,10 +485,142 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         await _runConnectionTest();
         if (!mounted) return;
         _showSnack(t.sync.connectionOk);
+
+        final newBackendType = _backendType;
+        final newWebdavBaseUrl = _requiredTrimmed(_baseUrlController).trim();
+        final newRemoteRoot = _requiredTrimmed(_remoteRootController).trim();
+        final newLocalDir = _requiredTrimmed(_localDirController).trim();
+
+        final shouldSync = _shouldRunSaveSyncForConfigChange(
+          oldBackendType: oldBackendType,
+          oldWebdavBaseUrl: oldWebdavBaseUrl,
+          oldRemoteRoot: oldRemoteRoot,
+          oldLocalDir: oldLocalDir,
+          newBackendType: newBackendType,
+          newWebdavBaseUrl: newWebdavBaseUrl,
+          newRemoteRoot: newRemoteRoot,
+          newLocalDir: newLocalDir,
+        );
+
+        var didSync = false;
+        if (shouldSync) {
+          final sessionScope =
+              context.getInheritedWidgetOfExactType<SessionScope>();
+          final sessionKey = sessionScope?.sessionKey;
+          final syncKey = await _loadSyncKey();
+          if (sessionKey != null &&
+              syncKey != null &&
+              syncKey.length == 32 &&
+              mounted) {
+            switch (newBackendType) {
+              case SyncBackendType.webdav:
+                await _runSaveSyncWithProgress(
+                  pull: () async {
+                    await backend.syncWebdavPull(
+                      sessionKey,
+                      syncKey,
+                      baseUrl: newWebdavBaseUrl,
+                      username: _optionalTrimmed(_usernameController),
+                      password: _optionalTrimmed(_passwordController),
+                      remoteRoot: newRemoteRoot,
+                    );
+                  },
+                  push: () async {
+                    await backend.syncWebdavPushOpsOnly(
+                      sessionKey,
+                      syncKey,
+                      baseUrl: newWebdavBaseUrl,
+                      username: _optionalTrimmed(_usernameController),
+                      password: _optionalTrimmed(_passwordController),
+                      remoteRoot: newRemoteRoot,
+                    );
+                  },
+                );
+                didSync = true;
+                break;
+              case SyncBackendType.localDir:
+                await _runSaveSyncWithProgress(
+                  pull: () async {
+                    await backend.syncLocaldirPull(
+                      sessionKey,
+                      syncKey,
+                      localDir: newLocalDir,
+                      remoteRoot: newRemoteRoot,
+                    );
+                  },
+                  push: () async {
+                    await backend.syncLocaldirPush(
+                      sessionKey,
+                      syncKey,
+                      localDir: newLocalDir,
+                      remoteRoot: newRemoteRoot,
+                    );
+                  },
+                );
+                didSync = true;
+                break;
+              case SyncBackendType.managedVault:
+                final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
+                String? idToken;
+                try {
+                  idToken = await cloudAuth?.getIdToken();
+                } catch (_) {
+                  idToken = null;
+                }
+                final vaultId = cloudAuth?.uid?.trim();
+                final baseUrl = await _store.resolveManagedVaultBaseUrl();
+
+                if (!mounted) break;
+                if (idToken == null ||
+                    idToken.trim().isEmpty ||
+                    vaultId == null ||
+                    vaultId.isEmpty ||
+                    baseUrl == null ||
+                    baseUrl.trim().isEmpty) {
+                  // If we can't get auth details, fall back to engine scheduling.
+                  break;
+                }
+
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
+                try {
+                  await _runSaveSyncWithProgress(
+                    pull: () async {
+                      await backend.syncManagedVaultPull(
+                        sessionKey,
+                        syncKey,
+                        baseUrl: baseUrl.trim(),
+                        vaultId: vaultId,
+                        idToken: idToken!.trim(),
+                      );
+                    },
+                    push: () async {
+                      await backend.syncManagedVaultPushOpsOnly(
+                        sessionKey,
+                        syncKey,
+                        baseUrl: baseUrl.trim(),
+                        vaultId: vaultId,
+                        idToken: idToken!.trim(),
+                      );
+                    },
+                  );
+                  didSync = true;
+                } finally {
+                  await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, false);
+                }
+                break;
+            }
+          }
+        }
+
+        if (!mounted) return;
         final engine = SyncEngineScope.maybeOf(context);
         engine?.start();
-        engine?.triggerPullNow();
-        engine?.triggerPushNow();
+        engine?.notifyExternalChange();
+        if (!didSync) {
+          engine?.triggerPullNow();
+          engine?.triggerPushNow();
+        }
       } catch (e) {
         if (!mounted) return;
         _showSnack(t.sync.connectionFailed(error: '$e'));

@@ -8,6 +8,7 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
@@ -233,6 +234,78 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets('Switching to Cloud runs sync and shows progress first',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      // Consent should still be prompted after the sync completes.
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _SyncingBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Switch prompt shows first.
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+
+    // Sync progress dialog appears before the embeddings prompt.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.byKey(const ValueKey('cloud_sync_switch_progress')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('cloud_sync_switch_progress_percent')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Use cloud embeddings for semantic search?'),
+      findsNothing,
+    );
+
+    // After sync finishes, embeddings consent prompt appears.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, contains('syncManagedVaultPull'));
+    expect(backend.calls, contains('syncManagedVaultPushOpsOnly'));
+    expect(
+        find.text('Use cloud embeddings for semantic search?'), findsOneWidget);
   });
 }
 
@@ -490,4 +563,34 @@ final class _Backend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
+}
+
+final class _SyncingBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    return 1;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPushOpsOnly');
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    return 1;
+  }
 }

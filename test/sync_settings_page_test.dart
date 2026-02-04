@@ -67,23 +67,29 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
-    final backend = _SyncSettingsBackend();
-
-    final runner = _FakeRunner();
-    final engine = SyncEngine(
-      syncRunner: runner,
-      loadConfig: () async => _webdavConfig(),
-      pushDebounce: const Duration(milliseconds: 1),
-      pullInterval: const Duration(days: 1),
-      pullJitter: Duration.zero,
-      pullOnStart: false,
+    final pushCompleter = Completer<int>();
+    final pullCompleter = Completer<int>();
+    final backend = _DelayedSyncBackend(
+      pushCompleter: pushCompleter,
+      pullCompleter: pullCompleter,
     );
 
-    await tester.pumpWidget(_wrap(
-      backend: backend,
-      store: store,
-      engine: engine,
-    ));
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -108,15 +114,219 @@ void main() {
     await tester.ensureVisible(saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(backend.webdavTestCalls, 1);
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_save_progress_percent')),
+        findsOneWidget);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+    // Still waiting for push.
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
+
+    pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('sync_save_progress_percent')), findsNothing);
+
     expect(find.textContaining('Connection'), findsOneWidget);
+  });
 
-    expect(runner.pullCalls, 1);
-    expect(runner.pushCalls, 1);
+  testWidgets('Save after changing WebDAV folder shows sync progress dialog',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
 
-    engine.stop();
+    final pushCompleter = Completer<int>();
+    final pullCompleter = Completer<int>();
+    final backend = _DelayedSyncBackend(
+      pushCompleter: pushCompleter,
+      pullCompleter: pullCompleter,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Change "Folder name".
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_save_progress_percent')),
+        findsOneWidget);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+    pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+  });
+
+  testWidgets('Save after changing local folder shows sync progress dialog',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.localDir);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeLocalDir('/tmp/SecondLoopVault');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final pushCompleter = Completer<int>();
+    final pullCompleter = Completer<int>();
+    final backend = _DelayedLocalDirSyncBackend(
+      pushCompleter: pushCompleter,
+      pullCompleter: pullCompleter,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder path',
+      ),
+      '/tmp/SecondLoopVault2',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_save_progress_percent')),
+        findsOneWidget);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+    pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+  });
+
+  testWidgets('Switch to Cloud sync triggers sync progress on Save',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final pullCompleter = Completer<int>();
+    final pushCompleter = Completer<int>();
+    final backend = _DelayedManagedVaultSyncBackend(
+      pullCompleter: pullCompleter,
+      pushCompleter: pushCompleter,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Change backend to Cloud.
+    await tester.tap(find.byType(DropdownButtonFormField<SyncBackendType>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SecondLoop Cloud').last);
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_save_progress_percent')),
+        findsOneWidget);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+    pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
   });
 
   testWidgets('Save requires sync passphrase (WebDAV)', (tester) async {
@@ -836,6 +1046,64 @@ final class _DelayedSyncBackend extends _SyncSettingsBackend {
     required String remoteRoot,
   }) async =>
       pullCompleter.future;
+}
+
+final class _DelayedLocalDirSyncBackend extends _SyncSettingsBackend {
+  _DelayedLocalDirSyncBackend({
+    required this.pushCompleter,
+    required this.pullCompleter,
+  }) : super(webdavPullResult: 0);
+
+  final Completer<int> pushCompleter;
+  final Completer<int> pullCompleter;
+
+  @override
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async =>
+      pushCompleter.future;
+
+  @override
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async =>
+      pullCompleter.future;
+}
+
+final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
+  _DelayedManagedVaultSyncBackend({
+    required this.pullCompleter,
+    required this.pushCompleter,
+  }) : super(managedVaultPullResult: 0);
+
+  final Completer<int> pullCompleter;
+  final Completer<int> pushCompleter;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async =>
+      pullCompleter.future;
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async =>
+      pushCompleter.future;
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {
