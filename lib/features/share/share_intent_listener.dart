@@ -21,6 +21,17 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
 
   bool _consuming = false;
 
+  bool _looksLikeUrl(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return false;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return false;
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') return false;
+    if (uri.host.isEmpty) return false;
+    return true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +75,17 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
             await ShareIngest.enqueueUrl(content);
             enqueuedAny = true;
             break;
+          case 'file':
+            final mimeType = map['mimeType'];
+            final filename = map['filename'];
+            if (mimeType is! String || mimeType.trim().isEmpty) continue;
+            await ShareIngest.enqueueFile(
+              tempPath: content,
+              mimeType: mimeType,
+              filename: filename is String ? filename : null,
+            );
+            enqueuedAny = true;
+            break;
           case 'image':
             final mimeType = map['mimeType'];
             if (mimeType is! String || mimeType.trim().isEmpty) continue;
@@ -75,7 +97,11 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
             break;
           case 'text':
           default:
-            await ShareIngest.enqueueText(content);
+            if (_looksLikeUrl(content)) {
+              await ShareIngest.enqueueUrl(content);
+            } else {
+              await ShareIngest.enqueueText(content);
+            }
             enqueuedAny = true;
         }
       }

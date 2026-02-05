@@ -183,14 +183,19 @@ class MainActivity : FlutterFragmentActivity() {
     if (type.isNullOrBlank() || content.isNullOrBlank()) return
 
     val mimeType = intent.getStringExtra(ShareReceiverActivity.EXTRA_SHARE_MIME_TYPE)
+    val filename = intent.getStringExtra(ShareReceiverActivity.EXTRA_SHARE_FILENAME)
     val payload = mutableMapOf("type" to type, "content" to content)
     if (!mimeType.isNullOrBlank()) {
       payload["mimeType"] = mimeType
+    }
+    if (!filename.isNullOrBlank()) {
+      payload["filename"] = filename
     }
     pendingShares.add(payload)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_TYPE)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_CONTENT)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_MIME_TYPE)
+    intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_FILENAME)
   }
 
   private fun fetchAndReturnLocation(result: MethodChannel.Result) {

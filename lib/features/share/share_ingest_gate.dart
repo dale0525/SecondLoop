@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
@@ -138,7 +140,100 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       final lang = Localizations.localeOf(context).toLanguageTag();
 
       Future<String> Function(String path, String mimeType)? onImage;
+      Future<String> Function(String path, String mimeType, String? filename)?
+          onFile;
+      Future<String> Function(String url)? onUrlManifest;
+      Future<void> Function(
+        String attachmentSha256,
+        ShareIngestAttachmentMetadata metadata,
+      )? onUpsertAttachmentMetadata;
       if (backend is NativeAppBackend) {
+        const metadataStore = RustAttachmentMetadataStore();
+        onUpsertAttachmentMetadata = (sha256, metadata) async {
+          try {
+            await metadataStore.upsert(
+              sessionKey,
+              attachmentSha256: sha256,
+              title: metadata.title,
+              filenames: metadata.filenames,
+              sourceUrls: metadata.sourceUrls,
+            );
+          } catch (_) {
+            // ignore
+          }
+        };
+
+        onUrlManifest = (url) async {
+          final manifest = jsonEncode({
+            'schema': 'secondloop.url_manifest.v1',
+            'url': url.trim(),
+          });
+          final bytes = Uint8List.fromList(utf8.encode(manifest));
+          final attachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: bytes,
+            mimeType: 'application/x.secondloop.url+json',
+          );
+          return attachment.sha256;
+        };
+
+        onFile = (path, mimeType, filename) async {
+          final bytes = await compute(_readFileBytes, path);
+          final normalizedMimeType = mimeType.trim();
+
+          if (normalizedMimeType.startsWith('video/')) {
+            final original = await backend.insertAttachment(
+              sessionKey,
+              bytes: bytes,
+              mimeType: normalizedMimeType,
+            );
+            unawaited(_maybeEnqueueCloudMediaBackup(
+              backend,
+              sessionKey,
+              original.sha256,
+            ));
+
+            final manifest = jsonEncode({
+              'schema': 'secondloop.video_manifest.v1',
+              'original_sha256': original.sha256,
+              'original_mime_type': normalizedMimeType,
+            });
+            final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
+            final manifestAttachment = await backend.insertAttachment(
+              sessionKey,
+              bytes: manifestBytes,
+              mimeType: 'application/x.secondloop.video+json',
+            );
+
+            try {
+              await File(path).delete();
+            } catch (_) {
+              // ignore
+            }
+
+            return manifestAttachment.sha256;
+          }
+
+          final attachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: bytes,
+            mimeType: normalizedMimeType,
+          );
+          unawaited(_maybeEnqueueCloudMediaBackup(
+            backend,
+            sessionKey,
+            attachment.sha256,
+          ));
+
+          try {
+            await File(path).delete();
+          } catch (_) {
+            // ignore
+          }
+
+          return attachment.sha256;
+        };
+
         onImage = (path, mimeType) async {
           final bytes = await compute(_readFileBytes, path);
           final compressed =
@@ -175,6 +270,9 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         sessionKey,
         onMutation: syncEngine?.notifyLocalMutation,
         onImage: onImage,
+        onFile: onFile,
+        onUrlManifest: onUrlManifest,
+        onUpsertAttachmentMetadata: onUpsertAttachmentMetadata,
       );
     } finally {
       _draining = false;

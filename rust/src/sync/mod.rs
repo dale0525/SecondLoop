@@ -10,3 +10,4 @@ include!("parts/02_push.rs");
 include!("parts/03_pull.rs");
 include!("parts/04_apply_core.rs");
 include!("parts/05_apply_messages_and_attachments.rs");
+include!("parts/06_apply_attachment_metadata.rs");

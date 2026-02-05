@@ -588,7 +588,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
   Future<void> _pickAndSendMedia() async {
     if (_isDesktopPlatform) {
-      return _pickAndSendImageFromFile();
+      return _pickAndSendAttachmentFromFile();
     }
     return _pickAndSendImageFromGallery();
   }
@@ -599,7 +599,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (!_supportsImageUpload) return;
 
     if (_isDesktopPlatform) {
-      await _pickAndSendImageFromFile();
+      await _pickAndSendAttachmentFromFile();
       return;
     }
 
@@ -775,7 +775,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
-  Future<void> _pickAndSendImageFromFile() async {
+  Future<void> _pickAndSendAttachmentFromFile() async {
     if (_sending) return;
     if (_asking) return;
     if (!_isDesktopPlatform) return;
@@ -783,19 +783,24 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     _setState(() => _sending = true);
     try {
       final picked = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif'],
+        type: FileType.any,
         withData: true,
       );
       if (picked == null || picked.files.isEmpty) return;
       final file = picked.files.first;
       final rawBytes = file.bytes;
-      if (rawBytes == null) {
-        throw Exception('file_picker returned no bytes');
-      }
+      if (rawBytes == null) throw Exception('file_picker returned no bytes');
 
-      final inferredMimeType = _inferImageMimeTypeFromPath(file.name);
-      await _sendImageAttachment(rawBytes, inferredMimeType);
+      final inferredMimeType = _inferMimeTypeFromFilename(file.name);
+      if (inferredMimeType.startsWith('image/')) {
+        await _sendImageAttachment(rawBytes, inferredMimeType);
+      } else {
+        await _sendFileAttachment(
+          rawBytes,
+          inferredMimeType,
+          filename: file.name,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

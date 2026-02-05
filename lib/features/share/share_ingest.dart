@@ -7,6 +7,42 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 
+final class ShareIngestAttachmentMetadata {
+  const ShareIngestAttachmentMetadata({
+    this.title,
+    this.filenames = const <String>[],
+    this.sourceUrls = const <String>[],
+  });
+
+  final String? title;
+  final List<String> filenames;
+  final List<String> sourceUrls;
+
+  @override
+  bool operator ==(Object other) {
+    return other is ShareIngestAttachmentMetadata &&
+        other.title == title &&
+        _listEqual(other.filenames, filenames) &&
+        _listEqual(other.sourceUrls, sourceUrls);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        title,
+        Object.hashAll(filenames),
+        Object.hashAll(sourceUrls),
+      );
+
+  static bool _listEqual(List<String> a, List<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
 final class ShareIngest {
   static const String _queueKey = 'share_ingest_queue_v1';
   static const String _dedupKey = 'share_ingest_dedup_v1';
@@ -49,6 +85,25 @@ final class ShareIngest {
     });
   }
 
+  static Future<void> enqueueFile({
+    required String tempPath,
+    required String mimeType,
+    String? filename,
+  }) async {
+    final trimmedPath = tempPath.trim();
+    final trimmedMime = mimeType.trim();
+    final trimmedFilename = filename?.trim();
+    if (trimmedPath.isEmpty) return;
+    if (trimmedMime.isEmpty) return;
+    await _enqueuePayload({
+      'type': 'file',
+      'path': trimmedPath,
+      'mimeType': trimmedMime,
+      if (trimmedFilename != null && trimmedFilename.isNotEmpty)
+        'filename': trimmedFilename,
+    });
+  }
+
   static Future<void> _enqueuePayload(Map<String, Object?> payload) async {
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getStringList(_queueKey) ?? const <String>[];
@@ -61,6 +116,13 @@ final class ShareIngest {
     Uint8List sessionKey, {
     void Function()? onMutation,
     Future<String> Function(String path, String mimeType)? onImage,
+    Future<String> Function(String path, String mimeType, String? filename)?
+        onFile,
+    Future<String> Function(String url)? onUrlManifest,
+    Future<void> Function(
+      String attachmentSha256,
+      ShareIngestAttachmentMetadata metadata,
+    )? onUpsertAttachmentMetadata,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getStringList(_queueKey) ?? const <String>[];
@@ -88,7 +150,6 @@ final class ShareIngest {
 
       switch (type) {
         case 'text':
-        case 'url':
           final content = payload['content'];
           if (content is! String || content.trim().isEmpty) continue;
           final dedupKey = '$type:${content.trim()}';
@@ -106,6 +167,58 @@ final class ShareIngest {
               role: 'user',
               content: content,
             );
+            dedup[dedupKey] = now;
+            processed += 1;
+            onMutation?.call();
+          } catch (_) {
+            remaining.addAll(current.skip(i));
+            break outer;
+          }
+          break;
+        case 'url':
+          final content = payload['content'];
+          if (content is! String || content.trim().isEmpty) continue;
+          final trimmedUrl = content.trim();
+          final dedupKey = 'url:$trimmedUrl';
+          if (dedup.containsKey(dedupKey)) {
+            processed += 1;
+            continue;
+          }
+          try {
+            String? attachmentSha256;
+            if (onUrlManifest != null) {
+              attachmentSha256 = await onUrlManifest(trimmedUrl);
+            }
+
+            conversationId ??=
+                (await backend.getOrCreateMainStreamConversation(sessionKey))
+                    .id;
+            final message = await backend.insertMessage(
+              sessionKey,
+              conversationId,
+              role: 'user',
+              content: trimmedUrl,
+            );
+            final attachmentsBackend = backend is AttachmentsBackend
+                ? backend as AttachmentsBackend
+                : null;
+            if (attachmentsBackend != null && attachmentSha256 != null) {
+              await attachmentsBackend.linkAttachmentToMessage(
+                sessionKey,
+                message.id,
+                attachmentSha256: attachmentSha256,
+              );
+              if (onUpsertAttachmentMetadata != null) {
+                await onUpsertAttachmentMetadata(
+                  attachmentSha256,
+                  ShareIngestAttachmentMetadata(
+                    title: trimmedUrl,
+                    sourceUrls: [trimmedUrl],
+                  ),
+                );
+              }
+            }
+
             dedup[dedupKey] = now;
             processed += 1;
             onMutation?.call();
@@ -149,6 +262,68 @@ final class ShareIngest {
                 attachmentSha256: sha256,
               );
             }
+            dedup[dedupKey] = now;
+            processed += 1;
+            onMutation?.call();
+          } catch (_) {
+            remaining.addAll(current.skip(i));
+            break outer;
+          }
+          break;
+        case 'file':
+          final path = payload['path'];
+          final mimeType = payload['mimeType'];
+          final filename = payload['filename'];
+          if (path is! String || path.trim().isEmpty) continue;
+          if (mimeType is! String || mimeType.trim().isEmpty) continue;
+          final safeFilename =
+              (filename is String && filename.trim().isNotEmpty)
+                  ? filename.trim()
+                  : null;
+          if (onFile == null) {
+            remaining.addAll(current.skip(i));
+            break outer;
+          }
+
+          try {
+            final sha256 =
+                await onFile(path.trim(), mimeType.trim(), safeFilename);
+            final dedupKey = 'file:$sha256';
+            if (dedup.containsKey(dedupKey)) {
+              processed += 1;
+              continue;
+            }
+
+            conversationId ??=
+                (await backend.getOrCreateMainStreamConversation(sessionKey))
+                    .id;
+            final content = safeFilename == null
+                ? 'Shared file (${mimeType.trim()})'
+                : 'Shared file: $safeFilename';
+            final message = await backend.insertMessage(
+              sessionKey,
+              conversationId,
+              role: 'user',
+              content: content,
+            );
+
+            final attachmentsBackend = backend is AttachmentsBackend
+                ? backend as AttachmentsBackend
+                : null;
+            if (attachmentsBackend != null) {
+              await attachmentsBackend.linkAttachmentToMessage(
+                sessionKey,
+                message.id,
+                attachmentSha256: sha256,
+              );
+              if (onUpsertAttachmentMetadata != null && safeFilename != null) {
+                await onUpsertAttachmentMetadata(
+                  sha256,
+                  ShareIngestAttachmentMetadata(filenames: [safeFilename]),
+                );
+              }
+            }
+
             dedup[dedupKey] = now;
             processed += 1;
             onMutation?.call();

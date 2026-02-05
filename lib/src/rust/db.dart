@@ -117,6 +117,45 @@ class AttachmentExifMetadata {
           longitude == other.longitude;
 }
 
+class AttachmentMetadata {
+  final String? title;
+  final List<String> filenames;
+  final List<String> sourceUrls;
+  final PlatformInt64 titleUpdatedAtMs;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const AttachmentMetadata({
+    this.title,
+    required this.filenames,
+    required this.sourceUrls,
+    required this.titleUpdatedAtMs,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      filenames.hashCode ^
+      sourceUrls.hashCode ^
+      titleUpdatedAtMs.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AttachmentMetadata &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          filenames == other.filenames &&
+          sourceUrls == other.sourceUrls &&
+          titleUpdatedAtMs == other.titleUpdatedAtMs &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class AttachmentPlaceJob {
   final String attachmentSha256;
   final String status;
@@ -287,6 +326,110 @@ class CloudMediaBackupSummary {
           lastUploadedAtMs == other.lastUploadedAtMs &&
           lastError == other.lastError &&
           lastErrorAtMs == other.lastErrorAtMs;
+}
+
+class ContentEnrichmentConfig {
+  final bool urlFetchEnabled;
+  final bool documentExtractEnabled;
+  final PlatformInt64 documentKeepOriginalMaxBytes;
+  final bool pdfCompressEnabled;
+  final String pdfCompressProfile;
+  final PlatformInt64 pdfCompressMinBytes;
+  final PlatformInt64 pdfCompressTargetMaxBytes;
+  final bool audioTranscribeEnabled;
+  final String audioTranscribeEngine;
+  final bool videoExtractEnabled;
+  final bool videoProxyEnabled;
+  final PlatformInt64 videoProxyMaxDurationMs;
+  final PlatformInt64 videoProxyMaxBytes;
+  final bool ocrEnabled;
+  final String ocrEngineMode;
+  final String ocrLanguageHints;
+  final PlatformInt64 ocrPdfDpi;
+  final PlatformInt64 ocrPdfAutoMaxPages;
+  final PlatformInt64 ocrPdfMaxPages;
+  final bool mobileBackgroundEnabled;
+  final bool mobileBackgroundRequiresWifi;
+  final bool mobileBackgroundRequiresCharging;
+
+  const ContentEnrichmentConfig({
+    required this.urlFetchEnabled,
+    required this.documentExtractEnabled,
+    required this.documentKeepOriginalMaxBytes,
+    required this.pdfCompressEnabled,
+    required this.pdfCompressProfile,
+    required this.pdfCompressMinBytes,
+    required this.pdfCompressTargetMaxBytes,
+    required this.audioTranscribeEnabled,
+    required this.audioTranscribeEngine,
+    required this.videoExtractEnabled,
+    required this.videoProxyEnabled,
+    required this.videoProxyMaxDurationMs,
+    required this.videoProxyMaxBytes,
+    required this.ocrEnabled,
+    required this.ocrEngineMode,
+    required this.ocrLanguageHints,
+    required this.ocrPdfDpi,
+    required this.ocrPdfAutoMaxPages,
+    required this.ocrPdfMaxPages,
+    required this.mobileBackgroundEnabled,
+    required this.mobileBackgroundRequiresWifi,
+    required this.mobileBackgroundRequiresCharging,
+  });
+
+  @override
+  int get hashCode =>
+      urlFetchEnabled.hashCode ^
+      documentExtractEnabled.hashCode ^
+      documentKeepOriginalMaxBytes.hashCode ^
+      pdfCompressEnabled.hashCode ^
+      pdfCompressProfile.hashCode ^
+      pdfCompressMinBytes.hashCode ^
+      pdfCompressTargetMaxBytes.hashCode ^
+      audioTranscribeEnabled.hashCode ^
+      audioTranscribeEngine.hashCode ^
+      videoExtractEnabled.hashCode ^
+      videoProxyEnabled.hashCode ^
+      videoProxyMaxDurationMs.hashCode ^
+      videoProxyMaxBytes.hashCode ^
+      ocrEnabled.hashCode ^
+      ocrEngineMode.hashCode ^
+      ocrLanguageHints.hashCode ^
+      ocrPdfDpi.hashCode ^
+      ocrPdfAutoMaxPages.hashCode ^
+      ocrPdfMaxPages.hashCode ^
+      mobileBackgroundEnabled.hashCode ^
+      mobileBackgroundRequiresWifi.hashCode ^
+      mobileBackgroundRequiresCharging.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContentEnrichmentConfig &&
+          runtimeType == other.runtimeType &&
+          urlFetchEnabled == other.urlFetchEnabled &&
+          documentExtractEnabled == other.documentExtractEnabled &&
+          documentKeepOriginalMaxBytes == other.documentKeepOriginalMaxBytes &&
+          pdfCompressEnabled == other.pdfCompressEnabled &&
+          pdfCompressProfile == other.pdfCompressProfile &&
+          pdfCompressMinBytes == other.pdfCompressMinBytes &&
+          pdfCompressTargetMaxBytes == other.pdfCompressTargetMaxBytes &&
+          audioTranscribeEnabled == other.audioTranscribeEnabled &&
+          audioTranscribeEngine == other.audioTranscribeEngine &&
+          videoExtractEnabled == other.videoExtractEnabled &&
+          videoProxyEnabled == other.videoProxyEnabled &&
+          videoProxyMaxDurationMs == other.videoProxyMaxDurationMs &&
+          videoProxyMaxBytes == other.videoProxyMaxBytes &&
+          ocrEnabled == other.ocrEnabled &&
+          ocrEngineMode == other.ocrEngineMode &&
+          ocrLanguageHints == other.ocrLanguageHints &&
+          ocrPdfDpi == other.ocrPdfDpi &&
+          ocrPdfAutoMaxPages == other.ocrPdfAutoMaxPages &&
+          ocrPdfMaxPages == other.ocrPdfMaxPages &&
+          mobileBackgroundEnabled == other.mobileBackgroundEnabled &&
+          mobileBackgroundRequiresWifi == other.mobileBackgroundRequiresWifi &&
+          mobileBackgroundRequiresCharging ==
+              other.mobileBackgroundRequiresCharging;
 }
 
 class Conversation {
@@ -681,6 +824,41 @@ class SimilarTodoThread {
           runtimeType == other.runtimeType &&
           todoId == other.todoId &&
           distance == other.distance;
+}
+
+class StoragePolicyConfig {
+  final bool autoPurgeEnabled;
+  final PlatformInt64 autoPurgeKeepRecentDays;
+  final PlatformInt64 autoPurgeMaxCacheBytes;
+  final PlatformInt64 autoPurgeMinCandidateBytes;
+  final bool autoPurgeIncludeImages;
+
+  const StoragePolicyConfig({
+    required this.autoPurgeEnabled,
+    required this.autoPurgeKeepRecentDays,
+    required this.autoPurgeMaxCacheBytes,
+    required this.autoPurgeMinCandidateBytes,
+    required this.autoPurgeIncludeImages,
+  });
+
+  @override
+  int get hashCode =>
+      autoPurgeEnabled.hashCode ^
+      autoPurgeKeepRecentDays.hashCode ^
+      autoPurgeMaxCacheBytes.hashCode ^
+      autoPurgeMinCandidateBytes.hashCode ^
+      autoPurgeIncludeImages.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StoragePolicyConfig &&
+          runtimeType == other.runtimeType &&
+          autoPurgeEnabled == other.autoPurgeEnabled &&
+          autoPurgeKeepRecentDays == other.autoPurgeKeepRecentDays &&
+          autoPurgeMaxCacheBytes == other.autoPurgeMaxCacheBytes &&
+          autoPurgeMinCandidateBytes == other.autoPurgeMinCandidateBytes &&
+          autoPurgeIncludeImages == other.autoPurgeIncludeImages;
 }
 
 class Todo {

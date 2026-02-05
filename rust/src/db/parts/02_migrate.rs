@@ -599,6 +599,27 @@ PRAGMA user_version = 20;
         )?;
     }
 
+    if user_version < 21 {
+        // v21: attachment metadata (encrypted at rest, syncable).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_metadata (
+  attachment_sha256 TEXT PRIMARY KEY,
+  title BLOB,
+  filenames BLOB,
+  source_urls BLOB,
+  title_updated_at_ms INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_metadata_updated_at_ms
+  ON attachment_metadata(updated_at_ms);
+PRAGMA user_version = 21;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -609,6 +630,7 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     conn.busy_timeout(Duration::from_millis(5_000))?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     migrate(&conn)?;
+    ensure_content_enrichment_kv_defaults(&conn)?;
     Ok(conn)
 }
 
@@ -649,6 +671,7 @@ DELETE FROM message_attachments;
 DELETE FROM cloud_media_backup;
 DELETE FROM attachment_variants;
 DELETE FROM attachment_exif;
+DELETE FROM attachment_metadata;
 DELETE FROM attachment_places;
 DELETE FROM attachment_annotations;
 DELETE FROM attachment_deletions;

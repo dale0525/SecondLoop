@@ -13,6 +13,9 @@ class SessionScope extends InheritedWidget {
   final Uint8List sessionKey;
   final VoidCallback lock;
 
+  static SessionScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SessionScope>();
+
   static SessionScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<SessionScope>();
     assert(scope != null, 'No SessionScope found in widget tree');

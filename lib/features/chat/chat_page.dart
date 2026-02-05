@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -13,6 +14,7 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/semantic_parse.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
+import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/native_backend.dart';
@@ -69,6 +71,7 @@ import 'attachment_annotation_job_status_row.dart';
 
 part 'chat_page_methods_a.dart';
 part 'chat_page_methods_b.dart';
+part 'chat_page_methods_b_attachments.dart';
 part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';

@@ -91,6 +91,17 @@ fn build_message_embedding_plaintext(
             extra.push_str(&display_name);
         }
 
+        if let Some(meta) = read_attachment_metadata(conn, key, &attachment_sha256)? {
+            let name = meta
+                .title
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| meta.filenames.first().cloned());
+            if let Some(name) = name {
+                extra.push_str("\nattachment: ");
+                extra.push_str(&name);
+            }
+        }
+
         if include_image_caption {
             if let Some(caption_long) =
                 read_attachment_annotation_caption_long_optional(conn, key, &attachment_sha256)?

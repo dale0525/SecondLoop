@@ -3,6 +3,8 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/attachments.dart';
+import 'api/content_enrichment.dart';
 import 'api/core.dart';
 import 'api/media_annotation.dart';
 import 'api/simple.dart';
@@ -42,6 +44,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AttachmentExifMetadata dco_decode_attachment_exif_metadata(dynamic raw);
 
   @protected
+  AttachmentMetadata dco_decode_attachment_metadata(dynamic raw);
+
+  @protected
   AttachmentPlaceJob dco_decode_attachment_place_job(dynamic raw);
 
   @protected
@@ -52,6 +57,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AttachmentExifMetadata dco_decode_box_autoadd_attachment_exif_metadata(
+      dynamic raw);
+
+  @protected
+  AttachmentMetadata dco_decode_box_autoadd_attachment_metadata(dynamic raw);
+
+  @protected
+  ContentEnrichmentConfig dco_decode_box_autoadd_content_enrichment_config(
       dynamic raw);
 
   @protected
@@ -68,10 +80,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message dco_decode_box_autoadd_message(dynamic raw);
 
   @protected
+  StoragePolicyConfig dco_decode_box_autoadd_storage_policy_config(dynamic raw);
+
+  @protected
   CloudMediaBackup dco_decode_cloud_media_backup(dynamic raw);
 
   @protected
   CloudMediaBackupSummary dco_decode_cloud_media_backup_summary(dynamic raw);
+
+  @protected
+  ContentEnrichmentConfig dco_decode_content_enrichment_config(dynamic raw);
 
   @protected
   Conversation dco_decode_conversation(dynamic raw);
@@ -169,6 +187,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  AttachmentMetadata? dco_decode_opt_box_autoadd_attachment_metadata(
+      dynamic raw);
+
+  @protected
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
@@ -185,6 +207,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SimilarTodoThread dco_decode_similar_todo_thread(dynamic raw);
+
+  @protected
+  StoragePolicyConfig dco_decode_storage_policy_config(dynamic raw);
 
   @protected
   Todo dco_decode_todo(dynamic raw);
@@ -229,6 +254,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  AttachmentMetadata sse_decode_attachment_metadata(
+      SseDeserializer deserializer);
+
+  @protected
   AttachmentPlaceJob sse_decode_attachment_place_job(
       SseDeserializer deserializer);
 
@@ -240,6 +269,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AttachmentExifMetadata sse_decode_box_autoadd_attachment_exif_metadata(
+      SseDeserializer deserializer);
+
+  @protected
+  AttachmentMetadata sse_decode_box_autoadd_attachment_metadata(
+      SseDeserializer deserializer);
+
+  @protected
+  ContentEnrichmentConfig sse_decode_box_autoadd_content_enrichment_config(
       SseDeserializer deserializer);
 
   @protected
@@ -256,10 +293,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message sse_decode_box_autoadd_message(SseDeserializer deserializer);
 
   @protected
+  StoragePolicyConfig sse_decode_box_autoadd_storage_policy_config(
+      SseDeserializer deserializer);
+
+  @protected
   CloudMediaBackup sse_decode_cloud_media_backup(SseDeserializer deserializer);
 
   @protected
   CloudMediaBackupSummary sse_decode_cloud_media_backup_summary(
+      SseDeserializer deserializer);
+
+  @protected
+  ContentEnrichmentConfig sse_decode_content_enrichment_config(
       SseDeserializer deserializer);
 
   @protected
@@ -369,6 +414,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  AttachmentMetadata? sse_decode_opt_box_autoadd_attachment_metadata(
+      SseDeserializer deserializer);
+
+  @protected
   double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
@@ -385,6 +434,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SimilarTodoThread sse_decode_similar_todo_thread(
+      SseDeserializer deserializer);
+
+  @protected
+  StoragePolicyConfig sse_decode_storage_policy_config(
       SseDeserializer deserializer);
 
   @protected
@@ -431,6 +484,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AttachmentExifMetadata self, SseSerializer serializer);
 
   @protected
+  void sse_encode_attachment_metadata(
+      AttachmentMetadata self, SseSerializer serializer);
+
+  @protected
   void sse_encode_attachment_place_job(
       AttachmentPlaceJob self, SseSerializer serializer);
 
@@ -444,6 +501,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_attachment_exif_metadata(
       AttachmentExifMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_attachment_metadata(
+      AttachmentMetadata self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_content_enrichment_config(
+      ContentEnrichmentConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
@@ -460,12 +525,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_message(Message self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_storage_policy_config(
+      StoragePolicyConfig self, SseSerializer serializer);
+
+  @protected
   void sse_encode_cloud_media_backup(
       CloudMediaBackup self, SseSerializer serializer);
 
   @protected
   void sse_encode_cloud_media_backup_summary(
       CloudMediaBackupSummary self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_content_enrichment_config(
+      ContentEnrichmentConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_conversation(Conversation self, SseSerializer serializer);
@@ -579,6 +652,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AttachmentExifMetadata? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_attachment_metadata(
+      AttachmentMetadata? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
 
   @protected
@@ -600,6 +677,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_similar_todo_thread(
       SimilarTodoThread self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_storage_policy_config(
+      StoragePolicyConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_todo(Todo self, SseSerializer serializer);

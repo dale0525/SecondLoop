@@ -9,6 +9,9 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
         "attachment.delete.v1" => apply_attachment_delete(conn, db_key, op),
         "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),
+        "attachment.metadata.upsert.v1" => {
+            apply_attachment_metadata_upsert(conn, db_key, &op["payload"])
+        }
         "attachment.place.upsert.v1" => apply_attachment_place_upsert(conn, db_key, &op["payload"]),
         "attachment.annotation.upsert.v1" => {
             apply_attachment_annotation_upsert(conn, db_key, &op["payload"])

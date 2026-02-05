@@ -1,0 +1,116 @@
+use std::fs;
+
+use rusqlite::OptionalExtension;
+use secondloop_rust::auth;
+use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::db;
+
+fn kv_value(conn: &rusqlite::Connection, key: &str) -> Option<String> {
+    conn.query_row(r#"SELECT value FROM kv WHERE key = ?1"#, [key], |row| {
+        row.get(0)
+    })
+    .optional()
+    .expect("query kv")
+}
+
+#[test]
+fn content_enrichment_kv_defaults_exist_and_match_plan() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+
+    let _key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let mb50 = 50i64 * 1024 * 1024;
+    let gb2 = 2i64 * 1024 * 1024 * 1024;
+    let mb10 = 10i64 * 1024 * 1024;
+
+    let cases: Vec<(&str, String)> = vec![
+        ("content_enrichment.url_fetch_enabled", "1".to_string()),
+        (
+            "content_enrichment.document_extract_enabled",
+            "1".to_string(),
+        ),
+        (
+            "content_enrichment.document_keep_original_max_bytes",
+            mb50.to_string(),
+        ),
+        ("content_enrichment.pdf_compress_enabled", "1".to_string()),
+        (
+            "content_enrichment.pdf_compress_profile",
+            "balanced".to_string(),
+        ),
+        ("content_enrichment.pdf_compress_min_bytes", "0".to_string()),
+        (
+            "content_enrichment.pdf_compress_target_max_bytes",
+            mb50.to_string(),
+        ),
+        (
+            "content_enrichment.audio_transcribe_enabled",
+            "0".to_string(),
+        ),
+        (
+            "content_enrichment.audio_transcribe_engine",
+            "whisper".to_string(),
+        ),
+        ("content_enrichment.video_extract_enabled", "0".to_string()),
+        ("content_enrichment.video_proxy_enabled", "1".to_string()),
+        (
+            "content_enrichment.video_proxy_max_duration_ms",
+            "3600000".to_string(),
+        ),
+        (
+            "content_enrichment.video_proxy_max_bytes",
+            "209715200".to_string(),
+        ),
+        ("content_enrichment.ocr_enabled", "1".to_string()),
+        (
+            "content_enrichment.ocr_engine_mode",
+            "platform_native".to_string(),
+        ),
+        (
+            "content_enrichment.ocr_language_hints",
+            "device_plus_en".to_string(),
+        ),
+        ("content_enrichment.ocr_pdf_dpi", "180".to_string()),
+        (
+            "content_enrichment.ocr_pdf_auto_max_pages",
+            "30".to_string(),
+        ),
+        ("content_enrichment.ocr_pdf_max_pages", "200".to_string()),
+        (
+            "content_enrichment.mobile_background_enabled",
+            "1".to_string(),
+        ),
+        (
+            "content_enrichment.mobile_background_requires_wifi",
+            "1".to_string(),
+        ),
+        (
+            "content_enrichment.mobile_background_requires_charging",
+            "1".to_string(),
+        ),
+        ("storage_policy.auto_purge_enabled", "1".to_string()),
+        (
+            "storage_policy.auto_purge_keep_recent_days",
+            "30".to_string(),
+        ),
+        ("storage_policy.auto_purge_max_cache_bytes", gb2.to_string()),
+        (
+            "storage_policy.auto_purge_min_candidate_bytes",
+            mb10.to_string(),
+        ),
+        ("storage_policy.auto_purge_include_images", "0".to_string()),
+    ];
+
+    for (key, expected) in cases {
+        let actual = kv_value(&conn, key);
+        assert_eq!(
+            actual.as_deref(),
+            Some(expected.as_str()),
+            "unexpected kv default for {key}"
+        );
+    }
+}
