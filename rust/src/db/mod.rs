@@ -12,6 +12,7 @@ include!("parts/08_attachments_core.rs");
 include!("parts/09_attachment_jobs.rs");
 include!("parts/10_todos.rs");
 include!("parts/11_events.rs");
+include!("parts/12_media_annotation_config.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;

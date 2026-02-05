@@ -41,3 +41,14 @@ abstract class AttachmentsBackend {
     required String sha256,
   });
 }
+
+abstract class AttachmentAnnotationMutationsBackend {
+  Future<void> markAttachmentAnnotationOkJson(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String lang,
+    required String modelName,
+    required String payloadJson,
+    required int nowMs,
+  });
+}

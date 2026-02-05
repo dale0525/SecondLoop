@@ -53,6 +53,13 @@ fn message_embedding_includes_attachment_enrichment() {
         .expect("init master password");
     let conn = db::open(&app_dir).expect("open db");
 
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('media_annotation.search_enabled', '1')
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        [],
+    )
+    .expect("enable media annotation search");
+
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
     let message =
         db::insert_message(&conn, &key, &conversation.id, "user", "").expect("insert message");

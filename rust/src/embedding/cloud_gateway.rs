@@ -106,6 +106,16 @@ impl CloudGatewayEmbedder {
             dim: OnceLock::new(),
         }
     }
+
+    pub fn seed_effective_model_id_and_dim(&self, model_id: &str, dim: usize) {
+        let model_id = model_id.trim();
+        if !model_id.is_empty() {
+            let _ = self.effective_model_id.set(model_id.to_string());
+        }
+        if dim > 0 {
+            let _ = self.dim.set(dim);
+        }
+    }
 }
 
 impl Embedder for CloudGatewayEmbedder {
@@ -155,12 +165,32 @@ impl Embedder for CloudGatewayEmbedder {
             .map(str::trim)
             .filter(|v| !v.is_empty())
         {
-            let _ = self.effective_model_id.set(model_id.to_string());
+            if let Some(existing) = self.effective_model_id.get() {
+                if existing.as_str() != model_id {
+                    return Err(anyhow!(
+                        "cloud-gateway embedding model_id mismatch: expected {}, got {}",
+                        existing,
+                        model_id
+                    ));
+                }
+            } else {
+                let _ = self.effective_model_id.set(model_id.to_string());
+            }
         }
 
         let body = resp.text().unwrap_or_default();
         let parsed = parse_openai_embeddings_response(&body, texts.len())?;
-        let _ = self.dim.set(parsed.dim);
+        if let Some(existing) = self.dim.get() {
+            if *existing != parsed.dim {
+                return Err(anyhow!(
+                    "cloud-gateway embedding dim mismatch: expected {}, got {}",
+                    existing,
+                    parsed.dim
+                ));
+            }
+        } else {
+            let _ = self.dim.set(parsed.dim);
+        }
         Ok(parsed.embeddings)
     }
 }

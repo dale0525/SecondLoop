@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 970 (485 per locale)
+/// Strings: 1056 (528 per locale)
 ///
-/// Built on 2026-02-04 at 10:20 UTC
+/// Built on 2026-02-04 at 19:17 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -239,6 +239,7 @@ class _StringsErrorsEn {
   // Translations
   String initFailed({required Object error}) => 'Init failed: ${error}';
   String loadFailed({required Object error}) => 'Load failed: ${error}';
+  String saveFailed({required Object error}) => 'Save failed: ${error}';
   String lockGateError({required Object error}) => 'LockGate error: ${error}';
   String get missingMainStream => 'Missing Main Stream';
 }
@@ -303,6 +304,8 @@ class _StringsSettingsEn {
   late final _StringsSettingsSemanticParseAutoActionsEn
       semanticParseAutoActions =
       _StringsSettingsSemanticParseAutoActionsEn._(_root);
+  late final _StringsSettingsMediaAnnotationEn mediaAnnotation =
+      _StringsSettingsMediaAnnotationEn._(_root);
   late final _StringsSettingsCloudEmbeddingsEn cloudEmbeddings =
       _StringsSettingsCloudEmbeddingsEn._(_root);
   late final _StringsSettingsCloudAccountEn cloudAccount =
@@ -391,6 +394,7 @@ class _StringsChatEn {
   String get semanticParseStatusRunning => 'AI analyzing…';
   String get semanticParseStatusSlow =>
       'AI is taking longer. Continuing in background…';
+  String get attachmentAnnotationNeedsSetup => 'Image annotations need setup';
   String get semanticParseStatusFailed => 'AI analysis failed';
   String get semanticParseStatusCanceled => 'AI analysis canceled';
   String semanticParseStatusCreated({required Object title}) =>
@@ -573,6 +577,8 @@ class _StringsCommonActionsEn {
 
   // Translations
   String get cancel => 'Cancel';
+  String get notNow => 'Not now';
+  String get allow => 'Allow';
   String get save => 'Save';
   String get copy => 'Copy';
   String get reset => 'Reset';
@@ -936,6 +942,39 @@ class _StringsSettingsSemanticParseAutoActionsEn {
   late final _StringsSettingsSemanticParseAutoActionsDialogActionsEn
       dialogActions =
       _StringsSettingsSemanticParseAutoActionsDialogActionsEn._(_root);
+}
+
+// Path: settings.mediaAnnotation
+class _StringsSettingsMediaAnnotationEn {
+  _StringsSettingsMediaAnnotationEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Image annotations';
+  String get subtitle => 'Optional: let AI caption images for better search';
+  late final _StringsSettingsMediaAnnotationSetupRequiredEn setupRequired =
+      _StringsSettingsMediaAnnotationSetupRequiredEn._(_root);
+  late final _StringsSettingsMediaAnnotationAnnotateEnabledEn annotateEnabled =
+      _StringsSettingsMediaAnnotationAnnotateEnabledEn._(_root);
+  late final _StringsSettingsMediaAnnotationSearchEnabledEn searchEnabled =
+      _StringsSettingsMediaAnnotationSearchEnabledEn._(_root);
+  late final _StringsSettingsMediaAnnotationSearchToggleConfirmEn
+      searchToggleConfirm =
+      _StringsSettingsMediaAnnotationSearchToggleConfirmEn._(_root);
+  late final _StringsSettingsMediaAnnotationAdvancedEn advanced =
+      _StringsSettingsMediaAnnotationAdvancedEn._(_root);
+  late final _StringsSettingsMediaAnnotationProviderModeEn providerMode =
+      _StringsSettingsMediaAnnotationProviderModeEn._(_root);
+  late final _StringsSettingsMediaAnnotationCloudModelNameEn cloudModelName =
+      _StringsSettingsMediaAnnotationCloudModelNameEn._(_root);
+  late final _StringsSettingsMediaAnnotationByokProfileEn byokProfile =
+      _StringsSettingsMediaAnnotationByokProfileEn._(_root);
+  late final _StringsSettingsMediaAnnotationAllowCellularEn allowCellular =
+      _StringsSettingsMediaAnnotationAllowCellularEn._(_root);
+  late final _StringsSettingsMediaAnnotationAllowCellularConfirmEn
+      allowCellularConfirm =
+      _StringsSettingsMediaAnnotationAllowCellularConfirmEn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -1700,6 +1739,134 @@ class _StringsSettingsSemanticParseAutoActionsDialogActionsEn {
   String get enable => 'Enable';
 }
 
+// Path: settings.mediaAnnotation.setupRequired
+class _StringsSettingsMediaAnnotationSetupRequiredEn {
+  _StringsSettingsMediaAnnotationSetupRequiredEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Image annotations setup required';
+  String get body => 'To annotate images, SecondLoop needs a multimodal model.';
+  late final _StringsSettingsMediaAnnotationSetupRequiredReasonsEn reasons =
+      _StringsSettingsMediaAnnotationSetupRequiredReasonsEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.annotateEnabled
+class _StringsSettingsMediaAnnotationAnnotateEnabledEn {
+  _StringsSettingsMediaAnnotationAnnotateEnabledEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Annotate images';
+  String get subtitle =>
+      'When you add a photo, SecondLoop may send it to AI to generate an encrypted caption.';
+}
+
+// Path: settings.mediaAnnotation.searchEnabled
+class _StringsSettingsMediaAnnotationSearchEnabledEn {
+  _StringsSettingsMediaAnnotationSearchEnabledEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Use annotations for search';
+  String get subtitle => 'Include image captions when building search data.';
+}
+
+// Path: settings.mediaAnnotation.searchToggleConfirm
+class _StringsSettingsMediaAnnotationSearchToggleConfirmEn {
+  _StringsSettingsMediaAnnotationSearchToggleConfirmEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Update search index?';
+  String get bodyEnable =>
+      'Turning this on will rebuild search data so image captions become searchable.';
+  String get bodyDisable =>
+      'Turning this off will rebuild search data to remove image captions from search.';
+}
+
+// Path: settings.mediaAnnotation.advanced
+class _StringsSettingsMediaAnnotationAdvancedEn {
+  _StringsSettingsMediaAnnotationAdvancedEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Advanced';
+}
+
+// Path: settings.mediaAnnotation.providerMode
+class _StringsSettingsMediaAnnotationProviderModeEn {
+  _StringsSettingsMediaAnnotationProviderModeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Multimodal model';
+  String get subtitle => 'Use a different provider/model for image captions.';
+  late final _StringsSettingsMediaAnnotationProviderModeLabelsEn labels =
+      _StringsSettingsMediaAnnotationProviderModeLabelsEn._(_root);
+  late final _StringsSettingsMediaAnnotationProviderModeDescriptionsEn
+      descriptions =
+      _StringsSettingsMediaAnnotationProviderModeDescriptionsEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.cloudModelName
+class _StringsSettingsMediaAnnotationCloudModelNameEn {
+  _StringsSettingsMediaAnnotationCloudModelNameEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Cloud model name';
+  String get subtitle => 'Override the cloud multimodal model name (optional).';
+  String get hint => 'e.g. gpt-4o-mini';
+  String get followAskAi => 'Follow Ask AI';
+}
+
+// Path: settings.mediaAnnotation.byokProfile
+class _StringsSettingsMediaAnnotationByokProfileEn {
+  _StringsSettingsMediaAnnotationByokProfileEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'API key profile';
+  String get subtitle => 'Pick which profile to use for image captions.';
+  String get unset => 'Not set';
+  String get missingBackend => 'Not available in this build.';
+  String get noOpenAiCompatibleProfiles =>
+      'No OpenAI‑compatible profiles found. Add one in API keys.';
+}
+
+// Path: settings.mediaAnnotation.allowCellular
+class _StringsSettingsMediaAnnotationAllowCellularEn {
+  _StringsSettingsMediaAnnotationAllowCellularEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Allow cellular data';
+  String get subtitle =>
+      'Use mobile data to annotate images. (Wi‑Fi only by default.)';
+}
+
+// Path: settings.mediaAnnotation.allowCellularConfirm
+class _StringsSettingsMediaAnnotationAllowCellularConfirmEn {
+  _StringsSettingsMediaAnnotationAllowCellularConfirmEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Use cellular data for image annotations?';
+  String get body =>
+      'Annotating images may upload photos to your chosen AI provider and can use significant data.';
+}
+
 // Path: settings.cloudEmbeddings.dialogActions
 class _StringsSettingsCloudEmbeddingsDialogActionsEn {
   _StringsSettingsCloudEmbeddingsDialogActionsEn._(this._root);
@@ -1887,6 +2054,7 @@ class _StringsSettingsByokUsagePurposesEn {
 
   // Translations
   String get semanticParse => 'Semantic parse';
+  String get mediaAnnotation => 'Image annotations';
 }
 
 // Path: settings.subscription.benefits
@@ -2139,6 +2307,50 @@ class _StringsEmbeddingProfilesReindexDialogActionsEn {
   String get continueLabel => 'Continue';
 }
 
+// Path: settings.mediaAnnotation.setupRequired.reasons
+class _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
+  _StringsSettingsMediaAnnotationSetupRequiredReasonsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get cloudUnavailable =>
+      'SecondLoop Cloud is not available in this build.';
+  String get cloudRequiresPro => 'SecondLoop Cloud requires Pro.';
+  String get cloudSignIn =>
+      'Sign in to SecondLoop Cloud to use the Cloud model.';
+  String get byokOpenAiCompatible =>
+      'Add an OpenAI‑compatible API key profile.';
+  String get followAskAi =>
+      'Ask AI must use an OpenAI‑compatible profile, or choose a different multimodal model in Advanced.';
+}
+
+// Path: settings.mediaAnnotation.providerMode.labels
+class _StringsSettingsMediaAnnotationProviderModeLabelsEn {
+  _StringsSettingsMediaAnnotationProviderModeLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get followAskAi => 'Follow Ask AI';
+  String get cloudGateway => 'SecondLoop Cloud';
+  String get byokProfile => 'API key (profile)';
+}
+
+// Path: settings.mediaAnnotation.providerMode.descriptions
+class _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
+  _StringsSettingsMediaAnnotationProviderModeDescriptionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get followAskAi => 'Use the same setup as Ask AI. (Recommended)';
+  String get cloudGateway =>
+      'Use SecondLoop Cloud when available. (Requires Pro)';
+  String get byokProfile =>
+      'Use a specific API key profile (OpenAI‑compatible).';
+}
+
 // Path: settings.cloudAccount.benefits.items
 class _StringsSettingsCloudAccountBenefitsItemsEn {
   _StringsSettingsCloudAccountBenefitsItemsEn._(this._root);
@@ -2380,6 +2592,8 @@ class _StringsErrorsZhCn extends _StringsErrorsEn {
   @override
   String loadFailed({required Object error}) => '加载失败：${error}';
   @override
+  String saveFailed({required Object error}) => '保存失败：${error}';
+  @override
   String lockGateError({required Object error}) => '锁定流程错误：${error}';
   @override
   String get missingMainStream => '缺少主线对话';
@@ -2476,6 +2690,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsSemanticParseAutoActionsZhCn
       semanticParseAutoActions =
       _StringsSettingsSemanticParseAutoActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationZhCn mediaAnnotation =
+      _StringsSettingsMediaAnnotationZhCn._(_root);
   @override
   late final _StringsSettingsCloudEmbeddingsZhCn cloudEmbeddings =
       _StringsSettingsCloudEmbeddingsZhCn._(_root);
@@ -2612,6 +2829,8 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusRunning => 'AI 分析中…';
   @override
   String get semanticParseStatusSlow => 'AI 分析较慢，后台继续…';
+  @override
+  String get attachmentAnnotationNeedsSetup => '图片注释需要先配置';
   @override
   String get semanticParseStatusFailed => 'AI 分析失败';
   @override
@@ -2891,6 +3110,10 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   // Translations
   @override
   String get cancel => '取消';
+  @override
+  String get notNow => '暂不';
+  @override
+  String get allow => '允许';
   @override
   String get save => '保存';
   @override
@@ -3449,6 +3672,56 @@ class _StringsSettingsSemanticParseAutoActionsZhCn
   late final _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
       dialogActions =
       _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation
+class _StringsSettingsMediaAnnotationZhCn
+    extends _StringsSettingsMediaAnnotationEn {
+  _StringsSettingsMediaAnnotationZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '图片注释';
+  @override
+  String get subtitle => '可选：让 AI 为图片生成注释用于检索';
+  @override
+  late final _StringsSettingsMediaAnnotationSetupRequiredZhCn setupRequired =
+      _StringsSettingsMediaAnnotationSetupRequiredZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAnnotateEnabledZhCn
+      annotateEnabled =
+      _StringsSettingsMediaAnnotationAnnotateEnabledZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationSearchEnabledZhCn searchEnabled =
+      _StringsSettingsMediaAnnotationSearchEnabledZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationSearchToggleConfirmZhCn
+      searchToggleConfirm =
+      _StringsSettingsMediaAnnotationSearchToggleConfirmZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAdvancedZhCn advanced =
+      _StringsSettingsMediaAnnotationAdvancedZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationProviderModeZhCn providerMode =
+      _StringsSettingsMediaAnnotationProviderModeZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationCloudModelNameZhCn cloudModelName =
+      _StringsSettingsMediaAnnotationCloudModelNameZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationByokProfileZhCn byokProfile =
+      _StringsSettingsMediaAnnotationByokProfileZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAllowCellularZhCn allowCellular =
+      _StringsSettingsMediaAnnotationAllowCellularZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
+      allowCellularConfirm =
+      _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -4596,6 +4869,197 @@ class _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
   String get enable => '开启';
 }
 
+// Path: settings.mediaAnnotation.setupRequired
+class _StringsSettingsMediaAnnotationSetupRequiredZhCn
+    extends _StringsSettingsMediaAnnotationSetupRequiredEn {
+  _StringsSettingsMediaAnnotationSetupRequiredZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '图片注释需要先配置';
+  @override
+  String get body => '要注释图片，SecondLoop 需要一个多模态模型。';
+  @override
+  late final _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn reasons =
+      _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.annotateEnabled
+class _StringsSettingsMediaAnnotationAnnotateEnabledZhCn
+    extends _StringsSettingsMediaAnnotationAnnotateEnabledEn {
+  _StringsSettingsMediaAnnotationAnnotateEnabledZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '注释图片';
+  @override
+  String get subtitle => '添加图片后，SecondLoop 可能会将图片发送给 AI 生成加密注释。';
+}
+
+// Path: settings.mediaAnnotation.searchEnabled
+class _StringsSettingsMediaAnnotationSearchEnabledZhCn
+    extends _StringsSettingsMediaAnnotationSearchEnabledEn {
+  _StringsSettingsMediaAnnotationSearchEnabledZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '注释用于搜索';
+  @override
+  String get subtitle => '将图片注释加入搜索索引。';
+}
+
+// Path: settings.mediaAnnotation.searchToggleConfirm
+class _StringsSettingsMediaAnnotationSearchToggleConfirmZhCn
+    extends _StringsSettingsMediaAnnotationSearchToggleConfirmEn {
+  _StringsSettingsMediaAnnotationSearchToggleConfirmZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '更新搜索索引？';
+  @override
+  String get bodyEnable => '开启后会重新生成搜索数据，让图片注释可被检索。';
+  @override
+  String get bodyDisable => '关闭后会重新生成搜索数据，从检索中移除图片注释。';
+}
+
+// Path: settings.mediaAnnotation.advanced
+class _StringsSettingsMediaAnnotationAdvancedZhCn
+    extends _StringsSettingsMediaAnnotationAdvancedEn {
+  _StringsSettingsMediaAnnotationAdvancedZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '高级设置';
+}
+
+// Path: settings.mediaAnnotation.providerMode
+class _StringsSettingsMediaAnnotationProviderModeZhCn
+    extends _StringsSettingsMediaAnnotationProviderModeEn {
+  _StringsSettingsMediaAnnotationProviderModeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '多模态模型';
+  @override
+  String get subtitle => '为图片注释选择独立于“问 AI”的服务商/模型。';
+  @override
+  late final _StringsSettingsMediaAnnotationProviderModeLabelsZhCn labels =
+      _StringsSettingsMediaAnnotationProviderModeLabelsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
+      descriptions =
+      _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.cloudModelName
+class _StringsSettingsMediaAnnotationCloudModelNameZhCn
+    extends _StringsSettingsMediaAnnotationCloudModelNameEn {
+  _StringsSettingsMediaAnnotationCloudModelNameZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'Cloud 模型名';
+  @override
+  String get subtitle => '可选：覆盖云端多模态模型名。';
+  @override
+  String get hint => '例如 gpt-4o-mini';
+  @override
+  String get followAskAi => '跟随问 AI';
+}
+
+// Path: settings.mediaAnnotation.byokProfile
+class _StringsSettingsMediaAnnotationByokProfileZhCn
+    extends _StringsSettingsMediaAnnotationByokProfileEn {
+  _StringsSettingsMediaAnnotationByokProfileZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'API Key 配置档';
+  @override
+  String get subtitle => '选择图片注释使用哪个配置档。';
+  @override
+  String get unset => '未设置';
+  @override
+  String get missingBackend => '当前构建不可用。';
+  @override
+  String get noOpenAiCompatibleProfiles =>
+      '没有可用的 OpenAI-compatible 配置档，请先在“API Key（问 AI）”里添加。';
+}
+
+// Path: settings.mediaAnnotation.allowCellular
+class _StringsSettingsMediaAnnotationAllowCellularZhCn
+    extends _StringsSettingsMediaAnnotationAllowCellularEn {
+  _StringsSettingsMediaAnnotationAllowCellularZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '允许蜂窝网络';
+  @override
+  String get subtitle => '允许用蜂窝网络进行图片注释（默认仅 Wi‑Fi）。';
+}
+
+// Path: settings.mediaAnnotation.allowCellularConfirm
+class _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
+    extends _StringsSettingsMediaAnnotationAllowCellularConfirmEn {
+  _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '允许使用蜂窝网络注释图片？';
+  @override
+  String get body => '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
+}
+
 // Path: settings.cloudEmbeddings.dialogActions
 class _StringsSettingsCloudEmbeddingsDialogActionsZhCn
     extends _StringsSettingsCloudEmbeddingsDialogActionsEn {
@@ -4883,6 +5347,8 @@ class _StringsSettingsByokUsagePurposesZhCn
   // Translations
   @override
   String get semanticParse => '语义解析';
+  @override
+  String get mediaAnnotation => '图片注释';
 }
 
 // Path: settings.subscription.benefits
@@ -5249,6 +5715,69 @@ class _StringsEmbeddingProfilesReindexDialogActionsZhCn
   String get continueLabel => '继续';
 }
 
+// Path: settings.mediaAnnotation.setupRequired.reasons
+class _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn
+    extends _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
+  _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get cloudUnavailable => '当前构建未启用 SecondLoop Cloud。';
+  @override
+  String get cloudRequiresPro => 'SecondLoop Cloud 需要 Pro。';
+  @override
+  String get cloudSignIn => '请先登录 SecondLoop Cloud。';
+  @override
+  String get byokOpenAiCompatible => '请先添加 OpenAI-compatible 的 API Key 配置档。';
+  @override
+  String get followAskAi =>
+      '“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
+}
+
+// Path: settings.mediaAnnotation.providerMode.labels
+class _StringsSettingsMediaAnnotationProviderModeLabelsZhCn
+    extends _StringsSettingsMediaAnnotationProviderModeLabelsEn {
+  _StringsSettingsMediaAnnotationProviderModeLabelsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get followAskAi => '跟随问 AI';
+  @override
+  String get cloudGateway => 'SecondLoop Cloud';
+  @override
+  String get byokProfile => 'API Key（配置档）';
+}
+
+// Path: settings.mediaAnnotation.providerMode.descriptions
+class _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
+    extends _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
+  _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get followAskAi => '使用与“问 AI”相同的设置（推荐）。';
+  @override
+  String get cloudGateway => '优先使用 SecondLoop Cloud（需要 Pro，且需可用）。';
+  @override
+  String get byokProfile => '使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。';
+}
+
 // Path: settings.cloudAccount.benefits.items
 class _StringsSettingsCloudAccountBenefitsItemsZhCn
     extends _StringsSettingsCloudAccountBenefitsItemsEn {
@@ -5441,6 +5970,10 @@ extension on Translations {
         return 'Settings';
       case 'common.actions.cancel':
         return 'Cancel';
+      case 'common.actions.notNow':
+        return 'Not now';
+      case 'common.actions.allow':
+        return 'Allow';
       case 'common.actions.save':
         return 'Save';
       case 'common.actions.copy':
@@ -5505,6 +6038,8 @@ extension on Translations {
         return ({required Object error}) => 'Init failed: ${error}';
       case 'errors.loadFailed':
         return ({required Object error}) => 'Load failed: ${error}';
+      case 'errors.saveFailed':
+        return ({required Object error}) => 'Save failed: ${error}';
       case 'errors.lockGateError':
         return ({required Object error}) => 'LockGate error: ${error}';
       case 'errors.missingMainStream':
@@ -5780,6 +6315,82 @@ extension on Translations {
         return 'To automatically create or update todos, SecondLoop can send message text to an AI model.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return 'Enable';
+      case 'settings.mediaAnnotation.title':
+        return 'Image annotations';
+      case 'settings.mediaAnnotation.subtitle':
+        return 'Optional: let AI caption images for better search';
+      case 'settings.mediaAnnotation.setupRequired.title':
+        return 'Image annotations setup required';
+      case 'settings.mediaAnnotation.setupRequired.body':
+        return 'To annotate images, SecondLoop needs a multimodal model.';
+      case 'settings.mediaAnnotation.setupRequired.reasons.cloudUnavailable':
+        return 'SecondLoop Cloud is not available in this build.';
+      case 'settings.mediaAnnotation.setupRequired.reasons.cloudRequiresPro':
+        return 'SecondLoop Cloud requires Pro.';
+      case 'settings.mediaAnnotation.setupRequired.reasons.cloudSignIn':
+        return 'Sign in to SecondLoop Cloud to use the Cloud model.';
+      case 'settings.mediaAnnotation.setupRequired.reasons.byokOpenAiCompatible':
+        return 'Add an OpenAI‑compatible API key profile.';
+      case 'settings.mediaAnnotation.setupRequired.reasons.followAskAi':
+        return 'Ask AI must use an OpenAI‑compatible profile, or choose a different multimodal model in Advanced.';
+      case 'settings.mediaAnnotation.annotateEnabled.title':
+        return 'Annotate images';
+      case 'settings.mediaAnnotation.annotateEnabled.subtitle':
+        return 'When you add a photo, SecondLoop may send it to AI to generate an encrypted caption.';
+      case 'settings.mediaAnnotation.searchEnabled.title':
+        return 'Use annotations for search';
+      case 'settings.mediaAnnotation.searchEnabled.subtitle':
+        return 'Include image captions when building search data.';
+      case 'settings.mediaAnnotation.searchToggleConfirm.title':
+        return 'Update search index?';
+      case 'settings.mediaAnnotation.searchToggleConfirm.bodyEnable':
+        return 'Turning this on will rebuild search data so image captions become searchable.';
+      case 'settings.mediaAnnotation.searchToggleConfirm.bodyDisable':
+        return 'Turning this off will rebuild search data to remove image captions from search.';
+      case 'settings.mediaAnnotation.advanced.title':
+        return 'Advanced';
+      case 'settings.mediaAnnotation.providerMode.title':
+        return 'Multimodal model';
+      case 'settings.mediaAnnotation.providerMode.subtitle':
+        return 'Use a different provider/model for image captions.';
+      case 'settings.mediaAnnotation.providerMode.labels.followAskAi':
+        return 'Follow Ask AI';
+      case 'settings.mediaAnnotation.providerMode.labels.cloudGateway':
+        return 'SecondLoop Cloud';
+      case 'settings.mediaAnnotation.providerMode.labels.byokProfile':
+        return 'API key (profile)';
+      case 'settings.mediaAnnotation.providerMode.descriptions.followAskAi':
+        return 'Use the same setup as Ask AI. (Recommended)';
+      case 'settings.mediaAnnotation.providerMode.descriptions.cloudGateway':
+        return 'Use SecondLoop Cloud when available. (Requires Pro)';
+      case 'settings.mediaAnnotation.providerMode.descriptions.byokProfile':
+        return 'Use a specific API key profile (OpenAI‑compatible).';
+      case 'settings.mediaAnnotation.cloudModelName.title':
+        return 'Cloud model name';
+      case 'settings.mediaAnnotation.cloudModelName.subtitle':
+        return 'Override the cloud multimodal model name (optional).';
+      case 'settings.mediaAnnotation.cloudModelName.hint':
+        return 'e.g. gpt-4o-mini';
+      case 'settings.mediaAnnotation.cloudModelName.followAskAi':
+        return 'Follow Ask AI';
+      case 'settings.mediaAnnotation.byokProfile.title':
+        return 'API key profile';
+      case 'settings.mediaAnnotation.byokProfile.subtitle':
+        return 'Pick which profile to use for image captions.';
+      case 'settings.mediaAnnotation.byokProfile.unset':
+        return 'Not set';
+      case 'settings.mediaAnnotation.byokProfile.missingBackend':
+        return 'Not available in this build.';
+      case 'settings.mediaAnnotation.byokProfile.noOpenAiCompatibleProfiles':
+        return 'No OpenAI‑compatible profiles found. Add one in API keys.';
+      case 'settings.mediaAnnotation.allowCellular.title':
+        return 'Allow cellular data';
+      case 'settings.mediaAnnotation.allowCellular.subtitle':
+        return 'Use mobile data to annotate images. (Wi‑Fi only by default.)';
+      case 'settings.mediaAnnotation.allowCellularConfirm.title':
+        return 'Use cellular data for image annotations?';
+      case 'settings.mediaAnnotation.allowCellularConfirm.body':
+        return 'Annotating images may upload photos to your chosen AI provider and can use significant data.';
       case 'settings.cloudEmbeddings.title':
         return 'Smarter search';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -5927,6 +6538,8 @@ extension on Translations {
             '${purpose} tokens (in/out/total)';
       case 'settings.byokUsage.purposes.semanticParse':
         return 'Semantic parse';
+      case 'settings.byokUsage.purposes.mediaAnnotation':
+        return 'Image annotations';
       case 'settings.subscription.title':
         return 'Subscription';
       case 'settings.subscription.subtitle':
@@ -6099,6 +6712,8 @@ extension on Translations {
         return 'AI analyzing…';
       case 'chat.semanticParseStatusSlow':
         return 'AI is taking longer. Continuing in background…';
+      case 'chat.attachmentAnnotationNeedsSetup':
+        return 'Image annotations need setup';
       case 'chat.semanticParseStatusFailed':
         return 'AI analysis failed';
       case 'chat.semanticParseStatusCanceled':
@@ -6445,6 +7060,10 @@ extension on _StringsZhCn {
         return '设置';
       case 'common.actions.cancel':
         return '取消';
+      case 'common.actions.notNow':
+        return '暂不';
+      case 'common.actions.allow':
+        return '允许';
       case 'common.actions.save':
         return '保存';
       case 'common.actions.copy':
@@ -6509,6 +7128,8 @@ extension on _StringsZhCn {
         return ({required Object error}) => '初始化失败：${error}';
       case 'errors.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
+      case 'errors.saveFailed':
+        return ({required Object error}) => '保存失败：${error}';
       case 'errors.lockGateError':
         return ({required Object error}) => '锁定流程错误：${error}';
       case 'errors.missingMainStream':
@@ -6783,6 +7404,82 @@ extension on _StringsZhCn {
         return '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。';
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return '开启';
+      case 'settings.mediaAnnotation.title':
+        return '图片注释';
+      case 'settings.mediaAnnotation.subtitle':
+        return '可选：让 AI 为图片生成注释用于检索';
+      case 'settings.mediaAnnotation.setupRequired.title':
+        return '图片注释需要先配置';
+      case 'settings.mediaAnnotation.setupRequired.body':
+        return '要注释图片，SecondLoop 需要一个多模态模型。';
+      case 'settings.mediaAnnotation.setupRequired.reasons.cloudUnavailable':
+        return '当前构建未启用 SecondLoop Cloud。';
+      case 'settings.mediaAnnotation.setupRequired.reasons.cloudRequiresPro':
+        return 'SecondLoop Cloud 需要 Pro。';
+      case 'settings.mediaAnnotation.setupRequired.reasons.cloudSignIn':
+        return '请先登录 SecondLoop Cloud。';
+      case 'settings.mediaAnnotation.setupRequired.reasons.byokOpenAiCompatible':
+        return '请先添加 OpenAI-compatible 的 API Key 配置档。';
+      case 'settings.mediaAnnotation.setupRequired.reasons.followAskAi':
+        return '“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
+      case 'settings.mediaAnnotation.annotateEnabled.title':
+        return '注释图片';
+      case 'settings.mediaAnnotation.annotateEnabled.subtitle':
+        return '添加图片后，SecondLoop 可能会将图片发送给 AI 生成加密注释。';
+      case 'settings.mediaAnnotation.searchEnabled.title':
+        return '注释用于搜索';
+      case 'settings.mediaAnnotation.searchEnabled.subtitle':
+        return '将图片注释加入搜索索引。';
+      case 'settings.mediaAnnotation.searchToggleConfirm.title':
+        return '更新搜索索引？';
+      case 'settings.mediaAnnotation.searchToggleConfirm.bodyEnable':
+        return '开启后会重新生成搜索数据，让图片注释可被检索。';
+      case 'settings.mediaAnnotation.searchToggleConfirm.bodyDisable':
+        return '关闭后会重新生成搜索数据，从检索中移除图片注释。';
+      case 'settings.mediaAnnotation.advanced.title':
+        return '高级设置';
+      case 'settings.mediaAnnotation.providerMode.title':
+        return '多模态模型';
+      case 'settings.mediaAnnotation.providerMode.subtitle':
+        return '为图片注释选择独立于“问 AI”的服务商/模型。';
+      case 'settings.mediaAnnotation.providerMode.labels.followAskAi':
+        return '跟随问 AI';
+      case 'settings.mediaAnnotation.providerMode.labels.cloudGateway':
+        return 'SecondLoop Cloud';
+      case 'settings.mediaAnnotation.providerMode.labels.byokProfile':
+        return 'API Key（配置档）';
+      case 'settings.mediaAnnotation.providerMode.descriptions.followAskAi':
+        return '使用与“问 AI”相同的设置（推荐）。';
+      case 'settings.mediaAnnotation.providerMode.descriptions.cloudGateway':
+        return '优先使用 SecondLoop Cloud（需要 Pro，且需可用）。';
+      case 'settings.mediaAnnotation.providerMode.descriptions.byokProfile':
+        return '使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。';
+      case 'settings.mediaAnnotation.cloudModelName.title':
+        return 'Cloud 模型名';
+      case 'settings.mediaAnnotation.cloudModelName.subtitle':
+        return '可选：覆盖云端多模态模型名。';
+      case 'settings.mediaAnnotation.cloudModelName.hint':
+        return '例如 gpt-4o-mini';
+      case 'settings.mediaAnnotation.cloudModelName.followAskAi':
+        return '跟随问 AI';
+      case 'settings.mediaAnnotation.byokProfile.title':
+        return 'API Key 配置档';
+      case 'settings.mediaAnnotation.byokProfile.subtitle':
+        return '选择图片注释使用哪个配置档。';
+      case 'settings.mediaAnnotation.byokProfile.unset':
+        return '未设置';
+      case 'settings.mediaAnnotation.byokProfile.missingBackend':
+        return '当前构建不可用。';
+      case 'settings.mediaAnnotation.byokProfile.noOpenAiCompatibleProfiles':
+        return '没有可用的 OpenAI-compatible 配置档，请先在“API Key（问 AI）”里添加。';
+      case 'settings.mediaAnnotation.allowCellular.title':
+        return '允许蜂窝网络';
+      case 'settings.mediaAnnotation.allowCellular.subtitle':
+        return '允许用蜂窝网络进行图片注释（默认仅 Wi‑Fi）。';
+      case 'settings.mediaAnnotation.allowCellularConfirm.title':
+        return '允许使用蜂窝网络注释图片？';
+      case 'settings.mediaAnnotation.allowCellularConfirm.body':
+        return '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
       case 'settings.cloudEmbeddings.title':
         return '更智能的搜索';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -6926,6 +7623,8 @@ extension on _StringsZhCn {
         return ({required Object purpose}) => '${purpose} tokens（输入/输出/总计）';
       case 'settings.byokUsage.purposes.semanticParse':
         return '语义解析';
+      case 'settings.byokUsage.purposes.mediaAnnotation':
+        return '图片注释';
       case 'settings.subscription.title':
         return '订阅';
       case 'settings.subscription.subtitle':
@@ -7098,6 +7797,8 @@ extension on _StringsZhCn {
         return 'AI 分析中…';
       case 'chat.semanticParseStatusSlow':
         return 'AI 分析较慢，后台继续…';
+      case 'chat.attachmentAnnotationNeedsSetup':
+        return '图片注释需要先配置';
       case 'chat.semanticParseStatusFailed':
         return 'AI 分析失败';
       case 'chat.semanticParseStatusCanceled':

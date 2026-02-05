@@ -715,3 +715,124 @@ WHERE id IN (
 
     Ok(())
 }
+
+fn apply_attachment_annotation_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let attachment_sha256 = payload["attachment_sha256"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment annotation op missing attachment_sha256"))?;
+    let lang = payload["lang"]
+        .as_str()
+        .ok_or_else(|| anyhow!("attachment annotation op missing lang"))?;
+    let model_name = payload
+        .get("model_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .trim();
+    let model_name = if model_name.is_empty() {
+        "unknown"
+    } else {
+        model_name
+    };
+    let created_at_ms = payload
+        .get("created_at_ms")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("attachment annotation op missing updated_at_ms"))?;
+
+    let annotation_payload = payload
+        .get("payload")
+        .ok_or_else(|| anyhow!("attachment annotation op missing payload"))?;
+
+    let existing_updated_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing_updated_at_ms.unwrap_or(0) >= updated_at_ms {
+        return Ok(());
+    }
+
+    let json = serde_json::to_vec(annotation_payload)?;
+    let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
+    let blob = encrypt_bytes(db_key, &json, aad.as_bytes())?;
+
+    let attachment_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if attachment_exists.is_none() {
+        // Avoid hard sync failures due to cross-device ordering. We'll accept orphan annotation rows
+        // temporarily; they'll resolve once the attachment arrives.
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let insert_result = conn.execute(
+        r#"
+INSERT INTO attachment_annotations(
+  attachment_sha256,
+  status,
+  lang,
+  model_name,
+  payload,
+  attempts,
+  next_retry_at,
+  last_error,
+  created_at,
+  updated_at
+)
+VALUES (?1, 'ok', ?2, ?3, ?4, 0, NULL, NULL, ?5, ?6)
+ON CONFLICT(attachment_sha256) DO UPDATE SET
+  status = 'ok',
+  lang = excluded.lang,
+  model_name = excluded.model_name,
+  payload = excluded.payload,
+  attempts = 0,
+  next_retry_at = NULL,
+  last_error = NULL,
+  created_at = min(attachment_annotations.created_at, excluded.created_at),
+  updated_at = max(attachment_annotations.updated_at, excluded.updated_at)
+"#,
+        params![
+            attachment_sha256,
+            lang,
+            model_name,
+            blob,
+            created_at_ms,
+            updated_at_ms
+        ],
+    );
+
+    if attachment_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    insert_result?;
+
+    conn.execute(
+        r#"
+UPDATE messages
+SET needs_embedding = 1
+WHERE id IN (
+  SELECT message_id
+  FROM message_attachments
+  WHERE attachment_sha256 = ?1
+)
+  AND COALESCE(is_deleted, 0) = 0
+  AND COALESCE(is_memory, 1) = 1
+"#,
+        params![attachment_sha256],
+    )?;
+
+    Ok(())
+}

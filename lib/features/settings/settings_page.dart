@@ -29,6 +29,7 @@ import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
 import 'embedding_profiles_page.dart';
 import 'llm_profiles_page.dart';
+import 'media_annotation_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
 import 'diagnostics_page.dart';
@@ -1116,6 +1117,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     await _setSemanticParseEnabled(value);
                   },
           ),
+          ListTile(
+            title: Text(context.t.settings.mediaAnnotation.title),
+            subtitle: Text(context.t.settings.mediaAnnotation.subtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MediaAnnotationSettingsPage(),
+                      ),
+                    );
+                  },
+          ),
         ]),
         const SizedBox(height: 16),
         Text(
@@ -1178,6 +1192,7 @@ class _SettingsPageState extends State<SettingsPage> {
         sectionCard([
           if (supportsDesktopHotkey)
             ListTile(
+              key: const ValueKey('settings_quick_capture_hotkey'),
               title: Text(context.t.settings.quickCaptureHotkey.title),
               subtitle: Text(context.t.settings.quickCaptureHotkey.subtitle),
               trailing: ValueListenableBuilder<HotKey?>(

@@ -534,6 +534,35 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
+  Future<void> _maybeEnqueueAttachmentAnnotationEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256, {
+    required String lang,
+  }) async {
+    MediaAnnotationConfig? config;
+    try {
+      config = await const RustMediaAnnotationConfigStore().read(sessionKey);
+    } catch (_) {
+      config = null;
+    }
+    if (config == null || !config.annotateEnabled) return;
+
+    try {
+      await backend.enqueueAttachmentAnnotation(
+        sessionKey,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      if (mounted) {
+        _setState(() {});
+      }
+    } catch (_) {
+      return;
+    }
+  }
+
   Future<_AttachmentEnrichment> _loadAttachmentEnrichment(
     AttachmentsBackend backend,
     Uint8List sessionKey,
@@ -856,6 +885,14 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       sessionKey,
       message.id,
       attachmentSha256: attachment.sha256,
+    );
+    unawaited(
+      _maybeEnqueueAttachmentAnnotationEnrichment(
+        backend,
+        sessionKey,
+        attachment.sha256,
+        lang: lang,
+      ),
     );
 
     syncEngine?.notifyLocalMutation();

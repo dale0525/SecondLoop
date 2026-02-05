@@ -47,7 +47,7 @@ SELECT message_id,
        created_at_ms,
        updated_at_ms
 FROM semantic_parse_jobs
-WHERE status IN ('pending', 'failed')
+WHERE status IN ('pending', 'failed', 'running')
   AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
 ORDER BY updated_at_ms ASC, message_id ASC
 LIMIT ?2
@@ -162,7 +162,7 @@ UPDATE semantic_parse_jobs
 SET status = 'running',
     updated_at_ms = ?2
 WHERE message_id = ?1
-  AND status IN ('pending', 'failed')
+  AND status IN ('pending', 'failed', 'running')
 "#,
         params![message_id, now_ms],
     )?;

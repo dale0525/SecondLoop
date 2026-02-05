@@ -9,6 +9,8 @@
   "common": {
     "actions": {
       "cancel": "Cancel",
+      "notNow": "Not now",
+      "allow": "Allow",
       "save": "Save",
       "copy": "Copy",
       "reset": "Reset",
@@ -48,6 +50,7 @@
   "errors": {
     "initFailed": "Init failed: $error",
     "loadFailed": "Load failed: $error",
+    "saveFailed": "Save failed: $error",
     "lockGateError": "LockGate error: $error",
     "missingMainStream": "Missing Main Stream"
   },
@@ -260,6 +263,72 @@
         "enable": "Enable"
       }
     },
+    "mediaAnnotation": {
+      "title": "Image annotations",
+      "subtitle": "Optional: let AI caption images for better search",
+      "setupRequired": {
+        "title": "Image annotations setup required",
+        "body": "To annotate images, SecondLoop needs a multimodal model.",
+        "reasons": {
+          "cloudUnavailable": "SecondLoop Cloud is not available in this build.",
+          "cloudRequiresPro": "SecondLoop Cloud requires Pro.",
+          "cloudSignIn": "Sign in to SecondLoop Cloud to use the Cloud model.",
+          "byokOpenAiCompatible": "Add an OpenAI‑compatible API key profile.",
+          "followAskAi": "Ask AI must use an OpenAI‑compatible profile, or choose a different multimodal model in Advanced."
+        }
+      },
+      "annotateEnabled": {
+        "title": "Annotate images",
+        "subtitle": "When you add a photo, SecondLoop may send it to AI to generate an encrypted caption."
+      },
+      "searchEnabled": {
+        "title": "Use annotations for search",
+        "subtitle": "Include image captions when building search data."
+      },
+      "searchToggleConfirm": {
+        "title": "Update search index?",
+        "bodyEnable": "Turning this on will rebuild search data so image captions become searchable.",
+        "bodyDisable": "Turning this off will rebuild search data to remove image captions from search."
+      },
+      "advanced": {
+        "title": "Advanced"
+      },
+      "providerMode": {
+        "title": "Multimodal model",
+        "subtitle": "Use a different provider/model for image captions.",
+        "labels": {
+          "followAskAi": "Follow Ask AI",
+          "cloudGateway": "SecondLoop Cloud",
+          "byokProfile": "API key (profile)"
+        },
+        "descriptions": {
+          "followAskAi": "Use the same setup as Ask AI. (Recommended)",
+          "cloudGateway": "Use SecondLoop Cloud when available. (Requires Pro)",
+          "byokProfile": "Use a specific API key profile (OpenAI‑compatible)."
+        }
+      },
+      "cloudModelName": {
+        "title": "Cloud model name",
+        "subtitle": "Override the cloud multimodal model name (optional).",
+        "hint": "e.g. gpt-4o-mini",
+        "followAskAi": "Follow Ask AI"
+      },
+      "byokProfile": {
+        "title": "API key profile",
+        "subtitle": "Pick which profile to use for image captions.",
+        "unset": "Not set",
+        "missingBackend": "Not available in this build.",
+        "noOpenAiCompatibleProfiles": "No OpenAI‑compatible profiles found. Add one in API keys."
+      },
+      "allowCellular": {
+        "title": "Allow cellular data",
+        "subtitle": "Use mobile data to annotate images. (Wi‑Fi only by default.)"
+      },
+      "allowCellularConfirm": {
+        "title": "Use cellular data for image annotations?",
+        "body": "Annotating images may upload photos to your chosen AI provider and can use significant data."
+      }
+    },
     "cloudEmbeddings": {
       "title": "Smarter search",
       "subtitleEnabled": "On. Improves search. Uses your Cloud quota.",
@@ -382,7 +451,8 @@
         "tokens": "$purpose tokens (in/out/total)"
       },
       "purposes": {
-        "semanticParse": "Semantic parse"
+        "semanticParse": "Semantic parse",
+        "mediaAnnotation": "Image annotations"
       }
     },
     "subscription": {
@@ -527,6 +597,7 @@
     },
     "semanticParseStatusRunning": "AI analyzing…",
     "semanticParseStatusSlow": "AI is taking longer. Continuing in background…",
+    "attachmentAnnotationNeedsSetup": "Image annotations need setup",
     "semanticParseStatusFailed": "AI analysis failed",
     "semanticParseStatusCanceled": "AI analysis canceled",
     "semanticParseStatusCreated": "Created task: $title",

@@ -190,7 +190,14 @@ final class SemanticParseAutoActionsRunner {
     var didUpdateJobs = false;
 
     for (final job in jobs) {
-      if (job.status != 'pending' && job.status != 'failed') continue;
+      // Treat `running` as recoverable: if the app was force-killed mid-run,
+      // the persisted job would remain `running` and should be retried on the
+      // next launch.
+      if (job.status != 'pending' &&
+          job.status != 'failed' &&
+          job.status != 'running') {
+        continue;
+      }
 
       final messageText = (await store.getMessageText(job.messageId))?.trim();
       if (messageText == null || messageText.isEmpty) {

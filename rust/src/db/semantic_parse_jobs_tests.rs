@@ -19,7 +19,9 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
 
     mark_semantic_parse_job_running(&conn, "msg:1", now_ms + 1).expect("running");
     let due_after_running = list_due_semantic_parse_jobs(&conn, now_ms + 1, 10).expect("list due");
-    assert!(due_after_running.is_empty());
+    assert_eq!(due_after_running.len(), 1);
+    assert_eq!(due_after_running[0].message_id, "msg:1");
+    assert_eq!(due_after_running[0].status, "running");
 
     mark_semantic_parse_job_failed(&conn, "msg:1", 1, now_ms + 120, "timeout", now_ms + 2)
         .expect("failed");

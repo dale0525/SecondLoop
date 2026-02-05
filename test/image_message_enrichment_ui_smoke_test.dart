@@ -15,6 +15,9 @@ import 'test_i18n.dart';
 void main() {
   testWidgets('Image message shows location + caption enrichment',
       (tester) async {
+    const longCaption =
+        '浦东的屋檐漫动了工作或学习空间。前景中，一个透明塑料杯充当笔筒，里面塞满了各种文具，包括一支标有“Surgical skin marker”（手术皮肤标记笔）的黑笔。'
+        '浦东的屋檐漫动了工作或学习空间。前景中，一个透明塑料杯充当笔筒，里面塞满了各种文具，包括一支标有“Surgical skin marker”（手术皮肤标记笔）的黑笔。';
     final backend = _Backend(
       messages: const [
         Message(
@@ -22,7 +25,7 @@ void main() {
           conversationId: 'main_stream',
           role: 'user',
           content: '',
-          createdAtMs: 0,
+          createdAtMs: 123,
           isMemory: true,
         ),
       ],
@@ -44,7 +47,7 @@ void main() {
         'abc': 'Seattle',
       },
       captionLongBySha: const {
-        'abc': 'a cat',
+        'abc': longCaption,
       },
     );
 
@@ -81,7 +84,13 @@ void main() {
       find.byKey(const ValueKey('chat_image_enrichment_caption_abc')),
       findsOneWidget,
     );
-    expect(find.text('a cat'), findsOneWidget);
+    expect(find.text(longCaption), findsOneWidget);
+
+    final thumbSize =
+        tester.getSize(find.byKey(const ValueKey('chat_attachment_image_abc')));
+    final captionSize = tester.getSize(
+        find.byKey(const ValueKey('chat_image_enrichment_caption_abc')));
+    expect(captionSize.width, thumbSize.width);
   });
 }
 

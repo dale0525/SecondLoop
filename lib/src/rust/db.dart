@@ -500,6 +500,45 @@ class LlmUsageAggregate {
           totalTokens == other.totalTokens;
 }
 
+class MediaAnnotationConfig {
+  final bool annotateEnabled;
+  final bool searchEnabled;
+  final bool allowCellular;
+  final String providerMode;
+  final String? byokProfileId;
+  final String? cloudModelName;
+
+  const MediaAnnotationConfig({
+    required this.annotateEnabled,
+    required this.searchEnabled,
+    required this.allowCellular,
+    required this.providerMode,
+    this.byokProfileId,
+    this.cloudModelName,
+  });
+
+  @override
+  int get hashCode =>
+      annotateEnabled.hashCode ^
+      searchEnabled.hashCode ^
+      allowCellular.hashCode ^
+      providerMode.hashCode ^
+      byokProfileId.hashCode ^
+      cloudModelName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaAnnotationConfig &&
+          runtimeType == other.runtimeType &&
+          annotateEnabled == other.annotateEnabled &&
+          searchEnabled == other.searchEnabled &&
+          allowCellular == other.allowCellular &&
+          providerMode == other.providerMode &&
+          byokProfileId == other.byokProfileId &&
+          cloudModelName == other.cloudModelName;
+}
+
 class Message {
   final String id;
   final String conversationId;

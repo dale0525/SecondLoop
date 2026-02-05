@@ -67,6 +67,11 @@ fn build_message_embedding_plaintext(
 ) -> Result<String> {
     let mut out = format!("passage: {content}");
 
+    let include_image_caption = kv_get_string(conn, "media_annotation.search_enabled")?
+        .unwrap_or_else(|| "0".to_string())
+        .trim()
+        == "1";
+
     let mut stmt = conn.prepare(
         r#"SELECT attachment_sha256
            FROM message_attachments
@@ -86,11 +91,13 @@ fn build_message_embedding_plaintext(
             extra.push_str(&display_name);
         }
 
-        if let Some(caption_long) =
-            read_attachment_annotation_caption_long_optional(conn, key, &attachment_sha256)?
-        {
-            extra.push_str("\nimage_caption: ");
-            extra.push_str(&caption_long);
+        if include_image_caption {
+            if let Some(caption_long) =
+                read_attachment_annotation_caption_long_optional(conn, key, &attachment_sha256)?
+            {
+                extra.push_str("\nimage_caption: ");
+                extra.push_str(&caption_long);
+            }
         }
 
         if extra.len() > MAX_ATTACHMENT_ENRICHMENT_CHARS {
@@ -845,4 +852,3 @@ COMMIT;
 
     Ok(total)
 }
-

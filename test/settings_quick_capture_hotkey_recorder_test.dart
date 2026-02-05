@@ -32,6 +32,8 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
     try {
+      expect(defaultTargetPlatform, TargetPlatform.macOS);
+      expect(kIsWeb, isFalse);
       await tester.pumpWidget(
         SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
@@ -45,11 +47,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        find.text('Quick capture shortcut'),
-        500,
-      );
-      await tester.tap(find.text('Quick capture shortcut'));
+      final shortcutFinder =
+          find.byKey(const ValueKey('settings_quick_capture_hotkey'));
+      await tester.scrollUntilVisible(shortcutFinder, 500);
+      await tester.ensureVisible(shortcutFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(shortcutFinder);
       await tester.pumpAndSettle();
 
       await _sendRawKeyEvent(<String, dynamic>{

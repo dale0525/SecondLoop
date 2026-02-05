@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/core.dart';
+import 'api/media_annotation.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
 import 'dart:async';
@@ -61,7 +62,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -636996289;
+  int get rustContentHash => 1487076338;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -888,6 +889,24 @@ abstract class RustLibApi extends BaseApi {
       String? password,
       required String remoteRoot,
       required String sha256});
+
+  Future<MediaAnnotationConfig>
+      crateApiMediaAnnotationDbGetMediaAnnotationConfig(
+          {required String appDir, required List<int> key});
+
+  Future<void> crateApiMediaAnnotationDbSetMediaAnnotationConfig(
+      {required String appDir,
+      required List<int> key,
+      required MediaAnnotationConfig config});
+
+  Future<String> crateApiMediaAnnotationMediaAnnotationByokProfile(
+      {required String appDir,
+      required List<int> key,
+      required String profileId,
+      required String localDay,
+      required String lang,
+      required String mimeType,
+      required List<int> imageBytes});
 
   String crateApiSimpleGreet({required String name});
 
@@ -5842,12 +5861,119 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MediaAnnotationConfig>
+      crateApiMediaAnnotationDbGetMediaAnnotationConfig(
+          {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 125, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_media_annotation_config,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiMediaAnnotationDbGetMediaAnnotationConfigConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMediaAnnotationDbGetMediaAnnotationConfigConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_get_media_annotation_config",
+            argNames: ["appDir", "key"],
+          );
+
+  @override
+  Future<void> crateApiMediaAnnotationDbSetMediaAnnotationConfig(
+      {required String appDir,
+      required List<int> key,
+      required MediaAnnotationConfig config}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_box_autoadd_media_annotation_config(config, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 126, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiMediaAnnotationDbSetMediaAnnotationConfigConstMeta,
+      argValues: [appDir, key, config],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMediaAnnotationDbSetMediaAnnotationConfigConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_set_media_annotation_config",
+            argNames: ["appDir", "key", "config"],
+          );
+
+  @override
+  Future<String> crateApiMediaAnnotationMediaAnnotationByokProfile(
+      {required String appDir,
+      required List<int> key,
+      required String profileId,
+      required String localDay,
+      required String lang,
+      required String mimeType,
+      required List<int> imageBytes}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(profileId, serializer);
+        sse_encode_String(localDay, serializer);
+        sse_encode_String(lang, serializer);
+        sse_encode_String(mimeType, serializer);
+        sse_encode_list_prim_u_8_loose(imageBytes, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 127, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiMediaAnnotationMediaAnnotationByokProfileConstMeta,
+      argValues: [appDir, key, profileId, localDay, lang, mimeType, imageBytes],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMediaAnnotationMediaAnnotationByokProfileConstMeta =>
+          const TaskConstMeta(
+            debugName: "media_annotation_byok_profile",
+            argNames: [
+              "appDir",
+              "key",
+              "profileId",
+              "localDay",
+              "lang",
+              "mimeType",
+              "imageBytes"
+            ],
+          );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 125)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 128)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -5870,7 +5996,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 126, port: port_);
+            funcId: 129, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -5905,7 +6031,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 127, port: port_);
+            funcId: 130, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -5949,7 +6075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 128, port: port_);
+            funcId: 131, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -5995,7 +6121,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 129, port: port_);
+            funcId: 132, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -6043,7 +6169,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 130, port: port_);
+            funcId: 133, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -6094,7 +6220,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 131, port: port_);
+            funcId: 134, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -6153,7 +6279,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 132, port: port_);
+            funcId: 135, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -6313,6 +6439,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
+  }
+
+  @protected
+  MediaAnnotationConfig dco_decode_box_autoadd_media_annotation_config(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_media_annotation_config(raw);
   }
 
   @protected
@@ -6571,6 +6704,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inputTokens: dco_decode_i_64(arr[3]),
       outputTokens: dco_decode_i_64(arr[4]),
       totalTokens: dco_decode_i_64(arr[5]),
+    );
+  }
+
+  @protected
+  MediaAnnotationConfig dco_decode_media_annotation_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return MediaAnnotationConfig(
+      annotateEnabled: dco_decode_bool(arr[0]),
+      searchEnabled: dco_decode_bool(arr[1]),
+      allowCellular: dco_decode_bool(arr[2]),
+      providerMode: dco_decode_String(arr[3]),
+      byokProfileId: dco_decode_opt_String(arr[4]),
+      cloudModelName: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -6885,6 +7034,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
+  MediaAnnotationConfig sse_decode_box_autoadd_media_annotation_config(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_media_annotation_config(deserializer));
   }
 
   @protected
@@ -7281,6 +7437,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MediaAnnotationConfig sse_decode_media_annotation_config(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_annotateEnabled = sse_decode_bool(deserializer);
+    var var_searchEnabled = sse_decode_bool(deserializer);
+    var var_allowCellular = sse_decode_bool(deserializer);
+    var var_providerMode = sse_decode_String(deserializer);
+    var var_byokProfileId = sse_decode_opt_String(deserializer);
+    var var_cloudModelName = sse_decode_opt_String(deserializer);
+    return MediaAnnotationConfig(
+        annotateEnabled: var_annotateEnabled,
+        searchEnabled: var_searchEnabled,
+        allowCellular: var_allowCellular,
+        providerMode: var_providerMode,
+        byokProfileId: var_byokProfileId,
+        cloudModelName: var_cloudModelName);
+  }
+
+  @protected
   Message sse_decode_message(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -7597,6 +7772,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_media_annotation_config(
+      MediaAnnotationConfig self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_media_annotation_config(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_message(Message self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_message(self, serializer);
@@ -7888,6 +8070,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.inputTokens, serializer);
     sse_encode_i_64(self.outputTokens, serializer);
     sse_encode_i_64(self.totalTokens, serializer);
+  }
+
+  @protected
+  void sse_encode_media_annotation_config(
+      MediaAnnotationConfig self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.annotateEnabled, serializer);
+    sse_encode_bool(self.searchEnabled, serializer);
+    sse_encode_bool(self.allowCellular, serializer);
+    sse_encode_String(self.providerMode, serializer);
+    sse_encode_opt_String(self.byokProfileId, serializer);
+    sse_encode_opt_String(self.cloudModelName, serializer);
   }
 
   @protected

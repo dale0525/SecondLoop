@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/core.dart';
+import 'api/media_annotation.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
 import 'dart:async';
@@ -60,6 +61,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  MediaAnnotationConfig dco_decode_box_autoadd_media_annotation_config(
+      dynamic raw);
 
   @protected
   Message dco_decode_box_autoadd_message(dynamic raw);
@@ -153,6 +158,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LlmUsageAggregate dco_decode_llm_usage_aggregate(dynamic raw);
 
   @protected
+  MediaAnnotationConfig dco_decode_media_annotation_config(dynamic raw);
+
+  @protected
   Message dco_decode_message(dynamic raw);
 
   @protected
@@ -241,6 +249,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  MediaAnnotationConfig sse_decode_box_autoadd_media_annotation_config(
+      SseDeserializer deserializer);
 
   @protected
   Message sse_decode_box_autoadd_message(SseDeserializer deserializer);
@@ -345,6 +357,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  MediaAnnotationConfig sse_decode_media_annotation_config(
+      SseDeserializer deserializer);
+
+  @protected
   Message sse_decode_message(SseDeserializer deserializer);
 
   @protected
@@ -437,6 +453,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_i_64(
       PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_media_annotation_config(
+      MediaAnnotationConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_message(Message self, SseSerializer serializer);
@@ -545,6 +565,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_llm_usage_aggregate(
       LlmUsageAggregate self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_media_annotation_config(
+      MediaAnnotationConfig self, SseSerializer serializer);
 
   @protected
   void sse_encode_message(Message self, SseSerializer serializer);

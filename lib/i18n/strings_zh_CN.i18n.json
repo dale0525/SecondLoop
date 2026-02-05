@@ -9,6 +9,8 @@
   "common": {
     "actions": {
       "cancel": "取消",
+      "notNow": "暂不",
+      "allow": "允许",
       "save": "保存",
       "copy": "复制",
       "reset": "重置",
@@ -48,6 +50,7 @@
   "errors": {
     "initFailed": "初始化失败：$error",
     "loadFailed": "加载失败：$error",
+    "saveFailed": "保存失败：$error",
     "lockGateError": "锁定流程错误：$error",
     "missingMainStream": "缺少主线对话"
   },
@@ -260,6 +263,72 @@
         "enable": "开启"
       }
     },
+    "mediaAnnotation": {
+      "title": "图片注释",
+      "subtitle": "可选：让 AI 为图片生成注释用于检索",
+      "setupRequired": {
+        "title": "图片注释需要先配置",
+        "body": "要注释图片，SecondLoop 需要一个多模态模型。",
+        "reasons": {
+          "cloudUnavailable": "当前构建未启用 SecondLoop Cloud。",
+          "cloudRequiresPro": "SecondLoop Cloud 需要 Pro。",
+          "cloudSignIn": "请先登录 SecondLoop Cloud。",
+          "byokOpenAiCompatible": "请先添加 OpenAI-compatible 的 API Key 配置档。",
+          "followAskAi": "“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。"
+        }
+      },
+      "annotateEnabled": {
+        "title": "注释图片",
+        "subtitle": "添加图片后，SecondLoop 可能会将图片发送给 AI 生成加密注释。"
+      },
+      "searchEnabled": {
+        "title": "注释用于搜索",
+        "subtitle": "将图片注释加入搜索索引。"
+      },
+      "searchToggleConfirm": {
+        "title": "更新搜索索引？",
+        "bodyEnable": "开启后会重新生成搜索数据，让图片注释可被检索。",
+        "bodyDisable": "关闭后会重新生成搜索数据，从检索中移除图片注释。"
+      },
+      "advanced": {
+        "title": "高级设置"
+      },
+      "providerMode": {
+        "title": "多模态模型",
+        "subtitle": "为图片注释选择独立于“问 AI”的服务商/模型。",
+        "labels": {
+          "followAskAi": "跟随问 AI",
+          "cloudGateway": "SecondLoop Cloud",
+          "byokProfile": "API Key（配置档）"
+        },
+        "descriptions": {
+          "followAskAi": "使用与“问 AI”相同的设置（推荐）。",
+          "cloudGateway": "优先使用 SecondLoop Cloud（需要 Pro，且需可用）。",
+          "byokProfile": "使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。"
+        }
+      },
+      "cloudModelName": {
+        "title": "Cloud 模型名",
+        "subtitle": "可选：覆盖云端多模态模型名。",
+        "hint": "例如 gpt-4o-mini",
+        "followAskAi": "跟随问 AI"
+      },
+      "byokProfile": {
+        "title": "API Key 配置档",
+        "subtitle": "选择图片注释使用哪个配置档。",
+        "unset": "未设置",
+        "missingBackend": "当前构建不可用。",
+        "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置档，请先在“API Key（问 AI）”里添加。"
+      },
+      "allowCellular": {
+        "title": "允许蜂窝网络",
+        "subtitle": "允许用蜂窝网络进行图片注释（默认仅 Wi‑Fi）。"
+      },
+      "allowCellularConfirm": {
+        "title": "允许使用蜂窝网络注释图片？",
+        "body": "图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。"
+      }
+    },
     "cloudEmbeddings": {
       "title": "更智能的搜索",
       "subtitleEnabled": "已开启。搜索更准，会消耗 Cloud 额度。",
@@ -382,7 +451,8 @@
         "tokens": "$purpose tokens（输入/输出/总计）"
       },
       "purposes": {
-        "semanticParse": "语义解析"
+        "semanticParse": "语义解析",
+        "mediaAnnotation": "图片注释"
       }
     },
     "subscription": {
@@ -527,6 +597,7 @@
     },
     "semanticParseStatusRunning": "AI 分析中…",
     "semanticParseStatusSlow": "AI 分析较慢，后台继续…",
+    "attachmentAnnotationNeedsSetup": "图片注释需要先配置",
     "semanticParseStatusFailed": "AI 分析失败",
     "semanticParseStatusCanceled": "已取消 AI 分析",
     "semanticParseStatusCreated": "已创建待办：$title",

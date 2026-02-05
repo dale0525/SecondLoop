@@ -43,6 +43,45 @@ void main() {
     expect(store.lastSucceeded?.appliedTodoTitle, '修电视机');
   });
 
+  test('runner processes running jobs (crash recovery)', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:3',
+          status: 'running',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:3': '修电视机'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"修电视机","status":"inbox","due_local_iso":null}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(store.createdTodoIds, contains('todo:msg:3'));
+    expect(store.lastSucceeded?.appliedActionKind, 'create');
+  });
+
   test('runner retries when client throws', () async {
     final store = _FakeStore(
       jobs: [

@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -636996289;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1487076338;
 
 // Section: executor
 
@@ -5170,6 +5170,126 @@ fn wire__crate__api__core__sync_webdav_upload_attachment_bytes_impl(
         },
     )
 }
+fn wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_get_media_annotation_config",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::media_annotation::db_get_media_annotation_config(
+                        api_app_dir,
+                        api_key,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_set_media_annotation_config",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_config = <crate::db::MediaAnnotationConfig>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::media_annotation::db_set_media_annotation_config(
+                        api_app_dir,
+                        api_key,
+                        api_config,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "media_annotation_byok_profile",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_profile_id = <String>::sse_decode(&mut deserializer);
+            let api_local_day = <String>::sse_decode(&mut deserializer);
+            let api_lang = <String>::sse_decode(&mut deserializer);
+            let api_mime_type = <String>::sse_decode(&mut deserializer);
+            let api_image_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::media_annotation::media_annotation_byok_profile(
+                        api_app_dir,
+                        api_key,
+                        api_profile_id,
+                        api_local_day,
+                        api_lang,
+                        api_mime_type,
+                        api_image_bytes,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__simple__greet_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -6055,6 +6175,26 @@ impl SseDecode for crate::db::LlmUsageAggregate {
     }
 }
 
+impl SseDecode for crate::db::MediaAnnotationConfig {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_annotateEnabled = <bool>::sse_decode(deserializer);
+        let mut var_searchEnabled = <bool>::sse_decode(deserializer);
+        let mut var_allowCellular = <bool>::sse_decode(deserializer);
+        let mut var_providerMode = <String>::sse_decode(deserializer);
+        let mut var_byokProfileId = <Option<String>>::sse_decode(deserializer);
+        let mut var_cloudModelName = <Option<String>>::sse_decode(deserializer);
+        return crate::db::MediaAnnotationConfig {
+            annotate_enabled: var_annotateEnabled,
+            search_enabled: var_searchEnabled,
+            allow_cellular: var_allowCellular,
+            provider_mode: var_providerMode,
+            byok_profile_id: var_byokProfileId,
+            cloud_model_name: var_cloudModelName,
+        };
+    }
+}
+
 impl SseDecode for crate::db::Message {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6894,38 +7034,56 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        126 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+        125 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        128 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+        126 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        129 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+        127 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        130 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+        129 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        130 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        131 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+        131 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        132 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+        132 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        133 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        134 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        135 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
@@ -6943,7 +7101,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        125 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        128 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -7219,6 +7377,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::db::LlmUsageAggregate>
     for crate::db::LlmUsageAggregate
 {
     fn into_into_dart(self) -> crate::db::LlmUsageAggregate {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::db::MediaAnnotationConfig {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.annotate_enabled.into_into_dart().into_dart(),
+            self.search_enabled.into_into_dart().into_dart(),
+            self.allow_cellular.into_into_dart().into_dart(),
+            self.provider_mode.into_into_dart().into_dart(),
+            self.byok_profile_id.into_into_dart().into_dart(),
+            self.cloud_model_name.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::db::MediaAnnotationConfig
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::db::MediaAnnotationConfig>
+    for crate::db::MediaAnnotationConfig
+{
+    fn into_into_dart(self) -> crate::db::MediaAnnotationConfig {
         self
     }
 }
@@ -7751,6 +7934,18 @@ impl SseEncode for crate::db::LlmUsageAggregate {
         <i64>::sse_encode(self.input_tokens, serializer);
         <i64>::sse_encode(self.output_tokens, serializer);
         <i64>::sse_encode(self.total_tokens, serializer);
+    }
+}
+
+impl SseEncode for crate::db::MediaAnnotationConfig {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.annotate_enabled, serializer);
+        <bool>::sse_encode(self.search_enabled, serializer);
+        <bool>::sse_encode(self.allow_cellular, serializer);
+        <String>::sse_encode(self.provider_mode, serializer);
+        <Option<String>>::sse_encode(self.byok_profile_id, serializer);
+        <Option<String>>::sse_encode(self.cloud_model_name, serializer);
     }
 }
 

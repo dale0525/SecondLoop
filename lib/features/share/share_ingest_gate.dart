@@ -6,10 +6,12 @@ import 'package:flutter/widgets.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../src/rust/db.dart';
 import '../media_backup/image_compression.dart';
 import 'share_ingest.dart';
 
@@ -103,6 +105,28 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     );
   }
 
+  Future<void> _maybeEnqueueAttachmentAnnotationEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256, {
+    required String lang,
+  }) async {
+    MediaAnnotationConfig? config;
+    try {
+      config = await const RustMediaAnnotationConfigStore().read(sessionKey);
+    } catch (_) {
+      config = null;
+    }
+    if (config == null || !config.annotateEnabled) return;
+
+    await backend.enqueueAttachmentAnnotation(
+      sessionKey,
+      attachmentSha256: attachmentSha256,
+      lang: lang,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
@@ -111,6 +135,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
+      final lang = Localizations.localeOf(context).toLanguageTag();
 
       Future<String> Function(String path, String mimeType)? onImage;
       if (backend is NativeAppBackend) {
@@ -128,6 +153,14 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
             sessionKey,
             attachment.sha256,
           ));
+          unawaited(
+            _maybeEnqueueAttachmentAnnotationEnrichment(
+              backend,
+              sessionKey,
+              attachment.sha256,
+              lang: lang,
+            ).catchError((_) {}),
+          );
           try {
             await File(path).delete();
           } catch (_) {

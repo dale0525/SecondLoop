@@ -627,6 +627,8 @@ pub fn mark_attachment_annotation_ok(
     payload: &serde_json::Value,
     now_ms: i64,
 ) -> Result<()> {
+    backfill_attachments_oplog_if_needed(conn, key)?;
+
     let lang = lang.trim();
     if lang.is_empty() {
         return Err(anyhow!("lang is required"));
@@ -667,6 +669,33 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
         params![attachment_sha256, lang, model_name, blob, now_ms],
     )?;
 
+    let (stored_created_at_ms, stored_updated_at_ms): (i64, i64) = conn.query_row(
+        r#"SELECT created_at, updated_at
+           FROM attachment_annotations
+           WHERE attachment_sha256 = ?1"#,
+        params![attachment_sha256],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": stored_updated_at_ms,
+        "type": "attachment.annotation.upsert.v1",
+        "payload": {
+            "attachment_sha256": attachment_sha256,
+            "lang": lang,
+            "model_name": model_name,
+            "payload": payload,
+            "created_at_ms": stored_created_at_ms,
+            "updated_at_ms": stored_updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
     mark_messages_linked_to_attachment_for_reembedding(conn, attachment_sha256)?;
     Ok(())
 }
@@ -699,4 +728,3 @@ WHERE attachment_sha256 = ?1
     )?;
     Ok(())
 }
-

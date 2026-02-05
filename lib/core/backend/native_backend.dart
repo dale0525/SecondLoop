@@ -41,7 +41,11 @@ typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String mimeType,
 });
 
-class NativeAppBackend implements AppBackend, AttachmentsBackend {
+class NativeAppBackend
+    implements
+        AppBackend,
+        AttachmentsBackend,
+        AttachmentAnnotationMutationsBackend {
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
@@ -531,6 +535,7 @@ class NativeAppBackend implements AppBackend, AttachmentsBackend {
     );
   }
 
+  @override
   Future<void> markAttachmentAnnotationOkJson(
     Uint8List key, {
     required String attachmentSha256,

@@ -1,67 +1,6 @@
 part of 'chat_page.dart';
 
 extension _ChatPageStateBuild on _ChatPageState {
-  Widget _buildComposerInlineButton(
-    BuildContext context, {
-    required Key key,
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
-    required Color backgroundColor,
-    required Color foregroundColor,
-    Color? borderColor,
-  }) {
-    final textTheme = Theme.of(context).textTheme;
-    final isEnabled = onPressed != null;
-
-    final effectiveBackground =
-        isEnabled ? backgroundColor : backgroundColor.withOpacity(0.52);
-    final effectiveForeground =
-        isEnabled ? foregroundColor : foregroundColor.withOpacity(0.62);
-
-    final borderRadius = BorderRadius.circular(999);
-    final borderSide =
-        borderColor == null ? BorderSide.none : BorderSide(color: borderColor);
-
-    return Semantics(
-      key: key,
-      button: true,
-      label: label,
-      child: Material(
-        color: effectiveBackground,
-        shape: RoundedRectangleBorder(
-          borderRadius: borderRadius,
-          side: borderSide,
-        ),
-        child: InkWell(
-          onTap: onPressed,
-          canRequestFocus: false,
-          borderRadius: borderRadius,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 18, color: effectiveForeground),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: textTheme.labelLarge?.copyWith(
-                      color: effectiveForeground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = SlTokens.of(context);
@@ -222,15 +161,67 @@ extension _ChatPageStateBuild on _ChatPageState {
                           );
                         }).catchError((_) => const <SemanticParseJob>[]);
 
-                        return FutureBuilder<List<SemanticParseJob>>(
-                          future: semanticJobsFuture,
+                        final nativeBackend =
+                            backend is NativeAppBackend ? backend : null;
+                        final annotationJobsFuture =
+                            Future<List<AttachmentAnnotationJob>>.sync(() {
+                          if (nativeBackend == null) {
+                            return const <AttachmentAnnotationJob>[];
+                          }
+
+                          // For chat UI we want *all* non-ok jobs, regardless of next_retry_at.
+                          const maxI64 = 9223372036854775807;
+                          return nativeBackend.listDueAttachmentAnnotations(
+                            sessionKey,
+                            nowMs: maxI64,
+                            limit: 500,
+                          );
+                        }).catchError((_) => const <AttachmentAnnotationJob>[]);
+
+                        final combinedJobsFuture = (() async {
+                          final semanticJobs = await semanticJobsFuture;
+                          final annotationJobs = await annotationJobsFuture;
+                          final annotationUi =
+                              nativeBackend == null || annotationJobs.isEmpty
+                                  ? (enabled: false, canRunNow: false)
+                                  : await _loadAttachmentAnnotationUiState(
+                                      nativeBackend,
+                                      sessionKey,
+                                    );
+                          return (
+                            semanticJobs: semanticJobs,
+                            annotationJobs: annotationJobs,
+                            attachmentAnnotationEnabled: annotationUi.enabled,
+                            attachmentAnnotationCanRunNow:
+                                annotationUi.canRunNow,
+                          );
+                        })();
+
+                        return FutureBuilder<
+                            ({
+                              List<SemanticParseJob> semanticJobs,
+                              List<AttachmentAnnotationJob> annotationJobs,
+                              bool attachmentAnnotationEnabled,
+                              bool attachmentAnnotationCanRunNow,
+                            })>(
+                          future: combinedJobsFuture,
                           builder: (context, snapshotJobs) {
-                            final jobs =
-                                snapshotJobs.data ?? const <SemanticParseJob>[];
+                            final jobs = snapshotJobs.data?.semanticJobs ??
+                                const <SemanticParseJob>[];
                             final jobsByMessageId =
                                 <String, SemanticParseJob>{};
                             for (final job in jobs) {
                               jobsByMessageId[job.messageId] = job;
+                            }
+
+                            final annotationJobs =
+                                snapshotJobs.data?.annotationJobs ??
+                                    const <AttachmentAnnotationJob>[];
+                            final annotationJobsBySha256 =
+                                <String, AttachmentAnnotationJob>{};
+                            for (final job in annotationJobs) {
+                              annotationJobsBySha256[job.attachmentSha256] =
+                                  job;
                             }
 
                             return ListView.builder(
@@ -284,6 +275,13 @@ extension _ChatPageStateBuild on _ChatPageState {
                                 attachmentsBackend: attachmentsBackend,
                                 sessionKey: sessionKey,
                                 jobsByMessageId: jobsByMessageId,
+                                annotationJobsBySha256: annotationJobsBySha256,
+                                attachmentAnnotationEnabled: snapshotJobs
+                                        .data?.attachmentAnnotationEnabled ??
+                                    false,
+                                attachmentAnnotationCanRunNow: snapshotJobs
+                                        .data?.attachmentAnnotationCanRunNow ??
+                                    false,
                                 colorScheme: colorScheme,
                                 tokens: tokens,
                                 isDesktopPlatform: isDesktopPlatform,

@@ -1,0 +1,200 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/attachments_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
+import 'package:secondloop/src/rust/db.dart';
+
+import 'test_backend.dart';
+import 'test_i18n.dart';
+
+void main() {
+  testWidgets('AttachmentViewerPage shows annotation caption when available',
+      (tester) async {
+    final backend = _Backend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: const {'abc': 'A long caption'},
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('A long caption'), findsOneWidget);
+  });
+
+  testWidgets(
+      'AttachmentViewerPage allows editing annotation caption and saves',
+      (tester) async {
+    final backend = _Backend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: const {'abc': 'Old caption'},
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Old caption'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('attachment_annotation_edit')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('attachment_annotation_edit_field')),
+      'New caption',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('attachment_annotation_edit_save')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('New caption'), findsOneWidget);
+    expect(backend.savedPayloadJsons.length, 1);
+    expect(backend.savedPayloadJsons.single.contains('New caption'), isTrue);
+  });
+}
+
+Uint8List _tinyPngBytes() {
+  // 1x1 transparent PNG.
+  const b64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBApGq4QAAAABJRU5ErkJggg==';
+  return Uint8List.fromList(base64Decode(b64));
+}
+
+final class _Backend extends TestAppBackend
+    implements AttachmentsBackend, AttachmentAnnotationMutationsBackend {
+  _Backend({
+    required Map<String, Uint8List> bytesBySha,
+    required Map<String, String?> annotationCaptionBySha,
+  })  : _bytesBySha = Map<String, Uint8List>.from(bytesBySha),
+        _annotationCaptionBySha =
+            Map<String, String?>.from(annotationCaptionBySha);
+
+  final Map<String, Uint8List> _bytesBySha;
+  final Map<String, String?> _annotationCaptionBySha;
+  final List<String> savedPayloadJsons = <String>[];
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    final bytes = _bytesBySha[sha256];
+    if (bytes == null) throw StateError('missing_bytes:$sha256');
+    return bytes;
+  }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return _annotationCaptionBySha[sha256];
+  }
+
+  @override
+  Future<void> markAttachmentAnnotationOkJson(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String lang,
+    required String modelName,
+    required String payloadJson,
+    required int nowMs,
+  }) async {
+    savedPayloadJsons.add(payloadJson);
+    final decoded = jsonDecode(payloadJson);
+    if (decoded is Map<String, dynamic>) {
+      final caption = decoded['caption_long'];
+      if (caption is String) {
+        _annotationCaptionBySha[attachmentSha256] = caption;
+      }
+    }
+  }
+
+  @override
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> linkAttachmentToMessage(
+    Uint8List key,
+    String messageId, {
+    required String attachmentSha256,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<Attachment>> listMessageAttachments(
+    Uint8List key,
+    String messageId,
+  ) =>
+      throw UnimplementedError();
+}

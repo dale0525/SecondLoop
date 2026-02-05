@@ -11,6 +11,9 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
     required AttachmentsBackend? attachmentsBackend,
     required Uint8List sessionKey,
     required Map<String, SemanticParseJob> jobsByMessageId,
+    required Map<String, AttachmentAnnotationJob> annotationJobsBySha256,
+    required bool attachmentAnnotationEnabled,
+    required bool attachmentAnnotationCanRunNow,
     required ColorScheme colorScheme,
     required SlTokens tokens,
     required bool isDesktopPlatform,
@@ -524,173 +527,239 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   return const SizedBox.shrink();
                                 }
 
+                                double estimateAttachmentPreviewWidth(
+                                  Attachment attachment,
+                                ) {
+                                  if (attachment.mimeType
+                                      .startsWith('image/')) {
+                                    // 180px preview + 1px border on each side.
+                                    return 180 + 2;
+                                  }
+                                  // AttachmentCard uses maxWidth=220 with the same SlSurface border.
+                                  return 220 + 2;
+                                }
+
+                                double estimateRowWidth(
+                                    List<Attachment> items) {
+                                  const spacing = 8.0;
+                                  var sum = 0.0;
+                                  for (var i = 0; i < items.length; i++) {
+                                    sum += estimateAttachmentPreviewWidth(
+                                        items[i]);
+                                    if (i != items.length - 1) sum += spacing;
+                                  }
+                                  return sum;
+                                }
+
                                 return Padding(
                                   padding: EdgeInsets.only(
                                     top: hasContentAboveAttachments ? 8 : 0,
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          children: [
-                                            for (final attachment in items)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  right: 8,
-                                                ),
-                                                child: attachment.mimeType
-                                                        .startsWith('image/')
-                                                    ? ChatImageAttachmentThumbnail(
-                                                        key: ValueKey(
-                                                          'chat_attachment_image_${attachment.sha256}',
-                                                        ),
-                                                        attachment: attachment,
-                                                        attachmentsBackend:
-                                                            attachmentsBackend,
-                                                        onTap: () {
-                                                          Navigator.of(context)
-                                                              .push(
-                                                            MaterialPageRoute(
-                                                              builder:
-                                                                  (context) {
-                                                                return AttachmentViewerPage(
-                                                                  attachment:
-                                                                      attachment,
-                                                                );
-                                                              },
-                                                            ),
-                                                          );
-                                                        },
-                                                      )
-                                                    : AttachmentCard(
-                                                        attachment: attachment,
-                                                        onTap: () {
-                                                          Navigator.of(context)
-                                                              .push(
-                                                            MaterialPageRoute(
-                                                              builder:
-                                                                  (context) {
-                                                                return AttachmentViewerPage(
-                                                                  attachment:
-                                                                      attachment,
-                                                                );
-                                                              },
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      const spacing = 8.0;
+                                      final estimatedRowWidth =
+                                          estimateRowWidth(items);
+                                      final shouldScroll = estimatedRowWidth >
+                                          constraints.maxWidth;
+
+                                      final thumbRow = Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          for (var i = 0; i < items.length; i++)
+                                            Padding(
+                                              padding: EdgeInsets.only(
+                                                right: i == items.length - 1
+                                                    ? 0
+                                                    : spacing,
                                               ),
-                                          ],
-                                        ),
-                                      ),
-                                      Builder(
-                                        builder: (context) {
-                                          String? firstImageSha256;
-                                          for (final a in items) {
-                                            if (a.mimeType
-                                                .startsWith('image/')) {
-                                              firstImageSha256 = a.sha256;
-                                              break;
-                                            }
-                                          }
-                                          final sha256 = firstImageSha256;
-                                          if (sha256 == null) {
-                                            return const SizedBox.shrink();
-                                          }
-
-                                          return FutureBuilder(
-                                            initialData:
-                                                _attachmentEnrichmentCacheBySha256[
-                                                    sha256],
-                                            future:
-                                                _attachmentEnrichmentFuturesBySha256
-                                                    .putIfAbsent(
-                                              sha256,
-                                              () => _loadAttachmentEnrichment(
-                                                attachmentsBackend,
-                                                sessionKey,
-                                                sha256,
-                                              ).then((value) {
-                                                _attachmentEnrichmentCacheBySha256[
-                                                    sha256] = value;
-                                                return value;
-                                              }),
+                                              child: items[i]
+                                                      .mimeType
+                                                      .startsWith('image/')
+                                                  ? ChatImageAttachmentThumbnail(
+                                                      key: ValueKey(
+                                                        'chat_attachment_image_${items[i].sha256}',
+                                                      ),
+                                                      attachment: items[i],
+                                                      attachmentsBackend:
+                                                          attachmentsBackend,
+                                                      onTap: () {
+                                                        Navigator.of(context)
+                                                            .push(
+                                                          MaterialPageRoute(
+                                                            builder: (context) {
+                                                              return AttachmentViewerPage(
+                                                                attachment:
+                                                                    items[i],
+                                                              );
+                                                            },
+                                                          ),
+                                                        );
+                                                      },
+                                                    )
+                                                  : AttachmentCard(
+                                                      attachment: items[i],
+                                                      onTap: () {
+                                                        Navigator.of(context)
+                                                            .push(
+                                                          MaterialPageRoute(
+                                                            builder: (context) {
+                                                              return AttachmentViewerPage(
+                                                                attachment:
+                                                                    items[i],
+                                                              );
+                                                            },
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
                                             ),
-                                            builder: (context, snapshot) {
-                                              final enrichment = snapshot.data;
-                                              final place = enrichment
-                                                  ?.placeDisplayName
-                                                  ?.trim();
-                                              final caption = enrichment
-                                                  ?.captionLong
-                                                  ?.trim();
+                                        ],
+                                      );
 
-                                              final hasPlace = place != null &&
-                                                  place.isNotEmpty;
-                                              final hasCaption =
-                                                  caption != null &&
-                                                      caption.isNotEmpty;
-                                              if (!hasPlace && !hasCaption) {
-                                                return const SizedBox.shrink();
-                                              }
+                                      Widget rowWidget = thumbRow;
+                                      if (shouldScroll) {
+                                        rowWidget = SizedBox(
+                                          width: constraints.maxWidth,
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: thumbRow,
+                                          ),
+                                        );
+                                      }
 
-                                              final textStyle = Theme.of(
-                                                      context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: isUser
-                                                        ? colorScheme
-                                                            .onPrimaryContainer
-                                                            .withOpacity(0.78)
-                                                        : colorScheme
-                                                            .onSurfaceVariant
-                                                            .withOpacity(0.86),
-                                                  );
+                                      Attachment? firstImage;
+                                      for (final a in items) {
+                                        if (a.mimeType.startsWith('image/')) {
+                                          firstImage = a;
+                                          break;
+                                        }
+                                      }
 
-                                              return Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 6,
-                                                ),
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    if (hasPlace)
-                                                      Text(
-                                                        place,
-                                                        key: ValueKey(
-                                                          'chat_image_enrichment_location_$sha256',
-                                                        ),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: textStyle,
-                                                      ),
-                                                    if (hasPlace && hasCaption)
-                                                      const SizedBox(height: 2),
-                                                    if (hasCaption)
-                                                      Text(
-                                                        caption,
-                                                        key: ValueKey(
-                                                          'chat_image_enrichment_caption_$sha256',
-                                                        ),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: textStyle,
-                                                      ),
-                                                  ],
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        },
-                                      ),
-                                    ],
+                                      final imageSha256 = firstImage?.sha256;
+                                      final double? enrichmentWidth =
+                                          firstImage == null
+                                              ? null
+                                              : estimateAttachmentPreviewWidth(
+                                                  firstImage,
+                                                )
+                                                  .clamp(
+                                                    0.0,
+                                                    constraints.maxWidth,
+                                                  )
+                                                  .toDouble();
+
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          rowWidget,
+                                          if (imageSha256 != null &&
+                                              enrichmentWidth != null)
+                                            FutureBuilder(
+                                              initialData:
+                                                  _attachmentEnrichmentCacheBySha256[
+                                                      imageSha256],
+                                              future:
+                                                  _attachmentEnrichmentFuturesBySha256
+                                                      .putIfAbsent(
+                                                imageSha256,
+                                                () => _loadAttachmentEnrichment(
+                                                  attachmentsBackend,
+                                                  sessionKey,
+                                                  imageSha256,
+                                                ).then((value) {
+                                                  _attachmentEnrichmentCacheBySha256[
+                                                      imageSha256] = value;
+                                                  return value;
+                                                }),
+                                              ),
+                                              builder: (context, snapshot) {
+                                                final enrichment =
+                                                    snapshot.data;
+                                                final place = enrichment
+                                                    ?.placeDisplayName
+                                                    ?.trim();
+                                                final caption = enrichment
+                                                    ?.captionLong
+                                                    ?.trim();
+
+                                                final hasPlace =
+                                                    place != null &&
+                                                        place.isNotEmpty;
+                                                final hasCaption =
+                                                    caption != null &&
+                                                        caption.isNotEmpty;
+                                                if (!hasPlace && !hasCaption) {
+                                                  return const SizedBox
+                                                      .shrink();
+                                                }
+
+                                                final textStyle = Theme.of(
+                                                        context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: isUser
+                                                          ? colorScheme
+                                                              .onPrimaryContainer
+                                                              .withOpacity(0.78)
+                                                          : colorScheme
+                                                              .onSurfaceVariant
+                                                              .withOpacity(
+                                                                  0.86),
+                                                    );
+
+                                                return SizedBox(
+                                                  width: enrichmentWidth,
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                      top: 6,
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        if (hasPlace)
+                                                          Text(
+                                                            place,
+                                                            key: ValueKey(
+                                                              'chat_image_enrichment_location_$imageSha256',
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style: textStyle,
+                                                          ),
+                                                        if (hasPlace &&
+                                                            hasCaption)
+                                                          const SizedBox(
+                                                              height: 2),
+                                                        if (hasCaption)
+                                                          Text(
+                                                            caption,
+                                                            key: ValueKey(
+                                                              'chat_image_enrichment_caption_$imageSha256',
+                                                            ),
+                                                            maxLines: 2,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style: textStyle,
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 );
                               },
@@ -774,6 +843,84 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                 ],
               ),
             ),
+            if (supportsAttachments && annotationJobsBySha256.isNotEmpty)
+              FutureBuilder<List<Attachment>>(
+                initialData: _attachmentsCacheByMessageId[stableMsg.id],
+                future: _attachmentsFuturesByMessageId.putIfAbsent(
+                  stableMsg.id,
+                  () => attachmentsBackend
+                      .listMessageAttachments(
+                    sessionKey,
+                    stableMsg.id,
+                  )
+                      .then((items) {
+                    _attachmentsCacheByMessageId[stableMsg.id] = items;
+                    return items;
+                  }),
+                ),
+                builder: (context, snapshot) {
+                  final items = snapshot.data ?? const <Attachment>[];
+                  if (items.isEmpty) return const SizedBox.shrink();
+
+                  String? firstImageSha256;
+                  for (final a in items) {
+                    if (a.mimeType.startsWith('image/')) {
+                      firstImageSha256 = a.sha256;
+                      break;
+                    }
+                  }
+                  final sha256 = firstImageSha256;
+                  if (sha256 == null) return const SizedBox.shrink();
+
+                  final job = annotationJobsBySha256[sha256];
+                  if (job == null) return const SizedBox.shrink();
+
+                  Future<void> retry() async {
+                    final backendAny = AppBackendScope.of(context);
+                    if (backendAny is! NativeAppBackend) return;
+                    final syncEngine = SyncEngineScope.maybeOf(context);
+
+                    final lang = job.lang.trim().isNotEmpty
+                        ? job.lang.trim()
+                        : Localizations.localeOf(context).toLanguageTag();
+
+                    try {
+                      await backendAny.enqueueAttachmentAnnotation(
+                        sessionKey,
+                        attachmentSha256: sha256,
+                        lang: lang,
+                        nowMs: DateTime.now().millisecondsSinceEpoch,
+                      );
+                      syncEngine?.notifyExternalChange();
+                    } catch (_) {
+                      // ignore
+                    }
+                  }
+
+                  return Align(
+                    alignment:
+                        isUser ? Alignment.centerRight : Alignment.centerLeft,
+                    child: AttachmentAnnotationJobStatusRow(
+                      job: job,
+                      annotateEnabled: attachmentAnnotationEnabled,
+                      canAnnotateNow: attachmentAnnotationCanRunNow,
+                      onOpenSetup: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => Scaffold(
+                              appBar: AppBar(
+                                title: Text(context.t.settings.title),
+                              ),
+                              body: const SettingsPage(),
+                            ),
+                          ),
+                        );
+                      },
+                      onRetry: job.status == 'failed' ? retry : null,
+                    ),
+                  );
+                },
+              ),
             if (isUser &&
                 !isPending &&
                 jobsByMessageId.containsKey(stableMsg.id))

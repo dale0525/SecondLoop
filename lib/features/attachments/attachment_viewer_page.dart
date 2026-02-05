@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -35,8 +36,14 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   Future<Uint8List>? _bytesFuture;
   Future<AttachmentExifMetadata?>? _exifFuture;
   Future<String?>? _placeFuture;
+  Future<String?>? _annotationCaptionFuture;
   bool _loadingPlace = false;
+  bool _loadingAnnotation = false;
   String? _placeDisplayName;
+  String? _annotationCaption;
+  bool _editingAnnotationCaption = false;
+  bool _savingAnnotationCaption = false;
+  TextEditingController? _annotationCaptionController;
   Timer? _inlinePlaceResolveTimer;
   bool _inlinePlaceResolveScheduled = false;
   bool _attemptedSyncDownload = false;
@@ -51,12 +58,16 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     if (_placeFuture == null) {
       _startPlaceLoad();
     }
+    if (_annotationCaptionFuture == null) {
+      _startAnnotationCaptionLoad();
+    }
     _attachSyncEngine();
   }
 
   @override
   void dispose() {
     _inlinePlaceResolveTimer?.cancel();
+    _annotationCaptionController?.dispose();
     _detachSyncEngine();
     super.dispose();
   }
@@ -71,10 +82,26 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     void onChange() {
       if (!mounted) return;
-      if (_loadingPlace) return;
-      final existing = _placeDisplayName?.trim();
-      if (existing != null && existing.isNotEmpty) return;
-      setState(() => _startPlaceLoad());
+      var didSchedule = false;
+      if (!_loadingPlace) {
+        final existing = _placeDisplayName?.trim();
+        if (existing == null || existing.isEmpty) {
+          didSchedule = true;
+          _startPlaceLoad();
+        }
+      }
+
+      if (!_loadingAnnotation) {
+        final existing = _annotationCaption?.trim();
+        if (existing == null || existing.isEmpty) {
+          didSchedule = true;
+          _startAnnotationCaptionLoad();
+        }
+      }
+
+      if (didSchedule) {
+        setState(() {});
+      }
     }
 
     _syncListener = onChange;
@@ -98,6 +125,16 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       return value;
     }).whenComplete(() {
       _loadingPlace = false;
+    });
+  }
+
+  void _startAnnotationCaptionLoad() {
+    _loadingAnnotation = true;
+    _annotationCaptionFuture = _loadAnnotationCaptionLong().then((value) {
+      _annotationCaption = value?.trim();
+      return value;
+    }).whenComplete(() {
+      _loadingAnnotation = false;
     });
   }
 
@@ -237,6 +274,21 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }
   }
 
+  Future<String?> _loadAnnotationCaptionLong() async {
+    final backend = AppBackendScope.of(context);
+    if (backend is! AttachmentsBackend) return null;
+    final attachmentsBackend = backend as AttachmentsBackend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    try {
+      return await attachmentsBackend.readAttachmentAnnotationCaptionLong(
+        sessionKey,
+        sha256: widget.attachment.sha256,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   static String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     final kb = bytes / 1024;
@@ -327,6 +379,144 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     );
   }
 
+  Widget _buildAnnotationCard(
+    BuildContext context, {
+    required String captionLong,
+  }) {
+    final caption = captionLong.trim();
+    if (caption.isEmpty) return const SizedBox.shrink();
+
+    Future<void> save() async {
+      if (_savingAnnotationCaption) return;
+      final controller = _annotationCaptionController;
+      if (controller == null) return;
+
+      final nextCaption = controller.text.trim();
+      if (nextCaption.isEmpty) return;
+
+      final backend = AppBackendScope.of(context);
+      if (backend is! AttachmentAnnotationMutationsBackend) return;
+      final annotationsBackend =
+          backend as AttachmentAnnotationMutationsBackend;
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
+
+      setState(() => _savingAnnotationCaption = true);
+      try {
+        final payload = jsonEncode({
+          'caption_long': nextCaption,
+          'tags': null,
+          'ocr_text': null,
+        });
+        await annotationsBackend.markAttachmentAnnotationOkJson(
+          sessionKey,
+          attachmentSha256: widget.attachment.sha256,
+          lang: Localizations.localeOf(context).toLanguageTag(),
+          modelName: 'manual_edit',
+          payloadJson: payload,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+        );
+        syncEngine?.notifyLocalMutation();
+
+        if (!mounted) return;
+        setState(() {
+          _savingAnnotationCaption = false;
+          _editingAnnotationCaption = false;
+          _annotationCaptionController?.dispose();
+          _annotationCaptionController = null;
+          _startAnnotationCaptionLoad();
+        });
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t.errors.saveFailed(error: '$e')),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        setState(() => _savingAnnotationCaption = false);
+      }
+    }
+
+    void beginEdit() {
+      _annotationCaptionController?.dispose();
+      _annotationCaptionController = TextEditingController(text: caption);
+      setState(() => _editingAnnotationCaption = true);
+    }
+
+    void cancelEdit() {
+      _annotationCaptionController?.dispose();
+      _annotationCaptionController = null;
+      setState(() => _editingAnnotationCaption = false);
+    }
+
+    final canEdit =
+        AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
+
+    return SlSurface(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.t.settings.mediaAnnotation.title,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+              if (!_editingAnnotationCaption && canEdit)
+                IconButton(
+                  key: const ValueKey('attachment_annotation_edit'),
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: context.t.common.actions.edit,
+                  onPressed: beginEdit,
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (!_editingAnnotationCaption)
+            Text(
+              caption,
+              key: const ValueKey('attachment_annotation_caption'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          if (_editingAnnotationCaption) ...[
+            TextField(
+              key: const ValueKey('attachment_annotation_edit_field'),
+              controller: _annotationCaptionController,
+              enabled: !_savingAnnotationCaption,
+              maxLines: null,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: const ValueKey('attachment_annotation_edit_cancel'),
+                  onPressed: _savingAnnotationCaption ? null : cancelEdit,
+                  child: Text(context.t.common.actions.cancel),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  key: const ValueKey('attachment_annotation_edit_save'),
+                  onPressed:
+                      _savingAnnotationCaption ? null : () => unawaited(save()),
+                  child: Text(context.t.common.actions.save),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
@@ -385,6 +575,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 Widget buildContent(
                   AttachmentExifMetadata? persisted,
                   String? placeDisplayName,
+                  String? annotationCaption,
                 ) {
                   final persistedCapturedAtMs = persisted?.capturedAtMs;
                   final persistedCapturedAt = persistedCapturedAtMs == null
@@ -426,14 +617,26 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                         top: false,
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: _buildMetadataCard(
-                            context,
-                            mimeType: widget.attachment.mimeType,
-                            byteLen: widget.attachment.byteLen.toInt(),
-                            capturedAt: capturedAt,
-                            latitude: latitude,
-                            longitude: longitude,
-                            placeDisplayName: placeDisplayName,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildMetadataCard(
+                                context,
+                                mimeType: widget.attachment.mimeType,
+                                byteLen: widget.attachment.byteLen.toInt(),
+                                capturedAt: capturedAt,
+                                latitude: latitude,
+                                longitude: longitude,
+                                placeDisplayName: placeDisplayName,
+                              ),
+                              if ((annotationCaption ?? '').trim().isNotEmpty)
+                                const SizedBox(height: 12),
+                              if ((annotationCaption ?? '').trim().isNotEmpty)
+                                _buildAnnotationCard(
+                                  context,
+                                  captionLong: annotationCaption!,
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -441,17 +644,39 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   );
                 }
 
+                Widget buildWithAnnotation(
+                  AttachmentExifMetadata? persisted,
+                  String? placeDisplayName,
+                ) {
+                  final annotationFuture = _annotationCaptionFuture;
+                  if (annotationFuture == null) {
+                    return buildContent(persisted, placeDisplayName, null);
+                  }
+
+                  return FutureBuilder<String?>(
+                    future: annotationFuture,
+                    initialData: _annotationCaption,
+                    builder: (context, annotationSnapshot) {
+                      return buildContent(
+                        persisted,
+                        placeDisplayName,
+                        annotationSnapshot.data,
+                      );
+                    },
+                  );
+                }
+
                 Widget buildWithPlace(AttachmentExifMetadata? persisted) {
                   final placeFuture = _placeFuture;
                   if (placeFuture == null) {
-                    return buildContent(persisted, null);
+                    return buildWithAnnotation(persisted, null);
                   }
 
                   return FutureBuilder<String?>(
                     future: placeFuture,
                     initialData: _placeDisplayName,
                     builder: (context, placeSnapshot) {
-                      return buildContent(persisted, placeSnapshot.data);
+                      return buildWithAnnotation(persisted, placeSnapshot.data);
                     },
                   );
                 }

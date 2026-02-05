@@ -3,5 +3,6 @@
 //
 
 pub mod core;
+pub mod media_annotation;
 pub mod simple;
 pub mod sync_progress;

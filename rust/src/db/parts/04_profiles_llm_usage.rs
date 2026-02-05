@@ -307,6 +307,57 @@ pub fn load_active_llm_profile_config(
     )))
 }
 
+pub fn load_llm_profile_config_by_id(
+    conn: &Connection,
+    key: &[u8; 32],
+    profile_id: &str,
+) -> Result<Option<LlmProfileConfig>> {
+    let row = conn
+        .query_row(
+            r#"SELECT provider_type, base_url, api_key, model_name
+               FROM llm_profiles
+               WHERE id = ?1
+               LIMIT 1"#,
+            params![profile_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    let Some((provider_type, base_url, api_key_blob, model_name)) = row else {
+        return Ok(None);
+    };
+
+    let api_key = match api_key_blob {
+        Some(blob) => {
+            let api_key_bytes = decrypt_bytes(
+                key,
+                &blob,
+                format!("llm.api_key:{profile_id}").as_bytes(),
+            )?;
+
+            Some(
+                String::from_utf8(api_key_bytes)
+                    .map_err(|_| anyhow!("llm api_key is not valid utf-8"))?,
+            )
+        }
+        None => None,
+    };
+
+    Ok(Some(LlmProfileConfig {
+        provider_type,
+        base_url,
+        api_key,
+        model_name,
+    }))
+}
+
 pub fn load_active_embedding_profile_config(
     conn: &Connection,
     key: &[u8; 32],
@@ -480,4 +531,3 @@ fn default_embed_text(text: &str) -> Vec<f32> {
 
     v
 }
-

@@ -16,6 +16,7 @@ import '../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -64,6 +65,7 @@ import 'chat_markdown_sanitizer.dart';
 import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';
 import 'semantic_parse_job_status_row.dart';
+import 'attachment_annotation_job_status_row.dart';
 
 part 'chat_page_methods_a.dart';
 part 'chat_page_methods_b.dart';
@@ -71,6 +73,7 @@ part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
 part 'chat_page_message_item_builder.dart';
+part 'chat_page_build_helpers.dart';
 part 'chat_page_build.dart';
 
 const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';

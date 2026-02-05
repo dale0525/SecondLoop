@@ -18,6 +18,7 @@ String _purposeLabel(BuildContext context, LlmUsageAggregate agg) {
   return switch (agg.purpose) {
     'ask_ai' => context.t.common.actions.askAi,
     'semantic_parse' => context.t.settings.byokUsage.purposes.semanticParse,
+    'media_annotation' => context.t.settings.byokUsage.purposes.mediaAnnotation,
     _ => agg.purpose,
   };
 }

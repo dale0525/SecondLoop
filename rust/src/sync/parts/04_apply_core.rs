@@ -10,6 +10,9 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "attachment.delete.v1" => apply_attachment_delete(conn, db_key, op),
         "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),
         "attachment.place.upsert.v1" => apply_attachment_place_upsert(conn, db_key, &op["payload"]),
+        "attachment.annotation.upsert.v1" => {
+            apply_attachment_annotation_upsert(conn, db_key, &op["payload"])
+        }
         "message.attachment.link.v1" => apply_message_attachment_link(conn, db_key, &op["payload"]),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.delete.v1" => apply_todo_delete(conn, op),
@@ -632,4 +635,3 @@ WHERE excluded.updated_at_ms > events.updated_at_ms
 
     Ok(())
 }
-

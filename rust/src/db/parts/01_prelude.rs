@@ -17,6 +17,19 @@ const DEFAULT_EMBEDDING_DIM: usize = crate::embedding::DEFAULT_EMBED_DIM;
 const MAIN_STREAM_CONVERSATION_ID: &str = "main_stream";
 const KV_ACTIVE_EMBEDDING_MODEL_NAME: &str = "embedding.active_model_name";
 const KV_ACTIVE_EMBEDDING_DIM: &str = "embedding.active_dim";
+const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_BASE_URL: &str = "embedding.cloud_gateway.embeddings.base_url";
+const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_REQUESTED_MODEL_NAME: &str =
+    "embedding.cloud_gateway.embeddings.requested_model_name";
+const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_MODEL_ID: &str = "embedding.cloud_gateway.embeddings.model_id";
+const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_DIM: &str = "embedding.cloud_gateway.embeddings.dim";
+
+#[derive(Clone, Debug)]
+pub struct CloudGatewayEmbeddingsCache {
+    pub base_url: String,
+    pub requested_model_name: String,
+    pub effective_model_id: String,
+    pub dim: usize,
+}
 
 #[derive(Clone, Debug)]
 pub struct Conversation {
@@ -326,6 +339,110 @@ pub fn get_active_embedding_dim(conn: &Connection) -> Result<Option<usize>> {
         .parse::<usize>()
         .map_err(|_| anyhow!("invalid {KV_ACTIVE_EMBEDDING_DIM}: {raw}"))?;
     Ok(Some(dim))
+}
+
+pub fn lookup_embedding_space_dim(conn: &Connection, model_name: &str) -> Result<Option<usize>> {
+    if !sqlite_table_exists(conn, "embedding_spaces")? {
+        return Ok(None);
+    }
+
+    let dim_i64: Option<i64> = conn
+        .query_row(
+            r#"SELECT dim
+               FROM embedding_spaces
+               WHERE model_name = ?1
+               ORDER BY updated_at_ms DESC
+               LIMIT 1"#,
+            params![model_name],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    let Some(dim_i64) = dim_i64 else {
+        return Ok(None);
+    };
+    let dim = usize::try_from(dim_i64).unwrap_or(0);
+    if dim == 0 || dim > 8192 {
+        return Ok(None);
+    }
+    Ok(Some(dim))
+}
+
+pub fn load_cloud_gateway_embeddings_cache(
+    conn: &Connection,
+) -> Result<Option<CloudGatewayEmbeddingsCache>> {
+    let base_url = kv_get_string(conn, KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_BASE_URL)?
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let requested_model_name = kv_get_string(conn, KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_REQUESTED_MODEL_NAME)?
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let effective_model_id = kv_get_string(conn, KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_MODEL_ID)?
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let dim_raw = kv_get_string(conn, KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_DIM)?
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if base_url.is_empty()
+        || requested_model_name.is_empty()
+        || effective_model_id.is_empty()
+        || dim_raw.is_empty()
+    {
+        return Ok(None);
+    }
+
+    let dim = dim_raw
+        .parse::<usize>()
+        .map_err(|_| anyhow!("invalid {KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_DIM}: {dim_raw}"))?;
+    if dim == 0 || dim > 8192 {
+        return Ok(None);
+    }
+
+    Ok(Some(CloudGatewayEmbeddingsCache {
+        base_url,
+        requested_model_name,
+        effective_model_id,
+        dim,
+    }))
+}
+
+pub fn store_cloud_gateway_embeddings_cache(
+    conn: &Connection,
+    base_url: &str,
+    requested_model_name: &str,
+    effective_model_id: &str,
+    dim: usize,
+) -> Result<()> {
+    if dim == 0 || dim > 8192 {
+        return Err(anyhow!("invalid embedding dim: {dim}"));
+    }
+
+    kv_set_string(
+        conn,
+        KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_BASE_URL,
+        base_url.trim(),
+    )?;
+    kv_set_string(
+        conn,
+        KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_REQUESTED_MODEL_NAME,
+        requested_model_name.trim(),
+    )?;
+    kv_set_string(
+        conn,
+        KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_MODEL_ID,
+        effective_model_id.trim(),
+    )?;
+    kv_set_string(
+        conn,
+        KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_DIM,
+        &dim.to_string(),
+    )?;
+    Ok(())
 }
 
 fn current_embedding_dim(conn: &Connection) -> Result<usize> {
@@ -657,12 +774,16 @@ fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) 
 const KV_ATTACHMENTS_OPLOG_BACKFILLED: &str = "oplog.backfill.attachments.v1";
 const KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED: &str = "oplog.backfill.attachment_exif.v1";
 const KV_ATTACHMENT_PLACES_OPLOG_BACKFILLED: &str = "oplog.backfill.attachment_places.v1";
+const KV_ATTACHMENT_ANNOTATIONS_OPLOG_BACKFILLED: &str =
+    "oplog.backfill.attachment_annotations.v1";
 
 pub fn backfill_attachments_oplog_if_needed(conn: &Connection, key: &[u8; 32]) -> Result<u64> {
     let attachments_backfilled = kv_get_string(conn, KV_ATTACHMENTS_OPLOG_BACKFILLED)?.is_some();
     let exif_backfilled = kv_get_string(conn, KV_ATTACHMENT_EXIF_OPLOG_BACKFILLED)?.is_some();
     let places_backfilled = kv_get_string(conn, KV_ATTACHMENT_PLACES_OPLOG_BACKFILLED)?.is_some();
-    if attachments_backfilled && exif_backfilled && places_backfilled {
+    let annotations_backfilled =
+        kv_get_string(conn, KV_ATTACHMENT_ANNOTATIONS_OPLOG_BACKFILLED)?.is_some();
+    if attachments_backfilled && exif_backfilled && places_backfilled && annotations_backfilled {
         return Ok(0);
     }
 
@@ -827,6 +948,66 @@ ORDER BY updated_at ASC, attachment_sha256 ASC
         }
 
         kv_set_string(conn, KV_ATTACHMENT_PLACES_OPLOG_BACKFILLED, "1")?;
+    }
+
+    if !annotations_backfilled {
+        let mut stmt = conn.prepare(
+            r#"
+SELECT attachment_sha256, status, lang, model_name, payload, created_at, updated_at
+FROM attachment_annotations
+WHERE status = 'ok' AND payload IS NOT NULL
+ORDER BY updated_at ASC, attachment_sha256 ASC
+"#,
+        )?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let attachment_sha256: String = row.get(0)?;
+            let status: String = row.get(1)?;
+            let lang: String = row.get(2)?;
+            let model_name: Option<String> = row.get(3)?;
+            let blob: Vec<u8> = row.get(4)?;
+            let created_at_ms: i64 = row.get(5)?;
+            let updated_at_ms: i64 = row.get(6)?;
+
+            if status != "ok" {
+                continue;
+            }
+
+            let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
+            let json = decrypt_bytes(key, &blob, aad.as_bytes())?;
+            let payload: serde_json::Value = serde_json::from_slice(&json)?;
+
+            let model_name = model_name
+                .unwrap_or_else(|| "unknown".to_string())
+                .trim()
+                .to_string();
+            let model_name = if model_name.is_empty() {
+                "unknown".to_string()
+            } else {
+                model_name
+            };
+
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id.as_str(),
+                "seq": seq,
+                "ts_ms": updated_at_ms,
+                "type": "attachment.annotation.upsert.v1",
+                "payload": {
+                    "attachment_sha256": attachment_sha256,
+                    "lang": lang,
+                    "model_name": model_name,
+                    "payload": payload,
+                    "created_at_ms": created_at_ms,
+                    "updated_at_ms": updated_at_ms,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            ops_inserted += 1;
+        }
+
+        kv_set_string(conn, KV_ATTACHMENT_ANNOTATIONS_OPLOG_BACKFILLED, "1")?;
     }
 
     Ok(ops_inserted)
