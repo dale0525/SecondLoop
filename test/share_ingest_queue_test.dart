@@ -63,6 +63,48 @@ void main() {
     expect(backend.insertedContents, ['Shared image (image/png)']);
     expect(backend.linkCalls, ['m1:sha256_test']);
   });
+
+  test('ShareIngest drains queued audio file via handler', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _ShareBackend();
+    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
+
+    final dir = await Directory.systemTemp.createTemp('secondloop_share_');
+    addTearDown(() async => dir.delete(recursive: true));
+
+    final file = File('${dir.path}/voice.wav');
+    await file.writeAsBytes([1, 2, 3, 4]);
+
+    await ShareIngest.enqueueFile(
+      tempPath: file.path,
+      mimeType: 'audio/wav',
+      filename: 'voice.wav',
+    );
+
+    String? drainedPath;
+    String? drainedMimeType;
+    String? drainedFilename;
+    final processed = await ShareIngest.drainQueue(
+      backend,
+      sessionKey,
+      onFile: (path, mimeType, filename) async {
+        drainedPath = path;
+        drainedMimeType = mimeType;
+        drainedFilename = filename;
+        await File(path).delete();
+        return 'sha256_audio';
+      },
+    );
+
+    expect(processed, 1);
+    expect(drainedPath, file.path);
+    expect(drainedMimeType, 'audio/wav');
+    expect(drainedFilename, 'voice.wav');
+    expect(await file.exists(), false);
+    expect(backend.insertedContents, ['Shared file: voice.wav']);
+    expect(backend.linkCalls, ['m1:sha256_audio']);
+  });
 }
 
 final class _ShareBackend extends AppBackend implements AttachmentsBackend {

@@ -155,7 +155,6 @@ fn normalize_audio_transcribe_engine(engine: &str) -> &'static str {
     match engine.trim() {
         "" | "whisper" => "whisper",
         "multimodal_llm" => "multimodal_llm",
-        "auto" => "auto",
         _ => "whisper",
     }
 }

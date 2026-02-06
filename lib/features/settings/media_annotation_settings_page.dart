@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -13,19 +14,24 @@ import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
+import 'media_annotation_settings_sections.dart';
 
 class MediaAnnotationSettingsPage extends StatefulWidget {
   const MediaAnnotationSettingsPage({
     super.key,
     this.configStore,
+    this.contentConfigStore,
   });
 
   final MediaAnnotationConfigStore? configStore;
+  final ContentEnrichmentConfigStore? contentConfigStore;
 
   static const annotateSwitchKey =
       ValueKey('media_annotation_settings_annotate_switch');
   static const searchSwitchKey =
       ValueKey('media_annotation_settings_search_switch');
+  static const audioTranscribeSwitchKey =
+      ValueKey('media_annotation_settings_audio_transcribe_switch');
   static const searchConfirmDialogKey =
       ValueKey('media_annotation_settings_search_confirm_dialog');
   static const searchConfirmCancelKey =
@@ -46,12 +52,16 @@ class _MediaAnnotationSettingsPageState
 
   bool _didKickoffLoad = false;
   MediaAnnotationConfig? _config;
+  ContentEnrichmentConfig? _contentConfig;
   List<LlmProfile>? _llmProfiles;
   Object? _loadError;
+  Object? _contentLoadError;
   bool _busy = false;
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
+  ContentEnrichmentConfigStore get _contentStore =>
+      widget.contentConfigStore ?? const RustContentEnrichmentConfigStore();
 
   Future<void> _showSetupRequiredDialog({
     required String reason,
@@ -312,6 +322,14 @@ class _MediaAnnotationSettingsPageState
         context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
     try {
       final config = await _store.read(sessionKey);
+      ContentEnrichmentConfig? contentConfig;
+      Object? contentLoadError;
+      try {
+        contentConfig = await _contentStore.readContentEnrichment(sessionKey);
+      } catch (e) {
+        contentConfig = null;
+        contentLoadError = e;
+      }
       List<LlmProfile>? profiles;
       if (backend != null) {
         try {
@@ -323,6 +341,8 @@ class _MediaAnnotationSettingsPageState
       if (!mounted) return;
       setState(() {
         _config = config;
+        _contentConfig = contentConfig;
+        _contentLoadError = contentLoadError;
         _llmProfiles = profiles;
         _loadError = null;
       });
@@ -331,6 +351,7 @@ class _MediaAnnotationSettingsPageState
       setState(() {
         _loadError = e;
         _config = null;
+        _contentConfig = null;
       });
     }
   }
@@ -345,6 +366,62 @@ class _MediaAnnotationSettingsPageState
       await _store.write(sessionKey, next);
       if (!mounted) return;
       setState(() => _config = next);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  ContentEnrichmentConfig _copyContentConfig(
+    ContentEnrichmentConfig source, {
+    bool? audioTranscribeEnabled,
+    String? audioTranscribeEngine,
+  }) {
+    return ContentEnrichmentConfig(
+      urlFetchEnabled: source.urlFetchEnabled,
+      documentExtractEnabled: source.documentExtractEnabled,
+      documentKeepOriginalMaxBytes: source.documentKeepOriginalMaxBytes,
+      pdfCompressEnabled: source.pdfCompressEnabled,
+      pdfCompressProfile: source.pdfCompressProfile,
+      pdfCompressMinBytes: source.pdfCompressMinBytes,
+      pdfCompressTargetMaxBytes: source.pdfCompressTargetMaxBytes,
+      audioTranscribeEnabled:
+          audioTranscribeEnabled ?? source.audioTranscribeEnabled,
+      audioTranscribeEngine:
+          audioTranscribeEngine ?? source.audioTranscribeEngine,
+      videoExtractEnabled: source.videoExtractEnabled,
+      videoProxyEnabled: source.videoProxyEnabled,
+      videoProxyMaxDurationMs: source.videoProxyMaxDurationMs,
+      videoProxyMaxBytes: source.videoProxyMaxBytes,
+      ocrEnabled: source.ocrEnabled,
+      ocrEngineMode: source.ocrEngineMode,
+      ocrLanguageHints: source.ocrLanguageHints,
+      ocrPdfDpi: source.ocrPdfDpi,
+      ocrPdfAutoMaxPages: source.ocrPdfAutoMaxPages,
+      ocrPdfMaxPages: source.ocrPdfMaxPages,
+      mobileBackgroundEnabled: source.mobileBackgroundEnabled,
+      mobileBackgroundRequiresWifi: source.mobileBackgroundRequiresWifi,
+      mobileBackgroundRequiresCharging: source.mobileBackgroundRequiresCharging,
+    );
+  }
+
+  Future<void> _persistContentConfig(ContentEnrichmentConfig next) async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    setState(() => _busy = true);
+    try {
+      await _contentStore.writeContentEnrichment(sessionKey, next);
+      if (!mounted) return;
+      setState(() => _contentConfig = next);
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -556,24 +633,136 @@ class _MediaAnnotationSettingsPageState
     );
   }
 
+  String _audioTranscribeEngineLabel(BuildContext context, String engine) {
+    final labels =
+        context.t.settings.mediaAnnotation.audioTranscribe.engine.labels;
+    switch (engine.trim()) {
+      case 'multimodal_llm':
+        return labels.multimodalLlm;
+      default:
+        return labels.whisper;
+    }
+  }
+
+  Future<void> _pickAudioTranscribeEngine(
+      ContentEnrichmentConfig config) async {
+    if (_busy) return;
+    final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        var value = config.audioTranscribeEngine.trim();
+        if (value != 'whisper' && value != 'multimodal_llm') {
+          value = 'whisper';
+        }
+
+        Widget option({
+          required String mode,
+          required String title,
+          required String subtitle,
+          required void Function(void Function()) setInnerState,
+        }) {
+          return RadioListTile<String>(
+            value: mode,
+            groupValue: value,
+            title: Text(title),
+            subtitle: Text(subtitle),
+            onChanged: (next) {
+              if (next == null) return;
+              setInnerState(() => value = next);
+            },
+          );
+        }
+
+        return AlertDialog(
+          title: Text(t.title),
+          content: StatefulBuilder(
+            builder: (context, setInnerState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    option(
+                      mode: 'whisper',
+                      title: t.labels.whisper,
+                      subtitle: t.descriptions.whisper,
+                      setInnerState: setInnerState,
+                    ),
+                    option(
+                      mode: 'multimodal_llm',
+                      title: t.labels.multimodalLlm,
+                      subtitle: t.descriptions.multimodalLlm,
+                      setInnerState: setInnerState,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+              child: Text(context.t.common.actions.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(value),
+              child: Text(context.t.common.actions.save),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || selected == null) return;
+    if (selected == config.audioTranscribeEngine.trim()) return;
+    await _persistContentConfig(
+      _copyContentConfig(config, audioTranscribeEngine: selected),
+    );
+  }
+
+  Future<void> _openAudioTranscribeConfigHelp() async {
+    final t = context.t.settings.mediaAnnotation.audioTranscribe.configureApi;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(t.title),
+          content: Text(t.body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(context.t.common.actions.cancel),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CloudAccountPage()),
+                );
+              },
+              child: Text(t.openCloud),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
+                );
+              },
+              child: Text(t.openApiKeys),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _config;
+    final contentConfig = _contentConfig;
     final t = context.t.settings.mediaAnnotation;
-
-    Widget sectionCard(List<Widget> children) {
-      return SlSurface(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i != 0) const Divider(height: 1),
-              children[i],
-            ],
-          ],
-        ),
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -589,10 +778,75 @@ class _MediaAnnotationSettingsPageState
                 context.t.errors.loadFailed(error: '$_loadError'),
               ),
             ),
+          if (_contentLoadError != null)
+            SlSurface(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                context.t.errors.loadFailed(error: '$_contentLoadError'),
+              ),
+            ),
           if (config == null && _loadError == null)
             const Center(child: CircularProgressIndicator()),
           if (config != null) ...[
-            sectionCard([
+            mediaAnnotationRoutingGuideCard(
+              context: context,
+              title: t.routingGuide.title,
+              pro: t.routingGuide.pro,
+              byok: t.routingGuide.byok,
+            ),
+            const SizedBox(height: 16),
+            mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
+            const SizedBox(height: 8),
+            mediaAnnotationSectionCard([
+              SwitchListTile(
+                key: MediaAnnotationSettingsPage.audioTranscribeSwitchKey,
+                title: Text(t.audioTranscribe.enabled.title),
+                subtitle: Text(t.audioTranscribe.enabled.subtitle),
+                value: contentConfig?.audioTranscribeEnabled ?? false,
+                onChanged: _busy || contentConfig == null
+                    ? null
+                    : (value) async {
+                        await _persistContentConfig(
+                          _copyContentConfig(
+                            contentConfig,
+                            audioTranscribeEnabled: value,
+                          ),
+                        );
+                      },
+              ),
+              ListTile(
+                title: Text(t.audioTranscribe.engine.title),
+                subtitle: Text(t.audioTranscribe.engine.subtitle),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      contentConfig == null
+                          ? t.audioTranscribe.engine.notAvailable
+                          : _audioTranscribeEngineLabel(
+                              context,
+                              contentConfig.audioTranscribeEngine,
+                            ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+                onTap: _busy || contentConfig == null
+                    ? null
+                    : () => _pickAudioTranscribeEngine(contentConfig),
+              ),
+              ListTile(
+                title: Text(t.audioTranscribe.configureApi.title),
+                subtitle: Text(t.audioTranscribe.configureApi.subtitle),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _busy ? null : _openAudioTranscribeConfigHelp,
+              ),
+            ]),
+            const SizedBox(height: 16),
+            mediaAnnotationSectionTitle(context, t.imageCaption.title),
+            const SizedBox(height: 8),
+            mediaAnnotationSectionCard([
               SwitchListTile(
                 key: MediaAnnotationSettingsPage.annotateSwitchKey,
                 title: Text(t.annotateEnabled.title),
@@ -646,15 +900,9 @@ class _MediaAnnotationSettingsPageState
               ),
             ]),
             const SizedBox(height: 16),
-            Text(
-              t.advanced.title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
+            mediaAnnotationSectionTitle(context, t.providerSettings.title),
             const SizedBox(height: 8),
-            sectionCard([
+            mediaAnnotationSectionCard([
               ListTile(
                 title: Text(t.providerMode.title),
                 subtitle: Text(t.providerMode.subtitle),

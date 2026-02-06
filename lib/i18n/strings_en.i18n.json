@@ -264,8 +264,19 @@
       }
     },
     "mediaAnnotation": {
-      "title": "Image annotations",
-      "subtitle": "Optional: let AI caption images for better search",
+    "title": "Media understanding",
+    "subtitle": "Optional: image captions and audio transcripts for better search",
+    "routingGuide": {
+      "title": "Choose your AI source",
+      "pro": "Pro + signed in: uses SecondLoop Cloud by default.",
+      "byok": "Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active."
+    },
+    "imageCaption": {
+      "title": "Image captions"
+    },
+    "providerSettings": {
+      "title": "Image caption provider"
+    },
       "setupRequired": {
         "title": "Image annotations setup required",
         "body": "To annotate images, SecondLoop needs a multimodal model.",
@@ -327,6 +338,35 @@
       "allowCellularConfirm": {
         "title": "Use cellular data for image annotations?",
         "body": "Annotating images may upload photos to your chosen AI provider and can use significant data."
+      },
+    "audioTranscribe": {
+      "title": "Audio transcription",
+      "enabled": {
+        "title": "Transcribe audio attachments",
+        "subtitle": "When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search."
+      },
+        "engine": {
+          "title": "Transcription engine",
+          "subtitle": "Choose which engine to use for audio transcription.",
+          "notAvailable": "Unavailable",
+          "labels": {
+            "whisper": "Whisper",
+            "multimodalLlm": "Multimodal LLM",
+            "auto": "Auto"
+          },
+          "descriptions": {
+            "whisper": "Stable default for speech transcription. (Recommended)",
+            "multimodalLlm": "Use a multimodal chat model when available.",
+            "auto": "Let SecondLoop choose the best available engine."
+          }
+        },
+      "configureApi": {
+        "title": "Configure transcription API",
+        "subtitle": "Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.",
+        "body": "Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.",
+        "openCloud": "Open Cloud account",
+        "openApiKeys": "Open API keys"
+      }
       }
     },
     "cloudEmbeddings": {
@@ -652,7 +692,7 @@
     "sections": {
       "automation": "Auto sync",
       "backend": "Sync method",
-      "mediaPreview": "Media previews",
+      "mediaPreview": "Media downloads",
       "mediaBackup": "Media uploads",
       "securityActions": "Security & manual sync"
     },
@@ -663,8 +703,8 @@
       "wifiOnlySubtitle": "Save mobile data by syncing automatically only on Wi‑Fi"
     },
     "mediaPreview": {
-      "chatThumbnailsWifiOnlyTitle": "Image previews on Wi‑Fi only",
-      "chatThumbnailsWifiOnlySubtitle": "If a photo isn't on this device yet, download its preview only on Wi‑Fi"
+      "chatThumbnailsWifiOnlyTitle": "Download media files on Wi‑Fi only",
+      "chatThumbnailsWifiOnlySubtitle": "If an attachment isn't on this device yet, download it only on Wi‑Fi"
     },
     "mediaBackup": {
       "title": "Media uploads",

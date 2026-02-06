@@ -7,10 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/media_backup/audio_transcode_worker.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -246,6 +249,233 @@ void main() {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
+
+  testWidgets('Desktop: attach button transcodes wav before storing',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    FilePicker? oldPicker;
+    final oldTranscodeOverride = AudioTranscodeWorker.debugTranscodeOverride;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    AudioTranscodeWorker.debugTranscodeOverride = (
+      originalBytes, {
+      required sourceMimeType,
+      required targetSampleRateHz,
+      required targetBitrateKbps,
+      required mono,
+    }) async {
+      expect(sourceMimeType, 'audio/wav');
+      return Uint8List.fromList(const <int>[9, 8, 7, 6]);
+    };
+    try {
+      final backend = _TestBackend();
+      final picker = _TestFilePicker(
+        result: FilePickerResult([
+          PlatformFile(
+            name: 'voice.wav',
+            size: 10,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3, 4, 5]),
+          ),
+        ]),
+      );
+      FilePicker.platform = picker;
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Chat',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 1);
+
+      expect(backend.insertAttachmentCalls, 1);
+      expect(backend.insertedAttachmentMimeTypes, contains('audio/mp4'));
+    } finally {
+      AudioTranscodeWorker.debugTranscodeOverride = oldTranscodeOverride;
+      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets('Desktop: Pro upload transcodes wav before storing',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    FilePicker? oldPicker;
+    final oldTranscodeOverride = AudioTranscodeWorker.debugTranscodeOverride;
+    var transcodeCalls = 0;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    AudioTranscodeWorker.debugTranscodeOverride = (
+      originalBytes, {
+      required sourceMimeType,
+      required targetSampleRateHz,
+      required targetBitrateKbps,
+      required mono,
+    }) async {
+      transcodeCalls += 1;
+      return Uint8List.fromList(const <int>[9, 8, 7, 6]);
+    };
+    try {
+      final backend = _TestBackend();
+      final picker = _TestFilePicker(
+        result: FilePickerResult([
+          PlatformFile(
+            name: 'voice.wav',
+            size: 10,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3, 4, 5]),
+          ),
+        ]),
+      );
+      FilePicker.platform = picker;
+      final subscriptionController =
+          _FakeSubscriptionStatusController(SubscriptionStatus.entitled);
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: SubscriptionScope(
+              controller: subscriptionController,
+              child: AppBackendScope(
+                backend: backend,
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: const ChatPage(
+                    conversation: Conversation(
+                      id: 'c1',
+                      title: 'Chat',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 1);
+
+      expect(transcodeCalls, 1);
+      expect(backend.insertAttachmentCalls, 1);
+      expect(backend.insertedAttachmentMimeTypes, contains('audio/mp4'));
+      expect(backend.insertedAttachmentMimeTypes, isNot(contains('audio/wav')));
+    } finally {
+      AudioTranscodeWorker.debugTranscodeOverride = oldTranscodeOverride;
+      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets(
+      'Desktop: Pro upload keeps original audio when local transcode keeps failing',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    FilePicker? oldPicker;
+    final oldTranscodeOverride = AudioTranscodeWorker.debugTranscodeOverride;
+    var localTranscodeCalls = 0;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    AudioTranscodeWorker.debugTranscodeOverride = (
+      originalBytes, {
+      required sourceMimeType,
+      required targetSampleRateHz,
+      required targetBitrateKbps,
+      required mono,
+    }) async {
+      localTranscodeCalls += 1;
+      return Uint8List(0);
+    };
+    try {
+      final backend = _TestBackend();
+      final picker = _TestFilePicker(
+        result: FilePickerResult([
+          PlatformFile(
+            name: 'voice.wav',
+            size: 10,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3, 4, 5]),
+          ),
+        ]),
+      );
+      FilePicker.platform = picker;
+      final subscriptionController =
+          _FakeSubscriptionStatusController(SubscriptionStatus.entitled);
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: SubscriptionScope(
+              controller: subscriptionController,
+              child: AppBackendScope(
+                backend: backend,
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: const ChatPage(
+                    conversation: Conversation(
+                      id: 'c1',
+                      title: 'Chat',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 1);
+
+      expect(localTranscodeCalls, 3);
+      expect(backend.insertAttachmentCalls, 1);
+      expect(backend.insertedAttachmentMimeTypes, contains('audio/wav'));
+      expect(backend.insertedAttachmentMimeTypes, isNot(contains('audio/mp4')));
+    } finally {
+      AudioTranscodeWorker.debugTranscodeOverride = oldTranscodeOverride;
+      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
 }
 
 Future<void> _pumpUntil(
@@ -435,4 +665,14 @@ final class _TestBackend extends NativeAppBackend {
   }) async {
     return _attachmentBytesBySha[sha256] ?? Uint8List(0);
   }
+}
+
+final class _FakeSubscriptionStatusController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FakeSubscriptionStatusController(this._status);
+
+  final SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
 }

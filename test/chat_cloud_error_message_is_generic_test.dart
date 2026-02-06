@@ -79,6 +79,7 @@ void main() {
     expect(pendingMarkdownData, startsWith('Ask AI failed'));
     expect(pendingMarkdownData, isNot(contains('HTTP 502')));
     expect(pendingMarkdownData, isNot(contains('upstream_error')));
+    expect(backend.lastTopK, 0);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
@@ -95,6 +96,8 @@ void main() {
 }
 
 final class _CloudErrorBackend extends TestAppBackend {
+  int? lastTopK;
+
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
       const <LlmProfile>[];
@@ -110,6 +113,7 @@ final class _CloudErrorBackend extends TestAppBackend {
     required String idToken,
     required String modelName,
   }) {
+    lastTopK = topK;
     return Stream<String>.fromFuture(
       Future<String>.delayed(
         const Duration(milliseconds: 10),

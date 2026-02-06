@@ -300,14 +300,6 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
-    let expected_dim = current_embedding_dim(conn)?;
-    let space_id = embedding_space_id(embedder.model_name(), expected_dim)?;
-    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
-    let message_table = message_embeddings_table(&space_id)?;
-
-    let top_k = top_k.max(1);
-    let candidate_k = (top_k.saturating_mul(10)).min(1000);
-
     let query = format!("query: {query}");
     let mut vectors = embedder.embed(&[query])?;
     if vectors.len() != 1 {
@@ -317,6 +309,7 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
         ));
     }
     let query_vector = vectors.remove(0);
+    let expected_dim = current_embedding_dim(conn)?;
     if query_vector.len() != expected_dim {
         return Err(anyhow!(
             "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
@@ -324,6 +317,30 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
             embedder.model_name()
         ));
     }
+    search_similar_messages_by_embedding(conn, key, embedder.model_name(), &query_vector, top_k)
+}
+
+pub fn search_similar_messages_by_embedding(
+    conn: &Connection,
+    key: &[u8; 32],
+    model_name: &str,
+    query_vector: &[f32],
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
+    let expected_dim = current_embedding_dim(conn)?;
+    let space_id = embedding_space_id(model_name, expected_dim)?;
+    ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
+    let message_table = message_embeddings_table(&space_id)?;
+
+    if query_vector.len() != expected_dim {
+        return Err(anyhow!(
+            "query vector dim mismatch: expected {expected_dim}, got {} (model_name={model_name})",
+            query_vector.len(),
+        ));
+    }
+
+    let top_k = top_k.max(1);
+    let candidate_k = (top_k.saturating_mul(10)).min(1000);
 
     let mut stmt = conn.prepare(&format!(
         r#"SELECT message_id, distance
@@ -335,16 +352,24 @@ pub fn search_similar_messages<E: Embedder + ?Sized>(
     let mut rows = stmt.query(params![
         query_vector.as_bytes(),
         i64::try_from(candidate_k).unwrap_or(i64::MAX),
-        embedder.model_name()
+        model_name
     ])?;
 
     let mut result = Vec::new();
-    let mut seen_contents = std::collections::HashSet::new();
+    let mut seen_contexts = std::collections::HashSet::new();
     while let Some(row) = rows.next()? {
         let message_id: String = row.get(0)?;
         let distance: f64 = row.get(1)?;
-        let message = get_message_by_id(conn, key, &message_id)?;
-        if !seen_contents.insert(message.content.clone()) {
+        let message = match get_message_by_id(conn, key, &message_id) {
+            Ok(v) => v,
+            Err(_) => {
+                // Keep retrieval resilient: stale/corrupt rows should not fail the whole query.
+                continue;
+            }
+        };
+        let context_key = build_message_rag_context(conn, key, &message.id, &message.content)
+            .unwrap_or_else(|_| message.content.clone());
+        if !seen_contexts.insert(context_key) {
             continue;
         }
         result.push(SimilarMessage { message, distance });
@@ -762,13 +787,49 @@ pub fn search_similar_messages_in_conversation<E: Embedder + ?Sized>(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
+    let query = format!("query: {query}");
+    let mut vectors = embedder.embed(&[query])?;
+    if vectors.len() != 1 {
+        return Err(anyhow!(
+            "embedder output length mismatch: expected 1, got {}",
+            vectors.len()
+        ));
+    }
+    let query_vector = vectors.remove(0);
+    let expected_dim = current_embedding_dim(conn)?;
+    if query_vector.len() != expected_dim {
+        return Err(anyhow!(
+            "embedder dim mismatch: expected {expected_dim}, got {} (model_name={})",
+            query_vector.len(),
+            embedder.model_name()
+        ));
+    }
+    search_similar_messages_in_conversation_by_embedding(
+        conn,
+        key,
+        embedder.model_name(),
+        conversation_id,
+        &query_vector,
+        top_k,
+    )
+}
+
+pub fn search_similar_messages_in_conversation_by_embedding(
+    conn: &Connection,
+    key: &[u8; 32],
+    model_name: &str,
+    conversation_id: &str,
+    query_vector: &[f32],
+    top_k: usize,
+) -> Result<Vec<SimilarMessage>> {
     // `sqlite-vec` KNN queries currently restrict additional WHERE constraints in ways that make
     // joins/IN filters brittle. For Focus scoping, we over-fetch candidates globally and then
     // filter in Rust.
     let top_k = top_k.max(1);
     let candidate_k = (top_k.saturating_mul(50)).min(1000);
 
-    let candidates = search_similar_messages(conn, key, embedder, query, candidate_k)?;
+    let candidates =
+        search_similar_messages_by_embedding(conn, key, model_name, query_vector, candidate_k)?;
     Ok(candidates
         .into_iter()
         .filter(|sm| sm.message.conversation_id == conversation_id)
@@ -785,4 +846,3 @@ fn sha256_hex(bytes: &[u8]) -> String {
     }
     out
 }
-

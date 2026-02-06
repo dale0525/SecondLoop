@@ -37,7 +37,7 @@ void main() {
     );
   });
 
-  testWidgets('Sync settings shows chat thumbnail Wi‑Fi only toggle (webdav)',
+  testWidgets('Sync settings shows media download Wi‑Fi only toggle (webdav)',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('sync_chat_thumbnails_wifi_only')),
+      find.byKey(const ValueKey('sync_media_downloads_wifi_only')),
       findsOneWidget,
     );
   });

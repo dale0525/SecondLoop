@@ -93,6 +93,7 @@ pixi run test
 pixi run rust-test
 pixi run frb-generate
 pixi run run-macos
+pixi run run-linux
 pixi run run-android
 pixi run build-android-apk
 pixi run run-windows
@@ -100,8 +101,10 @@ pixi run run-windows
 
 备注：
 - `run-macos` 仅在 macOS 可用。
+- `run-linux` 仅在 Linux 可用。
 - `run-windows` 仅在 Windows 可用（依赖 `setup-windows`），并会把 `nuget.exe` 下载到 `.tool/nuget/`，避免 Flutter 自动下载。
 - Android 相关任务会把 SDK/NDK 与 Rust targets 安装到 `.tool/`（无需系统级 Android SDK）。
+- 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`，因此构建机需要已安装 `ffmpeg`。
 
 如需通过 FVM 执行任意 Flutter 命令：
 

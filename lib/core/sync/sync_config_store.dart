@@ -35,6 +35,7 @@ final class SyncConfigStore {
   static const kAutoWifiOnly = 'sync_auto_wifi_only'; // 1 | 0
   static const kChatThumbnailsWifiOnly =
       'sync_chat_thumbnails_wifi_only'; // 1 | 0
+  static const kMediaDownloadsWifiOnly = kChatThumbnailsWifiOnly; // 1 | 0
   static const kLocalDir = 'sync_localdir_path';
 
   static const kWebdavBaseUrl = 'sync_webdav_base_url';
@@ -82,14 +83,22 @@ final class SyncConfigStore {
     await _writeConfigUpdates({kAutoWifiOnly: enabled ? '1' : '0'});
   }
 
-  Future<bool> readChatThumbnailsWifiOnly() async {
-    final v = (await _loadConfigMap())[kChatThumbnailsWifiOnly];
+  Future<bool> readMediaDownloadsWifiOnly() async {
+    final v = (await _loadConfigMap())[kMediaDownloadsWifiOnly];
     if (v == null) return true;
     return v == '1';
   }
 
-  Future<void> writeChatThumbnailsWifiOnly(bool enabled) async {
-    await _writeConfigUpdates({kChatThumbnailsWifiOnly: enabled ? '1' : '0'});
+  Future<void> writeMediaDownloadsWifiOnly(bool enabled) async {
+    await _writeConfigUpdates({kMediaDownloadsWifiOnly: enabled ? '1' : '0'});
+  }
+
+  Future<bool> readChatThumbnailsWifiOnly() {
+    return readMediaDownloadsWifiOnly();
+  }
+
+  Future<void> writeChatThumbnailsWifiOnly(bool enabled) {
+    return writeMediaDownloadsWifiOnly(enabled);
   }
 
   Future<SyncBackendType> readBackendType() async {

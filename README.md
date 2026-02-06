@@ -93,6 +93,7 @@ pixi run test
 pixi run rust-test
 pixi run frb-generate
 pixi run run-macos
+pixi run run-linux
 pixi run run-android
 pixi run build-android-apk
 pixi run run-windows
@@ -100,8 +101,10 @@ pixi run run-windows
 
 Notes:
 - `run-macos` is only available on macOS.
+- `run-linux` is only available on Linux.
 - `run-windows` is only available on Windows (it depends on `setup-windows`) and will download `nuget.exe` into `.tool/nuget/` so Flutter won't auto-download it.
 - Android tasks install SDK/NDK and Rust targets into `.tool/` (no system-wide Android SDK required).
+- Desktop run tasks (`run-macos` / `run-linux` / `run-windows`) prepare bundled `ffmpeg` before launching; build hosts must have `ffmpeg` installed.
 
 To run arbitrary Flutter commands through FVM:
 

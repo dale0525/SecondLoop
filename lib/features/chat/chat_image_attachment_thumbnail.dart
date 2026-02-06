@@ -95,7 +95,7 @@ class _ChatImageAttachmentThumbnailState
   }
 
   Future<bool> _shouldAutoDownloadNow() async {
-    final wifiOnly = await _store.readChatThumbnailsWifiOnly();
+    final wifiOnly = await _store.readMediaDownloadsWifiOnly();
     if (!wifiOnly) return true;
 
     try {

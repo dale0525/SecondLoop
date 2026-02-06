@@ -139,6 +139,12 @@ jobs:
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
           if ($Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging managed vault URL." }
       - run: flutter pub get
+      - name: Install FFmpeg
+        shell: pwsh
+        run: choco install ffmpeg --yes --no-progress
+      - name: Prepare bundled FFmpeg
+        shell: pwsh
+        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows --source-bin "C:\ProgramData\chocolatey\bin\ffmpeg.exe"
       - name: Build (prod)
         shell: pwsh
         run: |
@@ -212,6 +218,12 @@ jobs:
             exit 1
           fi
       - run: flutter pub get
+      - name: Install FFmpeg
+        shell: bash
+        run: brew install ffmpeg
+      - name: Prepare bundled FFmpeg
+        shell: bash
+        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=macos
       - name: Build (prod)
         shell: bash
         run: |
@@ -268,9 +280,97 @@ jobs:
           name: macos
           path: dist/*.dmg
 
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
+      SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
+      SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.6"
+          channel: stable
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85.1"
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ffmpeg \
+            libgtk-3-dev \
+            liblzma-dev \
+            libsecret-1-dev \
+            ninja-build \
+            pkg-config
+      - name: Validate prod config
+        shell: bash
+        run: |
+          : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
+          : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+          : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+          if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
+            echo "Prod gateway URL must start with https://"
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" == *"stage"* ]]; then
+            echo "Refusing to build prod release with a staging gateway URL."
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" != https://* ]]; then
+            echo "Prod managed vault URL must start with https://"
+            exit 1
+          fi
+          if [[ "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" == *"staging"* || "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}" == *"stage"* ]]; then
+            echo "Refusing to build prod release with a staging managed vault URL."
+            exit 1
+          fi
+      - run: flutter pub get
+      - name: Prepare bundled FFmpeg
+        shell: bash
+        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=linux
+      - name: Build (prod)
+        shell: bash
+        run: |
+          build_number="${GITHUB_RUN_NUMBER}"
+          build_name=''
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            candidate="${GITHUB_REF_NAME#v}"
+            if [[ "${candidate}" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
+              build_name="${candidate}"
+            fi
+          fi
+
+          build_args=("--build-number=${build_number}")
+          if [[ -n "${build_name}" ]]; then
+            build_args+=("--build-name=${build_name}")
+          fi
+
+          defines=(
+            "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
+            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+          )
+          flutter build linux --release "${build_args[@]}" "${defines[@]}"
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -C build/linux/x64/release -czf "dist/SecondLoop-linux-x64-${GITHUB_REF_NAME}.tar.gz" bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+
   publish:
     runs-on: ubuntu-latest
-    needs: [android, windows, macos]
+    needs: [android, windows, macos, linux]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4
@@ -286,3 +386,4 @@ jobs:
             dist/*.aab
             dist/*.dmg
             dist/*.zip
+            dist/*.tar.gz

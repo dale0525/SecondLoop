@@ -117,3 +117,29 @@ fn vector_search_ignores_other_model() {
     assert_eq!(results[0].message.content, "apple");
     assert_eq!(results[1].message.content, "apple pie");
 }
+
+#[test]
+fn vector_search_skips_dangling_message_rows() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let m1 = db::insert_message(&conn, &key, &conversation.id, "user", "apple").expect("m1");
+    let _m2 = db::insert_message(&conn, &key, &conversation.id, "user", "apple pie").expect("m2");
+
+    let embedder = TestEmbedder;
+    db::process_pending_message_embeddings(&conn, &key, &embedder, 100).expect("index");
+
+    conn.execute(
+        "DELETE FROM messages WHERE id = ?1",
+        rusqlite::params![m1.id.as_str()],
+    )
+    .expect("delete message row");
+
+    let results = db::search_similar_messages(&conn, &key, &embedder, "apple", 2).expect("search");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].message.content, "apple pie");
+}

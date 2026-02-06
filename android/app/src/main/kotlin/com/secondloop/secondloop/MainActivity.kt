@@ -12,15 +12,22 @@ import android.os.Handler
 import android.os.Looper
 import android.net.Uri
 import android.os.Build
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.MethodCall
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import java.io.File
 
 class MainActivity : FlutterFragmentActivity() {
   private val pendingShares = mutableListOf<Map<String, String>>()
@@ -28,6 +35,7 @@ class MainActivity : FlutterFragmentActivity() {
   private var exifChannel: MethodChannel? = null
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
+  private var audioTranscodeChannel: MethodChannel? = null
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
   private val requestMediaLocationPermissionLauncher =
@@ -158,6 +166,16 @@ class MainActivity : FlutterFragmentActivity() {
                 result.success(null)
               }
             }
+            else -> result.notImplemented()
+          }
+        }
+      }
+
+    audioTranscodeChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/audio_transcode").apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "transcodeToM4a" -> handleTranscodeToM4a(call, result)
             else -> result.notImplemented()
           }
         }
@@ -372,6 +390,258 @@ class MainActivity : FlutterFragmentActivity() {
     return if (out.isEmpty()) null else out
   }
 
+  private fun handleTranscodeToM4a(call: MethodCall, result: MethodChannel.Result) {
+    val args = call.arguments as? Map<*, *>
+    val inputPath = (args?.get("input_path") as? String)?.trim().orEmpty()
+    val outputPath = (args?.get("output_path") as? String)?.trim().orEmpty()
+    if (inputPath.isEmpty() || outputPath.isEmpty()) {
+      result.success(false)
+      return
+    }
+
+    val sampleRateHz = (args?.get("sample_rate_hz") as? Number)?.toInt() ?: 24000
+    val bitrateKbps = (args?.get("bitrate_kbps") as? Number)?.toInt() ?: 48
+    val mono = (args?.get("mono") as? Boolean) ?: true
+
+    Thread {
+      val ok = try {
+        transcodeToM4a(
+          inputPath = inputPath,
+          outputPath = outputPath,
+          sampleRateHz = sampleRateHz,
+          bitrateKbps = bitrateKbps,
+          mono = mono
+        )
+      } catch (_: Throwable) {
+        false
+      }
+      runOnUiThread {
+        result.success(ok)
+      }
+    }.start()
+  }
+
+  private fun transcodeToM4a(
+    inputPath: String,
+    outputPath: String,
+    sampleRateHz: Int,
+    bitrateKbps: Int,
+    mono: Boolean
+  ): Boolean {
+    val outputFile = File(outputPath)
+    outputFile.parentFile?.mkdirs()
+    if (outputFile.exists()) {
+      outputFile.delete()
+    }
+
+    var extractor: MediaExtractor? = null
+    var decoder: MediaCodec? = null
+    var encoder: MediaCodec? = null
+    var muxer: MediaMuxer? = null
+    var muxerStarted = false
+
+    try {
+      extractor = MediaExtractor()
+      extractor.setDataSource(inputPath)
+
+      var audioTrackIndex = -1
+      for (i in 0 until extractor.trackCount) {
+        val format = extractor.getTrackFormat(i)
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+        if (mime.startsWith("audio/")) {
+          audioTrackIndex = i
+          break
+        }
+      }
+      if (audioTrackIndex < 0) return false
+      extractor.selectTrack(audioTrackIndex)
+
+      val inputFormat = extractor.getTrackFormat(audioTrackIndex)
+      val inputMime = inputFormat.getString(MediaFormat.KEY_MIME) ?: return false
+      val inputSampleRate = inputFormat.getIntegerOrDefault(
+        MediaFormat.KEY_SAMPLE_RATE,
+        sampleRateHz
+      )
+      val inputChannelCount = inputFormat.getIntegerOrDefault(MediaFormat.KEY_CHANNEL_COUNT, 2)
+
+      val targetSampleRate = maxOf(8000, if (sampleRateHz > 0) sampleRateHz else inputSampleRate)
+      val targetChannelCount = if (mono) 1 else maxOf(1, inputChannelCount)
+
+      decoder = MediaCodec.createDecoderByType(inputMime)
+      decoder.configure(inputFormat, null, null, 0)
+      decoder.start()
+
+      val encoderFormat = MediaFormat.createAudioFormat(
+        "audio/mp4a-latm",
+        targetSampleRate,
+        targetChannelCount
+      ).apply {
+        setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+        setInteger(MediaFormat.KEY_BIT_RATE, maxOf(16, bitrateKbps) * 1000)
+        setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 256 * 1024)
+      }
+      encoder = MediaCodec.createEncoderByType("audio/mp4a-latm")
+      encoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+      encoder.start()
+
+      muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+      val bufferInfo = MediaCodec.BufferInfo()
+
+      var muxerTrackIndex = -1
+      var extractorDone = false
+      var decoderDone = false
+      var encoderDone = false
+
+      while (!encoderDone) {
+        if (!extractorDone) {
+          val decoderInputIndex = decoder.dequeueInputBuffer(10_000)
+          if (decoderInputIndex >= 0) {
+            val decoderInputBuffer = decoder.getInputBuffer(decoderInputIndex)
+            if (decoderInputBuffer != null) {
+              val sampleSize = extractor.readSampleData(decoderInputBuffer, 0)
+              if (sampleSize < 0) {
+                decoder.queueInputBuffer(
+                  decoderInputIndex,
+                  0,
+                  0,
+                  0,
+                  MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                )
+                extractorDone = true
+              } else {
+                val sampleTimeUs = extractor.sampleTime
+                decoder.queueInputBuffer(decoderInputIndex, 0, sampleSize, sampleTimeUs, 0)
+                extractor.advance()
+              }
+            }
+          }
+        }
+
+        var decoderOutputAvailable = !decoderDone
+        while (decoderOutputAvailable) {
+          val decoderOutputIndex = decoder.dequeueOutputBuffer(bufferInfo, 10_000)
+          when {
+            decoderOutputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+              decoderOutputAvailable = false
+            }
+            decoderOutputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+              // ignore
+            }
+            decoderOutputIndex >= 0 -> {
+              val endOfStream = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
+              val decoderOutputBuffer = decoder.getOutputBuffer(decoderOutputIndex)
+
+              if (decoderOutputBuffer != null && bufferInfo.size > 0) {
+                decoderOutputBuffer.position(bufferInfo.offset)
+                decoderOutputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+
+                var queued = false
+                while (!queued) {
+                  val encoderInputIndex = encoder.dequeueInputBuffer(10_000)
+                  if (encoderInputIndex >= 0) {
+                    val encoderInputBuffer = encoder.getInputBuffer(encoderInputIndex)
+                    if (encoderInputBuffer != null) {
+                      encoderInputBuffer.clear()
+                      encoderInputBuffer.put(decoderOutputBuffer)
+                      encoder.queueInputBuffer(
+                        encoderInputIndex,
+                        0,
+                        bufferInfo.size,
+                        bufferInfo.presentationTimeUs,
+                        if (endOfStream) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0
+                      )
+                    }
+                    queued = true
+                  }
+                }
+              } else if (endOfStream) {
+                val encoderInputIndex = encoder.dequeueInputBuffer(10_000)
+                if (encoderInputIndex >= 0) {
+                  encoder.queueInputBuffer(
+                    encoderInputIndex,
+                    0,
+                    0,
+                    bufferInfo.presentationTimeUs,
+                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                  )
+                }
+              }
+
+              decoder.releaseOutputBuffer(decoderOutputIndex, false)
+              if (endOfStream) {
+                decoderDone = true
+                decoderOutputAvailable = false
+              }
+            }
+          }
+        }
+
+        var encoderOutputAvailable = true
+        while (encoderOutputAvailable) {
+          val encoderOutputIndex = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
+          when {
+            encoderOutputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+              encoderOutputAvailable = false
+            }
+            encoderOutputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+              if (muxerStarted) return false
+              muxerTrackIndex = muxer.addTrack(encoder.outputFormat)
+              muxer.start()
+              muxerStarted = true
+            }
+            encoderOutputIndex >= 0 -> {
+              val endOfStream = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
+              val encodedBuffer = encoder.getOutputBuffer(encoderOutputIndex)
+
+              if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                bufferInfo.size = 0
+              }
+              if (encodedBuffer != null && bufferInfo.size > 0 && muxerStarted && muxerTrackIndex >= 0) {
+                encodedBuffer.position(bufferInfo.offset)
+                encodedBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                muxer.writeSampleData(muxerTrackIndex, encodedBuffer, bufferInfo)
+              }
+
+              encoder.releaseOutputBuffer(encoderOutputIndex, false)
+              if (endOfStream) {
+                encoderDone = true
+                encoderOutputAvailable = false
+              }
+            }
+          }
+        }
+      }
+
+      return outputFile.exists() && outputFile.length() > 0
+    } catch (_: Throwable) {
+      return false
+    } finally {
+      try {
+        extractor?.release()
+      } catch (_: Throwable) {}
+      try {
+        decoder?.stop()
+      } catch (_: Throwable) {}
+      try {
+        decoder?.release()
+      } catch (_: Throwable) {}
+      try {
+        encoder?.stop()
+      } catch (_: Throwable) {}
+      try {
+        encoder?.release()
+      } catch (_: Throwable) {}
+      if (muxerStarted) {
+        try {
+          muxer?.stop()
+        } catch (_: Throwable) {}
+      }
+      try {
+        muxer?.release()
+      } catch (_: Throwable) {}
+    }
+  }
+
   private fun readExif(path: String): ExifInterface? {
     return if (path.startsWith("content://")) {
       val input = contentResolver.openInputStream(Uri.parse(path)) ?: return null
@@ -393,5 +663,13 @@ class MainActivity : FlutterFragmentActivity() {
     } catch (_: Throwable) {
       null
     }
+  }
+}
+
+private fun MediaFormat.getIntegerOrDefault(key: String, fallback: Int): Int {
+  return try {
+    if (containsKey(key)) getInteger(key) else fallback
+  } catch (_: Throwable) {
+    fallback
   }
 }

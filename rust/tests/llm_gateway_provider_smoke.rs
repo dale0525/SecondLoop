@@ -95,3 +95,63 @@ data: [DONE]
         ]
     );
 }
+
+#[test]
+fn cloud_gateway_provider_handles_plain_json_with_sse_content_type() {
+    let body = r#"{
+  "id": "chatcmpl-plain-json",
+  "object": "chat.completion.chunk",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "fallback-json-content"
+      }
+    }
+  ]
+}"#;
+
+    let (base_url, req_rx, handle) = start_one_shot_server(body.to_string(), "text/event-stream");
+
+    let provider = secondloop_rust::llm::gateway::CloudGatewayProvider::new(
+        base_url,
+        "test-id-token".to_string(),
+        "gpt-test".to_string(),
+        None,
+    );
+
+    let mut events: Vec<ChatDelta> = Vec::new();
+    provider
+        .stream_answer("hi", &mut |ev| {
+            events.push(ev);
+            Ok(())
+        })
+        .expect("stream answer");
+
+    handle.join().expect("join server thread");
+
+    let req = req_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("receive request");
+    let req_lower = req.to_ascii_lowercase();
+    assert!(req_lower.contains("post /v1/chat/completions"));
+    assert!(req_lower.contains("authorization: bearer test-id-token"));
+
+    assert_eq!(
+        events,
+        vec![
+            ChatDelta {
+                role: Some("assistant".to_string()),
+                text_delta: "fallback-json-content".to_string(),
+                done: false,
+            },
+            ChatDelta {
+                role: None,
+                text_delta: "".to_string(),
+                done: true,
+            },
+        ]
+    );
+}

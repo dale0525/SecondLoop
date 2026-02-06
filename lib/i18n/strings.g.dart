@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1068 (534 per locale)
+/// Strings: 1112 (556 per locale)
 ///
-/// Built on 2026-02-05 at 19:29 UTC
+/// Built on 2026-02-06 at 07:21 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -954,8 +954,16 @@ class _StringsSettingsMediaAnnotationEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Image annotations';
-  String get subtitle => 'Optional: let AI caption images for better search';
+  String get title => 'Media understanding';
+  String get subtitle =>
+      'Optional: image captions and audio transcripts for better search';
+  late final _StringsSettingsMediaAnnotationRoutingGuideEn routingGuide =
+      _StringsSettingsMediaAnnotationRoutingGuideEn._(_root);
+  late final _StringsSettingsMediaAnnotationImageCaptionEn imageCaption =
+      _StringsSettingsMediaAnnotationImageCaptionEn._(_root);
+  late final _StringsSettingsMediaAnnotationProviderSettingsEn
+      providerSettings =
+      _StringsSettingsMediaAnnotationProviderSettingsEn._(_root);
   late final _StringsSettingsMediaAnnotationSetupRequiredEn setupRequired =
       _StringsSettingsMediaAnnotationSetupRequiredEn._(_root);
   late final _StringsSettingsMediaAnnotationAnnotateEnabledEn annotateEnabled =
@@ -978,6 +986,8 @@ class _StringsSettingsMediaAnnotationEn {
   late final _StringsSettingsMediaAnnotationAllowCellularConfirmEn
       allowCellularConfirm =
       _StringsSettingsMediaAnnotationAllowCellularConfirmEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEn audioTranscribe =
+      _StringsSettingsMediaAnnotationAudioTranscribeEn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -1336,7 +1346,7 @@ class _StringsSyncSectionsEn {
   // Translations
   String get automation => 'Auto sync';
   String get backend => 'Sync method';
-  String get mediaPreview => 'Media previews';
+  String get mediaPreview => 'Media downloads';
   String get mediaBackup => 'Media uploads';
   String get securityActions => 'Security & manual sync';
 }
@@ -1362,9 +1372,10 @@ class _StringsSyncMediaPreviewEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get chatThumbnailsWifiOnlyTitle => 'Image previews on Wi‑Fi only';
+  String get chatThumbnailsWifiOnlyTitle =>
+      'Download media files on Wi‑Fi only';
   String get chatThumbnailsWifiOnlySubtitle =>
-      'If a photo isn\'t on this device yet, download its preview only on Wi‑Fi';
+      'If an attachment isn\'t on this device yet, download it only on Wi‑Fi';
 }
 
 // Path: sync.mediaBackup
@@ -1767,6 +1778,39 @@ class _StringsSettingsSemanticParseAutoActionsDialogActionsEn {
   String get enable => 'Enable';
 }
 
+// Path: settings.mediaAnnotation.routingGuide
+class _StringsSettingsMediaAnnotationRoutingGuideEn {
+  _StringsSettingsMediaAnnotationRoutingGuideEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Choose your AI source';
+  String get pro => 'Pro + signed in: uses SecondLoop Cloud by default.';
+  String get byok =>
+      'Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active.';
+}
+
+// Path: settings.mediaAnnotation.imageCaption
+class _StringsSettingsMediaAnnotationImageCaptionEn {
+  _StringsSettingsMediaAnnotationImageCaptionEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Image captions';
+}
+
+// Path: settings.mediaAnnotation.providerSettings
+class _StringsSettingsMediaAnnotationProviderSettingsEn {
+  _StringsSettingsMediaAnnotationProviderSettingsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Image caption provider';
+}
+
 // Path: settings.mediaAnnotation.setupRequired
 class _StringsSettingsMediaAnnotationSetupRequiredEn {
   _StringsSettingsMediaAnnotationSetupRequiredEn._(this._root);
@@ -1893,6 +1937,23 @@ class _StringsSettingsMediaAnnotationAllowCellularConfirmEn {
   String get title => 'Use cellular data for image annotations?';
   String get body =>
       'Annotating images may upload photos to your chosen AI provider and can use significant data.';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe
+class _StringsSettingsMediaAnnotationAudioTranscribeEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Audio transcription';
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn enabled =
+      _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineEn engine =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn
+      configureApi =
+      _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn._(_root);
 }
 
 // Path: settings.cloudEmbeddings.dialogActions
@@ -2379,6 +2440,53 @@ class _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
       'Use a specific API key profile (OpenAI‑compatible).';
 }
 
+// Path: settings.mediaAnnotation.audioTranscribe.enabled
+class _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Transcribe audio attachments';
+  String get subtitle =>
+      'When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search.';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.engine
+class _StringsSettingsMediaAnnotationAudioTranscribeEngineEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEngineEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Transcription engine';
+  String get subtitle => 'Choose which engine to use for audio transcription.';
+  String get notAvailable => 'Unavailable';
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn
+      labels =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn
+      descriptions =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.configureApi
+class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Configure transcription API';
+  String get subtitle =>
+      'Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.';
+  String get body =>
+      'Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.';
+  String get openCloud => 'Open Cloud account';
+  String get openApiKeys => 'Open API keys';
+}
+
 // Path: settings.cloudAccount.benefits.items
 class _StringsSettingsCloudAccountBenefitsItemsEn {
   _StringsSettingsCloudAccountBenefitsItemsEn._(this._root);
@@ -2450,6 +2558,32 @@ class _StringsSettingsSubscriptionBenefitsItemsEn {
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.engine.labels
+class _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get whisper => 'Whisper';
+  String get multimodalLlm => 'Multimodal LLM';
+  String get auto => 'Auto';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.engine.descriptions
+class _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get whisper =>
+      'Stable default for speech transcription. (Recommended)';
+  String get multimodalLlm => 'Use a multimodal chat model when available.';
+  String get auto => 'Let SecondLoop choose the best available engine.';
 }
 
 // Path: settings.cloudAccount.benefits.items.purchase
@@ -3720,9 +3854,19 @@ class _StringsSettingsMediaAnnotationZhCn
 
   // Translations
   @override
-  String get title => '图片注释';
+  String get title => '媒体理解';
   @override
-  String get subtitle => '可选：让 AI 为图片生成注释用于检索';
+  String get subtitle => '可选：生成图片注释和音频转写以增强检索';
+  @override
+  late final _StringsSettingsMediaAnnotationRoutingGuideZhCn routingGuide =
+      _StringsSettingsMediaAnnotationRoutingGuideZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationImageCaptionZhCn imageCaption =
+      _StringsSettingsMediaAnnotationImageCaptionZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationProviderSettingsZhCn
+      providerSettings =
+      _StringsSettingsMediaAnnotationProviderSettingsZhCn._(_root);
   @override
   late final _StringsSettingsMediaAnnotationSetupRequiredZhCn setupRequired =
       _StringsSettingsMediaAnnotationSetupRequiredZhCn._(_root);
@@ -3756,6 +3900,10 @@ class _StringsSettingsMediaAnnotationZhCn
   late final _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
       allowCellularConfirm =
       _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeZhCn
+      audioTranscribe =
+      _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -4289,7 +4437,7 @@ class _StringsSyncSectionsZhCn extends _StringsSyncSectionsEn {
   @override
   String get backend => '同步方式';
   @override
-  String get mediaPreview => '媒体预览';
+  String get mediaPreview => '媒体下载';
   @override
   String get mediaBackup => '媒体上传';
   @override
@@ -4327,9 +4475,9 @@ class _StringsSyncMediaPreviewZhCn extends _StringsSyncMediaPreviewEn {
 
   // Translations
   @override
-  String get chatThumbnailsWifiOnlyTitle => '仅在 Wi‑Fi 下下载图片预览';
+  String get chatThumbnailsWifiOnlyTitle => '仅在 Wi‑Fi 下下载媒体文件';
   @override
-  String get chatThumbnailsWifiOnlySubtitle => '当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览';
+  String get chatThumbnailsWifiOnlySubtitle => '当附件在本机缺失时，仅在 Wi‑Fi 下自动下载';
 }
 
 // Path: sync.mediaBackup
@@ -4939,6 +5087,55 @@ class _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
   String get enable => '开启';
 }
 
+// Path: settings.mediaAnnotation.routingGuide
+class _StringsSettingsMediaAnnotationRoutingGuideZhCn
+    extends _StringsSettingsMediaAnnotationRoutingGuideEn {
+  _StringsSettingsMediaAnnotationRoutingGuideZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '先选择 AI 来源';
+  @override
+  String get pro => 'Pro 且已登录：默认使用 SecondLoop Cloud。';
+  @override
+  String get byok => '免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。';
+}
+
+// Path: settings.mediaAnnotation.imageCaption
+class _StringsSettingsMediaAnnotationImageCaptionZhCn
+    extends _StringsSettingsMediaAnnotationImageCaptionEn {
+  _StringsSettingsMediaAnnotationImageCaptionZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '图片注释';
+}
+
+// Path: settings.mediaAnnotation.providerSettings
+class _StringsSettingsMediaAnnotationProviderSettingsZhCn
+    extends _StringsSettingsMediaAnnotationProviderSettingsEn {
+  _StringsSettingsMediaAnnotationProviderSettingsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '图片注释服务来源';
+}
+
 // Path: settings.mediaAnnotation.setupRequired
 class _StringsSettingsMediaAnnotationSetupRequiredZhCn
     extends _StringsSettingsMediaAnnotationSetupRequiredEn {
@@ -5128,6 +5325,31 @@ class _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
   String get title => '允许使用蜂窝网络注释图片？';
   @override
   String get body => '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe
+class _StringsSettingsMediaAnnotationAudioTranscribeZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '音频转写';
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn enabled =
+      _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn engine =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
+      configureApi =
+      _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn._(_root);
 }
 
 // Path: settings.cloudEmbeddings.dialogActions
@@ -5848,6 +6070,77 @@ class _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
   String get byokProfile => '使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。';
 }
 
+// Path: settings.mediaAnnotation.audioTranscribe.enabled
+class _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '转写音频附件';
+  @override
+  String get subtitle => '添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.engine
+class _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeEngineEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '转写引擎';
+  @override
+  String get subtitle => '选择音频转写使用的引擎。';
+  @override
+  String get notAvailable => '不可用';
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsZhCn
+      labels =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsZhCn
+      descriptions =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsZhCn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.configureApi
+class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '配置转写 API';
+  @override
+  String get subtitle =>
+      'Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。';
+  @override
+  String get body =>
+      '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。';
+  @override
+  String get openCloud => '打开 Cloud 账号';
+  @override
+  String get openApiKeys => '打开 API Key';
+}
+
 // Path: settings.cloudAccount.benefits.items
 class _StringsSettingsCloudAccountBenefitsItemsZhCn
     extends _StringsSettingsCloudAccountBenefitsItemsEn {
@@ -5956,6 +6249,46 @@ class _StringsSettingsSubscriptionBenefitsItemsZhCn
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.engine.labels
+class _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get whisper => 'Whisper';
+  @override
+  String get multimodalLlm => '多模态 LLM';
+  @override
+  String get auto => '自动';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.engine.descriptions
+class _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get whisper => '语音转写稳定默认方案（推荐）。';
+  @override
+  String get multimodalLlm => '可用时使用多模态聊天模型。';
+  @override
+  String get auto => '由 SecondLoop 自动选择最可用的引擎。';
 }
 
 // Path: settings.cloudAccount.benefits.items.purchase
@@ -6386,9 +6719,19 @@ extension on Translations {
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return 'Enable';
       case 'settings.mediaAnnotation.title':
-        return 'Image annotations';
+        return 'Media understanding';
       case 'settings.mediaAnnotation.subtitle':
-        return 'Optional: let AI caption images for better search';
+        return 'Optional: image captions and audio transcripts for better search';
+      case 'settings.mediaAnnotation.routingGuide.title':
+        return 'Choose your AI source';
+      case 'settings.mediaAnnotation.routingGuide.pro':
+        return 'Pro + signed in: uses SecondLoop Cloud by default.';
+      case 'settings.mediaAnnotation.routingGuide.byok':
+        return 'Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active.';
+      case 'settings.mediaAnnotation.imageCaption.title':
+        return 'Image captions';
+      case 'settings.mediaAnnotation.providerSettings.title':
+        return 'Image caption provider';
       case 'settings.mediaAnnotation.setupRequired.title':
         return 'Image annotations setup required';
       case 'settings.mediaAnnotation.setupRequired.body':
@@ -6461,6 +6804,40 @@ extension on Translations {
         return 'Use cellular data for image annotations?';
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return 'Annotating images may upload photos to your chosen AI provider and can use significant data.';
+      case 'settings.mediaAnnotation.audioTranscribe.title':
+        return 'Audio transcription';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
+        return 'Transcribe audio attachments';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.subtitle':
+        return 'When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.title':
+        return 'Transcription engine';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.subtitle':
+        return 'Choose which engine to use for audio transcription.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.notAvailable':
+        return 'Unavailable';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.whisper':
+        return 'Whisper';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.multimodalLlm':
+        return 'Multimodal LLM';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.auto':
+        return 'Auto';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.whisper':
+        return 'Stable default for speech transcription. (Recommended)';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.multimodalLlm':
+        return 'Use a multimodal chat model when available.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
+        return 'Let SecondLoop choose the best available engine.';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
+        return 'Configure transcription API';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
+        return 'Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
+        return 'Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
+        return 'Open Cloud account';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
+        return 'Open API keys';
       case 'settings.cloudEmbeddings.title':
         return 'Smarter search';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -6866,7 +7243,7 @@ extension on Translations {
       case 'sync.sections.backend':
         return 'Sync method';
       case 'sync.sections.mediaPreview':
-        return 'Media previews';
+        return 'Media downloads';
       case 'sync.sections.mediaBackup':
         return 'Media uploads';
       case 'sync.sections.securityActions':
@@ -6880,9 +7257,9 @@ extension on Translations {
       case 'sync.autoSync.wifiOnlySubtitle':
         return 'Save mobile data by syncing automatically only on Wi‑Fi';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlyTitle':
-        return 'Image previews on Wi‑Fi only';
+        return 'Download media files on Wi‑Fi only';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
-        return 'If a photo isn\'t on this device yet, download its preview only on Wi‑Fi';
+        return 'If an attachment isn\'t on this device yet, download it only on Wi‑Fi';
       case 'sync.mediaBackup.title':
         return 'Media uploads';
       case 'sync.mediaBackup.subtitle':
@@ -7487,9 +7864,19 @@ extension on _StringsZhCn {
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return '开启';
       case 'settings.mediaAnnotation.title':
-        return '图片注释';
+        return '媒体理解';
       case 'settings.mediaAnnotation.subtitle':
-        return '可选：让 AI 为图片生成注释用于检索';
+        return '可选：生成图片注释和音频转写以增强检索';
+      case 'settings.mediaAnnotation.routingGuide.title':
+        return '先选择 AI 来源';
+      case 'settings.mediaAnnotation.routingGuide.pro':
+        return 'Pro 且已登录：默认使用 SecondLoop Cloud。';
+      case 'settings.mediaAnnotation.routingGuide.byok':
+        return '免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。';
+      case 'settings.mediaAnnotation.imageCaption.title':
+        return '图片注释';
+      case 'settings.mediaAnnotation.providerSettings.title':
+        return '图片注释服务来源';
       case 'settings.mediaAnnotation.setupRequired.title':
         return '图片注释需要先配置';
       case 'settings.mediaAnnotation.setupRequired.body':
@@ -7562,6 +7949,40 @@ extension on _StringsZhCn {
         return '允许使用蜂窝网络注释图片？';
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
+      case 'settings.mediaAnnotation.audioTranscribe.title':
+        return '音频转写';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
+        return '转写音频附件';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.subtitle':
+        return '添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.title':
+        return '转写引擎';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.subtitle':
+        return '选择音频转写使用的引擎。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.notAvailable':
+        return '不可用';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.whisper':
+        return 'Whisper';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.multimodalLlm':
+        return '多模态 LLM';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.auto':
+        return '自动';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.whisper':
+        return '语音转写稳定默认方案（推荐）。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.multimodalLlm':
+        return '可用时使用多模态聊天模型。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
+        return '由 SecondLoop 自动选择最可用的引擎。';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
+        return '配置转写 API';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
+        return 'Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
+        return '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
+        return '打开 Cloud 账号';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
+        return '打开 API Key';
       case 'settings.cloudEmbeddings.title':
         return '更智能的搜索';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -7960,7 +8381,7 @@ extension on _StringsZhCn {
       case 'sync.sections.backend':
         return '同步方式';
       case 'sync.sections.mediaPreview':
-        return '媒体预览';
+        return '媒体下载';
       case 'sync.sections.mediaBackup':
         return '媒体上传';
       case 'sync.sections.securityActions':
@@ -7974,9 +8395,9 @@ extension on _StringsZhCn {
       case 'sync.autoSync.wifiOnlySubtitle':
         return '节省流量：自动同步只在 Wi‑Fi 下进行';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlyTitle':
-        return '仅在 Wi‑Fi 下下载图片预览';
+        return '仅在 Wi‑Fi 下下载媒体文件';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
-        return '当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览';
+        return '当附件在本机缺失时，仅在 Wi‑Fi 下自动下载';
       case 'sync.mediaBackup.title':
         return '媒体上传';
       case 'sync.mediaBackup.subtitle':

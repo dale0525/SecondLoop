@@ -196,6 +196,11 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
+      subscriptionStatus: subscriptionStatus,
+    );
 
     final normalizedMimeType = mimeType.trim();
 
@@ -221,6 +226,24 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
         mimeType: 'application/x.secondloop.video+json',
       );
       shaToLink = manifestAttachment.sha256;
+    } else if (normalizedMimeType.startsWith('audio/')) {
+      final proxy = useLocalAudioTranscode
+          ? await AudioTranscodeWorker.transcodeToM4aProxy(
+              rawBytes,
+              sourceMimeType: normalizedMimeType,
+            )
+          : AudioTranscodeResult(
+              bytes: rawBytes,
+              mimeType: normalizedMimeType,
+              didTranscode: false,
+            );
+      final attachment = await backend.insertAttachment(
+        sessionKey,
+        bytes: proxy.bytes,
+        mimeType: proxy.mimeType,
+      );
+      shaToLink = attachment.sha256;
+      shaToBackup = attachment.sha256;
     } else {
       final attachment = await backend.insertAttachment(
         sessionKey,

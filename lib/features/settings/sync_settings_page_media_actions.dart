@@ -13,10 +13,10 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
     _setState(() => _autoWifiOnly = enabled);
   }
 
-  Future<void> _setChatThumbnailsWifiOnly(bool enabled) async {
-    await _store.writeChatThumbnailsWifiOnly(enabled);
+  Future<void> _setMediaDownloadsWifiOnly(bool enabled) async {
+    await _store.writeMediaDownloadsWifiOnly(enabled);
     if (!mounted) return;
-    _setState(() => _chatThumbnailsWifiOnly = enabled);
+    _setState(() => _mediaDownloadsWifiOnly = enabled);
   }
 
   Future<void> _setCloudMediaBackupWifiOnly(bool enabled) async {

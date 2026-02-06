@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../features/audio_transcribe/audio_transcribe_runner.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
@@ -197,6 +198,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           (contentConfig?.documentExtractEnabled ?? true);
       final contentRequiresWifi =
           contentConfig?.mobileBackgroundRequiresWifi ?? true;
+      final audioTranscribeConfigured = contentBackgroundEnabled &&
+          (contentConfig?.audioTranscribeEnabled ?? false);
 
       MediaEnrichmentClient? annotationClient;
       var annotationModelName = gatewayConfig.modelName;
@@ -226,6 +229,13 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           if (p.isActive) return p;
         }
         return null;
+      }
+
+      LlmProfile? activeOpenAiProfile() {
+        final active = activeProfile();
+        if (active == null) return null;
+        if (active.providerType != 'openai-compatible') return null;
+        return active;
       }
 
       if (mediaAnnotationConfig.annotateEnabled) {
@@ -280,11 +290,19 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                   subscriptionStatus == SubscriptionStatus.entitled &&
                   hasGateway &&
                   hasIdToken));
+      final audioTranscribeCloudAvailable =
+          subscriptionStatus == SubscriptionStatus.entitled &&
+              hasGateway &&
+              hasIdToken;
+      final audioTranscribeByokProfile = activeOpenAiProfile();
+      final audioTranscribeEnabled = audioTranscribeConfigured &&
+          (audioTranscribeCloudAvailable || audioTranscribeByokProfile != null);
 
       if (!geoReverseEnabled &&
           !annotationEnabled &&
           !urlFetchEnabled &&
-          !documentExtractEnabled) {
+          !documentExtractEnabled &&
+          !audioTranscribeEnabled) {
         _schedule(_kIdleInterval);
         return;
       }
@@ -342,6 +360,57 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
+      var processedAudioTranscripts = 0;
+      if (audioTranscribeEnabled) {
+        final network = await getNetwork();
+        final allowedByNetwork = network != MediaEnrichmentNetwork.offline &&
+            (!contentRequiresWifi || network == MediaEnrichmentNetwork.wifi);
+        if (allowedByNetwork) {
+          final effectiveEngine = normalizeAudioTranscribeEngine(
+            contentConfig?.audioTranscribeEngine ?? 'whisper',
+          );
+          final store = BackendAudioTranscribeStore(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+          );
+          AudioTranscribeClient? client;
+          if (audioTranscribeCloudAvailable) {
+            // Cloud transcription mode is selected by gateway config:
+            // - with CLOUD_AUDIO_TRANSCRIBE_WHISPER_MODEL_NAME => whisper route
+            // - without it => server-routed multimodal route.
+            // Client-side engine setting must not override cloud behavior.
+            client = CloudGatewayWhisperAudioTranscribeClient(
+              gatewayBaseUrl: gatewayConfig.baseUrl,
+              idToken: idToken!.trim(),
+              modelName: 'cloud',
+            );
+          } else if (effectiveEngine == 'multimodal_llm') {
+            if (audioTranscribeByokProfile != null) {
+              client = ByokMultimodalAudioTranscribeClient(
+                sessionKey: Uint8List.fromList(sessionKey),
+                profileId: audioTranscribeByokProfile.id,
+                modelName: audioTranscribeByokProfile.modelName,
+              );
+            }
+          } else if (audioTranscribeByokProfile != null) {
+            client = ByokWhisperAudioTranscribeClient(
+              sessionKey: Uint8List.fromList(sessionKey),
+              profileId: audioTranscribeByokProfile.id,
+              modelName: audioTranscribeByokProfile.modelName,
+            );
+          }
+
+          if (client != null) {
+            final runner = AudioTranscribeRunner(
+              store: store,
+              client: client,
+            );
+            final result = await runner.runOnce(limit: 5);
+            processedAudioTranscripts = result.processed;
+          }
+        }
+      }
+
       MediaEnrichmentRunResult result = const MediaEnrichmentRunResult(
         processedPlaces: 0,
         processedAnnotations: 0,
@@ -388,8 +457,10 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         if (!mounted) return;
       }
 
-      final didEnrichAny =
-          processedUrl > 0 || processedDocs > 0 || result.didEnrichAny;
+      final didEnrichAny = processedUrl > 0 ||
+          processedDocs > 0 ||
+          processedAudioTranscripts > 0 ||
+          result.didEnrichAny;
       if (didEnrichAny) {
         syncEngine?.notifyExternalChange();
       }

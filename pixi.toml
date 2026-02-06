@@ -37,6 +37,7 @@ i18n-sync = { depends-on = ["i18n-translate", "i18n-gen"] }
 icons-macos-round = "python tools/round_icon.py --in assets/icon/app_icon.png --out assets/icon/app_icon_macos.png"
 icons-macos-check = "python tools/check_icon_corners.py --path assets/icon/app_icon_macos.png"
 icons-update = { cmd = "dart pub global run fvm:main dart run icons_launcher:create", depends-on = ["icons-macos-round", "icons-macos-check"] }
+prepare-ffmpeg = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart"
 
 [dependencies]
 rust = "1.85.*"
@@ -54,10 +55,16 @@ clangxx_osx-arm64 = ">=21.1.8,<22"
 
 [target.osx-arm64.tasks]
 setup-cocoapods = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2"
-run-macos = { cmd = "env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["setup-cocoapods"] }
+prepare-ffmpeg-macos = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=macos"
+run-macos = { cmd = "env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["setup-cocoapods", "prepare-ffmpeg-macos"] }
+
+[target.linux-64.tasks]
+prepare-ffmpeg-linux = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=linux"
+run-linux = { cmd = "bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["prepare-ffmpeg-linux"] }
 
 [target.win-64.tasks]
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 setup-nuget = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_nuget.ps1"
 setup-windows = { cmd = "echo setup-windows ok", depends-on = ["setup-flutter", "setup-nuget"] }
-run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["setup-windows"] }
+prepare-ffmpeg-windows = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=windows"
+run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["setup-windows", "prepare-ffmpeg-windows"] }

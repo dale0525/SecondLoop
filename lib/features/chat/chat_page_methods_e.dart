@@ -137,6 +137,10 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     }
 
     final hasTimeWindow = timeStartMs != null && timeEndMs != null;
+    final canRetryCloudWithoutEmbeddings =
+        route == AskAiRouteKind.cloudGateway &&
+            allowCloudEmbeddings &&
+            !hasTimeWindow;
 
     Stream<String> stream;
     switch (route) {
@@ -185,7 +189,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
                   sessionKey,
                   widget.conversation.id,
                   question: question,
-                  topK: topK,
+                  topK: 0,
                   thisThreadOnly: _thisThreadOnly,
                   gatewayBaseUrl: cloudGatewayConfig.baseUrl,
                   idToken: cloudIdToken ?? '',
@@ -233,8 +237,11 @@ extension _ChatPageStateMethodsE on _ChatPageState {
         break;
     }
 
-    Future<void> startStream(Stream<String> stream,
-        {required bool fromCloud}) async {
+    Future<void> startStream(
+      Stream<String> stream, {
+      required bool fromCloud,
+      required bool canRetryWithoutEmbeddings,
+    }) async {
       late final StreamSubscription<String> sub;
       var sawError = false;
 
@@ -287,6 +294,32 @@ extension _ChatPageStateMethodsE on _ChatPageState {
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
 
+          if (fromCloud &&
+              canRetryWithoutEmbeddings &&
+              cloudStatus == null &&
+              _isCloudEmbeddingsPreflightFailure(e)) {
+            _setState(() {
+              _askError = null;
+              _streamingAnswer = '';
+            });
+            final fallbackStream = backend.askAiStreamCloudGateway(
+              sessionKey,
+              widget.conversation.id,
+              question: question,
+              topK: 0,
+              thisThreadOnly: _thisThreadOnly,
+              gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+              idToken: cloudIdToken ?? '',
+              modelName: cloudGatewayConfig.modelName,
+            );
+            await startStream(
+              fallbackStream,
+              fromCloud: true,
+              canRetryWithoutEmbeddings: false,
+            );
+            return;
+          }
+
           if (fromCloud && hasByok && isCloudFallbackableError(e)) {
             final message = switch (cloudStatus) {
               401 => context.t.chat.cloudGateway.fallback.auth,
@@ -330,7 +363,11 @@ extension _ChatPageStateMethodsE on _ChatPageState {
                     topK: 10,
                     thisThreadOnly: _thisThreadOnly,
                   );
-            await startStream(byokStream, fromCloud: false);
+            await startStream(
+              byokStream,
+              fromCloud: false,
+              canRetryWithoutEmbeddings: false,
+            );
             return;
           }
 
@@ -396,7 +433,18 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       _setState(() => _askSub = sub);
     }
 
-    await startStream(stream, fromCloud: route == AskAiRouteKind.cloudGateway);
+    await startStream(
+      stream,
+      fromCloud: route == AskAiRouteKind.cloudGateway,
+      canRetryWithoutEmbeddings: canRetryCloudWithoutEmbeddings,
+    );
+  }
+
+  bool _isCloudEmbeddingsPreflightFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('embedding') ||
+        message.contains('embedder') ||
+        message.contains('query vector dim mismatch');
   }
 
   Future<bool> _ensureAskAiDataConsent({bool allowPrompt = true}) async {

@@ -5,15 +5,21 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../core/ai/ai_routing.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../src/rust/db.dart';
+import '../audio_transcribe/audio_transcribe_runner.dart';
+import '../media_backup/audio_transcode_policy.dart';
+import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
 import 'share_ingest.dart';
 
@@ -129,6 +135,32 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     );
   }
 
+  Future<void> _maybeEnqueueAudioTranscribeEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256, {
+    required String mimeType,
+    required String lang,
+  }) async {
+    if (!looksLikeAudioMimeType(mimeType)) return;
+
+    ContentEnrichmentConfig? config;
+    try {
+      config = await const RustContentEnrichmentConfigStore()
+          .readContentEnrichment(sessionKey);
+    } catch (_) {
+      config = null;
+    }
+    if (config == null || !config.audioTranscribeEnabled) return;
+
+    await backend.enqueueAttachmentAnnotation(
+      sessionKey,
+      attachmentSha256: attachmentSha256,
+      lang: lang,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
@@ -138,6 +170,11 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
       final lang = Localizations.localeOf(context).toLanguageTag();
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
+        subscriptionStatus: subscriptionStatus,
+      );
 
       Future<String> Function(String path, String mimeType)? onImage;
       Future<String> Function(String path, String mimeType, String? filename)?
@@ -193,10 +230,45 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               original.sha256,
             ));
 
+            String? audioSha256;
+            String? audioMimeType;
+            final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+              bytes,
+              sourceMimeType: normalizedMimeType,
+            );
+            if (audioProxy.didTranscode &&
+                audioProxy.bytes.isNotEmpty &&
+                looksLikeAudioMimeType(audioProxy.mimeType)) {
+              final audioAttachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: audioProxy.bytes,
+                mimeType: audioProxy.mimeType,
+              );
+              audioSha256 = audioAttachment.sha256;
+              audioMimeType = audioAttachment.mimeType;
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                audioAttachment.sha256,
+              ));
+              unawaited(
+                _maybeEnqueueAudioTranscribeEnrichment(
+                  backend,
+                  sessionKey,
+                  audioAttachment.sha256,
+                  mimeType: audioAttachment.mimeType,
+                  lang: lang,
+                ).catchError((_) {}),
+              );
+            }
+
             final manifest = jsonEncode({
-              'schema': 'secondloop.video_manifest.v1',
-              'original_sha256': original.sha256,
-              'original_mime_type': normalizedMimeType,
+              ...buildVideoManifestPayload(
+                originalSha256: original.sha256,
+                originalMimeType: normalizedMimeType,
+                audioSha256: audioSha256,
+                audioMimeType: audioMimeType,
+              ),
             });
             final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
             final manifestAttachment = await backend.insertAttachment(
@@ -212,6 +284,46 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
             }
 
             return manifestAttachment.sha256;
+          }
+
+          if (normalizedMimeType.startsWith('audio/')) {
+            final proxy = useLocalAudioTranscode
+                ? await AudioTranscodeWorker.transcodeToM4aProxy(
+                    bytes,
+                    sourceMimeType: normalizedMimeType,
+                  )
+                : AudioTranscodeResult(
+                    bytes: bytes,
+                    mimeType: normalizedMimeType,
+                    didTranscode: false,
+                  );
+            final attachment = await backend.insertAttachment(
+              sessionKey,
+              bytes: proxy.bytes,
+              mimeType: proxy.mimeType,
+            );
+            unawaited(_maybeEnqueueCloudMediaBackup(
+              backend,
+              sessionKey,
+              attachment.sha256,
+            ));
+            unawaited(
+              _maybeEnqueueAudioTranscribeEnrichment(
+                backend,
+                sessionKey,
+                attachment.sha256,
+                mimeType: proxy.mimeType,
+                lang: lang,
+              ).catchError((_) {}),
+            );
+
+            try {
+              await File(path).delete();
+            } catch (_) {
+              // ignore
+            }
+
+            return attachment.sha256;
           }
 
           final attachment = await backend.insertAttachment(
@@ -284,3 +396,20 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 }
 
 Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
+
+Map<String, Object?> buildVideoManifestPayload({
+  required String originalSha256,
+  required String originalMimeType,
+  String? audioSha256,
+  String? audioMimeType,
+}) {
+  return <String, Object?>{
+    'schema': 'secondloop.video_manifest.v1',
+    'original_sha256': originalSha256,
+    'original_mime_type': originalMimeType,
+    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
+      'audio_sha256': audioSha256,
+    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
+      'audio_mime_type': audioMimeType,
+  };
+}

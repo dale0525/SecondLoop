@@ -264,8 +264,19 @@
       }
     },
     "mediaAnnotation": {
-      "title": "图片注释",
-      "subtitle": "可选：让 AI 为图片生成注释用于检索",
+    "title": "媒体理解",
+    "subtitle": "可选：生成图片注释和音频转写以增强检索",
+    "routingGuide": {
+      "title": "先选择 AI 来源",
+      "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
+      "byok": "免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。"
+    },
+    "imageCaption": {
+      "title": "图片注释"
+    },
+    "providerSettings": {
+      "title": "图片注释服务来源"
+    },
       "setupRequired": {
         "title": "图片注释需要先配置",
         "body": "要注释图片，SecondLoop 需要一个多模态模型。",
@@ -327,6 +338,35 @@
       "allowCellularConfirm": {
         "title": "允许使用蜂窝网络注释图片？",
         "body": "图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。"
+      },
+    "audioTranscribe": {
+      "title": "音频转写",
+      "enabled": {
+        "title": "转写音频附件",
+        "subtitle": "添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。"
+        },
+        "engine": {
+          "title": "转写引擎",
+          "subtitle": "选择音频转写使用的引擎。",
+          "notAvailable": "不可用",
+          "labels": {
+            "whisper": "Whisper",
+            "multimodalLlm": "多模态 LLM",
+            "auto": "自动"
+          },
+          "descriptions": {
+            "whisper": "语音转写稳定默认方案（推荐）。",
+            "multimodalLlm": "可用时使用多模态聊天模型。",
+            "auto": "由 SecondLoop 自动选择最可用的引擎。"
+          }
+        },
+      "configureApi": {
+        "title": "配置转写 API",
+        "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。",
+        "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。",
+        "openCloud": "打开 Cloud 账号",
+        "openApiKeys": "打开 API Key"
+      }
       }
     },
     "cloudEmbeddings": {
@@ -652,7 +692,7 @@
     "sections": {
       "automation": "自动同步",
       "backend": "同步方式",
-      "mediaPreview": "媒体预览",
+      "mediaPreview": "媒体下载",
       "mediaBackup": "媒体上传",
       "securityActions": "安全与手动同步"
     },
@@ -663,8 +703,8 @@
       "wifiOnlySubtitle": "节省流量：自动同步只在 Wi‑Fi 下进行"
     },
     "mediaPreview": {
-      "chatThumbnailsWifiOnlyTitle": "仅在 Wi‑Fi 下下载图片预览",
-      "chatThumbnailsWifiOnlySubtitle": "当图片在本机缺失时，仅在 Wi‑Fi 下自动下载预览"
+      "chatThumbnailsWifiOnlyTitle": "仅在 Wi‑Fi 下下载媒体文件",
+      "chatThumbnailsWifiOnlySubtitle": "当附件在本机缺失时，仅在 Wi‑Fi 下自动下载"
     },
     "mediaBackup": {
       "title": "媒体上传",

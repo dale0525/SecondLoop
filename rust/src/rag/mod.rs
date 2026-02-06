@@ -751,14 +751,19 @@ pub fn ask_ai_with_provider(
 
     let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
     for sm in similar_messages {
-        contexts_with_distance.push((sm.distance, sm.message.content));
+        let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
+            .unwrap_or_else(|_| sm.message.content.clone());
+        contexts_with_distance.push((sm.distance, context));
     }
     let mut seen_todos = std::collections::HashSet::new();
     for st in similar_todos {
         if !seen_todos.insert(st.todo_id.clone()) {
             continue;
         }
-        let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+        let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
         contexts_with_distance.push((st.distance, ctx));
     }
     contexts_with_distance
@@ -832,8 +837,15 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     let mut contexts: Vec<String> = Vec::new();
     if top_k > 0 {
         // Avoid wiping the current index if the embedder is misconfigured/unreachable.
-        let probe = embedder.embed(&[format!("query: {question}")])?;
-        let dim = probe.first().map(|v| v.len()).unwrap_or(0);
+        let mut probe = embedder.embed(&[format!("query: {question}")])?;
+        if probe.len() != 1 {
+            return Err(anyhow!(
+                "embedder output length mismatch: expected 1, got {}",
+                probe.len()
+            ));
+        }
+        let query_vector = probe.pop().unwrap_or_default();
+        let dim = query_vector.len();
         if dim == 0 {
             return Err(anyhow!("embedder returned empty embeddings"));
         }
@@ -846,31 +858,46 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
         let top_k = top_k.max(1);
 
         let similar_messages = match focus {
-            Focus::AllMemories => {
-                db::search_similar_messages(conn, key, embedder, question, top_k)?
-            }
-            Focus::ThisThread => db::search_similar_messages_in_conversation(
+            Focus::AllMemories => db::search_similar_messages_by_embedding(
                 conn,
                 key,
-                embedder,
+                embedder.model_name(),
+                &query_vector,
+                top_k,
+            )?,
+            Focus::ThisThread => db::search_similar_messages_in_conversation_by_embedding(
+                conn,
+                key,
+                embedder.model_name(),
                 conversation_id,
-                question,
+                &query_vector,
                 top_k,
             )?,
         };
 
-        let similar_todos = db::search_similar_todo_threads(conn, key, embedder, question, top_k)?;
+        let similar_todos = db::search_similar_todo_threads_by_embedding(
+            conn,
+            embedder.model_name(),
+            &query_vector,
+            top_k,
+        )?;
 
         let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
         for sm in similar_messages {
-            contexts_with_distance.push((sm.distance, sm.message.content));
+            let context =
+                db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
+                    .unwrap_or_else(|_| sm.message.content.clone());
+            contexts_with_distance.push((sm.distance, context));
         }
         let mut seen_todos = std::collections::HashSet::new();
         for st in similar_todos {
             if !seen_todos.insert(st.todo_id.clone()) {
                 continue;
             }
-            let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+            let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
             contexts_with_distance.push((st.distance, ctx));
         }
         contexts_with_distance
@@ -981,12 +1008,15 @@ pub fn ask_ai_with_provider_using_active_embeddings(
 
         let mut candidates: Vec<ContextItem> = Vec::new();
         for sm in similar_messages {
+            let context =
+                db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
+                    .unwrap_or_else(|_| sm.message.content.clone());
             candidates.push(ContextItem {
                 source: ContextSource::Message,
                 id: sm.message.id.clone(),
                 created_at_ms: sm.message.created_at_ms,
                 distance: Some(sm.distance),
-                text: sm.message.content,
+                text: context,
             });
         }
 
@@ -995,8 +1025,14 @@ pub fn ask_ai_with_provider_using_active_embeddings(
             if !seen_todos.insert(st.todo_id.clone()) {
                 continue;
             }
-            let todo = db::get_todo(conn, key, &st.todo_id)?;
-            let ctx = build_todo_thread_context(conn, key, &st.todo_id)?;
+            let todo = match db::get_todo(conn, key, &st.todo_id) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
             candidates.push(ContextItem {
                 source: ContextSource::TodoThread,
                 id: st.todo_id,
@@ -1088,12 +1124,14 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             time_end_ms,
             800,
         )? {
+            let context =
+                db::build_message_rag_context(conn, key, &m.id, &m.content).unwrap_or(m.content);
             candidates.push(ContextItem {
                 source: ContextSource::Message,
                 id: m.id,
                 created_at_ms: m.created_at_ms,
                 distance: None,
-                text: m.content,
+                text: context,
             });
         }
 

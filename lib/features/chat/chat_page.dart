@@ -58,6 +58,8 @@ import '../attachments/attachment_card.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../attachments/image_exif_metadata.dart';
 import '../attachments/platform_exif_metadata.dart';
+import '../media_backup/audio_transcode_policy.dart';
+import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';

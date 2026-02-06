@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/attachments.dart';
+import 'api/audio_transcribe.dart';
 import 'api/content_enrichment.dart';
 import 'api/content_extract.dart';
 import 'api/core.dart';

@@ -85,7 +85,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
   bool _autoWifiOnly = false;
-  bool _chatThumbnailsWifiOnly = true;
+  bool _mediaDownloadsWifiOnly = true;
   bool _cloudMediaBackupEnabled = true;
   bool _cloudMediaBackupWifiOnly = true;
   Future<CloudMediaBackupSummary>? _cloudMediaBackupSummary;
@@ -145,8 +145,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
     final localDir = all[SyncConfigStore.kLocalDir];
     final hasSyncKey = (all[SyncConfigStore.kSyncKeyB64] ?? '').isNotEmpty;
-    final chatThumbnailsWifiOnly =
-        (all[SyncConfigStore.kChatThumbnailsWifiOnly] ?? '1') == '1';
+    final mediaDownloadsWifiOnly =
+        (all[SyncConfigStore.kMediaDownloadsWifiOnly] ?? '1') == '1';
     final cloudMediaBackupEnabled =
         (all[SyncConfigStore.kCloudMediaBackupEnabled] ?? '1') == '1';
     final cloudMediaBackupWifiOnly =
@@ -163,7 +163,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       _passwordController.text = password ?? '';
       _remoteRootController.text = remoteRoot ?? _remoteRootController.text;
       _localDirController.text = localDir ?? '';
-      _chatThumbnailsWifiOnly = chatThumbnailsWifiOnly;
+      _mediaDownloadsWifiOnly = mediaDownloadsWifiOnly;
       _cloudMediaBackupEnabled = cloudMediaBackupEnabled;
       _cloudMediaBackupWifiOnly = cloudMediaBackupWifiOnly;
       _cloudMediaBackupSummary = (backendType == SyncBackendType.managedVault ||
@@ -480,17 +480,17 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
           sectionTitle(context.t.sync.sections.mediaPreview),
           sectionCard(
             SwitchListTile(
-              key: const ValueKey('sync_chat_thumbnails_wifi_only'),
+              key: const ValueKey('sync_media_downloads_wifi_only'),
               contentPadding: EdgeInsets.zero,
               title:
                   Text(context.t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle),
               subtitle: Text(
                   context.t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle),
-              value: _chatThumbnailsWifiOnly,
+              value: _mediaDownloadsWifiOnly,
               onChanged: _busy
                   ? null
                   : (value) async {
-                      await _setChatThumbnailsWifiOnly(value);
+                      await _setMediaDownloadsWifiOnly(value);
                     },
             ),
           ),

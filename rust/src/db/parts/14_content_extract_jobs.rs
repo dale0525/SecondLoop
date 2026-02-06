@@ -150,22 +150,29 @@ pub fn maybe_auto_enqueue_content_enrichment_for_attachment(
     now_ms: i64,
 ) -> Result<()> {
     let cfg = get_content_enrichment_config(conn)?;
-    if !cfg.url_fetch_enabled && !cfg.document_extract_enabled {
+    if !cfg.url_fetch_enabled && !cfg.document_extract_enabled && !cfg.audio_transcribe_enabled {
         return Ok(());
     }
+
+    let normalized_mime = mime_type.trim().to_ascii_lowercase();
 
     // Avoid auto-enqueueing images (LLM captioning is user-controlled).
-    if mime_type.trim().starts_with("image/") {
+    if normalized_mime.starts_with("image/") {
         return Ok(());
     }
 
-    if cfg.url_fetch_enabled && is_url_manifest_mime_type(mime_type) {
+    if cfg.audio_transcribe_enabled && normalized_mime.starts_with("audio/") {
+        enqueue_attachment_annotation(conn, attachment_sha256, "und", now_ms)?;
+        return Ok(());
+    }
+
+    if cfg.url_fetch_enabled && is_url_manifest_mime_type(&normalized_mime) {
         // Language isn't used for local/URL extraction; keep deterministic.
         enqueue_attachment_annotation(conn, attachment_sha256, "und", now_ms)?;
         return Ok(());
     }
 
-    if cfg.document_extract_enabled && is_supported_document_mime_type(mime_type) {
+    if cfg.document_extract_enabled && is_supported_document_mime_type(&normalized_mime) {
         enqueue_attachment_annotation(conn, attachment_sha256, "und", now_ms)?;
         return Ok(());
     }

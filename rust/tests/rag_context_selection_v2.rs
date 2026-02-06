@@ -1,5 +1,6 @@
 use anyhow::Result;
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::embedding::Embedder;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::{auth, db, embedding, rag};
 
@@ -26,6 +27,63 @@ impl rag::AnswerProvider for FakeProvider {
             done: true,
         })?;
         Ok(())
+    }
+}
+
+struct ConstantEmbedder {
+    dim: usize,
+}
+
+impl ConstantEmbedder {
+    fn new(dim: usize) -> Self {
+        Self { dim }
+    }
+}
+
+impl Embedder for ConstantEmbedder {
+    fn model_name(&self) -> &str {
+        "test.constant.embedder"
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        Ok(vec![vec![0.0; self.dim]; texts.len()])
+    }
+}
+
+struct CountingEmbedder {
+    dim: usize,
+    calls: std::sync::atomic::AtomicUsize,
+}
+
+impl CountingEmbedder {
+    fn new(dim: usize) -> Self {
+        Self {
+            dim,
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    fn call_count(&self) -> usize {
+        self.calls.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Embedder for CountingEmbedder {
+    fn model_name(&self) -> &str {
+        "test.counting.embedder"
+    }
+
+    fn dim(&self) -> usize {
+        self.dim
+    }
+
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(vec![vec![0.0; self.dim]; texts.len()])
     }
 }
 
@@ -191,4 +249,96 @@ fn rag_v2_respects_context_char_budget() {
     let memories = prompt_memories_section(&prompt);
     assert!(memories.contains("CTX1_UNIQUE"));
     assert!(!memories.contains("CTX2_UNIQUE"));
+}
+
+#[test]
+fn rag_v2_includes_audio_transcript_excerpt_in_prompt_memories() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let message = db::insert_message(&conn, &key, &conversation.id, "user", "voice note")
+        .expect("insert message");
+
+    let attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"m4a", "audio/mp4").expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)
+        .expect("link attachment");
+
+    let transcript = "TRANSCRIPT_KEYWORD_ALPHA";
+    let transcript_json = serde_json::json!({
+        "schema": "secondloop.audio_transcript.v1",
+        "transcript_excerpt": transcript,
+        "transcript_full": transcript,
+    });
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment.sha256,
+        "en",
+        "whisper-1",
+        &transcript_json,
+        message.created_at_ms,
+    )
+    .expect("mark transcript ok");
+
+    let provider = FakeProvider::default();
+    let embedder = ConstantEmbedder::new(32);
+    rag::ask_ai_with_provider_using_embedder(
+        &conn,
+        &key,
+        &embedder,
+        &conversation.id,
+        "voice note",
+        1,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+    let memories = prompt_memories_section(&prompt);
+    assert!(
+        memories.contains(transcript),
+        "expected transcript excerpt in memories, got: {memories}"
+    );
+}
+
+#[test]
+fn rag_embedder_query_embedding_only_runs_once() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    let provider = FakeProvider::default();
+    let embedder = CountingEmbedder::new(32);
+    rag::ask_ai_with_provider_using_embedder(
+        &conn,
+        &key,
+        &embedder,
+        &conversation.id,
+        "hello",
+        1,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    assert_eq!(embedder.call_count(), 1);
 }

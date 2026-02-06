@@ -87,6 +87,8 @@ fn read_attachment_annotation_excerpt_optional(
         .get("readable_text_excerpt")
         .and_then(|v| v.as_str())
         .or_else(|| payload.get("extracted_text_excerpt").and_then(|v| v.as_str()))
+        .or_else(|| payload.get("transcript_excerpt").and_then(|v| v.as_str()))
+        .or_else(|| payload.get("transcript_full").and_then(|v| v.as_str()))
         .unwrap_or_default()
         .trim();
 
@@ -175,6 +177,17 @@ fn build_message_embedding_plaintext(
     }
 
     Ok(out)
+}
+
+pub fn build_message_rag_context(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    content: &str,
+) -> Result<String> {
+    let enriched = build_message_embedding_plaintext(conn, key, message_id, content)?;
+    let without_prefix = enriched.strip_prefix("passage: ").unwrap_or(&enriched);
+    Ok(without_prefix.trim().to_string())
 }
 
 pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(

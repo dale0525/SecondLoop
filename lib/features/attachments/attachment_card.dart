@@ -165,21 +165,8 @@ Future<String?> _readExtractedSummaryFromPayload(
     final decoded = jsonDecode(raw);
     if (decoded is! Map) return null;
     final payload = Map<String, Object?>.from(decoded);
-
-    final excerpt = _normalizedTextSnippet(
-      payload['readable_text_excerpt']?.toString(),
-    );
-    if (excerpt.isNotEmpty) return excerpt;
-
-    final extractedExcerpt = _normalizedTextSnippet(
-      payload['extracted_text_excerpt']?.toString(),
-    );
-    if (extractedExcerpt.isNotEmpty) return extractedExcerpt;
-
-    final captionLong = _normalizedTextSnippet(
-      payload['caption_long']?.toString(),
-    );
-    if (captionLong.isNotEmpty) return captionLong;
+    final summary = extractAttachmentCardSummaryFromPayload(payload);
+    if (summary != null) return summary;
   } catch (_) {
     return null;
   }
@@ -189,6 +176,35 @@ Future<String?> _readExtractedSummaryFromPayload(
 String _normalizedTextSnippet(String? raw) {
   final text = (raw ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
   return text;
+}
+
+String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
+  final readableExcerpt = _normalizedTextSnippet(
+    payload['readable_text_excerpt']?.toString(),
+  );
+  if (readableExcerpt.isNotEmpty) return readableExcerpt;
+
+  final extractedExcerpt = _normalizedTextSnippet(
+    payload['extracted_text_excerpt']?.toString(),
+  );
+  if (extractedExcerpt.isNotEmpty) return extractedExcerpt;
+
+  final transcriptExcerpt = _normalizedTextSnippet(
+    payload['transcript_excerpt']?.toString(),
+  );
+  if (transcriptExcerpt.isNotEmpty) return transcriptExcerpt;
+
+  final captionLong = _normalizedTextSnippet(
+    payload['caption_long']?.toString(),
+  );
+  if (captionLong.isNotEmpty) return captionLong;
+
+  final transcriptFull = _normalizedTextSnippet(
+    payload['transcript_full']?.toString(),
+  );
+  if (transcriptFull.isNotEmpty) return transcriptFull;
+
+  return null;
 }
 
 String _resolveDisplayTitle(Attachment attachment, AttachmentMetadata? meta) {

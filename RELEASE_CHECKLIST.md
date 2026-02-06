@@ -78,6 +78,9 @@ Actions 将构建并发布：
 - Android：`apk` + `aab`
 - macOS：`dmg`
 - Windows：`zip`
+- Linux：`tar.gz`（包含 `bundle/`）
+
+桌面构建（macOS/Windows/Linux）会在打包前自动准备并随包携带 `ffmpeg` 二进制。
 
 ### Windows SmartScreen（已知行为）
 

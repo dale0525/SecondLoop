@@ -3,6 +3,7 @@
 //
 
 pub mod attachments;
+pub mod audio_transcribe;
 pub mod content_enrichment;
 pub mod content_extract;
 pub mod core;

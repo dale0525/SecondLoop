@@ -21,16 +21,19 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import 'audio_attachment_player.dart';
 import 'image_exif_metadata.dart';
 import 'non_image_attachment_view.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
     required this.attachment,
+    this.cloudMediaDownload,
     super.key,
   });
 
   final Attachment attachment;
+  final CloudMediaDownload? cloudMediaDownload;
 
   @override
   State<AttachmentViewerPage> createState() => _AttachmentViewerPageState();
@@ -268,7 +271,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }
   }
 
-  Future<Uint8List> _loadBytes({bool forceSyncDownload = false}) async {
+  Future<Uint8List> _loadBytes() async {
     final backend = AppBackendScope.of(context);
     if (backend is! AttachmentsBackend) {
       throw StateError('Attachments backend not available');
@@ -281,13 +284,26 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         sha256: widget.attachment.sha256,
       );
     } catch (_) {
-      if (!forceSyncDownload && _attemptedSyncDownload) rethrow;
+      if (_attemptedSyncDownload) rethrow;
       _attemptedSyncDownload = true;
+      if (!mounted) rethrow;
 
-      final didDownload = await CloudMediaDownload()
-          .downloadAttachmentBytesFromConfiguredSync(context,
-              sha256: widget.attachment.sha256);
-      if (!didDownload) rethrow;
+      final downloader = widget.cloudMediaDownload ?? CloudMediaDownload();
+      final idTokenGetter =
+          CloudAuthScope.maybeOf(context)?.controller.getIdToken;
+
+      var result =
+          await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+        backend: backend,
+        sessionKey: sessionKey,
+        idTokenGetter: idTokenGetter,
+        sha256: widget.attachment.sha256,
+        allowCellular: false,
+      );
+      if (result.needsCellularConfirmation) {
+        throw StateError('media_download_requires_wifi');
+      }
+      if (!result.didDownload) rethrow;
 
       return attachmentsBackend.readAttachmentBytes(
         sessionKey,
@@ -620,6 +636,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
+                  final err = snapshot.error;
+                  final isWifiConsentError = err is StateError &&
+                      err.message == 'media_download_requires_wifi';
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -629,16 +648,17 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                           const Icon(Icons.broken_image_outlined, size: 48),
                           const SizedBox(height: 12),
                           Text(
-                            context.t.errors
-                                .loadFailed(error: '${snapshot.error}'),
+                            isWifiConsentError
+                                ? context.t.sync.mediaPreview
+                                    .chatThumbnailsWifiOnlySubtitle
+                                : context.t.errors.loadFailed(error: '$err'),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
                             onPressed: () {
                               setState(() {
-                                _bytesFuture =
-                                    _loadBytes(forceSyncDownload: true);
+                                _bytesFuture = _loadBytes();
                               });
                             },
                             icon: const Icon(Icons.refresh),
@@ -654,6 +674,17 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 if (bytes == null) return const SizedBox.shrink();
 
                 final isImage = widget.attachment.mimeType.startsWith('image/');
+                final isAudio = widget.attachment.mimeType.startsWith('audio/');
+                if (isAudio) {
+                  return AudioAttachmentPlayerView(
+                    attachment: widget.attachment,
+                    bytes: bytes,
+                    metadataFuture: _metadataFuture,
+                    initialMetadata: _metadata,
+                    annotationPayloadFuture: _annotationPayloadFuture,
+                    initialAnnotationPayload: _annotationPayload,
+                  );
+                }
                 if (!isImage) {
                   return NonImageAttachmentView(
                     attachment: widget.attachment,
