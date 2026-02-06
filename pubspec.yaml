@@ -54,6 +54,7 @@ dependencies:
   image: ^4.7.2
   image_picker: ^1.0.8
   file_picker: ^8.0.5
+  desktop_drop: ^0.4.4
   flutter_image_compress: ^2.3.0
   connectivity_plus: ^6.1.0
 

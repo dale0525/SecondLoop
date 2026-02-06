@@ -4,11 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../features/media_enrichment/media_enrichment_runner.dart';
+import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
+import '../attachments/attachment_metadata_store.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../content_enrichment/content_enrichment_config_store.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -178,6 +181,23 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       final geoReverseEnabled = availability.geoReverseAvailable;
 
+      ContentEnrichmentConfig? contentConfig;
+      try {
+        contentConfig = await const RustContentEnrichmentConfigStore()
+            .readContentEnrichment(Uint8List.fromList(sessionKey));
+      } catch (_) {
+        contentConfig = null;
+      }
+
+      final contentBackgroundEnabled =
+          contentConfig?.mobileBackgroundEnabled ?? true;
+      final urlFetchEnabled =
+          contentBackgroundEnabled && (contentConfig?.urlFetchEnabled ?? true);
+      final documentExtractEnabled = contentBackgroundEnabled &&
+          (contentConfig?.documentExtractEnabled ?? true);
+      final contentRequiresWifi =
+          contentConfig?.mobileBackgroundRequiresWifi ?? true;
+
       MediaEnrichmentClient? annotationClient;
       var annotationModelName = gatewayConfig.modelName;
 
@@ -261,62 +281,116 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                   hasGateway &&
                   hasIdToken));
 
-      if (!geoReverseEnabled && !annotationEnabled) {
+      if (!geoReverseEnabled &&
+          !annotationEnabled &&
+          !urlFetchEnabled &&
+          !documentExtractEnabled) {
         _schedule(_kIdleInterval);
         return;
       }
 
       final syncEngine = SyncEngineScope.maybeOf(context);
 
-      final baseStore = BackendMediaEnrichmentStore(
-        backend: backend,
-        sessionKey: Uint8List.fromList(sessionKey),
-      );
-      final store = _GatedMediaEnrichmentStore(
-        baseStore: baseStore,
-        placesEnabled: geoReverseEnabled,
-        annotationEnabled: annotationEnabled,
-      );
-
-      final cloudClient = CloudGatewayMediaEnrichmentClient(
-        backend: backend,
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-        idToken: idToken?.trim() ?? '',
-        annotationModelName: annotationModelName,
-      );
-
-      final client = annotationClient == null
-          ? cloudClient
-          : _CompositeMediaEnrichmentClient(
-              placeClient: cloudClient,
-              annotationClient: annotationClient,
-            );
-
       MediaEnrichmentNetwork? lastNetwork;
-      final runner = MediaEnrichmentRunner(
-        store: store,
-        client: client,
-        settings: MediaEnrichmentRunnerSettings(
-          annotationEnabled: annotationEnabled,
-          annotationWifiOnly: true,
-        ),
-        getNetwork: () async {
-          try {
-            final network =
-                await ConnectivityMediaEnrichmentNetworkProvider().call();
-            lastNetwork = network;
-            return network;
-          } catch (_) {
-            return MediaEnrichmentNetwork.unknown;
-          }
-        },
-      );
+      MediaEnrichmentNetwork? cachedNetwork;
+      Future<MediaEnrichmentNetwork> getNetwork() async {
+        final existing = cachedNetwork;
+        if (existing != null) return existing;
+        try {
+          final network =
+              await ConnectivityMediaEnrichmentNetworkProvider().call();
+          cachedNetwork = network;
+          lastNetwork = network;
+          return network;
+        } catch (_) {
+          cachedNetwork = MediaEnrichmentNetwork.unknown;
+          lastNetwork = MediaEnrichmentNetwork.unknown;
+          return MediaEnrichmentNetwork.unknown;
+        }
+      }
 
-      final result = await runner.runOnce(
-        allowAnnotationCellular: mediaAnnotationConfig.allowCellular,
+      var processedUrl = 0;
+      if (urlFetchEnabled) {
+        final network = await getNetwork();
+        final allowedByNetwork = network != MediaEnrichmentNetwork.offline &&
+            (!contentRequiresWifi || network == MediaEnrichmentNetwork.wifi);
+        if (allowedByNetwork) {
+          final store = _BackendUrlEnrichmentStore(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+          );
+          final runner = UrlEnrichmentRunner(
+            store: store,
+            fetcher: HttpUrlEnrichmentFetcher(
+              securityPolicy: UrlEnrichmentSecurityPolicy(),
+            ),
+          );
+          final result = await runner.runOnce(limit: 5);
+          processedUrl = result.processed;
+        }
+      }
+
+      var processedDocs = 0;
+      if (documentExtractEnabled) {
+        try {
+          processedDocs = await backend.processPendingDocumentExtractions(
+            Uint8List.fromList(sessionKey),
+            limit: 5,
+          );
+        } catch (_) {
+          processedDocs = 0;
+        }
+      }
+
+      MediaEnrichmentRunResult result = const MediaEnrichmentRunResult(
+        processedPlaces: 0,
+        processedAnnotations: 0,
+        needsAnnotationCellularConfirmation: false,
       );
-      if (!mounted) return;
-      if (result.didEnrichAny) {
+      if (geoReverseEnabled || annotationEnabled) {
+        final baseStore = BackendMediaEnrichmentStore(
+          backend: backend,
+          sessionKey: Uint8List.fromList(sessionKey),
+        );
+        final store = _GatedMediaEnrichmentStore(
+          baseStore: baseStore,
+          placesEnabled: geoReverseEnabled,
+          annotationEnabled: annotationEnabled,
+        );
+
+        final cloudClient = CloudGatewayMediaEnrichmentClient(
+          backend: backend,
+          gatewayBaseUrl: gatewayConfig.baseUrl,
+          idToken: idToken?.trim() ?? '',
+          annotationModelName: annotationModelName,
+        );
+
+        final client = annotationClient == null
+            ? cloudClient
+            : _CompositeMediaEnrichmentClient(
+                placeClient: cloudClient,
+                annotationClient: annotationClient,
+              );
+
+        final runner = MediaEnrichmentRunner(
+          store: store,
+          client: client,
+          settings: MediaEnrichmentRunnerSettings(
+            annotationEnabled: annotationEnabled,
+            annotationWifiOnly: true,
+          ),
+          getNetwork: getNetwork,
+        );
+
+        result = await runner.runOnce(
+          allowAnnotationCellular: mediaAnnotationConfig.allowCellular,
+        );
+        if (!mounted) return;
+      }
+
+      final didEnrichAny =
+          processedUrl > 0 || processedDocs > 0 || result.didEnrichAny;
+      if (didEnrichAny) {
         syncEngine?.notifyExternalChange();
       }
 
@@ -345,7 +419,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
-      if (!result.didEnrichAny) {
+      if (!didEnrichAny) {
         _schedule(_kIdleInterval);
         return;
       }
@@ -540,5 +614,90 @@ final class _GatedMediaEnrichmentStore implements MediaEnrichmentStore {
         attempts: attempts,
         nextRetryAtMs: nextRetryAtMs,
         nowMs: nowMs,
+      );
+}
+
+final class _BackendUrlEnrichmentStore implements UrlEnrichmentStore {
+  _BackendUrlEnrichmentStore({
+    required this.backend,
+    required Uint8List sessionKey,
+    AttachmentMetadataStore? metadataStore,
+  })  : _sessionKey = Uint8List.fromList(sessionKey),
+        _metadataStore = metadataStore ?? const RustAttachmentMetadataStore();
+
+  final NativeAppBackend backend;
+  final Uint8List _sessionKey;
+  final AttachmentMetadataStore _metadataStore;
+
+  @override
+  Future<List<UrlEnrichmentJob>> listDueUrlAnnotations({
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    final rows = await backend.listDueUrlManifestAttachmentAnnotations(
+      _sessionKey,
+      nowMs: nowMs,
+      limit: limit,
+    );
+    return rows
+        .map(
+          (r) => UrlEnrichmentJob(
+            attachmentSha256: r.attachmentSha256,
+            lang: r.lang,
+            status: r.status,
+            attempts: r.attempts,
+            nextRetryAtMs: r.nextRetryAtMs,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<Uint8List> readAttachmentBytes({required String attachmentSha256}) =>
+      backend.readAttachmentBytes(_sessionKey, sha256: attachmentSha256);
+
+  @override
+  Future<void> markAnnotationOk({
+    required String attachmentSha256,
+    required String lang,
+    required String modelName,
+    required String payloadJson,
+    required int nowMs,
+  }) =>
+      backend.markAttachmentAnnotationOkJson(
+        _sessionKey,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        modelName: modelName,
+        payloadJson: payloadJson,
+        nowMs: nowMs,
+      );
+
+  @override
+  Future<void> markAnnotationFailed({
+    required String attachmentSha256,
+    required String error,
+    required int attempts,
+    required int nextRetryAtMs,
+    required int nowMs,
+  }) =>
+      backend.markAttachmentAnnotationFailed(
+        _sessionKey,
+        attachmentSha256: attachmentSha256,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: error,
+        nowMs: nowMs,
+      );
+
+  @override
+  Future<void> upsertAttachmentTitle({
+    required String attachmentSha256,
+    required String title,
+  }) =>
+      _metadataStore.upsert(
+        _sessionKey,
+        attachmentSha256: attachmentSha256,
+        title: title,
       );
 }

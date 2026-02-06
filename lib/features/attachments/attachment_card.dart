@@ -1,7 +1,13 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../core/attachments/attachment_metadata_store.dart';
+import '../../core/backend/native_app_dir.dart';
 import '../../core/session/session_scope.dart';
+import '../../i18n/strings.g.dart';
+import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -19,34 +25,52 @@ class AttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(tokens.radiusLg);
-    final isImage = attachment.mimeType.startsWith('image/');
-    final byteLen = attachment.byteLen.toInt();
     final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
 
-    const metadataStore = RustAttachmentMetadataStore();
-    final metadataFuture = sessionKey == null
+    final cardDataFuture = sessionKey == null
         ? null
-        : metadataStore.read(sessionKey, attachmentSha256: attachment.sha256);
+        : _loadAttachmentCardData(
+            sessionKey,
+            attachmentSha256: attachment.sha256,
+          );
 
     final child = FutureBuilder(
-      future: metadataFuture,
+      future: cardDataFuture,
       builder: (context, snapshot) {
-        final meta = snapshot.data;
-        final displayTitle = meta?.title ??
-            (meta?.filenames.isNotEmpty == true
-                ? meta!.filenames.first
-                : null) ??
-            attachment.mimeType;
-        final subtitle = '${attachment.mimeType} • ${_formatBytes(byteLen)}';
+        final cardData = snapshot.data;
+        final meta = cardData?.metadata;
+        final displayTitle = _resolveDisplayTitle(attachment, meta);
+        final subtitle = _resolveDisplaySummary(
+          meta,
+          extractedSummary: cardData?.extractedSummary,
+          displayTitle: displayTitle,
+          fallback: context.t.sync.progressDialog.preparing,
+        );
+        final icon = _resolveIcon(attachment.mimeType);
 
         return ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 120, maxWidth: 220),
+          constraints: const BoxConstraints(minWidth: 160, maxWidth: 280),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(isImage ? Icons.image_outlined : Icons.attach_file),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: colorScheme.secondaryContainer.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -57,13 +81,19 @@ class AttachmentCard extends StatelessWidget {
                         displayTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.25,
+                            ),
                       ),
                     ],
                   ),
@@ -95,12 +125,129 @@ class AttachmentCard extends StatelessWidget {
   }
 }
 
-String _formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  final kb = bytes / 1024;
-  if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-  final mb = kb / 1024;
-  if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-  final gb = mb / 1024;
-  return '${gb.toStringAsFixed(1)} GB';
+Future<_AttachmentCardData> _loadAttachmentCardData(
+  Uint8List sessionKey, {
+  required String attachmentSha256,
+}) async {
+  final metadataFuture = const RustAttachmentMetadataStore()
+      .read(sessionKey, attachmentSha256: attachmentSha256)
+      .catchError((_) => null);
+  final summaryFuture = _readExtractedSummaryFromPayload(
+    sessionKey,
+    attachmentSha256: attachmentSha256,
+  );
+
+  final values = await Future.wait<Object?>([
+    metadataFuture,
+    summaryFuture,
+  ]);
+  return _AttachmentCardData(
+    metadata: values[0] as AttachmentMetadata?,
+    extractedSummary: values[1] as String?,
+  );
+}
+
+Future<String?> _readExtractedSummaryFromPayload(
+  Uint8List sessionKey, {
+  required String attachmentSha256,
+}) async {
+  try {
+    final appDir = await getNativeAppDir();
+    final payloadJson =
+        await rust_content_extract.dbReadAttachmentAnnotationPayloadJson(
+      appDir: appDir,
+      key: sessionKey,
+      attachmentSha256: attachmentSha256,
+    );
+    final raw = payloadJson?.trim();
+    if (raw == null || raw.isEmpty) return null;
+
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final payload = Map<String, Object?>.from(decoded);
+
+    final excerpt = _normalizedTextSnippet(
+      payload['readable_text_excerpt']?.toString(),
+    );
+    if (excerpt.isNotEmpty) return excerpt;
+
+    final extractedExcerpt = _normalizedTextSnippet(
+      payload['extracted_text_excerpt']?.toString(),
+    );
+    if (extractedExcerpt.isNotEmpty) return extractedExcerpt;
+
+    final captionLong = _normalizedTextSnippet(
+      payload['caption_long']?.toString(),
+    );
+    if (captionLong.isNotEmpty) return captionLong;
+  } catch (_) {
+    return null;
+  }
+  return null;
+}
+
+String _normalizedTextSnippet(String? raw) {
+  final text = (raw ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  return text;
+}
+
+String _resolveDisplayTitle(Attachment attachment, AttachmentMetadata? meta) {
+  final filename =
+      meta?.filenames.isNotEmpty == true ? meta!.filenames.first.trim() : '';
+  if (filename.isNotEmpty) return filename;
+
+  final title = (meta?.title ?? '').trim();
+  if (title.isNotEmpty) return title;
+
+  final firstUrl =
+      meta?.sourceUrls.isNotEmpty == true ? meta!.sourceUrls.first.trim() : '';
+  if (firstUrl.isNotEmpty) return firstUrl;
+
+  return attachment.mimeType;
+}
+
+String _resolveDisplaySummary(
+  AttachmentMetadata? meta, {
+  String? extractedSummary,
+  required String displayTitle,
+  required String fallback,
+}) {
+  final normalizedSummary = _normalizedTextSnippet(extractedSummary);
+  if (normalizedSummary.isNotEmpty && normalizedSummary != displayTitle) {
+    return normalizedSummary;
+  }
+
+  final sourceUrl =
+      meta?.sourceUrls.isNotEmpty == true ? meta!.sourceUrls.first.trim() : '';
+  if (sourceUrl.isNotEmpty && sourceUrl != displayTitle) {
+    return sourceUrl;
+  }
+
+  final title = (meta?.title ?? '').trim();
+  if (title.isNotEmpty && title != displayTitle) {
+    return title;
+  }
+
+  return fallback;
+}
+
+IconData _resolveIcon(String mimeType) {
+  if (mimeType == 'application/x.secondloop.url+json') {
+    return Icons.link_rounded;
+  }
+  if (mimeType.startsWith('image/')) return Icons.image_outlined;
+  if (mimeType.startsWith('video/')) return Icons.videocam_outlined;
+  if (mimeType.startsWith('audio/')) return Icons.graphic_eq_rounded;
+  if (mimeType == 'application/pdf') return Icons.picture_as_pdf_outlined;
+  return Icons.description_outlined;
+}
+
+final class _AttachmentCardData {
+  const _AttachmentCardData({
+    required this.metadata,
+    required this.extractedSummary,
+  });
+
+  final AttachmentMetadata? metadata;
+  final String? extractedSummary;
 }

@@ -5,6 +5,8 @@ import 'package:secondloop/features/attachments/attachment_card.dart';
 import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/ui/sl_surface.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets('AttachmentCard renders basic metadata', (tester) async {
     const attachment = Attachment(
@@ -16,15 +18,18 @@ void main() {
     );
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: AttachmentCard(attachment: attachment),
+      wrapWithI18n(
+        const MaterialApp(
+          home: Scaffold(
+            body: AttachmentCard(attachment: attachment),
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('image/png'), findsOneWidget);
+    expect(find.text('12 B'), findsNothing);
     expect(find.byType(SlSurface), findsOneWidget);
   });
 }

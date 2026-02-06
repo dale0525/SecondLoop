@@ -10,6 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
+import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
@@ -473,6 +474,46 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       nowMs: PlatformInt64Util.from(nowMs),
+      limit: limit,
+    );
+  }
+
+  Future<List<AttachmentAnnotationJob>> listDueImageAttachmentAnnotations(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_content_extract.dbListDueImageAttachmentAnnotations(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+      limit: limit,
+    );
+  }
+
+  Future<List<AttachmentAnnotationJob>> listDueUrlManifestAttachmentAnnotations(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_content_extract.dbListDueUrlManifestAttachmentAnnotations(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+      limit: limit,
+    );
+  }
+
+  Future<int> processPendingDocumentExtractions(
+    Uint8List key, {
+    int limit = 5,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_content_extract.dbProcessPendingDocumentExtractions(
+      appDir: appDir,
+      key: key,
       limit: limit,
     );
   }

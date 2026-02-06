@@ -334,6 +334,16 @@ pub fn link_attachment_to_message(
         }
     });
     insert_oplog(conn, key, &op)?;
+
+    // Best-effort: auto-enqueue content enrichment for URL manifests and document-like files.
+    if let Ok(mime_type) = read_attachment_mime_type(conn, attachment_sha256) {
+        let _ = maybe_auto_enqueue_content_enrichment_for_attachment(
+            conn,
+            attachment_sha256,
+            &mime_type,
+            now,
+        );
+    }
     Ok(())
 }
 

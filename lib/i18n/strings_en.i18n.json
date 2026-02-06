@@ -611,6 +611,16 @@
       "size": "Size",
       "capturedAt": "Captured",
       "location": "Location"
+    },
+    "url": {
+      "originalUrl": "Original URL",
+      "canonicalUrl": "Canonical URL"
+    },
+    "content": {
+      "excerpt": "Excerpt",
+      "fullText": "Full text",
+      "needsOcrTitle": "OCR required",
+      "needsOcrSubtitle": "This PDF appears to contain no selectable text."
     }
   },
   "semanticSearch": {

@@ -5,6 +5,7 @@
 
 import 'api/attachments.dart';
 import 'api/content_enrichment.dart';
+import 'api/content_extract.dart';
 import 'api/core.dart';
 import 'api/media_annotation.dart';
 import 'api/simple.dart';

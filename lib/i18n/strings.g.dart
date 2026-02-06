@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1056 (528 per locale)
+/// Strings: 1068 (534 per locale)
 ///
-/// Built on 2026-02-04 at 19:17 UTC
+/// Built on 2026-02-05 at 19:29 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -414,6 +414,9 @@ class _StringsAttachmentsEn {
   // Translations
   late final _StringsAttachmentsMetadataEn metadata =
       _StringsAttachmentsMetadataEn._(_root);
+  late final _StringsAttachmentsUrlEn url = _StringsAttachmentsUrlEn._(_root);
+  late final _StringsAttachmentsContentEn content =
+      _StringsAttachmentsContentEn._(_root);
 }
 
 // Path: semanticSearch
@@ -1282,6 +1285,31 @@ class _StringsAttachmentsMetadataEn {
   String get size => 'Size';
   String get capturedAt => 'Captured';
   String get location => 'Location';
+}
+
+// Path: attachments.url
+class _StringsAttachmentsUrlEn {
+  _StringsAttachmentsUrlEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get originalUrl => 'Original URL';
+  String get canonicalUrl => 'Canonical URL';
+}
+
+// Path: attachments.content
+class _StringsAttachmentsContentEn {
+  _StringsAttachmentsContentEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get excerpt => 'Excerpt';
+  String get fullText => 'Full text';
+  String get needsOcrTitle => 'OCR required';
+  String get needsOcrSubtitle =>
+      'This PDF appears to contain no selectable text.';
 }
 
 // Path: sync.progressDialog
@@ -2860,6 +2888,12 @@ class _StringsAttachmentsZhCn extends _StringsAttachmentsEn {
   @override
   late final _StringsAttachmentsMetadataZhCn metadata =
       _StringsAttachmentsMetadataZhCn._(_root);
+  @override
+  late final _StringsAttachmentsUrlZhCn url =
+      _StringsAttachmentsUrlZhCn._(_root);
+  @override
+  late final _StringsAttachmentsContentZhCn content =
+      _StringsAttachmentsContentZhCn._(_root);
 }
 
 // Path: semanticSearch
@@ -4178,6 +4212,42 @@ class _StringsAttachmentsMetadataZhCn extends _StringsAttachmentsMetadataEn {
   String get capturedAt => '拍摄时间';
   @override
   String get location => '地点';
+}
+
+// Path: attachments.url
+class _StringsAttachmentsUrlZhCn extends _StringsAttachmentsUrlEn {
+  _StringsAttachmentsUrlZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get originalUrl => '原始链接';
+  @override
+  String get canonicalUrl => '规范链接';
+}
+
+// Path: attachments.content
+class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
+  _StringsAttachmentsContentZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get excerpt => '摘要';
+  @override
+  String get fullText => '全文';
+  @override
+  String get needsOcrTitle => '需要 OCR';
+  @override
+  String get needsOcrSubtitle => '此 PDF 可能不包含可复制文本。';
 }
 
 // Path: sync.progressDialog
@@ -6734,6 +6804,18 @@ extension on Translations {
         return 'Captured';
       case 'attachments.metadata.location':
         return 'Location';
+      case 'attachments.url.originalUrl':
+        return 'Original URL';
+      case 'attachments.url.canonicalUrl':
+        return 'Canonical URL';
+      case 'attachments.content.excerpt':
+        return 'Excerpt';
+      case 'attachments.content.fullText':
+        return 'Full text';
+      case 'attachments.content.needsOcrTitle':
+        return 'OCR required';
+      case 'attachments.content.needsOcrSubtitle':
+        return 'This PDF appears to contain no selectable text.';
       case 'semanticSearch.preparing':
         return 'Preparing semantic search…';
       case 'semanticSearch.indexingMessages':
@@ -7819,6 +7901,18 @@ extension on _StringsZhCn {
         return '拍摄时间';
       case 'attachments.metadata.location':
         return '地点';
+      case 'attachments.url.originalUrl':
+        return '原始链接';
+      case 'attachments.url.canonicalUrl':
+        return '规范链接';
+      case 'attachments.content.excerpt':
+        return '摘要';
+      case 'attachments.content.fullText':
+        return '全文';
+      case 'attachments.content.needsOcrTitle':
+        return '需要 OCR';
+      case 'attachments.content.needsOcrSubtitle':
+        return '此 PDF 可能不包含可复制文本。';
       case 'semanticSearch.preparing':
         return '正在准备语义检索…';
       case 'semanticSearch.indexingMessages':

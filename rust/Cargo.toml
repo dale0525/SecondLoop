@@ -12,6 +12,8 @@ anyhow = "1"
 argon2 = "0.5"
 base64 = "0.22"
 chacha20poly1305 = "0.10"
+flate2 = "1"
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
 rand = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 rusqlite = { version = "0.33", features = ["bundled"] }
@@ -22,13 +24,13 @@ quick-xml = "0.31"
 sqlite-vec = "0.1.7-alpha.2"
 uuid = { version = "1", features = ["v4"] }
 zerocopy = { version = "0.8", features = ["alloc"] }
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 fastembed = { version = "=5.8.0", default-features = false, features = ["hf-hub-rustls-tls", "ort-load-dynamic"] }
-flate2 = "1"
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic"] }
 tar = "0.4"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = "3"

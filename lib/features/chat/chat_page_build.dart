@@ -642,316 +642,333 @@ extension _ChatPageStateBuild on _ChatPageState {
                             ),
                           ),
                         )
-                      : SlFocusRing(
-                          key: const ValueKey('chat_input_ring'),
-                          borderRadius: BorderRadius.circular(tokens.radiusLg),
-                          child: SlSurface(
-                            color: tokens.surface2,
-                            borderColor: tokens.borderSubtle,
+                      : _buildDesktopDropTargetComposer(
+                          context,
+                          tokens: tokens,
+                          colorScheme: colorScheme,
+                          child: SlFocusRing(
+                            key: const ValueKey('chat_input_ring'),
                             borderRadius:
                                 BorderRadius.circular(tokens.radiusLg),
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Focus(
-                                    // ignore: deprecated_member_use
-                                    onKey: (node, event) {
+                            child: SlSurface(
+                              color: tokens.surface2,
+                              borderColor: tokens.borderSubtle,
+                              borderRadius:
+                                  BorderRadius.circular(tokens.radiusLg),
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Focus(
                                       // ignore: deprecated_member_use
-                                      if (event is! RawKeyDownEvent) {
-                                        return KeyEventResult.ignored;
-                                      }
-
-                                      final key = event.logicalKey;
-                                      bool isShortcutChar(String char) =>
-                                          char == 'a' ||
-                                          char == 'c' ||
-                                          char == 'v' ||
-                                          char == 'x';
-
-                                      String? keyChar;
-                                      final keyLabel = event.data.keyLabel;
-                                      if (keyLabel.length == 1) {
-                                        final lowered = keyLabel.toLowerCase();
-                                        if (isShortcutChar(lowered)) {
-                                          keyChar = lowered;
+                                      onKey: (node, event) {
+                                        // ignore: deprecated_member_use
+                                        if (event is! RawKeyDownEvent) {
+                                          return KeyEventResult.ignored;
                                         }
-                                      }
-                                      if (keyChar == null) {
-                                        final rawChar = event.character;
-                                        if (rawChar != null &&
-                                            rawChar.length == 1) {
-                                          final lowered = rawChar.toLowerCase();
+
+                                        final key = event.logicalKey;
+                                        bool isShortcutChar(String char) =>
+                                            char == 'a' ||
+                                            char == 'c' ||
+                                            char == 'v' ||
+                                            char == 'x';
+
+                                        String? keyChar;
+                                        final keyLabel = event.data.keyLabel;
+                                        if (keyLabel.length == 1) {
+                                          final lowered =
+                                              keyLabel.toLowerCase();
                                           if (isShortcutChar(lowered)) {
                                             keyChar = lowered;
                                           }
                                         }
-                                      }
-                                      final composing =
-                                          _controller.value.composing;
-                                      final isComposing = composing.isValid &&
-                                          !composing.isCollapsed;
-
-                                      final hardware =
-                                          HardwareKeyboard.instance;
-                                      final metaPressed =
-                                          hardware.isMetaPressed;
-                                      final controlPressed =
-                                          hardware.isControlPressed;
-                                      final shiftPressed =
-                                          hardware.isShiftPressed;
-                                      final hasModifier =
-                                          metaPressed || controlPressed;
-
-                                      final isPaste =
-                                          key == LogicalKeyboardKey.paste ||
-                                              ((keyChar == 'v' ||
-                                                      key ==
-                                                          LogicalKeyboardKey
-                                                              .keyV) &&
-                                                  hasModifier);
-                                      if (isPaste) {
-                                        unawaited(_pasteIntoChatInput());
-                                        return KeyEventResult.handled;
-                                      }
-
-                                      final isSelectAll = hasModifier &&
-                                          (keyChar == 'a' ||
-                                              (keyChar == null &&
-                                                  key ==
-                                                      LogicalKeyboardKey.keyA));
-                                      if (isSelectAll) {
-                                        final textLength =
-                                            _controller.value.text.length;
-                                        _controller.selection = TextSelection(
-                                          baseOffset: 0,
-                                          extentOffset: textLength,
-                                        );
-                                        return KeyEventResult.handled;
-                                      }
-
-                                      final isCopy = (key ==
-                                                  LogicalKeyboardKey.copy ||
-                                              keyChar == 'c' ||
-                                              key == LogicalKeyboardKey.keyC) &&
-                                          hasModifier;
-                                      if (isCopy) {
-                                        final value = _controller.value;
-                                        final selection = value.selection;
-                                        if (selection.isValid &&
-                                            !selection.isCollapsed) {
-                                          final start = selection.start;
-                                          final end = selection.end;
-                                          final normalizedStart =
-                                              start < end ? start : end;
-                                          final normalizedEnd =
-                                              start < end ? end : start;
-                                          final selectedText =
-                                              value.text.substring(
-                                            normalizedStart,
-                                            normalizedEnd,
-                                          );
-                                          unawaited(
-                                            Clipboard.setData(
-                                              ClipboardData(text: selectedText),
-                                            ),
-                                          );
+                                        if (keyChar == null) {
+                                          final rawChar = event.character;
+                                          if (rawChar != null &&
+                                              rawChar.length == 1) {
+                                            final lowered =
+                                                rawChar.toLowerCase();
+                                            if (isShortcutChar(lowered)) {
+                                              keyChar = lowered;
+                                            }
+                                          }
                                         }
-                                        return KeyEventResult.handled;
-                                      }
+                                        final composing =
+                                            _controller.value.composing;
+                                        final isComposing = composing.isValid &&
+                                            !composing.isCollapsed;
 
-                                      final isCut = (key ==
-                                                  LogicalKeyboardKey.cut ||
-                                              keyChar == 'x' ||
-                                              key == LogicalKeyboardKey.keyX) &&
-                                          hasModifier;
-                                      if (isCut) {
-                                        final value = _controller.value;
-                                        final selection = value.selection;
-                                        if (selection.isValid &&
-                                            !selection.isCollapsed) {
-                                          final start = selection.start;
-                                          final end = selection.end;
+                                        final hardware =
+                                            HardwareKeyboard.instance;
+                                        final metaPressed =
+                                            hardware.isMetaPressed;
+                                        final controlPressed =
+                                            hardware.isControlPressed;
+                                        final shiftPressed =
+                                            hardware.isShiftPressed;
+                                        final hasModifier =
+                                            metaPressed || controlPressed;
+
+                                        final isPaste =
+                                            key == LogicalKeyboardKey.paste ||
+                                                ((keyChar == 'v' ||
+                                                        key ==
+                                                            LogicalKeyboardKey
+                                                                .keyV) &&
+                                                    hasModifier);
+                                        if (isPaste) {
+                                          unawaited(_pasteIntoChatInput());
+                                          return KeyEventResult.handled;
+                                        }
+
+                                        final isSelectAll = hasModifier &&
+                                            (keyChar == 'a' ||
+                                                (keyChar == null &&
+                                                    key ==
+                                                        LogicalKeyboardKey
+                                                            .keyA));
+                                        if (isSelectAll) {
+                                          final textLength =
+                                              _controller.value.text.length;
+                                          _controller.selection = TextSelection(
+                                            baseOffset: 0,
+                                            extentOffset: textLength,
+                                          );
+                                          return KeyEventResult.handled;
+                                        }
+
+                                        final isCopy = (key ==
+                                                    LogicalKeyboardKey.copy ||
+                                                keyChar == 'c' ||
+                                                key ==
+                                                    LogicalKeyboardKey.keyC) &&
+                                            hasModifier;
+                                        if (isCopy) {
+                                          final value = _controller.value;
+                                          final selection = value.selection;
+                                          if (selection.isValid &&
+                                              !selection.isCollapsed) {
+                                            final start = selection.start;
+                                            final end = selection.end;
+                                            final normalizedStart =
+                                                start < end ? start : end;
+                                            final normalizedEnd =
+                                                start < end ? end : start;
+                                            final selectedText =
+                                                value.text.substring(
+                                              normalizedStart,
+                                              normalizedEnd,
+                                            );
+                                            unawaited(
+                                              Clipboard.setData(
+                                                ClipboardData(
+                                                    text: selectedText),
+                                              ),
+                                            );
+                                          }
+                                          return KeyEventResult.handled;
+                                        }
+
+                                        final isCut = (key ==
+                                                    LogicalKeyboardKey.cut ||
+                                                keyChar == 'x' ||
+                                                key ==
+                                                    LogicalKeyboardKey.keyX) &&
+                                            hasModifier;
+                                        if (isCut) {
+                                          final value = _controller.value;
+                                          final selection = value.selection;
+                                          if (selection.isValid &&
+                                              !selection.isCollapsed) {
+                                            final start = selection.start;
+                                            final end = selection.end;
+                                            final normalizedStart =
+                                                start < end ? start : end;
+                                            final normalizedEnd =
+                                                start < end ? end : start;
+                                            final selectedText =
+                                                value.text.substring(
+                                              normalizedStart,
+                                              normalizedEnd,
+                                            );
+                                            unawaited(
+                                              Clipboard.setData(
+                                                ClipboardData(
+                                                    text: selectedText),
+                                              ),
+                                            );
+                                            final updatedText =
+                                                value.text.replaceRange(
+                                              normalizedStart,
+                                              normalizedEnd,
+                                              '',
+                                            );
+                                            _controller.value = value.copyWith(
+                                              text: updatedText,
+                                              selection:
+                                                  TextSelection.collapsed(
+                                                offset: normalizedStart,
+                                              ),
+                                              composing: TextRange.empty,
+                                            );
+                                          }
+                                          return KeyEventResult.handled;
+                                        }
+
+                                        if (key != LogicalKeyboardKey.enter &&
+                                            key !=
+                                                LogicalKeyboardKey
+                                                    .numpadEnter) {
+                                          return KeyEventResult.ignored;
+                                        }
+
+                                        if (event.repeat) {
+                                          return KeyEventResult.handled;
+                                        }
+
+                                        if (isComposing) {
+                                          return KeyEventResult.ignored;
+                                        }
+
+                                        if (shiftPressed) {
+                                          final value = _controller.value;
+                                          final selection = value.selection;
+                                          final start = selection.isValid
+                                              ? selection.start
+                                              : value.text.length;
+                                          final end = selection.isValid
+                                              ? selection.end
+                                              : value.text.length;
                                           final normalizedStart =
                                               start < end ? start : end;
                                           final normalizedEnd =
                                               start < end ? end : start;
-                                          final selectedText =
-                                              value.text.substring(
-                                            normalizedStart,
-                                            normalizedEnd,
-                                          );
-                                          unawaited(
-                                            Clipboard.setData(
-                                              ClipboardData(text: selectedText),
-                                            ),
-                                          );
                                           final updatedText =
                                               value.text.replaceRange(
                                             normalizedStart,
                                             normalizedEnd,
-                                            '',
+                                            '\n',
                                           );
                                           _controller.value = value.copyWith(
                                             text: updatedText,
                                             selection: TextSelection.collapsed(
-                                              offset: normalizedStart,
+                                              offset: normalizedStart + 1,
                                             ),
                                             composing: TextRange.empty,
                                           );
+                                          return KeyEventResult.handled;
                                         }
+
+                                        unawaited(_send());
                                         return KeyEventResult.handled;
-                                      }
-
-                                      if (key != LogicalKeyboardKey.enter &&
-                                          key !=
-                                              LogicalKeyboardKey.numpadEnter) {
-                                        return KeyEventResult.ignored;
-                                      }
-
-                                      if (event.repeat) {
-                                        return KeyEventResult.handled;
-                                      }
-
-                                      if (isComposing) {
-                                        return KeyEventResult.ignored;
-                                      }
-
-                                      if (shiftPressed) {
-                                        final value = _controller.value;
-                                        final selection = value.selection;
-                                        final start = selection.isValid
-                                            ? selection.start
-                                            : value.text.length;
-                                        final end = selection.isValid
-                                            ? selection.end
-                                            : value.text.length;
-                                        final normalizedStart =
-                                            start < end ? start : end;
-                                        final normalizedEnd =
-                                            start < end ? end : start;
-                                        final updatedText =
-                                            value.text.replaceRange(
-                                          normalizedStart,
-                                          normalizedEnd,
-                                          '\n',
-                                        );
-                                        _controller.value = value.copyWith(
-                                          text: updatedText,
-                                          selection: TextSelection.collapsed(
-                                            offset: normalizedStart + 1,
-                                          ),
-                                          composing: TextRange.empty,
-                                        );
-                                        return KeyEventResult.handled;
-                                      }
-
-                                      unawaited(_send());
-                                      return KeyEventResult.handled;
-                                    },
-                                    child: TextField(
-                                      key: const ValueKey('chat_input'),
-                                      focusNode: _inputFocusNode,
-                                      controller: _controller,
-                                      decoration: InputDecoration(
-                                        hintText:
-                                            context.t.common.fields.message,
-                                        border: InputBorder.none,
-                                        filled: false,
+                                      },
+                                      child: TextField(
+                                        key: const ValueKey('chat_input'),
+                                        focusNode: _inputFocusNode,
+                                        controller: _controller,
+                                        decoration: InputDecoration(
+                                          hintText:
+                                              context.t.common.fields.message,
+                                          border: InputBorder.none,
+                                          filled: false,
+                                        ),
+                                        keyboardType: TextInputType.multiline,
+                                        textInputAction:
+                                            TextInputAction.newline,
+                                        minLines: 1,
+                                        maxLines: 6,
                                       ),
-                                      keyboardType: TextInputType.multiline,
-                                      textInputAction: TextInputAction.newline,
-                                      minLines: 1,
-                                      maxLines: 6,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                if (_supportsImageUpload) ...[
-                                  Semantics(
-                                    label: context.t.chat.attachTooltip,
-                                    button: true,
-                                    child: SlIconButton(
-                                      key: const ValueKey('chat_attach'),
-                                      icon: Icons.add_rounded,
-                                      size: 44,
-                                      iconSize: 22,
-                                      tooltip: context.t.chat.attachTooltip,
-                                      onPressed: (_sending || _asking)
-                                          ? null
-                                          : _openAttachmentSheet,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                ],
-                                ValueListenableBuilder<TextEditingValue>(
-                                  valueListenable: _controller,
-                                  builder: (context, value, child) {
-                                    final hasText =
-                                        value.text.trim().isNotEmpty;
+                                  if (_supportsImageUpload) ...[
+                                    Semantics(
+                                      label: context.t.chat.attachTooltip,
+                                      button: true,
+                                      child: SlIconButton(
+                                        key: const ValueKey('chat_attach'),
+                                        icon: Icons.add_rounded,
+                                        size: 44,
+                                        iconSize: 22,
+                                        tooltip: context.t.chat.attachTooltip,
+                                        onPressed: (_sending || _asking)
+                                            ? null
+                                            : _openAttachmentSheet,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  ValueListenableBuilder<TextEditingValue>(
+                                    valueListenable: _controller,
+                                    builder: (context, value, child) {
+                                      final hasText =
+                                          value.text.trim().isNotEmpty;
 
-                                    if (_asking) {
-                                      return SlButton(
-                                        buttonKey: const ValueKey('chat_stop'),
-                                        icon: const Icon(
-                                          Icons.stop_circle_outlined,
-                                          size: 18,
-                                        ),
-                                        variant: SlButtonVariant.outline,
-                                        onPressed:
-                                            _stopRequested ? null : _stopAsk,
-                                        child: Text(
-                                          _stopRequested
-                                              ? context
-                                                  .t.common.actions.stopping
-                                              : context.t.common.actions.stop,
-                                        ),
+                                      if (_asking) {
+                                        return SlButton(
+                                          buttonKey:
+                                              const ValueKey('chat_stop'),
+                                          icon: const Icon(
+                                            Icons.stop_circle_outlined,
+                                            size: 18,
+                                          ),
+                                          variant: SlButtonVariant.outline,
+                                          onPressed:
+                                              _stopRequested ? null : _stopAsk,
+                                          child: Text(
+                                            _stopRequested
+                                                ? context
+                                                    .t.common.actions.stopping
+                                                : context.t.common.actions.stop,
+                                          ),
+                                        );
+                                      }
+
+                                      if (!hasText) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      return Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SlButton(
+                                            buttonKey:
+                                                const ValueKey('chat_ask_ai'),
+                                            icon: const Icon(
+                                              Icons.auto_awesome_rounded,
+                                              size: 18,
+                                            ),
+                                            variant: SlButtonVariant.secondary,
+                                            onPressed: (_sending || _asking)
+                                                ? null
+                                                : _askAi,
+                                            child: Text(
+                                              context.t.common.actions.askAi,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SlButton(
+                                            buttonKey:
+                                                const ValueKey('chat_send'),
+                                            icon: const Icon(
+                                              Icons.send_rounded,
+                                              size: 18,
+                                            ),
+                                            variant: SlButtonVariant.primary,
+                                            onPressed: (_sending || _asking)
+                                                ? null
+                                                : _send,
+                                            child: Text(
+                                              context.t.common.actions.send,
+                                            ),
+                                          ),
+                                        ],
                                       );
-                                    }
-
-                                    if (!hasText) {
-                                      return const SizedBox.shrink();
-                                    }
-
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SlButton(
-                                          buttonKey:
-                                              const ValueKey('chat_ask_ai'),
-                                          icon: const Icon(
-                                            Icons.auto_awesome_rounded,
-                                            size: 18,
-                                          ),
-                                          variant: SlButtonVariant.secondary,
-                                          onPressed: (_sending || _asking)
-                                              ? null
-                                              : _askAi,
-                                          child: Text(
-                                            context.t.common.actions.askAi,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        SlButton(
-                                          buttonKey:
-                                              const ValueKey('chat_send'),
-                                          icon: const Icon(
-                                            Icons.send_rounded,
-                                            size: 18,
-                                          ),
-                                          variant: SlButtonVariant.primary,
-                                          onPressed: (_sending || _asking)
-                                              ? null
-                                              : _send,
-                                          child: Text(
-                                            context.t.common.actions.send,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ],
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

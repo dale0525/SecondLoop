@@ -342,7 +342,7 @@ final class BackendMediaEnrichmentStore implements MediaEnrichmentStore {
     required int nowMs,
     int limit = 5,
   }) async {
-    final rows = await backend.listDueAttachmentAnnotations(
+    final rows = await backend.listDueImageAttachmentAnnotations(
       _sessionKey,
       nowMs: nowMs,
       limit: limit,

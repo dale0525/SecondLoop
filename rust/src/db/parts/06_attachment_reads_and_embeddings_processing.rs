@@ -51,6 +51,52 @@ fn read_attachment_annotation_caption_long_optional(
     Ok(Some(caption_long.to_string()))
 }
 
+fn read_attachment_annotation_excerpt_optional(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<Option<String>> {
+    let row: Option<(String, Vec<u8>)> = conn
+        .query_row(
+            r#"SELECT lang, payload
+               FROM attachment_annotations
+               WHERE attachment_sha256 = ?1
+                 AND status = 'ok'
+                 AND payload IS NOT NULL"#,
+            params![attachment_sha256],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+
+    let Some((lang, payload_blob)) = row else {
+        return Ok(None);
+    };
+
+    let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
+    let json = match decrypt_bytes(key, &payload_blob, aad.as_bytes()) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let payload: serde_json::Value = match serde_json::from_slice(&json) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let excerpt = payload
+        .get("readable_text_excerpt")
+        .and_then(|v| v.as_str())
+        .or_else(|| payload.get("extracted_text_excerpt").and_then(|v| v.as_str()))
+        .unwrap_or_default()
+        .trim();
+
+    if excerpt.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(excerpt.to_string()))
+}
+
 pub fn read_attachment_annotation_caption_long(
     conn: &Connection,
     key: &[u8; 32],
@@ -109,6 +155,13 @@ fn build_message_embedding_plaintext(
                 extra.push_str("\nimage_caption: ");
                 extra.push_str(&caption_long);
             }
+        }
+
+        if let Some(excerpt) =
+            read_attachment_annotation_excerpt_optional(conn, key, &attachment_sha256)?
+        {
+            extra.push_str("\nattachment_excerpt: ");
+            extra.push_str(&excerpt);
         }
 
         if extra.len() > MAX_ATTACHMENT_ENRICHMENT_CHARS {

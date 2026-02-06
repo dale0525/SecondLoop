@@ -611,6 +611,16 @@
       "size": "大小",
       "capturedAt": "拍摄时间",
       "location": "地点"
+    },
+    "url": {
+      "originalUrl": "原始链接",
+      "canonicalUrl": "规范链接"
+    },
+    "content": {
+      "excerpt": "摘要",
+      "fullText": "全文",
+      "needsOcrTitle": "需要 OCR",
+      "needsOcrSubtitle": "此 PDF 可能不包含可复制文本。"
     }
   },
   "semanticSearch": {

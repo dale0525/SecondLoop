@@ -118,3 +118,50 @@ fn message_embedding_includes_attachment_enrichment() {
         .expect("query needs_embedding");
     assert_eq!(needs_embedding, 1);
 }
+
+#[test]
+fn message_embedding_includes_attachment_content_excerpt() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
+    let message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
+
+    let attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"doc", "text/plain").expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)
+        .expect("link attachment");
+
+    let now = message.created_at_ms;
+    let ann_json = serde_json::json!({
+        "extracted_text_excerpt": "keyword_doc_excerpt",
+        "extracted_text_full": "keyword_doc_full",
+        "needs_ocr": false,
+        "page_count": null
+    });
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment.sha256,
+        "und",
+        "document_extract.v1",
+        &ann_json,
+        now,
+    )
+    .expect("mark annotation ok");
+
+    let embedder = CaptureEmbedder::new(384);
+    let processed = db::process_pending_message_embeddings(&conn, &key, &embedder, 10)
+        .expect("process embeddings");
+    assert_eq!(processed, 1);
+
+    let seen = embedder.seen_texts();
+    assert_eq!(seen.len(), 1);
+    assert!(seen[0].contains("keyword_doc_excerpt"));
+}

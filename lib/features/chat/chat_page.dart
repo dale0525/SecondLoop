@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -78,6 +79,7 @@ part 'chat_page_methods_e.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_build_helpers.dart';
 part 'chat_page_build.dart';
+part 'chat_page_build_desktop_drop.dart';
 
 const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
 const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
@@ -363,6 +365,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _sending = false;
   bool _asking = false;
   bool _stopRequested = false;
+  bool _desktopDropActive = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;

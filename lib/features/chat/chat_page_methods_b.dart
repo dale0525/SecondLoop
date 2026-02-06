@@ -444,42 +444,53 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
-      final message = await backend.insertMessage(
-        sessionKey,
-        widget.conversation.id,
-        role: 'user',
-        content: text,
-      );
+      final sentAsUrlAttachment = await _trySendTextAsUrlAttachment(text);
+      Message? sentMessage;
+
+      if (!sentAsUrlAttachment) {
+        sentMessage = await backend.insertMessage(
+          sessionKey,
+          widget.conversation.id,
+          role: 'user',
+          content: text,
+        );
+        syncEngine?.notifyLocalMutation();
+        if (mounted) {
+          _refresh();
+          if (_usePagination) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (!_scrollController.hasClients) return;
+              unawaited(
+                _scrollController.animateTo(
+                  0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                ),
+              );
+            });
+          }
+        }
+      }
+
       if (!mounted) return;
-      syncEngine?.notifyLocalMutation();
       _controller.clear();
-      _refresh();
       if (_isDesktopPlatform) {
         _inputFocusNode.requestFocus();
       }
-      if (_usePagination) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (!_scrollController.hasClients) return;
-          unawaited(
-            _scrollController.animateTo(
-              0,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-            ),
-          );
-        });
+
+      if (sentMessage != null) {
+        _messageAutoActionsQueue ??= MessageAutoActionsQueue(
+          backend: backend,
+          sessionKey: sessionKey,
+          handler: _handleMessageAutoActions,
+        );
+        _messageAutoActionsQueue!.enqueue(
+          message: sentMessage,
+          rawText: text,
+          createdAtMs: sentMessage.createdAtMs,
+        );
       }
-      _messageAutoActionsQueue ??= MessageAutoActionsQueue(
-        backend: backend,
-        sessionKey: sessionKey,
-        handler: _handleMessageAutoActions,
-      );
-      _messageAutoActionsQueue!.enqueue(
-        message: message,
-        rawText: text,
-        createdAtMs: message.createdAtMs,
-      );
     } finally {
       if (mounted) _setState(() => _sending = false);
     }
@@ -784,23 +795,28 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     try {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.any,
+        allowMultiple: true,
         withData: true,
       );
       if (picked == null || picked.files.isEmpty) return;
-      final file = picked.files.first;
-      final rawBytes = file.bytes;
-      if (rawBytes == null) throw Exception('file_picker returned no bytes');
 
-      final inferredMimeType = _inferMimeTypeFromFilename(file.name);
-      if (inferredMimeType.startsWith('image/')) {
-        await _sendImageAttachment(rawBytes, inferredMimeType);
-      } else {
-        await _sendFileAttachment(
-          rawBytes,
-          inferredMimeType,
-          filename: file.name,
-        );
+      final payloads = <({String filename, Uint8List bytes})>[];
+      for (final file in picked.files) {
+        var bytes = file.bytes;
+        final path = file.path?.trim();
+        if ((bytes == null || bytes.isEmpty) &&
+            path != null &&
+            path.isNotEmpty) {
+          bytes = await XFile(path).readAsBytes();
+        }
+        if (bytes == null || bytes.isEmpty) continue;
+        payloads.add((filename: file.name, bytes: bytes));
       }
+      if (payloads.isEmpty) {
+        throw Exception('file_picker returned no readable file data');
+      }
+
+      await _sendDesktopFilePayloads(payloads);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

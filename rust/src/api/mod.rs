@@ -4,6 +4,7 @@
 
 pub mod attachments;
 pub mod content_enrichment;
+pub mod content_extract;
 pub mod core;
 pub mod media_annotation;
 pub mod simple;

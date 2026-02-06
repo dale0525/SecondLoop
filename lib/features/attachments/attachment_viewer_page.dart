@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/app_backend.dart';
+import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/media_enrichment/media_enrichment_availability.dart';
@@ -16,9 +18,11 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'image_exif_metadata.dart';
+import 'non_image_attachment_view.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -37,10 +41,16 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   Future<AttachmentExifMetadata?>? _exifFuture;
   Future<String?>? _placeFuture;
   Future<String?>? _annotationCaptionFuture;
+  Future<AttachmentMetadata?>? _metadataFuture;
+  Future<Map<String, Object?>?>? _annotationPayloadFuture;
   bool _loadingPlace = false;
   bool _loadingAnnotation = false;
+  bool _loadingMetadata = false;
+  bool _loadingAnnotationPayload = false;
   String? _placeDisplayName;
   String? _annotationCaption;
+  AttachmentMetadata? _metadata;
+  Map<String, Object?>? _annotationPayload;
   bool _editingAnnotationCaption = false;
   bool _savingAnnotationCaption = false;
   TextEditingController? _annotationCaptionController;
@@ -54,12 +64,22 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _bytesFuture ??= _loadBytes();
-    _exifFuture ??= _loadPersistedExif();
-    if (_placeFuture == null) {
-      _startPlaceLoad();
-    }
-    if (_annotationCaptionFuture == null) {
-      _startAnnotationCaptionLoad();
+    final isImage = widget.attachment.mimeType.startsWith('image/');
+    if (isImage) {
+      _exifFuture ??= _loadPersistedExif();
+      if (_placeFuture == null) {
+        _startPlaceLoad();
+      }
+      if (_annotationCaptionFuture == null) {
+        _startAnnotationCaptionLoad();
+      }
+    } else {
+      if (_metadataFuture == null) {
+        _startMetadataLoad();
+      }
+      if (_annotationPayloadFuture == null) {
+        _startAnnotationPayloadLoad();
+      }
     }
     _attachSyncEngine();
   }
@@ -82,20 +102,32 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     void onChange() {
       if (!mounted) return;
+      final isImage = widget.attachment.mimeType.startsWith('image/');
       var didSchedule = false;
-      if (!_loadingPlace) {
-        final existing = _placeDisplayName?.trim();
-        if (existing == null || existing.isEmpty) {
-          didSchedule = true;
-          _startPlaceLoad();
+      if (isImage) {
+        if (!_loadingPlace) {
+          final existing = _placeDisplayName?.trim();
+          if (existing == null || existing.isEmpty) {
+            didSchedule = true;
+            _startPlaceLoad();
+          }
         }
-      }
 
-      if (!_loadingAnnotation) {
-        final existing = _annotationCaption?.trim();
-        if (existing == null || existing.isEmpty) {
+        if (!_loadingAnnotation) {
+          final existing = _annotationCaption?.trim();
+          if (existing == null || existing.isEmpty) {
+            didSchedule = true;
+            _startAnnotationCaptionLoad();
+          }
+        }
+      } else {
+        if (!_loadingMetadata && _metadata == null) {
           didSchedule = true;
-          _startAnnotationCaptionLoad();
+          _startMetadataLoad();
+        }
+        if (!_loadingAnnotationPayload && _annotationPayload == null) {
+          didSchedule = true;
+          _startAnnotationPayloadLoad();
         }
       }
 
@@ -135,6 +167,26 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       return value;
     }).whenComplete(() {
       _loadingAnnotation = false;
+    });
+  }
+
+  void _startMetadataLoad() {
+    _loadingMetadata = true;
+    _metadataFuture = _loadAttachmentMetadata().then((value) {
+      _metadata = value;
+      return value;
+    }).whenComplete(() {
+      _loadingMetadata = false;
+    });
+  }
+
+  void _startAnnotationPayloadLoad() {
+    _loadingAnnotationPayload = true;
+    _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
+      _annotationPayload = value;
+      return value;
+    }).whenComplete(() {
+      _loadingAnnotationPayload = false;
     });
   }
 
@@ -284,6 +336,42 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         sessionKey,
         sha256: widget.attachment.sha256,
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<AttachmentMetadata?> _loadAttachmentMetadata() async {
+    final backend = AppBackendScope.of(context);
+    if (backend is! NativeAppBackend) return null;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    try {
+      return await const RustAttachmentMetadataStore().read(
+        sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, Object?>?> _loadAnnotationPayload() async {
+    final backend = AppBackendScope.of(context);
+    if (backend is! NativeAppBackend) return null;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final appDir = await getNativeAppDir();
+    try {
+      final json =
+          await rust_content_extract.dbReadAttachmentAnnotationPayloadJson(
+        appDir: appDir,
+        key: sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+      );
+      final raw = json?.trim();
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return Map<String, Object?>.from(decoded);
     } catch (_) {
       return null;
     }
@@ -567,7 +655,14 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
                 final isImage = widget.attachment.mimeType.startsWith('image/');
                 if (!isImage) {
-                  return const Center(child: Icon(Icons.attach_file));
+                  return NonImageAttachmentView(
+                    attachment: widget.attachment,
+                    bytes: bytes,
+                    metadataFuture: _metadataFuture,
+                    initialMetadata: _metadata,
+                    annotationPayloadFuture: _annotationPayloadFuture,
+                    initialAnnotationPayload: _annotationPayload,
+                  );
                 }
 
                 final exifFromBytes = tryReadImageExifMetadata(bytes);
