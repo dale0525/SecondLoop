@@ -199,7 +199,7 @@ fn html_to_text_v1(html: &str) -> String {
             .next()
             .unwrap_or("")
             .split(':')
-            .last()
+            .next_back()
             .unwrap_or("")
             .to_ascii_lowercase();
 

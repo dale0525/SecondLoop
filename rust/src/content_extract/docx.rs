@@ -52,10 +52,8 @@ pub fn extract_docx_text(bytes: &[u8]) -> Result<String> {
                         out.push('\n');
                     }
                     at_paragraph_start = true;
-                } else if name == b"tab" {
-                    if !out.ends_with(' ') && !out.ends_with('\n') {
-                        out.push(' ');
-                    }
+                } else if name == b"tab" && !out.ends_with(' ') && !out.ends_with('\n') {
+                    out.push(' ');
                 }
             }
             Ok(Event::Text(e)) => {

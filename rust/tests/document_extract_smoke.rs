@@ -45,7 +45,7 @@ fn build_minimal_pdf_with_stream(stream_body: &str) -> Vec<u8> {
     };
     let obj4 = format!(
         "4 0 obj\n<< /Length {} >>\nstream\n{}endstream\nendobj\n",
-        stream.as_bytes().len(),
+        stream.len(),
         stream
     )
     .into_bytes();
@@ -69,8 +69,8 @@ fn build_minimal_pdf_with_stream(stream_body: &str) -> Vec<u8> {
     let mut xref = String::new();
     xref.push_str("xref\n0 6\n");
     xref.push_str("0000000000 65535 f \n");
-    for i in 1..=5 {
-        xref.push_str(&format!("{:010} 00000 n \n", offsets[i]));
+    for offset in offsets.iter().take(6).skip(1) {
+        xref.push_str(&format!("{:010} 00000 n \n", offset));
     }
     let trailer = format!(
         "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
@@ -104,7 +104,7 @@ fn document_extract_smoke_docx() {
     .expect("extract docx");
     assert!(docx_res.full_text.contains("Hello"));
     assert!(docx_res.full_text.contains("World"));
-    assert_eq!(docx_res.needs_ocr, false);
+    assert!(!docx_res.needs_ocr);
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn document_extract_smoke_pdf_text() {
     let pdf = build_minimal_pdf_with_text("Hello PDF");
     let pdf_res = content_extract::extract_document("application/pdf", &pdf).expect("extract pdf");
     assert!(pdf_res.full_text.contains("Hello PDF"));
-    assert_eq!(pdf_res.needs_ocr, false);
+    assert!(!pdf_res.needs_ocr);
     assert_eq!(pdf_res.page_count, Some(1));
 }
 
@@ -122,7 +122,7 @@ fn document_extract_smoke_pdf_without_text_marks_needs_ocr() {
     let pdf_res = content_extract::extract_document("application/pdf", &pdf).expect("extract pdf");
     assert!(pdf_res.full_text.trim().is_empty());
     assert!(pdf_res.excerpt.trim().is_empty());
-    assert_eq!(pdf_res.needs_ocr, true);
+    assert!(pdf_res.needs_ocr);
     assert_eq!(pdf_res.page_count, Some(1));
 }
 
@@ -158,10 +158,7 @@ fn document_extract_smoke_text_like_mime_matrix() {
             !result.excerpt.trim().is_empty(),
             "excerpt should be non-empty for {mime}"
         );
-        assert_eq!(
-            result.needs_ocr, false,
-            "needs_ocr should be false for {mime}"
-        );
+        assert!(!result.needs_ocr, "needs_ocr should be false for {mime}");
         assert!(
             result.page_count.is_none(),
             "page_count should be none for {mime}"
