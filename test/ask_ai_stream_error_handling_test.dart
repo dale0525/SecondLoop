@@ -13,7 +13,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI stream error does not crash and resets state',
+  testWidgets('Ask AI stream error keeps failed question retry state',
       (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
 
@@ -49,26 +49,37 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.textContaining('HTTP 500'), findsOneWidget);
-    expect(find.textContaining('removed in 3 seconds'), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat_message_row_pending_user')),
+    expect(find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('chat_message_row_pending_assistant')),
-        findsOneWidget);
+        findsNothing);
+    expect(
+      find.byKey(const ValueKey('chat_ask_ai_retry_pending_user')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('chat_ask_ai_error_pending_user')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('chat_stop')), findsNothing);
     expect(backend.askCalls, 1);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('chat_message_row_pending_user')),
-        findsNothing);
+    expect(find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
+        findsOneWidget);
     expect(find.byKey(const ValueKey('chat_message_row_pending_assistant')),
         findsNothing);
+    expect(
+      find.byKey(const ValueKey('chat_ask_ai_retry_pending_user')),
+      findsOneWidget,
+    );
 
     final field =
         tester.widget<TextField>(find.byKey(const ValueKey('chat_input')));
-    expect(field.controller?.text, 'hello?');
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
+    expect(field.controller?.text, isEmpty);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

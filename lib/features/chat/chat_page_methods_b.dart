@@ -2,7 +2,6 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateMethodsB on _ChatPageState {
   void _showAskAiFailure(String question, {String? message}) {
-    _askFailureTimer?.cancel();
     final failureMessage = message ?? context.t.chat.askAiFailedTemporary;
 
     _setState(() {
@@ -10,33 +9,95 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       _askSub = null;
       _asking = false;
       _stopRequested = false;
-      _pendingQuestion = question;
+      _pendingQuestion = null;
       _streamingAnswer = '';
       _askFailureQuestion = question;
       _askFailureMessage = failureMessage;
+      _askFailureCreatedAtMs =
+          _askAttemptCreatedAtMs ?? DateTime.now().millisecondsSinceEpoch;
+      _askFailureAnchorMessageId = _askAttemptAnchorMessageId;
+      _askAttemptCreatedAtMs = null;
+      _askAttemptAnchorMessageId = null;
+    });
+  }
+
+  Future<void> _retryAskAiFailedQuestion() async {
+    if (_asking || _sending) return;
+    final question = _askFailureQuestion?.trim() ?? '';
+    if (question.isEmpty) return;
+
+    _setState(() {
+      _askFailureQuestion = null;
+      _askFailureMessage = null;
+      _askFailureCreatedAtMs = null;
+      _askFailureAnchorMessageId = null;
     });
 
-    _askFailureTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      final stillSameAttempt = _askFailureQuestion == question;
-      if (!stillSameAttempt) return;
+    await _askAi(questionOverride: question);
+  }
 
-      final shouldRestoreInput = _controller.text.trim().isEmpty;
-      _setState(() {
-        if (_pendingQuestion == question) {
-          _pendingQuestion = null;
-        }
-        _askFailureQuestion = null;
-        _askFailureMessage = null;
-      });
+  String? _latestCommittedMessageId() {
+    if (_latestLoadedMessages.isEmpty) return null;
 
-      if (!shouldRestoreInput) return;
-      _controller.text = question;
-      _controller.selection = TextSelection.collapsed(offset: question.length);
-      if (_isDesktopPlatform) {
-        _inputFocusNode.requestFocus();
+    Message latest = _latestLoadedMessages.first;
+    for (var i = 1; i < _latestLoadedMessages.length; i++) {
+      final candidate = _latestLoadedMessages[i];
+      if (candidate.createdAtMs >= latest.createdAtMs) {
+        latest = candidate;
       }
-    });
+    }
+    return latest.id;
+  }
+
+  bool _messagesNewestFirst(List<Message> messages) {
+    if (messages.length < 2) return _usePagination;
+    return messages.first.createdAtMs >= messages.last.createdAtMs;
+  }
+
+  List<Message> _messagesWithFailedAskQuestion(List<Message> source) {
+    final question = _askFailureQuestion;
+    final failureMessage = _askFailureMessage;
+    if (question == null || failureMessage == null) return source;
+
+    final failed = Message(
+      id: _kFailedAskMessageId,
+      conversationId: widget.conversation.id,
+      role: 'user',
+      content: question,
+      createdAtMs:
+          _askFailureCreatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      isMemory: false,
+    );
+    final list = List<Message>.from(source);
+    if (list.isEmpty) {
+      list.add(failed);
+      return list;
+    }
+
+    final anchorId = _askFailureAnchorMessageId;
+    final newestFirst = _messagesNewestFirst(list);
+    if (anchorId == null) {
+      if (newestFirst) {
+        list.add(failed);
+      } else {
+        list.insert(0, failed);
+      }
+      return list;
+    }
+
+    final anchorIndex = list.indexWhere((m) => m.id == anchorId);
+    if (anchorIndex == -1) {
+      if (newestFirst) {
+        list.insert(0, failed);
+      } else {
+        list.add(failed);
+      }
+      return list;
+    }
+
+    final insertAt = newestFirst ? anchorIndex : anchorIndex + 1;
+    list.insert(insertAt.clamp(0, list.length).toInt(), failed);
+    return list;
   }
 
   Future<List<Message>> _loadMessages() async {
@@ -51,14 +112,19 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       if (mounted) {
         _setState(() {
           _paginatedMessages = page;
+          _latestLoadedMessages = page;
           _hasMoreMessages = page.length == _kMessagePageSize;
           _loadingMoreMessages = false;
         });
+      } else {
+        _latestLoadedMessages = page;
       }
       return page;
     }
 
-    return backend.listMessages(sessionKey, widget.conversation.id);
+    final list = await backend.listMessages(sessionKey, widget.conversation.id);
+    _latestLoadedMessages = list;
+    return list;
   }
 
   Future<void> _loadOlderMessages() async {
@@ -90,6 +156,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
               .where((message) => !existingIds.contains(message.id))
               .toList(growable: false);
           _paginatedMessages = <Message>[..._paginatedMessages, ...deduped];
+          _latestLoadedMessages = _paginatedMessages;
           _hasMoreMessages = page.length == _kMessagePageSize;
         }
         _loadingMoreMessages = false;

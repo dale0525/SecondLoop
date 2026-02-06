@@ -11,6 +11,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       _asking = false;
       _pendingQuestion = null;
       _streamingAnswer = '';
+      _askAttemptCreatedAtMs = null;
+      _askAttemptAnchorMessageId = null;
     });
 
     if (sub != null) {
@@ -21,15 +23,12 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     _setState(() => _stopRequested = false);
   }
 
-  Future<void> _askAi() async {
+  Future<void> _askAi({String? questionOverride}) async {
     if (_asking) return;
     if (_sending) return;
 
-    final question = _controller.text.trim();
+    final question = (questionOverride ?? _controller.text).trim();
     if (question.isEmpty) return;
-
-    _askFailureTimer?.cancel();
-    _askFailureTimer = null;
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -68,6 +67,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final hasBrokEmbeddings = route == AskAiRouteKind.byok &&
         await _hasActiveEmbeddingProfile(backend, sessionKey);
     const topK = 10;
+    final attemptAnchorMessageId = _latestCommittedMessageId();
+    final attemptCreatedAtMs = DateTime.now().millisecondsSinceEpoch;
 
     _setState(() {
       _asking = true;
@@ -75,10 +76,16 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       _askError = null;
       _askFailureMessage = null;
       _askFailureQuestion = null;
+      _askFailureCreatedAtMs = null;
+      _askFailureAnchorMessageId = null;
+      _askAttemptCreatedAtMs = attemptCreatedAtMs;
+      _askAttemptAnchorMessageId = attemptAnchorMessageId;
       _pendingQuestion = question;
       _streamingAnswer = '';
     });
-    _controller.clear();
+    if (questionOverride == null) {
+      _controller.clear();
+    }
 
     if (!mounted) return;
     final locale = Localizations.localeOf(context);
@@ -422,6 +429,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             _asking = false;
             _pendingQuestion = null;
             _streamingAnswer = '';
+            _askAttemptCreatedAtMs = null;
+            _askAttemptAnchorMessageId = null;
           });
           _refresh();
           SyncEngineScope.maybeOf(context)?.notifyLocalMutation();

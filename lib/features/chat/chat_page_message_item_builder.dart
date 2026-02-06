@@ -19,6 +19,9 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
     required bool isDesktopPlatform,
   }) {
     return (context, index) {
+      bool isTransientPendingMessageId(String id) =>
+          id.startsWith('pending_') && id != _kFailedAskMessageId;
+
       Message? messageAt(int targetIndex) {
         if (_usePagination) {
           if (targetIndex < extraCount) {
@@ -158,7 +161,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
       final itemCount = messages.length + extraCount;
       final dayLocal = _messageLocalDay(stableMsg.createdAtMs);
       var showDateDivider = false;
-      if (dayLocal != null && !stableMsg.id.startsWith('pending_')) {
+      if (dayLocal != null && !isTransientPendingMessageId(stableMsg.id)) {
         final step = _usePagination ? 1 : -1;
         var neighborIndex = index + step;
         DateTime? neighborDay;
@@ -167,7 +170,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           if (neighborMsg == null) break;
           final neighborDayLocal = _messageLocalDay(neighborMsg.createdAtMs);
           if (neighborDayLocal != null &&
-              !neighborMsg.id.startsWith('pending_')) {
+              !isTransientPendingMessageId(neighborMsg.id)) {
             neighborDay = neighborDayLocal;
             break;
           }
@@ -190,7 +193,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
       final bubbleColor =
           isUser ? colorScheme.primaryContainer : tokens.surface2;
 
-      final isPending = stableMsg.id.startsWith('pending_');
+      final isPending = isTransientPendingMessageId(stableMsg.id);
       final isPendingAssistant = stableMsg.id == 'pending_assistant';
       final showAskAiWaitingIndicator = isPendingAssistant &&
           pendingFailureMessage == null &&
@@ -203,6 +206,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           !_stopRequested &&
           _streamingAnswer.isNotEmpty;
       final showHoverMenu = !isPending && _hoveredMessageId == stableMsg.id;
+      final canEditMessage =
+          isUser && stableMsg.id != _kFailedAskMessageId && !isPending;
 
       final supportsAttachments = attachmentsBackend != null && !isPending;
 
@@ -220,6 +225,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
       final shouldCollapse = !isPending &&
           _shouldCollapseMessage(displayText) &&
           actionSuggestions.isEmpty;
+      final isFailedPendingUser =
+          stableMsg.id == _kFailedAskMessageId && pendingFailureMessage != null;
 
       final hoverMenuSlot = _hoverActionsEnabled && !isPending
           ? Padding(
@@ -235,7 +242,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                             ? MainAxisAlignment.end
                             : MainAxisAlignment.start,
                         children: [
-                          if (isUser) ...[
+                          if (canEditMessage) ...[
                             SlIconButton(
                               key: ValueKey('message_edit_${stableMsg.id}'),
                               icon: Icons.edit_rounded,
@@ -258,6 +265,24 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                         ],
                       )
                     : const SizedBox.shrink(),
+              ),
+            )
+          : const SizedBox.shrink();
+      final retryFailedAskSlot = isFailedPendingUser
+          ? Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: IconButton(
+                key: const ValueKey('chat_ask_ai_retry_pending_user'),
+                tooltip: context.t.common.actions.retry,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                icon: Icon(
+                  Icons.error_rounded,
+                  color: colorScheme.error,
+                  size: 20,
+                ),
+                onPressed: (_asking || _sending)
+                    ? null
+                    : () => unawaited(_retryAskAiFailedQuestion()),
               ),
             )
           : const SizedBox.shrink();
@@ -838,11 +863,34 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                     isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
                 children: [
                   if (isUser) hoverMenuSlot,
+                  if (isUser) retryFailedAskSlot,
                   Flexible(child: bubble),
                   if (!isUser) hoverMenuSlot,
                 ],
               ),
             ),
+            if (isFailedPendingUser)
+              Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(44, 2, 4, 0),
+                    child: Text(
+                      pendingFailureMessage,
+                      key: const ValueKey('chat_ask_ai_error_pending_user'),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: colorScheme.error.withOpacity(
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? 0.92
+                                  : 0.9,
+                            ),
+                            height: 1.3,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
             if (supportsAttachments && annotationJobsBySha256.isNotEmpty)
               FutureBuilder<List<Attachment>>(
                 initialData: _attachmentsCacheByMessageId[stableMsg.id],

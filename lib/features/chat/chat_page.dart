@@ -94,6 +94,7 @@ const _kAskAiEmailNotVerifiedSnackKey = ValueKey(
 );
 
 const _kAskAiErrorPrefix = '\u001eSL_ERROR\u001e';
+const _kFailedAskMessageId = 'pending_failed_user';
 const _kCollapsedMessageHeight = 280.0;
 const _kLongMessageRuneThreshold = 600;
 const _kLongMessageLineThreshold = 12;
@@ -360,6 +361,7 @@ class _ChatPageState extends State<ChatPage> {
   final Map<String, _AttachmentEnrichment> _attachmentEnrichmentCacheBySha256 =
       <String, _AttachmentEnrichment>{};
   List<Message> _paginatedMessages = <Message>[];
+  List<Message> _latestLoadedMessages = const <Message>[];
   bool _loadingMoreMessages = false;
   bool _hasMoreMessages = true;
   bool _isAtBottom = true;
@@ -377,7 +379,10 @@ class _ChatPageState extends State<ChatPage> {
   String? _askError;
   String? _askFailureMessage;
   String? _askFailureQuestion;
-  Timer? _askFailureTimer;
+  int? _askAttemptCreatedAtMs;
+  int? _askFailureCreatedAtMs;
+  String? _askAttemptAnchorMessageId;
+  String? _askFailureAnchorMessageId;
   StreamSubscription<String>? _askSub;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -426,7 +431,6 @@ class _ChatPageState extends State<ChatPage> {
     }
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
-    _askFailureTimer?.cancel();
     _controller.dispose();
     _inputFocusNode.dispose();
     _scrollController.dispose();

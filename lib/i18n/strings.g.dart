@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1112 (556 per locale)
 ///
-/// Built on 2026-02-06 at 07:21 UTC
+/// Built on 2026-02-06 at 13:25 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -385,8 +385,7 @@ class _StringsChatEn {
       _StringsChatAskAiSetupEn._(_root);
   late final _StringsChatCloudGatewayEn cloudGateway =
       _StringsChatCloudGatewayEn._(_root);
-  String get askAiFailedTemporary =>
-      'Ask AI failed. Please try again. This message will be removed in 3 seconds.';
+  String get askAiFailedTemporary => 'Ask AI failed. Please try again.';
   late final _StringsChatAskAiConsentEn askAiConsent =
       _StringsChatAskAiConsentEn._(_root);
   late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
@@ -2980,7 +2979,7 @@ class _StringsChatZhCn extends _StringsChatEn {
   late final _StringsChatCloudGatewayZhCn cloudGateway =
       _StringsChatCloudGatewayZhCn._(_root);
   @override
-  String get askAiFailedTemporary => '问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。';
+  String get askAiFailedTemporary => '问 AI 失败了，请重试。';
   @override
   late final _StringsChatAskAiConsentZhCn askAiConsent =
       _StringsChatAskAiConsentZhCn._(_root);
@@ -7138,7 +7137,7 @@ extension on Translations {
       case 'chat.cloudGateway.errors.generic':
         return 'Cloud request failed.';
       case 'chat.askAiFailedTemporary':
-        return 'Ask AI failed. Please try again. This message will be removed in 3 seconds.';
+        return 'Ask AI failed. Please try again.';
       case 'chat.askAiConsent.title':
         return 'Before we use AI';
       case 'chat.askAiConsent.body':
@@ -8279,7 +8278,7 @@ extension on _StringsZhCn {
       case 'chat.cloudGateway.errors.generic':
         return 'Cloud 请求失败。';
       case 'chat.askAiFailedTemporary':
-        return '问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。';
+        return '问 AI 失败了，请重试。';
       case 'chat.askAiConsent.title':
         return '使用 AI 前确认';
       case 'chat.askAiConsent.body':

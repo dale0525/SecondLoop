@@ -105,16 +105,16 @@ extension _ChatPageStateBuild on _ChatPageState {
                       builder: (context, snapshot) {
                         final isLoading =
                             snapshot.connectionState != ConnectionState.done;
-                        final messages = _usePagination
+                        final loadedMessages = _usePagination
                             ? _paginatedMessages
                             : snapshot.data ?? const <Message>[];
+                        final messages =
+                            _messagesWithFailedAskQuestion(loadedMessages);
                         final pendingQuestion = _pendingQuestion;
                         final pendingFailureMessage = _askFailureMessage;
-                        final hasPendingAssistant =
-                            (_asking && !_stopRequested) ||
-                                pendingFailureMessage != null;
-                        final pendingAssistantText = pendingFailureMessage ??
-                            (_streamingAnswer.isEmpty ? '…' : _streamingAnswer);
+                        final hasPendingAssistant = _asking && !_stopRequested;
+                        final pendingAssistantText =
+                            _streamingAnswer.isEmpty ? '…' : _streamingAnswer;
                         final extraCount = (hasPendingAssistant ? 1 : 0) +
                             (pendingQuestion == null ? 0 : 1);
                         if (messages.isEmpty && extraCount == 0) {

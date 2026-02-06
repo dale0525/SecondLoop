@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -66,32 +65,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 20));
     await tester.pump();
 
-    final pendingBubble =
-        find.byKey(const ValueKey('message_bubble_pending_assistant'));
-    expect(pendingBubble, findsOneWidget);
-
-    final pendingMarkdown = find.descendant(
-      of: pendingBubble,
-      matching: find.byType(MarkdownBody),
+    expect(find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_message_row_pending_assistant')),
+        findsNothing);
+    expect(
+      find.byKey(const ValueKey('chat_ask_ai_retry_pending_user')),
+      findsOneWidget,
     );
-    final pendingMarkdownData =
-        tester.widget<MarkdownBody>(pendingMarkdown).data;
-    expect(pendingMarkdownData, startsWith('Ask AI failed'));
-    expect(pendingMarkdownData, isNot(contains('HTTP 502')));
-    expect(pendingMarkdownData, isNot(contains('upstream_error')));
+    final errorText = tester.widget<Text>(
+      find.byKey(const ValueKey('chat_ask_ai_error_pending_user')),
+    );
+    expect(errorText.data, startsWith('Ask AI failed'));
+    expect(errorText.data, isNot(contains('HTTP 502')));
+    expect(errorText.data, isNot(contains('upstream_error')));
     expect(backend.lastTopK, 0);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('chat_message_row_pending_user')),
-        findsNothing);
-    expect(find.byKey(const ValueKey('chat_message_row_pending_assistant')),
-        findsNothing);
+    expect(find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
+        findsOneWidget);
 
     final field =
         tester.widget<TextField>(find.byKey(const ValueKey('chat_input')));
-    expect(field.controller?.text, question);
+    expect(field.controller?.text, isEmpty);
   });
 }
 

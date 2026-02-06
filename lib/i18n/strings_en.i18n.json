@@ -620,7 +620,7 @@
         "generic": "Cloud request failed."
       }
     },
-    "askAiFailedTemporary": "Ask AI failed. Please try again. This message will be removed in 3 seconds.",
+    "askAiFailedTemporary": "Ask AI failed. Please try again.",
     "askAiConsent": {
       "title": "Before we use AI",
       "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your master password or your full history.",

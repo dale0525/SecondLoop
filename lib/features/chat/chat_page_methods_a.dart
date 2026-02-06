@@ -1,6 +1,9 @@
 part of 'chat_page.dart';
 
 extension _ChatPageStateMethodsA on _ChatPageState {
+  bool _isTransientPendingMessage(Message message) =>
+      message.id.startsWith('pending_') && message.id != _kFailedAskMessageId;
+
   Future<void> _loadEmbeddingsDataConsentPreference() async {
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) return;
@@ -67,8 +70,43 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   }
 
   Future<void> _showMessageActions(Message message) async {
-    if (message.id.startsWith('pending_')) return;
-    final canEdit = message.role == 'user';
+    if (_isTransientPendingMessage(message)) return;
+    final isFailedAskMessage = message.id == _kFailedAskMessageId;
+    if (isFailedAskMessage) {
+      final action = await showModalBottomSheet<_MessageAction>(
+        context: context,
+        builder: (context) {
+          final tokens = SlTokens.of(context);
+          final colorScheme = Theme.of(context).colorScheme;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: SlSurface(
+                key: const ValueKey('message_actions_sheet'),
+                color: tokens.surface2,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: ListTile(
+                  key: const ValueKey('message_action_delete'),
+                  leading: const Icon(Icons.delete_outline_rounded),
+                  iconColor: colorScheme.error,
+                  textColor: colorScheme.error,
+                  title: Text(context.t.common.actions.delete),
+                  onTap: () => Navigator.of(context).pop(_MessageAction.delete),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      if (!mounted) return;
+      if (action == _MessageAction.delete) {
+        await _deleteMessage(message);
+      }
+      return;
+    }
+
+    final canEdit =
+        message.role == 'user' && message.id != _kFailedAskMessageId;
     final displayText = _displayTextForMessage(message).trim();
     if (!mounted) return;
 
@@ -303,8 +341,34 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     Message message,
     Offset globalPosition,
   ) async {
-    if (message.id.startsWith('pending_')) return;
-    final canEdit = message.role == 'user';
+    if (_isTransientPendingMessage(message)) return;
+    final isFailedAskMessage = message.id == _kFailedAskMessageId;
+    if (isFailedAskMessage) {
+      final overlay =
+          Overlay.of(context).context.findRenderObject() as RenderBox;
+      final action = await showMenu<_MessageAction>(
+        context: context,
+        position: RelativeRect.fromRect(
+          Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+          Offset.zero & overlay.size,
+        ),
+        items: [
+          PopupMenuItem<_MessageAction>(
+            key: const ValueKey('message_context_delete'),
+            value: _MessageAction.delete,
+            child: Text(context.t.common.actions.delete),
+          ),
+        ],
+      );
+      if (!mounted) return;
+      if (action == _MessageAction.delete) {
+        await _deleteMessage(message);
+      }
+      return;
+    }
+
+    final canEdit =
+        message.role == 'user' && message.id != _kFailedAskMessageId;
     final linkedTodo = await _resolveLinkedTodoInfo(message);
     final canConvertToTodo =
         linkedTodo == null && _displayTextForMessage(message).trim().isNotEmpty;
@@ -644,6 +708,22 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
       final messenger = ScaffoldMessenger.of(context);
+
+      if (message.id == _kFailedAskMessageId) {
+        _setState(() {
+          _askFailureQuestion = null;
+          _askFailureMessage = null;
+          _askFailureCreatedAtMs = null;
+          _askFailureAnchorMessageId = null;
+        });
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(t.chat.messageDeleted),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
 
       var resolvedLinkedTodoInfo = linkedTodoInfo;
       if (resolvedLinkedTodoInfo == null) {

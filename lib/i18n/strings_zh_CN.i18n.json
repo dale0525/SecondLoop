@@ -620,7 +620,7 @@
         "generic": "Cloud 请求失败。"
       }
     },
-    "askAiFailedTemporary": "问 AI 失败了，请重试。本提醒将在 3 秒后自动删除。",
+    "askAiFailedTemporary": "问 AI 失败了，请重试。",
     "askAiConsent": {
       "title": "使用 AI 前确认",
       "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。",
