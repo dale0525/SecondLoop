@@ -65,6 +65,11 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 - **Community Edition（本仓库）**：BYOK（自带 Key）、本地优先、加密 Vault、以及 BYOS（自带存储）的同步后端。
 - **SecondLoop Cloud（付费托管）**：可选的托管服务（账号、AI 网关、托管 Vault、实时同步等）。
 
+## 📄 License
+
+- **SecondLoop Community Edition（本仓库）** 采用 **Apache License 2.0**，详见 `LICENSE`。
+- **SecondLoop Cloud**（托管服务与计费基础设施）不包含在本仓库中，采用独立商业条款提供。
+
 ## 🛠️ 开发者 / 贡献者
 
 新贡献者建议从 `CONTRIBUTING.md` 开始。

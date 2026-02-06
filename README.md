@@ -65,6 +65,11 @@ When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads *
 - **Community Edition (this repo)**: BYOK (bring your own key), local‑first, encrypted vault, and BYOS (bring your own storage) sync backends.
 - **SecondLoop Cloud (premium, managed)**: optional hosted services (account, AI gateway, managed vault, realtime sync).
 
+## 📄 License
+
+- The **SecondLoop Community Edition (this repository)** is licensed under the **Apache License 2.0**. See `LICENSE`.
+- **SecondLoop Cloud** (managed hosted services and billing infrastructure) is not distributed in this repository and is offered under separate commercial terms.
+
 ## 🛠️ Developer / Contributor Guide
 
 New contributors: start with `CONTRIBUTING.md`.

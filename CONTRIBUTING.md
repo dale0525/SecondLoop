@@ -1,5 +1,7 @@
 # Contributing
 
+By contributing to this repository, you agree that your contributions are licensed under the Apache License 2.0 (`LICENSE`).
+
 ## Quick start (no secrets needed)
 
 - Install Flutter via Pixi/FVM: `pixi run setup-flutter`
