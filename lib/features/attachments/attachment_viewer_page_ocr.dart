@@ -18,7 +18,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
     final now = DateTime.now().millisecondsSinceEpoch;
     final localeTag = Localizations.localeOf(context).toLanguageTag();
 
-    setState(() {
+    _updateViewerState(() {
       _runningDocumentOcr = true;
       _documentOcrStatusText = context.t.attachments.content.ocrRunning;
     });
@@ -28,7 +28,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       final manifest = parseVideoManifestPayload(manifestBytes);
       if (manifest == null) {
         if (!mounted) return;
-        setState(() {
+        _updateViewerState(() {
           _runningDocumentOcr = false;
           _documentOcrStatusText = context.t.attachments.content.ocrFailed;
         });
@@ -43,7 +43,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       );
       if (originalVideoBytes.isEmpty) {
         if (!mounted) return;
-        setState(() {
+        _updateViewerState(() {
           _runningDocumentOcr = false;
           _documentOcrStatusText = context.t.attachments.content.ocrFailed;
         });
@@ -59,7 +59,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       );
       if (ocr == null) {
         if (!mounted) return;
-        setState(() {
+        _updateViewerState(() {
           _runningDocumentOcr = false;
           _documentOcrStatusText = context.t.attachments.content.ocrFailed;
         });
@@ -102,7 +102,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           .toString()
           .trim();
       final needsOcr = updatedPayload?['needs_ocr'] == true;
-      setState(() {
+      _updateViewerState(() {
         _runningDocumentOcr = false;
         _annotationPayload = updatedPayload;
         _annotationPayloadFuture = Future.value(updatedPayload);
@@ -112,7 +112,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
+      _updateViewerState(() {
         _runningDocumentOcr = false;
         _documentOcrStatusText = context.t.attachments.content.ocrFailed;
       });
@@ -136,7 +136,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       return null;
     }
 
-    setState(() {
+    _updateViewerState(() {
       _runningDocumentOcr = true;
       _documentOcrStatusText = context.t.attachments.content.ocrRunning;
     });
@@ -158,7 +158,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
 
       if (platformOcr == null) {
         if (!mounted) return;
-        setState(() {
+        _updateViewerState(() {
           _runningDocumentOcr = false;
           _documentOcrStatusText = context.t.attachments.content.ocrFailed;
         });
@@ -209,7 +209,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           .toString()
           .trim();
       final needsOcr = updatedPayload?['needs_ocr'] == true;
-      setState(() {
+      _updateViewerState(() {
         _runningDocumentOcr = false;
         _annotationPayload = updatedPayload;
         _annotationPayloadFuture = Future.value(updatedPayload);
@@ -219,7 +219,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
+      _updateViewerState(() {
         _runningDocumentOcr = false;
         _documentOcrStatusText = context.t.attachments.content.ocrFailed;
       });

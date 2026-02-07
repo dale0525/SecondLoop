@@ -227,7 +227,6 @@ Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
     return const _AttachmentCardPayloadSummary(
         summary: null, ocrRunning: false);
   }
-  return const _AttachmentCardPayloadSummary(summary: null, ocrRunning: false);
 }
 
 String _normalizedTextSnippet(String? raw) {

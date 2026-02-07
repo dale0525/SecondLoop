@@ -228,7 +228,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 3),
           ),
         );
       }

@@ -26,7 +26,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('image/png'), findsOneWidget);
     expect(find.text('12 B'), findsNothing);

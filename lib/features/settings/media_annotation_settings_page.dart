@@ -484,9 +484,6 @@ class _MediaAnnotationSettingsPageState
     bool? audioTranscribeEnabled,
     String? audioTranscribeEngine,
     bool? ocrEnabled,
-    String? ocrLanguageHints,
-    int? ocrPdfDpi,
-    int? ocrPdfAutoMaxPages,
     bool? pdfSmartCompressEnabled,
   }) {
     return ContentEnrichmentConfig(

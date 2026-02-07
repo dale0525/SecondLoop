@@ -175,7 +175,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final pageCount = _asInt(payload['page_count']);
       if (pageCount <= 0) continue;
 
-      final runMaxPages = hardMaxPages;
+      const runMaxPages = hardMaxPages;
       final attemptMs = DateTime.now().millisecondsSinceEpoch;
       final retryCount = _asInt(payload['ocr_auto_retry_count']);
 

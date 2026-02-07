@@ -166,6 +166,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     _syncListener = null;
   }
 
+  void _updateViewerState(VoidCallback updater) {
+    if (!mounted) return;
+    setState(updater);
+  }
+
   void _startPlaceLoad() {
     _loadingPlace = true;
     _placeFuture = _loadPlaceDisplayName().then((value) {
