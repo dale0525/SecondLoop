@@ -84,7 +84,7 @@ New contributors: start with `CONTRIBUTING.md`.
 
 1) Install Pixi: https://pixi.sh
 
-2) Install the pinned Flutter SDK (via FVM):
+2) Optional prewarm: install the pinned Flutter SDK (via FVM) ahead of first run:
 
 ```bash
 pixi run setup-flutter
@@ -93,9 +93,9 @@ pixi run setup-flutter
 3) Common commands:
 
 ```bash
-pixi run analyze
-pixi run test
-pixi run rust-test
+pixi run flutter analyze
+pixi run flutter test
+pixi run cargo test
 pixi run frb-generate
 pixi run run-macos
 pixi run run-linux
@@ -107,20 +107,25 @@ pixi run run-windows
 Notes:
 - `run-macos` is only available on macOS.
 - `run-linux` is only available on Linux.
-- `run-windows` is only available on Windows (it depends on `setup-windows`) and will download `nuget.exe` into `.tool/nuget/` so Flutter won't auto-download it.
+- `run-windows` is only available on Windows and auto-runs its preflight setup (downloads `nuget.exe` into `.tool/nuget/` and static `ffmpeg.exe` into `.tools/ffmpeg/windows`).
 - Android tasks install SDK/NDK and Rust targets into `.tool/` (no system-wide Android SDK required).
-- Desktop run tasks (`run-macos` / `run-linux` / `run-windows`) prepare bundled `ffmpeg` before launching; build hosts must have `ffmpeg` installed.
+- All `run-xxx` tasks now auto-run `setup-flutter` and `init-env` on first execution, so a fresh clone can run `pixi run run-xxx` directly.
+- Desktop run tasks (`run-macos` / `run-linux` / `run-windows`) prepare bundled `ffmpeg` before launching; macOS auto-downloads a static binary into `.tools/ffmpeg/macos`, and you can always override via `.tools` or `--source-bin` (no system-wide install required).
 
-To run arbitrary Flutter commands through FVM:
+To run arbitrary Flutter/Dart/Cargo commands:
 
 ```bash
-pixi run dart pub global run fvm:main flutter <args...>
+pixi run flutter <command> [command-args]
+# examples with multiple flags:
+pixi run flutter test "--coverage --reporter expanded"
+pixi run dart format "--output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
+pixi run cargo clippy "--all-targets --all-features -- -D warnings"
 ```
 
 ### Optional Cloud config (maintainers / your own infra)
 
 - Create local config: `pixi run init-env` (generates `.env.local` from `.env.example`)
-- No config is required for `pixi run test` / `pixi run rust-test`.
+- No config is required for `pixi run flutter test` / `pixi run cargo test`.
 - Cloud login + Cloud Ask AI (optional) requires:
   - `SECONDLOOP_FIREBASE_WEB_API_KEY`
   - `SECONDLOOP_CLOUD_ENV=staging|prod`
@@ -133,6 +138,6 @@ pixi run dart pub global run fvm:main flutter <args...>
 
 ### Platform prerequisites
 
-- Android: optional Android Studio. Pixi tasks provision SDK/NDK + Rust toolchain into `.tool/` (run `pixi run doctor` to verify).
+- Android: optional Android Studio. Pixi tasks provision SDK/NDK + Rust toolchain into `.tool/` (run `pixi run flutter doctor -v` to verify).
 - Windows (dev/build): Visual Studio 2022 + Desktop development with C++ + Individual component `C++ ATL for latest v143 build tools (x86 & x64)` (for `atlstr.h`). End users do not need VS/ATL (they may need the VC++ runtime, which your installer should include).
 - macOS/iOS: Xcode + Command Line Tools

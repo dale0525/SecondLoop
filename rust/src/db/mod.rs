@@ -23,3 +23,6 @@ mod semantic_parse_jobs_tests;
 
 #[cfg(test)]
 mod cloud_media_backup_tests;
+
+#[cfg(test)]
+mod content_extract_jobs_tests;

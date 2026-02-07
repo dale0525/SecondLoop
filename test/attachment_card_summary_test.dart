@@ -35,4 +35,28 @@ void main() {
 
     expect(summary, 'readable excerpt');
   });
+
+  test('attachment card summary prefers extracted excerpt over OCR excerpt',
+      () {
+    final summary = extractAttachmentCardSummaryFromPayload(
+      const <String, Object?>{
+        'extracted_text_excerpt': 'extracted excerpt',
+        'ocr_text_excerpt': 'ocr excerpt',
+      },
+    );
+
+    expect(summary, 'extracted excerpt');
+  });
+
+  test('attachment card summary prefers OCR when extracted looks degraded', () {
+    final summary = extractAttachmentCardSummaryFromPayload(
+      const <String, Object?>{
+        'extracted_text_excerpt': 'A B C D E F G H I J K L M N O P',
+        'ocr_text_excerpt': 'Invoice total is 123.45 USD.',
+        'ocr_engine': 'apple_vision',
+      },
+    );
+
+    expect(summary, 'Invoice total is 123.45 USD.');
+  });
 }

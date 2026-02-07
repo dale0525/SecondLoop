@@ -264,19 +264,126 @@
       }
     },
     "mediaAnnotation": {
-    "title": "媒体理解",
-    "subtitle": "可选：生成图片注释和音频转写以增强检索",
-    "routingGuide": {
-      "title": "先选择 AI 来源",
-      "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
-      "byok": "免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。"
-    },
-    "imageCaption": {
-      "title": "图片注释"
-    },
-    "providerSettings": {
-      "title": "图片注释服务来源"
-    },
+      "title": "媒体理解",
+      "subtitle": "可选：OCR、图片注释、音频转写与 PDF 压缩，增强检索与存储体验",
+      "routingGuide": {
+        "title": "先选择 AI 来源",
+        "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
+        "byok": "免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。"
+      },
+      "documentOcr": {
+        "title": "文档 OCR",
+        "enabled": {
+          "title": "启用 OCR",
+          "subtitle": "当文档文本提取不足时，对扫描 PDF 和视频关键帧执行 OCR。"
+        },
+        "languageHints": {
+          "title": "语言提示",
+          "subtitle": "选择 OCR 识别优先语言。",
+          "labels": {
+            "devicePlusEn": "设备语言 + 英文",
+            "en": "英文",
+            "zhEn": "中文 + 英文",
+            "jaEn": "日文 + 英文",
+            "koEn": "韩文 + 英文",
+            "frEn": "法文 + 英文",
+            "deEn": "德文 + 英文",
+            "esEn": "西班牙文 + 英文"
+          }
+        },
+        "pdfAutoMaxPages": {
+          "title": "自动 OCR 页数上限",
+          "subtitle": "超过该页数的 PDF 会保持 needs_ocr，需在查看页手动执行。",
+          "manualOnly": "仅手动",
+          "pages": "$count 页"
+        },
+        "pdfDpi": {
+          "title": "OCR DPI",
+          "subtitle": "更高 DPI 可能提升识别率，但处理更慢。",
+          "value": "$dpi dpi"
+        },
+        "linuxModels": {
+          "title": "桌面 OCR 模型",
+          "subtitle": "为桌面端（Linux/macOS/Windows）下载本地 OCR 模型文件。",
+          "status": {
+            "notInstalled": "未安装",
+            "runtimeMissing": "模型已下载，但 OCR 运行环境未就绪",
+            "downloading": "下载中...",
+            "installed": "已安装：$count 个文件（$size）"
+          },
+          "actions": {
+            "download": "下载模型",
+            "redownload": "重新下载",
+            "delete": "删除模型"
+          },
+          "confirmDelete": {
+            "title": "删除已下载 OCR 模型？",
+            "body": "删除后，桌面端本地 OCR 可能不可用，直到再次下载。",
+            "confirm": "删除"
+          }
+        }
+      },
+      "pdfCompression": {
+        "title": "PDF 智能压缩",
+        "enabled": {
+          "title": "智能压缩 PDF",
+          "subtitle": "自动优化存储/上传的 PDF，无需额外配置。"
+        },
+        "linuxResources": {
+          "title": "Linux 压缩资源",
+          "subtitle": "为 Linux 桌面端下载增强本地 PDF 压缩资源。",
+          "status": {
+            "notInstalled": "未安装",
+            "downloading": "下载中...",
+            "installed": "已安装：$count 个文件（$size）"
+          },
+          "actions": {
+            "download": "下载资源",
+            "redownload": "重新下载",
+            "delete": "删除资源"
+          },
+          "confirmDelete": {
+            "title": "删除已下载压缩资源？",
+            "body": "删除后，Linux PDF 压缩可能退回基础模式，直到再次下载资源。",
+            "confirm": "删除"
+          }
+        }
+      },
+      "audioTranscribe": {
+        "title": "音频转写",
+        "enabled": {
+          "title": "转写音频附件",
+          "subtitle": "添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。"
+        },
+        "engine": {
+          "title": "转写引擎",
+          "subtitle": "选择音频转写使用的引擎。",
+          "notAvailable": "不可用",
+          "labels": {
+            "whisper": "Whisper",
+            "multimodalLlm": "多模态 LLM",
+            "auto": "自动"
+          },
+          "descriptions": {
+            "whisper": "语音转写稳定默认方案（推荐）。",
+            "multimodalLlm": "可用时使用多模态聊天模型。",
+            "auto": "由 SecondLoop 自动选择最可用的引擎。"
+          }
+        },
+        "configureApi": {
+          "title": "配置转写 API",
+          "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。",
+          "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。",
+          "openCloud": "打开 Cloud 账号",
+          "openApiKeys": "打开 API Key"
+        }
+      },
+      "imageCaption": {
+        "title": "图片注释"
+      },
+      "providerSettings": {
+        "title": "图片注释服务来源"
+      },
       "setupRequired": {
         "title": "图片注释需要先配置",
         "body": "要注释图片，SecondLoop 需要一个多模态模型。",
@@ -338,35 +445,6 @@
       "allowCellularConfirm": {
         "title": "允许使用蜂窝网络注释图片？",
         "body": "图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。"
-      },
-    "audioTranscribe": {
-      "title": "音频转写",
-      "enabled": {
-        "title": "转写音频附件",
-        "subtitle": "添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。"
-        },
-        "engine": {
-          "title": "转写引擎",
-          "subtitle": "选择音频转写使用的引擎。",
-          "notAvailable": "不可用",
-          "labels": {
-            "whisper": "Whisper",
-            "multimodalLlm": "多模态 LLM",
-            "auto": "自动"
-          },
-          "descriptions": {
-            "whisper": "语音转写稳定默认方案（推荐）。",
-            "multimodalLlm": "可用时使用多模态聊天模型。",
-            "auto": "由 SecondLoop 自动选择最可用的引擎。"
-          }
-        },
-      "configureApi": {
-        "title": "配置转写 API",
-        "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。",
-        "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。",
-        "openCloud": "打开 Cloud 账号",
-        "openApiKeys": "打开 API Key"
-      }
       }
     },
     "cloudEmbeddings": {
@@ -659,8 +737,17 @@
     "content": {
       "excerpt": "摘要",
       "fullText": "全文",
+      "ocrTitle": "OCR",
       "needsOcrTitle": "需要 OCR",
-      "needsOcrSubtitle": "此 PDF 可能不包含可复制文本。"
+      "needsOcrSubtitle": "此 PDF 可能不包含可复制文本。",
+      "runOcr": "运行 OCR",
+      "rerunOcr": "重新识别",
+      "ocrRunning": "OCR 处理中…",
+      "ocrReadySubtitle": "已可用文本，如有需要可重新识别。",
+      "keepForegroundHint": "OCR 进行中，请尽量保持应用在前台。",
+      "openWithSystem": "用系统应用打开",
+      "ocrFinished": "OCR 已完成，正在刷新预览…",
+      "ocrFailed": "此设备上 OCR 执行失败。"
     }
   },
   "semanticSearch": {

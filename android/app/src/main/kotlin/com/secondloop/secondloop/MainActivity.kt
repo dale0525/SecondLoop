@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : FlutterFragmentActivity() {
   private val pendingShares = mutableListOf<Map<String, String>>()
@@ -36,6 +37,10 @@ class MainActivity : FlutterFragmentActivity() {
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
+  private var ocrChannel: MethodChannel? = null
+  private val ocrAndPdfChannelHandler by lazy {
+    OcrAndPdfChannelHandler(cacheDir = cacheDir)
+  }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
   private val requestMediaLocationPermissionLauncher =
@@ -178,6 +183,13 @@ class MainActivity : FlutterFragmentActivity() {
             "transcodeToM4a" -> handleTranscodeToM4a(call, result)
             else -> result.notImplemented()
           }
+        }
+      }
+
+    ocrChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/ocr").apply {
+        setMethodCallHandler { call, result ->
+          ocrAndPdfChannelHandler.handle(call, result)
         }
       }
   }

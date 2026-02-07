@@ -6330,10 +6330,7 @@ impl SseDecode for crate::db::ContentEnrichmentConfig {
         let mut var_urlFetchEnabled = <bool>::sse_decode(deserializer);
         let mut var_documentExtractEnabled = <bool>::sse_decode(deserializer);
         let mut var_documentKeepOriginalMaxBytes = <i64>::sse_decode(deserializer);
-        let mut var_pdfCompressEnabled = <bool>::sse_decode(deserializer);
-        let mut var_pdfCompressProfile = <String>::sse_decode(deserializer);
-        let mut var_pdfCompressMinBytes = <i64>::sse_decode(deserializer);
-        let mut var_pdfCompressTargetMaxBytes = <i64>::sse_decode(deserializer);
+        let mut var_pdfSmartCompressEnabled = <bool>::sse_decode(deserializer);
         let mut var_audioTranscribeEnabled = <bool>::sse_decode(deserializer);
         let mut var_audioTranscribeEngine = <String>::sse_decode(deserializer);
         let mut var_videoExtractEnabled = <bool>::sse_decode(deserializer);
@@ -6353,10 +6350,7 @@ impl SseDecode for crate::db::ContentEnrichmentConfig {
             url_fetch_enabled: var_urlFetchEnabled,
             document_extract_enabled: var_documentExtractEnabled,
             document_keep_original_max_bytes: var_documentKeepOriginalMaxBytes,
-            pdf_compress_enabled: var_pdfCompressEnabled,
-            pdf_compress_profile: var_pdfCompressProfile,
-            pdf_compress_min_bytes: var_pdfCompressMinBytes,
-            pdf_compress_target_max_bytes: var_pdfCompressTargetMaxBytes,
+            pdf_smart_compress_enabled: var_pdfSmartCompressEnabled,
             audio_transcribe_enabled: var_audioTranscribeEnabled,
             audio_transcribe_engine: var_audioTranscribeEngine,
             video_extract_enabled: var_videoExtractEnabled,
@@ -7956,12 +7950,7 @@ impl flutter_rust_bridge::IntoDart for crate::db::ContentEnrichmentConfig {
             self.document_keep_original_max_bytes
                 .into_into_dart()
                 .into_dart(),
-            self.pdf_compress_enabled.into_into_dart().into_dart(),
-            self.pdf_compress_profile.into_into_dart().into_dart(),
-            self.pdf_compress_min_bytes.into_into_dart().into_dart(),
-            self.pdf_compress_target_max_bytes
-                .into_into_dart()
-                .into_dart(),
+            self.pdf_smart_compress_enabled.into_into_dart().into_dart(),
             self.audio_transcribe_enabled.into_into_dart().into_dart(),
             self.audio_transcribe_engine.into_into_dart().into_dart(),
             self.video_extract_enabled.into_into_dart().into_dart(),
@@ -8444,10 +8433,7 @@ impl SseEncode for crate::db::ContentEnrichmentConfig {
         <bool>::sse_encode(self.url_fetch_enabled, serializer);
         <bool>::sse_encode(self.document_extract_enabled, serializer);
         <i64>::sse_encode(self.document_keep_original_max_bytes, serializer);
-        <bool>::sse_encode(self.pdf_compress_enabled, serializer);
-        <String>::sse_encode(self.pdf_compress_profile, serializer);
-        <i64>::sse_encode(self.pdf_compress_min_bytes, serializer);
-        <i64>::sse_encode(self.pdf_compress_target_max_bytes, serializer);
+        <bool>::sse_encode(self.pdf_smart_compress_enabled, serializer);
         <bool>::sse_encode(self.audio_transcribe_enabled, serializer);
         <String>::sse_encode(self.audio_transcribe_engine, serializer);
         <bool>::sse_encode(self.video_extract_enabled, serializer);

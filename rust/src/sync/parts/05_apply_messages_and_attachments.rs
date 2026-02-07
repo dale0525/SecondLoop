@@ -469,6 +469,18 @@ ON CONFLICT(sha256) DO UPDATE SET
         params![sha256],
     )?;
     let _ = conn.execute(
+        r#"DELETE FROM attachment_metadata WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_places WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
         r#"DELETE FROM cloud_media_backup WHERE attachment_sha256 = ?1"#,
         params![sha256],
     )?;

@@ -83,20 +83,117 @@ fn read_attachment_annotation_excerpt_optional(
         Err(_) => return Ok(None),
     };
 
-    let excerpt = payload
-        .get("readable_text_excerpt")
-        .and_then(|v| v.as_str())
-        .or_else(|| payload.get("extracted_text_excerpt").and_then(|v| v.as_str()))
-        .or_else(|| payload.get("transcript_excerpt").and_then(|v| v.as_str()))
-        .or_else(|| payload.get("transcript_full").and_then(|v| v.as_str()))
-        .unwrap_or_default()
-        .trim();
+    let extracted_excerpt = payload_str_trimmed(&payload, "extracted_text_excerpt");
+    let extracted_full = payload_str_trimmed(&payload, "extracted_text_full");
+    let extracted = extracted_excerpt.or(extracted_full);
+
+    let readable_excerpt = payload_str_trimmed(&payload, "readable_text_excerpt");
+    let readable_full = payload_str_trimmed(&payload, "readable_text_full");
+    let readable = readable_excerpt.or(readable_full);
+
+    let ocr_excerpt = payload_str_trimmed(&payload, "ocr_text_excerpt");
+    let ocr_full = payload_str_trimmed(&payload, "ocr_text_full");
+    let ocr = ocr_excerpt.or(ocr_full);
+
+    let prefer_ocr = match (ocr, extracted) {
+        (Some(_), Some(extracted_text)) => looks_degraded_ascii_text(extracted_text),
+        _ => false,
+    };
+
+    let document_excerpt = if prefer_ocr {
+        ocr.or(readable).or(extracted)
+    } else {
+        extracted.or(readable).or(ocr)
+    };
+
+    let excerpt = document_excerpt
+        .or_else(|| payload_str_trimmed(&payload, "transcript_excerpt"))
+        .or_else(|| payload_str_trimmed(&payload, "transcript_full"))
+        .unwrap_or_default();
 
     if excerpt.is_empty() {
         return Ok(None);
     }
 
     Ok(Some(excerpt.to_string()))
+}
+
+fn payload_str_trimmed<'a>(payload: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+    payload
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+}
+
+fn looks_degraded_ascii_text(raw: &str) -> bool {
+    let normalized = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.chars().count() < 24 {
+        return false;
+    }
+
+    let mut meaningful_count = 0usize;
+    let mut non_space_count = 0usize;
+    let mut noisy_count = 0usize;
+    for ch in normalized.chars() {
+        if ch.is_whitespace() {
+            continue;
+        }
+        non_space_count += 1;
+        if is_meaningful_char(ch) {
+            meaningful_count += 1;
+        } else {
+            noisy_count += 1;
+        }
+    }
+    if meaningful_count == 0 {
+        return false;
+    }
+
+    let mut considered = 0usize;
+    let mut single_char_tokens = 0usize;
+    let mut total_len = 0usize;
+    for token in normalized.split_whitespace() {
+        let meaningful_len = token.chars().filter(|c| is_meaningful_char(*c)).count();
+        if meaningful_len == 0 {
+            continue;
+        }
+        considered += 1;
+        total_len += meaningful_len;
+        if meaningful_len == 1 {
+            single_char_tokens += 1;
+        }
+    }
+
+    if considered < 8 {
+        return false;
+    }
+
+    let single_ratio = single_char_tokens as f64 / considered as f64;
+    let avg_len = total_len as f64 / considered as f64;
+    let noisy_ratio = if non_space_count == 0 {
+        0.0
+    } else {
+        noisy_count as f64 / non_space_count as f64
+    };
+
+    if single_ratio >= 0.5 {
+        return true;
+    }
+    if avg_len < 1.8 {
+        return true;
+    }
+    if meaningful_count >= 20 && noisy_ratio > 0.45 {
+        return true;
+    }
+    if considered >= 12 && single_ratio >= 0.4 && noisy_ratio > 0.2 {
+        return true;
+    }
+    false
+}
+
+fn is_meaningful_char(ch: char) -> bool {
+    ch.is_alphanumeric() || matches!(ch, '_')
 }
 
 pub fn read_attachment_annotation_caption_long(

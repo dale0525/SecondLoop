@@ -37,15 +37,9 @@ fn content_enrichment_kv_defaults_exist_and_match_plan() {
             "content_enrichment.document_keep_original_max_bytes",
             mb50.to_string(),
         ),
-        ("content_enrichment.pdf_compress_enabled", "1".to_string()),
         (
-            "content_enrichment.pdf_compress_profile",
-            "balanced".to_string(),
-        ),
-        ("content_enrichment.pdf_compress_min_bytes", "0".to_string()),
-        (
-            "content_enrichment.pdf_compress_target_max_bytes",
-            mb50.to_string(),
+            "content_enrichment.pdf_smart_compress_enabled",
+            "1".to_string(),
         ),
         (
             "content_enrichment.audio_transcribe_enabled",
@@ -55,7 +49,7 @@ fn content_enrichment_kv_defaults_exist_and_match_plan() {
             "content_enrichment.audio_transcribe_engine",
             "whisper".to_string(),
         ),
-        ("content_enrichment.video_extract_enabled", "0".to_string()),
+        ("content_enrichment.video_extract_enabled", "1".to_string()),
         ("content_enrichment.video_proxy_enabled", "1".to_string()),
         (
             "content_enrichment.video_proxy_max_duration_ms",
@@ -75,11 +69,8 @@ fn content_enrichment_kv_defaults_exist_and_match_plan() {
             "device_plus_en".to_string(),
         ),
         ("content_enrichment.ocr_pdf_dpi", "180".to_string()),
-        (
-            "content_enrichment.ocr_pdf_auto_max_pages",
-            "30".to_string(),
-        ),
-        ("content_enrichment.ocr_pdf_max_pages", "200".to_string()),
+        ("content_enrichment.ocr_pdf_auto_max_pages", "0".to_string()),
+        ("content_enrichment.ocr_pdf_max_pages", "0".to_string()),
         (
             "content_enrichment.mobile_background_enabled",
             "1".to_string(),
@@ -113,4 +104,44 @@ fn content_enrichment_kv_defaults_exist_and_match_plan() {
             "unexpected kv default for {key}"
         );
     }
+}
+
+#[test]
+fn content_enrichment_ocr_pdf_settings_are_fixed_on_write() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+
+    let _key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let mut cfg = db::get_content_enrichment_config(&conn).expect("read config");
+    cfg.ocr_pdf_dpi = 300;
+    cfg.ocr_pdf_auto_max_pages = 50;
+    cfg.ocr_pdf_max_pages = 1000;
+    cfg.ocr_language_hints = "zh_en".to_string();
+    db::set_content_enrichment_config(&conn, &cfg).expect("write config");
+
+    let next = db::get_content_enrichment_config(&conn).expect("read updated config");
+    assert_eq!(next.ocr_pdf_dpi, 180);
+    assert_eq!(next.ocr_pdf_auto_max_pages, 0);
+    assert_eq!(next.ocr_pdf_max_pages, 0);
+    assert_eq!(next.ocr_language_hints.as_str(), "device_plus_en");
+    assert_eq!(
+        kv_value(&conn, "content_enrichment.ocr_pdf_dpi").as_deref(),
+        Some("180")
+    );
+    assert_eq!(
+        kv_value(&conn, "content_enrichment.ocr_pdf_auto_max_pages").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        kv_value(&conn, "content_enrichment.ocr_pdf_max_pages").as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        kv_value(&conn, "content_enrichment.ocr_language_hints").as_deref(),
+        Some("device_plus_en")
+    );
 }

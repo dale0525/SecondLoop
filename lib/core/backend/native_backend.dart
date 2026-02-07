@@ -418,6 +418,18 @@ class NativeAppBackend
     );
   }
 
+  Future<String?> readAttachmentAnnotationPayloadJson(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_content_extract.dbReadAttachmentAnnotationPayloadJson(
+      appDir: appDir,
+      key: key,
+      attachmentSha256: sha256,
+    );
+  }
+
   Future<void> enqueueAttachmentPlace(
     Uint8List key, {
     required String attachmentSha256,

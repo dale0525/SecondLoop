@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1112 (556 per locale)
+/// Strings: 1222 (611 per locale)
 ///
-/// Built on 2026-02-06 at 13:25 UTC
+/// Built on 2026-02-07 at 14:11 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -955,9 +955,15 @@ class _StringsSettingsMediaAnnotationEn {
   // Translations
   String get title => 'Media understanding';
   String get subtitle =>
-      'Optional: image captions and audio transcripts for better search';
+      'Optional: OCR, image captions, audio transcripts, and PDF compression for better search/storage';
   late final _StringsSettingsMediaAnnotationRoutingGuideEn routingGuide =
       _StringsSettingsMediaAnnotationRoutingGuideEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrEn documentOcr =
+      _StringsSettingsMediaAnnotationDocumentOcrEn._(_root);
+  late final _StringsSettingsMediaAnnotationPdfCompressionEn pdfCompression =
+      _StringsSettingsMediaAnnotationPdfCompressionEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEn audioTranscribe =
+      _StringsSettingsMediaAnnotationAudioTranscribeEn._(_root);
   late final _StringsSettingsMediaAnnotationImageCaptionEn imageCaption =
       _StringsSettingsMediaAnnotationImageCaptionEn._(_root);
   late final _StringsSettingsMediaAnnotationProviderSettingsEn
@@ -985,8 +991,6 @@ class _StringsSettingsMediaAnnotationEn {
   late final _StringsSettingsMediaAnnotationAllowCellularConfirmEn
       allowCellularConfirm =
       _StringsSettingsMediaAnnotationAllowCellularConfirmEn._(_root);
-  late final _StringsSettingsMediaAnnotationAudioTranscribeEn audioTranscribe =
-      _StringsSettingsMediaAnnotationAudioTranscribeEn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -1316,9 +1320,20 @@ class _StringsAttachmentsContentEn {
   // Translations
   String get excerpt => 'Excerpt';
   String get fullText => 'Full text';
+  String get ocrTitle => 'OCR';
   String get needsOcrTitle => 'OCR required';
   String get needsOcrSubtitle =>
       'This PDF appears to contain no selectable text.';
+  String get runOcr => 'Run OCR';
+  String get rerunOcr => 'Re-run OCR';
+  String get ocrRunning => 'OCR in progress…';
+  String get ocrReadySubtitle =>
+      'Text is available. You can re-run OCR if needed.';
+  String get keepForegroundHint =>
+      'Keep the app in foreground while OCR is running.';
+  String get openWithSystem => 'Open with system app';
+  String get ocrFinished => 'OCR finished. Refreshing preview…';
+  String get ocrFailed => 'OCR failed on this device.';
 }
 
 // Path: sync.progressDialog
@@ -1790,6 +1805,61 @@ class _StringsSettingsMediaAnnotationRoutingGuideEn {
       'Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active.';
 }
 
+// Path: settings.mediaAnnotation.documentOcr
+class _StringsSettingsMediaAnnotationDocumentOcrEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Document OCR';
+  late final _StringsSettingsMediaAnnotationDocumentOcrEnabledEn enabled =
+      _StringsSettingsMediaAnnotationDocumentOcrEnabledEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsEn
+      languageHints =
+      _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesEn
+      pdfAutoMaxPages =
+      _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrPdfDpiEn pdfDpi =
+      _StringsSettingsMediaAnnotationDocumentOcrPdfDpiEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn
+      linuxModels =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.pdfCompression
+class _StringsSettingsMediaAnnotationPdfCompressionEn {
+  _StringsSettingsMediaAnnotationPdfCompressionEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'PDF smart compression';
+  late final _StringsSettingsMediaAnnotationPdfCompressionEnabledEn enabled =
+      _StringsSettingsMediaAnnotationPdfCompressionEnabledEn._(_root);
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn
+      linuxResources =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe
+class _StringsSettingsMediaAnnotationAudioTranscribeEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Audio transcription';
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn enabled =
+      _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineEn engine =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn
+      configureApi =
+      _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn._(_root);
+}
+
 // Path: settings.mediaAnnotation.imageCaption
 class _StringsSettingsMediaAnnotationImageCaptionEn {
   _StringsSettingsMediaAnnotationImageCaptionEn._(this._root);
@@ -1936,23 +2006,6 @@ class _StringsSettingsMediaAnnotationAllowCellularConfirmEn {
   String get title => 'Use cellular data for image annotations?';
   String get body =>
       'Annotating images may upload photos to your chosen AI provider and can use significant data.';
-}
-
-// Path: settings.mediaAnnotation.audioTranscribe
-class _StringsSettingsMediaAnnotationAudioTranscribeEn {
-  _StringsSettingsMediaAnnotationAudioTranscribeEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'Audio transcription';
-  late final _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn enabled =
-      _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn._(_root);
-  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineEn engine =
-      _StringsSettingsMediaAnnotationAudioTranscribeEngineEn._(_root);
-  late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn
-      configureApi =
-      _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn._(_root);
 }
 
 // Path: settings.cloudEmbeddings.dialogActions
@@ -2395,48 +2448,115 @@ class _StringsEmbeddingProfilesReindexDialogActionsEn {
   String get continueLabel => 'Continue';
 }
 
-// Path: settings.mediaAnnotation.setupRequired.reasons
-class _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
-  _StringsSettingsMediaAnnotationSetupRequiredReasonsEn._(this._root);
+// Path: settings.mediaAnnotation.documentOcr.enabled
+class _StringsSettingsMediaAnnotationDocumentOcrEnabledEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEnabledEn._(this._root);
 
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get cloudUnavailable =>
-      'SecondLoop Cloud is not available in this build.';
-  String get cloudRequiresPro => 'SecondLoop Cloud requires Pro.';
-  String get cloudSignIn =>
-      'Sign in to SecondLoop Cloud to use the Cloud model.';
-  String get byokOpenAiCompatible =>
-      'Add an OpenAI‑compatible API key profile.';
-  String get followAskAi =>
-      'Ask AI must use an OpenAI‑compatible profile, or choose a different multimodal model in Advanced.';
+  String get title => 'Enable OCR';
+  String get subtitle =>
+      'Run OCR for scanned PDFs and video keyframes when text extraction is insufficient.';
 }
 
-// Path: settings.mediaAnnotation.providerMode.labels
-class _StringsSettingsMediaAnnotationProviderModeLabelsEn {
-  _StringsSettingsMediaAnnotationProviderModeLabelsEn._(this._root);
+// Path: settings.mediaAnnotation.documentOcr.languageHints
+class _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsEn._(this._root);
 
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get followAskAi => 'Follow Ask AI';
-  String get cloudGateway => 'SecondLoop Cloud';
-  String get byokProfile => 'API key (profile)';
+  String get title => 'Language hints';
+  String get subtitle => 'Choose preferred languages for OCR recognition.';
+  late final _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsEn
+      labels =
+      _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsEn._(_root);
 }
 
-// Path: settings.mediaAnnotation.providerMode.descriptions
-class _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
-  _StringsSettingsMediaAnnotationProviderModeDescriptionsEn._(this._root);
+// Path: settings.mediaAnnotation.documentOcr.pdfAutoMaxPages
+class _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesEn {
+  _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesEn._(this._root);
 
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get followAskAi => 'Use the same setup as Ask AI. (Recommended)';
-  String get cloudGateway =>
-      'Use SecondLoop Cloud when available. (Requires Pro)';
-  String get byokProfile =>
-      'Use a specific API key profile (OpenAI‑compatible).';
+  String get title => 'Auto OCR page limit';
+  String get subtitle =>
+      'PDFs above this limit stay in needs-OCR state until you run OCR manually in viewer.';
+  String get manualOnly => 'Manual only';
+  String pages({required Object count}) => '${count} pages';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.pdfDpi
+class _StringsSettingsMediaAnnotationDocumentOcrPdfDpiEn {
+  _StringsSettingsMediaAnnotationDocumentOcrPdfDpiEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'OCR DPI';
+  String get subtitle =>
+      'Higher DPI may improve accuracy but costs more processing time.';
+  String value({required Object dpi}) => '${dpi} dpi';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Desktop OCR models';
+  String get subtitle =>
+      'Download local OCR model files for desktop (Linux/macOS/Windows).';
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusEn
+      status =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsEn
+      actions =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn
+      confirmDelete =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.enabled
+class _StringsSettingsMediaAnnotationPdfCompressionEnabledEn {
+  _StringsSettingsMediaAnnotationPdfCompressionEnabledEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Smart-compress PDFs';
+  String get subtitle =>
+      'Automatically optimize stored/uploaded PDFs without extra setup.';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Linux compression resources';
+  String get subtitle =>
+      'Download enhanced local PDF compression resources for Linux desktop.';
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn
+      status =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn._(
+          _root);
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn
+      actions =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn._(
+          _root);
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn
+      confirmDelete =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn
+          ._(_root);
 }
 
 // Path: settings.mediaAnnotation.audioTranscribe.enabled
@@ -2484,6 +2604,50 @@ class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn {
       'Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.';
   String get openCloud => 'Open Cloud account';
   String get openApiKeys => 'Open API keys';
+}
+
+// Path: settings.mediaAnnotation.setupRequired.reasons
+class _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
+  _StringsSettingsMediaAnnotationSetupRequiredReasonsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get cloudUnavailable =>
+      'SecondLoop Cloud is not available in this build.';
+  String get cloudRequiresPro => 'SecondLoop Cloud requires Pro.';
+  String get cloudSignIn =>
+      'Sign in to SecondLoop Cloud to use the Cloud model.';
+  String get byokOpenAiCompatible =>
+      'Add an OpenAI‑compatible API key profile.';
+  String get followAskAi =>
+      'Ask AI must use an OpenAI‑compatible profile, or choose a different multimodal model in Advanced.';
+}
+
+// Path: settings.mediaAnnotation.providerMode.labels
+class _StringsSettingsMediaAnnotationProviderModeLabelsEn {
+  _StringsSettingsMediaAnnotationProviderModeLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get followAskAi => 'Follow Ask AI';
+  String get cloudGateway => 'SecondLoop Cloud';
+  String get byokProfile => 'API key (profile)';
+}
+
+// Path: settings.mediaAnnotation.providerMode.descriptions
+class _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
+  _StringsSettingsMediaAnnotationProviderModeDescriptionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get followAskAi => 'Use the same setup as Ask AI. (Recommended)';
+  String get cloudGateway =>
+      'Use SecondLoop Cloud when available. (Requires Pro)';
+  String get byokProfile =>
+      'Use a specific API key profile (OpenAI‑compatible).';
 }
 
 // Path: settings.cloudAccount.benefits.items
@@ -2557,6 +2721,105 @@ class _StringsSettingsSubscriptionBenefitsItemsEn {
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.documentOcr.languageHints.labels
+class _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get devicePlusEn => 'Device language + English';
+  String get en => 'English';
+  String get zhEn => 'Chinese + English';
+  String get jaEn => 'Japanese + English';
+  String get koEn => 'Korean + English';
+  String get frEn => 'French + English';
+  String get deEn => 'German + English';
+  String get esEn => 'Spanish + English';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels.status
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get notInstalled => 'Not installed';
+  String get runtimeMissing =>
+      'Models are downloaded, but OCR runtime is not ready';
+  String get downloading => 'Downloading...';
+  String installed({required Object count, required Object size}) =>
+      'Installed: ${count} files (${size})';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels.actions
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get download => 'Download models';
+  String get redownload => 'Re-download';
+  String get delete => 'Delete models';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete downloaded OCR models?';
+  String get body =>
+      'Local desktop OCR may stop working until models are downloaded again.';
+  String get confirm => 'Delete';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources.status
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get notInstalled => 'Not installed';
+  String get downloading => 'Downloading...';
+  String installed({required Object count, required Object size}) =>
+      'Installed: ${count} files (${size})';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources.actions
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get download => 'Download resources';
+  String get redownload => 'Re-download';
+  String get delete => 'Delete resources';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete downloaded compression resources?';
+  String get body =>
+      'After deletion, Linux PDF compression may run in basic mode until resources are downloaded again.';
+  String get confirm => 'Delete';
 }
 
 // Path: settings.mediaAnnotation.audioTranscribe.engine.labels
@@ -3855,10 +4118,20 @@ class _StringsSettingsMediaAnnotationZhCn
   @override
   String get title => '媒体理解';
   @override
-  String get subtitle => '可选：生成图片注释和音频转写以增强检索';
+  String get subtitle => '可选：OCR、图片注释、音频转写与 PDF 压缩，增强检索与存储体验';
   @override
   late final _StringsSettingsMediaAnnotationRoutingGuideZhCn routingGuide =
       _StringsSettingsMediaAnnotationRoutingGuideZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrZhCn documentOcr =
+      _StringsSettingsMediaAnnotationDocumentOcrZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationPdfCompressionZhCn pdfCompression =
+      _StringsSettingsMediaAnnotationPdfCompressionZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeZhCn
+      audioTranscribe =
+      _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_root);
   @override
   late final _StringsSettingsMediaAnnotationImageCaptionZhCn imageCaption =
       _StringsSettingsMediaAnnotationImageCaptionZhCn._(_root);
@@ -3899,10 +4172,6 @@ class _StringsSettingsMediaAnnotationZhCn
   late final _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
       allowCellularConfirm =
       _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn._(_root);
-  @override
-  late final _StringsSettingsMediaAnnotationAudioTranscribeZhCn
-      audioTranscribe =
-      _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -4392,9 +4661,27 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
   @override
   String get fullText => '全文';
   @override
+  String get ocrTitle => 'OCR';
+  @override
   String get needsOcrTitle => '需要 OCR';
   @override
   String get needsOcrSubtitle => '此 PDF 可能不包含可复制文本。';
+  @override
+  String get runOcr => '运行 OCR';
+  @override
+  String get rerunOcr => '重新识别';
+  @override
+  String get ocrRunning => 'OCR 处理中…';
+  @override
+  String get ocrReadySubtitle => '已可用文本，如有需要可重新识别。';
+  @override
+  String get keepForegroundHint => 'OCR 进行中，请尽量保持应用在前台。';
+  @override
+  String get openWithSystem => '用系统应用打开';
+  @override
+  String get ocrFinished => 'OCR 已完成，正在刷新预览…';
+  @override
+  String get ocrFailed => '此设备上 OCR 执行失败。';
 }
 
 // Path: sync.progressDialog
@@ -5105,6 +5392,86 @@ class _StringsSettingsMediaAnnotationRoutingGuideZhCn
   String get byok => '免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。';
 }
 
+// Path: settings.mediaAnnotation.documentOcr
+class _StringsSettingsMediaAnnotationDocumentOcrZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrEn {
+  _StringsSettingsMediaAnnotationDocumentOcrZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '文档 OCR';
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrEnabledZhCn enabled =
+      _StringsSettingsMediaAnnotationDocumentOcrEnabledZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsZhCn
+      languageHints =
+      _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesZhCn
+      pdfAutoMaxPages =
+      _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrPdfDpiZhCn pdfDpi =
+      _StringsSettingsMediaAnnotationDocumentOcrPdfDpiZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn
+      linuxModels =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.pdfCompression
+class _StringsSettingsMediaAnnotationPdfCompressionZhCn
+    extends _StringsSettingsMediaAnnotationPdfCompressionEn {
+  _StringsSettingsMediaAnnotationPdfCompressionZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'PDF 智能压缩';
+  @override
+  late final _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn enabled =
+      _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn
+      linuxResources =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe
+class _StringsSettingsMediaAnnotationAudioTranscribeZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '音频转写';
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn enabled =
+      _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn engine =
+      _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
+      configureApi =
+      _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn._(_root);
+}
+
 // Path: settings.mediaAnnotation.imageCaption
 class _StringsSettingsMediaAnnotationImageCaptionZhCn
     extends _StringsSettingsMediaAnnotationImageCaptionEn {
@@ -5324,31 +5691,6 @@ class _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
   String get title => '允许使用蜂窝网络注释图片？';
   @override
   String get body => '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
-}
-
-// Path: settings.mediaAnnotation.audioTranscribe
-class _StringsSettingsMediaAnnotationAudioTranscribeZhCn
-    extends _StringsSettingsMediaAnnotationAudioTranscribeEn {
-  _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => '音频转写';
-  @override
-  late final _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn enabled =
-      _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn._(_root);
-  @override
-  late final _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn engine =
-      _StringsSettingsMediaAnnotationAudioTranscribeEngineZhCn._(_root);
-  @override
-  late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
-      configureApi =
-      _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn._(_root);
 }
 
 // Path: settings.cloudEmbeddings.dialogActions
@@ -6006,10 +6348,10 @@ class _StringsEmbeddingProfilesReindexDialogActionsZhCn
   String get continueLabel => '继续';
 }
 
-// Path: settings.mediaAnnotation.setupRequired.reasons
-class _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn
-    extends _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
-  _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn._(_StringsZhCn root)
+// Path: settings.mediaAnnotation.documentOcr.enabled
+class _StringsSettingsMediaAnnotationDocumentOcrEnabledZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrEnabledEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEnabledZhCn._(_StringsZhCn root)
       : this._root = root,
         super._(root);
 
@@ -6018,41 +6360,15 @@ class _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn
 
   // Translations
   @override
-  String get cloudUnavailable => '当前构建未启用 SecondLoop Cloud。';
+  String get title => '启用 OCR';
   @override
-  String get cloudRequiresPro => 'SecondLoop Cloud 需要 Pro。';
-  @override
-  String get cloudSignIn => '请先登录 SecondLoop Cloud。';
-  @override
-  String get byokOpenAiCompatible => '请先添加 OpenAI-compatible 的 API Key 配置档。';
-  @override
-  String get followAskAi =>
-      '“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
+  String get subtitle => '当文档文本提取不足时，对扫描 PDF 和视频关键帧执行 OCR。';
 }
 
-// Path: settings.mediaAnnotation.providerMode.labels
-class _StringsSettingsMediaAnnotationProviderModeLabelsZhCn
-    extends _StringsSettingsMediaAnnotationProviderModeLabelsEn {
-  _StringsSettingsMediaAnnotationProviderModeLabelsZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get followAskAi => '跟随问 AI';
-  @override
-  String get cloudGateway => 'SecondLoop Cloud';
-  @override
-  String get byokProfile => 'API Key（配置档）';
-}
-
-// Path: settings.mediaAnnotation.providerMode.descriptions
-class _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
-    extends _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
-  _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn._(
+// Path: settings.mediaAnnotation.documentOcr.languageHints
+class _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsZhCn._(
       _StringsZhCn root)
       : this._root = root,
         super._(root);
@@ -6062,11 +6378,135 @@ class _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
 
   // Translations
   @override
-  String get followAskAi => '使用与“问 AI”相同的设置（推荐）。';
+  String get title => '语言提示';
   @override
-  String get cloudGateway => '优先使用 SecondLoop Cloud（需要 Pro，且需可用）。';
+  String get subtitle => '选择 OCR 识别优先语言。';
   @override
-  String get byokProfile => '使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。';
+  late final _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsZhCn
+      labels =
+      _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsZhCn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.documentOcr.pdfAutoMaxPages
+class _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesEn {
+  _StringsSettingsMediaAnnotationDocumentOcrPdfAutoMaxPagesZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '自动 OCR 页数上限';
+  @override
+  String get subtitle => '超过该页数的 PDF 会保持 needs_ocr，需在查看页手动执行。';
+  @override
+  String get manualOnly => '仅手动';
+  @override
+  String pages({required Object count}) => '${count} 页';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.pdfDpi
+class _StringsSettingsMediaAnnotationDocumentOcrPdfDpiZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrPdfDpiEn {
+  _StringsSettingsMediaAnnotationDocumentOcrPdfDpiZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'OCR DPI';
+  @override
+  String get subtitle => '更高 DPI 可能提升识别率，但处理更慢。';
+  @override
+  String value({required Object dpi}) => '${dpi} dpi';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '桌面 OCR 模型';
+  @override
+  String get subtitle => '为桌面端（Linux/macOS/Windows）下载本地 OCR 模型文件。';
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusZhCn
+      status =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsZhCn
+      actions =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteZhCn
+      confirmDelete =
+      _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteZhCn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.enabled
+class _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn
+    extends _StringsSettingsMediaAnnotationPdfCompressionEnabledEn {
+  _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '智能压缩 PDF';
+  @override
+  String get subtitle => '自动优化存储/上传的 PDF，无需额外配置。';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn
+    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'Linux 压缩资源';
+  @override
+  String get subtitle => '为 Linux 桌面端下载增强本地 PDF 压缩资源。';
+  @override
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn
+      status =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn._(
+          _root);
+  @override
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn
+      actions =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn._(
+          _root);
+  @override
+  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn
+      confirmDelete =
+      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn
+          ._(_root);
 }
 
 // Path: settings.mediaAnnotation.audioTranscribe.enabled
@@ -6138,6 +6578,69 @@ class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
   String get openCloud => '打开 Cloud 账号';
   @override
   String get openApiKeys => '打开 API Key';
+}
+
+// Path: settings.mediaAnnotation.setupRequired.reasons
+class _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn
+    extends _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
+  _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get cloudUnavailable => '当前构建未启用 SecondLoop Cloud。';
+  @override
+  String get cloudRequiresPro => 'SecondLoop Cloud 需要 Pro。';
+  @override
+  String get cloudSignIn => '请先登录 SecondLoop Cloud。';
+  @override
+  String get byokOpenAiCompatible => '请先添加 OpenAI-compatible 的 API Key 配置档。';
+  @override
+  String get followAskAi =>
+      '“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
+}
+
+// Path: settings.mediaAnnotation.providerMode.labels
+class _StringsSettingsMediaAnnotationProviderModeLabelsZhCn
+    extends _StringsSettingsMediaAnnotationProviderModeLabelsEn {
+  _StringsSettingsMediaAnnotationProviderModeLabelsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get followAskAi => '跟随问 AI';
+  @override
+  String get cloudGateway => 'SecondLoop Cloud';
+  @override
+  String get byokProfile => 'API Key（配置档）';
+}
+
+// Path: settings.mediaAnnotation.providerMode.descriptions
+class _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
+    extends _StringsSettingsMediaAnnotationProviderModeDescriptionsEn {
+  _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get followAskAi => '使用与“问 AI”相同的设置（推荐）。';
+  @override
+  String get cloudGateway => '优先使用 SecondLoop Cloud（需要 Pro，且需可用）。';
+  @override
+  String get byokProfile => '使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。';
 }
 
 // Path: settings.cloudAccount.benefits.items
@@ -6248,6 +6751,160 @@ class _StringsSettingsSubscriptionBenefitsItemsZhCn
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.documentOcr.languageHints.labels
+class _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLanguageHintsLabelsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get devicePlusEn => '设备语言 + 英文';
+  @override
+  String get en => '英文';
+  @override
+  String get zhEn => '中文 + 英文';
+  @override
+  String get jaEn => '日文 + 英文';
+  @override
+  String get koEn => '韩文 + 英文';
+  @override
+  String get frEn => '法文 + 英文';
+  @override
+  String get deEn => '德文 + 英文';
+  @override
+  String get esEn => '西班牙文 + 英文';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels.status
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsStatusZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get notInstalled => '未安装';
+  @override
+  String get runtimeMissing => '模型已下载，但 OCR 运行环境未就绪';
+  @override
+  String get downloading => '下载中...';
+  @override
+  String installed({required Object count, required Object size}) =>
+      '已安装：${count} 个文件（${size}）';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels.actions
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsActionsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get download => '下载模型';
+  @override
+  String get redownload => '重新下载';
+  @override
+  String get delete => '删除模型';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete
+class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn {
+  _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除已下载 OCR 模型？';
+  @override
+  String get body => '删除后，桌面端本地 OCR 可能不可用，直到再次下载。';
+  @override
+  String get confirm => '删除';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources.status
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn
+    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get notInstalled => '未安装';
+  @override
+  String get downloading => '下载中...';
+  @override
+  String installed({required Object count, required Object size}) =>
+      '已安装：${count} 个文件（${size}）';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources.actions
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn
+    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get download => '下载资源';
+  @override
+  String get redownload => '重新下载';
+  @override
+  String get delete => '删除资源';
+}
+
+// Path: settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete
+class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn
+    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn {
+  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除已下载压缩资源？';
+  @override
+  String get body => '删除后，Linux PDF 压缩可能退回基础模式，直到再次下载资源。';
+  @override
+  String get confirm => '删除';
 }
 
 // Path: settings.mediaAnnotation.audioTranscribe.engine.labels
@@ -6720,13 +7377,141 @@ extension on Translations {
       case 'settings.mediaAnnotation.title':
         return 'Media understanding';
       case 'settings.mediaAnnotation.subtitle':
-        return 'Optional: image captions and audio transcripts for better search';
+        return 'Optional: OCR, image captions, audio transcripts, and PDF compression for better search/storage';
       case 'settings.mediaAnnotation.routingGuide.title':
         return 'Choose your AI source';
       case 'settings.mediaAnnotation.routingGuide.pro':
         return 'Pro + signed in: uses SecondLoop Cloud by default.';
       case 'settings.mediaAnnotation.routingGuide.byok':
         return 'Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active.';
+      case 'settings.mediaAnnotation.documentOcr.title':
+        return 'Document OCR';
+      case 'settings.mediaAnnotation.documentOcr.enabled.title':
+        return 'Enable OCR';
+      case 'settings.mediaAnnotation.documentOcr.enabled.subtitle':
+        return 'Run OCR for scanned PDFs and video keyframes when text extraction is insufficient.';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.title':
+        return 'Language hints';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.subtitle':
+        return 'Choose preferred languages for OCR recognition.';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.devicePlusEn':
+        return 'Device language + English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.en':
+        return 'English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.zhEn':
+        return 'Chinese + English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.jaEn':
+        return 'Japanese + English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.koEn':
+        return 'Korean + English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.frEn':
+        return 'French + English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.deEn':
+        return 'German + English';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.esEn':
+        return 'Spanish + English';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.title':
+        return 'Auto OCR page limit';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.subtitle':
+        return 'PDFs above this limit stay in needs-OCR state until you run OCR manually in viewer.';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.manualOnly':
+        return 'Manual only';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.pages':
+        return ({required Object count}) => '${count} pages';
+      case 'settings.mediaAnnotation.documentOcr.pdfDpi.title':
+        return 'OCR DPI';
+      case 'settings.mediaAnnotation.documentOcr.pdfDpi.subtitle':
+        return 'Higher DPI may improve accuracy but costs more processing time.';
+      case 'settings.mediaAnnotation.documentOcr.pdfDpi.value':
+        return ({required Object dpi}) => '${dpi} dpi';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.title':
+        return 'Desktop OCR models';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.subtitle':
+        return 'Download local OCR model files for desktop (Linux/macOS/Windows).';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.notInstalled':
+        return 'Not installed';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.runtimeMissing':
+        return 'Models are downloaded, but OCR runtime is not ready';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.downloading':
+        return 'Downloading...';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.installed':
+        return ({required Object count, required Object size}) =>
+            'Installed: ${count} files (${size})';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.actions.download':
+        return 'Download models';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.actions.redownload':
+        return 'Re-download';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.actions.delete':
+        return 'Delete models';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.title':
+        return 'Delete downloaded OCR models?';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.body':
+        return 'Local desktop OCR may stop working until models are downloaded again.';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.confirm':
+        return 'Delete';
+      case 'settings.mediaAnnotation.pdfCompression.title':
+        return 'PDF smart compression';
+      case 'settings.mediaAnnotation.pdfCompression.enabled.title':
+        return 'Smart-compress PDFs';
+      case 'settings.mediaAnnotation.pdfCompression.enabled.subtitle':
+        return 'Automatically optimize stored/uploaded PDFs without extra setup.';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.title':
+        return 'Linux compression resources';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.subtitle':
+        return 'Download enhanced local PDF compression resources for Linux desktop.';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.notInstalled':
+        return 'Not installed';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.downloading':
+        return 'Downloading...';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.installed':
+        return ({required Object count, required Object size}) =>
+            'Installed: ${count} files (${size})';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.download':
+        return 'Download resources';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.redownload':
+        return 'Re-download';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.delete':
+        return 'Delete resources';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.title':
+        return 'Delete downloaded compression resources?';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.body':
+        return 'After deletion, Linux PDF compression may run in basic mode until resources are downloaded again.';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.confirm':
+        return 'Delete';
+      case 'settings.mediaAnnotation.audioTranscribe.title':
+        return 'Audio transcription';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
+        return 'Transcribe audio attachments';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.subtitle':
+        return 'When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.title':
+        return 'Transcription engine';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.subtitle':
+        return 'Choose which engine to use for audio transcription.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.notAvailable':
+        return 'Unavailable';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.whisper':
+        return 'Whisper';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.multimodalLlm':
+        return 'Multimodal LLM';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.auto':
+        return 'Auto';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.whisper':
+        return 'Stable default for speech transcription. (Recommended)';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.multimodalLlm':
+        return 'Use a multimodal chat model when available.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
+        return 'Let SecondLoop choose the best available engine.';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
+        return 'Configure transcription API';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
+        return 'Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
+        return 'Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
+        return 'Open Cloud account';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
+        return 'Open API keys';
       case 'settings.mediaAnnotation.imageCaption.title':
         return 'Image captions';
       case 'settings.mediaAnnotation.providerSettings.title':
@@ -6803,40 +7588,6 @@ extension on Translations {
         return 'Use cellular data for image annotations?';
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return 'Annotating images may upload photos to your chosen AI provider and can use significant data.';
-      case 'settings.mediaAnnotation.audioTranscribe.title':
-        return 'Audio transcription';
-      case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
-        return 'Transcribe audio attachments';
-      case 'settings.mediaAnnotation.audioTranscribe.enabled.subtitle':
-        return 'When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search.';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.title':
-        return 'Transcription engine';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.subtitle':
-        return 'Choose which engine to use for audio transcription.';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.notAvailable':
-        return 'Unavailable';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.whisper':
-        return 'Whisper';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.multimodalLlm':
-        return 'Multimodal LLM';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.auto':
-        return 'Auto';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.whisper':
-        return 'Stable default for speech transcription. (Recommended)';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.multimodalLlm':
-        return 'Use a multimodal chat model when available.';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
-        return 'Let SecondLoop choose the best available engine.';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
-        return 'Configure transcription API';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
-        return 'Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
-        return 'Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
-        return 'Open Cloud account';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
-        return 'Open API keys';
       case 'settings.cloudEmbeddings.title':
         return 'Smarter search';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -7188,10 +7939,28 @@ extension on Translations {
         return 'Excerpt';
       case 'attachments.content.fullText':
         return 'Full text';
+      case 'attachments.content.ocrTitle':
+        return 'OCR';
       case 'attachments.content.needsOcrTitle':
         return 'OCR required';
       case 'attachments.content.needsOcrSubtitle':
         return 'This PDF appears to contain no selectable text.';
+      case 'attachments.content.runOcr':
+        return 'Run OCR';
+      case 'attachments.content.rerunOcr':
+        return 'Re-run OCR';
+      case 'attachments.content.ocrRunning':
+        return 'OCR in progress…';
+      case 'attachments.content.ocrReadySubtitle':
+        return 'Text is available. You can re-run OCR if needed.';
+      case 'attachments.content.keepForegroundHint':
+        return 'Keep the app in foreground while OCR is running.';
+      case 'attachments.content.openWithSystem':
+        return 'Open with system app';
+      case 'attachments.content.ocrFinished':
+        return 'OCR finished. Refreshing preview…';
+      case 'attachments.content.ocrFailed':
+        return 'OCR failed on this device.';
       case 'semanticSearch.preparing':
         return 'Preparing semantic search…';
       case 'semanticSearch.indexingMessages':
@@ -7865,13 +8634,141 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.title':
         return '媒体理解';
       case 'settings.mediaAnnotation.subtitle':
-        return '可选：生成图片注释和音频转写以增强检索';
+        return '可选：OCR、图片注释、音频转写与 PDF 压缩，增强检索与存储体验';
       case 'settings.mediaAnnotation.routingGuide.title':
         return '先选择 AI 来源';
       case 'settings.mediaAnnotation.routingGuide.pro':
         return 'Pro 且已登录：默认使用 SecondLoop Cloud。';
       case 'settings.mediaAnnotation.routingGuide.byok':
         return '免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。';
+      case 'settings.mediaAnnotation.documentOcr.title':
+        return '文档 OCR';
+      case 'settings.mediaAnnotation.documentOcr.enabled.title':
+        return '启用 OCR';
+      case 'settings.mediaAnnotation.documentOcr.enabled.subtitle':
+        return '当文档文本提取不足时，对扫描 PDF 和视频关键帧执行 OCR。';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.title':
+        return '语言提示';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.subtitle':
+        return '选择 OCR 识别优先语言。';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.devicePlusEn':
+        return '设备语言 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.en':
+        return '英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.zhEn':
+        return '中文 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.jaEn':
+        return '日文 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.koEn':
+        return '韩文 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.frEn':
+        return '法文 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.deEn':
+        return '德文 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.languageHints.labels.esEn':
+        return '西班牙文 + 英文';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.title':
+        return '自动 OCR 页数上限';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.subtitle':
+        return '超过该页数的 PDF 会保持 needs_ocr，需在查看页手动执行。';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.manualOnly':
+        return '仅手动';
+      case 'settings.mediaAnnotation.documentOcr.pdfAutoMaxPages.pages':
+        return ({required Object count}) => '${count} 页';
+      case 'settings.mediaAnnotation.documentOcr.pdfDpi.title':
+        return 'OCR DPI';
+      case 'settings.mediaAnnotation.documentOcr.pdfDpi.subtitle':
+        return '更高 DPI 可能提升识别率，但处理更慢。';
+      case 'settings.mediaAnnotation.documentOcr.pdfDpi.value':
+        return ({required Object dpi}) => '${dpi} dpi';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.title':
+        return '桌面 OCR 模型';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.subtitle':
+        return '为桌面端（Linux/macOS/Windows）下载本地 OCR 模型文件。';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.notInstalled':
+        return '未安装';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.runtimeMissing':
+        return '模型已下载，但 OCR 运行环境未就绪';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.downloading':
+        return '下载中...';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.status.installed':
+        return ({required Object count, required Object size}) =>
+            '已安装：${count} 个文件（${size}）';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.actions.download':
+        return '下载模型';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.actions.redownload':
+        return '重新下载';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.actions.delete':
+        return '删除模型';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.title':
+        return '删除已下载 OCR 模型？';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.body':
+        return '删除后，桌面端本地 OCR 可能不可用，直到再次下载。';
+      case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.confirm':
+        return '删除';
+      case 'settings.mediaAnnotation.pdfCompression.title':
+        return 'PDF 智能压缩';
+      case 'settings.mediaAnnotation.pdfCompression.enabled.title':
+        return '智能压缩 PDF';
+      case 'settings.mediaAnnotation.pdfCompression.enabled.subtitle':
+        return '自动优化存储/上传的 PDF，无需额外配置。';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.title':
+        return 'Linux 压缩资源';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.subtitle':
+        return '为 Linux 桌面端下载增强本地 PDF 压缩资源。';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.notInstalled':
+        return '未安装';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.downloading':
+        return '下载中...';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.installed':
+        return ({required Object count, required Object size}) =>
+            '已安装：${count} 个文件（${size}）';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.download':
+        return '下载资源';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.redownload':
+        return '重新下载';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.delete':
+        return '删除资源';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.title':
+        return '删除已下载压缩资源？';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.body':
+        return '删除后，Linux PDF 压缩可能退回基础模式，直到再次下载资源。';
+      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.confirm':
+        return '删除';
+      case 'settings.mediaAnnotation.audioTranscribe.title':
+        return '音频转写';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
+        return '转写音频附件';
+      case 'settings.mediaAnnotation.audioTranscribe.enabled.subtitle':
+        return '添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.title':
+        return '转写引擎';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.subtitle':
+        return '选择音频转写使用的引擎。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.notAvailable':
+        return '不可用';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.whisper':
+        return 'Whisper';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.multimodalLlm':
+        return '多模态 LLM';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.auto':
+        return '自动';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.whisper':
+        return '语音转写稳定默认方案（推荐）。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.multimodalLlm':
+        return '可用时使用多模态聊天模型。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
+        return '由 SecondLoop 自动选择最可用的引擎。';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
+        return '配置转写 API';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
+        return 'Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
+        return '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
+        return '打开 Cloud 账号';
+      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
+        return '打开 API Key';
       case 'settings.mediaAnnotation.imageCaption.title':
         return '图片注释';
       case 'settings.mediaAnnotation.providerSettings.title':
@@ -7948,40 +8845,6 @@ extension on _StringsZhCn {
         return '允许使用蜂窝网络注释图片？';
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
-      case 'settings.mediaAnnotation.audioTranscribe.title':
-        return '音频转写';
-      case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
-        return '转写音频附件';
-      case 'settings.mediaAnnotation.audioTranscribe.enabled.subtitle':
-        return '添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.title':
-        return '转写引擎';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.subtitle':
-        return '选择音频转写使用的引擎。';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.notAvailable':
-        return '不可用';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.whisper':
-        return 'Whisper';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.multimodalLlm':
-        return '多模态 LLM';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.labels.auto':
-        return '自动';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.whisper':
-        return '语音转写稳定默认方案（推荐）。';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.multimodalLlm':
-        return '可用时使用多模态聊天模型。';
-      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
-        return '由 SecondLoop 自动选择最可用的引擎。';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
-        return '配置转写 API';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
-        return 'Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
-        return '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
-        return '打开 Cloud 账号';
-      case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
-        return '打开 API Key';
       case 'settings.cloudEmbeddings.title':
         return '更智能的搜索';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -8329,10 +9192,28 @@ extension on _StringsZhCn {
         return '摘要';
       case 'attachments.content.fullText':
         return '全文';
+      case 'attachments.content.ocrTitle':
+        return 'OCR';
       case 'attachments.content.needsOcrTitle':
         return '需要 OCR';
       case 'attachments.content.needsOcrSubtitle':
         return '此 PDF 可能不包含可复制文本。';
+      case 'attachments.content.runOcr':
+        return '运行 OCR';
+      case 'attachments.content.rerunOcr':
+        return '重新识别';
+      case 'attachments.content.ocrRunning':
+        return 'OCR 处理中…';
+      case 'attachments.content.ocrReadySubtitle':
+        return '已可用文本，如有需要可重新识别。';
+      case 'attachments.content.keepForegroundHint':
+        return 'OCR 进行中，请尽量保持应用在前台。';
+      case 'attachments.content.openWithSystem':
+        return '用系统应用打开';
+      case 'attachments.content.ocrFinished':
+        return 'OCR 已完成，正在刷新预览…';
+      case 'attachments.content.ocrFailed':
+        return '此设备上 OCR 执行失败。';
       case 'semanticSearch.preparing':
         return '正在准备语义检索…';
       case 'semanticSearch.indexingMessages':

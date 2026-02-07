@@ -73,4 +73,48 @@ void main() {
 
     expect(resolved, isNull);
   });
+
+  test('resolveFfmpegFromProjectPaths prefers .tools platform binary', () {
+    final existing = <String>{
+      '/repo/.tools/ffmpeg/macos/ffmpeg',
+      '/repo/.pixi/envs/default/bin/ffmpeg',
+    };
+
+    final resolved = resolveFfmpegFromProjectPaths(
+      projectRoot: '/repo',
+      platform: DesktopPlatform.macos,
+      isFile: existing.contains,
+    );
+
+    expect(resolved, '/repo/.tools/ffmpeg/macos/ffmpeg');
+  });
+
+  test('resolveFfmpegFromProjectPaths falls back to .pixi env binary', () {
+    final existing = <String>{
+      '/repo/.pixi/envs/default/bin/ffmpeg',
+    };
+
+    final resolved = resolveFfmpegFromProjectPaths(
+      projectRoot: '/repo',
+      platform: DesktopPlatform.linux,
+      isFile: existing.contains,
+    );
+
+    expect(resolved, '/repo/.pixi/envs/default/bin/ffmpeg');
+  });
+
+  test('resolveFfmpegFromProjectPaths uses windows Library/bin first', () {
+    final existing = <String>{
+      r'C:\repo\.pixi\envs\default\Library\bin\ffmpeg.exe',
+      r'C:\repo\.pixi\envs\default\bin\ffmpeg.exe',
+    };
+
+    final resolved = resolveFfmpegFromProjectPaths(
+      projectRoot: r'C:\repo',
+      platform: DesktopPlatform.windows,
+      isFile: existing.contains,
+    );
+
+    expect(resolved, r'C:\repo\.pixi\envs\default\Library\bin\ffmpeg.exe');
+  });
 }

@@ -332,10 +332,7 @@ class ContentEnrichmentConfig {
   final bool urlFetchEnabled;
   final bool documentExtractEnabled;
   final PlatformInt64 documentKeepOriginalMaxBytes;
-  final bool pdfCompressEnabled;
-  final String pdfCompressProfile;
-  final PlatformInt64 pdfCompressMinBytes;
-  final PlatformInt64 pdfCompressTargetMaxBytes;
+  final bool pdfSmartCompressEnabled;
   final bool audioTranscribeEnabled;
   final String audioTranscribeEngine;
   final bool videoExtractEnabled;
@@ -356,10 +353,7 @@ class ContentEnrichmentConfig {
     required this.urlFetchEnabled,
     required this.documentExtractEnabled,
     required this.documentKeepOriginalMaxBytes,
-    required this.pdfCompressEnabled,
-    required this.pdfCompressProfile,
-    required this.pdfCompressMinBytes,
-    required this.pdfCompressTargetMaxBytes,
+    required this.pdfSmartCompressEnabled,
     required this.audioTranscribeEnabled,
     required this.audioTranscribeEngine,
     required this.videoExtractEnabled,
@@ -382,10 +376,7 @@ class ContentEnrichmentConfig {
       urlFetchEnabled.hashCode ^
       documentExtractEnabled.hashCode ^
       documentKeepOriginalMaxBytes.hashCode ^
-      pdfCompressEnabled.hashCode ^
-      pdfCompressProfile.hashCode ^
-      pdfCompressMinBytes.hashCode ^
-      pdfCompressTargetMaxBytes.hashCode ^
+      pdfSmartCompressEnabled.hashCode ^
       audioTranscribeEnabled.hashCode ^
       audioTranscribeEngine.hashCode ^
       videoExtractEnabled.hashCode ^
@@ -410,10 +401,7 @@ class ContentEnrichmentConfig {
           urlFetchEnabled == other.urlFetchEnabled &&
           documentExtractEnabled == other.documentExtractEnabled &&
           documentKeepOriginalMaxBytes == other.documentKeepOriginalMaxBytes &&
-          pdfCompressEnabled == other.pdfCompressEnabled &&
-          pdfCompressProfile == other.pdfCompressProfile &&
-          pdfCompressMinBytes == other.pdfCompressMinBytes &&
-          pdfCompressTargetMaxBytes == other.pdfCompressTargetMaxBytes &&
+          pdfSmartCompressEnabled == other.pdfSmartCompressEnabled &&
           audioTranscribeEnabled == other.audioTranscribeEnabled &&
           audioTranscribeEngine == other.audioTranscribeEngine &&
           videoExtractEnabled == other.videoExtractEnabled &&

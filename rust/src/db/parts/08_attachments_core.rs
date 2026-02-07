@@ -170,6 +170,41 @@ ON CONFLICT(sha256) DO UPDATE SET
         )?;
     }
 
+    // Explicit cleanup is required because local DB rows can exist with
+    // foreign_keys temporarily disabled in some sync/apply paths.
+    let _ = conn.execute(
+        r#"DELETE FROM message_attachments WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM todo_activity_attachments WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_variants WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_exif WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_metadata WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_places WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+    let _ = conn.execute(
+        r#"DELETE FROM cloud_media_backup WHERE attachment_sha256 = ?1"#,
+        params![sha256],
+    )?;
+
     best_effort_remove_file(&app_dir.join(format!("attachments/{sha256}.bin")))?;
     best_effort_remove_dir_all(&app_dir.join(format!("attachments/variants/{sha256}")))?;
 
@@ -515,6 +550,17 @@ WHERE id IN (
     Ok(())
 }
 
+fn attachment_exists(conn: &Connection, attachment_sha256: &str) -> Result<bool> {
+    let exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![attachment_sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(exists.is_some())
+}
+
 pub fn mark_attachment_place_ok(
     conn: &Connection,
     key: &[u8; 32],
@@ -528,6 +574,9 @@ pub fn mark_attachment_place_ok(
     let lang = lang.trim();
     if lang.is_empty() {
         return Err(anyhow!("lang is required"));
+    }
+    if !attachment_exists(conn, attachment_sha256)? {
+        return Ok(());
     }
 
     let json = serde_json::to_vec(payload)?;
@@ -636,6 +685,9 @@ pub fn mark_attachment_annotation_ok(
     let model_name = model_name.trim();
     if model_name.is_empty() {
         return Err(anyhow!("model_name is required"));
+    }
+    if !attachment_exists(conn, attachment_sha256)? {
+        return Ok(());
     }
 
     let json = serde_json::to_vec(payload)?;

@@ -39,6 +39,12 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+
+    if target.name == 'audio_session'
+      target.build_configurations.each do |config|
+        config.build_settings['GCC_WARN_UNUSED_VALUE'] = 'NO'
+      end
+    end
   end
 
   hotkey_file = File.join(
@@ -67,4 +73,5 @@ post_install do |installer|
       # Best-effort: never fail pod install due to a warning-only patch.
     end
   end
+
 end

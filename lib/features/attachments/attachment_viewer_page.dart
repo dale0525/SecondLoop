@@ -22,8 +22,13 @@ import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'audio_attachment_player.dart';
+import 'attachment_payload_refresh_policy.dart';
 import 'image_exif_metadata.dart';
 import 'non_image_attachment_view.dart';
+import 'platform_pdf_ocr.dart';
+import 'video_keyframe_ocr_worker.dart';
+
+part 'attachment_viewer_page_ocr.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -56,6 +61,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   Map<String, Object?>? _annotationPayload;
   bool _editingAnnotationCaption = false;
   bool _savingAnnotationCaption = false;
+  bool _runningDocumentOcr = false;
+  String? _documentOcrStatusText;
+  String _documentOcrLanguageHints = 'device_plus_en';
   TextEditingController? _annotationCaptionController;
   Timer? _inlinePlaceResolveTimer;
   bool _inlinePlaceResolveScheduled = false;
@@ -128,7 +136,12 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
           didSchedule = true;
           _startMetadataLoad();
         }
-        if (!_loadingAnnotationPayload && _annotationPayload == null) {
+        if (!_loadingAnnotationPayload &&
+            shouldRefreshAttachmentAnnotationPayloadOnSync(
+              payload: _annotationPayload,
+              ocrRunning: _runningDocumentOcr,
+              ocrStatusText: _documentOcrStatusText,
+            )) {
           didSchedule = true;
           _startAnnotationPayloadLoad();
         }
@@ -187,6 +200,13 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     _loadingAnnotationPayload = true;
     _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
       _annotationPayload = value;
+      final ocrText =
+          ((value?['ocr_text_excerpt'] ?? value?['ocr_text_full']) ?? '')
+              .toString()
+              .trim();
+      if (ocrText.isNotEmpty) {
+        _documentOcrStatusText = null;
+      }
       return value;
     }).whenComplete(() {
       _loadingAnnotationPayload = false;
@@ -391,6 +411,17 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     } catch (_) {
       return null;
     }
+  }
+
+  String get _effectiveDocumentOcrLanguageHints =>
+      normalizeAttachmentOcrLanguageHint(_documentOcrLanguageHints);
+
+  void _updateDocumentOcrLanguageHints(String value) {
+    final normalized = normalizeAttachmentOcrLanguageHint(value);
+    if (normalized == _documentOcrLanguageHints) return;
+    setState(() {
+      _documentOcrLanguageHints = normalized;
+    });
   }
 
   static String _formatBytes(int bytes) {
@@ -686,6 +717,13 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   );
                 }
                 if (!isImage) {
+                  Future<void> Function()? runOcr;
+                  if (_isPdfAttachment()) {
+                    runOcr = _runDocumentOcr;
+                  } else if (_isVideoManifestAttachment()) {
+                    runOcr = _runVideoManifestOcr;
+                  }
+
                   return NonImageAttachmentView(
                     attachment: widget.attachment,
                     bytes: bytes,
@@ -693,6 +731,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     initialMetadata: _metadata,
                     annotationPayloadFuture: _annotationPayloadFuture,
                     initialAnnotationPayload: _annotationPayload,
+                    onRunOcr: runOcr,
+                    ocrRunning: _runningDocumentOcr,
+                    ocrStatusText: _documentOcrStatusText,
+                    ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
+                    onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
                   );
                 }
 

@@ -6,6 +6,8 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
+import '../../core/content_enrichment/linux_ocr_model_store.dart';
+import '../../core/content_enrichment/linux_pdf_compress_resource_store.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -16,15 +18,23 @@ import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_sections.dart';
 
+part 'media_annotation_settings_page_ocr.dart';
+part 'media_annotation_settings_page_linux_ocr.dart';
+part 'media_annotation_settings_page_linux_pdf_compress.dart';
+
 class MediaAnnotationSettingsPage extends StatefulWidget {
   const MediaAnnotationSettingsPage({
     super.key,
     this.configStore,
     this.contentConfigStore,
+    this.linuxOcrModelStore,
+    this.linuxPdfCompressResourceStore,
   });
 
   final MediaAnnotationConfigStore? configStore;
   final ContentEnrichmentConfigStore? contentConfigStore;
+  final LinuxOcrModelStore? linuxOcrModelStore;
+  final LinuxPdfCompressResourceStore? linuxPdfCompressResourceStore;
 
   static const annotateSwitchKey =
       ValueKey('media_annotation_settings_annotate_switch');
@@ -32,6 +42,23 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
       ValueKey('media_annotation_settings_search_switch');
   static const audioTranscribeSwitchKey =
       ValueKey('media_annotation_settings_audio_transcribe_switch');
+  static const ocrSwitchKey = ValueKey('media_annotation_settings_ocr_switch');
+  static const pdfCompressSwitchKey =
+      ValueKey('media_annotation_settings_pdf_compress_switch');
+  static const linuxOcrModelTileKey =
+      ValueKey('media_annotation_settings_linux_ocr_model_tile');
+  static const linuxOcrModelDownloadButtonKey =
+      ValueKey('media_annotation_settings_linux_ocr_download_button');
+  static const linuxOcrModelDeleteButtonKey =
+      ValueKey('media_annotation_settings_linux_ocr_delete_button');
+  static const linuxPdfCompressResourceTileKey =
+      ValueKey('media_annotation_settings_linux_pdf_compress_resource_tile');
+  static const linuxPdfCompressResourceDownloadButtonKey = ValueKey(
+    'media_annotation_settings_linux_pdf_compress_resource_download_button',
+  );
+  static const linuxPdfCompressResourceDeleteButtonKey = ValueKey(
+    'media_annotation_settings_linux_pdf_compress_resource_delete_button',
+  );
   static const searchConfirmDialogKey =
       ValueKey('media_annotation_settings_search_confirm_dialog');
   static const searchConfirmCancelKey =
@@ -57,11 +84,35 @@ class _MediaAnnotationSettingsPageState
   Object? _loadError;
   Object? _contentLoadError;
   bool _busy = false;
+  bool _linuxOcrBusy = false;
+  bool _linuxPdfCompressBusy = false;
+  LinuxOcrModelStatus _linuxOcrModelStatus = const LinuxOcrModelStatus(
+    supported: false,
+    installed: false,
+    modelDirPath: null,
+    modelCount: 0,
+    totalBytes: 0,
+    source: LinuxOcrModelSource.none,
+  );
+  LinuxPdfCompressResourceStatus _linuxPdfCompressResourceStatus =
+      const LinuxPdfCompressResourceStatus(
+    supported: false,
+    installed: false,
+    resourceDirPath: null,
+    fileCount: 0,
+    totalBytes: 0,
+    source: LinuxPdfCompressResourceSource.none,
+  );
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
   ContentEnrichmentConfigStore get _contentStore =>
       widget.contentConfigStore ?? const RustContentEnrichmentConfigStore();
+  LinuxOcrModelStore get _linuxOcrModelStore =>
+      widget.linuxOcrModelStore ?? createLinuxOcrModelStore();
+  LinuxPdfCompressResourceStore get _linuxPdfCompressResourceStore =>
+      widget.linuxPdfCompressResourceStore ??
+      createLinuxPdfCompressResourceStore();
 
   Future<void> _showSetupRequiredDialog({
     required String reason,
@@ -316,6 +367,11 @@ class _MediaAnnotationSettingsPageState
     unawaited(_load());
   }
 
+  void _mutateState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
+
   Future<void> _load() async {
     final sessionKey = SessionScope.of(context).sessionKey;
     final backend =
@@ -324,11 +380,53 @@ class _MediaAnnotationSettingsPageState
       final config = await _store.read(sessionKey);
       ContentEnrichmentConfig? contentConfig;
       Object? contentLoadError;
+      LinuxOcrModelStatus linuxOcrModelStatus = const LinuxOcrModelStatus(
+        supported: false,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      );
+      LinuxPdfCompressResourceStatus linuxPdfCompressResourceStatus =
+          const LinuxPdfCompressResourceStatus(
+        supported: false,
+        installed: false,
+        resourceDirPath: null,
+        fileCount: 0,
+        totalBytes: 0,
+        source: LinuxPdfCompressResourceSource.none,
+      );
       try {
         contentConfig = await _contentStore.readContentEnrichment(sessionKey);
       } catch (e) {
         contentConfig = null;
         contentLoadError = e;
+      }
+      try {
+        linuxOcrModelStatus = await _linuxOcrModelStore.readStatus();
+      } catch (_) {
+        linuxOcrModelStatus = const LinuxOcrModelStatus(
+          supported: false,
+          installed: false,
+          modelDirPath: null,
+          modelCount: 0,
+          totalBytes: 0,
+          source: LinuxOcrModelSource.none,
+        );
+      }
+      try {
+        linuxPdfCompressResourceStatus =
+            await _linuxPdfCompressResourceStore.readStatus();
+      } catch (_) {
+        linuxPdfCompressResourceStatus = const LinuxPdfCompressResourceStatus(
+          supported: false,
+          installed: false,
+          resourceDirPath: null,
+          fileCount: 0,
+          totalBytes: 0,
+          source: LinuxPdfCompressResourceSource.none,
+        );
       }
       List<LlmProfile>? profiles;
       if (backend != null) {
@@ -343,6 +441,8 @@ class _MediaAnnotationSettingsPageState
         _config = config;
         _contentConfig = contentConfig;
         _contentLoadError = contentLoadError;
+        _linuxOcrModelStatus = linuxOcrModelStatus;
+        _linuxPdfCompressResourceStatus = linuxPdfCompressResourceStatus;
         _llmProfiles = profiles;
         _loadError = null;
       });
@@ -383,15 +483,18 @@ class _MediaAnnotationSettingsPageState
     ContentEnrichmentConfig source, {
     bool? audioTranscribeEnabled,
     String? audioTranscribeEngine,
+    bool? ocrEnabled,
+    String? ocrLanguageHints,
+    int? ocrPdfDpi,
+    int? ocrPdfAutoMaxPages,
+    bool? pdfSmartCompressEnabled,
   }) {
     return ContentEnrichmentConfig(
       urlFetchEnabled: source.urlFetchEnabled,
       documentExtractEnabled: source.documentExtractEnabled,
       documentKeepOriginalMaxBytes: source.documentKeepOriginalMaxBytes,
-      pdfCompressEnabled: source.pdfCompressEnabled,
-      pdfCompressProfile: source.pdfCompressProfile,
-      pdfCompressMinBytes: source.pdfCompressMinBytes,
-      pdfCompressTargetMaxBytes: source.pdfCompressTargetMaxBytes,
+      pdfSmartCompressEnabled:
+          pdfSmartCompressEnabled ?? source.pdfSmartCompressEnabled,
       audioTranscribeEnabled:
           audioTranscribeEnabled ?? source.audioTranscribeEnabled,
       audioTranscribeEngine:
@@ -400,12 +503,16 @@ class _MediaAnnotationSettingsPageState
       videoProxyEnabled: source.videoProxyEnabled,
       videoProxyMaxDurationMs: source.videoProxyMaxDurationMs,
       videoProxyMaxBytes: source.videoProxyMaxBytes,
-      ocrEnabled: source.ocrEnabled,
+      ocrEnabled: ocrEnabled ?? source.ocrEnabled,
       ocrEngineMode: source.ocrEngineMode,
-      ocrLanguageHints: source.ocrLanguageHints,
-      ocrPdfDpi: source.ocrPdfDpi,
-      ocrPdfAutoMaxPages: source.ocrPdfAutoMaxPages,
-      ocrPdfMaxPages: source.ocrPdfMaxPages,
+      // OCR language hints are fixed to "device language + English".
+      ocrLanguageHints: 'device_plus_en',
+      // OCR DPI is fixed to 180 for stable quality/perf tradeoff.
+      ocrPdfDpi: 180,
+      // Auto OCR no longer exposes a page cap in settings.
+      ocrPdfAutoMaxPages: 0,
+      // OCR page cap is removed.
+      ocrPdfMaxPages: 0,
       mobileBackgroundEnabled: source.mobileBackgroundEnabled,
       mobileBackgroundRequiresWifi: source.mobileBackgroundRequiresWifi,
       mobileBackgroundRequiresCharging: source.mobileBackgroundRequiresCharging,
@@ -633,131 +740,6 @@ class _MediaAnnotationSettingsPageState
     );
   }
 
-  String _audioTranscribeEngineLabel(BuildContext context, String engine) {
-    final labels =
-        context.t.settings.mediaAnnotation.audioTranscribe.engine.labels;
-    switch (engine.trim()) {
-      case 'multimodal_llm':
-        return labels.multimodalLlm;
-      default:
-        return labels.whisper;
-    }
-  }
-
-  Future<void> _pickAudioTranscribeEngine(
-      ContentEnrichmentConfig config) async {
-    if (_busy) return;
-    final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
-
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        var value = config.audioTranscribeEngine.trim();
-        if (value != 'whisper' && value != 'multimodal_llm') {
-          value = 'whisper';
-        }
-
-        Widget option({
-          required String mode,
-          required String title,
-          required String subtitle,
-          required void Function(void Function()) setInnerState,
-        }) {
-          return RadioListTile<String>(
-            value: mode,
-            groupValue: value,
-            title: Text(title),
-            subtitle: Text(subtitle),
-            onChanged: (next) {
-              if (next == null) return;
-              setInnerState(() => value = next);
-            },
-          );
-        }
-
-        return AlertDialog(
-          title: Text(t.title),
-          content: StatefulBuilder(
-            builder: (context, setInnerState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    option(
-                      mode: 'whisper',
-                      title: t.labels.whisper,
-                      subtitle: t.descriptions.whisper,
-                      setInnerState: setInnerState,
-                    ),
-                    option(
-                      mode: 'multimodal_llm',
-                      title: t.labels.multimodalLlm,
-                      subtitle: t.descriptions.multimodalLlm,
-                      setInnerState: setInnerState,
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(value),
-              child: Text(context.t.common.actions.save),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || selected == null) return;
-    if (selected == config.audioTranscribeEngine.trim()) return;
-    await _persistContentConfig(
-      _copyContentConfig(config, audioTranscribeEngine: selected),
-    );
-  }
-
-  Future<void> _openAudioTranscribeConfigHelp() async {
-    final t = context.t.settings.mediaAnnotation.audioTranscribe.configureApi;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(t.title),
-          content: Text(t.body),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CloudAccountPage()),
-                );
-              },
-              child: Text(t.openCloud),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
-                );
-              },
-              child: Text(t.openApiKeys),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final config = _config;
@@ -842,6 +824,31 @@ class _MediaAnnotationSettingsPageState
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _busy ? null : _openAudioTranscribeConfigHelp,
               ),
+            ]),
+            const SizedBox(height: 16),
+            ..._buildDocumentOcrSection(context, contentConfig),
+            const SizedBox(height: 16),
+            mediaAnnotationSectionTitle(context, t.pdfCompression.title),
+            const SizedBox(height: 8),
+            mediaAnnotationSectionCard([
+              SwitchListTile(
+                key: MediaAnnotationSettingsPage.pdfCompressSwitchKey,
+                title: Text(t.pdfCompression.enabled.title),
+                subtitle: Text(t.pdfCompression.enabled.subtitle),
+                value: contentConfig?.pdfSmartCompressEnabled ?? false,
+                onChanged: _busy || contentConfig == null
+                    ? null
+                    : (value) async {
+                        await _persistContentConfig(
+                          _copyContentConfig(
+                            contentConfig,
+                            pdfSmartCompressEnabled: value,
+                          ),
+                        );
+                      },
+              ),
+              if (_buildLinuxPdfCompressResourceTile(context) case final tile?)
+                tile,
             ]),
             const SizedBox(height: 16),
             mediaAnnotationSectionTitle(context, t.imageCaption.title),

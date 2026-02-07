@@ -84,7 +84,7 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 1) 安装 Pixi：https://pixi.sh
 
-2) 安装固定版本的 Flutter SDK（通过 FVM）：
+2) 可选预热：提前安装固定版本的 Flutter SDK（通过 FVM）：
 
 ```bash
 pixi run setup-flutter
@@ -93,9 +93,9 @@ pixi run setup-flutter
 3) 常用命令：
 
 ```bash
-pixi run analyze
-pixi run test
-pixi run rust-test
+pixi run flutter analyze
+pixi run flutter test
+pixi run cargo test
 pixi run frb-generate
 pixi run run-macos
 pixi run run-linux
@@ -107,20 +107,25 @@ pixi run run-windows
 备注：
 - `run-macos` 仅在 macOS 可用。
 - `run-linux` 仅在 Linux 可用。
-- `run-windows` 仅在 Windows 可用（依赖 `setup-windows`），并会把 `nuget.exe` 下载到 `.tool/nuget/`，避免 Flutter 自动下载。
+- `run-windows` 仅在 Windows 可用，并会自动执行预检初始化（将 `nuget.exe` 下载到 `.tool/nuget/`，并将静态 `ffmpeg.exe` 下载到 `.tools/ffmpeg/windows`）。
 - Android 相关任务会把 SDK/NDK 与 Rust targets 安装到 `.tool/`（无需系统级 Android SDK）。
-- 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`，因此构建机需要已安装 `ffmpeg`。
+- 所有 `run-xxx` 任务在首次执行时都会自动触发 `setup-flutter` 与 `init-env`，因此新 clone 后可以直接执行 `pixi run run-xxx`。
+- 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`；macOS 会自动下载静态二进制到 `.tools/ffmpeg/macos`，也可放在 `.tools` 或通过 `--source-bin` 指定（无需系统级安装）。
 
-如需通过 FVM 执行任意 Flutter 命令：
+如需执行任意 Flutter/Dart/Cargo 命令：
 
 ```bash
-pixi run dart pub global run fvm:main flutter <args...>
+pixi run flutter <command> [command-args]
+# 多个参数可放在同一个引号字符串里：
+pixi run flutter test "--coverage --reporter expanded"
+pixi run dart format "--output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
+pixi run cargo clippy "--all-targets --all-features -- -D warnings"
 ```
 
 ### 可选：Cloud 配置（维护者 / 自建基础设施）
 
 - 创建本地配置：`pixi run init-env`（从 `.env.example` 生成 `.env.local`）
-- `pixi run test` / `pixi run rust-test` 不需要任何 Cloud 配置。
+- `pixi run flutter test` / `pixi run cargo test` 不需要任何 Cloud 配置。
 - Cloud 登录 + Cloud Ask AI（可选）需要：
   - `SECONDLOOP_FIREBASE_WEB_API_KEY`
   - `SECONDLOOP_CLOUD_ENV=staging|prod`
@@ -133,6 +138,6 @@ pixi run dart pub global run fvm:main flutter <args...>
 
 ### 平台前置依赖
 
-- Android：可选 Android Studio。Pixi 任务会把 SDK/NDK + Rust 工具链安装到 `.tool/`（可用 `pixi run doctor` 验证）。
+- Android：可选 Android Studio。Pixi 任务会把 SDK/NDK + Rust 工具链安装到 `.tool/`（可用 `pixi run flutter doctor -v` 验证）。
 - Windows（开发/构建）：Visual Studio 2022 + Desktop development with C++ + 组件 `C++ ATL for latest v143 build tools (x86 & x64)`（用于 `atlstr.h`）。终端用户不需要 VS/ATL（可能需要 VC++ runtime，安装器应包含）。
 - macOS/iOS：Xcode + Command Line Tools

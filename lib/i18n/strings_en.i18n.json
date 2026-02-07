@@ -264,19 +264,126 @@
       }
     },
     "mediaAnnotation": {
-    "title": "Media understanding",
-    "subtitle": "Optional: image captions and audio transcripts for better search",
-    "routingGuide": {
-      "title": "Choose your AI source",
-      "pro": "Pro + signed in: uses SecondLoop Cloud by default.",
-      "byok": "Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active."
-    },
-    "imageCaption": {
-      "title": "Image captions"
-    },
-    "providerSettings": {
-      "title": "Image caption provider"
-    },
+      "title": "Media understanding",
+      "subtitle": "Optional: OCR, image captions, audio transcripts, and PDF compression for better search/storage",
+      "routingGuide": {
+        "title": "Choose your AI source",
+        "pro": "Pro + signed in: uses SecondLoop Cloud by default.",
+        "byok": "Free/BYOK: add an OpenAI-compatible profile in Ask AI settings, then set it active."
+      },
+      "documentOcr": {
+        "title": "Document OCR",
+        "enabled": {
+          "title": "Enable OCR",
+          "subtitle": "Run OCR for scanned PDFs and video keyframes when text extraction is insufficient."
+        },
+        "languageHints": {
+          "title": "Language hints",
+          "subtitle": "Choose preferred languages for OCR recognition.",
+          "labels": {
+            "devicePlusEn": "Device language + English",
+            "en": "English",
+            "zhEn": "Chinese + English",
+            "jaEn": "Japanese + English",
+            "koEn": "Korean + English",
+            "frEn": "French + English",
+            "deEn": "German + English",
+            "esEn": "Spanish + English"
+          }
+        },
+        "pdfAutoMaxPages": {
+          "title": "Auto OCR page limit",
+          "subtitle": "PDFs above this limit stay in needs-OCR state until you run OCR manually in viewer.",
+          "manualOnly": "Manual only",
+          "pages": "$count pages"
+        },
+        "pdfDpi": {
+          "title": "OCR DPI",
+          "subtitle": "Higher DPI may improve accuracy but costs more processing time.",
+          "value": "$dpi dpi"
+        },
+        "linuxModels": {
+          "title": "Desktop OCR models",
+          "subtitle": "Download local OCR model files for desktop (Linux/macOS/Windows).",
+          "status": {
+            "notInstalled": "Not installed",
+            "runtimeMissing": "Models are downloaded, but OCR runtime is not ready",
+            "downloading": "Downloading...",
+            "installed": "Installed: $count files ($size)"
+          },
+          "actions": {
+            "download": "Download models",
+            "redownload": "Re-download",
+            "delete": "Delete models"
+          },
+          "confirmDelete": {
+            "title": "Delete downloaded OCR models?",
+            "body": "Local desktop OCR may stop working until models are downloaded again.",
+            "confirm": "Delete"
+          }
+        }
+      },
+      "pdfCompression": {
+        "title": "PDF smart compression",
+        "enabled": {
+          "title": "Smart-compress PDFs",
+          "subtitle": "Automatically optimize stored/uploaded PDFs without extra setup."
+        },
+        "linuxResources": {
+          "title": "Linux compression resources",
+          "subtitle": "Download enhanced local PDF compression resources for Linux desktop.",
+          "status": {
+            "notInstalled": "Not installed",
+            "downloading": "Downloading...",
+            "installed": "Installed: $count files ($size)"
+          },
+          "actions": {
+            "download": "Download resources",
+            "redownload": "Re-download",
+            "delete": "Delete resources"
+          },
+          "confirmDelete": {
+            "title": "Delete downloaded compression resources?",
+            "body": "After deletion, Linux PDF compression may run in basic mode until resources are downloaded again.",
+            "confirm": "Delete"
+          }
+        }
+      },
+      "audioTranscribe": {
+        "title": "Audio transcription",
+        "enabled": {
+          "title": "Transcribe audio attachments",
+          "subtitle": "When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search."
+        },
+        "engine": {
+          "title": "Transcription engine",
+          "subtitle": "Choose which engine to use for audio transcription.",
+          "notAvailable": "Unavailable",
+          "labels": {
+            "whisper": "Whisper",
+            "multimodalLlm": "Multimodal LLM",
+            "auto": "Auto"
+          },
+          "descriptions": {
+            "whisper": "Stable default for speech transcription. (Recommended)",
+            "multimodalLlm": "Use a multimodal chat model when available.",
+            "auto": "Let SecondLoop choose the best available engine."
+          }
+        },
+        "configureApi": {
+          "title": "Configure transcription API",
+          "subtitle": "Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.",
+          "body": "Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.",
+          "openCloud": "Open Cloud account",
+          "openApiKeys": "Open API keys"
+        }
+      },
+      "imageCaption": {
+        "title": "Image captions"
+      },
+      "providerSettings": {
+        "title": "Image caption provider"
+      },
       "setupRequired": {
         "title": "Image annotations setup required",
         "body": "To annotate images, SecondLoop needs a multimodal model.",
@@ -338,35 +445,6 @@
       "allowCellularConfirm": {
         "title": "Use cellular data for image annotations?",
         "body": "Annotating images may upload photos to your chosen AI provider and can use significant data."
-      },
-    "audioTranscribe": {
-      "title": "Audio transcription",
-      "enabled": {
-        "title": "Transcribe audio attachments",
-        "subtitle": "When you add audio, SecondLoop can transcribe it and save encrypted transcript text for playback and search."
-      },
-        "engine": {
-          "title": "Transcription engine",
-          "subtitle": "Choose which engine to use for audio transcription.",
-          "notAvailable": "Unavailable",
-          "labels": {
-            "whisper": "Whisper",
-            "multimodalLlm": "Multimodal LLM",
-            "auto": "Auto"
-          },
-          "descriptions": {
-            "whisper": "Stable default for speech transcription. (Recommended)",
-            "multimodalLlm": "Use a multimodal chat model when available.",
-            "auto": "Let SecondLoop choose the best available engine."
-          }
-        },
-      "configureApi": {
-        "title": "Configure transcription API",
-        "subtitle": "Pro users can use SecondLoop Cloud. Free users can use an OpenAI-compatible API key profile from Ask AI settings.",
-        "body": "Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.",
-        "openCloud": "Open Cloud account",
-        "openApiKeys": "Open API keys"
-      }
       }
     },
     "cloudEmbeddings": {
@@ -659,8 +737,17 @@
     "content": {
       "excerpt": "Excerpt",
       "fullText": "Full text",
+      "ocrTitle": "OCR",
       "needsOcrTitle": "OCR required",
-      "needsOcrSubtitle": "This PDF appears to contain no selectable text."
+      "needsOcrSubtitle": "This PDF appears to contain no selectable text.",
+      "runOcr": "Run OCR",
+      "rerunOcr": "Re-run OCR",
+      "ocrRunning": "OCR in progress…",
+      "ocrReadySubtitle": "Text is available. You can re-run OCR if needed.",
+      "keepForegroundHint": "Keep the app in foreground while OCR is running.",
+      "openWithSystem": "Open with system app",
+      "ocrFinished": "OCR finished. Refreshing preview…",
+      "ocrFailed": "OCR failed on this device."
     }
   },
   "semanticSearch": {

@@ -1,0 +1,90 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/features/attachments/platform_pdf_ocr.dart';
+import 'package:secondloop/features/attachments/video_keyframe_ocr_worker.dart';
+
+void main() {
+  test('parseVideoManifestPayload parses valid video manifest', () {
+    final manifest = Uint8List.fromList(
+      '[{"not":"used"}]'.codeUnits,
+    );
+    expect(parseVideoManifestPayload(manifest), isNull);
+
+    final valid = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v1","original_sha256":"sha-x","original_mime_type":"video/mp4"}'
+          .codeUnits,
+    );
+    final parsed = parseVideoManifestPayload(valid);
+    expect(parsed, isNotNull);
+    expect(parsed!.originalSha256, 'sha-x');
+    expect(parsed.originalMimeType, 'video/mp4');
+  });
+
+  test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
+      () async {
+    final result = await VideoKeyframeOcrWorker.runOnVideoBytes(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      sourceMimeType: 'video/mp4',
+      maxFrames: 3,
+      frameIntervalSeconds: 5,
+      languageHints: 'device_plus_en',
+      ffmpegExecutableResolver: () async => null,
+    );
+    expect(result, isNull);
+  });
+
+  test('VideoKeyframeOcrWorker extracts frames and aggregates OCR text',
+      () async {
+    var ocrCalls = 0;
+    final result = await VideoKeyframeOcrWorker.runOnVideoBytes(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      sourceMimeType: 'video/mp4',
+      maxFrames: 4,
+      frameIntervalSeconds: 5,
+      languageHints: 'device_plus_en',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        final outputPattern = arguments.last;
+        final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
+        final frame2 = File(outputPattern.replaceAll('%04d', '0002'));
+        await frame1.parent.create(recursive: true);
+        await frame1.writeAsBytes(const <int>[7, 8, 9]);
+        await frame2.writeAsBytes(const <int>[10, 11, 12]);
+        return ProcessResult(0, 0, '', '');
+      },
+      ocrImageFn: (bytes, {required languageHints}) async {
+        ocrCalls += 1;
+        if (ocrCalls == 1) {
+          return const PlatformPdfOcrResult(
+            fullText: 'hello frame',
+            excerpt: 'hello frame',
+            engine: 'apple_vision',
+            isTruncated: false,
+            pageCount: 1,
+            processedPages: 1,
+          );
+        }
+        return const PlatformPdfOcrResult(
+          fullText: 'world frame',
+          excerpt: 'world frame',
+          engine: 'apple_vision',
+          isTruncated: false,
+          pageCount: 1,
+          processedPages: 1,
+        );
+      },
+    );
+
+    expect(result, isNotNull);
+    expect(result!.engine, 'apple_vision');
+    expect(result.frameCount, 2);
+    expect(result.processedFrames, 2);
+    expect(result.fullText, contains('[frame 1]'));
+    expect(result.fullText, contains('hello frame'));
+    expect(result.fullText, contains('world frame'));
+    expect(ocrCalls, 2);
+  });
+}

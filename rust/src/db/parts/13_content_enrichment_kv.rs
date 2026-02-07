@@ -22,33 +22,32 @@ fn ensure_kv_defaults(conn: &Connection, defaults: &[(&str, String)]) -> Result<
 }
 
 pub fn ensure_content_enrichment_kv_defaults(conn: &Connection) -> Result<()> {
-    let mb50 = 50i64 * 1024 * 1024;
     let mb10 = 10i64 * 1024 * 1024;
     let gb2 = 2i64 * 1024 * 1024 * 1024;
 
     let defaults = vec![
         ("content_enrichment.url_fetch_enabled", "1".to_string()),
-        ("content_enrichment.document_extract_enabled", "1".to_string()),
+        (
+            "content_enrichment.document_extract_enabled",
+            "1".to_string(),
+        ),
         (
             "content_enrichment.document_keep_original_max_bytes",
-            mb50.to_string(),
+            (50i64 * 1024 * 1024).to_string(),
         ),
-        ("content_enrichment.pdf_compress_enabled", "1".to_string()),
         (
-            "content_enrichment.pdf_compress_profile",
-            "balanced".to_string(),
+            "content_enrichment.pdf_smart_compress_enabled",
+            "1".to_string(),
         ),
-        ("content_enrichment.pdf_compress_min_bytes", "0".to_string()),
         (
-            "content_enrichment.pdf_compress_target_max_bytes",
-            mb50.to_string(),
+            "content_enrichment.audio_transcribe_enabled",
+            "0".to_string(),
         ),
-        ("content_enrichment.audio_transcribe_enabled", "0".to_string()),
         (
             "content_enrichment.audio_transcribe_engine",
             "whisper".to_string(),
         ),
-        ("content_enrichment.video_extract_enabled", "0".to_string()),
+        ("content_enrichment.video_extract_enabled", "1".to_string()),
         ("content_enrichment.video_proxy_enabled", "1".to_string()),
         (
             "content_enrichment.video_proxy_max_duration_ms",
@@ -68,9 +67,12 @@ pub fn ensure_content_enrichment_kv_defaults(conn: &Connection) -> Result<()> {
             "device_plus_en".to_string(),
         ),
         ("content_enrichment.ocr_pdf_dpi", "180".to_string()),
-        ("content_enrichment.ocr_pdf_auto_max_pages", "30".to_string()),
-        ("content_enrichment.ocr_pdf_max_pages", "200".to_string()),
-        ("content_enrichment.mobile_background_enabled", "1".to_string()),
+        ("content_enrichment.ocr_pdf_auto_max_pages", "0".to_string()),
+        ("content_enrichment.ocr_pdf_max_pages", "0".to_string()),
+        (
+            "content_enrichment.mobile_background_enabled",
+            "1".to_string(),
+        ),
         (
             "content_enrichment.mobile_background_requires_wifi",
             "1".to_string(),
@@ -80,9 +82,15 @@ pub fn ensure_content_enrichment_kv_defaults(conn: &Connection) -> Result<()> {
             "1".to_string(),
         ),
         ("storage_policy.auto_purge_enabled", "1".to_string()),
-        ("storage_policy.auto_purge_keep_recent_days", "30".to_string()),
+        (
+            "storage_policy.auto_purge_keep_recent_days",
+            "30".to_string(),
+        ),
         ("storage_policy.auto_purge_max_cache_bytes", gb2.to_string()),
-        ("storage_policy.auto_purge_min_candidate_bytes", mb10.to_string()),
+        (
+            "storage_policy.auto_purge_min_candidate_bytes",
+            mb10.to_string(),
+        ),
         ("storage_policy.auto_purge_include_images", "0".to_string()),
     ];
 
@@ -94,10 +102,7 @@ pub struct ContentEnrichmentConfig {
     pub url_fetch_enabled: bool,
     pub document_extract_enabled: bool,
     pub document_keep_original_max_bytes: i64,
-    pub pdf_compress_enabled: bool,
-    pub pdf_compress_profile: String,
-    pub pdf_compress_min_bytes: i64,
-    pub pdf_compress_target_max_bytes: i64,
+    pub pdf_smart_compress_enabled: bool,
     pub audio_transcribe_enabled: bool,
     pub audio_transcribe_engine: String,
     pub video_extract_enabled: bool,
@@ -144,13 +149,6 @@ fn kv_string_or(conn: &Connection, key: &str, default: &str) -> Result<String> {
     Ok(kv_get_string(conn, key)?.unwrap_or_else(|| default.to_string()))
 }
 
-fn normalize_pdf_compress_profile(profile: &str) -> &'static str {
-    match profile.trim() {
-        "" | "balanced" => "balanced",
-        _ => "balanced",
-    }
-}
-
 fn normalize_audio_transcribe_engine(engine: &str) -> &'static str {
     match engine.trim() {
         "" | "whisper" => "whisper",
@@ -166,18 +164,10 @@ fn normalize_ocr_engine_mode(mode: &str) -> &'static str {
     }
 }
 
-fn normalize_ocr_language_hints(hints: &str) -> &'static str {
-    match hints.trim() {
-        "" | "device_plus_en" => "device_plus_en",
-        _ => "device_plus_en",
-    }
-}
-
 pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichmentConfig> {
     let mb50 = 50i64 * 1024 * 1024;
 
-    let url_fetch_enabled =
-        kv_bool_or(conn, "content_enrichment.url_fetch_enabled", true)?;
+    let url_fetch_enabled = kv_bool_or(conn, "content_enrichment.url_fetch_enabled", true)?;
     let document_extract_enabled =
         kv_bool_or(conn, "content_enrichment.document_extract_enabled", true)?;
     let document_keep_original_max_bytes = kv_i64_or(
@@ -187,22 +177,8 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
     )?
     .max(0);
 
-    let pdf_compress_enabled =
-        kv_bool_or(conn, "content_enrichment.pdf_compress_enabled", true)?;
-    let pdf_compress_profile = kv_string_or(
-        conn,
-        "content_enrichment.pdf_compress_profile",
-        "balanced",
-    )?;
-    let pdf_compress_profile = normalize_pdf_compress_profile(&pdf_compress_profile).to_string();
-    let pdf_compress_min_bytes =
-        kv_i64_or(conn, "content_enrichment.pdf_compress_min_bytes", 0)?.max(0);
-    let pdf_compress_target_max_bytes = kv_i64_or(
-        conn,
-        "content_enrichment.pdf_compress_target_max_bytes",
-        mb50,
-    )?
-    .max(0);
+    let pdf_smart_compress_enabled =
+        kv_bool_or(conn, "content_enrichment.pdf_smart_compress_enabled", true)?;
 
     let audio_transcribe_enabled =
         kv_bool_or(conn, "content_enrichment.audio_transcribe_enabled", false)?;
@@ -216,8 +192,7 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
 
     let video_extract_enabled =
         kv_bool_or(conn, "content_enrichment.video_extract_enabled", false)?;
-    let video_proxy_enabled =
-        kv_bool_or(conn, "content_enrichment.video_proxy_enabled", true)?;
+    let video_proxy_enabled = kv_bool_or(conn, "content_enrichment.video_proxy_enabled", true)?;
     let video_proxy_max_duration_ms = kv_i64_or(
         conn,
         "content_enrichment.video_proxy_max_duration_ms",
@@ -238,18 +213,20 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
         "platform_native",
     )?;
     let ocr_engine_mode = normalize_ocr_engine_mode(&ocr_engine_mode).to_string();
-    let ocr_language_hints = kv_string_or(
+    let _ocr_language_hints = kv_string_or(
         conn,
         "content_enrichment.ocr_language_hints",
         "device_plus_en",
     )?;
-    let ocr_language_hints = normalize_ocr_language_hints(&ocr_language_hints).to_string();
+    let ocr_language_hints = "device_plus_en".to_string();
 
-    let ocr_pdf_dpi = kv_i64_or(conn, "content_enrichment.ocr_pdf_dpi", 180)?.max(0);
-    let ocr_pdf_auto_max_pages =
-        kv_i64_or(conn, "content_enrichment.ocr_pdf_auto_max_pages", 30)?.max(0);
-    let ocr_pdf_max_pages =
-        kv_i64_or(conn, "content_enrichment.ocr_pdf_max_pages", 200)?.max(0);
+    let _ocr_pdf_dpi = kv_i64_or(conn, "content_enrichment.ocr_pdf_dpi", 180)?.clamp(72, 600);
+    let ocr_pdf_dpi = 180;
+    let _ocr_pdf_auto_max_pages =
+        kv_i64_or(conn, "content_enrichment.ocr_pdf_auto_max_pages", 0)?.max(0);
+    let ocr_pdf_auto_max_pages = 0;
+    let _ocr_pdf_max_pages = kv_i64_or(conn, "content_enrichment.ocr_pdf_max_pages", 0)?.max(0);
+    let ocr_pdf_max_pages = 0;
 
     let mobile_background_enabled =
         kv_bool_or(conn, "content_enrichment.mobile_background_enabled", true)?;
@@ -268,10 +245,7 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
         url_fetch_enabled,
         document_extract_enabled,
         document_keep_original_max_bytes,
-        pdf_compress_enabled,
-        pdf_compress_profile,
-        pdf_compress_min_bytes,
-        pdf_compress_target_max_bytes,
+        pdf_smart_compress_enabled,
         audio_transcribe_enabled,
         audio_transcribe_engine,
         video_extract_enabled,
@@ -294,12 +268,9 @@ pub fn set_content_enrichment_config(
     conn: &Connection,
     config: &ContentEnrichmentConfig,
 ) -> Result<()> {
-    let mb50 = 50i64 * 1024 * 1024;
-
-    let normalized_profile = normalize_pdf_compress_profile(&config.pdf_compress_profile);
-    let normalized_audio_engine = normalize_audio_transcribe_engine(&config.audio_transcribe_engine);
+    let normalized_audio_engine =
+        normalize_audio_transcribe_engine(&config.audio_transcribe_engine);
     let normalized_ocr_engine_mode = normalize_ocr_engine_mode(&config.ocr_engine_mode);
-    let normalized_ocr_language_hints = normalize_ocr_language_hints(&config.ocr_language_hints);
 
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
@@ -312,7 +283,11 @@ pub fn set_content_enrichment_config(
         kv_set_string(
             conn,
             "content_enrichment.document_extract_enabled",
-            if config.document_extract_enabled { "1" } else { "0" },
+            if config.document_extract_enabled {
+                "1"
+            } else {
+                "0"
+            },
         )?;
         kv_set_string(
             conn,
@@ -326,37 +301,22 @@ pub fn set_content_enrichment_config(
 
         kv_set_string(
             conn,
-            "content_enrichment.pdf_compress_enabled",
-            if config.pdf_compress_enabled { "1" } else { "0" },
-        )?;
-        kv_set_string(
-            conn,
-            "content_enrichment.pdf_compress_profile",
-            normalized_profile,
-        )?;
-        kv_set_string(
-            conn,
-            "content_enrichment.pdf_compress_min_bytes",
-            config
-                .pdf_compress_min_bytes
-                .clamp(0, mb50)
-                .to_string()
-                .as_str(),
-        )?;
-        kv_set_string(
-            conn,
-            "content_enrichment.pdf_compress_target_max_bytes",
-            config
-                .pdf_compress_target_max_bytes
-                .clamp(0, i64::MAX)
-                .to_string()
-                .as_str(),
+            "content_enrichment.pdf_smart_compress_enabled",
+            if config.pdf_smart_compress_enabled {
+                "1"
+            } else {
+                "0"
+            },
         )?;
 
         kv_set_string(
             conn,
             "content_enrichment.audio_transcribe_enabled",
-            if config.audio_transcribe_enabled { "1" } else { "0" },
+            if config.audio_transcribe_enabled {
+                "1"
+            } else {
+                "0"
+            },
         )?;
         kv_set_string(
             conn,
@@ -367,7 +327,11 @@ pub fn set_content_enrichment_config(
         kv_set_string(
             conn,
             "content_enrichment.video_extract_enabled",
-            if config.video_extract_enabled { "1" } else { "0" },
+            if config.video_extract_enabled {
+                "1"
+            } else {
+                "0"
+            },
         )?;
         kv_set_string(
             conn,
@@ -398,32 +362,20 @@ pub fn set_content_enrichment_config(
             "content_enrichment.ocr_enabled",
             if config.ocr_enabled { "1" } else { "0" },
         )?;
-        kv_set_string(conn, "content_enrichment.ocr_engine_mode", normalized_ocr_engine_mode)?;
+        kv_set_string(
+            conn,
+            "content_enrichment.ocr_engine_mode",
+            normalized_ocr_engine_mode,
+        )?;
         kv_set_string(
             conn,
             "content_enrichment.ocr_language_hints",
-            normalized_ocr_language_hints,
+            "device_plus_en",
         )?;
 
-        kv_set_string(
-            conn,
-            "content_enrichment.ocr_pdf_dpi",
-            config.ocr_pdf_dpi.clamp(0, 600).to_string().as_str(),
-        )?;
-        kv_set_string(
-            conn,
-            "content_enrichment.ocr_pdf_auto_max_pages",
-            config
-                .ocr_pdf_auto_max_pages
-                .clamp(0, 1_000)
-                .to_string()
-                .as_str(),
-        )?;
-        kv_set_string(
-            conn,
-            "content_enrichment.ocr_pdf_max_pages",
-            config.ocr_pdf_max_pages.clamp(0, 10_000).to_string().as_str(),
-        )?;
+        kv_set_string(conn, "content_enrichment.ocr_pdf_dpi", "180")?;
+        kv_set_string(conn, "content_enrichment.ocr_pdf_auto_max_pages", "0")?;
+        kv_set_string(conn, "content_enrichment.ocr_pdf_max_pages", "0")?;
 
         kv_set_string(
             conn,
@@ -477,12 +429,8 @@ pub fn get_storage_policy_config(conn: &Connection) -> Result<StoragePolicyConfi
         kv_i64_or(conn, "storage_policy.auto_purge_keep_recent_days", 30)?.max(0);
     let auto_purge_max_cache_bytes =
         kv_i64_or(conn, "storage_policy.auto_purge_max_cache_bytes", gb2)?.max(0);
-    let auto_purge_min_candidate_bytes = kv_i64_or(
-        conn,
-        "storage_policy.auto_purge_min_candidate_bytes",
-        mb10,
-    )?
-    .max(0);
+    let auto_purge_min_candidate_bytes =
+        kv_i64_or(conn, "storage_policy.auto_purge_min_candidate_bytes", mb10)?.max(0);
     let auto_purge_include_images =
         kv_bool_or(conn, "storage_policy.auto_purge_include_images", false)?;
 

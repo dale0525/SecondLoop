@@ -6,31 +6,53 @@ platforms = ["osx-arm64", "linux-64", "win-64"]
 version = "0.1.0"
 
 [tasks]
+# Bootstrap task (first clone / new machine / Flutter drift).
+# Installs and pins the required Flutter SDK via FVM, then runs flutter pub get.
 setup-flutter = "dart pub global activate fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
+
+# Generic command entry points (keeps task count low).
+# Common usage:
+# - Flutter analyze/tests: pixi run flutter analyze / pixi run flutter test
+# - Dart formatting: pixi run dart format "--output=none lib test ..."
+# - Cargo checks/tests: pixi run cargo test / pixi run cargo clippy "--all-targets --all-features -- -D warnings"
+flutter = { cmd = "dart pub global run fvm:main flutter {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
+dart = { cmd = "dart pub global run fvm:main dart {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
+cargo = { cmd = "cargo {{ command }} --manifest-path rust/Cargo.toml {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
+
+# Local developer helpers.
+# - init-env: creates .env.local (idempotent, no-op when file exists)
+# - install-git-hooks: installs local pre-commit hooks
 init-env = "bash scripts/init_env.sh"
 install-git-hooks = "bash scripts/install_git_hooks.sh"
+
+# Release helper (maintainers).
 release = "bash scripts/release_tag.sh"
-setup-android-sdk = "bash scripts/setup_android_sdk.sh"
-setup-rustup = "bash scripts/setup_rustup.sh"
-doctor = "dart pub global run fvm:main flutter doctor -v"
-analyze = "dart pub global run fvm:main flutter analyze"
-test = "dart pub global run fvm:main flutter test"
-clean = "dart pub global run fvm:main flutter clean"
-format = "dart pub global run fvm:main dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
-format-fix = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver"
-rust-fmt-fix = "cargo fmt --manifest-path rust/Cargo.toml --all"
-fmt = { depends-on = ["format-fix", "rust-fmt-fix"] }
-fmt-check = { depends-on = ["format", "rust-fmt"] }
-ci = { depends-on = ["fmt-check", "analyze", "test", "rust-clippy", "rust-test"] }
-run-android = { cmd = "env CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh run -d android", depends-on = ["setup-android-sdk", "setup-rustup"] }
-build-android-apk = { cmd = "env CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh build apk --release", depends-on = ["setup-android-sdk", "setup-rustup"] }
-run-android-cn = { cmd = "env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh run -d android", depends-on = ["setup-android-sdk", "setup-rustup"] }
-build-android-apk-cn = { cmd = "env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh build apk --release", depends-on = ["setup-android-sdk", "setup-rustup"] }
+
+# Cache cleanup (use when disk usage grows during long dev cycles).
+clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r -d \"\" cache_tag; do cleaned=1; target_dir=\"${cache_tag%/CACHEDIR.TAG}\"; rm -rf \"$target_dir/release\" \"$target_dir/doc\" \"$target_dir/package\"; find \"$target_dir\" -mindepth 2 -maxdepth 2 -type d \\( -name release -o -name doc -o -name package \\) -prune -exec rm -rf {} +; done < <(find . -type f -path \"*/target/CACHEDIR.TAG\" -print0); if [ -n \"${CARGO_TARGET_DIR:-}\" ] && [ -d \"${CARGO_TARGET_DIR}\" ]; then cleaned=1; target_dir=\"${CARGO_TARGET_DIR}\"; rm -rf \"$target_dir/release\" \"$target_dir/doc\" \"$target_dir/package\"; find \"$target_dir\" -mindepth 2 -maxdepth 2 -type d \\( -name release -o -name doc -o -name package \\) -prune -exec rm -rf {} +; fi; while IFS= read -r -d \"\" pycache_dir; do cleaned=1; rm -rf \"$pycache_dir\"; done < <(find ./tools -type d -name \"__pycache__\" -print0 2>/dev/null || true); while IFS= read -r -d \"\" gradle_cold_dir; do cleaned=1; rm -rf \"$gradle_cold_dir\"; done < <(find .tool -maxdepth 1 -mindepth 1 -type d -name \"gradle-cold-*\" -print0 2>/dev/null || true); while IFS= read -r -d \"\" tool_cache_dir; do cleaned=1; rm -rf \"$tool_cache_dir\"; done < <(find .tool/cache -maxdepth 1 -mindepth 1 -type d \\( -name android -o -name rustup \\) -print0 2>/dev/null || true); if [ \"$cleaned\" -eq 0 ]; then echo \"No unused cache found under $PWD or CARGO_TARGET_DIR\"; fi'"
+
+# Quality gates (before sharing or opening a PR).
+# - fmt: auto-fix formatting
+# - fmt-check: check-only formatting (CI-aligned)
+# - ci: local minimal CI (fmt-check + flutter analyze/test + rust clippy/test)
+fmt = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver && cargo fmt --manifest-path rust/Cargo.toml --all"
+fmt-check = "dart pub global run fvm:main dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed && cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
+ci = { cmd = "dart pub global run fvm:main flutter analyze && dart pub global run fvm:main flutter test && cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path rust/Cargo.toml", depends-on = ["fmt-check"] }
+
+# Run/build workflows (auto-include setup-flutter + init-env).
+# Typical usage:
+# - Android local run: run-android / run-android-cn
+# - Android release apk: build-android-apk / build-android-apk-cn
+run-android = { cmd = "bash scripts/setup_android_sdk.sh && bash scripts/setup_rustup.sh && env CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh run -d android", depends-on = ["setup-flutter", "init-env"] }
+build-android-apk = { cmd = "bash scripts/setup_android_sdk.sh && bash scripts/setup_rustup.sh && env CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh build apk --release", depends-on = ["setup-flutter", "init-env"] }
+run-android-cn = { cmd = "bash scripts/setup_android_sdk.sh && bash scripts/setup_rustup.sh && env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh run -d android", depends-on = ["setup-flutter", "init-env"] }
+build-android-apk-cn = { cmd = "bash scripts/setup_android_sdk.sh && bash scripts/setup_rustup.sh && env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup CARGO_HOME=\"$PWD/.tool/cargo\" RUSTUP_HOME=\"$PWD/.tool/rustup\" ANDROID_SDK_ROOT=\"$PWD/.tool/android-sdk\" ANDROID_HOME=\"$PWD/.tool/android-sdk\" ANDROID_USER_HOME=\"$PWD/.tool/android\" GRADLE_USER_HOME=\"$PWD/.tool/gradle\" bash scripts/flutter_with_defines.sh build apk --release", depends-on = ["setup-flutter", "init-env"] }
+
+# Code/resource generation helpers.
+# - frb-generate: regenerate Rust <-> Flutter bridge code
+# - i18n-sync: translate and refresh strings.g.dart
+# - icons-update: regenerate app icons (including macOS round-corner pre-processing)
 frb-generate = "env RUST_LOG=info PATH=\"$PWD/.fvm/flutter_sdk/bin:$HOME/.cargo/bin:$PATH\" flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml"
-rust-build-release = "cargo build --manifest-path rust/Cargo.toml --release"
-rust-test = "cargo test --manifest-path rust/Cargo.toml"
-rust-fmt = "cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
-rust-clippy = "cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings"
 i18n-gen = "dart pub global run fvm:main dart run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
 i18n-translate = "python tools/i18n_translate.py"
 i18n-sync = { depends-on = ["i18n-translate", "i18n-gen"] }
@@ -54,17 +76,18 @@ clang_osx-arm64 = ">=21.1.8,<22"
 clangxx_osx-arm64 = ">=21.1.8,<22"
 
 [target.osx-arm64.tasks]
-setup-cocoapods = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2"
-prepare-ffmpeg-macos = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=macos"
-run-macos = { cmd = "env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["setup-cocoapods", "prepare-ffmpeg-macos"] }
+prepare-ffmpeg-macos = "bash scripts/setup_ffmpeg_macos.sh && dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=macos"
+run-macos = { cmd = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2 && env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-macos"] }
 
 [target.linux-64.tasks]
 prepare-ffmpeg-linux = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=linux"
-run-linux = { cmd = "bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["prepare-ffmpeg-linux"] }
+run-linux = { cmd = "bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-linux"] }
 
 [target.win-64.tasks]
+# Windows-specific overrides.
+# - init-env uses PowerShell (no bash dependency)
+# - run-windows triggers nuget + ffmpeg preflight automatically
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
-setup-nuget = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_nuget.ps1"
-setup-windows = { cmd = "echo setup-windows ok", depends-on = ["setup-flutter", "setup-nuget"] }
-prepare-ffmpeg-windows = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=windows"
-run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["setup-windows", "prepare-ffmpeg-windows"] }
+init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"
+prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
+run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-windows"] }

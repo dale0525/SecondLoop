@@ -11,6 +11,7 @@ import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import 'attachment_text_source_policy.dart';
 
 class AttachmentCard extends StatelessWidget {
   const AttachmentCard({
@@ -42,12 +43,18 @@ class AttachmentCard extends StatelessWidget {
         final cardData = snapshot.data;
         final meta = cardData?.metadata;
         final displayTitle = _resolveDisplayTitle(attachment, meta);
+        final isOcrRunning = cardData?.ocrRunning ?? false;
+        final preparingText = context.t.sync.progressDialog.preparing;
         final subtitle = _resolveDisplaySummary(
           meta,
           extractedSummary: cardData?.extractedSummary,
           displayTitle: displayTitle,
-          fallback: context.t.sync.progressDialog.preparing,
+          fallback: isOcrRunning
+              ? context.t.attachments.content.ocrRunning
+              : preparingText,
         );
+        final showProcessingIndicator =
+            isOcrRunning || subtitle == preparingText;
         final icon = _resolveIcon(attachment.mimeType);
 
         return ConstrainedBox(
@@ -86,15 +93,43 @@ class AttachmentCard extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              height: 1.25,
+                      if (showProcessingIndicator)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                      ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                subtitle,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      height: 1.25,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    height: 1.25,
+                                  ),
+                        ),
                     ],
                   ),
                 ),
@@ -132,7 +167,7 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
   final metadataFuture = const RustAttachmentMetadataStore()
       .read(sessionKey, attachmentSha256: attachmentSha256)
       .catchError((_) => null);
-  final summaryFuture = _readExtractedSummaryFromPayload(
+  final summaryFuture = _readPayloadSummaryFromPayload(
     sessionKey,
     attachmentSha256: attachmentSha256,
   );
@@ -143,11 +178,19 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
   ]);
   return _AttachmentCardData(
     metadata: values[0] as AttachmentMetadata?,
-    extractedSummary: values[1] as String?,
+    extractedSummary: (values[1] as _AttachmentCardPayloadSummary).summary,
+    ocrRunning: (values[1] as _AttachmentCardPayloadSummary).ocrRunning,
   );
 }
 
-Future<String?> _readExtractedSummaryFromPayload(
+bool _isAttachmentOcrRunning(Map<String, Object?> payload) {
+  final status =
+      (payload['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
+  if (status == 'running') return true;
+  return payload['ocr_running'] == true;
+}
+
+Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
   Uint8List sessionKey, {
   required String attachmentSha256,
 }) async {
@@ -160,17 +203,31 @@ Future<String?> _readExtractedSummaryFromPayload(
       attachmentSha256: attachmentSha256,
     );
     final raw = payloadJson?.trim();
-    if (raw == null || raw.isEmpty) return null;
+    if (raw == null || raw.isEmpty) {
+      return const _AttachmentCardPayloadSummary(
+        summary: null,
+        ocrRunning: false,
+      );
+    }
 
     final decoded = jsonDecode(raw);
-    if (decoded is! Map) return null;
+    if (decoded is! Map) {
+      return const _AttachmentCardPayloadSummary(
+        summary: null,
+        ocrRunning: false,
+      );
+    }
     final payload = Map<String, Object?>.from(decoded);
     final summary = extractAttachmentCardSummaryFromPayload(payload);
-    if (summary != null) return summary;
+    return _AttachmentCardPayloadSummary(
+      summary: summary,
+      ocrRunning: _isAttachmentOcrRunning(payload),
+    );
   } catch (_) {
-    return null;
+    return const _AttachmentCardPayloadSummary(
+        summary: null, ocrRunning: false);
   }
-  return null;
+  return const _AttachmentCardPayloadSummary(summary: null, ocrRunning: false);
 }
 
 String _normalizedTextSnippet(String? raw) {
@@ -179,15 +236,12 @@ String _normalizedTextSnippet(String? raw) {
 }
 
 String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
-  final readableExcerpt = _normalizedTextSnippet(
-    payload['readable_text_excerpt']?.toString(),
-  );
-  if (readableExcerpt.isNotEmpty) return readableExcerpt;
+  final preferred = selectAttachmentDisplayText(payload);
+  final preferredExcerpt = _normalizedTextSnippet(preferred.excerpt);
+  if (preferredExcerpt.isNotEmpty) return preferredExcerpt;
 
-  final extractedExcerpt = _normalizedTextSnippet(
-    payload['extracted_text_excerpt']?.toString(),
-  );
-  if (extractedExcerpt.isNotEmpty) return extractedExcerpt;
+  final preferredFull = _normalizedTextSnippet(preferred.full);
+  if (preferredFull.isNotEmpty) return preferredFull;
 
   final transcriptExcerpt = _normalizedTextSnippet(
     payload['transcript_excerpt']?.toString(),
@@ -262,8 +316,20 @@ final class _AttachmentCardData {
   const _AttachmentCardData({
     required this.metadata,
     required this.extractedSummary,
+    required this.ocrRunning,
   });
 
   final AttachmentMetadata? metadata;
   final String? extractedSummary;
+  final bool ocrRunning;
+}
+
+final class _AttachmentCardPayloadSummary {
+  const _AttachmentCardPayloadSummary({
+    required this.summary,
+    required this.ocrRunning,
+  });
+
+  final String? summary;
+  final bool ocrRunning;
 }

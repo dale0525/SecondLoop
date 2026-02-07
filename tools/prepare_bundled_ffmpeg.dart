@@ -12,6 +12,11 @@ Future<void> main(List<String> args) async {
 
   final platform = config.platform ?? _detectHostDesktopPlatform();
   final sourcePath = config.sourceBin ??
+      resolveFfmpegFromProjectPaths(
+        projectRoot: Directory.current.path,
+        platform: platform,
+        isFile: (candidate) => File(candidate).existsSync(),
+      ) ??
       resolveFfmpegFromPath(
         pathEnv: Platform.environment['PATH'] ?? '',
         platform: platform,
@@ -21,7 +26,8 @@ Future<void> main(List<String> args) async {
 
   if (sourcePath == null || sourcePath.trim().isEmpty) {
     stderr.writeln(
-      'prepare-bundled-ffmpeg: unable to locate ffmpeg in PATH. '
+      'prepare-bundled-ffmpeg: unable to locate ffmpeg in '
+      'project paths (.tools/.tool/.pixi) or PATH. '
       'Provide --source-bin=/absolute/path/to/ffmpeg',
     );
     exit(2);

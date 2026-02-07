@@ -43,6 +43,45 @@ String bundledRelativePath(DesktopPlatform platform) {
   return 'assets/bin/ffmpeg/$folder/$executable';
 }
 
+String? resolveFfmpegFromProjectPaths({
+  required String projectRoot,
+  required DesktopPlatform platform,
+  required bool Function(String candidatePath) isFile,
+}) {
+  final executable = bundledExecutableName(platform);
+  final platformFolder = desktopPlatformFolderName(platform);
+  final candidates = <String>[
+    _joinPath(
+      projectRoot,
+      <String>['.tools', 'ffmpeg', platformFolder, executable],
+      platform,
+    ),
+    _joinPath(projectRoot, <String>['.tools', 'ffmpeg', executable], platform),
+    _joinPath(
+      projectRoot,
+      <String>['.tool', 'ffmpeg', platformFolder, executable],
+      platform,
+    ),
+    _joinPath(projectRoot, <String>['.tool', 'ffmpeg', executable], platform),
+    if (platform == DesktopPlatform.windows)
+      _joinPath(
+        projectRoot,
+        <String>['.pixi', 'envs', 'default', 'Library', 'bin', executable],
+        platform,
+      ),
+    _joinPath(
+      projectRoot,
+      <String>['.pixi', 'envs', 'default', 'bin', executable],
+      platform,
+    ),
+  ];
+
+  for (final candidate in candidates) {
+    if (isFile(candidate)) return candidate;
+  }
+  return null;
+}
+
 String? resolveFfmpegFromPath({
   required String pathEnv,
   required DesktopPlatform platform,
@@ -82,6 +121,18 @@ String _joinDirectoryAndFile(
   if (hasTrailingSlash) return '$directory$fileName';
   final separator = platform == DesktopPlatform.windows ? r'\' : '/';
   return '$directory$separator$fileName';
+}
+
+String _joinPath(
+  String base,
+  List<String> rest,
+  DesktopPlatform platform,
+) {
+  var out = base;
+  for (final part in rest) {
+    out = _joinDirectoryAndFile(out, part, platform);
+  }
+  return out;
 }
 
 String _trimOuterQuotes(String value) {

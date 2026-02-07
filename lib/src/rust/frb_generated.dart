@@ -7023,31 +7023,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ContentEnrichmentConfig dco_decode_content_enrichment_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 22)
-      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return ContentEnrichmentConfig(
       urlFetchEnabled: dco_decode_bool(arr[0]),
       documentExtractEnabled: dco_decode_bool(arr[1]),
       documentKeepOriginalMaxBytes: dco_decode_i_64(arr[2]),
-      pdfCompressEnabled: dco_decode_bool(arr[3]),
-      pdfCompressProfile: dco_decode_String(arr[4]),
-      pdfCompressMinBytes: dco_decode_i_64(arr[5]),
-      pdfCompressTargetMaxBytes: dco_decode_i_64(arr[6]),
-      audioTranscribeEnabled: dco_decode_bool(arr[7]),
-      audioTranscribeEngine: dco_decode_String(arr[8]),
-      videoExtractEnabled: dco_decode_bool(arr[9]),
-      videoProxyEnabled: dco_decode_bool(arr[10]),
-      videoProxyMaxDurationMs: dco_decode_i_64(arr[11]),
-      videoProxyMaxBytes: dco_decode_i_64(arr[12]),
-      ocrEnabled: dco_decode_bool(arr[13]),
-      ocrEngineMode: dco_decode_String(arr[14]),
-      ocrLanguageHints: dco_decode_String(arr[15]),
-      ocrPdfDpi: dco_decode_i_64(arr[16]),
-      ocrPdfAutoMaxPages: dco_decode_i_64(arr[17]),
-      ocrPdfMaxPages: dco_decode_i_64(arr[18]),
-      mobileBackgroundEnabled: dco_decode_bool(arr[19]),
-      mobileBackgroundRequiresWifi: dco_decode_bool(arr[20]),
-      mobileBackgroundRequiresCharging: dco_decode_bool(arr[21]),
+      pdfSmartCompressEnabled: dco_decode_bool(arr[3]),
+      audioTranscribeEnabled: dco_decode_bool(arr[4]),
+      audioTranscribeEngine: dco_decode_String(arr[5]),
+      videoExtractEnabled: dco_decode_bool(arr[6]),
+      videoProxyEnabled: dco_decode_bool(arr[7]),
+      videoProxyMaxDurationMs: dco_decode_i_64(arr[8]),
+      videoProxyMaxBytes: dco_decode_i_64(arr[9]),
+      ocrEnabled: dco_decode_bool(arr[10]),
+      ocrEngineMode: dco_decode_String(arr[11]),
+      ocrLanguageHints: dco_decode_String(arr[12]),
+      ocrPdfDpi: dco_decode_i_64(arr[13]),
+      ocrPdfAutoMaxPages: dco_decode_i_64(arr[14]),
+      ocrPdfMaxPages: dco_decode_i_64(arr[15]),
+      mobileBackgroundEnabled: dco_decode_bool(arr[16]),
+      mobileBackgroundRequiresWifi: dco_decode_bool(arr[17]),
+      mobileBackgroundRequiresCharging: dco_decode_bool(arr[18]),
     );
   }
 
@@ -7722,10 +7719,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_urlFetchEnabled = sse_decode_bool(deserializer);
     var var_documentExtractEnabled = sse_decode_bool(deserializer);
     var var_documentKeepOriginalMaxBytes = sse_decode_i_64(deserializer);
-    var var_pdfCompressEnabled = sse_decode_bool(deserializer);
-    var var_pdfCompressProfile = sse_decode_String(deserializer);
-    var var_pdfCompressMinBytes = sse_decode_i_64(deserializer);
-    var var_pdfCompressTargetMaxBytes = sse_decode_i_64(deserializer);
+    var var_pdfSmartCompressEnabled = sse_decode_bool(deserializer);
     var var_audioTranscribeEnabled = sse_decode_bool(deserializer);
     var var_audioTranscribeEngine = sse_decode_String(deserializer);
     var var_videoExtractEnabled = sse_decode_bool(deserializer);
@@ -7745,10 +7739,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         urlFetchEnabled: var_urlFetchEnabled,
         documentExtractEnabled: var_documentExtractEnabled,
         documentKeepOriginalMaxBytes: var_documentKeepOriginalMaxBytes,
-        pdfCompressEnabled: var_pdfCompressEnabled,
-        pdfCompressProfile: var_pdfCompressProfile,
-        pdfCompressMinBytes: var_pdfCompressMinBytes,
-        pdfCompressTargetMaxBytes: var_pdfCompressTargetMaxBytes,
+        pdfSmartCompressEnabled: var_pdfSmartCompressEnabled,
         audioTranscribeEnabled: var_audioTranscribeEnabled,
         audioTranscribeEngine: var_audioTranscribeEngine,
         videoExtractEnabled: var_videoExtractEnabled,
@@ -8555,10 +8546,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.urlFetchEnabled, serializer);
     sse_encode_bool(self.documentExtractEnabled, serializer);
     sse_encode_i_64(self.documentKeepOriginalMaxBytes, serializer);
-    sse_encode_bool(self.pdfCompressEnabled, serializer);
-    sse_encode_String(self.pdfCompressProfile, serializer);
-    sse_encode_i_64(self.pdfCompressMinBytes, serializer);
-    sse_encode_i_64(self.pdfCompressTargetMaxBytes, serializer);
+    sse_encode_bool(self.pdfSmartCompressEnabled, serializer);
     sse_encode_bool(self.audioTranscribeEnabled, serializer);
     sse_encode_String(self.audioTranscribeEngine, serializer);
     sse_encode_bool(self.videoExtractEnabled, serializer);

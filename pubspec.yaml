@@ -58,6 +58,7 @@ dependencies:
   flutter_image_compress: ^2.3.0
   connectivity_plus: ^6.1.0
   just_audio: ^0.9.42
+  archive: ^4.0.7
 
 dev_dependencies:
   flutter_test:
@@ -90,6 +91,7 @@ flutter:
 
   assets:
     - assets/bin/ffmpeg/
+    - assets/ocr/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

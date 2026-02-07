@@ -1,4 +1,5 @@
 const URL_MANIFEST_MIME: &str = "application/x.secondloop.url+json";
+const VIDEO_MANIFEST_MIME: &str = "application/x.secondloop.video+json";
 const DOCX_MIME: &str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME: &str = "application/pdf";
 
@@ -82,18 +83,9 @@ pub fn list_due_url_manifest_attachment_annotations(
     )
 }
 
-pub fn list_due_document_attachment_annotations(
-    conn: &Connection,
-    now_ms: i64,
-    limit: i64,
-) -> Result<Vec<AttachmentAnnotationJob>> {
-    // Keep in sync with `crate::content_extract::extract_document` supported types.
-    list_due_attachment_annotations_filtered(
-        conn,
-        now_ms,
-        limit,
-        &format!(
-            r#"
+fn document_mime_sql_filter() -> String {
+    format!(
+        r#"
 a.mime_type = '{PDF_MIME}'
 OR a.mime_type = '{DOCX_MIME}'
 OR a.mime_type LIKE 'text/%'
@@ -111,8 +103,50 @@ OR a.mime_type IN (
   'application/x-csv'
 )
 "#
-        ),
     )
+}
+
+pub fn list_due_document_attachment_annotations(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<AttachmentAnnotationJob>> {
+    // Keep in sync with `crate::content_extract::extract_document` supported types.
+    list_due_attachment_annotations_filtered(conn, now_ms, limit, &document_mime_sql_filter())
+}
+
+pub fn list_due_video_manifest_attachment_annotations(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<AttachmentAnnotationJob>> {
+    list_due_attachment_annotations_filtered(
+        conn,
+        now_ms,
+        limit,
+        &format!("a.mime_type = '{VIDEO_MANIFEST_MIME}'"),
+    )
+}
+
+fn list_due_content_extract_attachment_annotations(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+    include_documents: bool,
+    include_video_manifests: bool,
+) -> Result<Vec<AttachmentAnnotationJob>> {
+    let mut filters = Vec::<String>::new();
+    if include_documents {
+        filters.push(document_mime_sql_filter());
+    }
+    if include_video_manifests {
+        filters.push(format!("a.mime_type = '{VIDEO_MANIFEST_MIME}'"));
+    }
+    if filters.is_empty() {
+        return Ok(Vec::new());
+    }
+    let filter = filters.join("\nOR\n");
+    list_due_attachment_annotations_filtered(conn, now_ms, limit, &filter)
 }
 
 fn is_supported_document_mime_type(mime_type: &str) -> bool {
@@ -187,12 +221,19 @@ pub fn process_pending_document_extractions(
     limit: usize,
 ) -> Result<usize> {
     let cfg = get_content_enrichment_config(conn)?;
-    if !cfg.document_extract_enabled {
+    let process_documents = cfg.document_extract_enabled;
+    if !process_documents {
         return Ok(0);
     }
 
     let now = now_ms();
-    let due = list_due_document_attachment_annotations(conn, now, limit as i64)?;
+    let due = list_due_content_extract_attachment_annotations(
+        conn,
+        now,
+        limit as i64,
+        process_documents,
+        false,
+    )?;
     if due.is_empty() {
         return Ok(0);
     }
@@ -206,8 +247,23 @@ pub fn process_pending_document_extractions(
         let result: Result<()> = (|| {
             let mime_type = read_attachment_mime_type(conn, &job.attachment_sha256)?;
             let bytes = read_attachment_bytes(conn, key, app_dir, &job.attachment_sha256)?;
+            let normalized_mime = mime_type.trim().to_ascii_lowercase();
+
+            if !process_documents || !is_supported_document_mime_type(&normalized_mime) {
+                return Ok(());
+            }
 
             let extracted = crate::content_extract::extract_document(&mime_type, &bytes)?;
+            let is_pdf = mime_type.trim().eq_ignore_ascii_case(PDF_MIME);
+
+            let mut ocr_lang_hints: Option<String> = None;
+            let mut ocr_page_count: Option<u32> = None;
+
+            if is_pdf && extracted.needs_ocr {
+                ocr_lang_hints = Some(cfg.ocr_language_hints.clone());
+                ocr_page_count = extracted.page_count;
+            }
+
             let payload = serde_json::json!({
                 "schema": "secondloop.document_extract.v1",
                 "mime_type": mime_type,
@@ -215,6 +271,13 @@ pub fn process_pending_document_extractions(
                 "extracted_text_excerpt": extracted.excerpt,
                 "needs_ocr": extracted.needs_ocr,
                 "page_count": extracted.page_count,
+                "ocr_text_full": serde_json::Value::Null,
+                "ocr_text_excerpt": serde_json::Value::Null,
+                "ocr_engine": serde_json::Value::Null,
+                "ocr_lang_hints": ocr_lang_hints,
+                "ocr_is_truncated": serde_json::Value::Null,
+                "ocr_page_count": ocr_page_count,
+                "ocr_processed_pages": serde_json::Value::Null,
             });
 
             mark_attachment_annotation_ok(

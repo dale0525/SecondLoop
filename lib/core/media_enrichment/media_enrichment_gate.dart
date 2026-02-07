@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../features/audio_transcribe/audio_transcribe_runner.dart';
+import '../../features/attachments/platform_pdf_ocr.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
@@ -13,6 +15,7 @@ import '../backend/native_backend.dart';
 import '../attachments/attachment_metadata_store.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../content_enrichment/content_enrichment_config_store.dart';
+import '../content_enrichment/pdf_ocr_auto_policy.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -41,6 +44,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
   DateTime? _nextRunAt;
   bool _running = false;
   bool _cellularPromptShown = false;
+  final Set<String> _autoOcrCompletedShas = <String>{};
 
   @override
   void initState() {
@@ -111,6 +115,175 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     final m = dt.month.toString().padLeft(2, '0');
     final d = dt.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
+  }
+
+  static int _asInt(Object? raw) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) {
+      return int.tryParse(raw.trim()) ?? 0;
+    }
+    return 0;
+  }
+
+  static Map<String, Object?>? _decodePayloadObject(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return Map<String, Object?>.from(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<int> _runAutoPdfOcrForRecentScannedPdfs({
+    required NativeAppBackend backend,
+    required Uint8List sessionKey,
+    required ContentEnrichmentConfig? contentConfig,
+  }) async {
+    if (!(contentConfig?.ocrEnabled ?? true)) return 0;
+    // Auto OCR no longer enforces a user-facing page cap.
+    const autoMaxPages = 0;
+    const hardMaxPages = 10000;
+    const dpi = 180;
+    const languageHints = 'device_plus_en';
+
+    final recent = await backend.listRecentAttachments(sessionKey, limit: 80);
+    var updated = 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    for (final attachment in recent) {
+      final mime = attachment.mimeType.trim().toLowerCase();
+      if (mime != 'application/pdf') continue;
+      if (_autoOcrCompletedShas.contains(attachment.sha256)) continue;
+
+      final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+        sessionKey,
+        sha256: attachment.sha256,
+      );
+      final payload = _decodePayloadObject(payloadJson);
+      if (payload == null) continue;
+      if (!shouldAutoRunPdfOcr(
+        payload,
+        autoMaxPages: autoMaxPages,
+        nowMs: now,
+      )) {
+        continue;
+      }
+
+      final pageCount = _asInt(payload['page_count']);
+      if (pageCount <= 0) continue;
+
+      final runMaxPages = hardMaxPages;
+      final attemptMs = DateTime.now().millisecondsSinceEpoch;
+      final retryCount = _asInt(payload['ocr_auto_retry_count']);
+
+      Future<void> persistPayload(Map<String, Object?> next, int ts) async {
+        await backend.markAttachmentAnnotationOkJson(
+          sessionKey,
+          attachmentSha256: attachment.sha256,
+          lang: 'und',
+          modelName: 'document_extract.v1',
+          payloadJson: jsonEncode(next),
+          nowMs: ts,
+        );
+      }
+
+      try {
+        final runningPayload = Map<String, Object?>.from(payload);
+        runningPayload['ocr_auto_status'] = 'running';
+        runningPayload['ocr_auto_running_ms'] = attemptMs;
+        runningPayload['ocr_auto_last_attempt_ms'] = attemptMs;
+        runningPayload['ocr_auto_attempted_ms'] = attemptMs;
+        runningPayload['ocr_auto_retry_count'] = retryCount;
+        await persistPayload(runningPayload, attemptMs);
+
+        final bytes = await backend.readAttachmentBytes(
+          sessionKey,
+          sha256: attachment.sha256,
+        );
+        if (bytes.isEmpty) {
+          final failedPayload = Map<String, Object?>.from(runningPayload);
+          failedPayload.remove('ocr_auto_running_ms');
+          failedPayload['ocr_auto_status'] = 'failed';
+          failedPayload['ocr_auto_last_failure_ms'] =
+              DateTime.now().millisecondsSinceEpoch;
+          failedPayload['ocr_auto_retry_count'] = retryCount + 1;
+          await persistPayload(
+            failedPayload,
+            failedPayload['ocr_auto_last_failure_ms'] as int,
+          );
+          continue;
+        }
+
+        final ocr = await PlatformPdfOcr.tryOcrPdfBytes(
+          bytes,
+          maxPages: runMaxPages,
+          dpi: dpi,
+          languageHints: languageHints,
+        );
+
+        final updatedPayload = Map<String, Object?>.from(runningPayload);
+        updatedPayload.remove('ocr_auto_running_ms');
+        if (ocr != null) {
+          final extractedText = ((payload['extracted_text_excerpt'] ??
+                      payload['extracted_text_full']) ??
+                  '')
+              .toString()
+              .trim();
+          updatedPayload['needs_ocr'] =
+              ocr.fullText.trim().isEmpty && extractedText.isEmpty;
+          updatedPayload['ocr_text_full'] = ocr.fullText;
+          updatedPayload['ocr_text_excerpt'] = ocr.excerpt;
+          updatedPayload['ocr_engine'] = ocr.engine;
+          updatedPayload['ocr_lang_hints'] = languageHints;
+          updatedPayload['ocr_dpi'] = dpi;
+          updatedPayload['ocr_retry_attempted'] = ocr.retryAttempted;
+          updatedPayload['ocr_retry_attempts'] = ocr.retryAttempts;
+          updatedPayload['ocr_retry_hints'] = ocr.retryHintsTried.join(',');
+          updatedPayload['ocr_is_truncated'] = ocr.isTruncated;
+          updatedPayload['ocr_page_count'] = ocr.pageCount;
+          updatedPayload['ocr_processed_pages'] = ocr.processedPages;
+          updatedPayload['ocr_auto_status'] = 'ok';
+          updatedPayload['ocr_auto_last_success_ms'] =
+              DateTime.now().millisecondsSinceEpoch;
+          updatedPayload.remove('ocr_auto_last_failure_ms');
+          await persistPayload(
+            updatedPayload,
+            updatedPayload['ocr_auto_last_success_ms'] as int,
+          );
+          _autoOcrCompletedShas.add(attachment.sha256);
+          updated += 1;
+        } else {
+          updatedPayload['ocr_auto_status'] = 'failed';
+          updatedPayload['ocr_auto_last_failure_ms'] =
+              DateTime.now().millisecondsSinceEpoch;
+          updatedPayload['ocr_auto_retry_count'] = retryCount + 1;
+          await persistPayload(
+            updatedPayload,
+            updatedPayload['ocr_auto_last_failure_ms'] as int,
+          );
+        }
+      } catch (_) {
+        final failedPayload = Map<String, Object?>.from(payload);
+        failedPayload.remove('ocr_auto_running_ms');
+        failedPayload['ocr_auto_status'] = 'failed';
+        failedPayload['ocr_auto_last_failure_ms'] =
+            DateTime.now().millisecondsSinceEpoch;
+        failedPayload['ocr_auto_retry_count'] = retryCount + 1;
+        try {
+          await persistPayload(
+            failedPayload,
+            failedPayload['ocr_auto_last_failure_ms'] as int,
+          );
+        } catch (_) {
+          // ignore per-attachment status persistence failures.
+        }
+      }
+    }
+
+    return updated;
   }
 
   Future<bool> _promptAllowCellular() async {
@@ -196,6 +369,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           contentBackgroundEnabled && (contentConfig?.urlFetchEnabled ?? true);
       final documentExtractEnabled = contentBackgroundEnabled &&
           (contentConfig?.documentExtractEnabled ?? true);
+      final videoExtractEnabled = contentBackgroundEnabled &&
+          (contentConfig?.videoExtractEnabled ?? false);
       final contentRequiresWifi =
           contentConfig?.mobileBackgroundRequiresWifi ?? true;
       final audioTranscribeConfigured = contentBackgroundEnabled &&
@@ -302,6 +477,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           !annotationEnabled &&
           !urlFetchEnabled &&
           !documentExtractEnabled &&
+          !videoExtractEnabled &&
           !audioTranscribeEnabled) {
         _schedule(_kIdleInterval);
         return;
@@ -349,7 +525,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       }
 
       var processedDocs = 0;
-      if (documentExtractEnabled) {
+      if (documentExtractEnabled || videoExtractEnabled) {
         try {
           processedDocs = await backend.processPendingDocumentExtractions(
             Uint8List.fromList(sessionKey),
@@ -357,6 +533,19 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           );
         } catch (_) {
           processedDocs = 0;
+        }
+      }
+
+      var processedAutoPdfOcr = 0;
+      if (documentExtractEnabled) {
+        try {
+          processedAutoPdfOcr = await _runAutoPdfOcrForRecentScannedPdfs(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+            contentConfig: contentConfig,
+          );
+        } catch (_) {
+          processedAutoPdfOcr = 0;
         }
       }
 
@@ -459,6 +648,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       final didEnrichAny = processedUrl > 0 ||
           processedDocs > 0 ||
+          processedAutoPdfOcr > 0 ||
           processedAudioTranscripts > 0 ||
           result.didEnrichAny;
       if (didEnrichAny) {
