@@ -78,10 +78,13 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
           case 'file':
             final mimeType = map['mimeType'];
             final filename = map['filename'];
-            if (mimeType is! String || mimeType.trim().isEmpty) continue;
+            final normalizedMimeType =
+                mimeType is String && mimeType.trim().isNotEmpty
+                    ? mimeType.trim()
+                    : 'application/octet-stream';
             await ShareIngest.enqueueFile(
               tempPath: content,
-              mimeType: mimeType,
+              mimeType: normalizedMimeType,
               filename: filename is String ? filename : null,
             );
             enqueuedAny = true;

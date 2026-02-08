@@ -19,6 +19,72 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets('Android: attach sheet can pick non-image files', (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    FilePicker? oldPicker;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final backend = _TestBackend();
+      final picker = _TestFilePicker(
+        result: FilePickerResult([
+          PlatformFile(
+            name: 'report.txt',
+            size: 5,
+            bytes: Uint8List.fromList(const <int>[104, 101, 108, 108, 111]),
+          ),
+        ]),
+      );
+      FilePicker.platform = picker;
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Chat',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat_attach_pick_media')));
+      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () => backend.insertAttachmentCalls >= 1,
+        maxTicks: 300,
+      );
+
+      expect(picker.allowMultipleCalls, [true]);
+      expect(backend.insertAttachmentCalls, 1);
+      expect(backend.insertedAttachmentMimeTypes, contains('text/plain'));
+      expect(backend.linkCalls, 1);
+      expect(backend.insertMessageCalls, 1);
+    } finally {
+      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
   testWidgets('Desktop: attach button uploads image attachment',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;

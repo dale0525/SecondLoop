@@ -27,7 +27,6 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
-import '../../core/platform/android_media_location_permission.dart';
 import '../../core/platform/platform_location.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';

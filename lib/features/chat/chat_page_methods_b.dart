@@ -665,10 +665,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   }
 
   Future<void> _pickAndSendMedia() async {
-    if (_isDesktopPlatform) {
-      return _pickAndSendAttachmentFromFile();
-    }
-    return _pickAndSendImageFromGallery();
+    return _pickAndSendAttachmentFromFile();
   }
 
   Future<void> _openAttachmentSheet() async {
@@ -811,52 +808,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
-  Future<void> _pickAndSendImageFromGallery() async {
-    if (_sending) return;
-    if (_asking) return;
-    if (!_supportsCamera) return;
-
-    _setState(() => _sending = true);
-    try {
-      await AndroidMediaLocationPermission.requestIfNeeded();
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        requestFullMetadata: true,
-      );
-      if (picked == null) return;
-
-      final platformExif =
-          await PlatformExifReader.tryReadImageMetadataFromPath(picked.path);
-      final rawBytes = await picked.readAsBytes();
-      final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
-      int? fallbackCapturedAtMs;
-      try {
-        fallbackCapturedAtMs =
-            (await picked.lastModified()).toUtc().millisecondsSinceEpoch;
-      } catch (_) {}
-      await _sendImageAttachment(
-        rawBytes,
-        inferredMimeType,
-        fallbackCapturedAtMs: fallbackCapturedAtMs,
-        platformExif: platformExif,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.photoFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } finally {
-      if (mounted) _setState(() => _sending = false);
-    }
-  }
-
   Future<void> _pickAndSendAttachmentFromFile() async {
     if (_sending) return;
     if (_asking) return;
-    if (!_isDesktopPlatform) return;
 
     _setState(() => _sending = true);
     try {

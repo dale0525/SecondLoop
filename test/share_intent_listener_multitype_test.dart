@@ -59,4 +59,48 @@ void main() {
     expect(second['type'], 'url');
     expect(second['content'], 'https://example.com');
   });
+
+  testWidgets('ShareIntentListener falls back mimeType for file share',
+      (tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    const channel = MethodChannel('secondloop/share_intent');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'consumePendingShares') {
+        return <Map<String, Object?>>[
+          {
+            'type': 'file',
+            'content': '/tmp/shared-no-mime.bin',
+            'filename': 'shared-no-mime.bin',
+          },
+        ];
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: ShareIntentListener(child: SizedBox.shrink()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    final queue = prefs.getStringList('share_ingest_queue_v1');
+    expect(queue, isNotNull);
+    expect(queue!.length, 1);
+
+    final first = jsonDecode(queue[0]) as Map;
+    expect(first['type'], 'file');
+    expect(first['path'], '/tmp/shared-no-mime.bin');
+    expect(first['mimeType'], 'application/octet-stream');
+    expect(first['filename'], 'shared-no-mime.bin');
+  });
 }
