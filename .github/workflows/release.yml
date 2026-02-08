@@ -84,8 +84,10 @@ jobs:
           build_name=''
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             candidate="${GITHUB_REF_NAME#v}"
-            if [[ "${candidate}" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
-              build_name="${candidate}"
+            if [[ "${candidate}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(\.[0-9]+)?$ ]]; then
+              # Keep Apple bundle short version compatible (X.Y.Z),
+              # while still allowing 4-segment release tags.
+              build_name="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             fi
           fi
 
@@ -118,6 +120,7 @@ jobs:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
+      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ vars.SECONDLOOP_DESKTOP_RUNTIME_TAG }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -134,10 +137,22 @@ jobs:
           if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD" }
+          if (-not $Env:SECONDLOOP_DESKTOP_RUNTIME_TAG) { throw "Missing repo variable SECONDLOOP_DESKTOP_RUNTIME_TAG" }
+          if ($Env:SECONDLOOP_DESKTOP_RUNTIME_TAG -notmatch '^desktop-runtime-v\d+\.\d+\.\d+(\.\d+)?$') { throw "SECONDLOOP_DESKTOP_RUNTIME_TAG must be desktop-runtime-vX.Y.Z(.W)" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD.StartsWith("https://")) { throw "Prod gateway URL must start with https://" }
           if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
           if ($Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging managed vault URL." }
+      - name: Prepare desktop runtime assets
+        shell: pwsh
+        run: |
+          $runtimeArch = if ($Env:PROCESSOR_ARCHITECTURE -match 'ARM64') { 'arm64' } else { 'x64' }
+          dart run tools/prepare_desktop_runtime.dart `
+            --platform=windows `
+            --arch=$runtimeArch `
+            --runtime-tag=$Env:SECONDLOOP_DESKTOP_RUNTIME_TAG `
+            --repo=$Env:GITHUB_REPOSITORY `
+            --require-runtime-tag
       - run: flutter pub get
       - name: Install FFmpeg
         shell: pwsh
@@ -151,8 +166,10 @@ jobs:
           $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
           if ($Env:GITHUB_REF -like "refs/tags/v*") {
             $candidate = $Env:GITHUB_REF_NAME.Substring(1)
-            if ($candidate -match '^\d+(\.\d+){2}$') {
-              $buildArgs += "--build-name=$candidate"
+            if ($candidate -match '^(\d+)\.(\d+)\.(\d+)(\.\d+)?$') {
+              # Keep Apple bundle short version compatible (X.Y.Z),
+              # while still allowing 4-segment release tags.
+              $buildArgs += "--build-name=$($Matches[1]).$($Matches[2]).$($Matches[3])"
             }
           }
           $defines = @(
@@ -179,6 +196,7 @@ jobs:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
+      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ vars.SECONDLOOP_DESKTOP_RUNTIME_TAG }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -201,6 +219,11 @@ jobs:
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+          : "${SECONDLOOP_DESKTOP_RUNTIME_TAG:?Missing repo variable SECONDLOOP_DESKTOP_RUNTIME_TAG}"
+          if [[ ! "${SECONDLOOP_DESKTOP_RUNTIME_TAG}" =~ ^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "SECONDLOOP_DESKTOP_RUNTIME_TAG must be desktop-runtime-vX.Y.Z(.W)"
+            exit 1
+          fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
@@ -217,6 +240,22 @@ jobs:
             echo "Refusing to build prod release with a staging managed vault URL."
             exit 1
           fi
+      - name: Prepare desktop runtime assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_arch='x64'
+          host_arch="$(uname -m)"
+          case "${host_arch}" in
+            arm64|aarch64) runtime_arch='arm64' ;;
+            x86_64|amd64) runtime_arch='x64' ;;
+          esac
+          dart run tools/prepare_desktop_runtime.dart \
+            --platform=macos \
+            --arch="${runtime_arch}" \
+            --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
+            --repo="${GITHUB_REPOSITORY}" \
+            --require-runtime-tag
       - run: flutter pub get
       - name: Install FFmpeg
         shell: bash
@@ -231,8 +270,10 @@ jobs:
           build_name=''
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             candidate="${GITHUB_REF_NAME#v}"
-            if [[ "${candidate}" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
-              build_name="${candidate}"
+            if [[ "${candidate}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(\.[0-9]+)?$ ]]; then
+              # Keep Apple bundle short version compatible (X.Y.Z),
+              # while still allowing 4-segment release tags.
+              build_name="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             fi
           fi
 
@@ -286,6 +327,7 @@ jobs:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
+      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ vars.SECONDLOOP_DESKTOP_RUNTIME_TAG }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -315,6 +357,11 @@ jobs:
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+          : "${SECONDLOOP_DESKTOP_RUNTIME_TAG:?Missing repo variable SECONDLOOP_DESKTOP_RUNTIME_TAG}"
+          if [[ ! "${SECONDLOOP_DESKTOP_RUNTIME_TAG}" =~ ^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "SECONDLOOP_DESKTOP_RUNTIME_TAG must be desktop-runtime-vX.Y.Z(.W)"
+            exit 1
+          fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
@@ -331,6 +378,16 @@ jobs:
             echo "Refusing to build prod release with a staging managed vault URL."
             exit 1
           fi
+      - name: Prepare desktop runtime assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart run tools/prepare_desktop_runtime.dart \
+            --platform=linux \
+            --arch=x64 \
+            --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
+            --repo="${GITHUB_REPOSITORY}" \
+            --require-runtime-tag
       - run: flutter pub get
       - name: Prepare bundled FFmpeg
         shell: bash
@@ -342,8 +399,8 @@ jobs:
           build_name=''
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             candidate="${GITHUB_REF_NAME#v}"
-            if [[ "${candidate}" =~ ^[0-9]+(\.[0-9]+){2}$ ]]; then
-              build_name="${candidate}"
+            if [[ "${candidate}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(\.[0-9]+)?$ ]]; then
+              build_name="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             fi
           fi
 

@@ -30,7 +30,17 @@ time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 fastembed = { version = "=5.8.0", default-features = false, features = ["hf-hub-rustls-tls", "ort-load-dynamic"] }
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["load-dynamic"] }
+paddle-ocr-rs = { version = "0.6.1", default-features = false }
+image = "0.25"
 tar = "0.4"
 
 [dev-dependencies]
 tempfile = "3"
+
+[patch.crates-io]
+# Work around cargo-expand failures on macOS/aarch64 during FRB generation
+# caused by zune-jpeg's neon default feature on current toolchain.
+zune-jpeg = { path = "../third_party/zune-jpeg-patched" }
+# Work around cargo-expand failures on stable Rust (1.85) caused by a
+# let-chain expression in paddle-ocr-rs.
+paddle-ocr-rs = { path = "../third_party/paddle-ocr-rs-patched" }

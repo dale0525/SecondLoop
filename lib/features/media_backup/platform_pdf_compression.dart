@@ -1,18 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
-import 'linux_pdf_compression_fallback_stub.dart'
-    if (dart.library.io) 'linux_pdf_compression_fallback_io.dart'
-    as linux_fallback;
+import '../../src/rust/api/desktop_media.dart' as rust_desktop_media;
 
-const MethodChannel _channel = MethodChannel('secondloop/ocr');
-
-typedef PdfCompressionNativeInvoke = Future<Object?> Function(
-  String method,
-  Map<String, Object?> arguments,
-);
-
-typedef PdfCompressionLinuxFallback = Future<Uint8List?> Function(
+typedef PdfCompressionDesktopInvoke = Future<dynamic> Function(
   Uint8List bytes, {
   required int scanDpi,
 });
@@ -20,45 +10,31 @@ typedef PdfCompressionLinuxFallback = Future<Uint8List?> Function(
 Future<Uint8List?> compressPdfScanPagesViaPlatform(
   Uint8List bytes, {
   required int scanDpi,
-  PdfCompressionNativeInvoke? nativeInvoke,
-  PdfCompressionLinuxFallback? linuxFallbackCompressor,
+  PdfCompressionDesktopInvoke? desktopCompressor,
 }) async {
-  if (kIsWeb) return null;
-  if (bytes.isEmpty) return null;
+  if (kIsWeb || bytes.isEmpty) return null;
 
   final dpi = scanDpi.clamp(150, 200);
-  final invoke = nativeInvoke ?? _invokeNativeMethod;
-  final fallback =
-      linuxFallbackCompressor ?? linux_fallback.tryCompressPdfViaLinuxFallback;
+  final compressor = desktopCompressor ?? _compressViaRust;
 
   try {
-    final raw = await invoke(
-      'compressPdf',
-      <String, Object?>{
-        'bytes': bytes,
-        'scan_dpi': dpi,
-      },
-    );
+    final raw = await compressor(bytes, scanDpi: dpi);
+    if (raw == null) return null;
     if (raw is Uint8List) return raw;
     if (raw is List<int>) return Uint8List.fromList(raw);
-  } on MissingPluginException {
-    // Fall through to Linux fallback.
-  } on PlatformException {
-    // Fall through to Linux fallback.
-  } catch (_) {
-    // Fall through to Linux fallback.
-  }
-
-  try {
-    return await fallback(bytes, scanDpi: dpi);
   } catch (_) {
     return null;
   }
+
+  return null;
 }
 
-Future<Object?> _invokeNativeMethod(
-  String method,
-  Map<String, Object?> arguments,
-) {
-  return _channel.invokeMethod<Object?>(method, arguments);
+Future<dynamic> _compressViaRust(
+  Uint8List bytes, {
+  required int scanDpi,
+}) {
+  return rust_desktop_media.desktopCompressPdfScan(
+    bytes: bytes,
+    scanDpi: scanDpi,
+  );
 }

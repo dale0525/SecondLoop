@@ -458,7 +458,7 @@ void main() {
     expect(find.text('自动 OCR 页数上限'), findsNothing);
   });
 
-  testWidgets('Linux OCR model tile shows quality warning when not installed',
+  testWidgets('Linux OCR runtime tile is visible when runtime is not installed',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -504,16 +504,15 @@ void main() {
     await tester.pumpAndSettle();
 
     final scrollable = find.byType(Scrollable).first;
-    final warningKey = find.byKey(
-      const ValueKey('media_annotation_settings_linux_ocr_quality_warning'),
-    );
+    final runtimeTile =
+        find.byKey(MediaAnnotationSettingsPage.linuxOcrModelTileKey);
     await tester.scrollUntilVisible(
-      warningKey,
+      runtimeTile,
       260,
       scrollable: scrollable,
     );
     await tester.pumpAndSettle();
-    expect(warningKey, findsOneWidget);
+    expect(runtimeTile, findsOneWidget);
   });
 
   testWidgets('Linux OCR download shows progress bar while downloading',
@@ -665,7 +664,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(deleteButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear Runtime'));
     await tester.pumpAndSettle();
     expect(linuxModelStore.deleteCalls, 1);
   });
@@ -738,16 +737,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(linuxModelStore.downloadCalls, 1);
-    expect(
-      find.textContaining(
-          'Models are downloaded, but OCR runtime is not ready'),
-      findsAtLeastNWidgets(1),
-    );
+    expect(find.textContaining('Runtime missing'), findsAtLeastNWidgets(1));
     expect(
       find.textContaining('linux_ocr_runtime_exec_not_permitted'),
       findsAtLeastNWidgets(1),
     );
-    expect(find.byType(SnackBar), findsOneWidget);
   });
 
   testWidgets(
@@ -819,7 +813,7 @@ void main() {
 
     await tester.tap(deleteButton);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear Runtime'));
     await tester.pumpAndSettle();
     expect(linuxPdfStore.deleteCalls, 1);
   });

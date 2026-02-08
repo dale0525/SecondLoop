@@ -5,41 +5,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/content_enrichment/desktop_ocr_runtime.dart';
 
 void main() {
-  test('resolveManagedDesktopOcrPythonExecutable returns null when missing',
-      () async {
+  test('desktop runtime health transitions after repair and clear', () async {
     if (!supportsDesktopManagedOcrRuntime()) return;
 
     final appDir = await Directory.systemTemp.createTemp(
-      'secondloop_desktop_ocr_runtime_missing_test_',
+      'secondloop_desktop_runtime_health_test_',
     );
     try {
-      final resolved = await resolveManagedDesktopOcrPythonExecutable(
+      final initial = await readDesktopRuntimeHealth(
         appDirProvider: () async => appDir.path,
       );
-      expect(resolved, isNull);
-    } finally {
-      await appDir.delete(recursive: true);
-    }
-  });
+      expect(initial.supported, isTrue);
+      expect(initial.installed, isFalse);
 
-  test('resolveManagedDesktopOcrPythonExecutable prefers bundled runtime',
-      () async {
-    if (!supportsDesktopManagedOcrRuntime()) return;
-
-    final appDir = await Directory.systemTemp.createTemp(
-      'secondloop_desktop_ocr_runtime_present_test_',
-    );
-    try {
-      final candidate = Platform.isWindows
-          ? File('${appDir.path}/ocr/desktop/runtime/python/python.exe')
-          : File('${appDir.path}/ocr/desktop/runtime/python/bin/python3');
-      await candidate.parent.create(recursive: true);
-      await candidate.writeAsString('stub', flush: true);
-
-      final resolved = await resolveManagedDesktopOcrPythonExecutable(
+      final repaired = await repairDesktopRuntimeInstall(
         appDirProvider: () async => appDir.path,
       );
-      expect(resolved, candidate.path);
+      expect(repaired.supported, isTrue);
+      expect(repaired.installed, isTrue);
+      expect(repaired.runtimeDirPath, isNotNull);
+
+      await clearDesktopRuntimeInstall(
+        appDirProvider: () async => appDir.path,
+      );
+      final cleared = await readDesktopRuntimeHealth(
+        appDirProvider: () async => appDir.path,
+      );
+      expect(cleared.installed, isFalse);
     } finally {
       await appDir.delete(recursive: true);
     }

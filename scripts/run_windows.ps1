@@ -43,6 +43,12 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
+Write-Host "Running: prepare_desktop_runtime.dart --platform windows --arch x64"
+& dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
 Write-Host "Running: flutter run -d windows"
 $firebaseWebApiKey = $env:SECONDLOOP_FIREBASE_WEB_API_KEY
 $cloudEnv = $env:SECONDLOOP_CLOUD_ENV

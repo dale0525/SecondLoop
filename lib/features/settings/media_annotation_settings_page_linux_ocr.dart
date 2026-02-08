@@ -23,9 +23,9 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
       ),
     ];
 
-    final linuxTile = _buildLinuxOcrModelTile(context);
-    if (linuxTile != null) {
-      children.add(linuxTile);
+    final runtimeTile = _buildDesktopRuntimeHealthTile(context);
+    if (runtimeTile != null) {
+      children.add(runtimeTile);
     }
 
     return <Widget>[
@@ -35,15 +35,16 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     ];
   }
 
-  Widget? _buildLinuxOcrModelTile(BuildContext context) {
+  Widget? _buildDesktopRuntimeHealthTile(BuildContext context) {
     final status = _linuxOcrModelStatus;
     if (!status.supported) return null;
 
-    final t = context.t.settings.mediaAnnotation.documentOcr.linuxModels;
     final actionEnabled = !_busy && !_linuxOcrBusy;
-    final statusText = _linuxOcrStatusLabel(context, status);
     final colorScheme = Theme.of(context).colorScheme;
-    final showQualityWarning = !status.installed;
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
 
     return Padding(
       key: MediaAnnotationSettingsPage.linuxOcrModelTileKey,
@@ -51,9 +52,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: colorScheme.outlineVariant,
-          ),
+          border: Border.all(color: colorScheme.outlineVariant),
           color: colorScheme.surfaceVariant.withOpacity(0.45),
         ),
         padding: const EdgeInsets.all(12),
@@ -71,7 +70,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                     color: colorScheme.primaryContainer,
                   ),
                   child: Icon(
-                    Icons.model_training_outlined,
+                    Icons.health_and_safety_outlined,
                     color: colorScheme.onPrimaryContainer,
                     size: 20,
                   ),
@@ -82,7 +81,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        t.title,
+                        zh ? '桌面 OCR 运行时' : 'Desktop OCR Runtime',
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
@@ -90,23 +89,26 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        t.subtitle,
+                        zh
+                            ? '用于离线 OCR/PDF 压缩的内置运行时状态。'
+                            : 'Health status for bundled offline OCR/PDF runtime.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
                 ),
-                if (status.installed)
-                  Icon(
-                    Icons.check_circle,
-                    color: colorScheme.primary,
-                    size: 18,
-                  ),
+                Icon(
+                  status.installed ? Icons.check_circle : Icons.error_outline,
+                  color: status.installed
+                      ? colorScheme.primary
+                      : colorScheme.error,
+                  size: 18,
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              statusText,
+              _desktopRuntimeStatusLabel(context, status),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (_linuxOcrBusy) ...[
@@ -118,36 +120,6 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                 borderRadius: BorderRadius.all(Radius.circular(999)),
               ),
             ],
-            if (showQualityWarning) ...[
-              const SizedBox(height: 10),
-              Container(
-                key: const ValueKey(
-                    'media_annotation_settings_linux_ocr_quality_warning'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: colorScheme.errorContainer.withOpacity(0.4),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: colorScheme.error,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _linuxOcrQualityWarning(context),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -157,11 +129,9 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                   key: MediaAnnotationSettingsPage
                       .linuxOcrModelDownloadButtonKey,
                   onPressed: actionEnabled ? _downloadLinuxOcrModels : null,
-                  icon: const Icon(Icons.download_rounded),
+                  icon: const Icon(Icons.build_circle_outlined),
                   label: Text(
-                    status.installed
-                        ? t.actions.redownload
-                        : t.actions.download,
+                    zh ? '修复安装' : 'Repair Install',
                   ),
                 ),
                 if (status.installed)
@@ -170,7 +140,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                         .linuxOcrModelDeleteButtonKey,
                     onPressed: actionEnabled ? _deleteLinuxOcrModels : null,
                     icon: const Icon(Icons.delete_outline_rounded),
-                    label: Text(t.actions.delete),
+                    label: Text(zh ? '清除运行时' : 'Clear Runtime'),
                   ),
               ],
             ),
@@ -180,35 +150,42 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     );
   }
 
-  String _linuxOcrQualityWarning(BuildContext context) {
-    final languageCode =
-        Localizations.localeOf(context).languageCode.toLowerCase();
-    if (languageCode.startsWith('zh')) {
-      return '未下载模型时，桌面端 PDF/视频 OCR 识别效果会明显变差。';
-    }
-    return 'Without downloaded models, desktop PDF/video OCR quality will be noticeably worse.';
-  }
-
-  String _linuxOcrStatusLabel(
+  String _desktopRuntimeStatusLabel(
     BuildContext context,
     LinuxOcrModelStatus status,
   ) {
-    final t = context.t.settings.mediaAnnotation.documentOcr.linuxModels.status;
-    if (_linuxOcrBusy) return t.downloading;
-    if (!status.installed) {
-      if (_linuxOcrRuntimeMissing(status)) {
-        final detail = _linuxOcrRuntimeMissingDetail(status);
-        if (detail != null) {
-          return '${t.runtimeMissing} ($detail)';
-        }
-        return t.runtimeMissing;
-      }
-      return t.notInstalled;
+    if (_linuxOcrBusy) {
+      return Localizations.localeOf(context)
+              .languageCode
+              .toLowerCase()
+              .startsWith('zh')
+          ? '正在修复运行时...'
+          : 'Repairing runtime...';
     }
-    return t.installed(
-      count: status.modelCount,
-      size: _formatDataSize(status.totalBytes),
-    );
+    if (!status.installed) {
+      final reason = status.message?.trim();
+      if (reason != null && reason.isNotEmpty) {
+        return Localizations.localeOf(context)
+                .languageCode
+                .toLowerCase()
+                .startsWith('zh')
+            ? '运行时缺失（$reason）'
+            : 'Runtime missing ($reason)';
+      }
+      return Localizations.localeOf(context)
+              .languageCode
+              .toLowerCase()
+              .startsWith('zh')
+          ? '运行时缺失'
+          : 'Runtime missing';
+    }
+    final size = _formatDataSize(status.totalBytes);
+    return Localizations.localeOf(context)
+            .languageCode
+            .toLowerCase()
+            .startsWith('zh')
+        ? '运行时健康（${status.modelCount} 文件, $size）'
+        : 'Runtime healthy (${status.modelCount} files, $size)';
   }
 
   Future<void> _downloadLinuxOcrModels() async {
@@ -218,20 +195,6 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
       final next = await _linuxOcrModelStore.downloadModels();
       if (!mounted) return;
       _mutateState(() => _linuxOcrModelStatus = next);
-      if (_linuxOcrRuntimeMissing(next)) {
-        var message = context.t.settings.mediaAnnotation.documentOcr.linuxModels
-            .status.runtimeMissing;
-        final detail = _linuxOcrRuntimeMissingDetail(next);
-        if (detail != null) {
-          message = '$message ($detail)';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -245,31 +208,22 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     }
   }
 
-  bool _linuxOcrRuntimeMissing(LinuxOcrModelStatus status) {
-    final message = status.message?.trim() ?? '';
-    if (message.isEmpty) return false;
-    return message.startsWith('runtime_missing');
-  }
-
-  String? _linuxOcrRuntimeMissingDetail(LinuxOcrModelStatus status) {
-    final message = status.message?.trim() ?? '';
-    const prefix = 'runtime_missing:';
-    if (!message.startsWith(prefix)) return null;
-    final detail = message.substring(prefix.length).trim();
-    if (detail.isEmpty) return null;
-    return detail;
-  }
-
   Future<void> _deleteLinuxOcrModels() async {
     if (_busy || _linuxOcrBusy) return;
-    final t = context
-        .t.settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete;
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
     final confirmed = (await showDialog<bool>(
           context: context,
           builder: (dialogContext) {
             return AlertDialog(
-              title: Text(t.title),
-              content: Text(t.body),
+              title: Text(zh ? '清除桌面运行时' : 'Clear Desktop Runtime'),
+              content: Text(
+                zh
+                    ? '清除后会删除已安装的桌面 OCR/PDF 运行时文件。'
+                    : 'This removes installed desktop OCR/PDF runtime files.',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -277,7 +231,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(t.confirm),
+                  child: Text(zh ? '确认清除' : 'Clear Runtime'),
                 ),
               ],
             );

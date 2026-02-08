@@ -25,8 +25,12 @@ cargo = { cmd = "cargo {{ command }} --manifest-path rust/Cargo.toml {{ command_
 init-env = "bash scripts/init_env.sh"
 install-git-hooks = "bash scripts/install_git_hooks.sh"
 
-# Release helper (maintainers).
+# Release helpers (maintainers).
+# - release / release-app: publish app tag (triggers app release workflow)
+# - release-runtime: publish desktop runtime tag (triggers desktop runtime workflow)
 release = "bash scripts/release_tag.sh"
+release-app = "bash scripts/release_tag.sh"
+release-runtime = "bash scripts/release_runtime_tag.sh"
 
 # Cache cleanup (use when disk usage grows during long dev cycles).
 clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r -d \"\" cache_tag; do cleaned=1; target_dir=\"${cache_tag%/CACHEDIR.TAG}\"; rm -rf \"$target_dir/release\" \"$target_dir/doc\" \"$target_dir/package\"; find \"$target_dir\" -mindepth 2 -maxdepth 2 -type d \\( -name release -o -name doc -o -name package \\) -prune -exec rm -rf {} +; done < <(find . -type f -path \"*/target/CACHEDIR.TAG\" -print0); if [ -n \"${CARGO_TARGET_DIR:-}\" ] && [ -d \"${CARGO_TARGET_DIR}\" ]; then cleaned=1; target_dir=\"${CARGO_TARGET_DIR}\"; rm -rf \"$target_dir/release\" \"$target_dir/doc\" \"$target_dir/package\"; find \"$target_dir\" -mindepth 2 -maxdepth 2 -type d \\( -name release -o -name doc -o -name package \\) -prune -exec rm -rf {} +; fi; while IFS= read -r -d \"\" pycache_dir; do cleaned=1; rm -rf \"$pycache_dir\"; done < <(find ./tools -type d -name \"__pycache__\" -print0 2>/dev/null || true); while IFS= read -r -d \"\" gradle_cold_dir; do cleaned=1; rm -rf \"$gradle_cold_dir\"; done < <(find .tool -maxdepth 1 -mindepth 1 -type d -name \"gradle-cold-*\" -print0 2>/dev/null || true); while IFS= read -r -d \"\" tool_cache_dir; do cleaned=1; rm -rf \"$tool_cache_dir\"; done < <(find .tool/cache -maxdepth 1 -mindepth 1 -type d \\( -name android -o -name rustup \\) -print0 2>/dev/null || true); if [ \"$cleaned\" -eq 0 ]; then echo \"No unused cache found under $PWD or CARGO_TARGET_DIR\"; fi'"
@@ -50,9 +54,11 @@ build-android-apk-cn = { cmd = "bash scripts/setup_android_sdk.sh && bash script
 
 # Code/resource generation helpers.
 # - frb-generate: regenerate Rust <-> Flutter bridge code
+# - prepare-desktop-runtime: fetch + install desktop OCR runtime assets from release
 # - i18n-sync: translate and refresh strings.g.dart
 # - icons-update: regenerate app icons (including macOS round-corner pre-processing)
 frb-generate = "env RUST_LOG=info PATH=\"$PWD/.fvm/flutter_sdk/bin:$HOME/.cargo/bin:$PATH\" flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml"
+prepare-desktop-runtime = "dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart"
 i18n-gen = "dart pub global run fvm:main dart run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
 i18n-translate = "python tools/i18n_translate.py"
 i18n-sync = { depends-on = ["i18n-translate", "i18n-gen"] }
@@ -77,11 +83,11 @@ clangxx_osx-arm64 = ">=21.1.8,<22"
 
 [target.osx-arm64.tasks]
 prepare-ffmpeg-macos = "bash scripts/setup_ffmpeg_macos.sh && dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=macos"
-run-macos = { cmd = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2 && env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-macos"] }
+run-macos = { cmd = "gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2 && dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=macos && env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-macos"] }
 
 [target.linux-64.tasks]
 prepare-ffmpeg-linux = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=linux"
-run-linux = { cmd = "bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-linux"] }
+run-linux = { cmd = "dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=linux --arch=x64 && bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-linux"] }
 
 [target.win-64.tasks]
 # Windows-specific overrides.

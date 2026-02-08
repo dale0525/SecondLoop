@@ -3,6 +3,7 @@ pub mod auth;
 pub mod content_extract;
 pub mod crypto;
 pub mod db;
+pub mod desktop_media;
 pub mod embedding;
 mod frb_generated;
 pub mod geo;

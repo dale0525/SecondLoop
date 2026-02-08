@@ -1,9 +1,10 @@
-Bundled OCR runtime/model assets live under:
+Desktop OCR runtime/model assets are prepared into:
 
-- `assets/ocr/linux/python/` for Python runtime packages (for example: prebuilt
-  site-packages containing `rapidocr_onnxruntime` and `pypdfium2`)
-- `assets/ocr/linux/models/` for OCR model files used by the Linux fallback
+- `assets/ocr/desktop_runtime/`
 
-The Linux OCR bridge extracts these assets at runtime when present and prefers
-them over system-level Python paths. The app does not perform runtime `pip
-install`.
+The folder is generated from GitHub Release runtime assets by:
+
+- `dart run tools/prepare_desktop_runtime.dart`
+
+Do not commit `assets/ocr/desktop_runtime/` into git. The folder is ignored by
+`.gitignore` and should be generated locally/CI before desktop run/build.

@@ -1,0 +1,787 @@
+use anyhow::{anyhow, Result};
+use lopdf::Document;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use image::{DynamicImage, RgbImage};
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use paddle_ocr_rs::ocr_lite::OcrLite;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use std::collections::HashMap;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use std::sync::{Mutex, OnceLock};
+
+const MAX_FULL_TEXT_BYTES: usize = 256 * 1024;
+const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
+const OCR_MODEL_DIR_ENV: &str = "SECONDLOOP_OCR_MODEL_DIR";
+
+const DET_MODEL_ALIASES: [&str; 2] = ["ch_PP-OCRv4_det_infer.onnx", "ch_PP-OCRv5_mobile_det.onnx"];
+const CLS_MODEL_ALIASES: [&str; 1] = ["ch_ppocr_mobile_v2.0_cls_infer.onnx"];
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_PADDING: u32 = 50;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_BOX_SCORE_THRESH: f32 = 0.5;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_BOX_THRESH: f32 = 0.3;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_UNCLIP_RATIO: f32 = 1.6;
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OcrPayload {
+    pub ocr_text_full: String,
+    pub ocr_text_excerpt: String,
+    pub ocr_engine: String,
+    pub ocr_is_truncated: bool,
+    pub ocr_page_count: u32,
+    pub ocr_processed_pages: u32,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[derive(Clone, Copy)]
+struct RecModelSpec {
+    key: &'static str,
+    model_file: &'static str,
+    dict_file: Option<&'static str>,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const REC_MODEL_SPECS: &[RecModelSpec] = &[
+    RecModelSpec {
+        key: "zh_hans",
+        model_file: "ch_PP-OCRv4_rec_infer.onnx",
+        dict_file: None,
+    },
+    RecModelSpec {
+        key: "latin",
+        model_file: "latin_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("latin_dict.txt"),
+    },
+    RecModelSpec {
+        key: "arabic",
+        model_file: "arabic_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("arabic_dict.txt"),
+    },
+    RecModelSpec {
+        key: "cyrillic",
+        model_file: "cyrillic_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("cyrillic_dict.txt"),
+    },
+    RecModelSpec {
+        key: "devanagari",
+        model_file: "devanagari_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("devanagari_dict.txt"),
+    },
+    RecModelSpec {
+        key: "ja",
+        model_file: "japan_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("japan_dict.txt"),
+    },
+    RecModelSpec {
+        key: "ko",
+        model_file: "korean_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("korean_dict.txt"),
+    },
+    RecModelSpec {
+        key: "zh_hant",
+        model_file: "chinese_cht_PP-OCRv3_rec_infer.onnx",
+        dict_file: Some("chinese_cht_dict.txt"),
+    },
+];
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[derive(Clone)]
+struct ResolvedOcrModelConfig {
+    det_path: PathBuf,
+    cls_path: PathBuf,
+    rec_path: PathBuf,
+    dict_path: Option<PathBuf>,
+    cache_key: String,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub fn desktop_ocr_image(bytes: &[u8], language_hints: &str) -> Result<OcrPayload> {
+    if bytes.is_empty() {
+        return Err(anyhow!("missing image bytes"));
+    }
+
+    let image = image::load_from_memory(bytes)
+        .map_err(|e| anyhow!("invalid image bytes: {e}"))?
+        .to_rgb8();
+
+    let text = ocr_image_text(&image, language_hints, None)?;
+    if text.is_empty() {
+        return Ok(build_payload(
+            "",
+            1,
+            1,
+            "desktop_rust_image_no_model",
+            false,
+        ));
+    }
+
+    Ok(build_payload(&text, 1, 1, "desktop_rust_image_onnx", false))
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub fn desktop_ocr_image(bytes: &[u8], _language_hints: &str) -> Result<OcrPayload> {
+    if bytes.is_empty() {
+        return Err(anyhow!("missing image bytes"));
+    }
+    Ok(build_payload(
+        "",
+        1,
+        1,
+        "desktop_rust_image_unsupported",
+        false,
+    ))
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub fn desktop_ocr_pdf(
+    bytes: &[u8],
+    max_pages: u32,
+    _dpi: u32,
+    language_hints: &str,
+) -> Result<OcrPayload> {
+    if bytes.is_empty() {
+        return Err(anyhow!("missing pdf bytes"));
+    }
+
+    let safe_max_pages = max_pages.clamp(1, 10_000);
+    let extracted = extract_pdf_text_with_limit(bytes, safe_max_pages)?;
+    let text = normalize_text_keep_paragraphs(&extracted.text);
+    if !text.is_empty() {
+        return Ok(build_payload(
+            &text,
+            extracted.page_count,
+            extracted.processed_pages,
+            "desktop_rust_pdf_text",
+            false,
+        ));
+    }
+
+    let fallback = ocr_pdf_page_images(bytes, safe_max_pages, language_hints, None)?;
+    if !fallback.is_empty() {
+        return Ok(build_payload(
+            &fallback,
+            extracted.page_count,
+            extracted.processed_pages,
+            "desktop_rust_pdf_onnx",
+            false,
+        ));
+    }
+
+    Ok(build_payload(
+        "",
+        extracted.page_count,
+        extracted.processed_pages,
+        "desktop_rust_pdf_text",
+        false,
+    ))
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub fn desktop_ocr_pdf(
+    bytes: &[u8],
+    max_pages: u32,
+    _dpi: u32,
+    _language_hints: &str,
+) -> Result<OcrPayload> {
+    if bytes.is_empty() {
+        return Err(anyhow!("missing pdf bytes"));
+    }
+
+    let safe_max_pages = max_pages.clamp(1, 10_000);
+    let extracted = extract_pdf_text_with_limit(bytes, safe_max_pages)?;
+    Ok(build_payload(
+        &normalize_text_keep_paragraphs(&extracted.text),
+        extracted.page_count,
+        extracted.processed_pages,
+        "desktop_rust_pdf_text",
+        false,
+    ))
+}
+
+fn build_payload(
+    text: &str,
+    page_count: u32,
+    processed_pages: u32,
+    engine: &str,
+    force_truncated: bool,
+) -> OcrPayload {
+    let full = truncate_utf8(text, MAX_FULL_TEXT_BYTES);
+    let excerpt = truncate_utf8(&full, MAX_EXCERPT_TEXT_BYTES);
+    let is_truncated = force_truncated || full != text || processed_pages < page_count;
+    OcrPayload {
+        ocr_text_full: full,
+        ocr_text_excerpt: excerpt,
+        ocr_engine: engine.to_string(),
+        ocr_is_truncated: is_truncated,
+        ocr_page_count: page_count,
+        ocr_processed_pages: processed_pages,
+    }
+}
+
+fn truncate_utf8(input: &str, max_bytes: usize) -> String {
+    if input.len() <= max_bytes {
+        return input.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !input.is_char_boundary(end) {
+        end -= 1;
+    }
+    input[..end].to_string()
+}
+
+fn normalize_text_keep_paragraphs(input: &str) -> String {
+    let mut out = String::with_capacity(input.len().min(16 * 1024));
+
+    let mut last_was_space = false;
+    let mut newline_run = 0usize;
+
+    for ch in input.chars() {
+        match ch {
+            '\r' => continue,
+            '\n' => {
+                while out.ends_with(' ') {
+                    out.pop();
+                }
+                if newline_run < 2 {
+                    out.push('\n');
+                }
+                newline_run += 1;
+                last_was_space = false;
+            }
+            c if c.is_whitespace() => {
+                if newline_run > 0 || out.is_empty() {
+                    continue;
+                }
+                if !last_was_space {
+                    out.push(' ');
+                    last_was_space = true;
+                }
+            }
+            _ => {
+                out.push(ch);
+                last_was_space = false;
+                newline_run = 0;
+            }
+        }
+    }
+
+    out.trim().to_string()
+}
+
+struct DesktopPdfTextExtractResult {
+    text: String,
+    page_count: u32,
+    processed_pages: u32,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ocr_image_text(
+    image: &RgbImage,
+    language_hints: &str,
+    model_dir: Option<&str>,
+) -> Result<String> {
+    let Some(config) = resolve_ocr_model_config(language_hints, model_dir) else {
+        return Ok(String::new());
+    };
+    run_ocr_with_cached_model(&config, image)
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ocr_pdf_page_images(
+    bytes: &[u8],
+    max_pages: u32,
+    language_hints: &str,
+    model_dir: Option<&str>,
+) -> Result<String> {
+    let Some(config) = resolve_ocr_model_config(language_hints, model_dir) else {
+        return Ok(String::new());
+    };
+
+    let doc = Document::load_mem(bytes).map_err(|e| anyhow!("invalid pdf: {e}"))?;
+    let pages = doc.get_pages();
+    if pages.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut page_numbers: Vec<u32> = pages.keys().cloned().collect();
+    page_numbers.sort_unstable();
+    let take_count = usize::try_from(max_pages)
+        .unwrap_or(usize::MAX)
+        .min(page_numbers.len());
+
+    let mut page_texts = Vec::new();
+    for page_number in page_numbers.into_iter().take(take_count) {
+        let Some(page_id) = pages.get(&page_number).copied() else {
+            continue;
+        };
+
+        let mut image_candidates = match doc.get_page_images(page_id) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if image_candidates.is_empty() {
+            continue;
+        }
+
+        image_candidates.sort_by(|a, b| {
+            let area_a = i128::from(a.width).saturating_mul(i128::from(a.height));
+            let area_b = i128::from(b.width).saturating_mul(i128::from(b.height));
+            area_b.cmp(&area_a)
+        });
+
+        for candidate in image_candidates {
+            let decoded =
+                decode_pdf_image_to_rgb(&doc, candidate.id, candidate.width, candidate.height)?;
+            if let Some(rgb) = decoded {
+                let text = run_ocr_with_cached_model(&config, &rgb)?;
+                if !text.is_empty() {
+                    page_texts.push(text);
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(normalize_text_keep_paragraphs(&page_texts.join("\n")))
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn decode_pdf_image_to_rgb(
+    doc: &Document,
+    object_id: lopdf::ObjectId,
+    width: i64,
+    height: i64,
+) -> Result<Option<RgbImage>> {
+    if width <= 0 || height <= 0 {
+        return Ok(None);
+    }
+
+    let width_u32 = u32::try_from(width).unwrap_or(0);
+    let height_u32 = u32::try_from(height).unwrap_or(0);
+    if width_u32 == 0 || height_u32 == 0 {
+        return Ok(None);
+    }
+    if width_u32 > 40_000 || height_u32 > 40_000 {
+        return Ok(None);
+    }
+
+    let stream = match doc.get_object(object_id).and_then(|o| o.as_stream()) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    let filters = stream
+        .dict
+        .get(b"Filter")
+        .ok()
+        .and_then(|v| match v {
+            lopdf::Object::Name(name) => Some(vec![String::from_utf8_lossy(name).to_string()]),
+            lopdf::Object::Array(arr) => {
+                let mut out = Vec::new();
+                for item in arr {
+                    if let Ok(name) = item.as_name() {
+                        out.push(String::from_utf8_lossy(name).to_string());
+                    }
+                }
+                Some(out)
+            }
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    let has_encoded_filter = filters.iter().any(|f| f == "DCTDecode" || f == "JPXDecode");
+    if has_encoded_filter {
+        if let Ok(decoded) = image::load_from_memory(&stream.content) {
+            return Ok(Some(decoded.to_rgb8()));
+        }
+    }
+
+    let bits_per_component = stream
+        .dict
+        .get(b"BitsPerComponent")
+        .ok()
+        .and_then(|v| v.as_i64().ok())
+        .unwrap_or(8);
+    if bits_per_component != 8 {
+        return Ok(None);
+    }
+
+    let color_space = stream.dict.get(b"ColorSpace").ok().and_then(|v| match v {
+        lopdf::Object::Name(name) => Some(String::from_utf8_lossy(name).to_string()),
+        lopdf::Object::Array(arr) => arr.first().and_then(|o| {
+            o.as_name()
+                .ok()
+                .map(|name| String::from_utf8_lossy(name).to_string())
+        }),
+        _ => None,
+    });
+
+    let raw = match stream.decompressed_content() {
+        Ok(v) => v,
+        Err(_) => stream.content.clone(),
+    };
+
+    match color_space.as_deref() {
+        Some("DeviceRGB") => {
+            let expected = usize::try_from(width_u32)
+                .unwrap_or(0)
+                .saturating_mul(usize::try_from(height_u32).unwrap_or(0))
+                .saturating_mul(3);
+            if raw.len() < expected {
+                return Ok(None);
+            }
+            Ok(RgbImage::from_raw(
+                width_u32,
+                height_u32,
+                raw[..expected].to_vec(),
+            ))
+        }
+        Some("DeviceGray") => {
+            let expected = usize::try_from(width_u32)
+                .unwrap_or(0)
+                .saturating_mul(usize::try_from(height_u32).unwrap_or(0));
+            if raw.len() < expected {
+                return Ok(None);
+            }
+            let luma =
+                match image::GrayImage::from_raw(width_u32, height_u32, raw[..expected].to_vec()) {
+                    Some(v) => v,
+                    None => return Ok(None),
+                };
+            Ok(Some(DynamicImage::ImageLuma8(luma).to_rgb8()))
+        }
+        _ => Ok(None),
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn run_ocr_with_cached_model(config: &ResolvedOcrModelConfig, image: &RgbImage) -> Result<String> {
+    let cache = ocr_cache();
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if !guard.contains_key(&config.cache_key) {
+        let mut ocr = OcrLite::new();
+        init_ocr_model(&mut ocr, config)?;
+        guard.insert(config.cache_key.clone(), ocr);
+    }
+
+    let ocr = guard
+        .get_mut(&config.cache_key)
+        .ok_or_else(|| anyhow!("ocr model cache unavailable"))?;
+
+    let max_side_len = image.width().max(image.height()).clamp(1024, 3072);
+    let result = ocr
+        .detect(
+            image,
+            OCR_PADDING,
+            max_side_len,
+            OCR_BOX_SCORE_THRESH,
+            OCR_BOX_THRESH,
+            OCR_UNCLIP_RATIO,
+            true,
+            false,
+        )
+        .map_err(|e| anyhow!("paddle detect failed: {e}"))?;
+
+    let lines = result
+        .text_blocks
+        .into_iter()
+        .map(|block| block.text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>();
+    Ok(normalize_text_keep_paragraphs(&lines.join("\n")))
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn init_ocr_model(ocr: &mut OcrLite, config: &ResolvedOcrModelConfig) -> Result<()> {
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(2)
+        .clamp(1, 4);
+
+    let det = config.det_path.to_string_lossy().to_string();
+    let cls = config.cls_path.to_string_lossy().to_string();
+    let rec = config.rec_path.to_string_lossy().to_string();
+
+    if let Some(dict_path) = &config.dict_path {
+        let dict = dict_path.to_string_lossy().to_string();
+        ocr.init_models_with_dict(&det, &cls, &rec, &dict, threads)
+            .map_err(|e| anyhow!("paddle init with dict failed: {e}"))?;
+    } else {
+        ocr.init_models(&det, &cls, &rec, threads)
+            .map_err(|e| anyhow!("paddle init failed: {e}"))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ocr_cache() -> &'static Mutex<HashMap<String, OcrLite>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, OcrLite>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn resolve_ocr_model_config(
+    language_hints: &str,
+    model_dir: Option<&str>,
+) -> Option<ResolvedOcrModelConfig> {
+    let rec_preferences = preferred_rec_keys(language_hints);
+    let roots = model_root_candidates(model_dir);
+
+    for root in roots {
+        let det_path = match find_existing_file(&root, &DET_MODEL_ALIASES) {
+            Some(v) => v,
+            None => continue,
+        };
+        let cls_path = match find_existing_file(&root, &CLS_MODEL_ALIASES) {
+            Some(v) => v,
+            None => continue,
+        };
+
+        if let Some(cfg) = build_rec_model_config(&root, &det_path, &cls_path, &rec_preferences) {
+            return Some(cfg);
+        }
+
+        let all_keys = REC_MODEL_SPECS.iter().map(|s| s.key).collect::<Vec<_>>();
+        if let Some(cfg) = build_rec_model_config(&root, &det_path, &cls_path, &all_keys) {
+            return Some(cfg);
+        }
+    }
+
+    None
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn build_rec_model_config(
+    root: &Path,
+    det_path: &Path,
+    cls_path: &Path,
+    rec_keys: &[&str],
+) -> Option<ResolvedOcrModelConfig> {
+    for key in rec_keys {
+        let Some(spec) = REC_MODEL_SPECS.iter().find(|s| s.key == *key) else {
+            continue;
+        };
+
+        let rec_path = root.join(spec.model_file);
+        if !rec_path.is_file() {
+            continue;
+        }
+
+        let dict_path = match spec.dict_file {
+            Some(dict_file) => {
+                let candidate = root.join(dict_file);
+                if !candidate.is_file() {
+                    continue;
+                }
+                Some(candidate)
+            }
+            None => None,
+        };
+
+        let cache_key = format!(
+            "{}|{}|{}|{}",
+            det_path.display(),
+            cls_path.display(),
+            rec_path.display(),
+            dict_path
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default()
+        );
+
+        return Some(ResolvedOcrModelConfig {
+            det_path: det_path.to_path_buf(),
+            cls_path: cls_path.to_path_buf(),
+            rec_path,
+            dict_path,
+            cache_key,
+        });
+    }
+
+    None
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn preferred_rec_keys(language_hints: &str) -> Vec<&'static str> {
+    let hint = language_hints.trim().to_ascii_lowercase();
+
+    if hint.is_empty() || hint == "device_plus_en" {
+        return vec![
+            "zh_hans",
+            "latin",
+            "ja",
+            "ko",
+            "arabic",
+            "cyrillic",
+            "devanagari",
+            "zh_hant",
+        ];
+    }
+
+    if hint.contains("ja") {
+        return vec!["ja", "zh_hans", "latin"];
+    }
+    if hint.contains("ko") {
+        return vec!["ko", "zh_hans", "latin"];
+    }
+    if hint.contains("zh_strict") || hint.contains("zh_en") || hint == "zh" {
+        return vec!["zh_hans", "zh_hant", "latin"];
+    }
+    if hint.contains("ar") {
+        return vec!["arabic", "latin", "zh_hans"];
+    }
+    if hint.contains("ru") || hint.contains("cyrillic") {
+        return vec!["cyrillic", "latin", "zh_hans"];
+    }
+    if hint.contains("hi") || hint.contains("devanagari") {
+        return vec!["devanagari", "latin", "zh_hans"];
+    }
+
+    vec!["latin", "zh_hans", "ja"]
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn model_root_candidates(model_dir: Option<&str>) -> Vec<PathBuf> {
+    let mut seen = HashSet::<PathBuf>::new();
+    let mut roots = Vec::new();
+
+    let mut push_dir = |path: &Path| {
+        if path.as_os_str().is_empty() {
+            return;
+        }
+        let base = path.to_path_buf();
+        if base.is_dir() && seen.insert(base.clone()) {
+            roots.push(base.clone());
+        }
+
+        let nested_models = base.join("models");
+        if nested_models.is_dir() && seen.insert(nested_models.clone()) {
+            roots.push(nested_models);
+        }
+    };
+
+    if let Some(explicit) = model_dir {
+        push_dir(Path::new(explicit.trim()));
+    }
+
+    if let Ok(from_env) = std::env::var(OCR_MODEL_DIR_ENV) {
+        push_dir(Path::new(from_env.trim()));
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            push_dir(exe_dir);
+            push_dir(&exe_dir.join("assets/ocr/desktop_runtime"));
+            push_dir(&exe_dir.join("data/flutter_assets/assets/ocr/desktop_runtime"));
+            push_dir(&exe_dir.join("../Resources/flutter_assets/assets/ocr/desktop_runtime"));
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        push_dir(&cwd);
+        push_dir(&cwd.join("assets/ocr/desktop_runtime"));
+    }
+
+    roots
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn find_existing_file(root: &Path, aliases: &[&str]) -> Option<PathBuf> {
+    for alias in aliases {
+        let candidate = root.join(alias);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn extract_pdf_text_with_limit(
+    bytes: &[u8],
+    max_pages: u32,
+) -> Result<DesktopPdfTextExtractResult> {
+    let doc = Document::load_mem(bytes).map_err(|e| anyhow!("invalid pdf: {e}"))?;
+    let pages = doc.get_pages();
+    let page_count = u32::try_from(pages.len()).unwrap_or(u32::MAX);
+    if pages.is_empty() {
+        return Ok(DesktopPdfTextExtractResult {
+            text: String::new(),
+            page_count: 0,
+            processed_pages: 0,
+        });
+    }
+
+    let mut page_numbers: Vec<u32> = pages.keys().cloned().collect();
+    page_numbers.sort_unstable();
+    let take_count = usize::try_from(max_pages)
+        .unwrap_or(usize::MAX)
+        .min(page_numbers.len());
+    let selected_pages = page_numbers
+        .into_iter()
+        .take(take_count)
+        .collect::<Vec<_>>();
+
+    let text = match doc.extract_text(&selected_pages) {
+        Ok(text) => text,
+        Err(_) => {
+            let mut out = String::new();
+            for page_number in &selected_pages {
+                if let Ok(page_text) = doc.extract_text(&[*page_number]) {
+                    if !out.is_empty() && !out.ends_with('\n') {
+                        out.push('\n');
+                    }
+                    out.push_str(&page_text);
+                }
+            }
+            out
+        }
+    };
+
+    Ok(DesktopPdfTextExtractResult {
+        text,
+        page_count,
+        processed_pages: u32::try_from(selected_pages.len()).unwrap_or(u32::MAX),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_utf8_keeps_valid_boundaries() {
+        let text = "你好hello";
+        let truncated = truncate_utf8(text, 5);
+        assert_eq!(truncated, "你");
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn image_payload_uses_expected_shape_without_models() {
+        let img = image::RgbImage::from_raw(1, 1, vec![255, 255, 255]).unwrap();
+        let dynamic = image::DynamicImage::ImageRgb8(img);
+        let mut bytes = Vec::new();
+        dynamic
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+
+        let payload = desktop_ocr_image(&bytes, "device_plus_en").unwrap();
+        assert!(payload.ocr_engine.starts_with("desktop_rust_image_"));
+        assert_eq!(payload.ocr_page_count, 1);
+        assert_eq!(payload.ocr_processed_pages, 1);
+    }
+}

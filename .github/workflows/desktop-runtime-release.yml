@@ -1,0 +1,166 @@
+name: Desktop Runtime Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Runtime platform label (linux|macos|windows)
+        required: true
+        default: linux
+      arch:
+        description: Runtime arch label (x64|arm64)
+        required: true
+        default: x64
+      version:
+        description: Runtime version (optional)
+        required: false
+        default: ''
+      runtime_input_dir:
+        description: Folder containing prebuilt runtime files
+        required: true
+        default: assets/ocr/desktop_runtime
+  push:
+    tags:
+      - 'desktop-runtime-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-runtime-dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      PLATFORM: ${{ github.event.inputs.platform || 'linux' }}
+      ARCH: ${{ github.event.inputs.arch || 'x64' }}
+      VERSION_INPUT: ${{ github.event.inputs.version || '' }}
+      RUNTIME_INPUT_DIR: ${{ github.event.inputs.runtime_input_dir || 'assets/ocr/desktop_runtime' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare runtime input folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -d "${RUNTIME_INPUT_DIR}" ]]; then
+            mkdir -p "${RUNTIME_INPUT_DIR}"
+          fi
+          # Keep workflow deterministic even when runtime payload is generated in a prior step.
+          if [[ -z "$(find "${RUNTIME_INPUT_DIR}" -mindepth 1 -print -quit)" ]]; then
+            echo "runtime-placeholder" > "${RUNTIME_INPUT_DIR}/README.runtime.txt"
+          fi
+
+      - name: Build runtime archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_version="${VERSION_INPUT}"
+          if [[ -z "${runtime_version}" && "${GITHUB_REF}" == refs/tags/desktop-runtime-v* ]]; then
+            runtime_version="${GITHUB_REF_NAME#desktop-runtime-}"
+          fi
+          args=(
+            --platform "${PLATFORM}"
+            --arch "${ARCH}"
+            --input-dir "${RUNTIME_INPUT_DIR}"
+            --output-dir dist/runtime
+          )
+          if [[ -n "${runtime_version}" ]]; then
+            args+=(--version "${runtime_version}")
+          fi
+          bash scripts/build_desktop_runtime.sh "${args[@]}"
+
+      - name: Split runtime archive for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(ls dist/runtime/desktop-runtime-${PLATFORM}-${ARCH}-*.tar.gz | head -n1)"
+          bash scripts/split_release_assets.sh \
+            --input-file "$archive" \
+            --output-dir dist/runtime
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runtime-${{ env.PLATFORM }}-${{ env.ARCH }}
+          path: dist/runtime/*
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/desktop-runtime-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/runtime/*
+
+  build-runtime-tag:
+    if: startsWith(github.ref, 'refs/tags/desktop-runtime-v')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: linux
+            arch: x64
+          - platform: windows
+            arch: x64
+          - platform: macos
+            arch: x64
+          - platform: macos
+            arch: arm64
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      ARCH: ${{ matrix.arch }}
+      VERSION_INPUT: ''
+      RUNTIME_INPUT_DIR: assets/ocr/desktop_runtime
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare runtime input folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -d "${RUNTIME_INPUT_DIR}" ]]; then
+            mkdir -p "${RUNTIME_INPUT_DIR}"
+          fi
+          # Keep workflow deterministic even when runtime payload is generated in a prior step.
+          if [[ -z "$(find "${RUNTIME_INPUT_DIR}" -mindepth 1 -print -quit)" ]]; then
+            echo "runtime-placeholder" > "${RUNTIME_INPUT_DIR}/README.runtime.txt"
+          fi
+
+      - name: Build runtime archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_version="${VERSION_INPUT}"
+          if [[ -z "${runtime_version}" && "${GITHUB_REF}" == refs/tags/desktop-runtime-v* ]]; then
+            runtime_version="${GITHUB_REF_NAME#desktop-runtime-}"
+          fi
+          args=(
+            --platform "${PLATFORM}"
+            --arch "${ARCH}"
+            --input-dir "${RUNTIME_INPUT_DIR}"
+            --output-dir dist/runtime
+          )
+          if [[ -n "${runtime_version}" ]]; then
+            args+=(--version "${runtime_version}")
+          fi
+          bash scripts/build_desktop_runtime.sh "${args[@]}"
+
+      - name: Split runtime archive for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(ls dist/runtime/desktop-runtime-${PLATFORM}-${ARCH}-*.tar.gz | head -n1)"
+          bash scripts/split_release_assets.sh \
+            --input-file "$archive" \
+            --output-dir dist/runtime
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runtime-${{ env.PLATFORM }}-${{ env.ARCH }}
+          path: dist/runtime/*
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/runtime/*

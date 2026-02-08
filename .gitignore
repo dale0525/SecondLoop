@@ -39,5 +39,8 @@ build/
 # Local logs
 logs/
 
+# Local desktop runtime payload cache (downloaded from GitHub Releases)
+assets/ocr/desktop_runtime/
+
 # Git worktrees
 .worktrees/

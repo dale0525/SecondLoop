@@ -6,9 +6,11 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
     final status = _linuxPdfCompressResourceStatus;
     if (!status.supported) return null;
 
-    final t = context.t.settings.mediaAnnotation.pdfCompression.linuxResources;
     final actionEnabled = !_busy && !_linuxPdfCompressBusy;
-    final statusText = _linuxPdfCompressResourceStatusLabel(context, status);
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
 
     return Padding(
       key: MediaAnnotationSettingsPage.linuxPdfCompressResourceTileKey,
@@ -17,17 +19,21 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            t.title,
+            zh ? '桌面 PDF 压缩运行时' : 'Desktop PDF Compression Runtime',
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
-          Text(t.subtitle),
+          Text(
+            zh
+                ? '用于离线 PDF 智能压缩的运行时状态。'
+                : 'Health status for offline PDF smart compression runtime.',
+          ),
           const SizedBox(height: 6),
           Text(
-            statusText,
+            _linuxPdfCompressResourceStatusLabel(context, status),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 10),
@@ -40,9 +46,7 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
                     .linuxPdfCompressResourceDownloadButtonKey,
                 onPressed:
                     actionEnabled ? _downloadLinuxPdfCompressResources : null,
-                child: Text(
-                  status.installed ? t.actions.redownload : t.actions.download,
-                ),
+                child: Text(zh ? '修复安装' : 'Repair Install'),
               ),
               if (status.installed)
                 OutlinedButton(
@@ -50,7 +54,7 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
                       .linuxPdfCompressResourceDeleteButtonKey,
                   onPressed:
                       actionEnabled ? _deleteLinuxPdfCompressResources : null,
-                  child: Text(t.actions.delete),
+                  child: Text(zh ? '清除运行时' : 'Clear Runtime'),
                 ),
             ],
           ),
@@ -63,14 +67,23 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
     BuildContext context,
     LinuxPdfCompressResourceStatus status,
   ) {
-    final t =
-        context.t.settings.mediaAnnotation.pdfCompression.linuxResources.status;
-    if (_linuxPdfCompressBusy) return t.downloading;
-    if (!status.installed) return t.notInstalled;
-    return t.installed(
-      count: status.fileCount,
-      size: _formatLinuxPdfResourceSize(status.totalBytes),
-    );
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    if (_linuxPdfCompressBusy) {
+      return zh ? '正在修复运行时...' : 'Repairing runtime...';
+    }
+    if (!status.installed) {
+      final reason = status.message?.trim();
+      if (reason != null && reason.isNotEmpty) {
+        return zh ? '运行时缺失（$reason）' : 'Runtime missing ($reason)';
+      }
+      return zh ? '运行时缺失' : 'Runtime missing';
+    }
+    return zh
+        ? '运行时健康（${status.fileCount} 文件, ${_formatLinuxPdfResourceSize(status.totalBytes)}）'
+        : 'Runtime healthy (${status.fileCount} files, ${_formatLinuxPdfResourceSize(status.totalBytes)})';
   }
 
   Future<void> _downloadLinuxPdfCompressResources() async {
@@ -95,14 +108,20 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
 
   Future<void> _deleteLinuxPdfCompressResources() async {
     if (_busy || _linuxPdfCompressBusy) return;
-    final t = context
-        .t.settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete;
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
     final confirmed = (await showDialog<bool>(
           context: context,
           builder: (dialogContext) {
             return AlertDialog(
-              title: Text(t.title),
-              content: Text(t.body),
+              title: Text(zh ? '清除桌面运行时' : 'Clear Desktop Runtime'),
+              content: Text(
+                zh
+                    ? '清除后会删除已安装的桌面 OCR/PDF 运行时文件。'
+                    : 'This removes installed desktop OCR/PDF runtime files.',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -110,7 +129,7 @@ extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(t.confirm),
+                  child: Text(zh ? '确认清除' : 'Clear Runtime'),
                 ),
               ],
             );

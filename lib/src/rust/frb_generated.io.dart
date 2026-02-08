@@ -8,6 +8,7 @@ import 'api/audio_transcribe.dart';
 import 'api/content_enrichment.dart';
 import 'api/content_extract.dart';
 import 'api/core.dart';
+import 'api/desktop_media.dart';
 import 'api/media_annotation.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
@@ -15,6 +16,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'db.dart';
+import 'desktop_media/ocr.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 import 'semantic_parse.dart';
@@ -182,6 +184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message dco_decode_message(dynamic raw);
 
   @protected
+  OcrPayload dco_decode_ocr_payload(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -200,6 +205,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message? dco_decode_opt_box_autoadd_message(dynamic raw);
+
+  @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
   SemanticParseJob dco_decode_semantic_parse_job(dynamic raw);
@@ -409,6 +417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message sse_decode_message(SseDeserializer deserializer);
 
   @protected
+  OcrPayload sse_decode_ocr_payload(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -427,6 +438,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message? sse_decode_opt_box_autoadd_message(SseDeserializer deserializer);
+
+  @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
   SemanticParseJob sse_decode_semantic_parse_job(SseDeserializer deserializer);
@@ -647,6 +661,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_message(Message self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ocr_payload(OcrPayload self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -667,6 +684,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_message(
       Message? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+      Uint8List? self, SseSerializer serializer);
 
   @protected
   void sse_encode_semantic_parse_job(

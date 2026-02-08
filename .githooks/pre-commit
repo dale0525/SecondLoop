@@ -80,6 +80,13 @@ if (( check_mode )); then
   fi
 
   if (( scope_flutter )); then
+    if ! bash scripts/check_no_python_runtime.sh; then
+      echo "" >&2
+      echo "pre-commit: python runtime guard failed." >&2
+      echo "Fix locally with: bash scripts/check_no_python_runtime.sh" >&2
+      exit 1
+    fi
+
     if ! "${dart_bin}" format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed; then
       echo "" >&2
       echo "pre-commit: Formatting required." >&2

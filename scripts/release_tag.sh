@@ -5,6 +5,7 @@ usage() {
   cat <<'EOF'
 Usage:
   pixi run release vX.Y.Z
+  pixi run release vX.Y.Z.W
 
 Options:
   --dry-run          Print commands without running them
@@ -14,7 +15,9 @@ Options:
 
 Notes:
   - Requires current branch to be 'main' and up-to-date with <remote>/main.
-  - Tag format must match: vX.Y.Z (e.g. v0.1.0).
+  - Tag format must match: vX.Y.Z or vX.Y.Z.W (e.g. v0.1.0, v0.1.0.1).
+  - This command only publishes app tags.
+  - Runtime release tags are managed separately via: pixi run release-runtime vX.Y.Z[.W]
 EOF
 }
 
@@ -81,8 +84,8 @@ if [[ -z "${tag}" ]]; then
   exit 2
 fi
 
-if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  die "Invalid tag '${tag}'. Expected vX.Y.Z (e.g. v0.1.0)."
+if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+  die "Invalid tag '${tag}'. Expected vX.Y.Z or vX.Y.Z.W (e.g. v0.1.0, v0.1.0.1)."
 fi
 
 run() {
@@ -140,7 +143,7 @@ else
 fi
 
 if (( dry_run )); then
-  echo "release: (dry-run) would push ${tag} -> ${remote} (${head_sha})"
+  echo "release: (dry-run) would push app tag ${tag} -> ${remote} (${head_sha})"
 else
-  echo "release: pushed ${tag} -> ${remote} (${head_sha})"
+  echo "release: pushed app tag ${tag} -> ${remote} (${head_sha})"
 fi

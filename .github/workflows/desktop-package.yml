@@ -1,0 +1,64 @@
+name: Desktop Package Runtime Assemble
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_tag:
+        description: Release tag containing split runtime assets
+        required: true
+      runtime_base_name:
+        description: Base archive name (for example desktop-runtime-linux-x64-20260207000000.tar.gz)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  assemble-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release runtime parts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.runtime_tag }}
+          BASE: ${{ github.event.inputs.runtime_base_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/runtime
+          gh release download "$TAG" \
+            --pattern "${BASE}.part*" \
+            --pattern "${BASE}.sha256" \
+            --dir dist/runtime
+
+      - name: Assemble and verify runtime archive
+        shell: bash
+        env:
+          BASE: ${{ github.event.inputs.runtime_base_name }}
+        run: |
+          set -euo pipefail
+          bash scripts/assemble_desktop_runtime.sh \
+            --parts-dir dist/runtime \
+            --base-name "$BASE" \
+            --output-file "dist/runtime/$BASE" \
+            --sha256-file "dist/runtime/${BASE}.sha256"
+
+      - name: Expand runtime payload for app packaging
+        shell: bash
+        env:
+          BASE: ${{ github.event.inputs.runtime_base_name }}
+        run: |
+          set -euo pipefail
+          rm -rf assets/ocr/desktop_runtime
+          mkdir -p assets/ocr/desktop_runtime
+          tar -xzf "dist/runtime/$BASE" -C assets/ocr/desktop_runtime
+
+      - name: Upload assembled runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runtime-assembled
+          path: |
+            dist/runtime/${{ github.event.inputs.runtime_base_name }}
+            assets/ocr/desktop_runtime/**
