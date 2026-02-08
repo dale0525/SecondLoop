@@ -20,12 +20,12 @@ void main() {
     expect(result, Uint8List.fromList(const <int>[1, 2, 3]));
   });
 
-  test('compressPdfScanPagesViaPlatform clamps dpi into 150..200', () async {
+  test('compressPdfScanPagesViaPlatform clamps dpi into 180..300', () async {
     final result = await compressPdfScanPagesViaPlatform(
       Uint8List.fromList(const <int>[1]),
       scanDpi: 10,
       desktopCompressor: (bytes, {required scanDpi}) async {
-        expect(scanDpi, 150);
+        expect(scanDpi, 180);
         return null;
       },
     );

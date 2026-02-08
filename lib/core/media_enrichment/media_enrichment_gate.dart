@@ -18,6 +18,7 @@ import '../content_enrichment/content_enrichment_config_store.dart';
 import '../content_enrichment/pdf_ocr_auto_policy.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
+import '../sync/sync_engine.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine_gate.dart';
 import 'media_enrichment_availability.dart';
@@ -45,6 +46,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
   bool _running = false;
   bool _cellularPromptShown = false;
   final Set<String> _autoOcrCompletedShas = <String>{};
+  SyncEngine? _syncEngine;
+  VoidCallback? _syncListener;
 
   @override
   void initState() {
@@ -55,6 +58,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _detachSyncEngine();
     _timer?.cancel();
     super.dispose();
   }
@@ -82,13 +86,40 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
     final backend = AppBackendScope.of(context);
     if (backend is! NativeAppBackend) {
+      _detachSyncEngine();
       _timer?.cancel();
       _timer = null;
       _nextRunAt = null;
       return;
     }
 
+    _attachSyncEngine(SyncEngineScope.maybeOf(context));
     _schedule(const Duration(seconds: 2));
+  }
+
+  void _attachSyncEngine(SyncEngine? engine) {
+    if (identical(engine, _syncEngine)) return;
+    _detachSyncEngine();
+
+    _syncEngine = engine;
+    if (engine == null) return;
+
+    void onChange() {
+      _schedule(const Duration(milliseconds: 800));
+    }
+
+    _syncListener = onChange;
+    engine.changes.addListener(onChange);
+  }
+
+  void _detachSyncEngine() {
+    final engine = _syncEngine;
+    final listener = _syncListener;
+    if (engine != null && listener != null) {
+      engine.changes.removeListener(listener);
+    }
+    _syncEngine = null;
+    _syncListener = null;
   }
 
   void _schedule(Duration delay) {

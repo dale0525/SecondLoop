@@ -89,8 +89,8 @@ class OcrAndPdfChannelHandler(
       return
     }
 
-    val requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback = 180, upperBound = 600)
-    val dpi = requestedDpi.coerceIn(150, 200)
+    val requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback = 220, upperBound = 600)
+    val dpi = requestedDpi.coerceIn(180, 300)
     Thread {
       val payload =
         try {

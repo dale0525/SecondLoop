@@ -323,8 +323,8 @@ import Vision
       result(nil)
       return
     }
-    let requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback: 180, upperBound: 600)
-    let dpi = max(150, min(200, requestedDpi))
+    let requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback: 220, upperBound: 600)
+    let dpi = max(180, min(300, requestedDpi))
 
     DispatchQueue.global(qos: .userInitiated).async {
       let compressed = self.runScannedPdfCompression(pdfData: typed.data, dpi: dpi)

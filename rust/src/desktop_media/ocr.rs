@@ -4,17 +4,28 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[path = "ocr_model_config.rs"]
+mod ocr_model_config;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[path = "ocr_parallel.rs"]
+mod ocr_parallel;
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use super::pdf_page_image_decode::{
     collect_page_image_candidates, decode_pdf_image_to_rgb, PdfImageCandidate,
 };
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use image::RgbImage;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use ocr_model_config::resolve_ocr_model_config;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use ocr_parallel::choose_ocr_page_worker_count;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use paddle_ocr_rs::ocr_lite::OcrLite;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::collections::HashMap;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 const MAX_FULL_TEXT_BYTES: usize = 256 * 1024;
 const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
@@ -35,6 +46,14 @@ const OCR_BOX_SCORE_THRESH: f32 = 0.5;
 const OCR_BOX_THRESH: f32 = 0.3;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 const OCR_UNCLIP_RATIO: f32 = 1.6;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_TEXT_SCORE_THRESH: f32 = 0.5;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_MAX_SIDE_LEN: u32 = 1152;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_MAX_IMAGE_CANDIDATES_PER_PAGE: usize = 8;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+const OCR_PRIMARY_ORIENTATION_MIN_CHARS: usize = 30;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OcrPayload {
@@ -53,6 +72,22 @@ struct PdfImageOcrFallbackResult {
     image_candidate_count: u32,
     decoded_image_count: u32,
     ocr_attempt_count: u32,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[derive(Clone, Debug, Default)]
+struct OcrTextResult {
+    text: String,
+    avg_line_score: f32,
+    char_count: usize,
+    quality_score: f32,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[derive(Default)]
+struct OcrPageWorkerResult {
+    page_texts: Vec<(usize, String)>,
+    ocr_attempt_count: usize,
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -323,7 +358,8 @@ fn ocr_image_text(
     let Some(config) = resolve_ocr_model_config(language_hints, model_dir) else {
         return Ok(String::new());
     };
-    run_ocr_with_cached_model(&config, image)
+    let result = run_ocr_with_cached_model(&config, image, None)?;
+    Ok(result.text)
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -360,18 +396,24 @@ fn ocr_pdf_page_images(
     let take_count = usize::try_from(max_pages)
         .unwrap_or(usize::MAX)
         .min(page_numbers.len());
+    let selected_page_numbers = page_numbers
+        .into_iter()
+        .take(take_count)
+        .collect::<Vec<_>>();
 
-    let mut page_texts = Vec::new();
+    let mut decoded_pages = Vec::<Vec<RgbImage>>::with_capacity(selected_page_numbers.len());
     let mut image_candidate_count = 0usize;
     let mut decoded_image_count = 0usize;
     let mut ocr_attempt_count = 0usize;
-    for page_number in page_numbers.into_iter().take(take_count) {
+    for page_number in selected_page_numbers {
         let Some(page_id) = pages.get(&page_number).copied() else {
+            decoded_pages.push(Vec::new());
             continue;
         };
 
         let mut image_candidates = collect_page_image_candidates(&doc, page_id);
         if image_candidates.is_empty() {
+            decoded_pages.push(Vec::new());
             continue;
         }
         image_candidate_count = image_candidate_count.saturating_add(image_candidates.len());
@@ -382,7 +424,11 @@ fn ocr_pdf_page_images(
             area_b.cmp(&area_a)
         });
 
-        for candidate in image_candidates {
+        let mut decoded_images = Vec::<RgbImage>::new();
+        for candidate in image_candidates
+            .into_iter()
+            .take(OCR_MAX_IMAGE_CANDIDATES_PER_PAGE)
+        {
             let decoded = decode_pdf_image_to_rgb(
                 &doc,
                 PdfImageCandidate {
@@ -393,15 +439,84 @@ fn ocr_pdf_page_images(
             );
             if let Some(rgb) = decoded {
                 decoded_image_count = decoded_image_count.saturating_add(1);
-                ocr_attempt_count = ocr_attempt_count.saturating_add(1);
-                let text = run_ocr_with_cached_model(&config, &rgb)?;
-                if !text.is_empty() {
-                    page_texts.push(text);
-                    break;
-                }
+                decoded_images.push(rgb);
+            }
+        }
+        decoded_pages.push(decoded_images);
+    }
+
+    let pages_with_images = decoded_pages
+        .iter()
+        .filter(|images| !images.is_empty())
+        .count();
+    let mut page_text_by_index = vec![String::new(); decoded_pages.len()];
+    let available_parallelism = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let worker_count = choose_ocr_page_worker_count(pages_with_images, available_parallelism);
+
+    if worker_count <= 1 {
+        for (index, images) in decoded_pages.iter().enumerate() {
+            if images.is_empty() {
+                continue;
+            }
+            let (text, attempts) = ocr_decoded_page_images(&config, images, None)?;
+            ocr_attempt_count = ocr_attempt_count.saturating_add(attempts);
+            if let Some(text) = text {
+                page_text_by_index[index] = text;
+            }
+        }
+    } else {
+        let worker_results = std::thread::scope(|scope| -> Result<Vec<OcrPageWorkerResult>> {
+            let mut handles = Vec::with_capacity(worker_count);
+            for worker_id in 0..worker_count {
+                let worker_config = config.clone();
+                let decoded_pages_ref = &decoded_pages;
+                handles.push(scope.spawn(move || -> Result<OcrPageWorkerResult> {
+                    let mut out = OcrPageWorkerResult::default();
+                    for (index, images) in decoded_pages_ref.iter().enumerate() {
+                        if images.is_empty() || (index % worker_count) != worker_id {
+                            continue;
+                        }
+                        let (text, attempts) =
+                            ocr_decoded_page_images(&worker_config, images, Some(worker_id))?;
+                        out.ocr_attempt_count = out.ocr_attempt_count.saturating_add(attempts);
+                        if let Some(text) = text {
+                            out.page_texts.push((index, text));
+                        }
+                    }
+                    Ok(out)
+                }));
+            }
+
+            let mut out = Vec::with_capacity(handles.len());
+            for handle in handles {
+                let worker = match handle.join() {
+                    Ok(result) => result?,
+                    Err(payload) => {
+                        return Err(anyhow!(
+                            "ocr worker panicked: {}",
+                            panic_payload_to_string(&*payload)
+                        ));
+                    }
+                };
+                out.push(worker);
+            }
+            Ok(out)
+        })?;
+
+        for worker in worker_results {
+            ocr_attempt_count = ocr_attempt_count.saturating_add(worker.ocr_attempt_count);
+            for (index, text) in worker.page_texts {
+                page_text_by_index[index] = text;
             }
         }
     }
+
+    let page_texts = page_text_by_index
+        .into_iter()
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>();
 
     Ok(PdfImageOcrFallbackResult {
         text: normalize_text_keep_paragraphs(&page_texts.join("\n")),
@@ -413,27 +528,47 @@ fn ocr_pdf_page_images(
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn run_ocr_with_cached_model(config: &ResolvedOcrModelConfig, image: &RgbImage) -> Result<String> {
+fn run_ocr_with_cached_model(
+    config: &ResolvedOcrModelConfig,
+    image: &RgbImage,
+    cache_slot: Option<usize>,
+) -> Result<OcrTextResult> {
     ensure_ocr_onnxruntime_loaded(config)?;
 
-    let cache = ocr_cache();
-    let mut guard = match cache.lock() {
+    let cache_key = cache_slot
+        .map(|slot| format!("{}|slot:{slot}", config.cache_key))
+        .unwrap_or_else(|| config.cache_key.clone());
+
+    let ocr_handle = {
+        let cache = ocr_cache();
+        let mut guard = match cache.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if !guard.contains_key(&cache_key) {
+            let mut ocr = OcrLite::new();
+            init_ocr_model(&mut ocr, config)?;
+            guard.insert(cache_key.clone(), Arc::new(Mutex::new(ocr)));
+        }
+
+        guard
+            .get(&cache_key)
+            .cloned()
+            .ok_or_else(|| anyhow!("ocr model cache unavailable"))?
+    };
+
+    let mut ocr_guard = match ocr_handle.lock() {
         Ok(g) => g,
         Err(poisoned) => poisoned.into_inner(),
     };
+    let ocr = &mut *ocr_guard;
 
-    if !guard.contains_key(&config.cache_key) {
-        let mut ocr = OcrLite::new();
-        init_ocr_model(&mut ocr, config)?;
-        guard.insert(config.cache_key.clone(), ocr);
-    }
-
-    let ocr = guard
-        .get_mut(&config.cache_key)
-        .ok_or_else(|| anyhow!("ocr model cache unavailable"))?;
-
-    let max_side_len = image.width().max(image.height()).clamp(1024, 3072);
-    let result = ocr
+    let max_side_len = image
+        .width()
+        .max(image.height())
+        .clamp(1024, OCR_MAX_SIDE_LEN);
+    let primary = ocr
         .detect(
             image,
             OCR_PADDING,
@@ -445,14 +580,145 @@ fn run_ocr_with_cached_model(config: &ResolvedOcrModelConfig, image: &RgbImage) 
             false,
         )
         .map_err(|e| anyhow!("paddle detect failed: {e}"))?;
+    let mut best = build_ocr_text_result(primary);
+    if should_accept_primary_orientation(&best) {
+        return Ok(best);
+    }
 
-    let lines = result
-        .text_blocks
-        .into_iter()
-        .map(|block| block.text.trim().to_string())
-        .filter(|text| !text.is_empty())
-        .collect::<Vec<_>>();
-    Ok(normalize_text_keep_paragraphs(&lines.join("\n")))
+    let orientations = [
+        image::imageops::rotate90(image),
+        image::imageops::rotate270(image),
+    ];
+    for oriented in orientations {
+        let rotated = ocr
+            .detect(
+                &oriented,
+                OCR_PADDING,
+                max_side_len,
+                OCR_BOX_SCORE_THRESH,
+                OCR_BOX_THRESH,
+                OCR_UNCLIP_RATIO,
+                true,
+                false,
+            )
+            .map_err(|e| anyhow!("paddle detect failed: {e}"))?;
+        let candidate = build_ocr_text_result(rotated);
+        if is_better_ocr_text_result(&candidate, Some(&best)) {
+            best = candidate;
+        }
+    }
+
+    Ok(best)
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ocr_decoded_page_images(
+    config: &ResolvedOcrModelConfig,
+    images: &[RgbImage],
+    cache_slot: Option<usize>,
+) -> Result<(Option<String>, usize)> {
+    let mut attempts = 0usize;
+    let mut best_page_result: Option<OcrTextResult> = None;
+
+    for image in images {
+        attempts = attempts.saturating_add(1);
+        let text_result = run_ocr_with_cached_model(config, image, cache_slot)?;
+        if text_result.text.is_empty() {
+            continue;
+        }
+        if is_better_ocr_text_result(&text_result, best_page_result.as_ref()) {
+            best_page_result = Some(text_result);
+        }
+    }
+
+    let text = best_page_result.and_then(|result| (!result.text.is_empty()).then_some(result.text));
+    Ok((text, attempts))
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn should_accept_primary_orientation(result: &OcrTextResult) -> bool {
+    if result.text.is_empty() {
+        return false;
+    }
+    result.char_count >= OCR_PRIMARY_ORIENTATION_MIN_CHARS
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn keep_ocr_line(text: &str, score: f32) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if !score.is_finite() || score < OCR_TEXT_SCORE_THRESH {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn build_ocr_text_result(result: paddle_ocr_rs::ocr_result::OcrResult) -> OcrTextResult {
+    let mut lines = Vec::<String>::new();
+    let mut weighted_score_sum = 0f32;
+    let mut weighted_char_sum = 0usize;
+
+    for block in result.text_blocks {
+        let Some(line) = keep_ocr_line(&block.text, block.text_score) else {
+            continue;
+        };
+        let line_char_count = line.chars().count().max(1);
+        lines.push(line);
+        weighted_score_sum += block.text_score * line_char_count as f32;
+        weighted_char_sum = weighted_char_sum.saturating_add(line_char_count);
+    }
+
+    let text = normalize_text_keep_paragraphs(&lines.join("\n"));
+    let char_count = text.chars().count();
+    if char_count == 0 || weighted_char_sum == 0 {
+        return OcrTextResult::default();
+    }
+    let avg_line_score = weighted_score_sum / weighted_char_sum as f32;
+    let quality_score = compute_ocr_quality_score(avg_line_score, char_count);
+    OcrTextResult {
+        text,
+        avg_line_score,
+        char_count,
+        quality_score,
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn compute_ocr_quality_score(avg_line_score: f32, char_count: usize) -> f32 {
+    if !avg_line_score.is_finite() || char_count == 0 {
+        return 0.0;
+    }
+    let confidence = avg_line_score.clamp(0.0, 1.0);
+    confidence * (char_count as f32).sqrt()
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn is_better_ocr_text_result(candidate: &OcrTextResult, best: Option<&OcrTextResult>) -> bool {
+    if candidate.text.is_empty() {
+        return false;
+    }
+    let Some(best) = best else {
+        return true;
+    };
+    if best.text.is_empty() {
+        return true;
+    }
+    if candidate.quality_score > best.quality_score {
+        return true;
+    }
+    if candidate.quality_score < best.quality_score {
+        return false;
+    }
+    if candidate.avg_line_score > best.avg_line_score {
+        return true;
+    }
+    if candidate.avg_line_score < best.avg_line_score {
+        return false;
+    }
+    candidate.char_count > best.char_count
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -487,35 +753,27 @@ fn ensure_ocr_onnxruntime_loaded(config: &ResolvedOcrModelConfig) -> Result<()> 
         Initialized,
     }
 
-    static STATE: OnceLock<Mutex<InitState>> = OnceLock::new();
-    let state = STATE.get_or_init(|| Mutex::new(InitState::Uninitialized));
-
-    {
-        let guard = match state.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        match *guard {
-            InitState::Initialized => return Ok(()),
-            InitState::Initializing => {
-                return Err(anyhow!("onnxruntime init already in progress"));
-            }
-            InitState::Uninitialized => {}
-        }
-    }
+    static STATE: OnceLock<(Mutex<InitState>, Condvar)> = OnceLock::new();
+    let (state, cv) = STATE.get_or_init(|| (Mutex::new(InitState::Uninitialized), Condvar::new()));
 
     {
         let mut guard = match state.lock() {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        match *guard {
-            InitState::Initialized => return Ok(()),
-            InitState::Initializing => {
-                return Err(anyhow!("onnxruntime init already in progress"));
-            }
-            InitState::Uninitialized => {
-                *guard = InitState::Initializing;
+        loop {
+            match *guard {
+                InitState::Initialized => return Ok(()),
+                InitState::Initializing => {
+                    guard = match cv.wait(guard) {
+                        Ok(g) => g,
+                        Err(poisoned) => poisoned.into_inner(),
+                    };
+                }
+                InitState::Uninitialized => {
+                    *guard = InitState::Initializing;
+                    break;
+                }
             }
         }
     }
@@ -548,10 +806,12 @@ fn ensure_ocr_onnxruntime_loaded(config: &ResolvedOcrModelConfig) -> Result<()> 
     match result {
         Ok(()) => {
             *guard = InitState::Initialized;
+            cv.notify_all();
             Ok(())
         }
         Err(e) => {
             *guard = InitState::Uninitialized;
+            cv.notify_all();
             Err(e)
         }
     }
@@ -649,174 +909,12 @@ fn panic_payload_to_string(payload: &(dyn std::any::Any + Send)) -> String {
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn ocr_cache() -> &'static Mutex<HashMap<String, OcrLite>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, OcrLite>>> = OnceLock::new();
+type OcrModelHandle = Arc<Mutex<OcrLite>>;
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ocr_cache() -> &'static Mutex<HashMap<String, OcrModelHandle>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, OcrModelHandle>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn resolve_ocr_model_config(
-    language_hints: &str,
-    model_dir: Option<&str>,
-) -> Option<ResolvedOcrModelConfig> {
-    let rec_preferences = preferred_rec_keys(language_hints);
-    let roots = model_root_candidates(model_dir);
-
-    for root in roots {
-        let det_path = match find_existing_file(&root, &DET_MODEL_ALIASES) {
-            Some(v) => v,
-            None => continue,
-        };
-        let cls_path = match find_existing_file(&root, &CLS_MODEL_ALIASES) {
-            Some(v) => v,
-            None => continue,
-        };
-
-        if let Some(cfg) = build_rec_model_config(&root, &det_path, &cls_path, &rec_preferences) {
-            return Some(cfg);
-        }
-
-        let all_keys = REC_MODEL_SPECS.iter().map(|s| s.key).collect::<Vec<_>>();
-        if let Some(cfg) = build_rec_model_config(&root, &det_path, &cls_path, &all_keys) {
-            return Some(cfg);
-        }
-    }
-
-    None
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn build_rec_model_config(
-    root: &Path,
-    det_path: &Path,
-    cls_path: &Path,
-    rec_keys: &[&str],
-) -> Option<ResolvedOcrModelConfig> {
-    for key in rec_keys {
-        let Some(spec) = REC_MODEL_SPECS.iter().find(|s| s.key == *key) else {
-            continue;
-        };
-
-        let rec_path = match find_existing_file(root, spec.model_files) {
-            Some(path) => path,
-            None => continue,
-        };
-
-        let dict_path = if spec.dict_files.is_empty() {
-            None
-        } else {
-            let candidate = match find_existing_file(root, spec.dict_files) {
-                Some(path) => path,
-                None => continue,
-            };
-            Some(candidate)
-        };
-
-        let cache_key = format!(
-            "{}|{}|{}|{}",
-            det_path.display(),
-            cls_path.display(),
-            rec_path.display(),
-            dict_path
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default()
-        );
-
-        return Some(ResolvedOcrModelConfig {
-            det_path: det_path.to_path_buf(),
-            cls_path: cls_path.to_path_buf(),
-            rec_path,
-            dict_path,
-            cache_key,
-        });
-    }
-
-    None
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn preferred_rec_keys(language_hints: &str) -> Vec<&'static str> {
-    let hint = language_hints.trim().to_ascii_lowercase();
-
-    if hint.is_empty() || hint == "device_plus_en" {
-        return vec![
-            "zh_hans",
-            "latin",
-            "ja",
-            "ko",
-            "arabic",
-            "cyrillic",
-            "devanagari",
-            "zh_hant",
-        ];
-    }
-
-    if hint.contains("ja") {
-        return vec!["ja", "zh_hans", "latin"];
-    }
-    if hint.contains("ko") {
-        return vec!["ko", "zh_hans", "latin"];
-    }
-    if hint.contains("zh_strict") || hint.contains("zh_en") || hint == "zh" {
-        return vec!["zh_hans", "zh_hant", "latin"];
-    }
-    if hint.contains("ar") {
-        return vec!["arabic", "latin", "zh_hans"];
-    }
-    if hint.contains("ru") || hint.contains("cyrillic") {
-        return vec!["cyrillic", "latin", "zh_hans"];
-    }
-    if hint.contains("hi") || hint.contains("devanagari") {
-        return vec!["devanagari", "latin", "zh_hans"];
-    }
-
-    vec!["latin", "zh_hans", "ja"]
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn model_root_candidates(model_dir: Option<&str>) -> Vec<PathBuf> {
-    let mut seen = HashSet::<PathBuf>::new();
-    let mut roots = Vec::new();
-
-    let mut push_dir = |path: &Path| {
-        if path.as_os_str().is_empty() {
-            return;
-        }
-        let base = path.to_path_buf();
-        if base.is_dir() && seen.insert(base.clone()) {
-            roots.push(base.clone());
-        }
-
-        let nested_models = base.join("models");
-        if nested_models.is_dir() && seen.insert(nested_models.clone()) {
-            roots.push(nested_models);
-        }
-    };
-
-    if let Some(explicit) = model_dir {
-        push_dir(Path::new(explicit.trim()));
-    }
-
-    if let Ok(from_env) = std::env::var(OCR_MODEL_DIR_ENV) {
-        push_dir(Path::new(from_env.trim()));
-    }
-
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            push_dir(exe_dir);
-            push_dir(&exe_dir.join("assets/ocr/desktop_runtime"));
-            push_dir(&exe_dir.join("data/flutter_assets/assets/ocr/desktop_runtime"));
-            push_dir(&exe_dir.join("../Resources/flutter_assets/assets/ocr/desktop_runtime"));
-        }
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        push_dir(&cwd);
-        push_dir(&cwd.join("assets/ocr/desktop_runtime"));
-    }
-
-    roots
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -879,121 +977,5 @@ fn extract_pdf_text_with_limit(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn truncate_utf8_keeps_valid_boundaries() {
-        let text = "你好hello";
-        let truncated = truncate_utf8(text, 5);
-        assert_eq!(truncated, "你");
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    #[test]
-    fn image_payload_uses_expected_shape_without_models() {
-        let img = image::RgbImage::from_raw(1, 1, vec![255, 255, 255]).unwrap();
-        let dynamic = image::DynamicImage::ImageRgb8(img);
-        let mut bytes = Vec::new();
-        dynamic
-            .write_to(
-                &mut std::io::Cursor::new(&mut bytes),
-                image::ImageFormat::Png,
-            )
-            .unwrap();
-
-        let payload = desktop_ocr_image(&bytes, "device_plus_en").unwrap();
-        assert!(payload.ocr_engine.starts_with("desktop_rust_image_"));
-        assert_eq!(payload.ocr_page_count, 1);
-        assert_eq!(payload.ocr_processed_pages, 1);
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    #[test]
-    fn resolve_ocr_model_config_accepts_v3_model_set() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path();
-        std::fs::write(root.join("ch_PP-OCRv3_det_infer.onnx"), b"det").unwrap();
-        std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
-        std::fs::write(root.join("ch_PP-OCRv3_rec_infer.onnx"), b"rec").unwrap();
-
-        let model_dir = root.to_string_lossy().to_string();
-        let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));
-        assert!(resolved.is_some());
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    #[test]
-    fn resolve_ocr_model_config_accepts_v5_model_set() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path();
-        std::fs::write(root.join("ch_PP-OCRv5_mobile_det.onnx"), b"det").unwrap();
-        std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
-        std::fs::write(root.join("ch_PP-OCRv5_rec_mobile_infer.onnx"), b"rec").unwrap();
-
-        let model_dir = root.to_string_lossy().to_string();
-        let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));
-        assert!(resolved.is_some());
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    #[test]
-    fn resolve_ocr_model_config_prefers_v5_detector_when_v4_also_exists() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path();
-        std::fs::write(root.join("ch_PP-OCRv4_det_infer.onnx"), b"det-v4").unwrap();
-        std::fs::write(root.join("ch_PP-OCRv5_mobile_det.onnx"), b"det-v5").unwrap();
-        std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
-        std::fs::write(root.join("ch_PP-OCRv5_rec_mobile_infer.onnx"), b"rec").unwrap();
-
-        let model_dir = root.to_string_lossy().to_string();
-        let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir))
-            .expect("expected v5 config to resolve");
-        let det_name = resolved
-            .det_path
-            .file_name()
-            .and_then(|v| v.to_str())
-            .unwrap_or_default();
-        assert_eq!(det_name, "ch_PP-OCRv5_mobile_det.onnx");
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    #[test]
-    fn find_onnxruntime_library_from_runtime_payload_layout() {
-        let temp = tempfile::tempdir().unwrap();
-        let runtime_root = temp.path();
-        let models_dir = runtime_root.join("models");
-        let onnx_dir = runtime_root.join("onnxruntime");
-        std::fs::create_dir_all(&models_dir).unwrap();
-        std::fs::create_dir_all(&onnx_dir).unwrap();
-
-        let det_path = models_dir.join("ch_PP-OCRv3_det_infer.onnx");
-        let cls_path = models_dir.join("ch_ppocr_mobile_v2.0_cls_infer.onnx");
-        let rec_path = models_dir.join("ch_PP-OCRv3_rec_infer.onnx");
-
-        std::fs::write(&det_path, b"det").unwrap();
-        std::fs::write(&cls_path, b"cls").unwrap();
-        std::fs::write(&rec_path, b"rec").unwrap();
-
-        let lib_name = if cfg!(target_os = "windows") {
-            "onnxruntime.dll"
-        } else if cfg!(target_os = "macos") {
-            "libonnxruntime.dylib"
-        } else {
-            "libonnxruntime.so"
-        };
-        let lib_path = onnx_dir.join(lib_name);
-        std::fs::write(&lib_path, b"ort").unwrap();
-
-        let cfg = ResolvedOcrModelConfig {
-            det_path,
-            cls_path,
-            rec_path,
-            dict_path: None,
-            cache_key: "test-cache-key".to_string(),
-        };
-
-        let resolved = find_onnxruntime_library_path(&cfg);
-        assert_eq!(resolved, Some(lib_path));
-    }
-}
+#[path = "ocr_tests.rs"]
+mod tests;

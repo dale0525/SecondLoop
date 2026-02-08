@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -14,6 +16,11 @@ typedef DesktopOcrPdfInvoke = Future<dynamic> Function(
 typedef DesktopOcrImageInvoke = Future<dynamic> Function(
   Uint8List bytes, {
   required String languageHints,
+});
+
+typedef DesktopPdfCompressInvoke = Future<dynamic> Function(
+  Uint8List bytes, {
+  required int scanDpi,
 });
 
 final class PlatformPdfOcrResult {
@@ -64,6 +71,16 @@ final class PlatformPdfOcrResult {
   }
 }
 
+final class _RuntimePdfRetryState {
+  const _RuntimePdfRetryState({
+    required this.parsed,
+    this.rasterizedBytes,
+  });
+
+  final PlatformPdfOcrResult? parsed;
+  final Uint8List? rasterizedBytes;
+}
+
 final class PlatformPdfOcr {
   static const MethodChannel _nativeOcrChannel =
       MethodChannel('secondloop/ocr');
@@ -84,6 +101,7 @@ final class PlatformPdfOcr {
     required int dpi,
     required String languageHints,
     DesktopOcrPdfInvoke? ocrPdfInvoke,
+    DesktopPdfCompressInvoke? compressPdfInvoke,
   }) async {
     _lastErrorMessage = null;
     if (kIsWeb || bytes.isEmpty) {
@@ -97,6 +115,7 @@ final class PlatformPdfOcr {
         languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
 
     final invoke = ocrPdfInvoke ?? _invokeDesktopOcrPdf;
+    final compressInvoke = compressPdfInvoke ?? _invokeRustCompressPdfForOcr;
     final raw = await _invokeSafely(
       () => invoke(
         bytes,
@@ -106,29 +125,48 @@ final class PlatformPdfOcr {
       ),
     );
     var parsed = _parsePayload(raw);
-    parsed = await _retryRuntimeWithMacOsRasterizedPdfIfNeeded(
+    final retryState = await _retryRuntimeWithPlatformPdfRecoveryIfNeeded(
       parsed: parsed,
       originalBytes: bytes,
       invoke: invoke,
+      compressInvoke: compressInvoke,
       maxPages: safeMaxPages,
       dpi: safeDpi,
       languageHints: hints,
     );
+    parsed = retryState.parsed;
+    parsed = await _maybeRescueRuntimeGarbledPdfWithNativeOcr(
+      parsed: parsed,
+      originalBytes: bytes,
+      preferredRasterizedBytes: retryState.rasterizedBytes,
+      maxPages: safeMaxPages,
+      dpi: safeDpi,
+      languageHints: hints,
+      compressInvoke: compressInvoke,
+    );
     final runtimeError = _lastErrorMessage;
-    if (_shouldFallbackToMacOsNative(
-        parsed: parsed, runtimeError: runtimeError)) {
-      final macRaw = await _invokeSafely(
-        () => _invokeMacOsNativeOcrPdf(
+    final shouldFallbackToNative = _shouldFallbackToNativeOcr(
+          parsed: parsed,
+          runtimeError: runtimeError,
+        ) ||
+        _shouldPreferNativeMobilePdfOcr(
+          parsed: parsed,
+          runtimeError: runtimeError,
+        );
+    if (shouldFallbackToNative) {
+      final nativeDpi = _effectiveNativePdfOcrDpi(safeDpi);
+      final nativeRaw = await _invokeSafely(
+        () => _invokeNativeOcrPdf(
           bytes,
           maxPages: safeMaxPages,
-          dpi: safeDpi,
+          dpi: nativeDpi,
           languageHints: hints,
         ),
       );
-      final macParsed = _parsePayload(macRaw);
-      if (macParsed != null &&
-          (parsed == null || macParsed.fullText.trim().isNotEmpty)) {
-        parsed = macParsed;
+      final nativeParsed = _parsePayload(nativeRaw);
+      if (nativeParsed != null &&
+          (parsed == null || nativeParsed.fullText.trim().isNotEmpty)) {
+        parsed = nativeParsed;
       }
     }
     if (parsed != null) {
@@ -165,17 +203,17 @@ final class PlatformPdfOcr {
     );
     var parsed = _parsePayload(raw);
     final runtimeError = _lastErrorMessage;
-    if (_shouldFallbackToMacOsNative(
+    if (_shouldFallbackToNativeOcr(
         parsed: parsed, runtimeError: runtimeError)) {
-      final macRaw = await _invokeSafely(
-        () => _invokeMacOsNativeOcrImage(
+      final nativeRaw = await _invokeSafely(
+        () => _invokeNativeOcrImage(
           bytes,
           languageHints: hints,
         ),
       );
-      final macParsed = _parsePayload(macRaw);
-      if (macParsed != null && macParsed.fullText.trim().isNotEmpty) {
-        parsed = macParsed;
+      final nativeParsed = _parsePayload(nativeRaw);
+      if (nativeParsed != null && nativeParsed.fullText.trim().isNotEmpty) {
+        parsed = nativeParsed;
       }
     }
     if (parsed != null) {
@@ -189,17 +227,34 @@ final class PlatformPdfOcr {
     return null;
   }
 
-  static bool _canUseMacOsNativeOcrFallback() =>
+  static bool _isDesktopMacOs() =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
-  static bool _canUseMacOsPdfRasterizationRecovery() =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  static bool _isDesktopWindows() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
-  static bool _shouldFallbackToMacOsNative({
+  static bool _isDesktopLinux() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
+  static bool _isMobileAndroid() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  static bool _isMobileIos() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  static bool _isMobilePlatform() => _isMobileAndroid() || _isMobileIos();
+
+  static bool _canUseNativeOcrFallback() =>
+      _isDesktopMacOs() || _isDesktopWindows() || _isMobilePlatform();
+
+  static bool _canUsePlatformPdfRasterizationRecovery() =>
+      _isDesktopMacOs() || _isDesktopWindows() || _isDesktopLinux();
+
+  static bool _shouldFallbackToNativeOcr({
     required PlatformPdfOcrResult? parsed,
     required String? runtimeError,
   }) {
-    if (!_canUseMacOsNativeOcrFallback()) return false;
+    if (!_canUseNativeOcrFallback()) return false;
     if (parsed != null) return false;
     final message = runtimeError?.trim().toLowerCase() ?? '';
     if (message.isEmpty) return false;
@@ -209,32 +264,54 @@ final class PlatformPdfOcr {
     return false;
   }
 
-  static Future<PlatformPdfOcrResult?>
-      _retryRuntimeWithMacOsRasterizedPdfIfNeeded({
+  static bool _shouldPreferNativeMobilePdfOcr({
+    required PlatformPdfOcrResult? parsed,
+    required String? runtimeError,
+  }) {
+    if (!_isMobilePlatform()) return false;
+    if (parsed == null) {
+      return (runtimeError?.trim().isNotEmpty ?? false);
+    }
+    if (parsed.fullText.trim().isNotEmpty) return false;
+    return parsed.engine.trim().toLowerCase().startsWith('desktop_rust_pdf_');
+  }
+
+  static int _effectiveNativePdfOcrDpi(int dpi) {
+    if (!_isMobilePlatform()) return dpi;
+    return dpi < 260 ? 260 : dpi;
+  }
+
+  static Future<_RuntimePdfRetryState>
+      _retryRuntimeWithPlatformPdfRecoveryIfNeeded({
     required PlatformPdfOcrResult? parsed,
     required Uint8List originalBytes,
     required DesktopOcrPdfInvoke invoke,
+    required DesktopPdfCompressInvoke compressInvoke,
     required int maxPages,
     required int dpi,
     required String languageHints,
   }) async {
-    if (!_canUseMacOsPdfRasterizationRecovery()) return parsed;
-    if (parsed == null) return null;
-    if (parsed.engine != 'desktop_rust_pdf_image_decode_empty') return parsed;
-    if (parsed.fullText.trim().isNotEmpty) return parsed;
+    if (!_canUsePlatformPdfRasterizationRecovery()) {
+      return _RuntimePdfRetryState(parsed: parsed);
+    }
+    if (parsed == null) return const _RuntimePdfRetryState(parsed: null);
+    if (parsed.engine != 'desktop_rust_pdf_image_decode_empty') {
+      return _RuntimePdfRetryState(parsed: parsed);
+    }
+    if (parsed.fullText.trim().isNotEmpty) {
+      return _RuntimePdfRetryState(parsed: parsed);
+    }
 
-    final compressedRaw = await _invokeSafely(
-      () => _invokeMacOsRasterizePdfForOcr(
-        originalBytes,
-        scanDpi: dpi < 300 ? 300 : dpi,
-      ),
+    final compressedBytes = await _invokePlatformPdfRecoveryBytes(
+      originalBytes,
+      dpi: dpi,
+      compressInvoke: compressInvoke,
     );
-    final compressedBytes = _asUint8List(compressedRaw);
     if (compressedBytes == null || compressedBytes.isEmpty) {
-      return parsed;
+      return _RuntimePdfRetryState(parsed: parsed);
     }
     if (listEquals(compressedBytes, originalBytes)) {
-      return parsed;
+      return _RuntimePdfRetryState(parsed: parsed);
     }
 
     final retryRaw = await _invokeSafely(
@@ -246,22 +323,279 @@ final class PlatformPdfOcr {
       ),
     );
     final retryParsed = _parsePayload(retryRaw);
-    if (retryParsed == null) return parsed;
-
-    if (retryParsed.fullText.trim().isNotEmpty ||
-        retryParsed.engine != parsed.engine) {
-      return retryParsed.copyWith(
-        retryAttempted: true,
-        retryAttempts: (parsed.retryAttempts + 1).clamp(1, 99),
-        retryHintsTried: <String>[languageHints],
+    if (retryParsed == null) {
+      return _RuntimePdfRetryState(
+        parsed: parsed,
+        rasterizedBytes: compressedBytes,
       );
     }
 
-    return parsed.copyWith(
-      retryAttempted: true,
-      retryAttempts: (parsed.retryAttempts + 1).clamp(1, 99),
-      retryHintsTried: <String>[languageHints],
+    if (retryParsed.fullText.trim().isNotEmpty ||
+        retryParsed.engine != parsed.engine) {
+      return _RuntimePdfRetryState(
+        parsed: retryParsed.copyWith(
+          retryAttempted: true,
+          retryAttempts: (parsed.retryAttempts + 1).clamp(1, 99),
+          retryHintsTried: <String>[languageHints],
+        ),
+        rasterizedBytes: compressedBytes,
+      );
+    }
+
+    return _RuntimePdfRetryState(
+      parsed: parsed.copyWith(
+        retryAttempted: true,
+        retryAttempts: (parsed.retryAttempts + 1).clamp(1, 99),
+        retryHintsTried: <String>[languageHints],
+      ),
+      rasterizedBytes: compressedBytes,
     );
+  }
+
+  static Future<Uint8List?> _invokePlatformPdfRecoveryBytes(
+    Uint8List originalBytes, {
+    required int dpi,
+    required DesktopPdfCompressInvoke compressInvoke,
+  }) async {
+    if (_isDesktopMacOs() || _isDesktopWindows()) {
+      final recoveryDpi = dpi < 300 ? 300 : dpi;
+      final raw = await _invokeSafely(
+        () => _invokePlatformRasterizePdfForOcr(
+          originalBytes,
+          scanDpi: recoveryDpi,
+        ),
+      );
+      return _asUint8List(raw);
+    }
+    if (_isDesktopLinux()) {
+      final compressDpi = dpi.clamp(180, 300);
+      final raw = await _invokeSafely(
+        () => compressInvoke(
+          originalBytes,
+          scanDpi: compressDpi,
+        ),
+      );
+      return _asUint8List(raw);
+    }
+    return null;
+  }
+
+  static Future<PlatformPdfOcrResult?>
+      _maybeRescueRuntimeGarbledPdfWithNativeOcr({
+    required PlatformPdfOcrResult? parsed,
+    required Uint8List originalBytes,
+    Uint8List? preferredRasterizedBytes,
+    required int maxPages,
+    required int dpi,
+    required String languageHints,
+    required DesktopPdfCompressInvoke compressInvoke,
+  }) async {
+    if (!_shouldAttemptNativeQualityRescue(parsed)) return parsed;
+
+    final rescueDpi = dpi < 300 ? 300 : dpi;
+    final rasterizedBytes =
+        preferredRasterizedBytes != null && preferredRasterizedBytes.isNotEmpty
+            ? preferredRasterizedBytes
+            : await _invokePlatformPdfRecoveryBytes(
+                originalBytes,
+                dpi: rescueDpi,
+                compressInvoke: compressInvoke,
+              );
+    if (rasterizedBytes == null || rasterizedBytes.isEmpty) {
+      return parsed;
+    }
+
+    final nativeRaw = await _invokeSafely(
+      () => _invokeNativeOcrPdf(
+        rasterizedBytes,
+        maxPages: maxPages,
+        dpi: rescueDpi,
+        languageHints: languageHints,
+      ),
+    );
+    final nativeParsed = _parsePayload(nativeRaw);
+    if (!_shouldUseNativeOcrRescue(
+        nativeParsed: nativeParsed, runtimeParsed: parsed)) {
+      return parsed;
+    }
+
+    final previousAttempts = parsed?.retryAttempts ?? 0;
+    final nextAttempts = (previousAttempts + 1).clamp(1, 99);
+    final mergedHints = _mergeRetryHints(
+      parsed?.retryHintsTried ?? const <String>[],
+      languageHints,
+    );
+    return nativeParsed!.copyWith(
+      retryAttempted: true,
+      retryAttempts: nextAttempts,
+      retryHintsTried: mergedHints,
+    );
+  }
+
+  static bool _shouldAttemptNativeQualityRescue(
+    PlatformPdfOcrResult? parsed,
+  ) {
+    if (!_canUseNativeOcrFallback()) return false;
+    if (parsed == null) return false;
+    if (!parsed.retryAttempted) return false;
+    if (parsed.engine != 'desktop_rust_pdf_onnx') return false;
+    final full = parsed.fullText.trim();
+    if (full.isEmpty) return false;
+    if (_countNonSpaceRunes(full) < 80) return false;
+    if (_looksLikeRuntimeGarbledText(full)) return true;
+    return _ocrTextQualityScore(full) < 12.0;
+  }
+
+  static bool _shouldUseNativeOcrRescue({
+    required PlatformPdfOcrResult? nativeParsed,
+    required PlatformPdfOcrResult? runtimeParsed,
+  }) {
+    if (nativeParsed == null) return false;
+    if (runtimeParsed == null) return nativeParsed.fullText.trim().isNotEmpty;
+    final nativeText = nativeParsed.fullText.trim();
+    final runtimeText = runtimeParsed.fullText.trim();
+    if (nativeText.isEmpty) return false;
+    if (runtimeText.isEmpty) return true;
+
+    final runtimeScore = _ocrTextQualityScore(runtimeText);
+    final nativeScore = _ocrTextQualityScore(nativeText);
+    if (nativeScore > runtimeScore * 1.15) return true;
+    return _countNonSpaceRunes(nativeText) >
+        (_countNonSpaceRunes(runtimeText) + 80);
+  }
+
+  static bool _looksLikeRuntimeGarbledText(String text) {
+    final lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (lines.length < 10) return false;
+
+    var suspiciousLines = 0;
+    for (final line in lines) {
+      final nonSpace = _countNonSpaceRunes(line);
+      if (nonSpace <= 3) {
+        suspiciousLines += 1;
+        continue;
+      }
+      if (nonSpace <= 8 && _hasCjkRune(line) && _hasAsciiAlphaNumRune(line)) {
+        suspiciousLines += 1;
+      }
+    }
+
+    final suspiciousRatio = suspiciousLines / lines.length;
+    if (suspiciousRatio >= 0.45) {
+      return true;
+    }
+    return _ocrTextQualityScore(text) < 10.0;
+  }
+
+  static double _ocrTextQualityScore(String text) {
+    final lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (lines.isEmpty) return 0.0;
+
+    var nonSpace = 0;
+    var readable = 0;
+    var shortLines = 0;
+    var longLines = 0;
+
+    for (final line in lines) {
+      var lineNonSpace = 0;
+      for (final rune in line.runes) {
+        if (_isWhitespaceRune(rune)) continue;
+        lineNonSpace += 1;
+        nonSpace += 1;
+        if (_isReadableRune(rune)) {
+          readable += 1;
+        }
+      }
+      if (lineNonSpace <= 3) {
+        shortLines += 1;
+      }
+      if (lineNonSpace >= 8) {
+        longLines += 1;
+      }
+    }
+
+    if (nonSpace == 0) return 0.0;
+
+    final readableRatio = readable / nonSpace;
+    final shortRatio = shortLines / lines.length;
+    final longRatio = longLines / lines.length;
+    final density = math.sqrt(nonSpace.toDouble());
+    return density *
+        readableRatio *
+        (1.0 - shortRatio * 0.75) *
+        (0.8 + longRatio * 0.4);
+  }
+
+  static bool _hasAsciiAlphaNumRune(String text) {
+    for (final rune in text.runes) {
+      if (_isAsciiAlphaNumRune(rune)) return true;
+    }
+    return false;
+  }
+
+  static bool _hasCjkRune(String text) {
+    for (final rune in text.runes) {
+      if (_isCjkRune(rune)) return true;
+    }
+    return false;
+  }
+
+  static int _countNonSpaceRunes(String text) {
+    var count = 0;
+    for (final rune in text.runes) {
+      if (_isWhitespaceRune(rune)) continue;
+      count += 1;
+    }
+    return count;
+  }
+
+  static bool _isReadableRune(int rune) =>
+      _isAsciiAlphaNumRune(rune) || _isCjkRune(rune);
+
+  static bool _isAsciiAlphaNumRune(int rune) =>
+      (rune >= 0x30 && rune <= 0x39) ||
+      (rune >= 0x41 && rune <= 0x5A) ||
+      (rune >= 0x61 && rune <= 0x7A);
+
+  static bool _isCjkRune(int rune) =>
+      (rune >= 0x3400 && rune <= 0x4DBF) ||
+      (rune >= 0x4E00 && rune <= 0x9FFF) ||
+      (rune >= 0xF900 && rune <= 0xFAFF) ||
+      (rune >= 0x3040 && rune <= 0x30FF) ||
+      (rune >= 0xAC00 && rune <= 0xD7AF);
+
+  static bool _isWhitespaceRune(int rune) =>
+      rune == 0x20 ||
+      rune == 0x09 ||
+      rune == 0x0A ||
+      rune == 0x0B ||
+      rune == 0x0C ||
+      rune == 0x0D ||
+      rune == 0x3000;
+
+  static List<String> _mergeRetryHints(
+    List<String> current,
+    String next,
+  ) {
+    final out = <String>[];
+    for (final hint in current) {
+      final value = hint.trim();
+      if (value.isEmpty || out.contains(value)) continue;
+      out.add(value);
+    }
+    final normalized = next.trim();
+    if (normalized.isNotEmpty && !out.contains(normalized)) {
+      out.add(normalized);
+    }
+    return out;
   }
 
   static Future<dynamic> _invokeDesktopOcrPdf(
@@ -288,7 +622,7 @@ final class PlatformPdfOcr {
     );
   }
 
-  static Future<dynamic> _invokeMacOsNativeOcrPdf(
+  static Future<dynamic> _invokeNativeOcrPdf(
     Uint8List bytes, {
     required int maxPages,
     required int dpi,
@@ -305,7 +639,7 @@ final class PlatformPdfOcr {
     );
   }
 
-  static Future<dynamic> _invokeMacOsNativeOcrImage(
+  static Future<dynamic> _invokeNativeOcrImage(
     Uint8List bytes, {
     required String languageHints,
   }) {
@@ -318,7 +652,7 @@ final class PlatformPdfOcr {
     );
   }
 
-  static Future<dynamic> _invokeMacOsRasterizePdfForOcr(
+  static Future<dynamic> _invokePlatformRasterizePdfForOcr(
     Uint8List bytes, {
     required int scanDpi,
   }) {
@@ -328,6 +662,16 @@ final class PlatformPdfOcr {
         'bytes': bytes,
         'scan_dpi': scanDpi,
       },
+    );
+  }
+
+  static Future<dynamic> _invokeRustCompressPdfForOcr(
+    Uint8List bytes, {
+    required int scanDpi,
+  }) {
+    return rust_desktop_media.desktopCompressPdfScan(
+      bytes: bytes,
+      scanDpi: scanDpi,
     );
   }
 

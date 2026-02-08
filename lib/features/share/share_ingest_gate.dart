@@ -21,6 +21,7 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
+import '../media_backup/pdf_ingest_compression.dart';
 import 'share_ingest.dart';
 
 final class ShareIngestGate extends StatefulWidget {
@@ -326,10 +327,19 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
             return attachment.sha256;
           }
 
+          final pdfIngest = await compressPdfForIngest(
+            bytes,
+            mimeType: normalizedMimeType,
+            readPdfSmartCompressEnabled: () async {
+              final config = await const RustContentEnrichmentConfigStore()
+                  .readContentEnrichment(sessionKey);
+              return config.pdfSmartCompressEnabled;
+            },
+          );
           final attachment = await backend.insertAttachment(
             sessionKey,
-            bytes: bytes,
-            mimeType: normalizedMimeType,
+            bytes: pdfIngest.bytes,
+            mimeType: pdfIngest.mimeType,
           );
           unawaited(_maybeEnqueueCloudMediaBackup(
             backend,

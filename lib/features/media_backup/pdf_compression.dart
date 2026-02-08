@@ -81,10 +81,17 @@ Future<PdfCompressionResult> compressPdfForStorage(
   }
 
   final compressor = platformCompressor ?? compressPdfScanPagesViaPlatform;
-  final compressed = await compressor(originalBytes, scanDpi: 180);
-  if (compressed == null ||
-      compressed.isEmpty ||
-      compressed.length >= originalBytes.length) {
+  // Prefer higher OCR-friendliness first, then step down only when size does
+  // not improve, so scan-heavy PDFs can still be stored in compressed form.
+  Uint8List? compressed;
+  for (final dpi in const <int>[220, 200, 180]) {
+    final attempt = await compressor(originalBytes, scanDpi: dpi);
+    if (attempt == null || attempt.isEmpty) continue;
+    if (attempt.length >= originalBytes.length) continue;
+    compressed = attempt;
+    break;
+  }
+  if (compressed == null) {
     return PdfCompressionResult(
       bytes: originalBytes,
       mimeType: 'application/pdf',

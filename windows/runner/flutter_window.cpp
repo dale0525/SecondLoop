@@ -688,14 +688,26 @@ void FlutterWindow::HandleOcrMethodCall(
   }
 
   if (method == "compressPdf") {
-    int dpi = ClampPositiveInt(args, "scan_dpi", 180, 600);
-    dpi = std::clamp(dpi, 150, 200);
+    int dpi = ClampPositiveInt(args, "scan_dpi", 220, 600);
+    dpi = std::clamp(dpi, 180, 300);
     auto compressed = RunPdfScanCompression(*maybe_bytes, dpi);
     if (!compressed.has_value() || compressed->empty()) {
       result->Success(flutter::EncodableValue());
       return;
     }
     result->Success(flutter::EncodableValue(*compressed));
+    return;
+  }
+
+  if (method == "rasterizePdfForOcr") {
+    int dpi = ClampPositiveInt(args, "scan_dpi", 320, 600);
+    dpi = std::clamp(dpi, 260, 400);
+    auto rasterized = RunPdfScanCompression(*maybe_bytes, dpi);
+    if (!rasterized.has_value() || rasterized->empty()) {
+      result->Success(flutter::EncodableValue());
+      return;
+    }
+    result->Success(flutter::EncodableValue(*rasterized));
     return;
   }
 

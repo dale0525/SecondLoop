@@ -76,7 +76,7 @@ void main() {
       config: enabledConfig,
       scanClassifier: (_) => true,
       platformCompressor: (bytes, {required scanDpi}) async {
-        expect(scanDpi, 180);
+        expect(scanDpi, 220);
         return Uint8List.fromList(List<int>.filled(16, 9));
       },
     );
@@ -84,6 +84,32 @@ void main() {
     expect(result.didCompress, isTrue);
     expect(result.mimeType, 'application/pdf');
     expect(result.bytes.length, 16);
+  });
+
+  test('compressPdfForStorage retries with lower dpi when 220 is not smaller',
+      () async {
+    final input = Uint8List.fromList(List<int>.filled(200, 5));
+    final attemptedDpi = <int>[];
+    final result = await compressPdfForStorage(
+      input,
+      mimeType: 'application/pdf',
+      config: enabledConfig,
+      scanClassifier: (_) => true,
+      platformCompressor: (bytes, {required scanDpi}) async {
+        attemptedDpi.add(scanDpi);
+        if (scanDpi == 220) {
+          return Uint8List.fromList(List<int>.filled(220, 1));
+        }
+        if (scanDpi == 200) {
+          return Uint8List.fromList(List<int>.filled(150, 1));
+        }
+        return Uint8List.fromList(List<int>.filled(140, 1));
+      },
+    );
+
+    expect(result.didCompress, isTrue);
+    expect(result.bytes.length, 150);
+    expect(attemptedDpi, <int>[220, 200]);
   });
 
   test('compressPdfForStorage falls back to original on failed compression',
