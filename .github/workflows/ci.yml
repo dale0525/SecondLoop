@@ -77,6 +77,13 @@ jobs:
   rust:
     needs: changes
     runs-on: ubuntu-latest
+    env:
+      # Keep CI peak disk usage under runner limits during Rust test linking.
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      RUSTFLAGS: "-C debuginfo=0"
     steps:
       - name: Skip (no Rust changes)
         if: needs.changes.outputs.rust != 'true'
