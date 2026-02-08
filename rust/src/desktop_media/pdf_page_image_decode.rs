@@ -346,7 +346,7 @@ fn decode_device_gray_8bit(raw: &[u8], width: u32, height: u32, invert: bool) ->
 fn decode_device_gray_1bit(raw: &[u8], width: u32, height: u32, invert: bool) -> Option<RgbImage> {
     let width_usize = usize::try_from(width).ok()?;
     let height_usize = usize::try_from(height).ok()?;
-    let row_bytes = (width_usize + 7) / 8;
+    let row_bytes = width_usize.div_ceil(8);
     let expected = row_bytes.saturating_mul(height_usize);
     if raw.len() < expected {
         return None;

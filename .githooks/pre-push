@@ -18,50 +18,5 @@ if [[ "${SECONDLOOP_PRE_PUSH_FULL:-0}" == "1" ]]; then
   exit 0
 fi
 
-upstream_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
-if [[ -z "${upstream_ref}" ]]; then
-  # No upstream (e.g. first push of a new branch): fall back to full checks.
-  bash .githooks/pre-commit --check --ci
-  exit 0
-fi
-
-changed_files=()
-while IFS= read -r file; do
-  changed_files+=("${file}")
-done < <(git diff --name-only --diff-filter=ACMR "${upstream_ref}...HEAD")
-
-if [[ ${#changed_files[@]} -eq 0 ]]; then
-  echo "pre-push: no file changes vs ${upstream_ref}; skipping checks."
-  exit 0
-fi
-
-run_flutter=0
-run_rust=0
-for file in "${changed_files[@]}"; do
-  case "${file}" in
-    .fvm/fvm_config.json | .githooks/* | analysis_options.yaml | pubspec.yaml | pubspec.lock | flutter_rust_bridge.yaml | lib/* | test/* | integration_test/* | test_driver/* | rust_builder/* | android/* | ios/* | linux/* | macos/* | windows/*)
-      run_flutter=1
-      ;;
-  esac
-
-  case "${file}" in
-    .githooks/* | rust/*)
-      run_rust=1
-      ;;
-  esac
-done
-
-if (( run_flutter == 0 && run_rust == 0 )); then
-  echo "pre-push: no Flutter/Rust files changed; skipping checks."
-  exit 0
-fi
-
-args=(--check --ci)
-if (( run_flutter == 1 )); then
-  args+=(--flutter)
-fi
-if (( run_rust == 1 )); then
-  args+=(--rust)
-fi
-
-bash .githooks/pre-commit "${args[@]}"
+echo "pre-push: skipped (checks moved to pre-commit)."
+echo "pre-push: set SECONDLOOP_PRE_PUSH_FULL=1 to run full pre-push verification."
