@@ -1,7 +1,7 @@
 part of 'attachment_viewer_page.dart';
 
 extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
-  String _buildOcrFailedText([Object? error]) {
+  String _buildOcrFailedStatus([Object? error]) {
     final base = context.t.attachments.content.ocrFailed;
     final detail = error?.toString().trim() ?? '';
     if (detail.isEmpty) return base;
@@ -34,7 +34,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       final manifestBytes = await (_bytesFuture ??= _loadBytes());
       final manifest = parseVideoManifestPayload(manifestBytes);
       if (manifest == null) {
-        final failedText = _buildOcrFailedText('video_manifest_parse_failed');
+        final failedText = _buildOcrFailedStatus('video_manifest_parse_failed');
         if (!mounted) return;
         _updateViewerState(() {
           _runningDocumentOcr = false;
@@ -50,7 +50,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         sha256: manifest.originalSha256,
       );
       if (originalVideoBytes.isEmpty) {
-        final failedText = _buildOcrFailedText('original_video_missing');
+        final failedText = _buildOcrFailedStatus('original_video_missing');
         if (!mounted) return;
         _updateViewerState(() {
           _runningDocumentOcr = false;
@@ -72,7 +72,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           debugPrint('Video manifest OCR returned null: $detail');
         }
         final failedText =
-            _buildOcrFailedText(detail ?? 'video_ocr_result_null');
+            _buildOcrFailedStatus(detail ?? 'video_ocr_result_null');
         if (!mounted) return;
         _updateViewerState(() {
           _runningDocumentOcr = false;
@@ -129,12 +129,12 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         _annotationPayloadFuture = Future.value(updatedPayload);
         _documentOcrStatusText = (!needsOcr || ocrText.isNotEmpty)
             ? context.t.attachments.content.ocrFinished
-            : _buildOcrFailedText(failedReason);
+            : _buildOcrFailedStatus(failedReason);
       });
     } catch (error, stackTrace) {
       debugPrint('Video manifest OCR failed: $error');
       debugPrint('$stackTrace');
-      final failedText = _buildOcrFailedText(error);
+      final failedText = _buildOcrFailedStatus(error);
       if (!mounted) return;
       _updateViewerState(() {
         _runningDocumentOcr = false;
@@ -185,7 +185,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         if (detail != null && detail.isNotEmpty) {
           debugPrint('Document OCR returned null: $detail');
         }
-        final failedText = _buildOcrFailedText(detail ?? 'ocr_result_null');
+        final failedText = _buildOcrFailedStatus(detail ?? 'ocr_result_null');
         if (!mounted) return;
         _updateViewerState(() {
           _runningDocumentOcr = false;
@@ -259,12 +259,12 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         _annotationPayloadFuture = Future.value(updatedPayload);
         _documentOcrStatusText = (!needsOcr || ocrText.isNotEmpty)
             ? context.t.attachments.content.ocrFinished
-            : _buildOcrFailedText(failedReason);
+            : _buildOcrFailedStatus(failedReason);
       });
     } catch (error, stackTrace) {
       debugPrint('Document OCR failed: $error');
       debugPrint('$stackTrace');
-      final failedText = _buildOcrFailedText(error);
+      final failedText = _buildOcrFailedStatus(error);
       if (!mounted) return;
       _updateViewerState(() {
         _runningDocumentOcr = false;
