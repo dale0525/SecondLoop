@@ -186,7 +186,8 @@ void main() {
     expect(syncKey!.length, 32);
   });
 
-  testWidgets('Cloud sync switch prompt continues to cloud embeddings prompt',
+  testWidgets(
+      'Cloud sync switch prompt continues to embeddings then media understanding prompts',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       // Can be set by previous Ask AI / settings interactions.
@@ -233,7 +234,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+        find.text('Use cloud embeddings for semantic search?'), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextButton),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Use cloud for media understanding?'), findsOneWidget);
   });
 
   testWidgets('Switching to Cloud runs sync and shows progress first',

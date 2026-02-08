@@ -430,18 +430,28 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         return null;
       }
 
-      LlmProfile? activeProfile() {
+      LlmProfile? selectedOpenAiProfile() {
+        final id = mediaAnnotationConfig.byokProfileId?.trim();
+        if (id == null || id.isEmpty) return null;
+        final selected = findProfile(id);
+        if (selected == null) return null;
+        if (selected.providerType != 'openai-compatible') return null;
+        return selected;
+      }
+
+      LlmProfile? activeOpenAiProfile() {
         for (final p in llmProfiles) {
-          if (p.isActive) return p;
+          if (!p.isActive) continue;
+          if (p.providerType != 'openai-compatible') continue;
+          return p;
         }
         return null;
       }
 
-      LlmProfile? activeOpenAiProfile() {
-        final active = activeProfile();
-        if (active == null) return null;
-        if (active.providerType != 'openai-compatible') return null;
-        return active;
+      LlmProfile? effectiveOpenAiProfile() {
+        final selected = selectedOpenAiProfile();
+        if (selected != null) return selected;
+        return activeOpenAiProfile();
       }
 
       if (mediaAnnotationConfig.annotateEnabled) {
@@ -454,36 +464,13 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                     ? mediaAnnotationConfig.cloudModelName!.trim()
                     : gatewayConfig.modelName;
           }
-        } else if (desiredMode == 'byok_profile') {
-          final id = mediaAnnotationConfig.byokProfileId?.trim();
-          final profile = id == null || id.isEmpty ? null : findProfile(id);
-          if (profile != null && profile.providerType == 'openai-compatible') {
+        } else {
+          final profile = effectiveOpenAiProfile();
+          if (profile != null) {
             annotationClient = _ByokMediaEnrichmentClient(
               sessionKey: Uint8List.fromList(sessionKey),
               profileId: profile.id,
               modelName: profile.modelName,
-              appDirProvider: getNativeAppDir,
-            );
-          }
-        } else {
-          // Follow Ask AI, but with "automation" routing rules (Cloud only when entitled).
-          final active = activeProfile();
-          final allowCloud = subscriptionStatus == SubscriptionStatus.entitled;
-          final route = (allowCloud && hasGateway && hasIdToken)
-              ? AskAiRouteKind.cloudGateway
-              : (active != null
-                  ? AskAiRouteKind.byok
-                  : AskAiRouteKind.needsSetup);
-
-          if (route == AskAiRouteKind.cloudGateway) {
-            annotationModelName = gatewayConfig.modelName;
-          } else if (route == AskAiRouteKind.byok &&
-              active != null &&
-              active.providerType == 'openai-compatible') {
-            annotationClient = _ByokMediaEnrichmentClient(
-              sessionKey: Uint8List.fromList(sessionKey),
-              profileId: active.id,
-              modelName: active.modelName,
               appDirProvider: getNativeAppDir,
             );
           }
@@ -500,7 +487,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           subscriptionStatus == SubscriptionStatus.entitled &&
               hasGateway &&
               hasIdToken;
-      final audioTranscribeByokProfile = activeOpenAiProfile();
+      final audioTranscribeByokProfile = effectiveOpenAiProfile();
       final audioTranscribeEnabled = audioTranscribeConfigured &&
           (audioTranscribeCloudAvailable || audioTranscribeByokProfile != null);
 

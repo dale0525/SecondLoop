@@ -15,11 +15,12 @@ pub struct MediaAnnotationConfig {
     pub cloud_model_name: Option<String>,
 }
 
-fn kv_bool(conn: &Connection, key: &str) -> Result<bool> {
-    Ok(kv_get_string(conn, key)?
-        .unwrap_or_default()
-        .trim()
-        .eq("1"))
+fn kv_bool_or_media_annotation(conn: &Connection, key: &str, default: bool) -> Result<bool> {
+    let raw = kv_get_string(conn, key)?;
+    Ok(match raw.as_deref() {
+        None => default,
+        Some(v) => v.trim() == "1",
+    })
 }
 
 fn normalize_provider_mode(mode: &str) -> Result<&'static str> {
@@ -40,9 +41,12 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
 }
 
 pub fn get_media_annotation_config(conn: &Connection) -> Result<MediaAnnotationConfig> {
-    let annotate_enabled = kv_bool(conn, KV_MEDIA_ANNOTATION_ANNOTATE_ENABLED)?;
-    let search_enabled = kv_bool(conn, KV_MEDIA_ANNOTATION_SEARCH_ENABLED)?;
-    let allow_cellular = kv_bool(conn, KV_MEDIA_ANNOTATION_ALLOW_CELLULAR)?;
+    let annotate_enabled =
+        kv_bool_or_media_annotation(conn, KV_MEDIA_ANNOTATION_ANNOTATE_ENABLED, true)?;
+    let search_enabled =
+        kv_bool_or_media_annotation(conn, KV_MEDIA_ANNOTATION_SEARCH_ENABLED, true)?;
+    let allow_cellular =
+        kv_bool_or_media_annotation(conn, KV_MEDIA_ANNOTATION_ALLOW_CELLULAR, false)?;
 
     let provider_mode = kv_get_string(conn, KV_MEDIA_ANNOTATION_PROVIDER_MODE)?
         .unwrap_or_else(|| "follow_ask_ai".to_string());
@@ -77,7 +81,8 @@ WHERE COALESCE(is_deleted, 0) = 0
 }
 
 pub fn set_media_annotation_config(conn: &Connection, config: &MediaAnnotationConfig) -> Result<()> {
-    let previous_search_enabled = kv_bool(conn, KV_MEDIA_ANNOTATION_SEARCH_ENABLED)?;
+    let previous_search_enabled =
+        kv_bool_or_media_annotation(conn, KV_MEDIA_ANNOTATION_SEARCH_ENABLED, true)?;
 
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
@@ -140,4 +145,3 @@ pub fn set_media_annotation_config(conn: &Connection, config: &MediaAnnotationCo
         }
     }
 }
-

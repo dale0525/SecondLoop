@@ -10,9 +10,11 @@ import '../ai/embeddings_data_consent_prefs.dart';
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/db.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'cloud_sync_switch_prefs.dart';
 import 'sync_config_store.dart';
@@ -48,6 +50,7 @@ final class _CloudSyncSwitchPromptGateState
   bool _dialogShowing = false;
   bool _promptScheduled = false;
   bool _embeddingsPromptScheduled = false;
+  bool _mediaPromptScheduled = false;
 
   static const _kSyncProgressIndicatorKey =
       ValueKey('cloud_sync_switch_progress');
@@ -55,9 +58,13 @@ final class _CloudSyncSwitchPromptGateState
       ValueKey('cloud_sync_switch_progress_percent');
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+  late final MediaAnnotationConfigStore _mediaAnnotationStore =
+      const RustMediaAnnotationConfigStore();
 
   static const _kCloudEmbeddingsUpgradePromptedUidPrefsKey =
       'cloud_embeddings_upgrade_prompted_uid_v1';
+  static const _kCloudMediaUnderstandingUpgradePromptedUidPrefsKey =
+      'cloud_media_understanding_upgrade_prompted_uid_v1';
 
   @override
   void dispose() {
@@ -153,6 +160,17 @@ final class _CloudSyncSwitchPromptGateState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _embeddingsPromptScheduled = false;
       unawaited(_maybePromptEnableCloudEmbeddings());
+    });
+  }
+
+  void _scheduleMediaUnderstandingPrompt() {
+    if (!mounted) return;
+    if (_mediaPromptScheduled) return;
+
+    _mediaPromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mediaPromptScheduled = false;
+      unawaited(_maybePromptEnableCloudMediaUnderstanding());
     });
   }
 
@@ -268,10 +286,12 @@ final class _CloudSyncSwitchPromptGateState
         (prefs.getString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey) ?? '')
             .trim();
     if (alreadyPromptedUid == uid) {
+      await _maybePromptEnableCloudMediaUnderstanding();
       return;
     }
     if ((prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false) == true) {
       await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
+      await _maybePromptEnableCloudMediaUnderstanding();
       return;
     }
     if (!mounted) return;
@@ -312,6 +332,122 @@ final class _CloudSyncSwitchPromptGateState
 
     await EmbeddingsDataConsentPrefs.setEnabled(prefs, enable == true);
     await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
+    await _maybePromptEnableCloudMediaUnderstanding();
+  }
+
+  Future<void> _maybePromptEnableCloudMediaUnderstanding() async {
+    if (!mounted) return;
+    if (_dialogShowing) {
+      _scheduleMediaUnderstandingPrompt();
+      return;
+    }
+
+    final uid = _lastUid?.trim();
+    if (uid == null || uid.isEmpty) return;
+
+    final subscriptionStatus =
+        _subscriptionController?.status ?? SubscriptionStatus.unknown;
+    if (subscriptionStatus != SubscriptionStatus.entitled) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    if ((prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false) == true) {
+      _scheduleMediaUnderstandingPrompt();
+      return;
+    }
+    final alreadyPromptedUid =
+        (prefs.getString(_kCloudMediaUnderstandingUpgradePromptedUidPrefsKey) ??
+                '')
+            .trim();
+    if (alreadyPromptedUid == uid) {
+      return;
+    }
+
+    final sessionScope = SessionScope.maybeOf(context);
+    final sessionKey = sessionScope?.sessionKey;
+    if (sessionKey != null) {
+      try {
+        final config = await _mediaAnnotationStore.read(sessionKey);
+        if (!mounted) return;
+        if (config.providerMode == 'cloud_gateway') {
+          await prefs.setString(
+            _kCloudMediaUnderstandingUpgradePromptedUidPrefsKey,
+            uid,
+          );
+          return;
+        }
+      } catch (_) {
+        // Best effort: still allow user to decide in prompt below.
+      }
+    }
+
+    final dialogContext = widget.navigatorKey?.currentContext;
+    if (widget.navigatorKey != null && dialogContext == null) {
+      _scheduleMediaUnderstandingPrompt();
+      return;
+    }
+    final effectiveContext = dialogContext ?? context;
+    if (!effectiveContext.mounted) {
+      _scheduleMediaUnderstandingPrompt();
+      return;
+    }
+
+    final zh = Localizations.localeOf(effectiveContext)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    final title = zh ? '使用云端服务进行媒体理解？' : 'Use cloud for media understanding?';
+    final body = zh
+        ? '启用后媒体理解会优先使用 SecondLoop Cloud，用量不可用时自动回落到本地设置。'
+        : 'When enabled, media understanding will prioritize SecondLoop Cloud and fall back to local settings when quota is unavailable.';
+    final cancel = zh ? '使用本地回落' : 'Use local fallback';
+    final confirm = zh ? '启用云端' : 'Enable cloud';
+
+    _dialogShowing = true;
+    final enable = await showDialog<bool>(
+      context: effectiveContext,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(confirm),
+            ),
+          ],
+        );
+      },
+    );
+    _dialogShowing = false;
+
+    if (enable == true && sessionKey != null) {
+      try {
+        final current = await _mediaAnnotationStore.read(sessionKey);
+        await _mediaAnnotationStore.write(
+          sessionKey,
+          MediaAnnotationConfig(
+            annotateEnabled: current.annotateEnabled,
+            searchEnabled: current.searchEnabled,
+            allowCellular: current.allowCellular,
+            providerMode: 'cloud_gateway',
+            byokProfileId: current.byokProfileId,
+            cloudModelName: current.cloudModelName,
+          ),
+        );
+      } catch (_) {
+        // Best effort: do not block entitlement upgrade flow.
+      }
+    }
+
+    await prefs.setString(
+      _kCloudMediaUnderstandingUpgradePromptedUidPrefsKey,
+      uid,
+    );
   }
 
   Future<void> _runManagedVaultSyncWithProgress({

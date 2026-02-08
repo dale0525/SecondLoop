@@ -2,6 +2,17 @@ part of 'media_annotation_settings_page.dart';
 
 extension _MediaAnnotationSettingsPageOcrExtension
     on _MediaAnnotationSettingsPageState {
+  String _audioTranscribeApiProfileSubtitle(BuildContext context) {
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    if (zh) {
+      return '默认跟随 Ask AI，可改为已有 OpenAI-compatible API profile。';
+    }
+    return 'Default follows Ask AI. You can choose an existing OpenAI-compatible API profile.';
+  }
+
   String _audioTranscribeEngineLabel(BuildContext context, String engine) {
     final labels =
         context.t.settings.mediaAnnotation.audioTranscribe.engine.labels;
@@ -87,43 +98,6 @@ extension _MediaAnnotationSettingsPageOcrExtension
     if (selected == config.audioTranscribeEngine.trim()) return;
     await _persistContentConfig(
       _copyContentConfig(config, audioTranscribeEngine: selected),
-    );
-  }
-
-  Future<void> _openAudioTranscribeConfigHelp() async {
-    final t = context.t.settings.mediaAnnotation.audioTranscribe.configureApi;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(t.title),
-          content: Text(t.body),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CloudAccountPage()),
-                );
-              },
-              child: Text(t.openCloud),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
-                );
-              },
-              child: Text(t.openApiKeys),
-            ),
-          ],
-        );
-      },
     );
   }
 }

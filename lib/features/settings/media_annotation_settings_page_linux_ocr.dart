@@ -4,22 +4,12 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     on _MediaAnnotationSettingsPageState {
   List<Widget> _buildDocumentOcrSection(
     BuildContext context,
-    ContentEnrichmentConfig? contentConfig,
   ) {
     final t = context.t.settings.mediaAnnotation;
     final children = <Widget>[
-      SwitchListTile(
-        key: MediaAnnotationSettingsPage.ocrSwitchKey,
+      ListTile(
         title: Text(t.documentOcr.enabled.title),
         subtitle: Text(t.documentOcr.enabled.subtitle),
-        value: contentConfig?.ocrEnabled ?? false,
-        onChanged: _busy || contentConfig == null
-            ? null
-            : (value) async {
-                await _persistContentConfig(
-                  _copyContentConfig(contentConfig, ocrEnabled: value),
-                );
-              },
       ),
     ];
 

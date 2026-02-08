@@ -43,7 +43,7 @@ fn content_enrichment_kv_defaults_exist_and_match_plan() {
         ),
         (
             "content_enrichment.audio_transcribe_enabled",
-            "0".to_string(),
+            "1".to_string(),
         ),
         (
             "content_enrichment.audio_transcribe_engine",

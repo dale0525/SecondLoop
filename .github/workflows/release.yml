@@ -143,6 +143,7 @@ jobs:
           if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
           if ($Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging managed vault URL." }
+      - run: flutter pub get
       - name: Prepare desktop runtime assets
         shell: pwsh
         run: |
@@ -153,7 +154,6 @@ jobs:
             --runtime-tag=$Env:SECONDLOOP_DESKTOP_RUNTIME_TAG `
             --repo=$Env:GITHUB_REPOSITORY `
             --require-runtime-tag
-      - run: flutter pub get
       - name: Install FFmpeg
         shell: pwsh
         run: choco install ffmpeg --yes --no-progress
@@ -240,6 +240,7 @@ jobs:
             echo "Refusing to build prod release with a staging managed vault URL."
             exit 1
           fi
+      - run: flutter pub get
       - name: Prepare desktop runtime assets
         shell: bash
         run: |
@@ -256,7 +257,6 @@ jobs:
             --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
             --repo="${GITHUB_REPOSITORY}" \
             --require-runtime-tag
-      - run: flutter pub get
       - name: Install FFmpeg
         shell: bash
         run: brew install ffmpeg
@@ -378,6 +378,7 @@ jobs:
             echo "Refusing to build prod release with a staging managed vault URL."
             exit 1
           fi
+      - run: flutter pub get
       - name: Prepare desktop runtime assets
         shell: bash
         run: |
@@ -388,7 +389,6 @@ jobs:
             --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
             --repo="${GITHUB_REPOSITORY}" \
             --require-runtime-tag
-      - run: flutter pub get
       - name: Prepare bundled FFmpeg
         shell: bash
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=linux

@@ -5,15 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/content_enrichment/content_enrichment_config_store.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/content_enrichment/linux_ocr_model_store.dart';
 import 'package:secondloop/core/content_enrichment/linux_pdf_compress_resource_store.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/media_annotation/media_annotation_config_store.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/settings/media_annotation_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
+import 'test_backend.dart';
 
 final class _FakeMediaAnnotationConfigStore
     implements MediaAnnotationConfigStore {
@@ -168,19 +174,70 @@ final class _FakeLinuxPdfCompressResourceStore
   Future<String?> readInstalledResourceDir() async => status.resourceDirPath;
 }
 
-ContentEnrichmentConfig _defaultContentConfig() {
-  return const ContentEnrichmentConfig(
+final class _FakeSubscriptionController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FakeSubscriptionController(this._status);
+
+  final SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
+}
+
+final class _MixedProfilesBackend extends TestAppBackend {
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        LlmProfile(
+          id: 'p2',
+          name: 'Gemini',
+          providerType: 'gemini',
+          baseUrl: 'https://generativelanguage.googleapis.com',
+          modelName: 'gemini-2.0-flash',
+          isActive: false,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
+}
+
+MediaAnnotationConfig _defaultMediaConfig({
+  bool mediaUnderstandingEnabled = true,
+  String providerMode = 'follow_ask_ai',
+}) {
+  return MediaAnnotationConfig(
+    annotateEnabled: mediaUnderstandingEnabled,
+    searchEnabled: mediaUnderstandingEnabled,
+    allowCellular: false,
+    providerMode: providerMode,
+  );
+}
+
+ContentEnrichmentConfig _defaultContentConfig({
+  bool mediaUnderstandingEnabled = true,
+}) {
+  return ContentEnrichmentConfig(
     urlFetchEnabled: true,
     documentExtractEnabled: true,
     documentKeepOriginalMaxBytes: 104857600,
-    pdfSmartCompressEnabled: true,
-    audioTranscribeEnabled: false,
+    pdfSmartCompressEnabled: mediaUnderstandingEnabled,
+    audioTranscribeEnabled: mediaUnderstandingEnabled,
     audioTranscribeEngine: 'whisper',
     videoExtractEnabled: true,
     videoProxyEnabled: true,
     videoProxyMaxDurationMs: 600000,
     videoProxyMaxBytes: 209715200,
-    ocrEnabled: true,
+    ocrEnabled: mediaUnderstandingEnabled,
     ocrEngineMode: 'auto',
     ocrLanguageHints: '',
     ocrPdfDpi: 200,
@@ -192,270 +249,474 @@ ContentEnrichmentConfig _defaultContentConfig() {
   );
 }
 
+Future<void> _pumpPage(
+  WidgetTester tester, {
+  required _FakeMediaAnnotationConfigStore store,
+  required _FakeContentEnrichmentConfigStore contentStore,
+  LinuxOcrModelStore? linuxOcrModelStore,
+  LinuxPdfCompressResourceStore? linuxPdfCompressResourceStore,
+  SubscriptionStatus subscriptionStatus = SubscriptionStatus.unknown,
+  CloudAuthController? cloudAuthController,
+  String cloudGatewayBaseUrl = 'https://gateway.test',
+  AppBackend? backend,
+}) async {
+  Widget home = SubscriptionScope(
+    controller: _FakeSubscriptionController(subscriptionStatus),
+    child: Scaffold(
+      body: MediaAnnotationSettingsPage(
+        configStore: store,
+        contentConfigStore: contentStore,
+        linuxOcrModelStore: linuxOcrModelStore,
+        linuxPdfCompressResourceStore: linuxPdfCompressResourceStore,
+      ),
+    ),
+  );
+  if (backend != null) {
+    home = AppBackendScope(
+      backend: backend,
+      child: home,
+    );
+  }
+  if (cloudAuthController != null) {
+    home = CloudAuthScope(
+      controller: cloudAuthController,
+      gatewayConfig: CloudGatewayConfig(
+        baseUrl: cloudGatewayBaseUrl,
+        modelName: 'cloud',
+      ),
+      child: home,
+    );
+  }
+
+  await tester.pumpWidget(
+    SessionScope(
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      lock: () {},
+      child: wrapWithI18n(
+        MaterialApp(
+          home: home,
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('Media annotation settings shows image and audio switches',
+  testWidgets('Media understanding settings shows one master switch only',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final scrollable = find.byType(Scrollable).first;
-    final audioSwitch =
-        find.byKey(MediaAnnotationSettingsPage.audioTranscribeSwitchKey);
-    await tester.scrollUntilVisible(
-      audioSwitch,
-      300,
-      scrollable: scrollable,
-    );
-    await tester.pumpAndSettle();
-    expect(audioSwitch, findsOneWidget);
-
-    final annotateSwitch =
-        find.byKey(MediaAnnotationSettingsPage.annotateSwitchKey);
-    await tester.scrollUntilVisible(
-      annotateSwitch,
-      300,
-      scrollable: scrollable,
-    );
-    await tester.pumpAndSettle();
-    expect(annotateSwitch, findsOneWidget);
-
-    final searchSwitch =
-        find.byKey(MediaAnnotationSettingsPage.searchSwitchKey);
-    await tester.scrollUntilVisible(
-      searchSwitch,
-      150,
-      scrollable: scrollable,
-    );
-    await tester.pumpAndSettle();
-    expect(searchSwitch, findsOneWidget);
-  });
-
-  testWidgets('Search toggle asks for confirmation', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: true,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
-    );
-    final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
-
-    final searchSwitch =
-        find.byKey(MediaAnnotationSettingsPage.searchSwitchKey);
-    final scrollable = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
-      searchSwitch,
-      300,
-      scrollable: scrollable,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(searchSwitch);
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(MediaAnnotationSettingsPage.searchConfirmDialogKey),
-        findsOneWidget);
-
-    await tester
-        .tap(find.byKey(MediaAnnotationSettingsPage.searchConfirmCancelKey));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(MediaAnnotationSettingsPage.searchConfirmDialogKey),
-        findsNothing);
-  });
-
-  testWidgets('Audio transcribe switch writes content enrichment config',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
-    );
-    final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
-    );
-
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(
+    expect(
       find.byKey(MediaAnnotationSettingsPage.audioTranscribeSwitchKey),
+      findsNothing,
     );
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.ocrSwitchKey),
+      findsNothing,
+    );
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.pdfCompressSwitchKey),
+      findsNothing,
+    );
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.annotateSwitchKey),
+      findsNothing,
+    );
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.searchSwitchKey),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Routing guide text is removed from media settings',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+    );
+
+    expect(find.text('Choose your AI source'), findsNothing);
+    expect(find.text('先选择 AI 来源'), findsNothing);
+  });
+
+  testWidgets('Turning off media understanding hides detailed settings',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+    );
+
+    final masterSwitch =
+        find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey);
+    await tester.tap(masterSwitch);
+    await tester.pump();
     await tester.pumpAndSettle();
 
+    expect(store.writes, isNotEmpty);
     expect(contentStore.writes, isNotEmpty);
+    expect(store.writes.last.annotateEnabled, isFalse);
+    expect(store.writes.last.searchEnabled, isFalse);
+    expect(contentStore.writes.last.audioTranscribeEnabled, isFalse);
+    expect(contentStore.writes.last.ocrEnabled, isFalse);
+    expect(contentStore.writes.last.pdfSmartCompressEnabled, isFalse);
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.wifiOnlySwitchKey),
+      findsNothing,
+    );
+    expect(find.text('Audio transcription'), findsNothing);
+    expect(find.text('PDF smart compression'), findsNothing);
+    expect(find.text('Image caption provider'), findsNothing);
+  });
+
+  testWidgets('Turning on media understanding enables all media flags',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: false),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: false),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+    );
+
+    final masterSwitch =
+        find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey);
+    await tester.tap(masterSwitch);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(store.writes, isNotEmpty);
+    expect(contentStore.writes, isNotEmpty);
+    expect(store.writes.last.annotateEnabled, isTrue);
+    expect(store.writes.last.searchEnabled, isTrue);
     expect(contentStore.writes.last.audioTranscribeEnabled, isTrue);
+    expect(contentStore.writes.last.ocrEnabled, isTrue);
+    expect(contentStore.writes.last.pdfSmartCompressEnabled, isTrue);
   });
 
-  testWidgets('PDF settings keep only smart compression switch',
+  testWidgets('Pro users see Use SecondLoop Cloud switch', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      subscriptionStatus: SubscriptionStatus.entitled,
+    );
+
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.useSecondLoopCloudSwitchKey),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('API profile defaults to Follow Ask AI before user override',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      backend: TestAppBackend(),
     );
-    await tester.pumpAndSettle();
 
     final scrollable = find.byType(Scrollable).first;
-    final pdfSwitch =
-        find.byKey(MediaAnnotationSettingsPage.pdfCompressSwitchKey);
+    final audioApiTile =
+        find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
     await tester.scrollUntilVisible(
-      pdfSwitch,
+      audioApiTile,
+      220,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: audioApiTile, matching: find.text('Follow Ask AI')),
+      findsOneWidget,
+    );
+
+    final imageApiTile =
+        find.byKey(MediaAnnotationSettingsPage.imageApiProfileTileKey);
+    await tester.scrollUntilVisible(
+      imageApiTile,
+      240,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: imageApiTile, matching: find.text('Follow Ask AI')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Wi-Fi only switch acts as media understanding master control',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      subscriptionStatus: SubscriptionStatus.notEntitled,
+    );
+
+    final wifiOnlySwitch =
+        find.byKey(MediaAnnotationSettingsPage.wifiOnlySwitchKey);
+    expect(wifiOnlySwitch, findsOneWidget);
+
+    await tester.tap(wifiOnlySwitch);
+    await tester.pumpAndSettle();
+    expect(store.writes, isNotEmpty);
+    expect(store.writes.last.allowCellular, isTrue);
+
+    await tester.tap(wifiOnlySwitch);
+    await tester.pumpAndSettle();
+    expect(store.writes.last.allowCellular, isFalse);
+  });
+
+  testWidgets(
+      'Audio transcribe API profile picker supports Follow Ask AI and filters to OpenAI-compatible profiles',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      subscriptionStatus: SubscriptionStatus.entitled,
+      backend: _MixedProfilesBackend(),
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final configureApiTile =
+        find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
+    await tester.scrollUntilVisible(
+      configureApiTile,
       260,
       scrollable: scrollable,
     );
     await tester.pumpAndSettle();
 
-    expect(pdfSwitch, findsOneWidget);
-    expect(find.text('Compression profile'), findsNothing);
-    expect(find.text('压缩档位'), findsNothing);
+    await tester.tap(configureApiTile);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open Cloud account'), findsNothing);
+    expect(find.textContaining('SecondLoop Cloud'), findsNothing);
+    final dialog = find.byType(SimpleDialog);
+    expect(
+      find.descendant(of: dialog, matching: find.text('Follow Ask AI')),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: dialog, matching: find.text('OpenAI')),
+        findsOneWidget);
+    expect(find.text('Gemini'), findsNothing);
   });
 
-  testWidgets('Document OCR hides advanced language and page controls',
+  testWidgets('PDF smart compression settings are hidden', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxPdfCompressResourceStore: _FakeLinuxPdfCompressResourceStore(
+        status: const LinuxPdfCompressResourceStatus(
+          supported: true,
+          installed: true,
+          resourceDirPath: '/tmp/secondloop-pdf-compress-resource',
+          fileCount: 2,
+          totalBytes: 2048,
+          source: LinuxPdfCompressResourceSource.downloaded,
+        ),
+      ),
+    );
+
+    expect(find.text('PDF smart compression'), findsNothing);
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.linuxPdfCompressResourceTileKey),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Non-Pro users do not see Use SecondLoop Cloud switch',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      subscriptionStatus: SubscriptionStatus.notEntitled,
     );
-    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.useSecondLoopCloudSwitchKey),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+      'Audio transcribe API profile can be selected from existing profiles',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      backend: TestAppBackend(),
+    );
 
     final scrollable = find.byType(Scrollable).first;
-    final ocrSwitch = find.byKey(MediaAnnotationSettingsPage.ocrSwitchKey);
+    final audioApiTile =
+        find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
     await tester.scrollUntilVisible(
-      ocrSwitch,
+      audioApiTile,
       260,
       scrollable: scrollable,
     );
     await tester.pumpAndSettle();
 
-    expect(ocrSwitch, findsOneWidget);
-    expect(find.text('Language hints'), findsNothing);
-    expect(find.text('Auto OCR page limit'), findsNothing);
-    expect(find.text('OCR DPI'), findsNothing);
-    expect(find.text('语言提示'), findsNothing);
-    expect(find.text('自动 OCR 页数上限'), findsNothing);
+    await tester.tap(audioApiTile);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI').last);
+    await tester.pumpAndSettle();
+
+    expect(store.writes, isNotEmpty);
+    expect(store.writes.last.byokProfileId, 'p1');
+    expect(store.writes.last.providerMode, 'byok_profile');
+  });
+
+  testWidgets(
+      'Image caption API profile can be selected from existing profiles',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      backend: TestAppBackend(),
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final imageApiTile =
+        find.byKey(MediaAnnotationSettingsPage.imageApiProfileTileKey);
+    await tester.scrollUntilVisible(
+      imageApiTile,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(imageApiTile);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI').last);
+    await tester.pumpAndSettle();
+
+    expect(store.writes, isNotEmpty);
+    expect(store.writes.last.byokProfileId, 'p1');
+    expect(store.writes.last.providerMode, 'byok_profile');
   });
 
   testWidgets('Linux OCR runtime tile is visible when runtime is not installed',
@@ -463,15 +724,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
     final linuxModelStore = _FakeLinuxOcrModelStore(
       status: const LinuxOcrModelStatus(
@@ -484,24 +740,12 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-                linuxOcrModelStore: linuxModelStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
     );
-    await tester.pumpAndSettle();
 
     final scrollable = find.byType(Scrollable).first;
     final runtimeTile =
@@ -520,15 +764,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
     final completer = Completer<LinuxOcrModelStatus>();
     final linuxModelStore = _FakeLinuxOcrModelStore(
@@ -543,24 +782,12 @@ void main() {
       onDownload: () => completer.future,
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-                linuxOcrModelStore: linuxModelStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
     );
-    await tester.pumpAndSettle();
 
     final scrollable = find.byType(Scrollable).first;
     final downloadButton =
@@ -597,15 +824,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
     final linuxModelStore = _FakeLinuxOcrModelStore(
       status: const LinuxOcrModelStatus(
@@ -618,24 +840,12 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-                linuxOcrModelStore: linuxModelStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
     );
-    await tester.pumpAndSettle();
 
     final scrollable = find.byType(Scrollable).first;
     final downloadButton =
@@ -674,15 +884,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
     final linuxModelStore = _FakeLinuxOcrModelStore(
       status: const LinuxOcrModelStatus(
@@ -704,24 +909,12 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-                linuxOcrModelStore: linuxModelStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
     );
-    await tester.pumpAndSettle();
 
     final scrollable = find.byType(Scrollable).first;
     final downloadButton =
@@ -744,21 +937,15 @@ void main() {
     );
   });
 
-  testWidgets(
-      'Linux PDF compression resources can be downloaded and removed from settings',
+  testWidgets('Linux PDF compression runtime controls are hidden',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
-      const MediaAnnotationConfig(
-        annotateEnabled: false,
-        searchEnabled: false,
-        allowCellular: false,
-        providerMode: 'follow_ask_ai',
-      ),
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
     );
     final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(),
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
     );
     final linuxPdfStore = _FakeLinuxPdfCompressResourceStore(
       status: const LinuxPdfCompressResourceStatus(
@@ -771,50 +958,27 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: wrapWithI18n(
-          MaterialApp(
-            home: Scaffold(
-              body: MediaAnnotationSettingsPage(
-                configStore: store,
-                contentConfigStore: contentStore,
-                linuxPdfCompressResourceStore: linuxPdfStore,
-              ),
-            ),
-          ),
-        ),
-      ),
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxPdfCompressResourceStore: linuxPdfStore,
     );
-    await tester.pumpAndSettle();
-
-    final scrollable = find.byType(Scrollable).first;
-    final downloadButton = find.byKey(
-      MediaAnnotationSettingsPage.linuxPdfCompressResourceDownloadButtonKey,
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.linuxPdfCompressResourceTileKey),
+      findsNothing,
     );
-    await tester.scrollUntilVisible(
-      downloadButton,
-      260,
-      scrollable: scrollable,
+    expect(
+      find.byKey(MediaAnnotationSettingsPage
+          .linuxPdfCompressResourceDownloadButtonKey),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    expect(downloadButton, findsOneWidget);
-
-    await tester.tap(downloadButton);
-    await tester.pumpAndSettle();
-    expect(linuxPdfStore.downloadCalls, 1);
-
-    final deleteButton = find.byKey(
-      MediaAnnotationSettingsPage.linuxPdfCompressResourceDeleteButtonKey,
+    expect(
+      find.byKey(
+          MediaAnnotationSettingsPage.linuxPdfCompressResourceDeleteButtonKey),
+      findsNothing,
     );
-    expect(deleteButton, findsOneWidget);
-
-    await tester.tap(deleteButton);
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Clear Runtime'));
-    await tester.pumpAndSettle();
-    expect(linuxPdfStore.deleteCalls, 1);
+    expect(linuxPdfStore.downloadCalls, 0);
+    expect(linuxPdfStore.deleteCalls, 0);
   });
 }

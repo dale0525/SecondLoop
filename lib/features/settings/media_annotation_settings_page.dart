@@ -21,6 +21,7 @@ import 'media_annotation_settings_sections.dart';
 part 'media_annotation_settings_page_ocr.dart';
 part 'media_annotation_settings_page_linux_ocr.dart';
 part 'media_annotation_settings_page_linux_pdf_compress.dart';
+part 'media_annotation_settings_page_media_understanding.dart';
 
 class MediaAnnotationSettingsPage extends StatefulWidget {
   const MediaAnnotationSettingsPage({
@@ -45,6 +46,16 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
   static const ocrSwitchKey = ValueKey('media_annotation_settings_ocr_switch');
   static const pdfCompressSwitchKey =
       ValueKey('media_annotation_settings_pdf_compress_switch');
+  static const mediaUnderstandingSwitchKey =
+      ValueKey('media_annotation_settings_media_understanding_switch');
+  static const wifiOnlySwitchKey =
+      ValueKey('media_annotation_settings_wifi_only_switch');
+  static const audioApiProfileTileKey =
+      ValueKey('media_annotation_settings_audio_api_profile_tile');
+  static const imageApiProfileTileKey =
+      ValueKey('media_annotation_settings_image_api_profile_tile');
+  static const useSecondLoopCloudSwitchKey =
+      ValueKey('media_annotation_settings_use_secondloop_cloud_switch');
   static const linuxOcrModelTileKey =
       ValueKey('media_annotation_settings_linux_ocr_model_tile');
   static const linuxOcrModelDownloadButtonKey =
@@ -76,6 +87,7 @@ class _MediaAnnotationSettingsPageState
   static const _kProviderFollowAskAi = 'follow_ask_ai';
   static const _kProviderCloudGateway = 'cloud_gateway';
   static const _kProviderByokProfile = 'byok_profile';
+  static const _kApiProfileFollowChoice = '__follow_ask_ai__';
 
   bool _didKickoffLoad = false;
   MediaAnnotationConfig? _config;
@@ -198,6 +210,60 @@ class _MediaAnnotationSettingsPageState
     );
     if (!mounted) return null;
     return selectedId;
+  }
+
+  Future<String?> _promptApiProfileOverrideChoice() async {
+    final t = context.t.settings.mediaAnnotation;
+    final byok = t.byokProfile;
+    final backend =
+        context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    if (backend == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(byok.missingBackend),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return null;
+    }
+
+    final profiles = await backend
+        .listLlmProfiles(sessionKey)
+        .catchError((_) => <LlmProfile>[]);
+    if (!mounted) return null;
+
+    final openAiCompatible = profiles
+        .where((p) => p.providerType == 'openai-compatible')
+        .toList(growable: false);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          title: Text(byok.title),
+          children: [
+            SimpleDialogOption(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(_kApiProfileFollowChoice),
+              child: Text(t.providerMode.labels.followAskAi),
+            ),
+            if (openAiCompatible.isNotEmpty)
+              for (final p in openAiCompatible)
+                SimpleDialogOption(
+                  onPressed: () => Navigator.of(dialogContext).pop(p.id),
+                  child: Text(p.name),
+                ),
+            if (openAiCompatible.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+                child: Text(byok.noOpenAiCompatibleProfiles),
+              ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return null;
+    return selected;
   }
 
   Future<MediaAnnotationConfig?> _prepareEnableAnnotateConfig(
@@ -539,45 +605,6 @@ class _MediaAnnotationSettingsPageState
     }
   }
 
-  Future<bool> _confirmSearchToggle({required bool enabled}) async {
-    final t = context.t.settings.mediaAnnotation.searchToggleConfirm;
-
-    return (await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) {
-            return AlertDialog(
-              key: MediaAnnotationSettingsPage.searchConfirmDialogKey,
-              title: Text(t.title),
-              content: Text(
-                enabled ? t.bodyEnable : t.bodyDisable,
-              ),
-              actions: [
-                TextButton(
-                  key: MediaAnnotationSettingsPage.searchConfirmCancelKey,
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: Text(context.t.common.actions.cancel),
-                ),
-                FilledButton(
-                  key: MediaAnnotationSettingsPage.searchConfirmContinueKey,
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(context.t.common.actions.continueLabel),
-                ),
-              ],
-            );
-          },
-        )) ==
-        true;
-  }
-
-  String _providerModeLabel(BuildContext context, String mode) {
-    final t = context.t.settings.mediaAnnotation.providerMode.labels;
-    return switch (mode) {
-      _kProviderCloudGateway => t.cloudGateway,
-      _kProviderByokProfile => t.byokProfile,
-      _ => t.followAskAi,
-    };
-  }
-
   String? _byokProfileName(String? id) {
     final profiles = _llmProfiles;
     if (id == null || id.trim().isEmpty || profiles == null) return null;
@@ -587,151 +614,43 @@ class _MediaAnnotationSettingsPageState
     return null;
   }
 
-  Future<void> _pickProviderMode(MediaAnnotationConfig config) async {
+  String _apiProfileLabel(BuildContext context, String? profileId) {
+    return _byokProfileName(profileId) ??
+        context.t.settings.mediaAnnotation.providerMode.labels.followAskAi;
+  }
+
+  String _imageApiProfileSubtitle(BuildContext context) {
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    if (zh) {
+      return '默认跟随 Ask AI，可改为已有 OpenAI-compatible API profile。';
+    }
+    return 'Default follows Ask AI. You can choose an existing OpenAI-compatible API profile.';
+  }
+
+  Future<void> _pickApiProfileOverride(MediaAnnotationConfig config) async {
     if (_busy) return;
-    final t = context.t.settings.mediaAnnotation.providerMode;
-
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        var value = config.providerMode;
-
-        return AlertDialog(
-          title: Text(t.title),
-          content: StatefulBuilder(
-            builder: (context, setInnerState) {
-              Widget option({
-                required String mode,
-                required String title,
-                required String body,
-              }) {
-                return RadioListTile<String>(
-                  value: mode,
-                  groupValue: value,
-                  title: Text(title),
-                  subtitle: Text(body),
-                  onChanged: (next) {
-                    if (next == null) return;
-                    setInnerState(() => value = next);
-                  },
-                );
-              }
-
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    option(
-                      mode: _kProviderFollowAskAi,
-                      title: t.labels.followAskAi,
-                      body: t.descriptions.followAskAi,
-                    ),
-                    option(
-                      mode: _kProviderCloudGateway,
-                      title: t.labels.cloudGateway,
-                      body: t.descriptions.cloudGateway,
-                    ),
-                    option(
-                      mode: _kProviderByokProfile,
-                      title: t.labels.byokProfile,
-                      body: t.descriptions.byokProfile,
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(value),
-              child: Text(context.t.common.actions.save),
-            ),
-          ],
-        );
-      },
-    );
+    final selected = await _promptApiProfileOverrideChoice();
     if (selected == null || !mounted) return;
-    if (selected == config.providerMode) return;
+
+    final useFollowAskAi = selected == _kApiProfileFollowChoice;
+    final nextByokProfileId = useFollowAskAi ? null : selected;
+    final nextMode = config.providerMode == _kProviderCloudGateway
+        ? _kProviderCloudGateway
+        : (useFollowAskAi ? _kProviderFollowAskAi : _kProviderByokProfile);
+    final sameProfile =
+        (nextByokProfileId ?? '').trim() == (config.byokProfileId ?? '').trim();
+    if (sameProfile && nextMode == config.providerMode) return;
 
     await _persist(
       MediaAnnotationConfig(
         annotateEnabled: config.annotateEnabled,
         searchEnabled: config.searchEnabled,
         allowCellular: config.allowCellular,
-        providerMode: selected,
-        byokProfileId: config.byokProfileId,
-        cloudModelName: config.cloudModelName,
-      ),
-    );
-  }
-
-  Future<void> _pickCloudModelName(MediaAnnotationConfig config) async {
-    if (_busy) return;
-    final t = context.t.settings.mediaAnnotation.cloudModelName;
-
-    final controller = TextEditingController(text: config.cloudModelName ?? '');
-    final saved = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(t.title),
-          content: TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: t.hint,
-            ),
-            textInputAction: TextInputAction.done,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-              child: Text(context.t.common.actions.save),
-            ),
-          ],
-        );
-      },
-    );
-
-    controller.dispose();
-    if (saved == null || !mounted) return;
-
-    final trimmed = saved.trim();
-    final nextCloudModelName = trimmed.isEmpty ? null : trimmed;
-    if (nextCloudModelName == config.cloudModelName) return;
-
-    await _persist(
-      MediaAnnotationConfig(
-        annotateEnabled: config.annotateEnabled,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: config.providerMode,
-        byokProfileId: config.byokProfileId,
-        cloudModelName: nextCloudModelName,
-      ),
-    );
-  }
-
-  Future<void> _pickByokProfile(MediaAnnotationConfig config) async {
-    if (_busy) return;
-    final selectedId = await _promptOpenAiCompatibleProfileId();
-    if (selectedId == null || !mounted) return;
-    if (selectedId == config.byokProfileId) return;
-
-    await _persist(
-      MediaAnnotationConfig(
-        annotateEnabled: config.annotateEnabled,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: config.providerMode,
-        byokProfileId: selectedId,
+        providerMode: nextMode,
+        byokProfileId: nextByokProfileId,
         cloudModelName: config.cloudModelName,
       ),
     );
@@ -766,214 +685,150 @@ class _MediaAnnotationSettingsPageState
             ),
           if (config == null && _loadError == null)
             const Center(child: CircularProgressIndicator()),
-          if (config != null) ...[
-            mediaAnnotationRoutingGuideCard(
-              context: context,
-              title: t.routingGuide.title,
-              pro: t.routingGuide.pro,
-              byok: t.routingGuide.byok,
-            ),
-            const SizedBox(height: 16),
-            mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
-            const SizedBox(height: 8),
-            mediaAnnotationSectionCard([
-              SwitchListTile(
-                key: MediaAnnotationSettingsPage.audioTranscribeSwitchKey,
-                title: Text(t.audioTranscribe.enabled.title),
-                subtitle: Text(t.audioTranscribe.enabled.subtitle),
-                value: contentConfig?.audioTranscribeEnabled ?? false,
-                onChanged: _busy || contentConfig == null
-                    ? null
-                    : (value) async {
-                        await _persistContentConfig(
-                          _copyContentConfig(
-                            contentConfig,
-                            audioTranscribeEnabled: value,
-                          ),
-                        );
-                      },
-              ),
-              ListTile(
-                title: Text(t.audioTranscribe.engine.title),
-                subtitle: Text(t.audioTranscribe.engine.subtitle),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      contentConfig == null
-                          ? t.audioTranscribe.engine.notAvailable
-                          : _audioTranscribeEngineLabel(
-                              context,
-                              contentConfig.audioTranscribeEngine,
-                            ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right),
-                  ],
-                ),
-                onTap: _busy || contentConfig == null
-                    ? null
-                    : () => _pickAudioTranscribeEngine(contentConfig),
-              ),
-              ListTile(
-                title: Text(t.audioTranscribe.configureApi.title),
-                subtitle: Text(t.audioTranscribe.configureApi.subtitle),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _busy ? null : _openAudioTranscribeConfigHelp,
-              ),
-            ]),
-            const SizedBox(height: 16),
-            ..._buildDocumentOcrSection(context, contentConfig),
-            const SizedBox(height: 16),
-            mediaAnnotationSectionTitle(context, t.pdfCompression.title),
-            const SizedBox(height: 8),
-            mediaAnnotationSectionCard([
-              SwitchListTile(
-                key: MediaAnnotationSettingsPage.pdfCompressSwitchKey,
-                title: Text(t.pdfCompression.enabled.title),
-                subtitle: Text(t.pdfCompression.enabled.subtitle),
-                value: contentConfig?.pdfSmartCompressEnabled ?? false,
-                onChanged: _busy || contentConfig == null
-                    ? null
-                    : (value) async {
-                        await _persistContentConfig(
-                          _copyContentConfig(
-                            contentConfig,
-                            pdfSmartCompressEnabled: value,
-                          ),
-                        );
-                      },
-              ),
-              if (_buildLinuxPdfCompressResourceTile(context) case final tile?)
-                tile,
-            ]),
-            const SizedBox(height: 16),
-            mediaAnnotationSectionTitle(context, t.imageCaption.title),
-            const SizedBox(height: 8),
-            mediaAnnotationSectionCard([
-              SwitchListTile(
-                key: MediaAnnotationSettingsPage.annotateSwitchKey,
-                title: Text(t.annotateEnabled.title),
-                subtitle: Text(t.annotateEnabled.subtitle),
-                value: config.annotateEnabled,
-                onChanged: _busy
-                    ? null
-                    : (value) async {
-                        if (!value) {
-                          await _persist(
-                            MediaAnnotationConfig(
-                              annotateEnabled: false,
-                              searchEnabled: config.searchEnabled,
-                              allowCellular: config.allowCellular,
-                              providerMode: config.providerMode,
-                              byokProfileId: config.byokProfileId,
-                              cloudModelName: config.cloudModelName,
-                            ),
-                          );
-                          return;
-                        }
+          if (config != null)
+            ...() {
+              final mediaUnderstandingEnabled =
+                  _isMediaUnderstandingEnabled(config, contentConfig);
+              final subscriptionStatus =
+                  SubscriptionScope.maybeOf(context)?.status ??
+                      SubscriptionStatus.unknown;
+              final showSecondLoopCloudSwitch =
+                  subscriptionStatus == SubscriptionStatus.entitled;
+              final useSecondLoopCloud =
+                  config.providerMode == _kProviderCloudGateway;
 
-                        final prepared =
-                            await _prepareEnableAnnotateConfig(config);
-                        if (prepared == null || !mounted) return;
-                        await _persist(prepared);
-                      },
-              ),
-              SwitchListTile(
-                key: MediaAnnotationSettingsPage.searchSwitchKey,
-                title: Text(t.searchEnabled.title),
-                subtitle: Text(t.searchEnabled.subtitle),
-                value: config.searchEnabled,
-                onChanged: _busy
-                    ? null
-                    : (value) async {
-                        final confirmed =
-                            await _confirmSearchToggle(enabled: value);
-                        if (!confirmed || !mounted) return;
-                        await _persist(
-                          MediaAnnotationConfig(
-                            annotateEnabled: config.annotateEnabled,
-                            searchEnabled: value,
-                            allowCellular: config.allowCellular,
-                            providerMode: config.providerMode,
-                            byokProfileId: config.byokProfileId,
-                            cloudModelName: config.cloudModelName,
-                          ),
-                        );
-                      },
-              ),
-            ]),
-            const SizedBox(height: 16),
-            mediaAnnotationSectionTitle(context, t.providerSettings.title),
-            const SizedBox(height: 8),
-            mediaAnnotationSectionCard([
-              ListTile(
-                title: Text(t.providerMode.title),
-                subtitle: Text(t.providerMode.subtitle),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_providerModeLabel(context, config.providerMode)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right),
-                  ],
+              return <Widget>[
+                mediaAnnotationSectionTitle(
+                  context,
+                  _mediaUnderstandingTitle(context),
                 ),
-                onTap: _busy ? null : () => _pickProviderMode(config),
-              ),
-              if (config.providerMode == _kProviderCloudGateway)
-                ListTile(
-                  title: Text(t.cloudModelName.title),
-                  subtitle: Text(t.cloudModelName.subtitle),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text((config.cloudModelName ??
-                              t.cloudModelName.followAskAi)
-                          .trim()),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right),
-                    ],
+                const SizedBox(height: 8),
+                mediaAnnotationSectionCard([
+                  SwitchListTile(
+                    key:
+                        MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey,
+                    title: Text(_mediaUnderstandingTitle(context)),
+                    subtitle: Text(_mediaUnderstandingSubtitle(context)),
+                    value: mediaUnderstandingEnabled,
+                    onChanged: _busy || contentConfig == null
+                        ? null
+                        : (value) async {
+                            await _setMediaUnderstandingEnabled(
+                              enabled: value,
+                              config: config,
+                              contentConfig: contentConfig,
+                            );
+                          },
                   ),
-                  onTap: _busy ? null : () => _pickCloudModelName(config),
-                ),
-              if (config.providerMode == _kProviderByokProfile)
-                ListTile(
-                  title: Text(t.byokProfile.title),
-                  subtitle: Text(t.byokProfile.subtitle),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _byokProfileName(config.byokProfileId) ??
-                            t.byokProfile.unset,
+                ]),
+                if (mediaUnderstandingEnabled) ...[
+                  const SizedBox(height: 16),
+                  mediaAnnotationSectionCard([
+                    if (showSecondLoopCloudSwitch)
+                      SwitchListTile(
+                        key: MediaAnnotationSettingsPage
+                            .useSecondLoopCloudSwitchKey,
+                        title: Text(_useSecondLoopCloudTitle(context)),
+                        subtitle: Text(_useSecondLoopCloudSubtitle(context)),
+                        value: useSecondLoopCloud,
+                        onChanged: _busy
+                            ? null
+                            : (value) async {
+                                await _setUseSecondLoopCloudEnabled(
+                                  enabled: value,
+                                  config: config,
+                                );
+                              },
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right),
-                    ],
-                  ),
-                  onTap: _busy ? null : () => _pickByokProfile(config),
-                ),
-              SwitchListTile(
-                title: Text(t.allowCellular.title),
-                subtitle: Text(t.allowCellular.subtitle),
-                value: config.allowCellular,
-                onChanged: _busy
-                    ? null
-                    : (value) async {
-                        await _persist(
-                          MediaAnnotationConfig(
-                            annotateEnabled: config.annotateEnabled,
-                            searchEnabled: config.searchEnabled,
-                            allowCellular: value,
-                            providerMode: config.providerMode,
-                            byokProfileId: config.byokProfileId,
-                            cloudModelName: config.cloudModelName,
+                    SwitchListTile(
+                      key: MediaAnnotationSettingsPage.wifiOnlySwitchKey,
+                      title: Text(_mediaUnderstandingWifiOnlyTitle(context)),
+                      subtitle:
+                          Text(_mediaUnderstandingWifiOnlySubtitle(context)),
+                      value: !config.allowCellular,
+                      onChanged: _busy
+                          ? null
+                          : (wifiOnly) async {
+                              await _setMediaUnderstandingWifiOnly(
+                                wifiOnly: wifiOnly,
+                                config: config,
+                              );
+                            },
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
+                  const SizedBox(height: 8),
+                  mediaAnnotationSectionCard([
+                    ListTile(
+                      title: Text(t.audioTranscribe.enabled.title),
+                      subtitle: Text(t.audioTranscribe.enabled.subtitle),
+                    ),
+                    ListTile(
+                      title: Text(t.audioTranscribe.engine.title),
+                      subtitle: Text(t.audioTranscribe.engine.subtitle),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            contentConfig == null
+                                ? t.audioTranscribe.engine.notAvailable
+                                : _audioTranscribeEngineLabel(
+                                    context,
+                                    contentConfig.audioTranscribeEngine,
+                                  ),
                           ),
-                        );
-                      },
-              ),
-            ]),
-          ],
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
+                      onTap: _busy || contentConfig == null
+                          ? null
+                          : () => _pickAudioTranscribeEngine(contentConfig),
+                    ),
+                    ListTile(
+                      key: MediaAnnotationSettingsPage.audioApiProfileTileKey,
+                      title: Text(t.audioTranscribe.configureApi.title),
+                      subtitle:
+                          Text(_audioTranscribeApiProfileSubtitle(context)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_apiProfileLabel(context, config.byokProfileId)),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
+                      onTap:
+                          _busy ? null : () => _pickApiProfileOverride(config),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                  ..._buildDocumentOcrSection(context),
+                  const SizedBox(height: 16),
+                  mediaAnnotationSectionTitle(
+                      context, t.providerSettings.title),
+                  const SizedBox(height: 8),
+                  mediaAnnotationSectionCard([
+                    ListTile(
+                      key: MediaAnnotationSettingsPage.imageApiProfileTileKey,
+                      title: Text(t.byokProfile.title),
+                      subtitle: Text(_imageApiProfileSubtitle(context)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_apiProfileLabel(context, config.byokProfileId)),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
+                      onTap:
+                          _busy ? null : () => _pickApiProfileOverride(config),
+                    ),
+                  ]),
+                ],
+              ];
+            }(),
         ],
       ),
     );

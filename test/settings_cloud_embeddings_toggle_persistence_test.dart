@@ -101,6 +101,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    if (find.text('Use cloud for media understanding?').evaluate().isNotEmpty) {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextButton),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
 
     final toggle = find.widgetWithText(SwitchListTile, 'Smarter search');
     await tester.dragUntilVisible(

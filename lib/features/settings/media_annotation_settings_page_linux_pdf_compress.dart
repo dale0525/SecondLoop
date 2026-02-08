@@ -2,6 +2,7 @@ part of 'media_annotation_settings_page.dart';
 
 extension _MediaAnnotationSettingsPageLinuxPdfCompressExtension
     on _MediaAnnotationSettingsPageState {
+  // ignore: unused_element
   Widget? _buildLinuxPdfCompressResourceTile(BuildContext context) {
     final status = _linuxPdfCompressResourceStatus;
     if (!status.supported) return null;

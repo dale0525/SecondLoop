@@ -41,7 +41,7 @@ pub fn ensure_content_enrichment_kv_defaults(conn: &Connection) -> Result<()> {
         ),
         (
             "content_enrichment.audio_transcribe_enabled",
-            "0".to_string(),
+            "1".to_string(),
         ),
         (
             "content_enrichment.audio_transcribe_engine",
@@ -181,7 +181,7 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
         kv_bool_or(conn, "content_enrichment.pdf_smart_compress_enabled", true)?;
 
     let audio_transcribe_enabled =
-        kv_bool_or(conn, "content_enrichment.audio_transcribe_enabled", false)?;
+        kv_bool_or(conn, "content_enrichment.audio_transcribe_enabled", true)?;
     let audio_transcribe_engine = kv_string_or(
         conn,
         "content_enrichment.audio_transcribe_engine",
