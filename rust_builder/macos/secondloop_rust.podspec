@@ -42,6 +42,6 @@ A new Flutter FFI plugin project.
     # cross targets (e.g. x86_64-apple-darwin on Apple Silicon) during dev runs.
     'ARCHS' => '$(NATIVE_ARCH_ACTUAL)',
     'ONLY_ACTIVE_ARCH' => 'YES',
-    'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/libsecondloop_rust.a',
+    'OTHER_LDFLAGS' => '$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/libsecondloop_rust.a -lc++',
   }
 end

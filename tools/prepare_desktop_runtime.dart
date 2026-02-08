@@ -9,6 +9,25 @@ const _runtimeTagPattern =
 const _defaultOutputDir = 'assets/ocr/desktop_runtime';
 const _defaultCacheDir = '.tool/cache/desktop-runtime';
 const _installMarkerFile = '_secondloop_desktop_runtime_release.json';
+const _detModelAliases = <String>[
+  'ch_PP-OCRv5_mobile_det.onnx',
+  'ch_PP-OCRv4_det_infer.onnx',
+  'ch_PP-OCRv3_det_infer.onnx',
+];
+const _clsModelAliases = <String>[
+  'ch_ppocr_mobile_v2.0_cls_infer.onnx',
+];
+const _recModelAliases = <String>[
+  'ch_PP-OCRv4_rec_infer.onnx',
+  'ch_PP-OCRv3_rec_infer.onnx',
+  'latin_PP-OCRv3_rec_infer.onnx',
+  'arabic_PP-OCRv3_rec_infer.onnx',
+  'cyrillic_PP-OCRv3_rec_infer.onnx',
+  'devanagari_PP-OCRv3_rec_infer.onnx',
+  'japan_PP-OCRv3_rec_infer.onnx',
+  'korean_PP-OCRv3_rec_infer.onnx',
+  'chinese_cht_PP-OCRv3_rec_infer.onnx',
+];
 
 enum _DesktopPlatform {
   linux,
@@ -177,6 +196,8 @@ Future<void> main(List<String> args) async {
     await outputDir.delete(recursive: true);
   }
   await tempDir.rename(outputDir.path);
+
+  await _validateRuntimePayload(outputDir);
 
   await _writeInstallMarker(
     outputDir: outputDir,
@@ -370,7 +391,41 @@ Future<bool> _isRuntimeAlreadyInstalled({
 
   final hasFiles =
       await outputDir.list(recursive: true).any((entity) => entity is File);
-  return hasFiles;
+  if (!hasFiles) return false;
+  return _hasRequiredModelPayload(outputDir);
+}
+
+Future<void> _validateRuntimePayload(Directory outputDir) async {
+  final hasRequiredModels = await _hasRequiredModelPayload(outputDir);
+  if (hasRequiredModels) return;
+
+  throw StateError(
+    'Runtime payload missing required OCR model files in ${outputDir.path}. '
+    'Expected at least one DET/CLS/REC model file.',
+  );
+}
+
+Future<bool> _hasRequiredModelPayload(Directory outputDir) async {
+  if (!await outputDir.exists()) return false;
+  final basenames = <String>{};
+  await for (final entity in outputDir.list(recursive: true)) {
+    if (entity is! File) continue;
+    final path = entity.path;
+    final unix = path.split('/');
+    final windows = path.split('\\');
+    basenames.add((windows.length > unix.length ? windows.last : unix.last));
+  }
+
+  bool containsAny(List<String> aliases) {
+    for (final alias in aliases) {
+      if (basenames.contains(alias)) return true;
+    }
+    return false;
+  }
+
+  return containsAny(_detModelAliases) &&
+      containsAny(_clsModelAliases) &&
+      containsAny(_recModelAliases);
 }
 
 Future<void> _downloadReleaseAsset({

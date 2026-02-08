@@ -16,7 +16,11 @@ const MAX_FULL_TEXT_BYTES: usize = 256 * 1024;
 const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
 const OCR_MODEL_DIR_ENV: &str = "SECONDLOOP_OCR_MODEL_DIR";
 
-const DET_MODEL_ALIASES: [&str; 2] = ["ch_PP-OCRv4_det_infer.onnx", "ch_PP-OCRv5_mobile_det.onnx"];
+const DET_MODEL_ALIASES: [&str; 3] = [
+    "ch_PP-OCRv4_det_infer.onnx",
+    "ch_PP-OCRv5_mobile_det.onnx",
+    "ch_PP-OCRv3_det_infer.onnx",
+];
 const CLS_MODEL_ALIASES: [&str; 1] = ["ch_ppocr_mobile_v2.0_cls_infer.onnx"];
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -42,51 +46,51 @@ pub struct OcrPayload {
 #[derive(Clone, Copy)]
 struct RecModelSpec {
     key: &'static str,
-    model_file: &'static str,
-    dict_file: Option<&'static str>,
+    model_files: &'static [&'static str],
+    dict_files: &'static [&'static str],
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 const REC_MODEL_SPECS: &[RecModelSpec] = &[
     RecModelSpec {
         key: "zh_hans",
-        model_file: "ch_PP-OCRv4_rec_infer.onnx",
-        dict_file: None,
+        model_files: &["ch_PP-OCRv4_rec_infer.onnx", "ch_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &[],
     },
     RecModelSpec {
         key: "latin",
-        model_file: "latin_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("latin_dict.txt"),
+        model_files: &["latin_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["latin_dict.txt"],
     },
     RecModelSpec {
         key: "arabic",
-        model_file: "arabic_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("arabic_dict.txt"),
+        model_files: &["arabic_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["arabic_dict.txt"],
     },
     RecModelSpec {
         key: "cyrillic",
-        model_file: "cyrillic_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("cyrillic_dict.txt"),
+        model_files: &["cyrillic_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["cyrillic_dict.txt"],
     },
     RecModelSpec {
         key: "devanagari",
-        model_file: "devanagari_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("devanagari_dict.txt"),
+        model_files: &["devanagari_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["devanagari_dict.txt"],
     },
     RecModelSpec {
         key: "ja",
-        model_file: "japan_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("japan_dict.txt"),
+        model_files: &["japan_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["japan_dict.txt"],
     },
     RecModelSpec {
         key: "ko",
-        model_file: "korean_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("korean_dict.txt"),
+        model_files: &["korean_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["korean_dict.txt"],
     },
     RecModelSpec {
         key: "zh_hant",
-        model_file: "chinese_cht_PP-OCRv3_rec_infer.onnx",
-        dict_file: Some("chinese_cht_dict.txt"),
+        model_files: &["chinese_cht_PP-OCRv3_rec_infer.onnx"],
+        dict_files: &["chinese_cht_dict.txt"],
     },
 ];
 
@@ -573,20 +577,19 @@ fn build_rec_model_config(
             continue;
         };
 
-        let rec_path = root.join(spec.model_file);
-        if !rec_path.is_file() {
-            continue;
-        }
+        let rec_path = match find_existing_file(root, spec.model_files) {
+            Some(path) => path,
+            None => continue,
+        };
 
-        let dict_path = match spec.dict_file {
-            Some(dict_file) => {
-                let candidate = root.join(dict_file);
-                if !candidate.is_file() {
-                    continue;
-                }
-                Some(candidate)
-            }
-            None => None,
+        let dict_path = if spec.dict_files.is_empty() {
+            None
+        } else {
+            let candidate = match find_existing_file(root, spec.dict_files) {
+                Some(path) => path,
+                None => continue,
+            };
+            Some(candidate)
         };
 
         let cache_key = format!(
@@ -783,5 +786,19 @@ mod tests {
         assert!(payload.ocr_engine.starts_with("desktop_rust_image_"));
         assert_eq!(payload.ocr_page_count, 1);
         assert_eq!(payload.ocr_processed_pages, 1);
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn resolve_ocr_model_config_accepts_v3_model_set() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(root.join("ch_PP-OCRv3_det_infer.onnx"), b"det").unwrap();
+        std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
+        std::fs::write(root.join("ch_PP-OCRv3_rec_infer.onnx"), b"rec").unwrap();
+
+        let model_dir = root.to_string_lossy().to_string();
+        let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));
+        assert!(resolved.is_some());
     }
 }

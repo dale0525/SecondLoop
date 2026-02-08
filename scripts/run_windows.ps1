@@ -49,6 +49,12 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
+Write-Host "Running: sync_desktop_runtime_to_appdir.dart --platform windows"
+& dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
 Write-Host "Running: flutter run -d windows"
 $firebaseWebApiKey = $env:SECONDLOOP_FIREBASE_WEB_API_KEY
 $cloudEnv = $env:SECONDLOOP_CLOUD_ENV

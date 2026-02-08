@@ -111,7 +111,7 @@ SPEC CHECKSUMS:
   local_auth_darwin: 553ce4f9b16d3fdfeafce9cf042e7c9f77c1c391
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   screen_retriever: 4f97c103641aab8ce183fa5af3b87029df167936
-  secondloop_rust: 4b514aaa376a77b980f3425fefc688724ba07ce9
+  secondloop_rust: 7781080438e25bfec82322b700f9124a88bb089d
   share_plus: 11c7b7fa7020465584eca3ff6392c5bc1e399d6e
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   url_launcher_macos: 0fba8ddabfc33ce0a9afe7c5fef5aab3d8d2d673

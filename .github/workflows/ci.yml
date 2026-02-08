@@ -67,7 +67,7 @@ jobs:
       - name: Pub get
         if: needs.changes.outputs.flutter == 'true'
         run: flutter pub get
-      - name: Guard: no python runtime process usage
+      - name: "Guard: no python runtime process usage"
         if: needs.changes.outputs.flutter == 'true'
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (format + analyze + test)
@@ -88,7 +88,7 @@ jobs:
         with:
           toolchain: "1.85.1"
           components: rustfmt, clippy
-      - name: Guard: no python runtime process usage
+      - name: "Guard: no python runtime process usage"
         if: needs.changes.outputs.rust == 'true'
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (rustfmt + clippy + test)

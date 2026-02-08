@@ -19,6 +19,10 @@ on:
         description: Folder containing prebuilt runtime files
         required: true
         default: assets/ocr/desktop_runtime
+      rapidocr_version:
+        description: rapidocr_onnxruntime version when auto-downloading models
+        required: false
+        default: '1.2.3'
   push:
     tags:
       - 'desktop-runtime-v*'
@@ -35,20 +39,17 @@ jobs:
       ARCH: ${{ github.event.inputs.arch || 'x64' }}
       VERSION_INPUT: ${{ github.event.inputs.version || '' }}
       RUNTIME_INPUT_DIR: ${{ github.event.inputs.runtime_input_dir || 'assets/ocr/desktop_runtime' }}
+      RAPIDOCR_ONNXRUNTIME_VERSION: ${{ github.event.inputs.rapidocr_version || vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.2.3' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare runtime input folder
+      - name: Prepare runtime payload
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -d "${RUNTIME_INPUT_DIR}" ]]; then
-            mkdir -p "${RUNTIME_INPUT_DIR}"
-          fi
-          # Keep workflow deterministic even when runtime payload is generated in a prior step.
-          if [[ -z "$(find "${RUNTIME_INPUT_DIR}" -mindepth 1 -print -quit)" ]]; then
-            echo "runtime-placeholder" > "${RUNTIME_INPUT_DIR}/README.runtime.txt"
-          fi
+          bash scripts/prepare_desktop_runtime_payload.sh \
+            --output-dir "${RUNTIME_INPUT_DIR}" \
+            --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
 
       - name: Build runtime archive
         shell: bash
@@ -111,20 +112,17 @@ jobs:
       ARCH: ${{ matrix.arch }}
       VERSION_INPUT: ''
       RUNTIME_INPUT_DIR: assets/ocr/desktop_runtime
+      RAPIDOCR_ONNXRUNTIME_VERSION: ${{ vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.2.3' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare runtime input folder
+      - name: Prepare runtime payload
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -d "${RUNTIME_INPUT_DIR}" ]]; then
-            mkdir -p "${RUNTIME_INPUT_DIR}"
-          fi
-          # Keep workflow deterministic even when runtime payload is generated in a prior step.
-          if [[ -z "$(find "${RUNTIME_INPUT_DIR}" -mindepth 1 -print -quit)" ]]; then
-            echo "runtime-placeholder" > "${RUNTIME_INPUT_DIR}/README.runtime.txt"
-          fi
+          bash scripts/prepare_desktop_runtime_payload.sh \
+            --output-dir "${RUNTIME_INPUT_DIR}" \
+            --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
 
       - name: Build runtime archive
         shell: bash
