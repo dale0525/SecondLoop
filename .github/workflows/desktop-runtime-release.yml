@@ -49,6 +49,8 @@ jobs:
           set -euo pipefail
           bash scripts/prepare_desktop_runtime_payload.sh \
             --output-dir "${RUNTIME_INPUT_DIR}" \
+            --platform "${PLATFORM}" \
+            --arch "${ARCH}" \
             --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
 
       - name: Build runtime archive
@@ -122,6 +124,8 @@ jobs:
           set -euo pipefail
           bash scripts/prepare_desktop_runtime_payload.sh \
             --output-dir "${RUNTIME_INPUT_DIR}" \
+            --platform "${PLATFORM}" \
+            --arch "${ARCH}" \
             --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
 
       - name: Build runtime archive

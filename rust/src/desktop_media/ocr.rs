@@ -466,6 +466,8 @@ fn decode_pdf_image_to_rgb(
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn run_ocr_with_cached_model(config: &ResolvedOcrModelConfig, image: &RgbImage) -> Result<String> {
+    ensure_ocr_onnxruntime_loaded(config)?;
+
     let cache = ocr_cache();
     let mut guard = match cache.lock() {
         Ok(g) => g,
@@ -526,6 +528,176 @@ fn init_ocr_model(ocr: &mut OcrLite, config: &ResolvedOcrModelConfig) -> Result<
     }
 
     Ok(())
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ensure_ocr_onnxruntime_loaded(config: &ResolvedOcrModelConfig) -> Result<()> {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum InitState {
+        Uninitialized,
+        Initializing,
+        Initialized,
+    }
+
+    static STATE: OnceLock<Mutex<InitState>> = OnceLock::new();
+    let state = STATE.get_or_init(|| Mutex::new(InitState::Uninitialized));
+
+    {
+        let guard = match state.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        match *guard {
+            InitState::Initialized => return Ok(()),
+            InitState::Initializing => {
+                return Err(anyhow!("onnxruntime init already in progress"));
+            }
+            InitState::Uninitialized => {}
+        }
+    }
+
+    {
+        let mut guard = match state.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        match *guard {
+            InitState::Initialized => return Ok(()),
+            InitState::Initializing => {
+                return Err(anyhow!("onnxruntime init already in progress"));
+            }
+            InitState::Uninitialized => {
+                *guard = InitState::Initializing;
+            }
+        }
+    }
+
+    let init_attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+        let dylib_path = find_onnxruntime_library_path(config).ok_or_else(|| {
+            anyhow!(
+                "onnxruntime library not found near OCR runtime (det={})",
+                config.det_path.display()
+            )
+        })?;
+        ort::init_from(dylib_path.to_string_lossy().to_string())
+            .commit()
+            .map_err(|e| anyhow!("ort init failed: {e}"))?;
+        Ok(())
+    }));
+
+    let result: Result<()> = match init_attempt {
+        Ok(r) => r,
+        Err(p) => Err(anyhow!(
+            "onnxruntime init panicked: {}",
+            panic_payload_to_string(&*p)
+        )),
+    };
+
+    let mut guard = match state.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    match result {
+        Ok(()) => {
+            *guard = InitState::Initialized;
+            Ok(())
+        }
+        Err(e) => {
+            *guard = InitState::Uninitialized;
+            Err(e)
+        }
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn find_onnxruntime_library_path(config: &ResolvedOcrModelConfig) -> Option<PathBuf> {
+    let mut candidates = Vec::<PathBuf>::new();
+    let mut seen = HashSet::<PathBuf>::new();
+
+    let mut push = |path: PathBuf| {
+        if !path.is_dir() {
+            return;
+        }
+        if seen.insert(path.clone()) {
+            candidates.push(path);
+        }
+    };
+
+    if let Some(model_root) = config.det_path.parent() {
+        let model_root = model_root.to_path_buf();
+        push(model_root.clone());
+        push(model_root.join("onnxruntime"));
+
+        if model_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n == "models")
+        {
+            if let Some(runtime_root) = model_root.parent() {
+                let runtime_root = runtime_root.to_path_buf();
+                push(runtime_root.clone());
+                push(runtime_root.join("onnxruntime"));
+            }
+        }
+    }
+
+    for dir in candidates {
+        if let Some(path) = find_onnxruntime_library_in_dir(&dir) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn find_onnxruntime_library_in_dir(dir: &Path) -> Option<PathBuf> {
+    let main_aliases: &[&str] = if cfg!(target_os = "windows") {
+        &["onnxruntime.dll"]
+    } else if cfg!(target_os = "macos") {
+        &["libonnxruntime.dylib"]
+    } else {
+        &["libonnxruntime.so"]
+    };
+
+    if let Some(path) = find_existing_file(dir, main_aliases) {
+        return Some(path);
+    }
+
+    let mut versioned = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok().map(|v| v.path()))
+        .filter(|p| p.is_file())
+        .filter(|p| {
+            p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                if cfg!(target_os = "windows") {
+                    let lower = n.to_ascii_lowercase();
+                    lower.starts_with("onnxruntime") && lower.ends_with(".dll")
+                } else if cfg!(target_os = "macos") {
+                    n.starts_with("libonnxruntime")
+                        && n.contains(".dylib")
+                        && !n.contains("providers_shared")
+                } else {
+                    n.starts_with("libonnxruntime")
+                        && n.contains(".so")
+                        && !n.contains("providers_shared")
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    versioned.sort();
+    versioned.into_iter().next()
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn panic_payload_to_string(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        return s.to_string();
+    }
+    if let Some(s) = payload.downcast_ref::<String>() {
+        return s.clone();
+    }
+    "unknown panic payload".to_string()
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -800,5 +972,45 @@ mod tests {
         let model_dir = root.to_string_lossy().to_string();
         let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));
         assert!(resolved.is_some());
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn find_onnxruntime_library_from_runtime_payload_layout() {
+        let temp = tempfile::tempdir().unwrap();
+        let runtime_root = temp.path();
+        let models_dir = runtime_root.join("models");
+        let onnx_dir = runtime_root.join("onnxruntime");
+        std::fs::create_dir_all(&models_dir).unwrap();
+        std::fs::create_dir_all(&onnx_dir).unwrap();
+
+        let det_path = models_dir.join("ch_PP-OCRv3_det_infer.onnx");
+        let cls_path = models_dir.join("ch_ppocr_mobile_v2.0_cls_infer.onnx");
+        let rec_path = models_dir.join("ch_PP-OCRv3_rec_infer.onnx");
+
+        std::fs::write(&det_path, b"det").unwrap();
+        std::fs::write(&cls_path, b"cls").unwrap();
+        std::fs::write(&rec_path, b"rec").unwrap();
+
+        let lib_name = if cfg!(target_os = "windows") {
+            "onnxruntime.dll"
+        } else if cfg!(target_os = "macos") {
+            "libonnxruntime.dylib"
+        } else {
+            "libonnxruntime.so"
+        };
+        let lib_path = onnx_dir.join(lib_name);
+        std::fs::write(&lib_path, b"ort").unwrap();
+
+        let cfg = ResolvedOcrModelConfig {
+            det_path,
+            cls_path,
+            rec_path,
+            dict_path: None,
+            cache_key: "test-cache-key".to_string(),
+        };
+
+        let resolved = find_onnxruntime_library_path(&cfg);
+        assert_eq!(resolved, Some(lib_path));
     }
 }

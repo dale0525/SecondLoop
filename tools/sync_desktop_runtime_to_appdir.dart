@@ -25,6 +25,11 @@ const List<String> _kRecModelAliases = <String>[
   'korean_PP-OCRv3_rec_infer.onnx',
   'chinese_cht_PP-OCRv3_rec_infer.onnx',
 ];
+const List<String> _kOnnxRuntimeLibAliases = <String>[
+  'libonnxruntime.dylib',
+  'libonnxruntime.so',
+  'onnxruntime.dll',
+];
 
 enum _DesktopPlatform {
   macos,
@@ -65,10 +70,10 @@ Future<void> main(List<String> args) async {
     );
   }
 
-  final runtimeModelReady = _hasRequiredOcrModels(sourceFiles);
-  if (!runtimeModelReady) {
+  final runtimePayloadReady = _hasRequiredRuntimePayload(sourceFiles);
+  if (!runtimePayloadReady) {
     stderr.writeln(
-      'sync-desktop-runtime-to-appdir: warning: OCR model files not detected in ${sourceDir.path}',
+      'sync-desktop-runtime-to-appdir: warning: OCR runtime payload incomplete in ${sourceDir.path}',
     );
   }
 
@@ -85,7 +90,7 @@ Future<void> main(List<String> args) async {
       'dest=${runtimeDir.path} '
       'files=${sourceFiles.length} '
       'release_marker=$hasReleaseMarker '
-      'ocr_models_detected=$runtimeModelReady',
+      'runtime_payload_detected=$runtimePayloadReady',
     );
     return;
   }
@@ -108,7 +113,7 @@ Future<void> main(List<String> args) async {
     'source_runtime_dir': sourceDir.path,
     'copied_file_count': copiedCount,
     'release_marker_present': hasReleaseMarker,
-    'ocr_models_detected': runtimeModelReady,
+    'runtime_payload_detected': runtimePayloadReady,
   };
   await File(_joinPath(runtimeDir.path, _kRuntimeManifest))
       .writeAsString(jsonEncode(manifestPayload), flush: true);
@@ -248,7 +253,7 @@ Future<Set<String>> _collectRelativeFilePaths(Directory baseDir) async {
   return files;
 }
 
-bool _hasRequiredOcrModels(Set<String> sourceFiles) {
+bool _hasRequiredRuntimePayload(Set<String> sourceFiles) {
   bool containsAnyAlias(List<String> aliases) {
     for (final alias in aliases) {
       for (final path in sourceFiles) {
@@ -260,7 +265,8 @@ bool _hasRequiredOcrModels(Set<String> sourceFiles) {
 
   return containsAnyAlias(_kDetModelAliases) &&
       containsAnyAlias(_kClsModelAliases) &&
-      containsAnyAlias(_kRecModelAliases);
+      containsAnyAlias(_kRecModelAliases) &&
+      containsAnyAlias(_kOnnxRuntimeLibAliases);
 }
 
 Future<int> _copyDirectoryContents({

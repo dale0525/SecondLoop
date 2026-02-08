@@ -28,6 +28,11 @@ const _recModelAliases = <String>[
   'korean_PP-OCRv3_rec_infer.onnx',
   'chinese_cht_PP-OCRv3_rec_infer.onnx',
 ];
+const _onnxRuntimeLibAliases = <String>[
+  'libonnxruntime.dylib',
+  'libonnxruntime.so',
+  'onnxruntime.dll',
+];
 
 enum _DesktopPlatform {
   linux,
@@ -392,20 +397,20 @@ Future<bool> _isRuntimeAlreadyInstalled({
   final hasFiles =
       await outputDir.list(recursive: true).any((entity) => entity is File);
   if (!hasFiles) return false;
-  return _hasRequiredModelPayload(outputDir);
+  return _hasRequiredRuntimePayload(outputDir);
 }
 
 Future<void> _validateRuntimePayload(Directory outputDir) async {
-  final hasRequiredModels = await _hasRequiredModelPayload(outputDir);
-  if (hasRequiredModels) return;
+  final hasRequiredRuntime = await _hasRequiredRuntimePayload(outputDir);
+  if (hasRequiredRuntime) return;
 
   throw StateError(
-    'Runtime payload missing required OCR model files in ${outputDir.path}. '
-    'Expected at least one DET/CLS/REC model file.',
+    'Runtime payload missing required OCR runtime files in ${outputDir.path}. '
+    'Expected DET/CLS/REC model files and ONNX Runtime dynamic library.',
   );
 }
 
-Future<bool> _hasRequiredModelPayload(Directory outputDir) async {
+Future<bool> _hasRequiredRuntimePayload(Directory outputDir) async {
   if (!await outputDir.exists()) return false;
   final basenames = <String>{};
   await for (final entity in outputDir.list(recursive: true)) {
@@ -425,7 +430,8 @@ Future<bool> _hasRequiredModelPayload(Directory outputDir) async {
 
   return containsAny(_detModelAliases) &&
       containsAny(_clsModelAliases) &&
-      containsAny(_recModelAliases);
+      containsAny(_recModelAliases) &&
+      containsAny(_onnxRuntimeLibAliases);
 }
 
 Future<void> _downloadReleaseAsset({
