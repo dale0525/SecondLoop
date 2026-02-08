@@ -51,31 +51,25 @@ jobs:
 
   flutter:
     needs: changes
+    if: needs.changes.outputs.flutter == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Skip (no Flutter changes)
-        if: needs.changes.outputs.flutter != 'true'
-        run: echo "No Flutter-related changes detected; skipping Flutter CI."
       - uses: actions/checkout@v4
-        if: needs.changes.outputs.flutter == 'true'
       - uses: subosito/flutter-action@v2
-        if: needs.changes.outputs.flutter == 'true'
         with:
           flutter-version: "3.19.6"
           channel: stable
           cache: true
       - name: Pub get
-        if: needs.changes.outputs.flutter == 'true'
         run: flutter pub get
       - name: "Guard: no python runtime process usage"
-        if: needs.changes.outputs.flutter == 'true'
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (format + analyze + test)
-        if: needs.changes.outputs.flutter == 'true'
         run: bash .githooks/pre-commit --check --ci --flutter
 
   rust:
     needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     env:
       # Keep CI peak disk usage under runner limits during Rust test linking.
@@ -85,19 +79,12 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: "0"
       RUSTFLAGS: "-C debuginfo=0"
     steps:
-      - name: Skip (no Rust changes)
-        if: needs.changes.outputs.rust != 'true'
-        run: echo "No Rust-related changes detected; skipping Rust CI."
       - uses: actions/checkout@v4
-        if: needs.changes.outputs.rust == 'true'
       - uses: dtolnay/rust-toolchain@stable
-        if: needs.changes.outputs.rust == 'true'
         with:
           toolchain: "1.85.1"
           components: rustfmt, clippy
       - name: "Guard: no python runtime process usage"
-        if: needs.changes.outputs.rust == 'true'
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (rustfmt + clippy + test)
-        if: needs.changes.outputs.rust == 'true'
         run: bash .githooks/pre-commit --check --ci --rust
