@@ -46,6 +46,8 @@ class AppDelegate: FlutterAppDelegate {
         self.handleOcrImage(call: call, result: result)
       case "compressPdf":
         self.handleCompressPdf(call: call, result: result)
+      case "rasterizePdfForOcr":
+        self.handleRasterizePdfForOcr(call: call, result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -276,6 +278,31 @@ class AppDelegate: FlutterAppDelegate {
       DispatchQueue.main.async {
         if let compressed = compressed {
           result(FlutterStandardTypedData(bytes: compressed))
+        } else {
+          result(nil)
+        }
+      }
+    }
+  }
+
+  private func handleRasterizePdfForOcr(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard #available(macOS 10.15, *) else {
+      result(nil)
+      return
+    }
+    guard let args = call.arguments as? [String: Any],
+          let typed = args["bytes"] as? FlutterStandardTypedData else {
+      result(nil)
+      return
+    }
+    let requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback: 320, upperBound: 600)
+    let dpi = max(260, min(400, requestedDpi))
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let rasterized = self.runScannedPdfCompression(pdfData: typed.data, dpi: dpi)
+      DispatchQueue.main.async {
+        if let rasterized = rasterized {
+          result(FlutterStandardTypedData(bytes: rasterized))
         } else {
           result(nil)
         }

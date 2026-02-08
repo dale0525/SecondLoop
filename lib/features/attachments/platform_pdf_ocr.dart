@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../../src/rust/api/desktop_media.dart' as rust_desktop_media;
 import 'attachment_ocr_text_normalizer.dart';
@@ -64,6 +65,19 @@ final class PlatformPdfOcrResult {
 }
 
 final class PlatformPdfOcr {
+  static const MethodChannel _nativeOcrChannel =
+      MethodChannel('secondloop/ocr');
+  static const List<String> _runtimeUnavailableErrorMarkers = <String>[
+    'runtime_not_initialized',
+    'runtime_missing',
+    'desktop_runtime_not_supported',
+    'desktop_runtime_dir_unavailable',
+  ];
+
+  static String? _lastErrorMessage;
+
+  static String? get lastErrorMessage => _lastErrorMessage;
+
   static Future<PlatformPdfOcrResult?> tryOcrPdfBytes(
     Uint8List bytes, {
     required int maxPages,
@@ -71,7 +85,11 @@ final class PlatformPdfOcr {
     required String languageHints,
     DesktopOcrPdfInvoke? ocrPdfInvoke,
   }) async {
-    if (kIsWeb || bytes.isEmpty) return null;
+    _lastErrorMessage = null;
+    if (kIsWeb || bytes.isEmpty) {
+      _lastErrorMessage = 'ocr_input_unavailable';
+      return null;
+    }
 
     final safeMaxPages = maxPages.clamp(1, 10000);
     final safeDpi = dpi.clamp(72, 600);
@@ -87,7 +105,41 @@ final class PlatformPdfOcr {
         languageHints: hints,
       ),
     );
-    return _parsePayload(raw);
+    var parsed = _parsePayload(raw);
+    parsed = await _retryRuntimeWithMacOsRasterizedPdfIfNeeded(
+      parsed: parsed,
+      originalBytes: bytes,
+      invoke: invoke,
+      maxPages: safeMaxPages,
+      dpi: safeDpi,
+      languageHints: hints,
+    );
+    final runtimeError = _lastErrorMessage;
+    if (_shouldFallbackToMacOsNative(
+        parsed: parsed, runtimeError: runtimeError)) {
+      final macRaw = await _invokeSafely(
+        () => _invokeMacOsNativeOcrPdf(
+          bytes,
+          maxPages: safeMaxPages,
+          dpi: safeDpi,
+          languageHints: hints,
+        ),
+      );
+      final macParsed = _parsePayload(macRaw);
+      if (macParsed != null &&
+          (parsed == null || macParsed.fullText.trim().isNotEmpty)) {
+        parsed = macParsed;
+      }
+    }
+    if (parsed != null) {
+      _lastErrorMessage = null;
+      return parsed;
+    }
+    if (_lastErrorMessage == null) {
+      _lastErrorMessage = 'ocr_payload_invalid_or_empty';
+      debugPrint('PlatformPdfOcr parse failed: payload invalid_or_empty');
+    }
+    return null;
   }
 
   static Future<PlatformPdfOcrResult?> tryOcrImageBytes(
@@ -95,7 +147,11 @@ final class PlatformPdfOcr {
     required String languageHints,
     DesktopOcrImageInvoke? ocrImageInvoke,
   }) async {
-    if (kIsWeb || bytes.isEmpty) return null;
+    _lastErrorMessage = null;
+    if (kIsWeb || bytes.isEmpty) {
+      _lastErrorMessage = 'ocr_input_unavailable';
+      return null;
+    }
 
     final hints =
         languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
@@ -107,7 +163,105 @@ final class PlatformPdfOcr {
         languageHints: hints,
       ),
     );
-    return _parsePayload(raw);
+    var parsed = _parsePayload(raw);
+    final runtimeError = _lastErrorMessage;
+    if (_shouldFallbackToMacOsNative(
+        parsed: parsed, runtimeError: runtimeError)) {
+      final macRaw = await _invokeSafely(
+        () => _invokeMacOsNativeOcrImage(
+          bytes,
+          languageHints: hints,
+        ),
+      );
+      final macParsed = _parsePayload(macRaw);
+      if (macParsed != null && macParsed.fullText.trim().isNotEmpty) {
+        parsed = macParsed;
+      }
+    }
+    if (parsed != null) {
+      _lastErrorMessage = null;
+      return parsed;
+    }
+    if (_lastErrorMessage == null) {
+      _lastErrorMessage = 'ocr_payload_invalid_or_empty';
+      debugPrint('PlatformPdfOcr parse failed: payload invalid_or_empty');
+    }
+    return null;
+  }
+
+  static bool _canUseMacOsNativeOcrFallback() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
+  static bool _canUseMacOsPdfRasterizationRecovery() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
+  static bool _shouldFallbackToMacOsNative({
+    required PlatformPdfOcrResult? parsed,
+    required String? runtimeError,
+  }) {
+    if (!_canUseMacOsNativeOcrFallback()) return false;
+    if (parsed != null) return false;
+    final message = runtimeError?.trim().toLowerCase() ?? '';
+    if (message.isEmpty) return false;
+    for (final marker in _runtimeUnavailableErrorMarkers) {
+      if (message.contains(marker)) return true;
+    }
+    return false;
+  }
+
+  static Future<PlatformPdfOcrResult?>
+      _retryRuntimeWithMacOsRasterizedPdfIfNeeded({
+    required PlatformPdfOcrResult? parsed,
+    required Uint8List originalBytes,
+    required DesktopOcrPdfInvoke invoke,
+    required int maxPages,
+    required int dpi,
+    required String languageHints,
+  }) async {
+    if (!_canUseMacOsPdfRasterizationRecovery()) return parsed;
+    if (parsed == null) return null;
+    if (parsed.engine != 'desktop_rust_pdf_image_decode_empty') return parsed;
+    if (parsed.fullText.trim().isNotEmpty) return parsed;
+
+    final compressedRaw = await _invokeSafely(
+      () => _invokeMacOsRasterizePdfForOcr(
+        originalBytes,
+        scanDpi: dpi < 300 ? 300 : dpi,
+      ),
+    );
+    final compressedBytes = _asUint8List(compressedRaw);
+    if (compressedBytes == null || compressedBytes.isEmpty) {
+      return parsed;
+    }
+    if (listEquals(compressedBytes, originalBytes)) {
+      return parsed;
+    }
+
+    final retryRaw = await _invokeSafely(
+      () => invoke(
+        compressedBytes,
+        maxPages: maxPages,
+        dpi: dpi,
+        languageHints: languageHints,
+      ),
+    );
+    final retryParsed = _parsePayload(retryRaw);
+    if (retryParsed == null) return parsed;
+
+    if (retryParsed.fullText.trim().isNotEmpty ||
+        retryParsed.engine != parsed.engine) {
+      return retryParsed.copyWith(
+        retryAttempted: true,
+        retryAttempts: (parsed.retryAttempts + 1).clamp(1, 99),
+        retryHintsTried: <String>[languageHints],
+      );
+    }
+
+    return parsed.copyWith(
+      retryAttempted: true,
+      retryAttempts: (parsed.retryAttempts + 1).clamp(1, 99),
+      retryHintsTried: <String>[languageHints],
+    );
   }
 
   static Future<dynamic> _invokeDesktopOcrPdf(
@@ -134,12 +288,58 @@ final class PlatformPdfOcr {
     );
   }
 
+  static Future<dynamic> _invokeMacOsNativeOcrPdf(
+    Uint8List bytes, {
+    required int maxPages,
+    required int dpi,
+    required String languageHints,
+  }) {
+    return _nativeOcrChannel.invokeMethod<dynamic>(
+      'ocrPdf',
+      <String, Object?>{
+        'bytes': bytes,
+        'max_pages': maxPages,
+        'dpi': dpi,
+        'language_hints': languageHints,
+      },
+    );
+  }
+
+  static Future<dynamic> _invokeMacOsNativeOcrImage(
+    Uint8List bytes, {
+    required String languageHints,
+  }) {
+    return _nativeOcrChannel.invokeMethod<dynamic>(
+      'ocrImage',
+      <String, Object?>{
+        'bytes': bytes,
+        'language_hints': languageHints,
+      },
+    );
+  }
+
+  static Future<dynamic> _invokeMacOsRasterizePdfForOcr(
+    Uint8List bytes, {
+    required int scanDpi,
+  }) {
+    return _nativeOcrChannel.invokeMethod<dynamic>(
+      'rasterizePdfForOcr',
+      <String, Object?>{
+        'bytes': bytes,
+        'scan_dpi': scanDpi,
+      },
+    );
+  }
+
   static Future<dynamic> _invokeSafely(
     Future<dynamic> Function() run,
   ) async {
     try {
       return await run();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _lastErrorMessage = '$error';
+      debugPrint('PlatformPdfOcr invoke failed: $error');
+      debugPrint('$stackTrace');
       return null;
     }
   }
@@ -207,5 +407,15 @@ final class PlatformPdfOcr {
       return int.tryParse(raw.trim()) ?? 0;
     }
     return 0;
+  }
+
+  static Uint8List? _asUint8List(Object? raw) {
+    if (raw == null) return null;
+    if (raw is Uint8List) return raw;
+    if (raw is List<int>) return Uint8List.fromList(raw);
+    if (raw is ByteData) {
+      return raw.buffer.asUint8List(raw.offsetInBytes, raw.lengthInBytes);
+    }
+    return null;
   }
 }

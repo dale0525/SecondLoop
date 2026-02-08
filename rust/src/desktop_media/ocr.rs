@@ -4,7 +4,11 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-use image::{DynamicImage, RgbImage};
+use super::pdf_page_image_decode::{
+    collect_page_image_candidates, decode_pdf_image_to_rgb, PdfImageCandidate,
+};
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use image::RgbImage;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use paddle_ocr_rs::ocr_lite::OcrLite;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -43,6 +47,15 @@ pub struct OcrPayload {
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+struct PdfImageOcrFallbackResult {
+    text: String,
+    model_available: bool,
+    image_candidate_count: u32,
+    decoded_image_count: u32,
+    ocr_attempt_count: u32,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[derive(Clone, Copy)]
 struct RecModelSpec {
     key: &'static str,
@@ -54,7 +67,12 @@ struct RecModelSpec {
 const REC_MODEL_SPECS: &[RecModelSpec] = &[
     RecModelSpec {
         key: "zh_hans",
-        model_files: &["ch_PP-OCRv4_rec_infer.onnx", "ch_PP-OCRv3_rec_infer.onnx"],
+        model_files: &[
+            "ch_PP-OCRv5_rec_mobile_infer.onnx",
+            "ch_PP-OCRv5_mobile_rec.onnx",
+            "ch_PP-OCRv4_rec_infer.onnx",
+            "ch_PP-OCRv3_rec_infer.onnx",
+        ],
         dict_files: &[],
     },
     RecModelSpec {
@@ -167,9 +185,9 @@ pub fn desktop_ocr_pdf(
     }
 
     let fallback = ocr_pdf_page_images(bytes, safe_max_pages, language_hints, None)?;
-    if !fallback.is_empty() {
+    if !fallback.text.is_empty() {
         return Ok(build_payload(
-            &fallback,
+            &fallback.text,
             extracted.page_count,
             extracted.processed_pages,
             "desktop_rust_pdf_onnx",
@@ -177,11 +195,23 @@ pub fn desktop_ocr_pdf(
         ));
     }
 
+    let empty_engine = if !fallback.model_available {
+        "desktop_rust_pdf_no_model"
+    } else if fallback.image_candidate_count == 0 {
+        "desktop_rust_pdf_no_image_candidates"
+    } else if fallback.decoded_image_count == 0 {
+        "desktop_rust_pdf_image_decode_empty"
+    } else if fallback.ocr_attempt_count == 0 {
+        "desktop_rust_pdf_onnx_not_attempted"
+    } else {
+        "desktop_rust_pdf_onnx_empty"
+    };
+
     Ok(build_payload(
         "",
         extracted.page_count,
         extracted.processed_pages,
-        "desktop_rust_pdf_text",
+        empty_engine,
         false,
     ))
 }
@@ -302,15 +332,27 @@ fn ocr_pdf_page_images(
     max_pages: u32,
     language_hints: &str,
     model_dir: Option<&str>,
-) -> Result<String> {
+) -> Result<PdfImageOcrFallbackResult> {
     let Some(config) = resolve_ocr_model_config(language_hints, model_dir) else {
-        return Ok(String::new());
+        return Ok(PdfImageOcrFallbackResult {
+            text: String::new(),
+            model_available: false,
+            image_candidate_count: 0,
+            decoded_image_count: 0,
+            ocr_attempt_count: 0,
+        });
     };
 
     let doc = Document::load_mem(bytes).map_err(|e| anyhow!("invalid pdf: {e}"))?;
     let pages = doc.get_pages();
     if pages.is_empty() {
-        return Ok(String::new());
+        return Ok(PdfImageOcrFallbackResult {
+            text: String::new(),
+            model_available: true,
+            image_candidate_count: 0,
+            decoded_image_count: 0,
+            ocr_attempt_count: 0,
+        });
     }
 
     let mut page_numbers: Vec<u32> = pages.keys().cloned().collect();
@@ -320,18 +362,19 @@ fn ocr_pdf_page_images(
         .min(page_numbers.len());
 
     let mut page_texts = Vec::new();
+    let mut image_candidate_count = 0usize;
+    let mut decoded_image_count = 0usize;
+    let mut ocr_attempt_count = 0usize;
     for page_number in page_numbers.into_iter().take(take_count) {
         let Some(page_id) = pages.get(&page_number).copied() else {
             continue;
         };
 
-        let mut image_candidates = match doc.get_page_images(page_id) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+        let mut image_candidates = collect_page_image_candidates(&doc, page_id);
         if image_candidates.is_empty() {
             continue;
         }
+        image_candidate_count = image_candidate_count.saturating_add(image_candidates.len());
 
         image_candidates.sort_by(|a, b| {
             let area_a = i128::from(a.width).saturating_mul(i128::from(a.height));
@@ -340,9 +383,17 @@ fn ocr_pdf_page_images(
         });
 
         for candidate in image_candidates {
-            let decoded =
-                decode_pdf_image_to_rgb(&doc, candidate.id, candidate.width, candidate.height)?;
+            let decoded = decode_pdf_image_to_rgb(
+                &doc,
+                PdfImageCandidate {
+                    object_id: candidate.object_id,
+                    width: candidate.width,
+                    height: candidate.height,
+                },
+            );
             if let Some(rgb) = decoded {
+                decoded_image_count = decoded_image_count.saturating_add(1);
+                ocr_attempt_count = ocr_attempt_count.saturating_add(1);
                 let text = run_ocr_with_cached_model(&config, &rgb)?;
                 if !text.is_empty() {
                     page_texts.push(text);
@@ -352,116 +403,13 @@ fn ocr_pdf_page_images(
         }
     }
 
-    Ok(normalize_text_keep_paragraphs(&page_texts.join("\n")))
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn decode_pdf_image_to_rgb(
-    doc: &Document,
-    object_id: lopdf::ObjectId,
-    width: i64,
-    height: i64,
-) -> Result<Option<RgbImage>> {
-    if width <= 0 || height <= 0 {
-        return Ok(None);
-    }
-
-    let width_u32 = u32::try_from(width).unwrap_or(0);
-    let height_u32 = u32::try_from(height).unwrap_or(0);
-    if width_u32 == 0 || height_u32 == 0 {
-        return Ok(None);
-    }
-    if width_u32 > 40_000 || height_u32 > 40_000 {
-        return Ok(None);
-    }
-
-    let stream = match doc.get_object(object_id).and_then(|o| o.as_stream()) {
-        Ok(v) => v,
-        Err(_) => return Ok(None),
-    };
-
-    let filters = stream
-        .dict
-        .get(b"Filter")
-        .ok()
-        .and_then(|v| match v {
-            lopdf::Object::Name(name) => Some(vec![String::from_utf8_lossy(name).to_string()]),
-            lopdf::Object::Array(arr) => {
-                let mut out = Vec::new();
-                for item in arr {
-                    if let Ok(name) = item.as_name() {
-                        out.push(String::from_utf8_lossy(name).to_string());
-                    }
-                }
-                Some(out)
-            }
-            _ => None,
-        })
-        .unwrap_or_default();
-
-    let has_encoded_filter = filters.iter().any(|f| f == "DCTDecode" || f == "JPXDecode");
-    if has_encoded_filter {
-        if let Ok(decoded) = image::load_from_memory(&stream.content) {
-            return Ok(Some(decoded.to_rgb8()));
-        }
-    }
-
-    let bits_per_component = stream
-        .dict
-        .get(b"BitsPerComponent")
-        .ok()
-        .and_then(|v| v.as_i64().ok())
-        .unwrap_or(8);
-    if bits_per_component != 8 {
-        return Ok(None);
-    }
-
-    let color_space = stream.dict.get(b"ColorSpace").ok().and_then(|v| match v {
-        lopdf::Object::Name(name) => Some(String::from_utf8_lossy(name).to_string()),
-        lopdf::Object::Array(arr) => arr.first().and_then(|o| {
-            o.as_name()
-                .ok()
-                .map(|name| String::from_utf8_lossy(name).to_string())
-        }),
-        _ => None,
-    });
-
-    let raw = match stream.decompressed_content() {
-        Ok(v) => v,
-        Err(_) => stream.content.clone(),
-    };
-
-    match color_space.as_deref() {
-        Some("DeviceRGB") => {
-            let expected = usize::try_from(width_u32)
-                .unwrap_or(0)
-                .saturating_mul(usize::try_from(height_u32).unwrap_or(0))
-                .saturating_mul(3);
-            if raw.len() < expected {
-                return Ok(None);
-            }
-            Ok(RgbImage::from_raw(
-                width_u32,
-                height_u32,
-                raw[..expected].to_vec(),
-            ))
-        }
-        Some("DeviceGray") => {
-            let expected = usize::try_from(width_u32)
-                .unwrap_or(0)
-                .saturating_mul(usize::try_from(height_u32).unwrap_or(0));
-            if raw.len() < expected {
-                return Ok(None);
-            }
-            let luma =
-                match image::GrayImage::from_raw(width_u32, height_u32, raw[..expected].to_vec()) {
-                    Some(v) => v,
-                    None => return Ok(None),
-                };
-            Ok(Some(DynamicImage::ImageLuma8(luma).to_rgb8()))
-        }
-        _ => Ok(None),
-    }
+    Ok(PdfImageOcrFallbackResult {
+        text: normalize_text_keep_paragraphs(&page_texts.join("\n")),
+        model_available: true,
+        image_candidate_count: u32::try_from(image_candidate_count).unwrap_or(u32::MAX),
+        decoded_image_count: u32::try_from(decoded_image_count).unwrap_or(u32::MAX),
+        ocr_attempt_count: u32::try_from(ocr_attempt_count).unwrap_or(u32::MAX),
+    })
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -968,6 +916,20 @@ mod tests {
         std::fs::write(root.join("ch_PP-OCRv3_det_infer.onnx"), b"det").unwrap();
         std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
         std::fs::write(root.join("ch_PP-OCRv3_rec_infer.onnx"), b"rec").unwrap();
+
+        let model_dir = root.to_string_lossy().to_string();
+        let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));
+        assert!(resolved.is_some());
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn resolve_ocr_model_config_accepts_v5_model_set() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(root.join("ch_PP-OCRv5_mobile_det.onnx"), b"det").unwrap();
+        std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
+        std::fs::write(root.join("ch_PP-OCRv5_rec_mobile_infer.onnx"), b"rec").unwrap();
 
         let model_dir = root.to_string_lossy().to_string();
         let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));

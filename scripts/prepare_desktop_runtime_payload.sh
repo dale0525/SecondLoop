@@ -60,6 +60,8 @@ has_required_models() {
     "ch_ppocr_mobile_v2.0_cls_infer.onnx"
   )
   local rec_aliases=(
+    "ch_PP-OCRv5_rec_mobile_infer.onnx"
+    "ch_PP-OCRv5_mobile_rec.onnx"
     "ch_PP-OCRv4_rec_infer.onnx"
     "ch_PP-OCRv3_rec_infer.onnx"
     "latin_PP-OCRv3_rec_infer.onnx"
