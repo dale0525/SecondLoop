@@ -19,10 +19,18 @@ on:
         description: Folder containing prebuilt runtime files
         required: true
         default: assets/ocr/desktop_runtime
-      rapidocr_version:
-        description: rapidocr_onnxruntime version when auto-downloading models
+      model_source:
+        description: OCR model source (modelscope-v5|rapidocr-wheel)
         required: false
-        default: '1.2.3'
+        default: modelscope-v5
+      modelscope_version:
+        description: RapidOCR Modelscope tag for v5 source
+        required: false
+        default: v3.6.0
+      rapidocr_version:
+        description: rapidocr_onnxruntime version (used when model_source=rapidocr-wheel)
+        required: false
+        default: '1.4.4'
   push:
     tags:
       - 'desktop-runtime-v*'
@@ -39,7 +47,9 @@ jobs:
       ARCH: ${{ github.event.inputs.arch || 'x64' }}
       VERSION_INPUT: ${{ github.event.inputs.version || '' }}
       RUNTIME_INPUT_DIR: ${{ github.event.inputs.runtime_input_dir || 'assets/ocr/desktop_runtime' }}
-      RAPIDOCR_ONNXRUNTIME_VERSION: ${{ github.event.inputs.rapidocr_version || vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.2.3' }}
+      DESKTOP_RUNTIME_MODEL_SOURCE: ${{ github.event.inputs.model_source || vars.DESKTOP_RUNTIME_MODEL_SOURCE || 'modelscope-v5' }}
+      DESKTOP_RUNTIME_MODELSCOPE_VERSION: ${{ github.event.inputs.modelscope_version || vars.DESKTOP_RUNTIME_MODELSCOPE_VERSION || 'v3.6.0' }}
+      RAPIDOCR_ONNXRUNTIME_VERSION: ${{ github.event.inputs.rapidocr_version || vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.4.4' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +61,8 @@ jobs:
             --output-dir "${RUNTIME_INPUT_DIR}" \
             --platform "${PLATFORM}" \
             --arch "${ARCH}" \
+            --model-source "${DESKTOP_RUNTIME_MODEL_SOURCE}" \
+            --modelscope-version "${DESKTOP_RUNTIME_MODELSCOPE_VERSION}" \
             --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
 
       - name: Build runtime archive
@@ -114,7 +126,9 @@ jobs:
       ARCH: ${{ matrix.arch }}
       VERSION_INPUT: ''
       RUNTIME_INPUT_DIR: assets/ocr/desktop_runtime
-      RAPIDOCR_ONNXRUNTIME_VERSION: ${{ vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.2.3' }}
+      DESKTOP_RUNTIME_MODEL_SOURCE: ${{ vars.DESKTOP_RUNTIME_MODEL_SOURCE || 'modelscope-v5' }}
+      DESKTOP_RUNTIME_MODELSCOPE_VERSION: ${{ vars.DESKTOP_RUNTIME_MODELSCOPE_VERSION || 'v3.6.0' }}
+      RAPIDOCR_ONNXRUNTIME_VERSION: ${{ vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.4.4' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -126,6 +140,8 @@ jobs:
             --output-dir "${RUNTIME_INPUT_DIR}" \
             --platform "${PLATFORM}" \
             --arch "${ARCH}" \
+            --model-source "${DESKTOP_RUNTIME_MODEL_SOURCE}" \
+            --modelscope-version "${DESKTOP_RUNTIME_MODELSCOPE_VERSION}" \
             --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
 
       - name: Build runtime archive

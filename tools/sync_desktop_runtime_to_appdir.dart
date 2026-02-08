@@ -7,8 +7,8 @@ const String _kReleaseMarker = '_secondloop_desktop_runtime_release.json';
 const String _kRuntimeManifest = '_secondloop_desktop_runtime_manifest.json';
 
 const List<String> _kDetModelAliases = <String>[
-  'ch_PP-OCRv4_det_infer.onnx',
   'ch_PP-OCRv5_mobile_det.onnx',
+  'ch_PP-OCRv4_det_infer.onnx',
   'ch_PP-OCRv3_det_infer.onnx',
 ];
 const List<String> _kClsModelAliases = <String>[

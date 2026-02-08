@@ -21,8 +21,8 @@ const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
 const OCR_MODEL_DIR_ENV: &str = "SECONDLOOP_OCR_MODEL_DIR";
 
 const DET_MODEL_ALIASES: [&str; 3] = [
-    "ch_PP-OCRv4_det_infer.onnx",
     "ch_PP-OCRv5_mobile_det.onnx",
+    "ch_PP-OCRv4_det_infer.onnx",
     "ch_PP-OCRv3_det_infer.onnx",
 ];
 const CLS_MODEL_ALIASES: [&str; 1] = ["ch_ppocr_mobile_v2.0_cls_infer.onnx"];
@@ -934,6 +934,27 @@ mod tests {
         let model_dir = root.to_string_lossy().to_string();
         let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir));
         assert!(resolved.is_some());
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn resolve_ocr_model_config_prefers_v5_detector_when_v4_also_exists() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(root.join("ch_PP-OCRv4_det_infer.onnx"), b"det-v4").unwrap();
+        std::fs::write(root.join("ch_PP-OCRv5_mobile_det.onnx"), b"det-v5").unwrap();
+        std::fs::write(root.join("ch_ppocr_mobile_v2.0_cls_infer.onnx"), b"cls").unwrap();
+        std::fs::write(root.join("ch_PP-OCRv5_rec_mobile_infer.onnx"), b"rec").unwrap();
+
+        let model_dir = root.to_string_lossy().to_string();
+        let resolved = resolve_ocr_model_config("device_plus_en", Some(&model_dir))
+            .expect("expected v5 config to resolve");
+        let det_name = resolved
+            .det_path
+            .file_name()
+            .and_then(|v| v.to_str())
+            .unwrap_or_default();
+        assert_eq!(det_name, "ch_PP-OCRv5_mobile_det.onnx");
     }
 
     #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]

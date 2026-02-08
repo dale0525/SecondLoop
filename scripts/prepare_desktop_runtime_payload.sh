@@ -9,7 +9,9 @@ Usage:
 Options:
   --output-dir <dir>            Destination runtime payload directory (required)
   --source-dir <dir>            Copy payload from an existing directory first
-  --rapidocr-version <version>  rapidocr_onnxruntime version (default: 1.2.3)
+  --model-source <name>         OCR model source: modelscope-v5|rapidocr-wheel (default: modelscope-v5)
+  --modelscope-version <tag>    Modelscope RapidOCR tag for v5 downloads (default: v3.6.0)
+  --rapidocr-version <version>  rapidocr_onnxruntime version (default: 1.4.4)
   --onnxruntime-version <ver>   ONNX Runtime version (default: 1.23.0)
   --platform <name>             Runtime platform (linux|macos|windows)
   --arch <name>                 Runtime arch (x64|arm64)
@@ -18,7 +20,7 @@ Options:
 
 Behavior:
   - Ensures required OCR model files + ONNX Runtime dynamic library are present.
-  - Downloads rapidocr_onnxruntime wheel for model files when needed.
+  - Downloads OCR models from the selected source when needed.
   - Downloads ONNX Runtime archive for the target platform/arch when needed.
 USAGE
 }
@@ -108,6 +110,23 @@ normalize_arch() {
       ;;
     arm64|aarch64)
       echo "arm64"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+normalize_model_source() {
+  local raw="$1"
+  local lower
+  lower="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    modelscope-v5|modelscope_ppocrv5|ppocrv5|v5)
+      echo "modelscope-v5"
+      ;;
+    rapidocr-wheel|rapidocr|wheel)
+      echo "rapidocr-wheel"
       ;;
     *)
       return 1
@@ -266,13 +285,164 @@ has_required_payload() {
   has_required_models "$dir" && has_onnxruntime_lib "$dir" "$platform"
 }
 
+download_rapidocr_wheel_models() {
+  local output_dir="$1"
+  local rapidocr_version="$2"
+  local temp_dir="$3"
+  local pip_log="$temp_dir/pip_download.log"
+
+  echo "prepare-desktop-runtime-payload: downloading rapidocr_onnxruntime==${rapidocr_version}"
+  local download_ok=0
+  if python3 -m pip download "rapidocr_onnxruntime==${rapidocr_version}" --no-deps -d "$temp_dir" >"$pip_log" 2>&1; then
+    cat "$pip_log"
+    download_ok=1
+  else
+    local pyver=''
+    for pyver in 312 311 310; do
+      if python3 -m pip download "rapidocr_onnxruntime==${rapidocr_version}" --no-deps --python-version "$pyver" -d "$temp_dir" >"$pip_log" 2>&1; then
+        echo "prepare-desktop-runtime-payload: retrying rapidocr download with --python-version=${pyver}"
+        cat "$pip_log"
+        download_ok=1
+        break
+      fi
+    done
+  fi
+  if [[ "$download_ok" -eq 0 ]]; then
+    if [[ -f "$pip_log" ]]; then
+      cat "$pip_log" >&2
+    fi
+    die "unable to download rapidocr_onnxruntime==${rapidocr_version}"
+  fi
+
+  local wheel=''
+  wheel="$(ls "$temp_dir"/rapidocr_onnxruntime-*.whl 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$wheel" ]]; then
+    die "unable to locate downloaded wheel in $temp_dir"
+  fi
+
+  python3 - "$wheel" "$output_dir" <<'PY'
+import os
+import sys
+import zipfile
+
+wheel_path = sys.argv[1]
+output_dir = sys.argv[2]
+models_prefix = "rapidocr_onnxruntime/models/"
+models_out = os.path.join(output_dir, "models")
+os.makedirs(models_out, exist_ok=True)
+
+count = 0
+with zipfile.ZipFile(wheel_path) as zf:
+    for name in zf.namelist():
+        if not name.startswith(models_prefix) or name.endswith("/"):
+            continue
+        relative = name[len(models_prefix):]
+        if not relative:
+            continue
+        out_path = os.path.join(models_out, relative)
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with zf.open(name) as src, open(out_path, "wb") as dst:
+            dst.write(src.read())
+        count += 1
+
+if count == 0:
+    raise SystemExit("no model files extracted from wheel")
+print(f"extracted_models={count}")
+PY
+}
+
+download_modelscope_v5_models() {
+  local output_dir="$1"
+  local modelscope_version="$2"
+
+  echo "prepare-desktop-runtime-payload: downloading modelscope PP-OCRv5 models (${modelscope_version})"
+  python3 - "$output_dir" "$modelscope_version" <<'PY'
+import hashlib
+import os
+import pathlib
+import shutil
+import sys
+import urllib.request
+
+output_dir = pathlib.Path(sys.argv[1])
+modelscope_version = (sys.argv[2] or "v3.6.0").strip() or "v3.6.0"
+models_out = output_dir / "models"
+models_out.mkdir(parents=True, exist_ok=True)
+base = f"https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/{modelscope_version}"
+
+targets = [
+    (
+        "ch_PP-OCRv5_mobile_det.onnx",
+        f"{base}/onnx/PP-OCRv5/det/ch_PP-OCRv5_mobile_det.onnx",
+        "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae",
+    ),
+    (
+        "ch_PP-OCRv5_rec_mobile_infer.onnx",
+        f"{base}/onnx/PP-OCRv5/rec/ch_PP-OCRv5_rec_mobile_infer.onnx",
+        "5825fc7ebf84ae7a412be049820b4d86d77620f204a041697b0494669b1742c5",
+    ),
+    (
+        "ch_ppocr_mobile_v2.0_cls_infer.onnx",
+        f"{base}/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_infer.onnx",
+        "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+    ),
+]
+
+def sha256_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+downloaded = 0
+for file_name, url, expected_sha in targets:
+    destination = models_out / file_name
+    if destination.is_file():
+        if sha256_file(destination).lower() == expected_sha.lower():
+            continue
+
+    temp_download = destination.with_name(f".{file_name}.download")
+    with urllib.request.urlopen(url, timeout=120) as response, temp_download.open("wb") as output:
+        shutil.copyfileobj(response, output)
+
+    actual_sha = sha256_file(temp_download)
+    if actual_sha.lower() != expected_sha.lower():
+        try:
+            temp_download.unlink()
+        except FileNotFoundError:
+            pass
+        raise SystemExit(
+            f"sha256 mismatch for {file_name}: expected={expected_sha} actual={actual_sha}"
+        )
+
+    temp_download.replace(destination)
+    downloaded += 1
+
+print(f"extracted_models={len(targets)}")
+print(f"downloaded_models={downloaded}")
+PY
+
+  local rec_model="$output_dir/models/ch_PP-OCRv5_rec_mobile_infer.onnx"
+  local rec_alias="$output_dir/models/ch_PP-OCRv5_mobile_rec.onnx"
+  if [[ -f "$rec_model" && ! -f "$rec_alias" ]]; then
+    cp "$rec_model" "$rec_alias"
+  fi
+}
+
 output_dir=''
 source_dir=''
-rapidocr_version="${RAPIDOCR_ONNXRUNTIME_VERSION:-1.2.3}"
+model_source="${DESKTOP_RUNTIME_MODEL_SOURCE:-modelscope-v5}"
+modelscope_version="${DESKTOP_RUNTIME_MODELSCOPE_VERSION:-v3.6.0}"
+rapidocr_version="${RAPIDOCR_ONNXRUNTIME_VERSION:-1.4.4}"
 onnxruntime_version="${ONNXRUNTIME_VERSION:-1.23.0}"
 platform="${DESKTOP_RUNTIME_PLATFORM:-}"
 arch="${DESKTOP_RUNTIME_ARCH:-}"
 allow_download=1
+runtime_source='existing_payload'
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -282,6 +452,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --source-dir)
       source_dir="${2:-}"
+      shift 2
+      ;;
+    --model-source)
+      model_source="${2:-}"
+      shift 2
+      ;;
+    --modelscope-version)
+      modelscope_version="${2:-}"
       shift 2
       ;;
     --rapidocr-version)
@@ -333,6 +511,10 @@ if ! arch="$(normalize_arch "$arch")"; then
   die "Unsupported arch: $arch"
 fi
 
+if ! model_source="$(normalize_model_source "$model_source")"; then
+  die "Unsupported model source: $model_source"
+fi
+
 require_cmd python3
 
 mkdir -p "$output_dir"
@@ -344,6 +526,7 @@ if [[ -n "$source_dir" ]]; then
   rm -rf "$output_dir"
   mkdir -p "$output_dir"
   cp -R "$source_dir"/. "$output_dir"/
+  runtime_source="source_dir:${source_dir}"
 fi
 
 if has_required_payload "$output_dir" "$platform"; then
@@ -357,43 +540,19 @@ else
   trap 'rm -rf "$temp_dir"' EXIT
 
   if ! has_required_models "$output_dir"; then
-    echo "prepare-desktop-runtime-payload: downloading rapidocr_onnxruntime==${rapidocr_version}"
-    python3 -m pip download "rapidocr_onnxruntime==${rapidocr_version}" --no-deps -d "$temp_dir"
-
-    wheel="$(ls "$temp_dir"/rapidocr_onnxruntime-*.whl 2>/dev/null | head -n 1 || true)"
-    if [[ -z "$wheel" ]]; then
-      die "unable to locate downloaded wheel in $temp_dir"
-    fi
-
-    python3 - "$wheel" "$output_dir" <<'PY'
-import os
-import sys
-import zipfile
-
-wheel_path = sys.argv[1]
-output_dir = sys.argv[2]
-models_prefix = "rapidocr_onnxruntime/models/"
-models_out = os.path.join(output_dir, "models")
-os.makedirs(models_out, exist_ok=True)
-
-count = 0
-with zipfile.ZipFile(wheel_path) as zf:
-    for name in zf.namelist():
-        if not name.startswith(models_prefix) or name.endswith("/"):
-            continue
-        relative = name[len(models_prefix):]
-        if not relative:
-            continue
-        out_path = os.path.join(models_out, relative)
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with zf.open(name) as src, open(out_path, "wb") as dst:
-            dst.write(src.read())
-        count += 1
-
-if count == 0:
-    raise SystemExit("no model files extracted from wheel")
-print(f"extracted_models={count}")
-PY
+    case "$model_source" in
+      modelscope-v5)
+        download_modelscope_v5_models "$output_dir" "$modelscope_version"
+        runtime_source="modelscope-v5@${modelscope_version}"
+        ;;
+      rapidocr-wheel)
+        download_rapidocr_wheel_models "$output_dir" "$rapidocr_version" "$temp_dir"
+        runtime_source="rapidocr_onnxruntime==${rapidocr_version}"
+        ;;
+      *)
+        die "unsupported model source: ${model_source}"
+        ;;
+    esac
   fi
 
   if ! has_onnxruntime_lib "$output_dir" "$platform"; then
@@ -490,7 +649,10 @@ generated_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cat > "$output_dir/README.runtime.txt" <<EOF
 desktop-runtime-payload
 generated_at_utc=${generated_at_utc}
-source=${source_dir:-rapidocr_onnxruntime==${rapidocr_version}}
+source=${runtime_source}
+model_source=${model_source}
+modelscope_version=${modelscope_version}
+rapidocr_version=${rapidocr_version}
 platform=${platform}
 arch=${arch}
 onnxruntime=${onnxruntime_version}
