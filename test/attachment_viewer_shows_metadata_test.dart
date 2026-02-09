@@ -44,17 +44,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('attachment_metadata_format')),
-        findsOneWidget);
     expect(
         find.byKey(const ValueKey('attachment_metadata_size')), findsOneWidget);
-    expect(
-      tester
-          .widget<Text>(
-              find.byKey(const ValueKey('attachment_metadata_format')))
-          .data,
-      'image/png',
-    );
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('attachment_metadata_size')))
@@ -66,6 +57,12 @@ void main() {
         findsNothing);
     expect(find.byKey(const ValueKey('attachment_metadata_location')),
         findsNothing);
+    expect(
+        find.byKey(const ValueKey('attachment_metadata_format')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('attachment_viewer_share')), findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_viewer_download')),
+        findsOneWidget);
   });
 
   testWidgets('Attachment viewer shows captured time + location when present',

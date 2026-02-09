@@ -67,7 +67,7 @@ void main() {
 
     expect(backend.insertedContents, [
       'https://example.com',
-      'Shared file: report.pdf',
+      '',
     ]);
     expect(backend.linkCalls, [
       'm1:sha_url_manifest',

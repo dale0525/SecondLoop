@@ -272,7 +272,9 @@ String _resolveDisplayTitle(Attachment attachment, AttachmentMetadata? meta) {
       meta?.sourceUrls.isNotEmpty == true ? meta!.sourceUrls.first.trim() : '';
   if (firstUrl.isNotEmpty) return firstUrl;
 
-  return attachment.mimeType;
+  final sha = attachment.sha256.trim();
+  if (sha.isNotEmpty) return sha;
+  return 'Attachment';
 }
 
 String _resolveDisplaySummary(

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
+import '../../i18n/strings.g.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -37,6 +38,7 @@ class _ChatImageAttachmentThumbnailState
   Future<Uint8List?>? _bytesFuture;
   bool _hasBytes = false;
   bool _loadingBytes = false;
+  bool _blockedByWifiOnly = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   @override
@@ -118,15 +120,21 @@ class _ChatImageAttachmentThumbnailState
 
   Future<Uint8List?> _loadBytes() async {
     final sessionKey = SessionScope.of(context).sessionKey;
+    _blockedByWifiOnly = false;
 
     try {
-      return await widget.attachmentsBackend.readAttachmentBytes(
+      final bytes = await widget.attachmentsBackend.readAttachmentBytes(
         sessionKey,
         sha256: widget.attachment.sha256,
       );
+      _blockedByWifiOnly = false;
+      return bytes;
     } catch (_) {
       final allowed = await _shouldAutoDownloadNow();
-      if (!allowed) return null;
+      if (!allowed) {
+        _blockedByWifiOnly = true;
+        return null;
+      }
       if (!mounted) return null;
 
       final didDownload = await CloudMediaDownload(configStore: _store)
@@ -137,10 +145,12 @@ class _ChatImageAttachmentThumbnailState
       if (!didDownload) return null;
 
       try {
-        return await widget.attachmentsBackend.readAttachmentBytes(
+        final bytes = await widget.attachmentsBackend.readAttachmentBytes(
           sessionKey,
           sha256: widget.attachment.sha256,
         );
+        _blockedByWifiOnly = false;
+        return bytes;
       } catch (_) {
         return null;
       }
@@ -171,13 +181,20 @@ class _ChatImageAttachmentThumbnailState
                     return _placeholder(
                       context,
                       icon: Icons.image_outlined,
+                      statusText: context.t.sync.progressDialog.preparing,
                       showSpinner: true,
                     );
                   }
                   if (bytes == null || bytes.isEmpty) {
                     return _placeholder(
                       context,
-                      icon: Icons.image_outlined,
+                      icon: _blockedByWifiOnly
+                          ? Icons.wifi_off_rounded
+                          : Icons.broken_image_outlined,
+                      statusText: _blockedByWifiOnly
+                          ? context
+                              .t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle
+                          : context.t.attachments.content.previewUnavailable,
                       showSpinner: false,
                     );
                   }
@@ -190,6 +207,8 @@ class _ChatImageAttachmentThumbnailState
                       return _placeholder(
                         context,
                         icon: Icons.broken_image_outlined,
+                        statusText:
+                            context.t.attachments.content.previewUnavailable,
                         showSpinner: false,
                       );
                     },
@@ -206,21 +225,75 @@ class _ChatImageAttachmentThumbnailState
   Widget _placeholder(
     BuildContext context, {
     required IconData icon,
+    required String statusText,
     required bool showSpinner,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final statusStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          height: 1.25,
+        );
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant.withOpacity(0.6),
+        color: colorScheme.surfaceVariant.withOpacity(0.55),
       ),
       child: Center(
-        child: showSpinner
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(icon, color: colorScheme.onSurfaceVariant),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: colorScheme.onSecondaryContainer,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (showSpinner)
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 118),
+                      child: Text(
+                        statusText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.left,
+                        style: statusStyle,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  statusText,
+                  key: const ValueKey('chat_image_attachment_status_text'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: statusStyle,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

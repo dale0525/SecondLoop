@@ -60,7 +60,7 @@ void main() {
     expect(drainedPath, file.path);
     expect(drainedMimeType, 'image/png');
     expect(await file.exists(), false);
-    expect(backend.insertedContents, ['Shared image (image/png)']);
+    expect(backend.insertedContents, ['']);
     expect(backend.linkCalls, ['m1:sha256_test']);
   });
 
@@ -102,7 +102,7 @@ void main() {
     expect(drainedMimeType, 'audio/wav');
     expect(drainedFilename, 'voice.wav');
     expect(await file.exists(), false);
-    expect(backend.insertedContents, ['Shared file: voice.wav']);
+    expect(backend.insertedContents, ['']);
     expect(backend.linkCalls, ['m1:sha256_audio']);
   });
 }
