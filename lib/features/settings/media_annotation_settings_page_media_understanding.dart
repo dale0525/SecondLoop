@@ -40,8 +40,7 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
     return config.annotateEnabled &&
         config.searchEnabled &&
         contentConfig.audioTranscribeEnabled &&
-        contentConfig.ocrEnabled &&
-        contentConfig.pdfSmartCompressEnabled;
+        contentConfig.ocrEnabled;
   }
 
   bool _isZhLocale(BuildContext context) {
@@ -57,9 +56,9 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
 
   String _mediaUnderstandingSubtitle(BuildContext context) {
     if (_isZhLocale(context)) {
-      return '统一控制音频转写、文档 OCR、PDF 智能压缩和图片注释。关闭后会隐藏下方详细设置。';
+      return '统一控制音频转写、文档 OCR 和图片注释。关闭后会隐藏下方详细设置。';
     }
-    return 'One switch controls audio transcription, document OCR, PDF smart compression, and image annotations. Turn off to hide details below.';
+    return 'One switch controls audio transcription, document OCR, and image annotations. Turn off to hide details below.';
   }
 
   String _useSecondLoopCloudTitle(BuildContext context) {
@@ -105,7 +104,6 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
       contentConfig,
       audioTranscribeEnabled: enabled,
       ocrEnabled: enabled,
-      pdfSmartCompressEnabled: enabled,
     );
 
     await _persistBoth(

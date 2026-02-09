@@ -6,11 +6,57 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     BuildContext context,
   ) {
     final t = context.t.settings.mediaAnnotation;
+    final contentConfig = _contentConfig;
+    final mediaConfig = _config;
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final proUser = subscriptionStatus == SubscriptionStatus.entitled;
+    final cloudEnabled = mediaConfig?.providerMode ==
+        _MediaAnnotationSettingsPageState._kProviderCloudGateway;
     final children = <Widget>[
       ListTile(
         title: Text(t.documentOcr.enabled.title),
         subtitle: Text(t.documentOcr.enabled.subtitle),
       ),
+      if (contentConfig != null && mediaConfig != null)
+        ListTile(
+          key: MediaAnnotationSettingsPage.ocrModeTileKey,
+          title: Text(_documentOcrEngineTitle(context)),
+          subtitle: Text(
+            _documentOcrEngineSubtitle(
+              context,
+              proUser: proUser,
+              cloudEnabled: cloudEnabled,
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                proUser
+                    ? (cloudEnabled
+                        ? (_isZhOcrLocale(context)
+                            ? 'SecondLoop Cloud'
+                            : 'SecondLoop Cloud')
+                        : _documentOcrEngineLabel(
+                            context,
+                            contentConfig.ocrEngineMode,
+                          ))
+                    : _documentOcrEngineLabel(
+                        context,
+                        contentConfig.ocrEngineMode,
+                      ),
+              ),
+              if (!proUser) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right),
+              ],
+            ],
+          ),
+          onTap: _busy || proUser
+              ? null
+              : () => _pickDocumentOcrEngineMode(contentConfig, mediaConfig),
+        ),
     ];
 
     final runtimeTile = _buildDesktopRuntimeHealthTile(context);
@@ -80,8 +126,8 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                       const SizedBox(height: 2),
                       Text(
                         zh
-                            ? '用于离线 OCR/PDF 压缩的内置运行时状态。'
-                            : 'Health status for bundled offline OCR/PDF runtime.',
+                            ? '用于离线 OCR 的内置运行时状态。'
+                            : 'Health status for bundled offline OCR runtime.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -211,8 +257,8 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
               title: Text(zh ? '清除桌面运行时' : 'Clear Desktop Runtime'),
               content: Text(
                 zh
-                    ? '清除后会删除已安装的桌面 OCR/PDF 运行时文件。'
-                    : 'This removes installed desktop OCR/PDF runtime files.',
+                    ? '清除后会删除已安装的桌面 OCR 运行时文件。'
+                    : 'This removes installed desktop OCR runtime files.',
               ),
               actions: [
                 TextButton(

@@ -9,10 +9,13 @@ mod ocr_model_config;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[path = "ocr_parallel.rs"]
 mod ocr_parallel;
+#[path = "ocr_pdf_text.rs"]
+mod ocr_pdf_text;
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use super::pdf_page_image_decode::{
-    collect_page_image_candidates, decode_pdf_image_to_rgb, PdfImageCandidate,
+    collect_page_image_candidates, decode_pdf_image_to_rgb_with_reason, PdfImageCandidate,
+    PdfImageDecodeFailureReason,
 };
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use image::RgbImage;
@@ -20,6 +23,7 @@ use image::RgbImage;
 use ocr_model_config::resolve_ocr_model_config;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use ocr_parallel::choose_ocr_page_worker_count;
+use ocr_pdf_text::extract_pdf_text_with_limit;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use paddle_ocr_rs::ocr_lite::OcrLite;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -71,6 +75,9 @@ struct PdfImageOcrFallbackResult {
     model_available: bool,
     image_candidate_count: u32,
     decoded_image_count: u32,
+    decode_unsupported_color_space_count: u32,
+    decode_unsupported_bits_per_component_count: u32,
+    decode_other_failure_count: u32,
     ocr_attempt_count: u32,
 }
 
@@ -235,7 +242,15 @@ pub fn desktop_ocr_pdf(
     } else if fallback.image_candidate_count == 0 {
         "desktop_rust_pdf_no_image_candidates"
     } else if fallback.decoded_image_count == 0 {
-        "desktop_rust_pdf_image_decode_empty"
+        if fallback.decode_unsupported_color_space_count > 0 {
+            "desktop_rust_pdf_image_decode_unsupported_colorspace"
+        } else if fallback.decode_unsupported_bits_per_component_count > 0 {
+            "desktop_rust_pdf_image_decode_unsupported_bpc"
+        } else if fallback.decode_other_failure_count > 0 {
+            "desktop_rust_pdf_image_decode_failed"
+        } else {
+            "desktop_rust_pdf_image_decode_empty"
+        }
     } else if fallback.ocr_attempt_count == 0 {
         "desktop_rust_pdf_onnx_not_attempted"
     } else {
@@ -343,12 +358,6 @@ fn normalize_text_keep_paragraphs(input: &str) -> String {
     out.trim().to_string()
 }
 
-struct DesktopPdfTextExtractResult {
-    text: String,
-    page_count: u32,
-    processed_pages: u32,
-}
-
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn ocr_image_text(
     image: &RgbImage,
@@ -375,6 +384,9 @@ fn ocr_pdf_page_images(
             model_available: false,
             image_candidate_count: 0,
             decoded_image_count: 0,
+            decode_unsupported_color_space_count: 0,
+            decode_unsupported_bits_per_component_count: 0,
+            decode_other_failure_count: 0,
             ocr_attempt_count: 0,
         });
     };
@@ -387,6 +399,9 @@ fn ocr_pdf_page_images(
             model_available: true,
             image_candidate_count: 0,
             decoded_image_count: 0,
+            decode_unsupported_color_space_count: 0,
+            decode_unsupported_bits_per_component_count: 0,
+            decode_other_failure_count: 0,
             ocr_attempt_count: 0,
         });
     }
@@ -404,6 +419,9 @@ fn ocr_pdf_page_images(
     let mut decoded_pages = Vec::<Vec<RgbImage>>::with_capacity(selected_page_numbers.len());
     let mut image_candidate_count = 0usize;
     let mut decoded_image_count = 0usize;
+    let mut decode_unsupported_color_space_count = 0usize;
+    let mut decode_unsupported_bits_per_component_count = 0usize;
+    let mut decode_other_failure_count = 0usize;
     let mut ocr_attempt_count = 0usize;
     for page_number in selected_page_numbers {
         let Some(page_id) = pages.get(&page_number).copied() else {
@@ -429,17 +447,29 @@ fn ocr_pdf_page_images(
             .into_iter()
             .take(OCR_MAX_IMAGE_CANDIDATES_PER_PAGE)
         {
-            let decoded = decode_pdf_image_to_rgb(
+            match decode_pdf_image_to_rgb_with_reason(
                 &doc,
                 PdfImageCandidate {
                     object_id: candidate.object_id,
                     width: candidate.width,
                     height: candidate.height,
                 },
-            );
-            if let Some(rgb) = decoded {
-                decoded_image_count = decoded_image_count.saturating_add(1);
-                decoded_images.push(rgb);
+            ) {
+                Ok(rgb) => {
+                    decoded_image_count = decoded_image_count.saturating_add(1);
+                    decoded_images.push(rgb);
+                }
+                Err(PdfImageDecodeFailureReason::UnsupportedColorSpace) => {
+                    decode_unsupported_color_space_count =
+                        decode_unsupported_color_space_count.saturating_add(1);
+                }
+                Err(PdfImageDecodeFailureReason::UnsupportedBitsPerComponent) => {
+                    decode_unsupported_bits_per_component_count =
+                        decode_unsupported_bits_per_component_count.saturating_add(1);
+                }
+                Err(_) => {
+                    decode_other_failure_count = decode_other_failure_count.saturating_add(1);
+                }
             }
         }
         decoded_pages.push(decoded_images);
@@ -523,6 +553,13 @@ fn ocr_pdf_page_images(
         model_available: true,
         image_candidate_count: u32::try_from(image_candidate_count).unwrap_or(u32::MAX),
         decoded_image_count: u32::try_from(decoded_image_count).unwrap_or(u32::MAX),
+        decode_unsupported_color_space_count: u32::try_from(decode_unsupported_color_space_count)
+            .unwrap_or(u32::MAX),
+        decode_unsupported_bits_per_component_count: u32::try_from(
+            decode_unsupported_bits_per_component_count,
+        )
+        .unwrap_or(u32::MAX),
+        decode_other_failure_count: u32::try_from(decode_other_failure_count).unwrap_or(u32::MAX),
         ocr_attempt_count: u32::try_from(ocr_attempt_count).unwrap_or(u32::MAX),
     })
 }
@@ -926,54 +963,6 @@ fn find_existing_file(root: &Path, aliases: &[&str]) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn extract_pdf_text_with_limit(
-    bytes: &[u8],
-    max_pages: u32,
-) -> Result<DesktopPdfTextExtractResult> {
-    let doc = Document::load_mem(bytes).map_err(|e| anyhow!("invalid pdf: {e}"))?;
-    let pages = doc.get_pages();
-    let page_count = u32::try_from(pages.len()).unwrap_or(u32::MAX);
-    if pages.is_empty() {
-        return Ok(DesktopPdfTextExtractResult {
-            text: String::new(),
-            page_count: 0,
-            processed_pages: 0,
-        });
-    }
-
-    let mut page_numbers: Vec<u32> = pages.keys().cloned().collect();
-    page_numbers.sort_unstable();
-    let take_count = usize::try_from(max_pages)
-        .unwrap_or(usize::MAX)
-        .min(page_numbers.len());
-    let selected_pages = page_numbers
-        .into_iter()
-        .take(take_count)
-        .collect::<Vec<_>>();
-
-    let text = match doc.extract_text(&selected_pages) {
-        Ok(text) => text,
-        Err(_) => {
-            let mut out = String::new();
-            for page_number in &selected_pages {
-                if let Ok(page_text) = doc.extract_text(&[*page_number]) {
-                    if !out.is_empty() && !out.ends_with('\n') {
-                        out.push('\n');
-                    }
-                    out.push_str(&page_text);
-                }
-            }
-            out
-        }
-    };
-
-    Ok(DesktopPdfTextExtractResult {
-        text,
-        page_count,
-        processed_pages: u32::try_from(selected_pages.len()).unwrap_or(u32::MAX),
-    })
 }
 
 #[cfg(test)]

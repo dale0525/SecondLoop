@@ -94,8 +94,6 @@ import Vision
           self.handleOcrPdf(call: call, result: result)
         case "ocrImage":
           self.handleOcrImage(call: call, result: result)
-        case "compressPdf":
-          self.handleCompressPdf(call: call, result: result)
         default:
           result(FlutterMethodNotImplemented)
         }
@@ -313,31 +311,6 @@ import Vision
     }
   }
 
-  private func handleCompressPdf(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard #available(iOS 13.0, *) else {
-      result(nil)
-      return
-    }
-    guard let args = call.arguments as? [String: Any],
-          let typed = args["bytes"] as? FlutterStandardTypedData else {
-      result(nil)
-      return
-    }
-    let requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback: 220, upperBound: 600)
-    let dpi = max(180, min(300, requestedDpi))
-
-    DispatchQueue.global(qos: .userInitiated).async {
-      let compressed = self.runScannedPdfCompression(pdfData: typed.data, dpi: dpi)
-      DispatchQueue.main.async {
-        if let compressed = compressed {
-          result(FlutterStandardTypedData(bytes: compressed))
-        } else {
-          result(nil)
-        }
-      }
-    }
-  }
-
   private func normalizePositiveInt(_ raw: Any?, fallback: Int, upperBound: Int) -> Int {
     let value: Int
     switch raw {
@@ -463,34 +436,6 @@ import Vision
     } catch {
       return nil
     }
-  }
-
-  @available(iOS 13.0, *)
-  private func runScannedPdfCompression(pdfData: Data, dpi: Int) -> Data? {
-    guard let document = PDFDocument(data: pdfData) else {
-      return nil
-    }
-    if document.pageCount <= 0 {
-      return nil
-    }
-
-    let output = PDFDocument()
-    for index in 0..<document.pageCount {
-      guard let page = document.page(at: index),
-            let rendered = renderPdfPageAsCgImage(page: page, dpi: dpi) else {
-        continue
-      }
-      let image = UIImage(cgImage: rendered)
-      guard let outputPage = PDFPage(image: image) else {
-        continue
-      }
-      output.insert(outputPage, at: output.pageCount)
-    }
-
-    guard output.pageCount > 0 else {
-      return nil
-    }
-    return output.dataRepresentation()
   }
 
   @available(iOS 13.0, *)

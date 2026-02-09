@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1222 (611 per locale)
+/// Strings: 1194 (597 per locale)
 ///
-/// Built on 2026-02-07 at 14:11 UTC
+/// Built on 2026-02-09 at 10:28 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -955,13 +955,11 @@ class _StringsSettingsMediaAnnotationEn {
   // Translations
   String get title => 'Media understanding';
   String get subtitle =>
-      'Optional: OCR, image captions, audio transcripts, and PDF compression for better search/storage';
+      'Optional: OCR, image captions, and audio transcripts for better search/storage';
   late final _StringsSettingsMediaAnnotationRoutingGuideEn routingGuide =
       _StringsSettingsMediaAnnotationRoutingGuideEn._(_root);
   late final _StringsSettingsMediaAnnotationDocumentOcrEn documentOcr =
       _StringsSettingsMediaAnnotationDocumentOcrEn._(_root);
-  late final _StringsSettingsMediaAnnotationPdfCompressionEn pdfCompression =
-      _StringsSettingsMediaAnnotationPdfCompressionEn._(_root);
   late final _StringsSettingsMediaAnnotationAudioTranscribeEn audioTranscribe =
       _StringsSettingsMediaAnnotationAudioTranscribeEn._(_root);
   late final _StringsSettingsMediaAnnotationImageCaptionEn imageCaption =
@@ -1828,21 +1826,6 @@ class _StringsSettingsMediaAnnotationDocumentOcrEn {
       _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn._(_root);
 }
 
-// Path: settings.mediaAnnotation.pdfCompression
-class _StringsSettingsMediaAnnotationPdfCompressionEn {
-  _StringsSettingsMediaAnnotationPdfCompressionEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'PDF smart compression';
-  late final _StringsSettingsMediaAnnotationPdfCompressionEnabledEn enabled =
-      _StringsSettingsMediaAnnotationPdfCompressionEnabledEn._(_root);
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn
-      linuxResources =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn._(_root);
-}
-
 // Path: settings.mediaAnnotation.audioTranscribe
 class _StringsSettingsMediaAnnotationAudioTranscribeEn {
   _StringsSettingsMediaAnnotationAudioTranscribeEn._(this._root);
@@ -2523,42 +2506,6 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn {
           _root);
 }
 
-// Path: settings.mediaAnnotation.pdfCompression.enabled
-class _StringsSettingsMediaAnnotationPdfCompressionEnabledEn {
-  _StringsSettingsMediaAnnotationPdfCompressionEnabledEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'Smart-compress PDFs';
-  String get subtitle =>
-      'Automatically optimize stored/uploaded PDFs without extra setup.';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'Linux compression resources';
-  String get subtitle =>
-      'Download enhanced local PDF compression resources for Linux desktop.';
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn
-      status =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn._(
-          _root);
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn
-      actions =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn._(
-          _root);
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn
-      confirmDelete =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn
-          ._(_root);
-}
-
 // Path: settings.mediaAnnotation.audioTranscribe.enabled
 class _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn {
   _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn._(this._root);
@@ -2778,47 +2725,6 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn {
   String get title => 'Delete downloaded OCR models?';
   String get body =>
       'Local desktop OCR may stop working until models are downloaded again.';
-  String get confirm => 'Delete';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources.status
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn._(
-      this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get notInstalled => 'Not installed';
-  String get downloading => 'Downloading...';
-  String installed({required Object count, required Object size}) =>
-      'Installed: ${count} files (${size})';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources.actions
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn._(
-      this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get download => 'Download resources';
-  String get redownload => 'Re-download';
-  String get delete => 'Delete resources';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn._(
-      this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'Delete downloaded compression resources?';
-  String get body =>
-      'After deletion, Linux PDF compression may run in basic mode until resources are downloaded again.';
   String get confirm => 'Delete';
 }
 
@@ -4118,16 +4024,13 @@ class _StringsSettingsMediaAnnotationZhCn
   @override
   String get title => '媒体理解';
   @override
-  String get subtitle => '可选：OCR、图片注释、音频转写与 PDF 压缩，增强检索与存储体验';
+  String get subtitle => '可选：OCR、图片注释与音频转写，增强检索与存储体验';
   @override
   late final _StringsSettingsMediaAnnotationRoutingGuideZhCn routingGuide =
       _StringsSettingsMediaAnnotationRoutingGuideZhCn._(_root);
   @override
   late final _StringsSettingsMediaAnnotationDocumentOcrZhCn documentOcr =
       _StringsSettingsMediaAnnotationDocumentOcrZhCn._(_root);
-  @override
-  late final _StringsSettingsMediaAnnotationPdfCompressionZhCn pdfCompression =
-      _StringsSettingsMediaAnnotationPdfCompressionZhCn._(_root);
   @override
   late final _StringsSettingsMediaAnnotationAudioTranscribeZhCn
       audioTranscribe =
@@ -5425,28 +5328,6 @@ class _StringsSettingsMediaAnnotationDocumentOcrZhCn
       _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn._(_root);
 }
 
-// Path: settings.mediaAnnotation.pdfCompression
-class _StringsSettingsMediaAnnotationPdfCompressionZhCn
-    extends _StringsSettingsMediaAnnotationPdfCompressionEn {
-  _StringsSettingsMediaAnnotationPdfCompressionZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => 'PDF 智能压缩';
-  @override
-  late final _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn enabled =
-      _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn._(_root);
-  @override
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn
-      linuxResources =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn._(_root);
-}
-
 // Path: settings.mediaAnnotation.audioTranscribe
 class _StringsSettingsMediaAnnotationAudioTranscribeZhCn
     extends _StringsSettingsMediaAnnotationAudioTranscribeEn {
@@ -6459,56 +6340,6 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn
           _root);
 }
 
-// Path: settings.mediaAnnotation.pdfCompression.enabled
-class _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn
-    extends _StringsSettingsMediaAnnotationPdfCompressionEnabledEn {
-  _StringsSettingsMediaAnnotationPdfCompressionEnabledZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => '智能压缩 PDF';
-  @override
-  String get subtitle => '自动优化存储/上传的 PDF，无需额外配置。';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn
-    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesZhCn._(
-      _StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => 'Linux 压缩资源';
-  @override
-  String get subtitle => '为 Linux 桌面端下载增强本地 PDF 压缩资源。';
-  @override
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn
-      status =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn._(
-          _root);
-  @override
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn
-      actions =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn._(
-          _root);
-  @override
-  late final _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn
-      confirmDelete =
-      _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn
-          ._(_root);
-}
-
 // Path: settings.mediaAnnotation.audioTranscribe.enabled
 class _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn
     extends _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn {
@@ -6842,67 +6673,6 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteZhCn
   String get title => '删除已下载 OCR 模型？';
   @override
   String get body => '删除后，桌面端本地 OCR 可能不可用，直到再次下载。';
-  @override
-  String get confirm => '删除';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources.status
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn
-    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesStatusZhCn._(
-      _StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get notInstalled => '未安装';
-  @override
-  String get downloading => '下载中...';
-  @override
-  String installed({required Object count, required Object size}) =>
-      '已安装：${count} 个文件（${size}）';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources.actions
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn
-    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesActionsZhCn._(
-      _StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get download => '下载资源';
-  @override
-  String get redownload => '重新下载';
-  @override
-  String get delete => '删除资源';
-}
-
-// Path: settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete
-class _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn
-    extends _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteEn {
-  _StringsSettingsMediaAnnotationPdfCompressionLinuxResourcesConfirmDeleteZhCn._(
-      _StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => '删除已下载压缩资源？';
-  @override
-  String get body => '删除后，Linux PDF 压缩可能退回基础模式，直到再次下载资源。';
   @override
   String get confirm => '删除';
 }
@@ -7377,7 +7147,7 @@ extension on Translations {
       case 'settings.mediaAnnotation.title':
         return 'Media understanding';
       case 'settings.mediaAnnotation.subtitle':
-        return 'Optional: OCR, image captions, audio transcripts, and PDF compression for better search/storage';
+        return 'Optional: OCR, image captions, and audio transcripts for better search/storage';
       case 'settings.mediaAnnotation.routingGuide.title':
         return 'Choose your AI source';
       case 'settings.mediaAnnotation.routingGuide.pro':
@@ -7448,35 +7218,6 @@ extension on Translations {
       case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.body':
         return 'Local desktop OCR may stop working until models are downloaded again.';
       case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.confirm':
-        return 'Delete';
-      case 'settings.mediaAnnotation.pdfCompression.title':
-        return 'PDF smart compression';
-      case 'settings.mediaAnnotation.pdfCompression.enabled.title':
-        return 'Smart-compress PDFs';
-      case 'settings.mediaAnnotation.pdfCompression.enabled.subtitle':
-        return 'Automatically optimize stored/uploaded PDFs without extra setup.';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.title':
-        return 'Linux compression resources';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.subtitle':
-        return 'Download enhanced local PDF compression resources for Linux desktop.';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.notInstalled':
-        return 'Not installed';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.downloading':
-        return 'Downloading...';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.installed':
-        return ({required Object count, required Object size}) =>
-            'Installed: ${count} files (${size})';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.download':
-        return 'Download resources';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.redownload':
-        return 'Re-download';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.delete':
-        return 'Delete resources';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.title':
-        return 'Delete downloaded compression resources?';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.body':
-        return 'After deletion, Linux PDF compression may run in basic mode until resources are downloaded again.';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.confirm':
         return 'Delete';
       case 'settings.mediaAnnotation.audioTranscribe.title':
         return 'Audio transcription';
@@ -8634,7 +8375,7 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.title':
         return '媒体理解';
       case 'settings.mediaAnnotation.subtitle':
-        return '可选：OCR、图片注释、音频转写与 PDF 压缩，增强检索与存储体验';
+        return '可选：OCR、图片注释与音频转写，增强检索与存储体验';
       case 'settings.mediaAnnotation.routingGuide.title':
         return '先选择 AI 来源';
       case 'settings.mediaAnnotation.routingGuide.pro':
@@ -8705,35 +8446,6 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.body':
         return '删除后，桌面端本地 OCR 可能不可用，直到再次下载。';
       case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.confirm':
-        return '删除';
-      case 'settings.mediaAnnotation.pdfCompression.title':
-        return 'PDF 智能压缩';
-      case 'settings.mediaAnnotation.pdfCompression.enabled.title':
-        return '智能压缩 PDF';
-      case 'settings.mediaAnnotation.pdfCompression.enabled.subtitle':
-        return '自动优化存储/上传的 PDF，无需额外配置。';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.title':
-        return 'Linux 压缩资源';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.subtitle':
-        return '为 Linux 桌面端下载增强本地 PDF 压缩资源。';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.notInstalled':
-        return '未安装';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.downloading':
-        return '下载中...';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.status.installed':
-        return ({required Object count, required Object size}) =>
-            '已安装：${count} 个文件（${size}）';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.download':
-        return '下载资源';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.redownload':
-        return '重新下载';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.actions.delete':
-        return '删除资源';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.title':
-        return '删除已下载压缩资源？';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.body':
-        return '删除后，Linux PDF 压缩可能退回基础模式，直到再次下载资源。';
-      case 'settings.mediaAnnotation.pdfCompression.linuxResources.confirmDelete.confirm':
         return '删除';
       case 'settings.mediaAnnotation.audioTranscribe.title':
         return '音频转写';

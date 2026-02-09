@@ -10,7 +10,6 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/content_enrichment/content_enrichment_config_store.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/content_enrichment/linux_ocr_model_store.dart';
-import 'package:secondloop/core/content_enrichment/linux_pdf_compress_resource_store.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/media_annotation/media_annotation_config_store.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -20,6 +19,8 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 import 'test_backend.dart';
+
+part 'media_annotation_settings_smoke_ocr_cases.dart';
 
 final class _FakeMediaAnnotationConfigStore
     implements MediaAnnotationConfigStore {
@@ -129,51 +130,6 @@ final class _FakeLinuxOcrModelStore implements LinuxOcrModelStore {
   Future<String?> readInstalledModelDir() async => status.modelDirPath;
 }
 
-final class _FakeLinuxPdfCompressResourceStore
-    implements LinuxPdfCompressResourceStore {
-  _FakeLinuxPdfCompressResourceStore({
-    required this.status,
-  });
-
-  LinuxPdfCompressResourceStatus status;
-  int downloadCalls = 0;
-  int deleteCalls = 0;
-
-  @override
-  Future<LinuxPdfCompressResourceStatus> readStatus() async => status;
-
-  @override
-  Future<LinuxPdfCompressResourceStatus> downloadResources() async {
-    downloadCalls += 1;
-    status = const LinuxPdfCompressResourceStatus(
-      supported: true,
-      installed: true,
-      resourceDirPath: '/tmp/secondloop-pdf-compress-resource',
-      fileCount: 2,
-      totalBytes: 2048,
-      source: LinuxPdfCompressResourceSource.downloaded,
-    );
-    return status;
-  }
-
-  @override
-  Future<LinuxPdfCompressResourceStatus> deleteResources() async {
-    deleteCalls += 1;
-    status = const LinuxPdfCompressResourceStatus(
-      supported: true,
-      installed: false,
-      resourceDirPath: null,
-      fileCount: 0,
-      totalBytes: 0,
-      source: LinuxPdfCompressResourceSource.none,
-    );
-    return status;
-  }
-
-  @override
-  Future<String?> readInstalledResourceDir() async => status.resourceDirPath;
-}
-
 final class _FakeSubscriptionController extends ChangeNotifier
     implements SubscriptionStatusController {
   _FakeSubscriptionController(this._status);
@@ -230,7 +186,6 @@ ContentEnrichmentConfig _defaultContentConfig({
     urlFetchEnabled: true,
     documentExtractEnabled: true,
     documentKeepOriginalMaxBytes: 104857600,
-    pdfSmartCompressEnabled: mediaUnderstandingEnabled,
     audioTranscribeEnabled: mediaUnderstandingEnabled,
     audioTranscribeEngine: 'whisper',
     videoExtractEnabled: true,
@@ -254,7 +209,6 @@ Future<void> _pumpPage(
   required _FakeMediaAnnotationConfigStore store,
   required _FakeContentEnrichmentConfigStore contentStore,
   LinuxOcrModelStore? linuxOcrModelStore,
-  LinuxPdfCompressResourceStore? linuxPdfCompressResourceStore,
   SubscriptionStatus subscriptionStatus = SubscriptionStatus.unknown,
   CloudAuthController? cloudAuthController,
   String cloudGatewayBaseUrl = 'https://gateway.test',
@@ -267,7 +221,6 @@ Future<void> _pumpPage(
         configStore: store,
         contentConfigStore: contentStore,
         linuxOcrModelStore: linuxOcrModelStore,
-        linuxPdfCompressResourceStore: linuxPdfCompressResourceStore,
       ),
     ),
   );
@@ -333,10 +286,6 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(MediaAnnotationSettingsPage.pdfCompressSwitchKey),
-      findsNothing,
-    );
-    expect(
       find.byKey(MediaAnnotationSettingsPage.annotateSwitchKey),
       findsNothing,
     );
@@ -367,6 +316,8 @@ void main() {
     expect(find.text('先选择 AI 来源'), findsNothing);
   });
 
+  _registerOcrModeTests();
+
   testWidgets('Turning off media understanding hides detailed settings',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -396,13 +347,11 @@ void main() {
     expect(store.writes.last.searchEnabled, isFalse);
     expect(contentStore.writes.last.audioTranscribeEnabled, isFalse);
     expect(contentStore.writes.last.ocrEnabled, isFalse);
-    expect(contentStore.writes.last.pdfSmartCompressEnabled, isFalse);
     expect(
       find.byKey(MediaAnnotationSettingsPage.wifiOnlySwitchKey),
       findsNothing,
     );
     expect(find.text('Audio transcription'), findsNothing);
-    expect(find.text('PDF smart compression'), findsNothing);
     expect(find.text('Image caption provider'), findsNothing);
   });
 
@@ -435,7 +384,6 @@ void main() {
     expect(store.writes.last.searchEnabled, isTrue);
     expect(contentStore.writes.last.audioTranscribeEnabled, isTrue);
     expect(contentStore.writes.last.ocrEnabled, isTrue);
-    expect(contentStore.writes.last.pdfSmartCompressEnabled, isTrue);
   });
 
   testWidgets('Pro users see Use SecondLoop Cloud switch', (tester) async {
@@ -572,9 +520,15 @@ void main() {
     await tester.tap(configureApiTile);
     await tester.pumpAndSettle();
 
-    expect(find.text('Open Cloud account'), findsNothing);
-    expect(find.textContaining('SecondLoop Cloud'), findsNothing);
     final dialog = find.byType(SimpleDialog);
+    expect(find.text('Open Cloud account'), findsNothing);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.textContaining('SecondLoop Cloud'),
+      ),
+      findsNothing,
+    );
     expect(
       find.descendant(of: dialog, matching: find.text('Follow Ask AI')),
       findsOneWidget,
@@ -583,40 +537,6 @@ void main() {
         findsOneWidget);
     expect(find.text('Gemini'), findsNothing);
   });
-
-  testWidgets('PDF smart compression settings are hidden', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final store = _FakeMediaAnnotationConfigStore(
-      _defaultMediaConfig(mediaUnderstandingEnabled: true),
-    );
-    final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(mediaUnderstandingEnabled: true),
-    );
-
-    await _pumpPage(
-      tester,
-      store: store,
-      contentStore: contentStore,
-      linuxPdfCompressResourceStore: _FakeLinuxPdfCompressResourceStore(
-        status: const LinuxPdfCompressResourceStatus(
-          supported: true,
-          installed: true,
-          resourceDirPath: '/tmp/secondloop-pdf-compress-resource',
-          fileCount: 2,
-          totalBytes: 2048,
-          source: LinuxPdfCompressResourceSource.downloaded,
-        ),
-      ),
-    );
-
-    expect(find.text('PDF smart compression'), findsNothing);
-    expect(
-      find.byKey(MediaAnnotationSettingsPage.linuxPdfCompressResourceTileKey),
-      findsNothing,
-    );
-  });
-
   testWidgets('Non-Pro users do not see Use SecondLoop Cloud switch',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -935,50 +855,5 @@ void main() {
       find.textContaining('linux_ocr_runtime_exec_not_permitted'),
       findsAtLeastNWidgets(1),
     );
-  });
-
-  testWidgets('Linux PDF compression runtime controls are hidden',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final store = _FakeMediaAnnotationConfigStore(
-      _defaultMediaConfig(mediaUnderstandingEnabled: true),
-    );
-    final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(mediaUnderstandingEnabled: true),
-    );
-    final linuxPdfStore = _FakeLinuxPdfCompressResourceStore(
-      status: const LinuxPdfCompressResourceStatus(
-        supported: true,
-        installed: false,
-        resourceDirPath: null,
-        fileCount: 0,
-        totalBytes: 0,
-        source: LinuxPdfCompressResourceSource.none,
-      ),
-    );
-
-    await _pumpPage(
-      tester,
-      store: store,
-      contentStore: contentStore,
-      linuxPdfCompressResourceStore: linuxPdfStore,
-    );
-    expect(
-      find.byKey(MediaAnnotationSettingsPage.linuxPdfCompressResourceTileKey),
-      findsNothing,
-    );
-    expect(
-      find.byKey(MediaAnnotationSettingsPage
-          .linuxPdfCompressResourceDownloadButtonKey),
-      findsNothing,
-    );
-    expect(
-      find.byKey(
-          MediaAnnotationSettingsPage.linuxPdfCompressResourceDeleteButtonKey),
-      findsNothing,
-    );
-    expect(linuxPdfStore.downloadCalls, 0);
-    expect(linuxPdfStore.deleteCalls, 0);
   });
 }

@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::blocking::Client;
+use reqwest::header;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+const OCR_MARKDOWN_LANG_PREFIX: &str = "ocr_markdown:";
 
 pub fn cloud_gateway_chat_completions_url(gateway_base_url: &str) -> String {
     format!(
@@ -20,6 +23,13 @@ struct MediaAnnotationChatCompletionsRequest {
     model: String,
     messages: Vec<MediaAnnotationChatMessage>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream_options: Option<MediaAnnotationStreamOptions>,
+}
+
+#[derive(Debug, Serialize)]
+struct MediaAnnotationStreamOptions {
+    include_usage: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,8 +138,40 @@ struct OpenAiUsage {
 
 fn annotation_prompt(lang: &str) -> String {
     format!(
-        "Describe the image and respond ONLY as JSON with keys: caption_long (string), tags (array of strings), ocr_text (string|null). Language: {lang}."
+        "Describe the image and respond ONLY as JSON with keys: caption_long (string), tags (array of strings), ocr_text (string|null). If ocr_text is present, it must be Markdown that preserves layout as much as possible. Language: {lang}."
     )
+}
+
+fn ocr_markdown_prompt(lang: &str) -> String {
+    format!(
+        "Perform OCR on the provided file/image and respond ONLY as JSON with keys: caption_long (string), tags (array of strings), ocr_text (string|null). Put recognized text in ocr_text using Markdown and preserve original layout as much as possible (headings, lists, tables, line breaks). If no readable text exists, set ocr_text to null. Language: {lang}. Do not wrap JSON in markdown fences."
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MediaAnnotationPromptMode {
+    Annotation,
+    OcrMarkdown,
+}
+
+fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, String) {
+    let trimmed = raw_lang.trim();
+    if let Some(rest) = trimmed.strip_prefix(OCR_MARKDOWN_LANG_PREFIX) {
+        let normalized = rest.trim();
+        if normalized.is_empty() {
+            return (MediaAnnotationPromptMode::OcrMarkdown, "und".to_string());
+        }
+        return (
+            MediaAnnotationPromptMode::OcrMarkdown,
+            normalized.to_string(),
+        );
+    }
+
+    if trimmed.is_empty() {
+        return (MediaAnnotationPromptMode::Annotation, "und".to_string());
+    }
+
+    (MediaAnnotationPromptMode::Annotation, trimmed.to_string())
 }
 
 #[derive(Clone, Debug)]
@@ -144,7 +186,10 @@ fn build_request(
     lang: &str,
     mime_type: &str,
     image_bytes: &[u8],
-) -> Result<MediaAnnotationChatCompletionsRequest> {
+) -> Result<(
+    MediaAnnotationChatCompletionsRequest,
+    MediaAnnotationPromptMode,
+)> {
     if image_bytes.is_empty() {
         return Err(anyhow!("image_bytes is empty"));
     }
@@ -156,28 +201,142 @@ fn build_request(
     if model_name.is_empty() {
         return Err(anyhow!("model_name is required"));
     }
+    let (prompt_mode, normalized_lang) = parse_prompt_mode_and_lang(lang);
 
     let image_b64 = STANDARD.encode(image_bytes);
     let data_url = format!("data:{mime_type};base64,{image_b64}");
+    let prompt = match prompt_mode {
+        MediaAnnotationPromptMode::Annotation => annotation_prompt(&normalized_lang),
+        MediaAnnotationPromptMode::OcrMarkdown => ocr_markdown_prompt(&normalized_lang),
+    };
 
-    Ok(MediaAnnotationChatCompletionsRequest {
-        model: model_name.to_string(),
-        messages: vec![MediaAnnotationChatMessage {
-            role: "user".to_string(),
-            content: vec![
-                MediaAnnotationChatContentPart::Text {
-                    text: annotation_prompt(lang),
-                },
-                MediaAnnotationChatContentPart::ImageUrl {
-                    image_url: MediaAnnotationImageUrl { url: data_url },
-                },
-            ],
-        }],
-        stream: false,
-    })
+    Ok((
+        MediaAnnotationChatCompletionsRequest {
+            model: model_name.to_string(),
+            messages: vec![MediaAnnotationChatMessage {
+                role: "user".to_string(),
+                content: vec![
+                    MediaAnnotationChatContentPart::Text { text: prompt },
+                    MediaAnnotationChatContentPart::ImageUrl {
+                        image_url: MediaAnnotationImageUrl { url: data_url },
+                    },
+                ],
+            }],
+            stream: true,
+            stream_options: Some(MediaAnnotationStreamOptions {
+                include_usage: true,
+            }),
+        },
+        prompt_mode,
+    ))
 }
 
-fn parse_response(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
+fn extract_text_from_json_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items
+            .iter()
+            .map(extract_text_from_json_value)
+            .collect::<Vec<_>>()
+            .join(""),
+        Value::Object(map) => {
+            let from_text = map
+                .get("text")
+                .map(extract_text_from_json_value)
+                .unwrap_or_default();
+            if !from_text.is_empty() {
+                return from_text;
+            }
+            map.get("content")
+                .map(extract_text_from_json_value)
+                .unwrap_or_default()
+        }
+        _ => String::new(),
+    }
+}
+
+fn extract_stream_delta_text(value: &Value) -> String {
+    if let Some(content) = value.pointer("/choices/0/delta/content") {
+        let out = extract_text_from_json_value(content);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(content) = value.pointer("/choices/0/message/content") {
+        let out = extract_text_from_json_value(content);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(content) = value.pointer("/output/0/content") {
+        let out = extract_text_from_json_value(content);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(text) = value.pointer("/choices/0/delta/text") {
+        let out = extract_text_from_json_value(text);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(delta) = value.get("delta") {
+        let out = extract_text_from_json_value(delta);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(text) = value.get("text") {
+        let out = extract_text_from_json_value(text);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(output_text) = value.get("output_text") {
+        let out = extract_text_from_json_value(output_text);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    String::new()
+}
+
+fn usage_from_openai_usage(usage: OpenAiUsage) -> MediaAnnotationUsage {
+    let total = usage.total_tokens.or_else(|| {
+        let input = usage.prompt_tokens.unwrap_or(0);
+        let output = usage.completion_tokens.unwrap_or(0);
+        if input == 0 && output == 0 {
+            None
+        } else {
+            Some(input + output)
+        }
+    });
+    MediaAnnotationUsage {
+        input_tokens: usage.prompt_tokens,
+        output_tokens: usage.completion_tokens,
+        total_tokens: total,
+    }
+}
+
+fn parse_usage_from_json(value: &Value) -> Option<MediaAnnotationUsage> {
+    let parsed = serde_json::from_value::<OpenAiUsage>(value.clone()).ok()?;
+    let usage = usage_from_openai_usage(parsed);
+    if usage.input_tokens.is_none() && usage.output_tokens.is_none() && usage.total_tokens.is_none()
+    {
+        return None;
+    }
+    Some(usage)
+}
+
+fn default_usage() -> MediaAnnotationUsage {
+    MediaAnnotationUsage {
+        input_tokens: None,
+        output_tokens: None,
+        total_tokens: None,
+    }
+}
+
+fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     let parsed: MediaAnnotationChatCompletionsResponse =
         serde_json::from_str(body).map_err(|e| anyhow!("invalid chat completions json: {e}"))?;
 
@@ -196,20 +355,75 @@ fn parse_response(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     let payload: Value = serde_json::from_str(&normalized)
         .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
 
-    let usage = parsed.usage.map(|u| MediaAnnotationUsage {
-        input_tokens: u.prompt_tokens,
-        output_tokens: u.completion_tokens,
-        total_tokens: u.total_tokens,
-    });
+    let usage = parsed.usage.map(usage_from_openai_usage);
 
-    Ok((
-        payload,
-        usage.unwrap_or(MediaAnnotationUsage {
-            input_tokens: None,
-            output_tokens: None,
-            total_tokens: None,
-        }),
-    ))
+    Ok((payload, usage.unwrap_or_else(default_usage)))
+}
+
+fn parse_response_sse(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
+    let mut data_lines: Vec<String> = Vec::new();
+    let mut all_text = String::new();
+    let mut usage: Option<MediaAnnotationUsage> = None;
+
+    let mut process_event = |lines: &mut Vec<String>| {
+        if lines.is_empty() {
+            return;
+        }
+        let payload = lines.join("\n");
+        lines.clear();
+
+        let trimmed = payload.trim();
+        if trimmed.is_empty() || trimmed == "[DONE]" {
+            return;
+        }
+
+        let value: Value = match serde_json::from_str(trimmed) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        if let Some(raw_usage) = value.get("usage") {
+            if let Some(parsed_usage) = parse_usage_from_json(raw_usage) {
+                usage = Some(parsed_usage);
+            }
+        }
+
+        let delta = extract_stream_delta_text(&value);
+        if !delta.is_empty() {
+            all_text.push_str(&delta);
+        }
+    };
+
+    for line in body.lines() {
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() {
+            process_event(&mut data_lines);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("data:") {
+            data_lines.push(rest.trim().to_string());
+        }
+    }
+    process_event(&mut data_lines);
+
+    let normalized = normalize_annotation_content(all_text);
+    if normalized.trim().is_empty() {
+        return Err(anyhow!("annotation stream returned empty content"));
+    }
+    let payload: Value = serde_json::from_str(&normalized)
+        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
+
+    Ok((payload, usage.unwrap_or_else(default_usage)))
+}
+
+fn parse_response(body: &str, content_type: &str) -> Result<(Value, MediaAnnotationUsage)> {
+    if content_type
+        .to_ascii_lowercase()
+        .contains("text/event-stream")
+    {
+        return parse_response_sse(body);
+    }
+    parse_response_json(body)
 }
 
 pub struct CloudGatewayMediaAnnotationClient {
@@ -230,14 +444,19 @@ impl CloudGatewayMediaAnnotationClient {
     }
 
     pub fn annotate_image(&self, lang: &str, mime_type: &str, image_bytes: &[u8]) -> Result<Value> {
-        let req = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let purpose = match prompt_mode {
+            MediaAnnotationPromptMode::Annotation => "media_annotation",
+            MediaAnnotationPromptMode::OcrMarkdown => "ask_ai",
+        };
 
         let url = cloud_gateway_chat_completions_url(&self.gateway_base_url);
         let resp = self
             .client
             .post(url)
             .bearer_auth(&self.id_token)
-            .header("x-secondloop-purpose", "media_annotation")
+            .header("x-secondloop-purpose", purpose)
+            .header(header::ACCEPT, "text/event-stream")
             .json(&req)
             .send()?;
 
@@ -249,8 +468,14 @@ impl CloudGatewayMediaAnnotationClient {
             ));
         }
 
+        let content_type = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
         let body = resp.text().unwrap_or_default();
-        let (payload, _usage) = parse_response(&body)?;
+        let (payload, _usage) = parse_response(&body, &content_type)?;
         Ok(payload)
     }
 }
@@ -278,13 +503,14 @@ impl OpenAiCompatibleMediaAnnotationClient {
         mime_type: &str,
         image_bytes: &[u8],
     ) -> Result<(Value, MediaAnnotationUsage)> {
-        let req = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let (req, _prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
 
         let url = openai_compatible_chat_completions_url(&self.base_url);
         let resp = self
             .client
             .post(url)
             .bearer_auth(&self.api_key)
+            .header(header::ACCEPT, "text/event-stream")
             .json(&req)
             .send()?;
 
@@ -296,7 +522,13 @@ impl OpenAiCompatibleMediaAnnotationClient {
             ));
         }
 
+        let content_type = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
         let body = resp.text().unwrap_or_default();
-        parse_response(&body)
+        parse_response(&body, &content_type)
     }
 }

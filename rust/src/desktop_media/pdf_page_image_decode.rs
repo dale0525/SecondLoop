@@ -60,27 +60,39 @@ pub(super) fn collect_page_image_candidates(
     out
 }
 
-pub(super) fn decode_pdf_image_to_rgb(
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PdfImageDecodeFailureReason {
+    InvalidDimensions,
+    StreamUnavailable,
+    UnsupportedColorSpace,
+    UnsupportedBitsPerComponent,
+    DecodeFailed,
+}
+
+pub(super) fn decode_pdf_image_to_rgb_with_reason(
     doc: &Document,
     candidate: PdfImageCandidate,
-) -> Option<RgbImage> {
+) -> Result<RgbImage, PdfImageDecodeFailureReason> {
     if candidate.width <= 0 || candidate.height <= 0 {
-        return None;
+        return Err(PdfImageDecodeFailureReason::InvalidDimensions);
     }
 
-    let width_u32 = u32::try_from(candidate.width).ok()?;
-    let height_u32 = u32::try_from(candidate.height).ok()?;
+    let width_u32 = u32::try_from(candidate.width)
+        .map_err(|_| PdfImageDecodeFailureReason::InvalidDimensions)?;
+    let height_u32 = u32::try_from(candidate.height)
+        .map_err(|_| PdfImageDecodeFailureReason::InvalidDimensions)?;
     if width_u32 == 0 || height_u32 == 0 {
-        return None;
+        return Err(PdfImageDecodeFailureReason::InvalidDimensions);
     }
     if width_u32 > 40_000 || height_u32 > 40_000 {
-        return None;
+        return Err(PdfImageDecodeFailureReason::InvalidDimensions);
     }
 
     let stream = doc
         .get_object(candidate.object_id)
         .ok()
-        .and_then(|o| o.as_stream().ok())?;
+        .and_then(|o| o.as_stream().ok())
+        .ok_or(PdfImageDecodeFailureReason::StreamUnavailable)?;
 
     let filters = stream
         .dict
@@ -93,11 +105,11 @@ pub(super) fn decode_pdf_image_to_rgb(
     let decoded_stream_bytes = decode_image_stream_bytes(stream);
     if has_encoded_filter {
         if let Ok(decoded) = image::load_from_memory(&stream.content) {
-            return Some(decoded.to_rgb8());
+            return Ok(decoded.to_rgb8());
         }
         if decoded_stream_bytes.as_slice() != stream.content.as_slice() {
             if let Ok(decoded) = image::load_from_memory(&decoded_stream_bytes) {
-                return Some(decoded.to_rgb8());
+                return Ok(decoded.to_rgb8());
             }
         }
     }
@@ -109,14 +121,20 @@ pub(super) fn decode_pdf_image_to_rgb(
         .and_then(|v| v.as_i64().ok())
         .unwrap_or(8);
 
-    let color_space = color_space_name(&stream.dict);
+    let color_space = color_space_name(doc, &stream.dict);
     let raw = decoded_stream_bytes;
 
-    match color_space.as_deref() {
-        Some("DeviceRGB") if bits_per_component == 8 => {
+    let decoded = match color_space.as_deref() {
+        Some("DeviceRGB") => {
+            if bits_per_component != 8 {
+                return Err(PdfImageDecodeFailureReason::UnsupportedBitsPerComponent);
+            }
             decode_device_rgb_8bit(&raw, width_u32, height_u32)
         }
-        Some("DeviceCMYK") if bits_per_component == 8 => {
+        Some("DeviceCMYK") => {
+            if bits_per_component != 8 {
+                return Err(PdfImageDecodeFailureReason::UnsupportedBitsPerComponent);
+            }
             decode_device_cmyk_8bit(&raw, width_u32, height_u32)
         }
         Some("DeviceGray") => {
@@ -124,11 +142,13 @@ pub(super) fn decode_pdf_image_to_rgb(
             match bits_per_component {
                 8 => decode_device_gray_8bit(&raw, width_u32, height_u32, invert),
                 1 => decode_device_gray_1bit(&raw, width_u32, height_u32, invert),
-                _ => None,
+                _ => return Err(PdfImageDecodeFailureReason::UnsupportedBitsPerComponent),
             }
         }
-        _ => None,
-    }
+        _ => return Err(PdfImageDecodeFailureReason::UnsupportedColorSpace),
+    };
+
+    decoded.ok_or(PdfImageDecodeFailureReason::DecodeFailed)
 }
 
 fn collect_images_from_resources_object(
@@ -254,21 +274,53 @@ fn extract_filter_names(value: &Object) -> Option<Vec<String>> {
     }
 }
 
-fn color_space_name(dict: &Dictionary) -> Option<String> {
+fn color_space_name(doc: &Document, dict: &Dictionary) -> Option<String> {
     let value = dict.get(b"ColorSpace").ok()?;
-    let name = match value {
-        Object::Name(name) => String::from_utf8_lossy(name).to_string(),
+    color_space_name_from_object(doc, value)
+}
+
+fn color_space_name_from_object(doc: &Document, value: &Object) -> Option<String> {
+    match value {
+        Object::Name(name) => Some(normalize_pdf_name(name)),
+        Object::Reference(id) => doc
+            .get_object(*id)
+            .ok()
+            .and_then(|obj| color_space_name_from_object(doc, obj)),
         Object::Array(arr) => {
-            let first = arr.first()?;
-            let name = first.as_name().ok()?;
-            String::from_utf8_lossy(name).to_string()
+            let first_name = arr.first()?.as_name().ok()?;
+            let first = normalize_pdf_name(first_name);
+            if first == "ICCBased" {
+                let channels = arr
+                    .get(1)
+                    .and_then(|profile| iccbased_channel_count(doc, profile));
+                return match channels {
+                    Some(1) => Some("DeviceGray".to_string()),
+                    Some(3) => Some("DeviceRGB".to_string()),
+                    Some(4) => Some("DeviceCMYK".to_string()),
+                    _ => None,
+                };
+            }
+            Some(first)
         }
-        _ => return None,
-    };
-    if let Some(stripped) = name.strip_prefix('/') {
-        return Some(stripped.to_string());
+        _ => None,
     }
-    Some(name)
+}
+
+fn iccbased_channel_count(doc: &Document, object: &Object) -> Option<i64> {
+    match object {
+        Object::Reference(id) => doc
+            .get_object(*id)
+            .ok()
+            .and_then(|obj| iccbased_channel_count(doc, obj)),
+        Object::Stream(stream) => stream.dict.get(b"N").ok().and_then(|v| v.as_i64().ok()),
+        Object::Dictionary(dict) => dict.get(b"N").ok().and_then(|v| v.as_i64().ok()),
+        _ => None,
+    }
+}
+
+fn normalize_pdf_name(name: &[u8]) -> String {
+    let raw = String::from_utf8_lossy(name);
+    raw.strip_prefix('/').unwrap_or(&raw).to_string()
 }
 
 fn is_gray_decode_inverted(dict: &Dictionary) -> bool {
@@ -421,7 +473,7 @@ mod tests {
         assert!(stream.dict.get(b"Filter").is_ok());
         doc.objects.insert(image_id, Object::Stream(stream));
 
-        let rgb = decode_pdf_image_to_rgb(
+        let rgb = decode_pdf_image_to_rgb_with_reason(
             &doc,
             PdfImageCandidate {
                 object_id: image_id,
@@ -476,6 +528,54 @@ mod tests {
         assert_eq!(candidates[0].object_id, image_id);
         assert_eq!(candidates[0].width, 120);
         assert_eq!(candidates[0].height, 80);
+    }
+
+    #[test]
+    fn decode_pdf_image_to_rgb_supports_iccbased_rgb_stream() {
+        let mut doc = Document::new();
+        let image_id: ObjectId = (30, 0);
+        let profile_id: ObjectId = (31, 0);
+
+        let mut profile_dict = Dictionary::new();
+        profile_dict.set("N", Object::Integer(3));
+        doc.objects.insert(
+            profile_id,
+            Object::Stream(Stream::new(profile_dict, vec![])),
+        );
+
+        let width = 1i64;
+        let height = 1i64;
+        let raw = vec![12u8, 34u8, 56u8];
+
+        let mut image_dict = Dictionary::new();
+        image_dict.set("Subtype", Object::Name(b"Image".to_vec()));
+        image_dict.set("Width", Object::Integer(width));
+        image_dict.set("Height", Object::Integer(height));
+        image_dict.set(
+            "ColorSpace",
+            Object::Array(vec![
+                Object::Name(b"ICCBased".to_vec()),
+                Object::Reference(profile_id),
+            ]),
+        );
+        image_dict.set("BitsPerComponent", Object::Integer(8));
+
+        doc.objects
+            .insert(image_id, Object::Stream(Stream::new(image_dict, raw)));
+
+        let rgb = decode_pdf_image_to_rgb_with_reason(
+            &doc,
+            PdfImageCandidate {
+                object_id: image_id,
+                width,
+                height,
+            },
+        )
+        .expect("decode ICCBased rgb image stream");
+
+        assert_eq!(rgb.width(), 1);
+        assert_eq!(rgb.height(), 1);
+        assert_eq!(rgb.get_pixel(0, 0).0, [12, 34, 56]);
     }
 
     #[test]

@@ -332,7 +332,6 @@ class ContentEnrichmentConfig {
   final bool urlFetchEnabled;
   final bool documentExtractEnabled;
   final PlatformInt64 documentKeepOriginalMaxBytes;
-  final bool pdfSmartCompressEnabled;
   final bool audioTranscribeEnabled;
   final String audioTranscribeEngine;
   final bool videoExtractEnabled;
@@ -353,7 +352,6 @@ class ContentEnrichmentConfig {
     required this.urlFetchEnabled,
     required this.documentExtractEnabled,
     required this.documentKeepOriginalMaxBytes,
-    required this.pdfSmartCompressEnabled,
     required this.audioTranscribeEnabled,
     required this.audioTranscribeEngine,
     required this.videoExtractEnabled,
@@ -376,7 +374,6 @@ class ContentEnrichmentConfig {
       urlFetchEnabled.hashCode ^
       documentExtractEnabled.hashCode ^
       documentKeepOriginalMaxBytes.hashCode ^
-      pdfSmartCompressEnabled.hashCode ^
       audioTranscribeEnabled.hashCode ^
       audioTranscribeEngine.hashCode ^
       videoExtractEnabled.hashCode ^
@@ -401,7 +398,6 @@ class ContentEnrichmentConfig {
           urlFetchEnabled == other.urlFetchEnabled &&
           documentExtractEnabled == other.documentExtractEnabled &&
           documentKeepOriginalMaxBytes == other.documentKeepOriginalMaxBytes &&
-          pdfSmartCompressEnabled == other.pdfSmartCompressEnabled &&
           audioTranscribeEnabled == other.audioTranscribeEnabled &&
           audioTranscribeEngine == other.audioTranscribeEngine &&
           videoExtractEnabled == other.videoExtractEnabled &&

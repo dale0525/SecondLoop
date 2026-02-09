@@ -245,19 +245,10 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       shaToLink = attachment.sha256;
       shaToBackup = attachment.sha256;
     } else {
-      final pdfIngest = await compressPdfForIngest(
-        rawBytes,
-        mimeType: normalizedMimeType,
-        readPdfSmartCompressEnabled: () async {
-          final config = await const RustContentEnrichmentConfigStore()
-              .readContentEnrichment(sessionKey);
-          return config.pdfSmartCompressEnabled;
-        },
-      );
       final attachment = await backend.insertAttachment(
         sessionKey,
-        bytes: pdfIngest.bytes,
-        mimeType: pdfIngest.mimeType,
+        bytes: rawBytes,
+        mimeType: normalizedMimeType,
       );
       shaToLink = attachment.sha256;
       shaToBackup = attachment.sha256;

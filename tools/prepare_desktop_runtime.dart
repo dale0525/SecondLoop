@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:archive/archive.dart';
 
+import 'prepare_desktop_runtime_hash_lib.dart';
+
 const _runtimeTagPrefix = 'desktop-runtime-';
 const _runtimeTagPattern =
     r'^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$';
@@ -530,17 +532,13 @@ Future<String?> _computeSha256(String filePath) async {
   if (await _hasCommand('sha256sum')) {
     final result = await Process.run('sha256sum', <String>[filePath]);
     if (result.exitCode != 0) return null;
-    final text = '${result.stdout}'.trim();
-    if (text.isEmpty) return null;
-    return text.split(RegExp(r'\s+')).first;
+    return extractSha256FromCommandOutput('${result.stdout}');
   }
 
   if (await _hasCommand('shasum')) {
     final result = await Process.run('shasum', <String>['-a', '256', filePath]);
     if (result.exitCode != 0) return null;
-    final text = '${result.stdout}'.trim();
-    if (text.isEmpty) return null;
-    return text.split(RegExp(r'\s+')).first;
+    return extractSha256FromCommandOutput('${result.stdout}');
   }
 
   if (await _hasCommand('certutil')) {
@@ -550,17 +548,7 @@ Future<String?> _computeSha256(String filePath) async {
       'SHA256',
     ]);
     if (result.exitCode != 0) return null;
-    final lines = '${result.stdout}'
-        .split('\n')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList(growable: false);
-    for (final line in lines) {
-      final sanitized = line.replaceAll(' ', '');
-      if (RegExp(r'^[A-Fa-f0-9]{64}$').hasMatch(sanitized)) {
-        return sanitized;
-      }
-    }
+    return extractSha256FromCommandOutput('${result.stdout}');
   }
 
   return null;

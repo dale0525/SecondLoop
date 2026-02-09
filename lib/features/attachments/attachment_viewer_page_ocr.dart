@@ -150,6 +150,9 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
     if (backendAny is! NativeAppBackend) return;
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
     final now = DateTime.now().millisecondsSinceEpoch;
     final localeTag = Localizations.localeOf(context).toLanguageTag();
 
@@ -173,7 +176,57 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       const dpi = 180;
       final languageHints = _effectiveDocumentOcrLanguageHints;
       final bytes = await (_bytesFuture ??= _loadBytes());
-      final platformOcr = await PlatformPdfOcr.tryOcrPdfBytes(
+      ContentEnrichmentConfig? contentConfig;
+      try {
+        contentConfig = await const RustContentEnrichmentConfigStore()
+            .readContentEnrichment(sessionKey);
+      } catch (_) {
+        contentConfig = null;
+      }
+      final mediaConfig = await const RustMediaAnnotationConfigStore()
+          .read(sessionKey)
+          .catchError(
+            (_) => const MediaAnnotationConfig(
+              annotateEnabled: false,
+              searchEnabled: false,
+              allowCellular: false,
+              providerMode: 'follow_ask_ai',
+            ),
+          );
+      final llmProfiles =
+          await backend.listLlmProfiles(sessionKey).catchError((_) {
+        return const <LlmProfile>[];
+      });
+      final gatewayConfig =
+          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      String? idToken;
+      if (subscriptionStatus == SubscriptionStatus.entitled) {
+        try {
+          idToken = await cloudAuthScope?.controller.getIdToken();
+        } catch (_) {
+          idToken = null;
+        }
+      }
+      final ocrMode =
+          normalizeOcrEngineMode(contentConfig?.ocrEngineMode ?? '');
+      final pageCountHint = asInt(existingPayload['page_count']) ?? 1;
+      PlatformPdfOcrResult? platformOcr;
+      if (ocrMode == 'multimodal_llm') {
+        platformOcr = await tryConfiguredMultimodalPdfOcr(
+          backend: backend,
+          sessionKey: sessionKey,
+          pdfBytes: bytes,
+          pageCountHint: pageCountHint,
+          languageHints: languageHints,
+          subscriptionStatus: subscriptionStatus,
+          mediaAnnotationConfig: mediaConfig,
+          llmProfiles: llmProfiles,
+          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+          cloudIdToken: idToken?.trim() ?? '',
+          cloudModelName: gatewayConfig.modelName,
+        );
+      }
+      platformOcr ??= await PlatformPdfOcr.tryOcrPdfBytes(
         bytes,
         maxPages: maxPages,
         dpi: dpi,

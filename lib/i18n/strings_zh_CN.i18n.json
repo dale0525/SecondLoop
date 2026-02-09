@@ -265,7 +265,7 @@
     },
     "mediaAnnotation": {
       "title": "媒体理解",
-      "subtitle": "可选：OCR、图片注释、音频转写与 PDF 压缩，增强检索与存储体验",
+      "subtitle": "可选：OCR、图片注释与音频转写，增强检索与存储体验",
       "routingGuide": {
         "title": "先选择 AI 来源",
         "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
@@ -319,32 +319,6 @@
           "confirmDelete": {
             "title": "删除已下载 OCR 模型？",
             "body": "删除后，桌面端本地 OCR 可能不可用，直到再次下载。",
-            "confirm": "删除"
-          }
-        }
-      },
-      "pdfCompression": {
-        "title": "PDF 智能压缩",
-        "enabled": {
-          "title": "智能压缩 PDF",
-          "subtitle": "自动优化存储/上传的 PDF，无需额外配置。"
-        },
-        "linuxResources": {
-          "title": "Linux 压缩资源",
-          "subtitle": "为 Linux 桌面端下载增强本地 PDF 压缩资源。",
-          "status": {
-            "notInstalled": "未安装",
-            "downloading": "下载中...",
-            "installed": "已安装：$count 个文件（$size）"
-          },
-          "actions": {
-            "download": "下载资源",
-            "redownload": "重新下载",
-            "delete": "删除资源"
-          },
-          "confirmDelete": {
-            "title": "删除已下载压缩资源？",
-            "body": "删除后，Linux PDF 压缩可能退回基础模式，直到再次下载资源。",
             "confirm": "删除"
           }
         }

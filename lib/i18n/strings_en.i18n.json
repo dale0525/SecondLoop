@@ -265,7 +265,7 @@
     },
     "mediaAnnotation": {
       "title": "Media understanding",
-      "subtitle": "Optional: OCR, image captions, audio transcripts, and PDF compression for better search/storage",
+      "subtitle": "Optional: OCR, image captions, and audio transcripts for better search/storage",
       "routingGuide": {
         "title": "Choose your AI source",
         "pro": "Pro + signed in: uses SecondLoop Cloud by default.",
@@ -319,32 +319,6 @@
           "confirmDelete": {
             "title": "Delete downloaded OCR models?",
             "body": "Local desktop OCR may stop working until models are downloaded again.",
-            "confirm": "Delete"
-          }
-        }
-      },
-      "pdfCompression": {
-        "title": "PDF smart compression",
-        "enabled": {
-          "title": "Smart-compress PDFs",
-          "subtitle": "Automatically optimize stored/uploaded PDFs without extra setup."
-        },
-        "linuxResources": {
-          "title": "Linux compression resources",
-          "subtitle": "Download enhanced local PDF compression resources for Linux desktop.",
-          "status": {
-            "notInstalled": "Not installed",
-            "downloading": "Downloading...",
-            "installed": "Installed: $count files ($size)"
-          },
-          "actions": {
-            "download": "Download resources",
-            "redownload": "Re-download",
-            "delete": "Delete resources"
-          },
-          "confirmDelete": {
-            "title": "Delete downloaded compression resources?",
-            "body": "After deletion, Linux PDF compression may run in basic mode until resources are downloaded again.",
             "confirm": "Delete"
           }
         }

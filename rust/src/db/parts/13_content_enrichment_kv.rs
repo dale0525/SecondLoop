@@ -36,10 +36,6 @@ pub fn ensure_content_enrichment_kv_defaults(conn: &Connection) -> Result<()> {
             (50i64 * 1024 * 1024).to_string(),
         ),
         (
-            "content_enrichment.pdf_smart_compress_enabled",
-            "1".to_string(),
-        ),
-        (
             "content_enrichment.audio_transcribe_enabled",
             "1".to_string(),
         ),
@@ -102,7 +98,6 @@ pub struct ContentEnrichmentConfig {
     pub url_fetch_enabled: bool,
     pub document_extract_enabled: bool,
     pub document_keep_original_max_bytes: i64,
-    pub pdf_smart_compress_enabled: bool,
     pub audio_transcribe_enabled: bool,
     pub audio_transcribe_engine: String,
     pub video_extract_enabled: bool,
@@ -159,7 +154,8 @@ fn normalize_audio_transcribe_engine(engine: &str) -> &'static str {
 
 fn normalize_ocr_engine_mode(mode: &str) -> &'static str {
     match mode.trim() {
-        "" | "platform_native" => "platform_native",
+        "" | "platform_native" | "auto" => "platform_native",
+        "multimodal_llm" => "multimodal_llm",
         _ => "platform_native",
     }
 }
@@ -176,9 +172,6 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
         mb50,
     )?
     .max(0);
-
-    let pdf_smart_compress_enabled =
-        kv_bool_or(conn, "content_enrichment.pdf_smart_compress_enabled", true)?;
 
     let audio_transcribe_enabled =
         kv_bool_or(conn, "content_enrichment.audio_transcribe_enabled", true)?;
@@ -245,7 +238,6 @@ pub fn get_content_enrichment_config(conn: &Connection) -> Result<ContentEnrichm
         url_fetch_enabled,
         document_extract_enabled,
         document_keep_original_max_bytes,
-        pdf_smart_compress_enabled,
         audio_transcribe_enabled,
         audio_transcribe_engine,
         video_extract_enabled,
@@ -297,16 +289,6 @@ pub fn set_content_enrichment_config(
                 .clamp(0, i64::MAX)
                 .to_string()
                 .as_str(),
-        )?;
-
-        kv_set_string(
-            conn,
-            "content_enrichment.pdf_smart_compress_enabled",
-            if config.pdf_smart_compress_enabled {
-                "1"
-            } else {
-                "0"
-            },
         )?;
 
         kv_set_string(

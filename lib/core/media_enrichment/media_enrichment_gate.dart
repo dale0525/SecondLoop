@@ -15,6 +15,7 @@ import '../backend/native_backend.dart';
 import '../attachments/attachment_metadata_store.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../content_enrichment/content_enrichment_config_store.dart';
+import '../content_enrichment/multimodal_ocr.dart';
 import '../content_enrichment/pdf_ocr_auto_policy.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
@@ -25,6 +26,8 @@ import 'media_enrichment_availability.dart';
 import '../../src/rust/api/media_annotation.dart' as rust_media_annotation;
 import '../../src/rust/db.dart';
 import '../../i18n/strings.g.dart';
+
+part 'media_enrichment_gate_clients.dart';
 
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});
@@ -172,6 +175,11 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     required NativeAppBackend backend,
     required Uint8List sessionKey,
     required ContentEnrichmentConfig? contentConfig,
+    required String ocrEngineMode,
+    required Future<PlatformPdfOcrResult?> Function(
+      Uint8List bytes, {
+      required int pageCount,
+    }) runMultimodalPdfOcr,
   }) async {
     if (!(contentConfig?.ocrEnabled ?? true)) return 0;
     // Auto OCR no longer enforces a user-facing page cap.
@@ -248,12 +256,20 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           continue;
         }
 
-        final ocr = await PlatformPdfOcr.tryOcrPdfBytes(
-          bytes,
-          maxPages: runMaxPages,
-          dpi: dpi,
-          languageHints: languageHints,
-        );
+        final ocr = ocrEngineMode == 'multimodal_llm'
+            ? (await runMultimodalPdfOcr(bytes, pageCount: pageCount) ??
+                await PlatformPdfOcr.tryOcrPdfBytes(
+                  bytes,
+                  maxPages: runMaxPages,
+                  dpi: dpi,
+                  languageHints: languageHints,
+                ))
+            : await PlatformPdfOcr.tryOcrPdfBytes(
+                bytes,
+                maxPages: runMaxPages,
+                dpi: dpi,
+                languageHints: languageHints,
+              );
 
         final updatedPayload = Map<String, Object?>.from(runningPayload);
         updatedPayload.remove('ocr_auto_running_ms');
@@ -490,6 +506,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final audioTranscribeByokProfile = effectiveOpenAiProfile();
       final audioTranscribeEnabled = audioTranscribeConfigured &&
           (audioTranscribeCloudAvailable || audioTranscribeByokProfile != null);
+      final ocrEngineMode =
+          normalizeOcrEngineMode(contentConfig?.ocrEngineMode ?? '');
 
       if (!geoReverseEnabled &&
           !annotationEnabled &&
@@ -561,6 +579,22 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
+            ocrEngineMode: ocrEngineMode,
+            runMultimodalPdfOcr: (bytes, {required pageCount}) {
+              return tryConfiguredMultimodalPdfOcr(
+                backend: backend,
+                sessionKey: Uint8List.fromList(sessionKey),
+                pdfBytes: bytes,
+                pageCountHint: pageCount,
+                languageHints: 'device_plus_en',
+                subscriptionStatus: subscriptionStatus,
+                mediaAnnotationConfig: mediaAnnotationConfig,
+                llmProfiles: llmProfiles,
+                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+                cloudIdToken: idToken?.trim() ?? '',
+                cloudModelName: gatewayConfig.modelName,
+              );
+            },
           );
         } catch (_) {
           processedAutoPdfOcr = 0;
@@ -713,270 +747,4 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
   @override
   Widget build(BuildContext context) => widget.child;
-}
-
-final class _CompositeMediaEnrichmentClient implements MediaEnrichmentClient {
-  const _CompositeMediaEnrichmentClient({
-    required this.placeClient,
-    required this.annotationClient,
-  });
-
-  final MediaEnrichmentClient placeClient;
-  final MediaEnrichmentClient annotationClient;
-
-  @override
-  String get annotationModelName => annotationClient.annotationModelName;
-
-  @override
-  Future<String> reverseGeocode({
-    required double lat,
-    required double lon,
-    required String lang,
-  }) =>
-      placeClient.reverseGeocode(lat: lat, lon: lon, lang: lang);
-
-  @override
-  Future<String> annotateImage({
-    required String lang,
-    required String mimeType,
-    required Uint8List imageBytes,
-  }) =>
-      annotationClient.annotateImage(
-        lang: lang,
-        mimeType: mimeType,
-        imageBytes: imageBytes,
-      );
-}
-
-final class _ByokMediaEnrichmentClient implements MediaEnrichmentClient {
-  const _ByokMediaEnrichmentClient({
-    required Uint8List sessionKey,
-    required this.profileId,
-    required this.modelName,
-    required this.appDirProvider,
-  }) : _sessionKey = sessionKey;
-
-  final Uint8List _sessionKey;
-  final String profileId;
-  final String modelName;
-  final Future<String> Function() appDirProvider;
-
-  @override
-  String get annotationModelName => modelName;
-
-  @override
-  Future<String> reverseGeocode({
-    required double lat,
-    required double lon,
-    required String lang,
-  }) {
-    throw StateError('reverse_geocode_not_available_for_byok_annotation');
-  }
-
-  @override
-  Future<String> annotateImage({
-    required String lang,
-    required String mimeType,
-    required Uint8List imageBytes,
-  }) async {
-    final appDir = await appDirProvider();
-    return rust_media_annotation.mediaAnnotationByokProfile(
-      appDir: appDir,
-      key: _sessionKey,
-      profileId: profileId,
-      localDay: _MediaEnrichmentGateState._formatLocalDayKey(DateTime.now()),
-      lang: lang,
-      mimeType: mimeType,
-      imageBytes: imageBytes,
-    );
-  }
-}
-
-final class _GatedMediaEnrichmentStore implements MediaEnrichmentStore {
-  const _GatedMediaEnrichmentStore({
-    required this.baseStore,
-    required this.placesEnabled,
-    required this.annotationEnabled,
-  });
-
-  final MediaEnrichmentStore baseStore;
-  final bool placesEnabled;
-  final bool annotationEnabled;
-
-  @override
-  Future<List<MediaEnrichmentPlaceItem>> listDuePlaces({
-    required int nowMs,
-    int limit = 5,
-  }) {
-    if (!placesEnabled) return Future.value(const <MediaEnrichmentPlaceItem>[]);
-    return baseStore.listDuePlaces(nowMs: nowMs, limit: limit);
-  }
-
-  @override
-  Future<List<MediaEnrichmentAnnotationItem>> listDueAnnotations({
-    required int nowMs,
-    int limit = 5,
-  }) {
-    if (!annotationEnabled) {
-      return Future.value(const <MediaEnrichmentAnnotationItem>[]);
-    }
-    return baseStore.listDueAnnotations(nowMs: nowMs, limit: limit);
-  }
-
-  @override
-  Future<AttachmentExifMetadata?> readAttachmentExifMetadata({
-    required String attachmentSha256,
-  }) =>
-      baseStore.readAttachmentExifMetadata(attachmentSha256: attachmentSha256);
-
-  @override
-  Future<Uint8List> readAttachmentBytes({required String attachmentSha256}) =>
-      baseStore.readAttachmentBytes(attachmentSha256: attachmentSha256);
-
-  @override
-  Future<void> markPlaceOk({
-    required String attachmentSha256,
-    required String lang,
-    required String payloadJson,
-    required int nowMs,
-  }) =>
-      baseStore.markPlaceOk(
-        attachmentSha256: attachmentSha256,
-        lang: lang,
-        payloadJson: payloadJson,
-        nowMs: nowMs,
-      );
-
-  @override
-  Future<void> markPlaceFailed({
-    required String attachmentSha256,
-    required String error,
-    required int attempts,
-    required int nextRetryAtMs,
-    required int nowMs,
-  }) =>
-      baseStore.markPlaceFailed(
-        attachmentSha256: attachmentSha256,
-        error: error,
-        attempts: attempts,
-        nextRetryAtMs: nextRetryAtMs,
-        nowMs: nowMs,
-      );
-
-  @override
-  Future<void> markAnnotationOk({
-    required String attachmentSha256,
-    required String lang,
-    required String modelName,
-    required String payloadJson,
-    required int nowMs,
-  }) =>
-      baseStore.markAnnotationOk(
-        attachmentSha256: attachmentSha256,
-        lang: lang,
-        modelName: modelName,
-        payloadJson: payloadJson,
-        nowMs: nowMs,
-      );
-
-  @override
-  Future<void> markAnnotationFailed({
-    required String attachmentSha256,
-    required String error,
-    required int attempts,
-    required int nextRetryAtMs,
-    required int nowMs,
-  }) =>
-      baseStore.markAnnotationFailed(
-        attachmentSha256: attachmentSha256,
-        error: error,
-        attempts: attempts,
-        nextRetryAtMs: nextRetryAtMs,
-        nowMs: nowMs,
-      );
-}
-
-final class _BackendUrlEnrichmentStore implements UrlEnrichmentStore {
-  _BackendUrlEnrichmentStore({
-    required this.backend,
-    required Uint8List sessionKey,
-    AttachmentMetadataStore? metadataStore,
-  })  : _sessionKey = Uint8List.fromList(sessionKey),
-        _metadataStore = metadataStore ?? const RustAttachmentMetadataStore();
-
-  final NativeAppBackend backend;
-  final Uint8List _sessionKey;
-  final AttachmentMetadataStore _metadataStore;
-
-  @override
-  Future<List<UrlEnrichmentJob>> listDueUrlAnnotations({
-    required int nowMs,
-    int limit = 5,
-  }) async {
-    final rows = await backend.listDueUrlManifestAttachmentAnnotations(
-      _sessionKey,
-      nowMs: nowMs,
-      limit: limit,
-    );
-    return rows
-        .map(
-          (r) => UrlEnrichmentJob(
-            attachmentSha256: r.attachmentSha256,
-            lang: r.lang,
-            status: r.status,
-            attempts: r.attempts,
-            nextRetryAtMs: r.nextRetryAtMs,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  @override
-  Future<Uint8List> readAttachmentBytes({required String attachmentSha256}) =>
-      backend.readAttachmentBytes(_sessionKey, sha256: attachmentSha256);
-
-  @override
-  Future<void> markAnnotationOk({
-    required String attachmentSha256,
-    required String lang,
-    required String modelName,
-    required String payloadJson,
-    required int nowMs,
-  }) =>
-      backend.markAttachmentAnnotationOkJson(
-        _sessionKey,
-        attachmentSha256: attachmentSha256,
-        lang: lang,
-        modelName: modelName,
-        payloadJson: payloadJson,
-        nowMs: nowMs,
-      );
-
-  @override
-  Future<void> markAnnotationFailed({
-    required String attachmentSha256,
-    required String error,
-    required int attempts,
-    required int nextRetryAtMs,
-    required int nowMs,
-  }) =>
-      backend.markAttachmentAnnotationFailed(
-        _sessionKey,
-        attachmentSha256: attachmentSha256,
-        attempts: attempts,
-        nextRetryAtMs: nextRetryAtMs,
-        lastError: error,
-        nowMs: nowMs,
-      );
-
-  @override
-  Future<void> upsertAttachmentTitle({
-    required String attachmentSha256,
-    required String title,
-  }) =>
-      _metadataStore.upsert(
-        _sessionKey,
-        attachmentSha256: attachmentSha256,
-        title: title,
-      );
 }

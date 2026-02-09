@@ -22,8 +22,3 @@ Future<OcrPayload> desktopOcrPdf(
         maxPages: maxPages,
         dpi: dpi,
         languageHints: languageHints);
-
-Future<Uint8List?> desktopCompressPdfScan(
-        {required List<int> bytes, required int scanDpi}) =>
-    RustLib.instance.api.crateApiDesktopMediaDesktopCompressPdfScan(
-        bytes: bytes, scanDpi: scanDpi);

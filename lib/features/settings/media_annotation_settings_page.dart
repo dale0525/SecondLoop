@@ -7,7 +7,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/linux_ocr_model_store.dart';
-import '../../core/content_enrichment/linux_pdf_compress_resource_store.dart';
+import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -20,7 +20,6 @@ import 'media_annotation_settings_sections.dart';
 
 part 'media_annotation_settings_page_ocr.dart';
 part 'media_annotation_settings_page_linux_ocr.dart';
-part 'media_annotation_settings_page_linux_pdf_compress.dart';
 part 'media_annotation_settings_page_media_understanding.dart';
 
 class MediaAnnotationSettingsPage extends StatefulWidget {
@@ -29,13 +28,11 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
     this.configStore,
     this.contentConfigStore,
     this.linuxOcrModelStore,
-    this.linuxPdfCompressResourceStore,
   });
 
   final MediaAnnotationConfigStore? configStore;
   final ContentEnrichmentConfigStore? contentConfigStore;
   final LinuxOcrModelStore? linuxOcrModelStore;
-  final LinuxPdfCompressResourceStore? linuxPdfCompressResourceStore;
 
   static const annotateSwitchKey =
       ValueKey('media_annotation_settings_annotate_switch');
@@ -44,8 +41,8 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
   static const audioTranscribeSwitchKey =
       ValueKey('media_annotation_settings_audio_transcribe_switch');
   static const ocrSwitchKey = ValueKey('media_annotation_settings_ocr_switch');
-  static const pdfCompressSwitchKey =
-      ValueKey('media_annotation_settings_pdf_compress_switch');
+  static const ocrModeTileKey =
+      ValueKey('media_annotation_settings_ocr_mode_tile');
   static const mediaUnderstandingSwitchKey =
       ValueKey('media_annotation_settings_media_understanding_switch');
   static const wifiOnlySwitchKey =
@@ -62,14 +59,6 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
       ValueKey('media_annotation_settings_linux_ocr_download_button');
   static const linuxOcrModelDeleteButtonKey =
       ValueKey('media_annotation_settings_linux_ocr_delete_button');
-  static const linuxPdfCompressResourceTileKey =
-      ValueKey('media_annotation_settings_linux_pdf_compress_resource_tile');
-  static const linuxPdfCompressResourceDownloadButtonKey = ValueKey(
-    'media_annotation_settings_linux_pdf_compress_resource_download_button',
-  );
-  static const linuxPdfCompressResourceDeleteButtonKey = ValueKey(
-    'media_annotation_settings_linux_pdf_compress_resource_delete_button',
-  );
   static const searchConfirmDialogKey =
       ValueKey('media_annotation_settings_search_confirm_dialog');
   static const searchConfirmCancelKey =
@@ -97,7 +86,6 @@ class _MediaAnnotationSettingsPageState
   Object? _contentLoadError;
   bool _busy = false;
   bool _linuxOcrBusy = false;
-  bool _linuxPdfCompressBusy = false;
   LinuxOcrModelStatus _linuxOcrModelStatus = const LinuxOcrModelStatus(
     supported: false,
     installed: false,
@@ -106,15 +94,6 @@ class _MediaAnnotationSettingsPageState
     totalBytes: 0,
     source: LinuxOcrModelSource.none,
   );
-  LinuxPdfCompressResourceStatus _linuxPdfCompressResourceStatus =
-      const LinuxPdfCompressResourceStatus(
-    supported: false,
-    installed: false,
-    resourceDirPath: null,
-    fileCount: 0,
-    totalBytes: 0,
-    source: LinuxPdfCompressResourceSource.none,
-  );
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
@@ -122,9 +101,6 @@ class _MediaAnnotationSettingsPageState
       widget.contentConfigStore ?? const RustContentEnrichmentConfigStore();
   LinuxOcrModelStore get _linuxOcrModelStore =>
       widget.linuxOcrModelStore ?? createLinuxOcrModelStore();
-  LinuxPdfCompressResourceStore get _linuxPdfCompressResourceStore =>
-      widget.linuxPdfCompressResourceStore ??
-      createLinuxPdfCompressResourceStore();
 
   Future<void> _showSetupRequiredDialog({
     required String reason,
@@ -454,15 +430,6 @@ class _MediaAnnotationSettingsPageState
         totalBytes: 0,
         source: LinuxOcrModelSource.none,
       );
-      LinuxPdfCompressResourceStatus linuxPdfCompressResourceStatus =
-          const LinuxPdfCompressResourceStatus(
-        supported: false,
-        installed: false,
-        resourceDirPath: null,
-        fileCount: 0,
-        totalBytes: 0,
-        source: LinuxPdfCompressResourceSource.none,
-      );
       try {
         contentConfig = await _contentStore.readContentEnrichment(sessionKey);
       } catch (e) {
@@ -481,19 +448,6 @@ class _MediaAnnotationSettingsPageState
           source: LinuxOcrModelSource.none,
         );
       }
-      try {
-        linuxPdfCompressResourceStatus =
-            await _linuxPdfCompressResourceStore.readStatus();
-      } catch (_) {
-        linuxPdfCompressResourceStatus = const LinuxPdfCompressResourceStatus(
-          supported: false,
-          installed: false,
-          resourceDirPath: null,
-          fileCount: 0,
-          totalBytes: 0,
-          source: LinuxPdfCompressResourceSource.none,
-        );
-      }
       List<LlmProfile>? profiles;
       if (backend != null) {
         try {
@@ -508,7 +462,6 @@ class _MediaAnnotationSettingsPageState
         _contentConfig = contentConfig;
         _contentLoadError = contentLoadError;
         _linuxOcrModelStatus = linuxOcrModelStatus;
-        _linuxPdfCompressResourceStatus = linuxPdfCompressResourceStatus;
         _llmProfiles = profiles;
         _loadError = null;
       });
@@ -550,14 +503,12 @@ class _MediaAnnotationSettingsPageState
     bool? audioTranscribeEnabled,
     String? audioTranscribeEngine,
     bool? ocrEnabled,
-    bool? pdfSmartCompressEnabled,
+    String? ocrEngineMode,
   }) {
     return ContentEnrichmentConfig(
       urlFetchEnabled: source.urlFetchEnabled,
       documentExtractEnabled: source.documentExtractEnabled,
       documentKeepOriginalMaxBytes: source.documentKeepOriginalMaxBytes,
-      pdfSmartCompressEnabled:
-          pdfSmartCompressEnabled ?? source.pdfSmartCompressEnabled,
       audioTranscribeEnabled:
           audioTranscribeEnabled ?? source.audioTranscribeEnabled,
       audioTranscribeEngine:
@@ -567,7 +518,7 @@ class _MediaAnnotationSettingsPageState
       videoProxyMaxDurationMs: source.videoProxyMaxDurationMs,
       videoProxyMaxBytes: source.videoProxyMaxBytes,
       ocrEnabled: ocrEnabled ?? source.ocrEnabled,
-      ocrEngineMode: source.ocrEngineMode,
+      ocrEngineMode: ocrEngineMode ?? source.ocrEngineMode,
       // OCR language hints are fixed to "device language + English".
       ocrLanguageHints: 'device_plus_en',
       // OCR DPI is fixed to 180 for stable quality/perf tradeoff.

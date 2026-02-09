@@ -3,7 +3,8 @@ use std::path::Path;
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::blocking::{multipart, Client};
-use serde::Deserialize;
+use reqwest::header;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::db;
@@ -98,6 +99,224 @@ fn normalize_transcript_text(text: &str) -> String {
     trimmed
 }
 
+fn extract_text_from_json_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items
+            .iter()
+            .map(extract_text_from_json_value)
+            .collect::<Vec<_>>()
+            .join(""),
+        Value::Object(map) => {
+            let from_text = map
+                .get("text")
+                .map(extract_text_from_json_value)
+                .unwrap_or_default();
+            if !from_text.is_empty() {
+                return from_text;
+            }
+            map.get("content")
+                .map(extract_text_from_json_value)
+                .unwrap_or_default()
+        }
+        _ => String::new(),
+    }
+}
+
+fn extract_chat_stream_delta_text(value: &Value) -> String {
+    if let Some(content) = value.pointer("/choices/0/delta/content") {
+        let out = extract_text_from_json_value(content);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(content) = value.pointer("/choices/0/message/content") {
+        let out = extract_text_from_json_value(content);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(content) = value.pointer("/output/0/content") {
+        let out = extract_text_from_json_value(content);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(text) = value.pointer("/choices/0/delta/text") {
+        let out = extract_text_from_json_value(text);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(delta) = value.get("delta") {
+        let out = extract_text_from_json_value(delta);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(text) = value.get("text") {
+        let out = extract_text_from_json_value(text);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    if let Some(output_text) = value.get("output_text") {
+        let out = extract_text_from_json_value(output_text);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    String::new()
+}
+
+fn parse_sse_data_events(raw: &str) -> Vec<String> {
+    let mut data_lines: Vec<String> = Vec::new();
+    let mut events: Vec<String> = Vec::new();
+
+    let mut flush_event = |lines: &mut Vec<String>| {
+        if lines.is_empty() {
+            return;
+        }
+        let payload = lines.join("\n");
+        lines.clear();
+        events.push(payload);
+    };
+
+    for line in raw.lines() {
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() {
+            flush_event(&mut data_lines);
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("data:") {
+            data_lines.push(rest.trim().to_string());
+        }
+    }
+    flush_event(&mut data_lines);
+    events
+}
+
+fn parse_usage_value(value: &Value) -> Option<OpenAiUsage> {
+    let parsed: OpenAiUsage = serde_json::from_value(value.clone()).ok()?;
+    if parsed.prompt_tokens.is_none()
+        && parsed.completion_tokens.is_none()
+        && parsed.total_tokens.is_none()
+    {
+        return None;
+    }
+    Some(parsed)
+}
+
+fn parse_chat_transcribe_sse_payload(raw: &str) -> Result<(String, Option<OpenAiUsage>)> {
+    let mut transcript = String::new();
+    let mut usage: Option<OpenAiUsage> = None;
+
+    for payload in parse_sse_data_events(raw) {
+        let trimmed = payload.trim();
+        if trimmed.is_empty() || trimmed == "[DONE]" {
+            continue;
+        }
+        let value: Value = match serde_json::from_str(trimmed) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if let Some(raw_usage) = value.get("usage") {
+            if let Some(parsed) = parse_usage_value(raw_usage) {
+                usage = Some(parsed);
+            }
+        }
+
+        let delta = extract_chat_stream_delta_text(&value);
+        if !delta.is_empty() {
+            transcript.push_str(&delta);
+        }
+    }
+
+    let normalized = normalize_transcript_text(&transcript);
+    if normalized.is_empty() {
+        return Err(anyhow!("audio transcribe response has empty text"));
+    }
+    Ok((normalized, usage))
+}
+
+fn parse_whisper_sse_payload(raw: &str) -> Result<Value> {
+    let mut usage: Option<OpenAiUsage> = None;
+    let mut delta_text = String::new();
+    let mut last_payload_map: Option<serde_json::Map<String, Value>> = None;
+
+    for payload in parse_sse_data_events(raw) {
+        let trimmed = payload.trim();
+        if trimmed.is_empty() || trimmed == "[DONE]" {
+            continue;
+        }
+        let value: Value = match serde_json::from_str(trimmed) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if let Some(raw_usage) = value.get("usage") {
+            if let Some(parsed) = parse_usage_value(raw_usage) {
+                usage = Some(parsed);
+            }
+        }
+
+        let event_text = value
+            .get("text")
+            .or_else(|| value.get("transcript"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                let out = extract_chat_stream_delta_text(&value);
+                if out.is_empty() {
+                    None
+                } else {
+                    Some(out)
+                }
+            })
+            .unwrap_or_default();
+        if !event_text.is_empty() {
+            delta_text.push_str(&event_text);
+        }
+
+        if let Value::Object(map) = value {
+            last_payload_map = Some(map);
+        }
+    }
+
+    let mut output = last_payload_map.unwrap_or_default();
+    if !delta_text.trim().is_empty() && output.get("text").is_none() {
+        output.insert(
+            "text".to_string(),
+            Value::String(normalize_transcript_text(&delta_text)),
+        );
+    }
+
+    if output
+        .get("text")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .is_empty()
+        && output
+            .get("transcript")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+    {
+        return Err(anyhow!("audio transcribe response has empty text"));
+    }
+
+    if output.get("usage").is_none() {
+        if let Some(parsed_usage) = usage {
+            output.insert("usage".to_string(), serde_json::to_value(parsed_usage)?);
+        }
+    }
+
+    Ok(Value::Object(output))
+}
+
 fn chat_message_content_to_text(value: &Value) -> String {
     match value {
         Value::Null => String::new(),
@@ -170,7 +389,7 @@ struct OpenAiAudioTranscribeResponse {
     usage: Option<OpenAiUsage>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct OpenAiUsage {
     #[serde(default)]
     prompt_tokens: Option<i64>,
@@ -235,6 +454,7 @@ pub fn audio_transcribe_byok_profile(
         .text("response_format", "verbose_json")
         .text("language", lang.trim().to_string())
         .text("timestamp_granularities[]", "segment")
+        .text("stream", "true")
         .part("file", file_part);
 
     let client = Client::new();
@@ -242,6 +462,7 @@ pub fn audio_transcribe_byok_profile(
         .post(url)
         .bearer_auth(api_key)
         .header("x-secondloop-purpose", "audio_transcribe")
+        .header(header::ACCEPT, "text/event-stream")
         .multipart(form)
         .send()?;
 
@@ -253,9 +474,19 @@ pub fn audio_transcribe_byok_profile(
         ));
     }
 
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
     let raw = response.text().unwrap_or_default();
-    let mut json: Value =
-        serde_json::from_str(&raw).map_err(|e| anyhow!("invalid transcribe json: {e}"))?;
+    let mut json: Value = if content_type.contains("text/event-stream") {
+        parse_whisper_sse_payload(&raw)?
+    } else {
+        serde_json::from_str(&raw).map_err(|e| anyhow!("invalid transcribe json: {e}"))?
+    };
     let parsed: OpenAiAudioTranscribeResponse = serde_json::from_value(json.clone())
         .map_err(|e| anyhow!("invalid transcribe response shape: {e}"))?;
 
@@ -358,7 +589,10 @@ pub fn audio_transcribe_byok_profile_multimodal(
                 ]
             }
         ],
-        "stream": false,
+        "stream": true,
+        "stream_options": {
+            "include_usage": true,
+        },
     });
 
     let client = Client::new();
@@ -366,6 +600,7 @@ pub fn audio_transcribe_byok_profile_multimodal(
         .post(openai_chat_completions_url(&base_url))
         .bearer_auth(api_key)
         .header("x-secondloop-purpose", "audio_transcribe")
+        .header(header::ACCEPT, "text/event-stream")
         .json(&payload)
         .send()?;
 
@@ -377,9 +612,25 @@ pub fn audio_transcribe_byok_profile_multimodal(
         ));
     }
 
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
     let raw = response.text().unwrap_or_default();
-    let mut json: Value =
-        serde_json::from_str(&raw).map_err(|e| anyhow!("invalid transcribe json: {e}"))?;
+    let mut json: Value = if content_type.contains("text/event-stream") {
+        let (text, usage) = parse_chat_transcribe_sse_payload(&raw)?;
+        let mut obj = serde_json::Map::new();
+        obj.insert("text".to_string(), Value::String(text));
+        if let Some(parsed_usage) = usage {
+            obj.insert("usage".to_string(), serde_json::to_value(parsed_usage)?);
+        }
+        Value::Object(obj)
+    } else {
+        serde_json::from_str(&raw).map_err(|e| anyhow!("invalid transcribe json: {e}"))?
+    };
 
     let text = extract_transcript_text(&json).trim().to_string();
     if text.is_empty() {

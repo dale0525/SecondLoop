@@ -38,10 +38,6 @@ fn content_enrichment_kv_defaults_exist_and_match_plan() {
             mb50.to_string(),
         ),
         (
-            "content_enrichment.pdf_smart_compress_enabled",
-            "1".to_string(),
-        ),
-        (
             "content_enrichment.audio_transcribe_enabled",
             "1".to_string(),
         ),
@@ -121,6 +117,7 @@ fn content_enrichment_ocr_pdf_settings_are_fixed_on_write() {
     cfg.ocr_pdf_auto_max_pages = 50;
     cfg.ocr_pdf_max_pages = 1000;
     cfg.ocr_language_hints = "zh_en".to_string();
+    cfg.ocr_engine_mode = "multimodal_llm".to_string();
     db::set_content_enrichment_config(&conn, &cfg).expect("write config");
 
     let next = db::get_content_enrichment_config(&conn).expect("read updated config");
@@ -128,6 +125,7 @@ fn content_enrichment_ocr_pdf_settings_are_fixed_on_write() {
     assert_eq!(next.ocr_pdf_auto_max_pages, 0);
     assert_eq!(next.ocr_pdf_max_pages, 0);
     assert_eq!(next.ocr_language_hints.as_str(), "device_plus_en");
+    assert_eq!(next.ocr_engine_mode.as_str(), "multimodal_llm");
     assert_eq!(
         kv_value(&conn, "content_enrichment.ocr_pdf_dpi").as_deref(),
         Some("180")
@@ -143,5 +141,9 @@ fn content_enrichment_ocr_pdf_settings_are_fixed_on_write() {
     assert_eq!(
         kv_value(&conn, "content_enrichment.ocr_language_hints").as_deref(),
         Some("device_plus_en")
+    );
+    assert_eq!(
+        kv_value(&conn, "content_enrichment.ocr_engine_mode").as_deref(),
+        Some("multimodal_llm")
     );
 }

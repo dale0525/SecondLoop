@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `audio_input_format_by_mime_type`, `chat_message_content_to_text`, `extract_transcript_text`, `file_ext_for_mime_type`, `key_from_bytes`, `multimodal_transcribe_prompt`, `normalize_transcript_text`, `openai_audio_transcriptions_url`, `openai_chat_completions_url`
+// These functions are ignored because they are not marked as `pub`: `audio_input_format_by_mime_type`, `chat_message_content_to_text`, `extract_chat_stream_delta_text`, `extract_text_from_json_value`, `extract_transcript_text`, `file_ext_for_mime_type`, `key_from_bytes`, `multimodal_transcribe_prompt`, `normalize_transcript_text`, `openai_audio_transcriptions_url`, `openai_chat_completions_url`, `parse_chat_transcribe_sse_payload`, `parse_sse_data_events`, `parse_usage_value`, `parse_whisper_sse_payload`
 // These types are ignored because they are not used by any `pub` functions: `OpenAiAudioTranscribeResponse`, `OpenAiUsage`
 
 Future<String> audioTranscribeByokProfile(

@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1659852983;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1425822161;
 
 // Section: executor
 
@@ -5648,39 +5648,6 @@ fn wire__crate__api__core__sync_webdav_upload_attachment_bytes_impl(
         },
     )
 }
-fn wire__crate__api__desktop_media__desktop_compress_pdf_scan_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "desktop_compress_pdf_scan",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_scan_dpi = <u32>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::desktop_media::desktop_compress_pdf_scan(api_bytes, api_scan_dpi)
-                })())
-            }
-        },
-    )
-}
 fn wire__crate__api__desktop_media__desktop_ocr_image_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -6436,7 +6403,6 @@ impl SseDecode for crate::db::ContentEnrichmentConfig {
         let mut var_urlFetchEnabled = <bool>::sse_decode(deserializer);
         let mut var_documentExtractEnabled = <bool>::sse_decode(deserializer);
         let mut var_documentKeepOriginalMaxBytes = <i64>::sse_decode(deserializer);
-        let mut var_pdfSmartCompressEnabled = <bool>::sse_decode(deserializer);
         let mut var_audioTranscribeEnabled = <bool>::sse_decode(deserializer);
         let mut var_audioTranscribeEngine = <String>::sse_decode(deserializer);
         let mut var_videoExtractEnabled = <bool>::sse_decode(deserializer);
@@ -6456,7 +6422,6 @@ impl SseDecode for crate::db::ContentEnrichmentConfig {
             url_fetch_enabled: var_urlFetchEnabled,
             document_extract_enabled: var_documentExtractEnabled,
             document_keep_original_max_bytes: var_documentKeepOriginalMaxBytes,
-            pdf_smart_compress_enabled: var_pdfSmartCompressEnabled,
             audio_transcribe_enabled: var_audioTranscribeEnabled,
             audio_transcribe_engine: var_audioTranscribeEngine,
             video_extract_enabled: var_videoExtractEnabled,
@@ -6947,17 +6912,6 @@ impl SseDecode for Option<crate::db::Message> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::db::Message>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl SseDecode for Option<Vec<u8>> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<Vec<u8>>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -7818,71 +7772,65 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        137 => wire__crate__api__desktop_media__desktop_compress_pdf_scan_impl(
+        137 => wire__crate__api__desktop_media__desktop_ocr_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        138 => wire__crate__api__desktop_media__desktop_ocr_image_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        139 => {
+        138 => {
             wire__crate__api__desktop_media__desktop_ocr_pdf_impl(port, ptr, rust_vec_len, data_len)
         }
-        140 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
+        139 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        141 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
+        140 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        142 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
+        141 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        144 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+        143 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        146 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+        145 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        147 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+        146 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        148 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+        147 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        149 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+        148 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        150 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+        149 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
@@ -7900,7 +7848,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        143 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        142 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -8102,7 +8050,6 @@ impl flutter_rust_bridge::IntoDart for crate::db::ContentEnrichmentConfig {
             self.document_keep_original_max_bytes
                 .into_into_dart()
                 .into_dart(),
-            self.pdf_smart_compress_enabled.into_into_dart().into_dart(),
             self.audio_transcribe_enabled.into_into_dart().into_dart(),
             self.audio_transcribe_engine.into_into_dart().into_dart(),
             self.video_extract_enabled.into_into_dart().into_dart(),
@@ -8610,7 +8557,6 @@ impl SseEncode for crate::db::ContentEnrichmentConfig {
         <bool>::sse_encode(self.url_fetch_enabled, serializer);
         <bool>::sse_encode(self.document_extract_enabled, serializer);
         <i64>::sse_encode(self.document_keep_original_max_bytes, serializer);
-        <bool>::sse_encode(self.pdf_smart_compress_enabled, serializer);
         <bool>::sse_encode(self.audio_transcribe_enabled, serializer);
         <String>::sse_encode(self.audio_transcribe_engine, serializer);
         <bool>::sse_encode(self.video_extract_enabled, serializer);
@@ -8986,16 +8932,6 @@ impl SseEncode for Option<crate::db::Message> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::db::Message>::sse_encode(value, serializer);
-        }
-    }
-}
-
-impl SseEncode for Option<Vec<u8>> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <Vec<u8>>::sse_encode(value, serializer);
         }
     }
 }

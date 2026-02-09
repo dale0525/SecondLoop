@@ -212,3 +212,97 @@ fn choose_ocr_page_worker_count_scales_by_pages_and_cpu() {
     assert_eq!(choose_ocr_page_worker_count(32, 8), 4);
     assert_eq!(choose_ocr_page_worker_count(48, 3), 3);
 }
+
+fn build_pdf_with_single_byte_tounicode_mapping() -> Vec<u8> {
+    let content = "BT /F1 18 Tf 72 120 Td <212223> Tj ET\n";
+    let cmap = "/CIDInit /ProcSet findresource begin\n\
+12 dict begin\n\
+begincmap\n\
+/CIDSystemInfo <<\n\
+  /Registry (Adobe)\n\
+  /Ordering (UCS)\n\
+  /Supplement 0\n\
+>> def\n\
+/CMapName /Adobe-Identity-UCS def\n\
+/CMapType 2 def\n\
+1 begincodespacerange\n\
+<00><FF>\n\
+endcodespacerange\n\
+3 beginbfrange\n\
+<21><21><4F60>\n\
+<22><22><597D>\n\
+<23><23><FF01>\n\
+endbfrange\n\
+endcmap\n\
+CMapName currentdict /CMap defineresource pop\n\
+end\n\
+end\n";
+
+    let mut parts: Vec<Vec<u8>> = Vec::new();
+    parts.push(b"%PDF-1.4\n".to_vec());
+
+    let obj1 = b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n".to_vec();
+    let obj2 = b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n".to_vec();
+    let obj3 = b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n".to_vec();
+    let obj4 = b"4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /DummyFont /Encoding /Identity-H /DescendantFonts [7 0 R] /ToUnicode 6 0 R >>\nendobj\n".to_vec();
+    let obj5 = format!(
+        "5 0 obj\n<< /Length {} >>\nstream\n{}endstream\nendobj\n",
+        content.len(),
+        content
+    )
+    .into_bytes();
+    let obj6 = format!(
+        "6 0 obj\n<< /Length {} >>\nstream\n{}endstream\nendobj\n",
+        cmap.len(),
+        cmap
+    )
+    .into_bytes();
+    let obj7 = b"7 0 obj\n<< /Type /Font /Subtype /CIDFontType2 /BaseFont /DummyFont /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> >>\nendobj\n".to_vec();
+
+    parts.push(obj1);
+    parts.push(obj2);
+    parts.push(obj3);
+    parts.push(obj4);
+    parts.push(obj5);
+    parts.push(obj6);
+    parts.push(obj7);
+
+    let mut offsets: Vec<usize> = Vec::new();
+    let mut cur = 0usize;
+    for part in &parts {
+        offsets.push(cur);
+        cur += part.len();
+    }
+
+    let xref_start = cur;
+    let mut xref = String::new();
+    xref.push_str("xref\n0 8\n");
+    xref.push_str("0000000000 65535 f \n");
+    for offset in offsets.iter().take(8).skip(1) {
+        xref.push_str(&format!("{:010} 00000 n \n", offset));
+    }
+    let trailer = format!(
+        "trailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
+        xref_start
+    );
+
+    let mut out = Vec::<u8>::new();
+    for part in parts {
+        out.extend_from_slice(&part);
+    }
+    out.extend_from_slice(xref.as_bytes());
+    out.extend_from_slice(trailer.as_bytes());
+    out
+}
+
+#[test]
+fn extract_pdf_text_with_limit_handles_single_byte_tounicode_cmap() {
+    let pdf = build_pdf_with_single_byte_tounicode_mapping();
+    let extracted = extract_pdf_text_with_limit(&pdf, 1).expect("extract text");
+    let normalized = normalize_text_keep_paragraphs(&extracted.text);
+
+    assert!(
+        normalized.contains("你好"),
+        "expected to decode one-byte ToUnicode mapping, got: {normalized:?}"
+    );
+}

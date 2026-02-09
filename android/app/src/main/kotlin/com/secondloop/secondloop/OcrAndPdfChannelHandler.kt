@@ -3,8 +3,6 @@ package com.secondloop.secondloop
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Rect
-import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.Handler
 import android.os.Looper
@@ -20,7 +18,6 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
-import java.io.FileOutputStream
 import java.util.Locale
 
 class OcrAndPdfChannelHandler(
@@ -30,7 +27,6 @@ class OcrAndPdfChannelHandler(
     when (call.method) {
       "ocrPdf" -> handleOcrPdf(call, result)
       "ocrImage" -> handleOcrImage(call, result)
-      "compressPdf" -> handleCompressPdf(call, result)
       else -> result.notImplemented()
     }
   }
@@ -80,30 +76,6 @@ class OcrAndPdfChannelHandler(
       }
     }.start()
   }
-
-  private fun handleCompressPdf(call: MethodCall, result: MethodChannel.Result) {
-    val args = call.arguments as? Map<*, *>
-    val bytes = args?.get("bytes") as? ByteArray
-    if (bytes == null || bytes.isEmpty()) {
-      result.success(null)
-      return
-    }
-
-    val requestedDpi = normalizePositiveInt(args["scan_dpi"], fallback = 220, upperBound = 600)
-    val dpi = requestedDpi.coerceIn(180, 300)
-    Thread {
-      val payload =
-        try {
-          runScanPdfCompression(bytes, dpi)
-        } catch (_: Throwable) {
-          null
-        }
-      Handler(Looper.getMainLooper()).post {
-        result.success(payload)
-      }
-    }.start()
-  }
-
   private fun normalizePositiveInt(raw: Any?, fallback: Int, upperBound: Int): Int {
     val value =
       when (raw) {
@@ -258,89 +230,6 @@ class OcrAndPdfChannelHandler(
       bitmap.recycle()
     }
   }
-
-  private fun runScanPdfCompression(
-    pdfBytes: ByteArray,
-    dpi: Int,
-  ): ByteArray? {
-    if (pdfBytes.isEmpty()) return null
-
-    var inputFile: File? = null
-    var outputFile: File? = null
-    var descriptor: ParcelFileDescriptor? = null
-    var renderer: PdfRenderer? = null
-    var outputDocument: PdfDocument? = null
-
-    try {
-      inputFile = File.createTempFile("secondloop_pdf_input_", ".pdf", cacheDir)
-      inputFile.writeBytes(pdfBytes)
-      outputFile = File.createTempFile("secondloop_pdf_output_", ".pdf", cacheDir)
-
-      descriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
-      renderer = PdfRenderer(descriptor)
-      if (renderer.pageCount <= 0) return null
-
-      outputDocument = PdfDocument()
-      val scale = (dpi.toFloat() / 72f).coerceIn(1.0f, 6.0f)
-
-      for (index in 0 until renderer.pageCount) {
-        val page = renderer.openPage(index)
-        try {
-          val targetWidth = (page.width * scale).toInt().coerceAtLeast(1)
-          val targetHeight = (page.height * scale).toInt().coerceAtLeast(1)
-          val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-          try {
-            bitmap.eraseColor(Color.WHITE)
-            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            val pageInfo = PdfDocument.PageInfo.Builder(
-              targetWidth,
-              targetHeight,
-              index + 1,
-            ).create()
-            val outputPage = outputDocument.startPage(pageInfo)
-            outputPage.canvas.drawColor(Color.WHITE)
-            outputPage.canvas.drawBitmap(
-              bitmap,
-              Rect(0, 0, targetWidth, targetHeight),
-              Rect(0, 0, targetWidth, targetHeight),
-              null,
-            )
-            outputDocument.finishPage(outputPage)
-          } finally {
-            bitmap.recycle()
-          }
-        } finally {
-          page.close()
-        }
-      }
-
-      FileOutputStream(outputFile).use { stream ->
-        outputDocument.writeTo(stream)
-      }
-      val compressed = outputFile.readBytes()
-      if (compressed.isEmpty()) return null
-      return compressed
-    } catch (_: Throwable) {
-      return null
-    } finally {
-      try {
-        outputDocument?.close()
-      } catch (_: Throwable) {}
-      try {
-        renderer?.close()
-      } catch (_: Throwable) {}
-      try {
-        descriptor?.close()
-      } catch (_: Throwable) {}
-      try {
-        inputFile?.delete()
-      } catch (_: Throwable) {}
-      try {
-        outputFile?.delete()
-      } catch (_: Throwable) {}
-    }
-  }
-
   private fun truncateUtf8(text: String, maxBytes: Int): String {
     val data = text.toByteArray(Charsets.UTF_8)
     if (data.size <= maxBytes) return text

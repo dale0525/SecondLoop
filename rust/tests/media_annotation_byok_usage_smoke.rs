@@ -91,6 +91,7 @@ fn byok_media_annotation_records_usage() {
     assert!(req_lower.contains("authorization: bearer sk-test"));
     assert!(req_lower.contains("\"type\":\"image_url\""));
     assert!(req_lower.contains("data:image/jpeg;base64,"));
+    assert!(req_lower.contains("\"stream\":true"));
 
     let conn = db::open(std::path::Path::new(&app_dir_str)).expect("open db");
     let row: (i64, i64, i64, i64, i64) = conn
