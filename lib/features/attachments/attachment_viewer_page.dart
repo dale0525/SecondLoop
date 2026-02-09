@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/app_backend.dart';
@@ -73,6 +77,69 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _attemptedSyncDownload = false;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+
+  String _fileExtensionForDownload() {
+    final extension =
+        fileExtensionForSystemOpenMimeType(widget.attachment.mimeType);
+    return extension.isEmpty ? '.bin' : extension;
+  }
+
+  String _downloadFilename() {
+    final stem = widget.attachment.sha256.trim().isEmpty
+        ? DateTime.now().millisecondsSinceEpoch.toString()
+        : widget.attachment.sha256.trim();
+    return '$stem${_fileExtensionForDownload()}';
+  }
+
+  Future<File> _materializeTempDownloadFile(Uint8List bytes) async {
+    final dir = await getTemporaryDirectory();
+    final outFile = File('${dir.path}/${_downloadFilename()}');
+    await outFile.writeAsBytes(bytes, flush: true);
+    return outFile;
+  }
+
+  Future<void> _shareAttachment(Uint8List bytes) async {
+    try {
+      final file = await _materializeTempDownloadFile(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: widget.attachment.mimeType)],
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _downloadAttachment(Uint8List bytes) async {
+    try {
+      final file = await _materializeTempDownloadFile(bytes);
+      final launched = await launchUrl(
+        Uri.file(file.path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(file.path),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -444,7 +511,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
   Widget _buildMetadataCard(
     BuildContext context, {
-    required String mimeType,
     required int byteLen,
     required DateTime? capturedAt,
     required double? latitude,
@@ -462,17 +528,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            context.t.attachments.metadata.format,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            mimeType,
-            key: const ValueKey('attachment_metadata_format'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 10),
           Text(
             context.t.attachments.metadata.size,
             style: Theme.of(context).textTheme.labelMedium,
@@ -660,12 +715,77 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     );
   }
 
+  String _resolveAppBarTitle(
+    Attachment attachment, {
+    required AttachmentMetadata? metadata,
+  }) {
+    final filename = metadata?.filenames.isNotEmpty == true
+        ? metadata!.filenames.first.trim()
+        : '';
+    if (filename.isNotEmpty) return filename;
+
+    final title = (metadata?.title ?? '').trim();
+    if (title.isNotEmpty) return title;
+
+    final firstUrl = metadata?.sourceUrls.isNotEmpty == true
+        ? metadata!.sourceUrls.first.trim()
+        : '';
+    if (firstUrl.isNotEmpty) return firstUrl;
+
+    final mime = attachment.mimeType.trim().toLowerCase();
+    if (mime.startsWith('image/')) return 'Image attachment';
+    if (mime.startsWith('video/')) return 'Video attachment';
+    if (mime.startsWith('audio/')) return 'Audio attachment';
+    if (mime == 'application/pdf') return 'PDF attachment';
+    return 'Attachment';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
     final exifFuture = _exifFuture;
+    final appBarTitle = _resolveAppBarTitle(
+      widget.attachment,
+      metadata: _metadata,
+    );
     return Scaffold(
-      appBar: AppBar(title: Text(widget.attachment.mimeType)),
+      appBar: AppBar(
+        title: Text(appBarTitle),
+        actions: [
+          if (bytesFuture != null)
+            FutureBuilder<Uint8List>(
+              future: bytesFuture,
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                final disabled = bytes == null;
+                return IconButton(
+                  key: const ValueKey('attachment_viewer_share'),
+                  tooltip: context.t.common.actions.share,
+                  onPressed: disabled
+                      ? null
+                      : () => unawaited(_shareAttachment(bytes)),
+                  icon: const Icon(Icons.share_rounded),
+                );
+              },
+            ),
+          if (bytesFuture != null)
+            FutureBuilder<Uint8List>(
+              future: bytesFuture,
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                final disabled = bytes == null;
+                return IconButton(
+                  key: const ValueKey('attachment_viewer_download'),
+                  tooltip: context.t.common.actions.pull,
+                  onPressed: disabled
+                      ? null
+                      : () => unawaited(_downloadAttachment(bytes)),
+                  icon: const Icon(Icons.download_rounded),
+                );
+              },
+            ),
+        ],
+      ),
       body: bytesFuture == null
           ? const Center(child: CircularProgressIndicator())
           : FutureBuilder(
@@ -799,7 +919,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                             children: [
                               _buildMetadataCard(
                                 context,
-                                mimeType: widget.attachment.mimeType,
                                 byteLen: widget.attachment.byteLen.toInt(),
                                 capturedAt: capturedAt,
                                 latitude: latitude,

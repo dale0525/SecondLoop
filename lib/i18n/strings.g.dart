@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1194 (597 per locale)
+/// Strings: 1198 (599 per locale)
 ///
-/// Built on 2026-02-09 at 10:28 UTC
+/// Built on 2026-02-09 at 15:56 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1316,6 +1316,7 @@ class _StringsAttachmentsContentEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
+  String get summary => 'Summary';
   String get excerpt => 'Excerpt';
   String get fullText => 'Full text';
   String get ocrTitle => 'OCR';
@@ -1330,6 +1331,7 @@ class _StringsAttachmentsContentEn {
   String get keepForegroundHint =>
       'Keep the app in foreground while OCR is running.';
   String get openWithSystem => 'Open with system app';
+  String get previewUnavailable => 'Preview unavailable';
   String get ocrFinished => 'OCR finished. Refreshing preview…';
   String get ocrFailed => 'OCR failed on this device.';
 }
@@ -4560,6 +4562,8 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
 
   // Translations
   @override
+  String get summary => '摘要';
+  @override
   String get excerpt => '摘要';
   @override
   String get fullText => '全文';
@@ -4581,6 +4585,8 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
   String get keepForegroundHint => 'OCR 进行中，请尽量保持应用在前台。';
   @override
   String get openWithSystem => '用系统应用打开';
+  @override
+  String get previewUnavailable => '预览不可用';
   @override
   String get ocrFinished => 'OCR 已完成，正在刷新预览…';
   @override
@@ -7676,6 +7682,8 @@ extension on Translations {
         return 'Original URL';
       case 'attachments.url.canonicalUrl':
         return 'Canonical URL';
+      case 'attachments.content.summary':
+        return 'Summary';
       case 'attachments.content.excerpt':
         return 'Excerpt';
       case 'attachments.content.fullText':
@@ -7698,6 +7706,8 @@ extension on Translations {
         return 'Keep the app in foreground while OCR is running.';
       case 'attachments.content.openWithSystem':
         return 'Open with system app';
+      case 'attachments.content.previewUnavailable':
+        return 'Preview unavailable';
       case 'attachments.content.ocrFinished':
         return 'OCR finished. Refreshing preview…';
       case 'attachments.content.ocrFailed':
@@ -8900,6 +8910,8 @@ extension on _StringsZhCn {
         return '原始链接';
       case 'attachments.url.canonicalUrl':
         return '规范链接';
+      case 'attachments.content.summary':
+        return '摘要';
       case 'attachments.content.excerpt':
         return '摘要';
       case 'attachments.content.fullText':
@@ -8922,6 +8934,8 @@ extension on _StringsZhCn {
         return 'OCR 进行中，请尽量保持应用在前台。';
       case 'attachments.content.openWithSystem':
         return '用系统应用打开';
+      case 'attachments.content.previewUnavailable':
+        return '预览不可用';
       case 'attachments.content.ocrFinished':
         return 'OCR 已完成，正在刷新预览…';
       case 'attachments.content.ocrFailed':

@@ -54,7 +54,7 @@ void main() {
     expect(shown, contains('source=ocr'));
   });
 
-  testWidgets('NonImageAttachmentView shows URL fields and excerpt',
+  testWidgets('NonImageAttachmentView renders markdown and action buttons',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-url',
@@ -75,8 +75,8 @@ void main() {
     final payload = <String, Object?>{
       'title': 'Example Title',
       'canonical_url': 'https://example.com/canonical',
-      'readable_text_excerpt': 'Excerpt line',
-      'readable_text_full': 'Excerpt line\nFull body',
+      'readable_text_excerpt': '# Excerpt Heading\n- bullet',
+      'readable_text_full': '# Full Heading\n```\nFull body\n```',
       'needs_ocr': false,
     };
 
@@ -106,9 +106,19 @@ void main() {
     expect(find.text('https://example.com/p'), findsOneWidget);
     expect(find.text('Canonical URL'), findsOneWidget);
     expect(find.text('https://example.com/canonical'), findsOneWidget);
-    expect(find.text('Excerpt'), findsOneWidget);
-    expect(find.text('Excerpt line'), findsOneWidget);
-    expect(find.byIcon(Icons.open_in_new_outlined), findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_content_tab_summary')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_content_tab_full')),
+        findsOneWidget);
+    expect(find.text('Excerpt Heading'), findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_content_share_button')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_content_download_button')),
+        findsOneWidget);
+
+    await tester.tap(find.text('Full text'));
+    await tester.pumpAndSettle();
+    expect(find.text('Full Heading'), findsOneWidget);
   });
 
   testWidgets('NonImageAttachmentView shows OCR required for textless PDF',

@@ -28,7 +28,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('image/png'), findsOneWidget);
+    expect(find.text('abc'), findsOneWidget);
     expect(find.text('12 B'), findsNothing);
     expect(find.byType(SlSurface), findsOneWidget);
   });

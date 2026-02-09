@@ -13,6 +13,8 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/chat/chat_image_attachment_thumbnail.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets(
     'Chat image thumbnail does not restart byte load on connectivity changes while loading',
@@ -31,21 +33,23 @@ void main() {
         final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
 
         await tester.pumpWidget(
-          MaterialApp(
-            home: SessionScope(
-              sessionKey: sessionKey,
-              lock: () {},
-              child: Scaffold(
-                body: ChatImageAttachmentThumbnail(
-                  attachment: const Attachment(
-                    sha256: 'abc',
-                    mimeType: 'image/png',
-                    path: 'attachments/abc.bin',
-                    byteLen: 67,
-                    createdAtMs: 0,
+          wrapWithI18n(
+            MaterialApp(
+              home: SessionScope(
+                sessionKey: sessionKey,
+                lock: () {},
+                child: Scaffold(
+                  body: ChatImageAttachmentThumbnail(
+                    attachment: const Attachment(
+                      sha256: 'abc',
+                      mimeType: 'image/png',
+                      path: 'attachments/abc.bin',
+                      byteLen: 67,
+                      createdAtMs: 0,
+                    ),
+                    attachmentsBackend: backend,
+                    onTap: () {},
                   ),
-                  attachmentsBackend: backend,
-                  onTap: () {},
                 ),
               ),
             ),

@@ -709,6 +709,7 @@
       "canonicalUrl": "规范链接"
     },
     "content": {
+      "summary": "摘要",
       "excerpt": "摘要",
       "fullText": "全文",
       "ocrTitle": "OCR",
@@ -720,6 +721,7 @@
       "ocrReadySubtitle": "已可用文本，如有需要可重新识别。",
       "keepForegroundHint": "OCR 进行中，请尽量保持应用在前台。",
       "openWithSystem": "用系统应用打开",
+      "previewUnavailable": "预览不可用",
       "ocrFinished": "OCR 已完成，正在刷新预览…",
       "ocrFailed": "此设备上 OCR 执行失败。"
     }

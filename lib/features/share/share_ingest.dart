@@ -250,7 +250,7 @@ final class ShareIngest {
               sessionKey,
               conversationId,
               role: 'user',
-              content: 'Shared image ($mimeType)',
+              content: '',
             );
             final attachmentsBackend = backend is AttachmentsBackend
                 ? backend as AttachmentsBackend
@@ -297,14 +297,11 @@ final class ShareIngest {
             conversationId ??=
                 (await backend.getOrCreateMainStreamConversation(sessionKey))
                     .id;
-            final content = safeFilename == null
-                ? 'Shared file (${mimeType.trim()})'
-                : 'Shared file: $safeFilename';
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,
               role: 'user',
-              content: content,
+              content: '',
             );
 
             final attachmentsBackend = backend is AttachmentsBackend

@@ -709,6 +709,7 @@
       "canonicalUrl": "Canonical URL"
     },
     "content": {
+      "summary": "Summary",
       "excerpt": "Excerpt",
       "fullText": "Full text",
       "ocrTitle": "OCR",
@@ -720,6 +721,7 @@
       "ocrReadySubtitle": "Text is available. You can re-run OCR if needed.",
       "keepForegroundHint": "Keep the app in foreground while OCR is running.",
       "openWithSystem": "Open with system app",
+      "previewUnavailable": "Preview unavailable",
       "ocrFinished": "OCR finished. Refreshing preview…",
       "ocrFailed": "OCR failed on this device."
     }

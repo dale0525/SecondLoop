@@ -4,6 +4,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../i18n/strings.g.dart';
@@ -13,7 +16,6 @@ import '../url_enrichment/url_enrichment_runner.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_keyframe_ocr_worker.dart';
 
-@visibleForTesting
 String fileExtensionForSystemOpenMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
   if (normalized == 'application/pdf') return '.pdf';
@@ -108,7 +110,12 @@ String _attachmentOcrLanguageHintLabel(BuildContext context, String hint) {
   }
 }
 
-class NonImageAttachmentView extends StatelessWidget {
+enum _AttachmentTextPane {
+  summary,
+  full,
+}
+
+class NonImageAttachmentView extends StatefulWidget {
   const NonImageAttachmentView({
     required this.attachment,
     required this.bytes,
@@ -136,33 +143,12 @@ class NonImageAttachmentView extends StatelessWidget {
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
 
-  static Future<void> _openFullTextDialog(
-    BuildContext context, {
-    required String title,
-    required String text,
-  }) async {
-    if (text.trim().isEmpty) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 520),
-            child: SingleChildScrollView(
-              child: SelectableText(text),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.cancel),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  @override
+  State<NonImageAttachmentView> createState() => _NonImageAttachmentViewState();
+}
+
+class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
+  _AttachmentTextPane _selectedTextPane = _AttachmentTextPane.summary;
 
   static String? _tryParseUrlManifestUrl(Uint8List bytes) {
     try {
@@ -186,6 +172,7 @@ class NonImageAttachmentView extends StatelessWidget {
     BuildContext context, {
     required String label,
     required String value,
+    bool markdown = false,
   }) {
     final v = value.trim();
     if (v.isEmpty) return const SizedBox.shrink();
@@ -199,16 +186,29 @@ class NonImageAttachmentView extends StatelessWidget {
             style: Theme.of(context).textTheme.labelMedium,
           ),
           const SizedBox(height: 4),
-          SelectableText(
-            v,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          if (markdown)
+            MarkdownBody(
+              data: v,
+              selectable: true,
+              styleSheet:
+                  MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                p: Theme.of(context).textTheme.bodySmall,
+                listBullet: Theme.of(context).textTheme.bodySmall,
+                code: Theme.of(context).textTheme.bodySmall,
+                codeblockPadding: const EdgeInsets.all(8),
+              ),
+            )
+          else
+            SelectableText(
+              v,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
         ],
       ),
     );
   }
 
-  static Widget _buildView(
+  Widget _buildView(
     BuildContext context, {
     required Attachment attachment,
     required Uint8List bytes,
@@ -247,9 +247,9 @@ class NonImageAttachmentView extends StatelessWidget {
         : null;
     final canonicalUrl = payload?['canonical_url']?.toString().trim();
 
-    final selectedText = selectAttachmentDisplayText(payload);
-    final excerpt = selectedText.excerpt.trim();
-    final full = selectedText.full.trim();
+    final selectedTextContent = selectAttachmentDisplayText(payload);
+    final excerpt = selectedTextContent.excerpt.trim();
+    final full = selectedTextContent.full.trim();
     final needsOcr = payload?['needs_ocr'] == true;
     final ocrStatus = (ocrStatusText ?? '').trim();
     final autoOcrStatus =
@@ -274,8 +274,16 @@ class NonImageAttachmentView extends StatelessWidget {
     final showOcrCard = supportsOcr &&
         (needsOcr || ocrInProgress || ocrStatus.isNotEmpty || canRunOcr);
 
-    final showFullButton = fullText.isNotEmpty &&
-        (excerptText.isEmpty || fullText.length > excerptText.length);
+    final showSummaryTab = excerptText.isNotEmpty;
+    final showFullTab = fullText.isNotEmpty;
+    final showTextTabs = showSummaryTab && showFullTab;
+    final activePane = showTextTabs
+        ? _selectedTextPane
+        : showSummaryTab
+            ? _AttachmentTextPane.summary
+            : _AttachmentTextPane.full;
+    final selectedMarkdownText =
+        activePane == _AttachmentTextPane.full ? fullText : excerptText;
     final isMobile = defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
     final ocrEngine = (payload?['ocr_engine'] ?? '').toString().trim();
@@ -296,7 +304,7 @@ class NonImageAttachmentView extends StatelessWidget {
     final debugMarker = buildPdfOcrDebugMarker(
       isPdf: isPdf,
       debugEnabled: kDebugMode,
-      source: sourceLabel(selectedText.source),
+      source: sourceLabel(selectedTextContent.source),
       autoStatus: autoStatus,
       needsOcr: needsOcr,
       ocrEngine: ocrEngine,
@@ -323,17 +331,6 @@ class NonImageAttachmentView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      context.t.attachments.metadata.format,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      attachment.mimeType,
-                      key: const ValueKey('attachment_metadata_format'),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
                       context.t.attachments.metadata.size,
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
@@ -355,6 +352,28 @@ class NonImageAttachmentView extends StatelessWidget {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          key:
+                              const ValueKey('attachment_content_share_button'),
+                          onPressed: () => unawaited(_shareAttachment(context)),
+                          icon: const Icon(Icons.share_outlined),
+                          label: Text(context.t.common.actions.share),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey(
+                              'attachment_content_download_button'),
+                          onPressed: () =>
+                              unawaited(_downloadAttachment(context)),
+                          icon: const Icon(Icons.download_rounded),
+                          label: Text(context.t.common.actions.pull),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -518,19 +537,49 @@ class NonImageAttachmentView extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
-              if (excerpt.isNotEmpty)
+              if (hasAnyText) ...[
+                if (showTextTabs)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SegmentedButton<_AttachmentTextPane>(
+                      segments: [
+                        ButtonSegment<_AttachmentTextPane>(
+                          value: _AttachmentTextPane.summary,
+                          label: Text(
+                            context.t.attachments.content.summary,
+                            key: const ValueKey(
+                                'attachment_content_tab_summary'),
+                          ),
+                        ),
+                        ButtonSegment<_AttachmentTextPane>(
+                          value: _AttachmentTextPane.full,
+                          label: Text(
+                            context.t.attachments.content.fullText,
+                            key: const ValueKey('attachment_content_tab_full'),
+                          ),
+                        ),
+                      ],
+                      selected: <_AttachmentTextPane>{_selectedTextPane},
+                      onSelectionChanged: (next) {
+                        final picked = next.firstOrNull;
+                        if (picked == null || picked == _selectedTextPane) {
+                          return;
+                        }
+                        setState(() {
+                          _selectedTextPane = picked;
+                        });
+                      },
+                    ),
+                  ),
                 _buildLabeledValueCard(
                   context,
-                  label: context.t.attachments.content.excerpt,
-                  value: excerpt,
-                )
-              else if (full.isNotEmpty)
-                _buildLabeledValueCard(
-                  context,
-                  label: context.t.attachments.content.fullText,
-                  value: full,
-                )
-              else
+                  label: activePane == _AttachmentTextPane.summary
+                      ? context.t.attachments.content.summary
+                      : context.t.attachments.content.fullText,
+                  value: selectedMarkdownText,
+                  markdown: true,
+                ),
+              ] else
                 SlSurface(
                   padding: const EdgeInsets.all(12),
                   child: showPreparingTextState
@@ -558,23 +607,6 @@ class NonImageAttachmentView extends StatelessWidget {
                           key: const ValueKey('attachment_no_text_status'),
                         ),
                 ),
-              if (showFullButton) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => unawaited(
-                      _openFullTextDialog(
-                        context,
-                        title: context.t.attachments.content.fullText,
-                        text: fullText,
-                      ),
-                    ),
-                    icon: const Icon(Icons.open_in_new_outlined, size: 18),
-                    label: Text(context.t.common.actions.open),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -592,17 +624,81 @@ class NonImageAttachmentView extends StatelessWidget {
     return '${gb.toStringAsFixed(1)} GB';
   }
 
-  Future<String> _materializeFileForSystemOpen() async {
-    final extension = fileExtensionForSystemOpenMimeType(attachment.mimeType);
-    final stem = attachment.sha256.trim().isEmpty
+  String _fileExtensionForDownload() {
+    final extension =
+        fileExtensionForSystemOpenMimeType(widget.attachment.mimeType);
+    return extension.isEmpty ? '.bin' : extension;
+  }
+
+  String _downloadFilename() {
+    final stem = widget.attachment.sha256.trim().isEmpty
         ? DateTime.now().millisecondsSinceEpoch.toString()
-        : attachment.sha256.trim();
+        : widget.attachment.sha256.trim();
+    return '$stem${_fileExtensionForDownload()}';
+  }
+
+  Future<File> _materializeTempDownloadFile() async {
+    final dir = await getTemporaryDirectory();
+    final outFile = File('${dir.path}/${_downloadFilename()}');
+    await outFile.writeAsBytes(widget.bytes, flush: true);
+    return outFile;
+  }
+
+  Future<void> _shareAttachment(BuildContext context) async {
+    try {
+      final file = await _materializeTempDownloadFile();
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: widget.attachment.mimeType)],
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _downloadAttachment(BuildContext context) async {
+    try {
+      final file = await _materializeTempDownloadFile();
+      final launched = await launchUrl(
+        Uri.file(file.path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(file.path),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<String> _materializeFileForSystemOpen() async {
+    final extension =
+        fileExtensionForSystemOpenMimeType(widget.attachment.mimeType);
+    final stem = widget.attachment.sha256.trim().isEmpty
+        ? DateTime.now().millisecondsSinceEpoch.toString()
+        : widget.attachment.sha256.trim();
     final tempDir = Directory(
       '${Directory.systemTemp.path}/secondloop_open_with_system',
     );
     await tempDir.create(recursive: true);
     final outFile = File('${tempDir.path}/$stem$extension');
-    await outFile.writeAsBytes(bytes, flush: true);
+    await outFile.writeAsBytes(widget.bytes, flush: true);
     return outFile.path;
   }
 
@@ -632,30 +728,31 @@ class NonImageAttachmentView extends StatelessWidget {
     Widget buildWith(AttachmentMetadata? meta, Map<String, Object?>? payload) {
       return _buildView(
         context,
-        attachment: attachment,
-        bytes: bytes,
+        attachment: widget.attachment,
+        bytes: widget.bytes,
         meta: meta,
         payload: payload,
-        onRunOcr: onRunOcr,
+        onRunOcr: widget.onRunOcr,
         onOpenWithSystem: () => _openWithSystemApp(context),
-        ocrRunning: ocrRunning,
-        ocrStatusText: ocrStatusText,
-        ocrLanguageHints: ocrLanguageHints,
-        onOcrLanguageHintsChanged: onOcrLanguageHintsChanged,
+        ocrRunning: widget.ocrRunning,
+        ocrStatusText: widget.ocrStatusText,
+        ocrLanguageHints: widget.ocrLanguageHints,
+        onOcrLanguageHintsChanged: widget.onOcrLanguageHintsChanged,
       );
     }
 
-    if (metadataFuture == null && annotationPayloadFuture == null) {
-      return buildWith(initialMetadata, initialAnnotationPayload);
+    if (widget.metadataFuture == null &&
+        widget.annotationPayloadFuture == null) {
+      return buildWith(widget.initialMetadata, widget.initialAnnotationPayload);
     }
 
     return FutureBuilder<AttachmentMetadata?>(
-      future: metadataFuture,
-      initialData: initialMetadata,
+      future: widget.metadataFuture,
+      initialData: widget.initialMetadata,
       builder: (context, metaSnapshot) {
         return FutureBuilder<Map<String, Object?>?>(
-          future: annotationPayloadFuture,
-          initialData: initialAnnotationPayload,
+          future: widget.annotationPayloadFuture,
+          initialData: widget.initialAnnotationPayload,
           builder: (context, payloadSnapshot) {
             return buildWith(metaSnapshot.data, payloadSnapshot.data);
           },
