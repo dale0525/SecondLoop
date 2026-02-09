@@ -28,13 +28,28 @@ using winrt::Windows::Globalization::ApplicationLanguages;
 using winrt::Windows::Globalization::Language;
 using winrt::Windows::Graphics::Imaging::BitmapAlphaMode;
 using winrt::Windows::Graphics::Imaging::BitmapDecoder;
+using winrt::Windows::Graphics::Imaging::BitmapEncoder;
 using winrt::Windows::Graphics::Imaging::BitmapPixelFormat;
 using winrt::Windows::Graphics::Imaging::SoftwareBitmap;
 using winrt::Windows::Media::Ocr::OcrEngine;
+using winrt::Windows::Storage::Streams::Buffer;
 using winrt::Windows::Storage::Streams::DataReader;
 using winrt::Windows::Storage::Streams::DataWriter;
 using winrt::Windows::Storage::Streams::InMemoryRandomAccessStream;
 using winrt::Windows::Storage::Streams::IRandomAccessStream;
+
+constexpr char kCommonPdfOcrPreset[] = "common_ocr_v1";
+constexpr int kCommonPdfOcrMaxPages = 10'000;
+constexpr int kCommonPdfOcrDpi = 180;
+constexpr uint32_t kPdfRenderMaxOutputWidth = 1536;
+constexpr uint32_t kPdfRenderMaxOutputHeight = 20'000;
+constexpr uint64_t kPdfRenderMaxOutputPixels = 20'000'000ULL;
+
+struct PdfRenderPreset {
+  std::string id;
+  int max_pages;
+  int dpi;
+};
 
 std::string Trim(std::string text) {
   auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
@@ -270,6 +285,260 @@ std::optional<OcrEngine> CreateEngineFromHints(const std::string& hints) {
   return std::nullopt;
 }
 
+
+std::string ReadStringArg(const flutter::EncodableMap* args, const char* key) {
+  if (args == nullptr) {
+    return std::string();
+  }
+  auto it = args->find(flutter::EncodableValue(key));
+  if (it == args->end()) {
+    return std::string();
+  }
+  const auto* value = std::get_if<std::string>(&it->second);
+  if (value == nullptr) {
+    return std::string();
+  }
+  return ToLowerAscii(Trim(*value));
+}
+
+PdfRenderPreset ResolvePdfRenderPreset(const flutter::EncodableMap* args) {
+  const auto preset_id = ReadStringArg(args, "ocr_model_preset");
+  if (preset_id == kCommonPdfOcrPreset) {
+    return PdfRenderPreset{
+        std::string(kCommonPdfOcrPreset),
+        kCommonPdfOcrMaxPages,
+        kCommonPdfOcrDpi,
+    };
+  }
+
+  const int max_pages =
+      ClampPositiveInt(args, "max_pages", kCommonPdfOcrMaxPages, 10'000);
+  const int dpi = ClampPositiveInt(args, "dpi", kCommonPdfOcrDpi, 600);
+  return PdfRenderPreset{
+      preset_id.empty() ? std::string(kCommonPdfOcrPreset) : preset_id,
+      max_pages,
+      dpi,
+  };
+}
+
+std::optional<std::vector<uint8_t>> CopySoftwareBitmapPixelsBgra(
+    SoftwareBitmap bitmap) {
+  try {
+    if (bitmap.BitmapPixelFormat() != BitmapPixelFormat::Bgra8 ||
+        bitmap.BitmapAlphaMode() != BitmapAlphaMode::Premultiplied) {
+      bitmap = SoftwareBitmap::Convert(
+          bitmap, BitmapPixelFormat::Bgra8, BitmapAlphaMode::Premultiplied);
+    }
+
+    const int width = bitmap.PixelWidth();
+    const int height = bitmap.PixelHeight();
+    if (width <= 0 || height <= 0) {
+      return std::nullopt;
+    }
+
+    const uint64_t total_bytes =
+        static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4ULL;
+    if (total_bytes == 0 || total_bytes > std::numeric_limits<uint32_t>::max()) {
+      return std::nullopt;
+    }
+
+    Buffer buffer(static_cast<uint32_t>(total_bytes));
+    buffer.Length(static_cast<uint32_t>(total_bytes));
+    bitmap.CopyToBuffer(buffer);
+
+    auto reader = DataReader::FromBuffer(buffer);
+    std::vector<uint8_t> pixels(static_cast<size_t>(total_bytes));
+    reader.ReadBytes(winrt::array_view<uint8_t>(pixels));
+    return pixels;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+std::optional<std::vector<uint8_t>> EncodeJpegFromBgra(
+    const std::vector<uint8_t>& pixels, uint32_t width, uint32_t height) {
+  try {
+    if (width == 0 || height == 0 || pixels.empty()) {
+      return std::nullopt;
+    }
+
+    InMemoryRandomAccessStream stream;
+    auto encoder = BitmapEncoder::CreateAsync(
+        BitmapEncoder::JpegEncoderId(), stream).get();
+    encoder.SetPixelData(
+        BitmapPixelFormat::Bgra8,
+        BitmapAlphaMode::Ignore,
+        width,
+        height,
+        96.0,
+        96.0,
+        winrt::array_view<const uint8_t>(pixels));
+    encoder.FlushAsync().get();
+
+    stream.Seek(0);
+    const uint64_t out_size = stream.Size();
+    if (out_size == 0 || out_size > std::numeric_limits<uint32_t>::max()) {
+      return std::nullopt;
+    }
+
+    DataReader reader(stream);
+    reader.LoadAsync(static_cast<uint32_t>(out_size)).get();
+    std::vector<uint8_t> jpeg_bytes(static_cast<size_t>(out_size));
+    reader.ReadBytes(winrt::array_view<uint8_t>(jpeg_bytes));
+    return jpeg_bytes;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+std::optional<flutter::EncodableMap> RunPdfRenderToLongImage(
+    const std::vector<uint8_t>& bytes, int max_pages, int dpi) {
+  try {
+    auto stream = BytesToStream(bytes);
+    auto document = PdfDocument::LoadFromStreamAsync(stream).get();
+    const uint32_t page_count = document.PageCount();
+    if (page_count == 0) {
+      return std::nullopt;
+    }
+
+    const uint32_t target_pages =
+        std::min(page_count, static_cast<uint32_t>(max_pages));
+
+    std::vector<SoftwareBitmap> page_bitmaps;
+    page_bitmaps.reserve(target_pages);
+
+    uint32_t output_width = 0;
+    uint32_t output_height = 0;
+    uint32_t processed_pages = 0;
+
+    for (uint32_t index = 0; index < target_pages; ++index) {
+      auto page = document.GetPage(index);
+      auto size = page.Size();
+
+      const double scale =
+          std::clamp(static_cast<double>(dpi) / 72.0, 1.0, 6.0);
+      uint32_t width = std::max(
+          1, static_cast<int32_t>(std::llround(size.Width * scale)));
+      uint32_t height = std::max(
+          1, static_cast<int32_t>(std::llround(size.Height * scale)));
+
+      if (width > kPdfRenderMaxOutputWidth) {
+        const double ratio =
+            static_cast<double>(kPdfRenderMaxOutputWidth) / static_cast<double>(width);
+        width = kPdfRenderMaxOutputWidth;
+        height = std::max(
+            1, static_cast<int32_t>(std::llround(static_cast<double>(height) * ratio)));
+      }
+
+      const uint32_t next_width = std::max(output_width, width);
+      const uint64_t next_height =
+          static_cast<uint64_t>(output_height) + static_cast<uint64_t>(height);
+      if (next_height > kPdfRenderMaxOutputHeight) {
+        break;
+      }
+      const uint64_t next_pixels =
+          static_cast<uint64_t>(next_width) * static_cast<uint64_t>(next_height);
+      if (next_pixels > kPdfRenderMaxOutputPixels) {
+        break;
+      }
+
+      InMemoryRandomAccessStream image_stream;
+      PdfPageRenderOptions options;
+      options.DestinationWidth(width);
+      options.DestinationHeight(height);
+      page.RenderToStreamAsync(image_stream, options).get();
+      image_stream.Seek(0);
+
+      auto bitmap = DecodeBitmap(image_stream);
+      if (!bitmap.has_value()) {
+        continue;
+      }
+
+      const uint32_t bitmap_width = static_cast<uint32_t>(bitmap->PixelWidth());
+      const uint32_t bitmap_height = static_cast<uint32_t>(bitmap->PixelHeight());
+      if (bitmap_width == 0 || bitmap_height == 0) {
+        continue;
+      }
+
+      const uint32_t actual_next_width = std::max(output_width, bitmap_width);
+      const uint64_t actual_next_height =
+          static_cast<uint64_t>(output_height) + static_cast<uint64_t>(bitmap_height);
+      if (actual_next_height > kPdfRenderMaxOutputHeight) {
+        break;
+      }
+      const uint64_t actual_next_pixels =
+          static_cast<uint64_t>(actual_next_width) * actual_next_height;
+      if (actual_next_pixels > kPdfRenderMaxOutputPixels) {
+        break;
+      }
+
+      output_width = actual_next_width;
+      output_height = static_cast<uint32_t>(actual_next_height);
+      page_bitmaps.push_back(*bitmap);
+      processed_pages += 1;
+    }
+
+    if (page_bitmaps.empty() || output_width == 0 || output_height == 0) {
+      return std::nullopt;
+    }
+
+    const uint64_t canvas_bytes =
+        static_cast<uint64_t>(output_width) * static_cast<uint64_t>(output_height) * 4ULL;
+    if (canvas_bytes == 0 || canvas_bytes > std::numeric_limits<size_t>::max()) {
+      return std::nullopt;
+    }
+
+    std::vector<uint8_t> canvas(static_cast<size_t>(canvas_bytes), 255);
+    uint32_t y_offset = 0;
+    for (const auto& bitmap : page_bitmaps) {
+      const auto page_pixels = CopySoftwareBitmapPixelsBgra(bitmap);
+      if (!page_pixels.has_value()) {
+        continue;
+      }
+
+      const uint32_t width = static_cast<uint32_t>(bitmap.PixelWidth());
+      const uint32_t height = static_cast<uint32_t>(bitmap.PixelHeight());
+      if (width == 0 || height == 0 || y_offset >= output_height) {
+        continue;
+      }
+
+      const uint32_t rows_to_copy =
+          std::min(height, output_height - y_offset);
+      const size_t src_row_bytes = static_cast<size_t>(width) * 4;
+
+      for (uint32_t row = 0; row < rows_to_copy; ++row) {
+        const size_t src_offset = static_cast<size_t>(row) * src_row_bytes;
+        const size_t dst_offset =
+            (static_cast<size_t>(y_offset + row) * static_cast<size_t>(output_width)) * 4;
+        std::copy_n(
+            page_pixels->data() + src_offset,
+            src_row_bytes,
+            canvas.data() + dst_offset);
+      }
+
+      y_offset = std::min(output_height, y_offset + height);
+    }
+
+    const auto jpeg_bytes = EncodeJpegFromBgra(canvas, output_width, output_height);
+    if (!jpeg_bytes.has_value() || jpeg_bytes->empty()) {
+      return std::nullopt;
+    }
+
+    flutter::EncodableMap payload;
+    payload[flutter::EncodableValue("image_bytes")] =
+        flutter::EncodableValue(*jpeg_bytes);
+    payload[flutter::EncodableValue("image_mime_type")] =
+        flutter::EncodableValue(std::string("image/jpeg"));
+    payload[flutter::EncodableValue("page_count")] =
+        flutter::EncodableValue(static_cast<int32_t>(page_count));
+    payload[flutter::EncodableValue("processed_pages")] =
+        flutter::EncodableValue(static_cast<int32_t>(processed_pages));
+    return payload;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
 std::optional<flutter::EncodableMap> RunImageOcr(
     const std::vector<uint8_t>& bytes, const std::string& language_hints) {
   try {
@@ -473,6 +742,17 @@ void FlutterWindow::HandleOcrMethodCall(
     return;
   }
 
+  if (method == "renderPdfToLongImage") {
+    const auto preset = ResolvePdfRenderPreset(args);
+    auto payload =
+        RunPdfRenderToLongImage(*maybe_bytes, preset.max_pages, preset.dpi);
+    if (!payload.has_value()) {
+      result->Success(flutter::EncodableValue());
+      return;
+    }
+    result->Success(flutter::EncodableValue(*payload));
+    return;
+  }
 
   result->NotImplemented();
 }

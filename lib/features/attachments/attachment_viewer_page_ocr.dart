@@ -176,13 +176,6 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       const dpi = 180;
       final languageHints = _effectiveDocumentOcrLanguageHints;
       final bytes = await (_bytesFuture ??= _loadBytes());
-      ContentEnrichmentConfig? contentConfig;
-      try {
-        contentConfig = await const RustContentEnrichmentConfigStore()
-            .readContentEnrichment(sessionKey);
-      } catch (_) {
-        contentConfig = null;
-      }
       final mediaConfig = await const RustMediaAnnotationConfigStore()
           .read(sessionKey)
           .catchError(
@@ -207,25 +200,21 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           idToken = null;
         }
       }
-      final ocrMode =
-          normalizeOcrEngineMode(contentConfig?.ocrEngineMode ?? '');
       final pageCountHint = asInt(existingPayload['page_count']) ?? 1;
       PlatformPdfOcrResult? platformOcr;
-      if (ocrMode == 'multimodal_llm') {
-        platformOcr = await tryConfiguredMultimodalPdfOcr(
-          backend: backend,
-          sessionKey: sessionKey,
-          pdfBytes: bytes,
-          pageCountHint: pageCountHint,
-          languageHints: languageHints,
-          subscriptionStatus: subscriptionStatus,
-          mediaAnnotationConfig: mediaConfig,
-          llmProfiles: llmProfiles,
-          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-          cloudIdToken: idToken?.trim() ?? '',
-          cloudModelName: gatewayConfig.modelName,
-        );
-      }
+      platformOcr = await tryConfiguredMultimodalPdfOcr(
+        backend: backend,
+        sessionKey: sessionKey,
+        pdfBytes: bytes,
+        pageCountHint: pageCountHint,
+        languageHints: languageHints,
+        subscriptionStatus: subscriptionStatus,
+        mediaAnnotationConfig: mediaConfig,
+        llmProfiles: llmProfiles,
+        cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+        cloudIdToken: idToken?.trim() ?? '',
+        cloudModelName: gatewayConfig.modelName,
+      );
       platformOcr ??= await PlatformPdfOcr.tryOcrPdfBytes(
         bytes,
         maxPages: maxPages,

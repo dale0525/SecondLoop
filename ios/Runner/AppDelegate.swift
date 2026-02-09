@@ -9,6 +9,18 @@ import Vision
 
 @UIApplicationMain
 @objc class AppDelegate: FlutterAppDelegate, CLLocationManagerDelegate {
+  private struct PdfRenderPreset {
+    let id: String
+    let maxPages: Int
+    let dpi: Int
+  }
+
+  private let commonPdfOcrPreset = PdfRenderPreset(
+    id: "common_ocr_v1",
+    maxPages: 10_000,
+    dpi: 180
+  )
+
   private var locationManager: CLLocationManager?
   private var pendingLocationResult: FlutterResult?
 
@@ -94,6 +106,8 @@ import Vision
           self.handleOcrPdf(call: call, result: result)
         case "ocrImage":
           self.handleOcrImage(call: call, result: result)
+        case "renderPdfToLongImage":
+          self.handleRenderPdfToLongImage(call: call, result: result)
         default:
           result(FlutterMethodNotImplemented)
         }
@@ -311,6 +325,56 @@ import Vision
     }
   }
 
+  private func handleRenderPdfToLongImage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard #available(iOS 13.0, *) else {
+      result(nil)
+      return
+    }
+    guard let args = call.arguments as? [String: Any],
+          let typed = args["bytes"] as? FlutterStandardTypedData else {
+      result(nil)
+      return
+    }
+
+    let preset = resolvePdfRenderPreset(args)
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let payload = self.renderPdfToLongImage(
+        pdfData: typed.data,
+        maxPages: preset.maxPages,
+        dpi: preset.dpi
+      )
+      DispatchQueue.main.async {
+        result(payload)
+      }
+    }
+  }
+
+  private func resolvePdfRenderPreset(_ args: [String: Any]) -> PdfRenderPreset {
+    let presetId = (args["ocr_model_preset"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased() ?? ""
+    if presetId == commonPdfOcrPreset.id {
+      return commonPdfOcrPreset
+    }
+
+    let maxPages = normalizePositiveInt(
+      args["max_pages"],
+      fallback: commonPdfOcrPreset.maxPages,
+      upperBound: 10_000
+    )
+    let dpi = normalizePositiveInt(
+      args["dpi"],
+      fallback: commonPdfOcrPreset.dpi,
+      upperBound: 600
+    )
+    return PdfRenderPreset(
+      id: presetId.isEmpty ? commonPdfOcrPreset.id : presetId,
+      maxPages: maxPages,
+      dpi: dpi
+    )
+  }
+
   private func normalizePositiveInt(_ raw: Any?, fallback: Int, upperBound: Int) -> Int {
     let value: Int
     switch raw {
@@ -466,10 +530,127 @@ import Vision
     context.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
     context.saveGState()
     context.scaleBy(x: scale, y: scale)
-    context.translateBy(x: 0, y: bounds.height)
-    context.scaleBy(x: 1, y: -1)
     page.draw(with: .mediaBox, to: context)
     context.restoreGState()
+    return context.makeImage()
+  }
+
+  @available(iOS 13.0, *)
+  private func renderPdfToLongImage(
+    pdfData: Data,
+    maxPages: Int,
+    dpi: Int
+  ) -> [String: Any]? {
+    guard let document = PDFDocument(data: pdfData) else {
+      return nil
+    }
+    let pageCount = document.pageCount
+    if pageCount <= 0 {
+      return nil
+    }
+
+    let targetPages = min(pageCount, maxPages)
+    let maxOutputWidth = 1536
+    let maxOutputHeight = 20_000
+    let maxOutputPixels = 20_000_000
+
+    var pageImages = [CGImage]()
+    var totalHeight = 0
+    var outputWidth = 0
+    var processedPages = 0
+
+    for index in 0..<targetPages {
+      guard let page = document.page(at: index),
+            let rawImage = renderPdfPageAsCgImage(page: page, dpi: dpi) else {
+        continue
+      }
+
+      var image = rawImage
+      if image.width > maxOutputWidth {
+        let ratio = CGFloat(maxOutputWidth) / CGFloat(image.width)
+        let resizedHeight = max(1, Int(CGFloat(image.height) * ratio))
+        if let resized = resizeCgImage(image, width: maxOutputWidth, height: resizedHeight) {
+          image = resized
+        }
+      }
+
+      let nextHeight = totalHeight + image.height
+      let nextWidth = max(outputWidth, image.width)
+      if nextHeight > maxOutputHeight { break }
+      if nextWidth * nextHeight > maxOutputPixels { break }
+
+      pageImages.append(image)
+      totalHeight = nextHeight
+      outputWidth = nextWidth
+      processedPages += 1
+    }
+
+    if pageImages.isEmpty || outputWidth <= 0 || totalHeight <= 0 {
+      return nil
+    }
+
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: nil,
+      width: outputWidth,
+      height: totalHeight,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+      return nil
+    }
+
+    context.setFillColor(UIColor.white.cgColor)
+    context.fill(CGRect(x: 0, y: 0, width: outputWidth, height: totalHeight))
+
+    var offsetY = 0
+    for image in pageImages {
+      let drawRect = CGRect(
+        x: 0,
+        y: totalHeight - offsetY - image.height,
+        width: image.width,
+        height: image.height
+      )
+      context.draw(image, in: drawRect)
+      offsetY += image.height
+    }
+
+    guard let merged = context.makeImage() else {
+      return nil
+    }
+
+    let uiImage = UIImage(cgImage: merged)
+    guard let jpegData = uiImage.jpegData(compressionQuality: 0.82), !jpegData.isEmpty else {
+      return nil
+    }
+
+    return [
+      "image_bytes": FlutterStandardTypedData(bytes: jpegData),
+      "image_mime_type": "image/jpeg",
+      "page_count": pageCount,
+      "processed_pages": processedPages,
+    ]
+  }
+
+  private func resizeCgImage(_ image: CGImage, width: Int, height: Int) -> CGImage? {
+    if width <= 0 || height <= 0 { return nil }
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: nil,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+      return nil
+    }
+    context.setFillColor(UIColor.white.cgColor)
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
     return context.makeImage()
   }
 
@@ -477,90 +658,57 @@ import Vision
     let normalized = hints
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .lowercased()
-    var languages = [String]()
-    switch normalized {
-    case "", "device_plus_en":
+
+    func deduped(_ languages: [String]) -> [String] {
+      var unique = [String]()
+      for lang in languages {
+        let trimmed = lang.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || unique.contains(trimmed) {
+          continue
+        }
+        unique.append(trimmed)
+      }
+      return unique
+    }
+
+    if normalized.isEmpty || normalized == "device_plus_en" {
       let preferred = Locale.preferredLanguages.first ?? Locale.current.identifier
       let preferredLower = preferred.lowercased()
-      if preferredLower.hasPrefix("zh") {
-        languages.append("zh-Hans")
-        languages.append("zh-Hant")
-        languages.append("en-US")
-      } else if preferredLower.hasPrefix("ja") {
-        languages.append("ja-JP")
-        languages.append("en-US")
-      } else if preferredLower.hasPrefix("ko") {
-        languages.append("ko-KR")
-        languages.append("en-US")
-      } else if preferredLower.hasPrefix("fr") {
-        languages.append("fr-FR")
-        languages.append("en-US")
-      } else if preferredLower.hasPrefix("de") {
-        languages.append("de-DE")
-        languages.append("en-US")
-      } else if preferredLower.hasPrefix("es") {
-        languages.append("es-ES")
-        languages.append("en-US")
-      } else {
-        languages.append("en-US")
+      let localeMapping: [(String, [String])] = [
+        ("zh", ["zh-Hans", "zh-Hant", "en-US"]),
+        ("ja", ["ja-JP", "en-US"]),
+        ("ko", ["ko-KR", "en-US"]),
+        ("fr", ["fr-FR", "en-US"]),
+        ("de", ["de-DE", "en-US"]),
+        ("es", ["es-ES", "en-US"]),
+      ]
+      for (prefix, languages) in localeMapping where preferredLower.hasPrefix(prefix) {
+        return deduped(languages)
       }
-    case "en":
-      languages.append("en-US")
-    case "zh_strict":
-      languages.append("zh-Hans")
-      languages.append("zh-Hant")
-    case "zh_en":
-      languages.append("zh-Hans")
-      languages.append("zh-Hant")
-      languages.append("en-US")
-    case "ja_en":
-      languages.append("ja-JP")
-      languages.append("en-US")
-    case "ko_en":
-      languages.append("ko-KR")
-      languages.append("en-US")
-    case "fr_en":
-      languages.append("fr-FR")
-      languages.append("en-US")
-    case "de_en":
-      languages.append("de-DE")
-      languages.append("en-US")
-    case "es_en":
-      languages.append("es-ES")
-      languages.append("en-US")
-    default:
-      languages.append("en-US")
+      return ["en-US"]
     }
 
-    var unique = [String]()
-    for lang in languages {
-      let trimmed = lang.trimmingCharacters(in: .whitespacesAndNewlines)
-      if trimmed.isEmpty || unique.contains(trimmed) {
-        continue
-      }
-      unique.append(trimmed)
-    }
-    return unique
+    let explicitMapping: [String: [String]] = [
+      "en": ["en-US"],
+      "zh_strict": ["zh-Hans", "zh-Hant"],
+      "zh_en": ["zh-Hans", "zh-Hant", "en-US"],
+      "ja_en": ["ja-JP", "en-US"],
+      "ko_en": ["ko-KR", "en-US"],
+      "fr_en": ["fr-FR", "en-US"],
+      "de_en": ["de-DE", "en-US"],
+      "es_en": ["es-ES", "en-US"],
+    ]
+
+    return deduped(explicitMapping[normalized] ?? ["en-US"])
   }
-
   private func visionUsesLanguageCorrection(from hints: String) -> Bool {
-    let normalized = hints
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-      .lowercased()
-    switch normalized {
-    case "zh_strict":
-      return false
-    default:
-      return true
-    }
+    hints.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "zh_strict"
   }
 
   private func preparedVisionImage(from image: CGImage, languageHints: String) -> CGImage? {
     let normalized = languageHints
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .lowercased()
-    // For degraded Chinese scans/watermarks, a simple binarization pass often
-    // removes light overlays and improves OCR stability.
     if normalized == "zh_strict" || normalized == "zh_en" {
       return binarizedForOcr(image) ?? image
     }

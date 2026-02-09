@@ -323,4 +323,59 @@ void main() {
     expect(result!.engine, 'desktop_rust_pdf_onnx');
     expect(nativeCalled, isFalse);
   });
+
+  test('PlatformPdfRender parses native rendered long image payload', () async {
+    const channel = MethodChannel('secondloop/ocr');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'renderPdfToLongImage');
+      return <String, Object?>{
+        'image_bytes': Uint8List.fromList(const <int>[1, 2, 3, 4]),
+        'image_mime_type': 'image/jpeg',
+        'page_count': 5,
+        'processed_pages': 4,
+      };
+    });
+
+    final result = await PlatformPdfRender.tryRenderPdfToLongImage(
+      Uint8List.fromList(const <int>[8, 9, 10]),
+      preset: PlatformPdfRenderPreset.common,
+    );
+
+    expect(result, isNotNull);
+    expect(result!.mimeType, 'image/jpeg');
+    expect(result.pageCount, 5);
+    expect(result.processedPages, 4);
+    expect(result.imageBytes, Uint8List.fromList(const <int>[1, 2, 3, 4]));
+  });
+
+  test('PlatformPdfRender uses desktop runtime render path on linux', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+
+    final result = await PlatformPdfRender.tryRenderPdfToLongImage(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      preset: PlatformPdfRenderPreset.common,
+      nativeRenderInvoke:
+          (bytes, {required PlatformPdfRenderPreset preset}) async => null,
+      runtimeRenderInvoke: (bytes,
+          {required maxPages, required dpi, required languageHints}) async {
+        expect(languageHints, kDesktopRuntimeRenderLongImageHint);
+        return <String, Object?>{
+          'ocr_text_full': 'AQID',
+          'ocr_text_excerpt': 'ignored',
+          'ocr_engine': 'desktop_rust_pdf_render_jpeg',
+          'ocr_is_truncated': false,
+          'ocr_page_count': 3,
+          'ocr_processed_pages': 2,
+        };
+      },
+    );
+
+    expect(result, isNotNull);
+    expect(result!.mimeType, 'image/jpeg');
+    expect(result.pageCount, 3);
+    expect(result.processedPages, 2);
+    expect(result.imageBytes, Uint8List.fromList(const <int>[1, 2, 3]));
+  });
 }

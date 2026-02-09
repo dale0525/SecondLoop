@@ -175,7 +175,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     required NativeAppBackend backend,
     required Uint8List sessionKey,
     required ContentEnrichmentConfig? contentConfig,
-    required String ocrEngineMode,
     required Future<PlatformPdfOcrResult?> Function(
       Uint8List bytes, {
       required int pageCount,
@@ -256,20 +255,13 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           continue;
         }
 
-        final ocr = ocrEngineMode == 'multimodal_llm'
-            ? (await runMultimodalPdfOcr(bytes, pageCount: pageCount) ??
-                await PlatformPdfOcr.tryOcrPdfBytes(
-                  bytes,
-                  maxPages: runMaxPages,
-                  dpi: dpi,
-                  languageHints: languageHints,
-                ))
-            : await PlatformPdfOcr.tryOcrPdfBytes(
-                bytes,
-                maxPages: runMaxPages,
-                dpi: dpi,
-                languageHints: languageHints,
-              );
+        final ocr = await runMultimodalPdfOcr(bytes, pageCount: pageCount) ??
+            await PlatformPdfOcr.tryOcrPdfBytes(
+              bytes,
+              maxPages: runMaxPages,
+              dpi: dpi,
+              languageHints: languageHints,
+            );
 
         final updatedPayload = Map<String, Object?>.from(runningPayload);
         updatedPayload.remove('ocr_auto_running_ms');
@@ -506,8 +498,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final audioTranscribeByokProfile = effectiveOpenAiProfile();
       final audioTranscribeEnabled = audioTranscribeConfigured &&
           (audioTranscribeCloudAvailable || audioTranscribeByokProfile != null);
-      final ocrEngineMode =
-          normalizeOcrEngineMode(contentConfig?.ocrEngineMode ?? '');
 
       if (!geoReverseEnabled &&
           !annotationEnabled &&
@@ -579,7 +569,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
-            ocrEngineMode: ocrEngineMode,
             runMultimodalPdfOcr: (bytes, {required pageCount}) {
               return tryConfiguredMultimodalPdfOcr(
                 backend: backend,

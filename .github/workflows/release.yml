@@ -351,7 +351,9 @@ jobs:
             liblzma-dev \
             libsecret-1-dev \
             ninja-build \
-            pkg-config
+            pkg-config \
+            libpoppler-glib-dev \
+            tesseract-ocr
       - name: Validate prod config
         shell: bash
         run: |

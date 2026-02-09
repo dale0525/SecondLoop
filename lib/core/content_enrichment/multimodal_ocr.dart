@@ -11,6 +11,20 @@ import '../backend/native_backend.dart';
 const _kOcrMarkdownLangPrefix = 'ocr_markdown:';
 const _kDefaultLanguageHints = 'device_plus_en';
 
+typedef TryCloudOcrForPdf = Future<PlatformPdfOcrResult?> Function({
+  required String mimeType,
+  required Uint8List mediaBytes,
+  required int pageCountHint,
+});
+
+typedef TryByokOcrForPdf = Future<PlatformPdfOcrResult?> Function({
+  required String profileId,
+  required String modelName,
+  required String mimeType,
+  required Uint8List mediaBytes,
+  required int pageCountHint,
+});
+
 String normalizeOcrEngineMode(String mode) {
   switch (mode.trim()) {
     case 'multimodal_llm':
@@ -18,6 +32,33 @@ String normalizeOcrEngineMode(String mode) {
     default:
       return 'platform_native';
   }
+}
+
+bool canUseCloudMultimodalOcr({
+  required SubscriptionStatus subscriptionStatus,
+  required MediaAnnotationConfig mediaAnnotationConfig,
+  required String cloudGatewayBaseUrl,
+  required String cloudIdToken,
+}) {
+  return subscriptionStatus == SubscriptionStatus.entitled &&
+      cloudGatewayBaseUrl.trim().isNotEmpty &&
+      cloudIdToken.trim().isNotEmpty;
+}
+
+bool shouldAttemptMultimodalPdfOcr({
+  required String ocrEngineMode,
+  required SubscriptionStatus subscriptionStatus,
+  required MediaAnnotationConfig mediaAnnotationConfig,
+  required String cloudGatewayBaseUrl,
+  required String cloudIdToken,
+}) {
+  if (normalizeOcrEngineMode(ocrEngineMode) == 'multimodal_llm') return true;
+  return canUseCloudMultimodalOcr(
+    subscriptionStatus: subscriptionStatus,
+    mediaAnnotationConfig: mediaAnnotationConfig,
+    cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+    cloudIdToken: cloudIdToken,
+  );
 }
 
 LlmProfile? resolveMultimodalOcrByokProfile({
@@ -118,39 +159,119 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
   required String cloudGatewayBaseUrl,
   required String cloudIdToken,
   required String cloudModelName,
+  Future<PlatformPdfRenderedImage?> Function(
+    Uint8List bytes, {
+    PlatformPdfRenderPreset preset,
+  })? renderPdfToImage,
+  TryCloudOcrForPdf? tryCloudOcr,
+  TryByokOcrForPdf? tryByokOcr,
 }) async {
-  final canUseCloud = subscriptionStatus == SubscriptionStatus.entitled &&
-      mediaAnnotationConfig.providerMode == 'cloud_gateway' &&
-      cloudGatewayBaseUrl.trim().isNotEmpty &&
-      cloudIdToken.trim().isNotEmpty;
-
-  if (canUseCloud) {
-    return tryMultimodalOcrViaCloud(
-      backend: backend,
-      gatewayBaseUrl: cloudGatewayBaseUrl,
-      idToken: cloudIdToken,
-      modelName: cloudModelName,
-      languageHints: languageHints,
-      mimeType: 'application/pdf',
-      mediaBytes: pdfBytes,
-      pageCountHint: pageCountHint,
-    );
-  }
+  final canUseCloud = canUseCloudMultimodalOcr(
+    subscriptionStatus: subscriptionStatus,
+    mediaAnnotationConfig: mediaAnnotationConfig,
+    cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+    cloudIdToken: cloudIdToken,
+  );
 
   final byokProfile = resolveMultimodalOcrByokProfile(
     profiles: llmProfiles,
     preferredProfileId: mediaAnnotationConfig.byokProfileId,
   );
-  if (byokProfile == null) return null;
-  return tryMultimodalOcrViaByok(
-    sessionKey: sessionKey,
-    profileId: byokProfile.id,
-    modelName: byokProfile.modelName,
-    languageHints: languageHints,
-    mimeType: 'application/pdf',
-    mediaBytes: pdfBytes,
-    pageCountHint: pageCountHint,
+
+  if (!canUseCloud && byokProfile == null) {
+    return null;
+  }
+
+  final rendered =
+      await (renderPdfToImage ?? PlatformPdfRender.tryRenderPdfToLongImage)(
+    pdfBytes,
+    preset: PlatformPdfRenderPreset.common,
   );
+  if (rendered == null || rendered.imageBytes.isEmpty) {
+    return null;
+  }
+
+  final normalizedPageCount = rendered.processedPages > 0
+      ? rendered.processedPages
+      : (rendered.pageCount > 0 ? rendered.pageCount : pageCountHint);
+
+  final cloudRunner = tryCloudOcr ??
+      ({
+        required String mimeType,
+        required Uint8List mediaBytes,
+        required int pageCountHint,
+      }) {
+        return tryMultimodalOcrViaCloud(
+          backend: backend,
+          gatewayBaseUrl: cloudGatewayBaseUrl,
+          idToken: cloudIdToken,
+          modelName: cloudModelName,
+          languageHints: languageHints,
+          mimeType: mimeType,
+          mediaBytes: mediaBytes,
+          pageCountHint: pageCountHint,
+        );
+      };
+
+  final byokRunner = tryByokOcr ??
+      ({
+        required String profileId,
+        required String modelName,
+        required String mimeType,
+        required Uint8List mediaBytes,
+        required int pageCountHint,
+      }) {
+        return tryMultimodalOcrViaByok(
+          sessionKey: sessionKey,
+          profileId: profileId,
+          modelName: modelName,
+          languageHints: languageHints,
+          mimeType: mimeType,
+          mediaBytes: mediaBytes,
+          pageCountHint: pageCountHint,
+        );
+      };
+
+  if (canUseCloud) {
+    try {
+      final cloud = await cloudRunner(
+        mimeType: rendered.mimeType,
+        mediaBytes: rendered.imageBytes,
+        pageCountHint: normalizedPageCount,
+      );
+      if (cloud != null) return cloud;
+    } catch (_) {}
+
+    if (byokProfile != null) {
+      try {
+        final byok = await byokRunner(
+          profileId: byokProfile.id,
+          modelName: byokProfile.modelName,
+          mimeType: rendered.mimeType,
+          mediaBytes: rendered.imageBytes,
+          pageCountHint: normalizedPageCount,
+        );
+        if (byok != null) return byok;
+      } catch (_) {}
+    }
+    // Cloud path fallback order: cloud -> byok (if available) -> caller handles
+    // runtime OCR -> native OCR.
+    return null;
+  }
+
+  if (byokProfile == null) return null;
+  try {
+    return await byokRunner(
+      profileId: byokProfile.id,
+      modelName: byokProfile.modelName,
+      mimeType: rendered.mimeType,
+      mediaBytes: rendered.imageBytes,
+      pageCountHint: normalizedPageCount,
+    );
+  } catch (_) {
+    // BYOK fallback order: byok -> caller handles runtime OCR -> native OCR.
+    return null;
+  }
 }
 
 String? extractOcrMarkdownFromMediaAnnotationPayload(String payloadJson) {

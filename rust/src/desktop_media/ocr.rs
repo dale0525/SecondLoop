@@ -9,6 +9,8 @@ mod ocr_model_config;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[path = "ocr_parallel.rs"]
 mod ocr_parallel;
+#[path = "ocr_pdf_render.rs"]
+mod ocr_pdf_render;
 #[path = "ocr_pdf_text.rs"]
 mod ocr_pdf_text;
 
@@ -23,6 +25,7 @@ use image::RgbImage;
 use ocr_model_config::resolve_ocr_model_config;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use ocr_parallel::choose_ocr_page_worker_count;
+use ocr_pdf_render::{render_pdf_to_long_image_payload, PDF_RENDER_MODE_HINT};
 use ocr_pdf_text::extract_pdf_text_with_limit;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use paddle_ocr_rs::ocr_lite::OcrLite;
@@ -206,11 +209,15 @@ pub fn desktop_ocr_image(bytes: &[u8], _language_hints: &str) -> Result<OcrPaylo
 pub fn desktop_ocr_pdf(
     bytes: &[u8],
     max_pages: u32,
-    _dpi: u32,
+    dpi: u32,
     language_hints: &str,
 ) -> Result<OcrPayload> {
     if bytes.is_empty() {
         return Err(anyhow!("missing pdf bytes"));
+    }
+
+    if language_hints.trim() == PDF_RENDER_MODE_HINT {
+        return render_pdf_to_long_image_payload(bytes, max_pages, dpi);
     }
 
     let safe_max_pages = max_pages.clamp(1, 10_000);
@@ -270,11 +277,15 @@ pub fn desktop_ocr_pdf(
 pub fn desktop_ocr_pdf(
     bytes: &[u8],
     max_pages: u32,
-    _dpi: u32,
+    dpi: u32,
     _language_hints: &str,
 ) -> Result<OcrPayload> {
     if bytes.is_empty() {
         return Err(anyhow!("missing pdf bytes"));
+    }
+
+    if _language_hints.trim() == PDF_RENDER_MODE_HINT {
+        return render_pdf_to_long_image_payload(bytes, max_pages, dpi);
     }
 
     let safe_max_pages = max_pages.clamp(1, 10_000);

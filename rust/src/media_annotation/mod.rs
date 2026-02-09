@@ -4,6 +4,7 @@ use reqwest::blocking::Client;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::io::{BufRead, BufReader};
 
 const OCR_MARKDOWN_LANG_PREFIX: &str = "ocr_markdown:";
 
@@ -360,12 +361,13 @@ fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     Ok((payload, usage.unwrap_or_else(default_usage)))
 }
 
-fn parse_response_sse(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
+fn parse_response_sse_reader<R: BufRead>(reader: &mut R) -> Result<(Value, MediaAnnotationUsage)> {
     let mut data_lines: Vec<String> = Vec::new();
     let mut all_text = String::new();
     let mut usage: Option<MediaAnnotationUsage> = None;
+    let mut done_seen = false;
 
-    let mut process_event = |lines: &mut Vec<String>| {
+    let mut process_event = |lines: &mut Vec<String>, done: &mut bool| {
         if lines.is_empty() {
             return;
         }
@@ -373,7 +375,11 @@ fn parse_response_sse(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
         lines.clear();
 
         let trimmed = payload.trim();
-        if trimmed.is_empty() || trimmed == "[DONE]" {
+        if trimmed.is_empty() {
+            return;
+        }
+        if trimmed == "[DONE]" {
+            *done = true;
             return;
         }
 
@@ -394,17 +400,35 @@ fn parse_response_sse(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
         }
     };
 
-    for line in body.lines() {
-        let line = line.trim_end_matches('\r');
-        if line.is_empty() {
-            process_event(&mut data_lines);
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix("data:") {
-            data_lines.push(rest.trim().to_string());
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                process_event(&mut data_lines, &mut done_seen);
+                break;
+            }
+            Ok(_) => {
+                let trimmed = line.trim_end_matches(&['\r', '\n'][..]);
+                if trimmed.is_empty() {
+                    process_event(&mut data_lines, &mut done_seen);
+                    if done_seen {
+                        break;
+                    }
+                    continue;
+                }
+                if let Some(rest) = trimmed.strip_prefix("data:") {
+                    data_lines.push(rest.trim().to_string());
+                }
+            }
+            Err(err) => {
+                process_event(&mut data_lines, &mut done_seen);
+                if !done_seen {
+                    return Err(anyhow!("failed to read annotation SSE stream: {err}"));
+                }
+                break;
+            }
         }
     }
-    process_event(&mut data_lines);
 
     let normalized = normalize_annotation_content(all_text);
     if normalized.trim().is_empty() {
@@ -416,14 +440,23 @@ fn parse_response_sse(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     Ok((payload, usage.unwrap_or_else(default_usage)))
 }
 
-fn parse_response(body: &str, content_type: &str) -> Result<(Value, MediaAnnotationUsage)> {
-    if content_type
-        .to_ascii_lowercase()
-        .contains("text/event-stream")
-    {
-        return parse_response_sse(body);
+fn parse_response_from_http_response(
+    resp: reqwest::blocking::Response,
+) -> Result<(Value, MediaAnnotationUsage)> {
+    let content_type = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    if content_type.contains("text/event-stream") {
+        let mut reader = BufReader::new(resp);
+        return parse_response_sse_reader(&mut reader);
     }
-    parse_response_json(body)
+
+    let body = resp.text().unwrap_or_default();
+    parse_response_json(&body)
 }
 
 pub struct CloudGatewayMediaAnnotationClient {
@@ -468,14 +501,7 @@ impl CloudGatewayMediaAnnotationClient {
             ));
         }
 
-        let content_type = resp
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default()
-            .to_string();
-        let body = resp.text().unwrap_or_default();
-        let (payload, _usage) = parse_response(&body, &content_type)?;
+        let (payload, _usage) = parse_response_from_http_response(resp)?;
         Ok(payload)
     }
 }
@@ -522,13 +548,6 @@ impl OpenAiCompatibleMediaAnnotationClient {
             ));
         }
 
-        let content_type = resp
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default()
-            .to_string();
-        let body = resp.text().unwrap_or_default();
-        parse_response(&body, &content_type)
+        parse_response_from_http_response(resp)
     }
 }

@@ -11,7 +11,6 @@ import '../../core/backend/native_backend.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
-import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/media_enrichment/media_enrichment_availability.dart';

@@ -1,8 +1,31 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 
 import '../../src/rust/api/desktop_media.dart' as rust_desktop_media;
 import 'attachment_ocr_text_normalizer.dart';
+
+const kDesktopRuntimeRenderLongImageHint =
+    '__secondloop_render_long_image_jpeg__';
+const kCommonPdfOcrModelPreset = 'common_ocr_v1';
+
+final class PlatformPdfRenderPreset {
+  const PlatformPdfRenderPreset._({
+    required this.id,
+    required this.maxPages,
+    required this.dpi,
+  });
+
+  final String id;
+  final int maxPages;
+  final int dpi;
+
+  static const PlatformPdfRenderPreset common = PlatformPdfRenderPreset._(
+    id: kCommonPdfOcrModelPreset,
+    maxPages: 10000,
+    dpi: 180,
+  );
+}
 
 typedef DesktopOcrPdfInvoke = Future<dynamic> Function(
   Uint8List bytes, {
@@ -15,6 +38,192 @@ typedef DesktopOcrImageInvoke = Future<dynamic> Function(
   Uint8List bytes, {
   required String languageHints,
 });
+
+typedef PdfRenderLongImageInvoke = Future<dynamic> Function(
+  Uint8List bytes, {
+  required PlatformPdfRenderPreset preset,
+});
+
+final class PlatformPdfRenderedImage {
+  const PlatformPdfRenderedImage({
+    required this.imageBytes,
+    required this.mimeType,
+    required this.pageCount,
+    required this.processedPages,
+  });
+
+  final Uint8List imageBytes;
+  final String mimeType;
+  final int pageCount;
+  final int processedPages;
+}
+
+final class PlatformPdfRender {
+  static const MethodChannel _nativeOcrChannel =
+      MethodChannel('secondloop/ocr');
+
+  static String? _lastErrorMessage;
+
+  static String? get lastErrorMessage => _lastErrorMessage;
+
+  static Future<PlatformPdfRenderedImage?> tryRenderPdfToLongImage(
+    Uint8List bytes, {
+    PlatformPdfRenderPreset preset = PlatformPdfRenderPreset.common,
+    PdfRenderLongImageInvoke? nativeRenderInvoke,
+    DesktopOcrPdfInvoke? runtimeRenderInvoke,
+  }) async {
+    _lastErrorMessage = null;
+    if (kIsWeb || bytes.isEmpty) {
+      _lastErrorMessage = 'pdf_render_input_unavailable';
+      return null;
+    }
+
+    final safeMaxPages = preset.maxPages.clamp(1, 10000);
+    final safeDpi = preset.dpi.clamp(72, 600);
+
+    final nativeRaw = await _invokeSafely(
+      () => (nativeRenderInvoke ?? _invokeNativeRenderPdfToLongImage)(
+        bytes,
+        preset: preset,
+      ),
+    );
+    final nativeParsed = _parseNativePayload(nativeRaw);
+    if (nativeParsed != null) {
+      _lastErrorMessage = null;
+      return nativeParsed;
+    }
+
+    if (!_isDesktopPlatform()) {
+      _lastErrorMessage ??= 'pdf_render_native_payload_invalid_or_empty';
+      return null;
+    }
+
+    final runtimeRaw = await _invokeSafely(
+      () => (runtimeRenderInvoke ?? _invokeDesktopRuntimeRenderPdfToLongImage)(
+        bytes,
+        maxPages: safeMaxPages,
+        dpi: safeDpi,
+        languageHints: kDesktopRuntimeRenderLongImageHint,
+      ),
+    );
+    final runtimeParsed = _parseRuntimePayload(runtimeRaw);
+    if (runtimeParsed != null) {
+      _lastErrorMessage = null;
+      return runtimeParsed;
+    }
+
+    _lastErrorMessage ??= 'pdf_render_payload_invalid_or_empty';
+    return null;
+  }
+
+  static bool _isDesktopPlatform() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
+  static Future<dynamic> _invokeNativeRenderPdfToLongImage(
+    Uint8List bytes, {
+    required PlatformPdfRenderPreset preset,
+  }) {
+    return _nativeOcrChannel.invokeMethod<dynamic>(
+      'renderPdfToLongImage',
+      <String, Object?>{
+        'bytes': bytes,
+        'ocr_model_preset': preset.id,
+      },
+    );
+  }
+
+  static Future<dynamic> _invokeDesktopRuntimeRenderPdfToLongImage(
+    Uint8List bytes, {
+    required int maxPages,
+    required int dpi,
+    required String languageHints,
+  }) {
+    return rust_desktop_media.desktopOcrPdf(
+      bytes: bytes,
+      maxPages: maxPages,
+      dpi: dpi,
+      languageHints: languageHints,
+    );
+  }
+
+  static Future<dynamic> _invokeSafely(
+    Future<dynamic> Function() run,
+  ) async {
+    try {
+      return await run();
+    } catch (error) {
+      _lastErrorMessage = '$error';
+      return null;
+    }
+  }
+
+  static PlatformPdfRenderedImage? _parseNativePayload(Object? raw) {
+    if (raw is! Map) return null;
+    final payload = raw.map<String, Object?>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final imageBytes = _asBytes(payload['image_bytes']);
+    final mimeType = payload['image_mime_type']?.toString().trim() ?? '';
+    final pageCount = _asInt(payload['page_count']);
+    final processedPages = _asInt(payload['processed_pages']);
+    if (imageBytes == null || imageBytes.isEmpty) return null;
+    if (mimeType.isEmpty) return null;
+    if (pageCount <= 0 || processedPages <= 0) return null;
+
+    return PlatformPdfRenderedImage(
+      imageBytes: imageBytes,
+      mimeType: mimeType,
+      pageCount: pageCount,
+      processedPages: processedPages,
+    );
+  }
+
+  static PlatformPdfRenderedImage? _parseRuntimePayload(Object? raw) {
+    final payload = PlatformPdfOcr._payloadAsMapForRendering(raw);
+    if (payload == null) return null;
+    final engine = payload['ocr_engine']?.toString().trim().toLowerCase() ?? '';
+    if (engine != 'desktop_rust_pdf_render_jpeg') return null;
+
+    final encoded = payload['ocr_text_full']?.toString() ?? '';
+    if (encoded.trim().isEmpty) return null;
+    Uint8List imageBytes;
+    try {
+      imageBytes = Uint8List.fromList(base64Decode(encoded.trim()));
+    } catch (_) {
+      return null;
+    }
+    if (imageBytes.isEmpty) return null;
+
+    final pageCount = _asInt(payload['ocr_page_count']);
+    final processedPages = _asInt(payload['ocr_processed_pages']);
+    if (pageCount <= 0 || processedPages <= 0) return null;
+
+    return PlatformPdfRenderedImage(
+      imageBytes: imageBytes,
+      mimeType: 'image/jpeg',
+      pageCount: pageCount,
+      processedPages: processedPages,
+    );
+  }
+
+  static Uint8List? _asBytes(Object? raw) {
+    if (raw is Uint8List) return raw;
+    if (raw is List<int>) return Uint8List.fromList(raw);
+    if (raw is ByteData) return raw.buffer.asUint8List();
+    return null;
+  }
+
+  static int _asInt(Object? raw) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) return int.tryParse(raw.trim()) ?? 0;
+    return 0;
+  }
+}
 
 final class PlatformPdfOcrResult {
   const PlatformPdfOcrResult({
@@ -198,6 +407,9 @@ final class PlatformPdfOcr {
   static bool _isDesktopWindows() =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
+  static bool _isDesktopLinux() =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
   static bool _isMobileAndroid() =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
@@ -207,7 +419,10 @@ final class PlatformPdfOcr {
   static bool _isMobilePlatform() => _isMobileAndroid() || _isMobileIos();
 
   static bool _canUseNativeOcrFallback() =>
-      _isDesktopMacOs() || _isDesktopWindows() || _isMobilePlatform();
+      _isDesktopMacOs() ||
+      _isDesktopWindows() ||
+      _isDesktopLinux() ||
+      _isMobilePlatform();
 
   static bool _shouldFallbackToNativeOcr({
     required PlatformPdfOcrResult? parsed,
@@ -238,7 +453,9 @@ final class PlatformPdfOcr {
   static bool _shouldPreferNativeDesktopPdfOcrOnEmptyRuntimeResult({
     required PlatformPdfOcrResult? parsed,
   }) {
-    if (!_isDesktopMacOs() && !_isDesktopWindows()) return false;
+    if (!_isDesktopMacOs() && !_isDesktopWindows() && !_isDesktopLinux()) {
+      return false;
+    }
     if (parsed == null) return false;
     if (parsed.fullText.trim().isNotEmpty) return false;
     return parsed.engine.trim().toLowerCase().startsWith('desktop_rust_pdf_');
@@ -347,6 +564,9 @@ final class PlatformPdfOcr {
       processedPages: processedPages,
     );
   }
+
+  static Map<String, Object?>? _payloadAsMapForRendering(Object? raw) =>
+      _payloadAsMap(raw);
 
   static Map<String, Object?>? _payloadAsMap(Object? raw) {
     if (raw == null) return null;

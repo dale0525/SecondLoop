@@ -6,6 +6,18 @@ import Vision
 
 @NSApplicationMain
 class AppDelegate: FlutterAppDelegate {
+  private struct PdfRenderPreset {
+    let id: String
+    let maxPages: Int
+    let dpi: Int
+  }
+
+  private let commonPdfOcrPreset = PdfRenderPreset(
+    id: "common_ocr_v1",
+    maxPages: 10_000,
+    dpi: 180
+  )
+
   override func applicationDidFinishLaunching(_ notification: Notification) {
     guard let controller = mainFlutterWindow?.contentViewController as? FlutterViewController else {
       return
@@ -44,6 +56,8 @@ class AppDelegate: FlutterAppDelegate {
         self.handleOcrPdf(call: call, result: result)
       case "ocrImage":
         self.handleOcrImage(call: call, result: result)
+      case "renderPdfToLongImage":
+        self.handleRenderPdfToLongImage(call: call, result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -256,6 +270,56 @@ class AppDelegate: FlutterAppDelegate {
     }
   }
 
+  private func handleRenderPdfToLongImage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard #available(macOS 10.15, *) else {
+      result(nil)
+      return
+    }
+    guard let args = call.arguments as? [String: Any],
+          let typed = args["bytes"] as? FlutterStandardTypedData else {
+      result(nil)
+      return
+    }
+
+    let preset = resolvePdfRenderPreset(args)
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let payload = self.renderPdfToLongImage(
+        pdfData: typed.data,
+        maxPages: preset.maxPages,
+        dpi: preset.dpi
+      )
+      DispatchQueue.main.async {
+        result(payload)
+      }
+    }
+  }
+
+  private func resolvePdfRenderPreset(_ args: [String: Any]) -> PdfRenderPreset {
+    let presetId = (args["ocr_model_preset"] as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased() ?? ""
+    if presetId == commonPdfOcrPreset.id {
+      return commonPdfOcrPreset
+    }
+
+    let maxPages = normalizePositiveInt(
+      args["max_pages"],
+      fallback: commonPdfOcrPreset.maxPages,
+      upperBound: 10_000
+    )
+    let dpi = normalizePositiveInt(
+      args["dpi"],
+      fallback: commonPdfOcrPreset.dpi,
+      upperBound: 600
+    )
+    return PdfRenderPreset(
+      id: presetId.isEmpty ? commonPdfOcrPreset.id : presetId,
+      maxPages: maxPages,
+      dpi: dpi
+    )
+  }
+
   private func normalizePositiveInt(_ raw: Any?, fallback: Int, upperBound: Int) -> Int {
     let value: Int
     switch raw {
@@ -414,10 +478,130 @@ class AppDelegate: FlutterAppDelegate {
     context.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
     context.saveGState()
     context.scaleBy(x: scale, y: scale)
-    context.translateBy(x: 0, y: bounds.height)
-    context.scaleBy(x: 1, y: -1)
     page.draw(with: .mediaBox, to: context)
     context.restoreGState()
+    return context.makeImage()
+  }
+
+  @available(macOS 10.15, *)
+  private func renderPdfToLongImage(
+    pdfData: Data,
+    maxPages: Int,
+    dpi: Int
+  ) -> [String: Any]? {
+    guard let document = PDFDocument(data: pdfData) else {
+      return nil
+    }
+    let pageCount = document.pageCount
+    if pageCount <= 0 {
+      return nil
+    }
+
+    let targetPages = min(pageCount, maxPages)
+    let maxOutputWidth = 1536
+    let maxOutputHeight = 20_000
+    let maxOutputPixels = 20_000_000
+
+    var pageImages = [CGImage]()
+    var totalHeight = 0
+    var outputWidth = 0
+    var processedPages = 0
+
+    for index in 0..<targetPages {
+      guard let page = document.page(at: index),
+            let rawImage = renderPdfPageAsCgImage(page: page, dpi: dpi) else {
+        continue
+      }
+
+      var image = rawImage
+      if image.width > maxOutputWidth {
+        let ratio = CGFloat(maxOutputWidth) / CGFloat(image.width)
+        let resizedHeight = max(1, Int(CGFloat(image.height) * ratio))
+        if let resized = resizeCgImage(image, width: maxOutputWidth, height: resizedHeight) {
+          image = resized
+        }
+      }
+
+      let nextHeight = totalHeight + image.height
+      let nextWidth = max(outputWidth, image.width)
+      if nextHeight > maxOutputHeight { break }
+      if nextWidth * nextHeight > maxOutputPixels { break }
+
+      pageImages.append(image)
+      totalHeight = nextHeight
+      outputWidth = nextWidth
+      processedPages += 1
+    }
+
+    if pageImages.isEmpty || outputWidth <= 0 || totalHeight <= 0 {
+      return nil
+    }
+
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: nil,
+      width: outputWidth,
+      height: totalHeight,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+      return nil
+    }
+
+    context.setFillColor(NSColor.white.cgColor)
+    context.fill(CGRect(x: 0, y: 0, width: outputWidth, height: totalHeight))
+
+    var offsetY = 0
+    for image in pageImages {
+      let drawRect = CGRect(
+        x: 0,
+        y: totalHeight - offsetY - image.height,
+        width: image.width,
+        height: image.height
+      )
+      context.draw(image, in: drawRect)
+      offsetY += image.height
+    }
+
+    guard let merged = context.makeImage() else {
+      return nil
+    }
+
+    let bitmapRep = NSBitmapImageRep(cgImage: merged)
+    guard let jpegData = bitmapRep.representation(
+      using: .jpeg,
+      properties: [NSBitmapImageRep.PropertyKey.compressionFactor: 0.82]
+    ), !jpegData.isEmpty else {
+      return nil
+    }
+
+    return [
+      "image_bytes": FlutterStandardTypedData(bytes: jpegData),
+      "image_mime_type": "image/jpeg",
+      "page_count": pageCount,
+      "processed_pages": processedPages,
+    ]
+  }
+
+  private func resizeCgImage(_ image: CGImage, width: Int, height: Int) -> CGImage? {
+    if width <= 0 || height <= 0 { return nil }
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: nil,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: 0,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+      return nil
+    }
+    context.setFillColor(NSColor.white.cgColor)
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
     return context.makeImage()
   }
 

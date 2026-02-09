@@ -72,6 +72,7 @@ if (( check_mode )); then
   if (( scope_rust )); then
     if [[ -x "${repo_root}/.tool/cargo/bin/cargo" ]]; then
       cargo_bin="${repo_root}/.tool/cargo/bin/cargo"
+      export PATH="${repo_root}/.tool/cargo/bin:${PATH}"
     elif command -v cargo >/dev/null 2>&1; then
       cargo_bin="$(command -v cargo)"
     else
@@ -126,14 +127,14 @@ if (( check_mode )); then
       if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
         echo "" >&2
         echo "pre-commit: rust clippy failed." >&2
-        echo "Fix locally with: pixi run rust-clippy" >&2
+        echo "Fix locally with: pixi run cargo clippy \"--all-targets --all-features -- -D warnings\"" >&2
         exit 1
       fi
 
       if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
         echo "" >&2
         echo "pre-commit: rust tests failed." >&2
-        echo "Fix locally with: pixi run rust-test" >&2
+        echo "Fix locally with: pixi run cargo test" >&2
         exit 1
       fi
     fi
@@ -202,6 +203,7 @@ cargo_bin=""
 if [[ ${run_rust_fmt} -ne 0 ]]; then
   if [[ -x "${repo_root}/.tool/cargo/bin/cargo" ]]; then
     cargo_bin="${repo_root}/.tool/cargo/bin/cargo"
+    export PATH="${repo_root}/.tool/cargo/bin:${PATH}"
   elif command -v cargo >/dev/null 2>&1; then
     cargo_bin="$(command -v cargo)"
   else

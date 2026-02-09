@@ -350,7 +350,7 @@ fn parse_source_code(hex: &str) -> Option<u16> {
 }
 
 fn parse_utf16_hex_string(hex: &str) -> Option<Vec<u16>> {
-    if hex.len() < 4 || !hex.len().is_multiple_of(4) {
+    if hex.len() < 4 || !hex.as_bytes().chunks_exact(4).remainder().is_empty() {
         return None;
     }
 
