@@ -1367,10 +1367,11 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                 child: FutureBuilder<List<TodoActivity>>(
                   future: _activitiesFuture,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
+                    final loading =
+                        snapshot.connectionState != ConnectionState.done;
+                    final activities = snapshot.data ?? const <TodoActivity>[];
+
+                    if (snapshot.hasError && activities.isEmpty) {
                       return Center(
                         child: Text(
                           context.t.errors
@@ -1379,7 +1380,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                       );
                     }
 
-                    final activities = snapshot.data ?? const <TodoActivity>[];
+                    if (loading && activities.isEmpty) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
                     if (activities.isEmpty) {
                       return Center(
                         child: Text(context.t.actions.todoDetail.emptyTimeline),

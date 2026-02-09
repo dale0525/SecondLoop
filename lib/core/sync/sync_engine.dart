@@ -4,8 +4,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
 
-const _kPullProgressTick = Duration(seconds: 1);
-
 enum SyncBackendType {
   webdav,
   localDir,
@@ -374,18 +372,9 @@ final class SyncEngine {
 
   Future<void> _pullOnce() async {
     SyncConfig? config;
-    Timer? progressTimer;
     try {
       config = await loadConfig();
       if (!_running || config == null) return;
-
-      progressTimer = Timer.periodic(_kPullProgressTick, (_) {
-        if (!_running) {
-          progressTimer?.cancel();
-          return;
-        }
-        _notifyChange();
-      });
       final applied = await syncRunner.pull(config);
 
       if (config.backendType == SyncBackendType.managedVault &&
@@ -411,8 +400,6 @@ final class SyncEngine {
       }
 
       // Best-effort: avoid crashing the app on transient sync errors.
-    } finally {
-      progressTimer?.cancel();
-    }
+    } finally {}
   }
 }

@@ -64,7 +64,7 @@ void main() {
     });
   });
 
-  test('notifies changes periodically during long pull', () {
+  test('does not notify changes during long pull progress', () {
     fakeAsync((async) {
       final runner = _BlockingPullRunner();
       final engine = SyncEngine(
@@ -88,14 +88,45 @@ void main() {
       async.elapse(const Duration(seconds: 1));
       async.flushMicrotasks();
 
-      expect(
-        changeNotifications,
-        greaterThan(0),
-        reason: 'expected periodic change notifications during long pull',
-      );
+      expect(changeNotifications, 0);
 
       runner.completePull(applied: 0);
       async.flushMicrotasks();
+      expect(changeNotifications, 0);
+
+      engine.stop();
+    });
+  });
+
+  test('notifies once after long pull applies changes', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      var changeNotifications = 0;
+      engine.changes.addListener(() => changeNotifications++);
+
+      engine.start();
+      async.flushMicrotasks();
+
+      expect(runner.pullCalls, 1);
+      expect(changeNotifications, 0);
+
+      async.elapse(const Duration(seconds: 2));
+      async.flushMicrotasks();
+      expect(changeNotifications, 0);
+
+      runner.completePull(applied: 2);
+      async.flushMicrotasks();
+      expect(changeNotifications, 1);
+
       engine.stop();
     });
   });
