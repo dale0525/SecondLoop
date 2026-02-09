@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -9,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
@@ -64,6 +68,7 @@ import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
 import '../settings/settings_page.dart';
+import 'audio_recording_policy.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_sanitizer.dart';
@@ -78,6 +83,7 @@ part 'chat_page_methods_b_attachments.dart';
 part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
+part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
@@ -373,6 +379,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _asking = false;
   bool _stopRequested = false;
   bool _desktopDropActive = false;
+  bool _recordingAudio = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
@@ -391,6 +398,9 @@ class _ChatPageState extends State<ChatPage> {
   VoidCallback? _syncListener;
   MessageAutoActionsQueue? _messageAutoActionsQueue;
   int _todoAgendaBannerCollapseSignal = 0;
+
+  AudioRecorder? _audioRecorderInstance;
+  SpeechToText? _speechToTextInstance;
 
   void _setState(VoidCallback fn) => setState(fn);
 
@@ -416,6 +426,10 @@ class _ChatPageState extends State<ChatPage> {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
+  bool get _supportsAudioRecording =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
 
   @override
@@ -434,6 +448,8 @@ class _ChatPageState extends State<ChatPage> {
     }
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
+    unawaited(_audioRecorderInstance?.dispose());
+    unawaited(_speechToTextInstance?.cancel());
     _controller.dispose();
     _inputFocusNode.dispose();
     _scrollController.dispose();

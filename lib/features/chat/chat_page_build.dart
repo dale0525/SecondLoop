@@ -364,9 +364,10 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     size: 44,
                                     iconSize: 22,
                                     tooltip: context.t.chat.attachTooltip,
-                                    onPressed: (_sending || _asking)
-                                        ? null
-                                        : _openAttachmentSheet,
+                                    onPressed:
+                                        (_sending || _asking || _recordingAudio)
+                                            ? null
+                                            : _openAttachmentSheet,
                                   ),
                                   const SizedBox(width: 4),
                                 ],
@@ -626,7 +627,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                                             label:
                                                 context.t.common.actions.askAi,
                                             icon: Icons.auto_awesome_rounded,
-                                            onPressed: (_sending || _asking)
+                                            onPressed: (_sending ||
+                                                    _asking ||
+                                                    _recordingAudio)
                                                 ? null
                                                 : _askAi,
                                             backgroundColor:
@@ -641,7 +644,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                                             label:
                                                 context.t.common.actions.send,
                                             icon: Icons.send_rounded,
-                                            onPressed: (_sending || _asking)
+                                            onPressed: (_sending ||
+                                                    _asking ||
+                                                    _recordingAudio)
                                                 ? null
                                                 : _send,
                                             backgroundColor:
@@ -908,7 +913,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                                         size: 44,
                                         iconSize: 22,
                                         tooltip: context.t.chat.attachTooltip,
-                                        onPressed: (_sending || _asking)
+                                        onPressed: (_sending ||
+                                                _asking ||
+                                                _recordingAudio)
                                             ? null
                                             : _openAttachmentSheet,
                                       ),
@@ -956,7 +963,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                                               size: 18,
                                             ),
                                             variant: SlButtonVariant.secondary,
-                                            onPressed: (_sending || _asking)
+                                            onPressed: (_sending ||
+                                                    _asking ||
+                                                    _recordingAudio)
                                                 ? null
                                                 : _askAi,
                                             child: Text(
@@ -972,7 +981,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                                               size: 18,
                                             ),
                                             variant: SlButtonVariant.primary,
-                                            onPressed: (_sending || _asking)
+                                            onPressed: (_sending ||
+                                                    _asking ||
+                                                    _recordingAudio)
                                                 ? null
                                                 : _send,
                                             child: Text(
