@@ -221,6 +221,10 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           : rawDisplayText;
       final actionSuggestions = assistantActions?.suggestions?.suggestions ??
           const <ActionSuggestion>[];
+      final todoBadgeMeta = _todoMessageBadgeMetaForMessage(
+          message: stableMsg,
+          jobsByMessageId: jobsByMessageId,
+          displayText: displayText);
 
       final shouldCollapse = !isPending &&
           _shouldCollapseMessage(displayText) &&
@@ -372,6 +376,11 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                 ],
                               ),
                             ),
+                          if (todoBadgeMeta != null)
+                            _buildTodoTypeBadge(
+                                message: stableMsg,
+                                meta: todoBadgeMeta,
+                                colorScheme: colorScheme),
                           if (shouldCollapse)
                             SizedBox(
                               height: _kCollapsedMessageHeight,
@@ -476,6 +485,11 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                         displayText,
                                         isDesktopPlatform: isDesktopPlatform,
                                       )),
+                          if (todoBadgeMeta != null)
+                            _buildRelatedTodoRootQuote(
+                                message: stableMsg,
+                                meta: todoBadgeMeta,
+                                colorScheme: colorScheme),
                           if (shouldCollapse)
                             Align(
                               alignment: Alignment.centerRight,
