@@ -416,6 +416,95 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
   });
+
+  testWidgets(
+    'linked todo messages still show markers without semantic jobs',
+    (tester) async {
+      final backend = _Backend(
+        initialMessages: const [
+          Message(
+            id: 'm7',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: 'Submit invoice',
+            createdAtMs: 7,
+            isMemory: true,
+          ),
+          Message(
+            id: 'm8',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: 'Vendor confirmed delivery slot',
+            createdAtMs: 8,
+            isMemory: true,
+          ),
+        ],
+        todos: const [
+          Todo(
+            id: 't7',
+            title: 'Submit invoice',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            sourceEntryId: 'm7',
+          ),
+          Todo(
+            id: 't8',
+            title: 'Vendor follow-up',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+        jobsByMessageId: const <String, SemanticParseJob>{},
+        todoActivities: const [
+          TodoActivity(
+            id: 'a8',
+            todoId: 't8',
+            activityType: 'note',
+            content: 'Vendor confirmed delivery slot',
+            sourceMessageId: 'm8',
+            createdAtMs: 0,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            locale: const Locale('en'),
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('message_todo_type_badge_m7')),
+          findsOneWidget);
+      expect(find.text('Task'), findsOneWidget);
+
+      expect(find.byKey(const ValueKey('message_todo_type_badge_m8')),
+          findsOneWidget);
+      expect(find.text('Related task'), findsOneWidget);
+      expect(find.byKey(const ValueKey('message_related_todo_root_m8')),
+          findsOneWidget);
+      expect(find.text('「Vendor follow-up」'), findsOneWidget);
+    },
+  );
 }
 
 SemanticParseJob _job({
@@ -445,10 +534,12 @@ final class _Backend extends TestAppBackend {
     required super.initialMessages,
     required this.jobsByMessageId,
     required this.todos,
+    this.todoActivities = const <TodoActivity>[],
   });
 
   final Map<String, SemanticParseJob> jobsByMessageId;
   final List<Todo> todos;
+  final List<TodoActivity> todoActivities;
 
   @override
   Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
@@ -465,4 +556,12 @@ final class _Backend extends TestAppBackend {
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(todos);
+
+  @override
+  Future<List<TodoActivity>> listTodoActivitiesInRange(
+    Uint8List key, {
+    required int startAtMsInclusive,
+    required int endAtMsExclusive,
+  }) async =>
+      List<TodoActivity>.from(todoActivities);
 }

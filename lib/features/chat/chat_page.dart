@@ -79,6 +79,7 @@ part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
+part 'chat_page_linked_todo_badge_loader.dart';
 part 'chat_page_build_helpers.dart';
 part 'chat_page_build.dart';
 part 'chat_page_build_desktop_drop.dart';

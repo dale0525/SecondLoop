@@ -16,26 +16,28 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
   _TodoMessageBadgeMeta? _todoMessageBadgeMetaForMessage({
     required Message message,
     required Map<String, SemanticParseJob> jobsByMessageId,
+    required Map<String, _TodoMessageBadgeMeta> linkedTodoBadgeByMessageId,
     required String displayText,
   }) {
     final job = jobsByMessageId[message.id];
-    if (job == null) return null;
-    if (job.status != 'succeeded') return null;
-    if (job.undoneAtMs != null) return null;
+    if (job != null && job.status == 'succeeded' && job.undoneAtMs == null) {
+      final kind = job.appliedActionKind?.trim();
+      final todoId = job.appliedTodoId?.trim();
+      if (todoId != null && todoId.isNotEmpty) {
+        if (kind == 'create' || kind == 'followup') {
+          final title = (job.appliedTodoTitle ?? '').trim().isNotEmpty
+              ? job.appliedTodoTitle!.trim()
+              : displayText.trim();
+          return _TodoMessageBadgeMeta(
+            todoId: todoId,
+            todoTitle: title,
+            isRelated: kind == 'followup',
+          );
+        }
+      }
+    }
 
-    final kind = job.appliedActionKind?.trim();
-    final todoId = job.appliedTodoId?.trim();
-    if (todoId == null || todoId.isEmpty) return null;
-    if (kind != 'create' && kind != 'followup') return null;
-
-    final title = (job.appliedTodoTitle ?? '').trim().isNotEmpty
-        ? job.appliedTodoTitle!.trim()
-        : displayText.trim();
-    return _TodoMessageBadgeMeta(
-      todoId: todoId,
-      todoTitle: title,
-      isRelated: kind == 'followup',
-    );
+    return linkedTodoBadgeByMessageId[message.id];
   }
 
   String _todoMessageBadgeLabel(

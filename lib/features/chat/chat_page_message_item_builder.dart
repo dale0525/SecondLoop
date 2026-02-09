@@ -11,6 +11,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
     required AttachmentsBackend? attachmentsBackend,
     required Uint8List sessionKey,
     required Map<String, SemanticParseJob> jobsByMessageId,
+    required Map<String, _TodoMessageBadgeMeta> linkedTodoBadgeByMessageId,
     required Map<String, AttachmentAnnotationJob> annotationJobsBySha256,
     required bool attachmentAnnotationEnabled,
     required bool attachmentAnnotationCanRunNow,
@@ -224,6 +225,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
       final todoBadgeMeta = _todoMessageBadgeMetaForMessage(
           message: stableMsg,
           jobsByMessageId: jobsByMessageId,
+          linkedTodoBadgeByMessageId: linkedTodoBadgeByMessageId,
           displayText: displayText);
 
       final shouldCollapse = !isPending &&

@@ -178,9 +178,17 @@ extension _ChatPageStateBuild on _ChatPageState {
                           );
                         }).catchError((_) => const <AttachmentAnnotationJob>[]);
 
+                        final linkedTodoBadgeFuture =
+                            _loadLinkedTodoBadgesForMessages(
+                          backend: backend,
+                          sessionKey: sessionKey,
+                          messages: messages,
+                        );
+
                         final combinedJobsFuture = (() async {
                           final semanticJobs = await semanticJobsFuture;
                           final annotationJobs = await annotationJobsFuture;
+                          final linkedTodoBadges = await linkedTodoBadgeFuture;
                           final annotationUi =
                               nativeBackend == null || annotationJobs.isEmpty
                                   ? (enabled: false, canRunNow: false)
@@ -190,6 +198,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     );
                           return (
                             semanticJobs: semanticJobs,
+                            linkedTodoBadges: linkedTodoBadges,
                             annotationJobs: annotationJobs,
                             attachmentAnnotationEnabled: annotationUi.enabled,
                             attachmentAnnotationCanRunNow:
@@ -200,6 +209,8 @@ extension _ChatPageStateBuild on _ChatPageState {
                         return FutureBuilder<
                             ({
                               List<SemanticParseJob> semanticJobs,
+                              Map<String,
+                                  _TodoMessageBadgeMeta> linkedTodoBadges,
                               List<AttachmentAnnotationJob> annotationJobs,
                               bool attachmentAnnotationEnabled,
                               bool attachmentAnnotationCanRunNow,
@@ -208,6 +219,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                           builder: (context, snapshotJobs) {
                             final jobs = snapshotJobs.data?.semanticJobs ??
                                 const <SemanticParseJob>[];
+                            final linkedTodoBadgeByMessageId =
+                                snapshotJobs.data?.linkedTodoBadges ??
+                                    const <String, _TodoMessageBadgeMeta>{};
                             final jobsByMessageId =
                                 <String, SemanticParseJob>{};
                             for (final job in jobs) {
@@ -275,6 +289,8 @@ extension _ChatPageStateBuild on _ChatPageState {
                                 attachmentsBackend: attachmentsBackend,
                                 sessionKey: sessionKey,
                                 jobsByMessageId: jobsByMessageId,
+                                linkedTodoBadgeByMessageId:
+                                    linkedTodoBadgeByMessageId,
                                 annotationJobsBySha256: annotationJobsBySha256,
                                 attachmentAnnotationEnabled: snapshotJobs
                                         .data?.attachmentAnnotationEnabled ??
