@@ -39,6 +39,18 @@ String _formatTimestamp(BuildContext context, int? ms) {
   return '$date $time';
 }
 
+String _attachmentUsageSubtitle(
+  BuildContext context,
+  VaultAttachmentUsageItem item,
+) {
+  final parts = <String>[
+    _formatBytes(item.byteLen),
+    _shortSha(item.sha256),
+    _formatTimestamp(context, item.uploadedAtMs ?? item.createdAtMs),
+  ];
+  return parts.join(' • ');
+}
+
 int _compareAttachmentUsage(
   VaultAttachmentUsageItem a,
   VaultAttachmentUsageItem b,
@@ -141,7 +153,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
-              '${_formatBytes(item.byteLen)} • ${_shortSha(item.sha256)} • ${_formatTimestamp(context, item.uploadedAtMs ?? item.createdAtMs)}',
+              _attachmentUsageSubtitle(context, item),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -387,11 +399,15 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final itemTitle = item.mimeType.isEmpty ? item.sha256 : item.mimeType;
+        final itemDetails = <String>[
+          itemTitle,
+          _formatBytes(item.byteLen),
+          item.sha256,
+        ].join('\n');
         return AlertDialog(
           title: Text(context.t.common.actions.delete),
-          content: Text(
-            '${item.mimeType.isEmpty ? item.sha256 : item.mimeType}\n${_formatBytes(item.byteLen)}\n${item.sha256}',
-          ),
+          content: Text(itemDetails),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
