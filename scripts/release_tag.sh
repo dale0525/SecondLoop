@@ -17,6 +17,7 @@ Notes:
   - Computes release tag automatically via scripts/release_ai.py.
   - Tag format is strict SemVer: vX.Y.Z.
   - Requires RELEASE_LLM_API_KEY and RELEASE_LLM_MODEL.
+  - Loads env from .env.local when present.
   - This command only publishes app tags.
   - Runtime release tags are managed separately via: pixi run release-runtime vX.Y.Z[.W]
 EOF
@@ -79,6 +80,14 @@ done
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
+
+dotenv_file="${repo_root}/.env.local"
+if [[ -f "${dotenv_file}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${dotenv_file}"
+  set +a
+fi
 
 if [[ -z "${RELEASE_LLM_API_KEY:-}" ]]; then
   die "Missing RELEASE_LLM_API_KEY"
