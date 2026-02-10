@@ -537,6 +537,56 @@ void main() {
         findsOneWidget);
     expect(find.text('Gemini'), findsNothing);
   });
+  testWidgets(
+      'Audio transcribe local runtime mode disables profile override picker',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      backend: TestAppBackend(),
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final engineTile = find.widgetWithText(ListTile, 'Transcription engine');
+    await tester.scrollUntilVisible(
+      engineTile,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(engineTile);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Local runtime').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(contentStore.writes, isNotEmpty);
+    expect(contentStore.writes.last.audioTranscribeEngine, 'local_runtime');
+
+    final audioApiTile =
+        find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
+    expect(
+      find.descendant(of: audioApiTile, matching: find.text('Local mode')),
+      findsOneWidget,
+    );
+
+    await tester.tap(audioApiTile);
+    await tester.pumpAndSettle();
+    expect(find.byType(SimpleDialog), findsNothing);
+  });
+
   testWidgets('Non-Pro users do not see Use SecondLoop Cloud switch',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

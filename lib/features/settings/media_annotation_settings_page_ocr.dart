@@ -177,21 +177,35 @@ extension _MediaAnnotationSettingsPageOcrExtension
     );
   }
 
-  String _audioTranscribeApiProfileSubtitle(BuildContext context) {
+  String _audioTranscribeApiProfileSubtitle(
+    BuildContext context, {
+    required bool localRuntime,
+  }) {
     final zh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
         .startsWith('zh');
+    if (localRuntime) {
+      return zh
+          ? '当前使用本地转写，不依赖 BYOK profile。'
+          : 'Local runtime transcription is active and does not use a BYOK profile.';
+    }
     if (zh) {
       return '默认跟随 Ask AI，可改为已有 OpenAI-compatible API profile。';
     }
     return 'Default follows Ask AI. You can choose an existing OpenAI-compatible API profile.';
   }
 
+  bool _isLocalRuntimeAudioTranscribeEngine(String engine) {
+    return normalizeAudioTranscribeEngine(engine) == 'local_runtime';
+  }
+
   String _audioTranscribeEngineLabel(BuildContext context, String engine) {
     final labels =
         context.t.settings.mediaAnnotation.audioTranscribe.engine.labels;
-    switch (engine.trim()) {
+    switch (normalizeAudioTranscribeEngine(engine)) {
+      case 'local_runtime':
+        return _isZhOcrLocale(context) ? '本地转写' : 'Local runtime';
       case 'multimodal_llm':
         return labels.multimodalLlm;
       default:
@@ -200,17 +214,17 @@ extension _MediaAnnotationSettingsPageOcrExtension
   }
 
   Future<void> _pickAudioTranscribeEngine(
-      ContentEnrichmentConfig config) async {
+    ContentEnrichmentConfig config,
+  ) async {
     if (_busy) return;
     final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
+    final zh = _isZhOcrLocale(context);
 
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        var value = config.audioTranscribeEngine.trim();
-        if (value != 'whisper' && value != 'multimodal_llm') {
-          value = 'whisper';
-        }
+        var value =
+            normalizeAudioTranscribeEngine(config.audioTranscribeEngine);
 
         Widget option({
           required String mode,
@@ -238,6 +252,14 @@ extension _MediaAnnotationSettingsPageOcrExtension
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    option(
+                      mode: 'local_runtime',
+                      title: zh ? '本地转写' : 'Local runtime',
+                      subtitle: zh
+                          ? '优先本地 runtime 转写，失败时回落设备原生 STT（若可用）。'
+                          : 'Prefer local runtime transcription, then fallback to native STT when available.',
+                      setInnerState: setInnerState,
+                    ),
                     option(
                       mode: 'whisper',
                       title: t.labels.whisper,
@@ -270,9 +292,75 @@ extension _MediaAnnotationSettingsPageOcrExtension
     );
 
     if (!mounted || selected == null) return;
-    if (selected == config.audioTranscribeEngine.trim()) return;
-    await _persistContentConfig(
-      _copyContentConfig(config, audioTranscribeEngine: selected),
+    final normalizedSelected = normalizeAudioTranscribeEngine(selected);
+    if (normalizedSelected ==
+        normalizeAudioTranscribeEngine(config.audioTranscribeEngine)) {
+      return;
+    }
+
+    final nextContentConfig = _copyContentConfig(
+      config,
+      audioTranscribeEngine: normalizedSelected,
+    );
+
+    if (normalizedSelected == 'local_runtime') {
+      await _persistContentConfig(nextContentConfig);
+      return;
+    }
+
+    final mediaConfig = _config;
+    if (mediaConfig == null) {
+      await _persistContentConfig(nextContentConfig);
+      return;
+    }
+
+    final backend =
+        context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    List<LlmProfile> profiles = _llmProfiles ?? const <LlmProfile>[];
+    if (profiles.isEmpty && backend != null) {
+      profiles =
+          await backend.listLlmProfiles(sessionKey).catchError((_) => profiles);
+    }
+    if (!mounted) return;
+
+    final existingByokId = mediaConfig.byokProfileId?.trim();
+    var hasValidSelected = false;
+    if (existingByokId != null && existingByokId.isNotEmpty) {
+      for (final profile in profiles) {
+        if (profile.id == existingByokId &&
+            profile.providerType == 'openai-compatible') {
+          hasValidSelected = true;
+          break;
+        }
+      }
+    }
+
+    var resolvedByokId = existingByokId;
+    if (!hasValidSelected) {
+      resolvedByokId = await _promptOpenAiCompatibleProfileId();
+      final trimmed = resolvedByokId?.trim();
+      if (!mounted || trimmed == null || trimmed.isEmpty) return;
+      resolvedByokId = trimmed;
+    }
+
+    final shouldUpdateMediaConfig =
+        (mediaConfig.byokProfileId ?? '').trim() != resolvedByokId;
+    if (!shouldUpdateMediaConfig) {
+      await _persistContentConfig(nextContentConfig);
+      return;
+    }
+
+    await _persistBoth(
+      mediaConfig: MediaAnnotationConfig(
+        annotateEnabled: mediaConfig.annotateEnabled,
+        searchEnabled: mediaConfig.searchEnabled,
+        allowCellular: mediaConfig.allowCellular,
+        providerMode: mediaConfig.providerMode,
+        byokProfileId: resolvedByokId,
+        cloudModelName: mediaConfig.cloudModelName,
+      ),
+      contentConfig: nextContentConfig,
     );
   }
 }
