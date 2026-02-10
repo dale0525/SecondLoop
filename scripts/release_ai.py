@@ -397,6 +397,7 @@ def _llm_config() -> dict[str, Any]:
     timeout_seconds = int(os.getenv("RELEASE_LLM_TIMEOUT_SECONDS", "60"))
     retries = int(os.getenv("RELEASE_LLM_MAX_RETRIES", "2"))
     ca_bundle = os.getenv("RELEASE_LLM_CA_BUNDLE", "").strip()
+    insecure_skip_verify = os.getenv("RELEASE_LLM_INSECURE_SKIP_VERIFY", "0").strip().lower() in {"1", "true", "yes", "on"}
 
     if not api_key:
         raise RuntimeError("missing RELEASE_LLM_API_KEY")
@@ -412,6 +413,7 @@ def _llm_config() -> dict[str, Any]:
         "timeout_seconds": timeout_seconds,
         "retries": retries,
         "ca_bundle": ca_bundle,
+        "insecure_skip_verify": insecure_skip_verify,
     }
 
 
@@ -437,7 +439,9 @@ def _openai_chat_json(messages: list[dict[str, str]], *, config: dict[str, Any])
 
     urlopen_kwargs: dict[str, Any] = {"timeout": config["timeout_seconds"]}
     ca_bundle = str(config.get("ca_bundle", "")).strip()
-    if ca_bundle:
+    if bool(config.get("insecure_skip_verify")):
+        urlopen_kwargs["context"] = ssl._create_unverified_context()
+    elif ca_bundle:
         urlopen_kwargs["context"] = ssl.create_default_context(cafile=ca_bundle)
 
     for attempt in range(config["retries"] + 1):
@@ -466,7 +470,7 @@ def _openai_chat_json(messages: list[dict[str, str]], *, config: dict[str, Any])
         except Exception as exc:  # noqa: BLE001
             if attempt >= config["retries"]:
                 if "CERTIFICATE_VERIFY_FAILED" in str(exc):
-                    hint = "Set RELEASE_LLM_CA_BUNDLE (or SSL_CERT_FILE) to a trusted CA bundle."
+                    hint = "Set RELEASE_LLM_CA_BUNDLE (or SSL_CERT_FILE) to a trusted CA bundle. For local dry-run only, use RELEASE_LLM_INSECURE_SKIP_VERIFY=1."
                     raise RuntimeError(f"LLM TLS certificate verify failed: {exc}. {hint}") from exc
                 raise RuntimeError(f"LLM call failed after retries: {exc}") from exc
 
