@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../features/audio_transcribe/audio_transcribe_runner.dart';
 import '../../features/attachments/platform_pdf_ocr.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
+import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
 import '../backend/app_backend.dart';
@@ -15,7 +16,10 @@ import '../backend/native_backend.dart';
 import '../attachments/attachment_metadata_store.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../content_enrichment/content_enrichment_config_store.dart';
+import '../content_enrichment/docx_ocr.dart';
+import '../content_enrichment/docx_ocr_policy.dart';
 import '../content_enrichment/multimodal_ocr.dart';
+import '../content_enrichment/ocr_text_quality.dart';
 import '../content_enrichment/pdf_ocr_auto_policy.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
@@ -160,6 +164,42 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     return 0;
   }
 
+  static bool _isRuntimeOcrEngine(String engine) {
+    final normalized = engine.trim().toLowerCase();
+    return normalized.startsWith('desktop_rust_');
+  }
+
+  static String _buildExcerptFromText(String fullText, {int maxChars = 1200}) {
+    final trimmed = fullText.trim();
+    if (trimmed.length <= maxChars) return trimmed;
+    return '${trimmed.substring(0, maxChars).trimRight()}…';
+  }
+
+  static PlatformPdfOcrResult _preferExtractedTextIfRuntimeOcr({
+    required PlatformPdfOcrResult ocr,
+    required String extractedFull,
+    required String extractedExcerpt,
+  }) {
+    if (!_isRuntimeOcrEngine(ocr.engine)) return ocr;
+
+    final full = extractedFull.trim();
+    if (full.isEmpty) return ocr;
+
+    if (!shouldPreferExtractedTextOverOcr(
+      extractedText: full,
+      ocrText: ocr.fullText,
+    )) {
+      return ocr;
+    }
+
+    final excerpt = extractedExcerpt.trim();
+    return ocr.copyWith(
+      fullText: full,
+      excerpt: excerpt.isNotEmpty ? excerpt : _buildExcerptFromText(full),
+      engine: '${ocr.engine}+prefer_extracted',
+    );
+  }
+
   static Map<String, Object?>? _decodePayloadObject(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     try {
@@ -185,7 +225,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     const autoMaxPages = 0;
     const hardMaxPages = 10000;
     const dpi = 180;
-    const languageHints = 'device_plus_en';
+    final configuredHints = contentConfig?.ocrLanguageHints.trim() ?? '';
+    final languageHints =
+        configuredHints.isEmpty ? 'device_plus_en' : configuredHints;
 
     final recent = await backend.listRecentAttachments(sessionKey, limit: 80);
     var updated = 0;
@@ -266,24 +308,184 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         final updatedPayload = Map<String, Object?>.from(runningPayload);
         updatedPayload.remove('ocr_auto_running_ms');
         if (ocr != null) {
-          final extractedText = ((payload['extracted_text_excerpt'] ??
-                      payload['extracted_text_full']) ??
-                  '')
-              .toString()
+          final extractedFull =
+              (payload['extracted_text_full'] ?? '').toString();
+          final extractedExcerpt =
+              (payload['extracted_text_excerpt'] ?? '').toString();
+          final preferredOcr = _preferExtractedTextIfRuntimeOcr(
+            ocr: ocr,
+            extractedFull: extractedFull,
+            extractedExcerpt: extractedExcerpt,
+          );
+          final extractedText = (extractedExcerpt.trim().isNotEmpty
+                  ? extractedExcerpt
+                  : extractedFull)
               .trim();
           updatedPayload['needs_ocr'] =
-              ocr.fullText.trim().isEmpty && extractedText.isEmpty;
-          updatedPayload['ocr_text_full'] = ocr.fullText;
-          updatedPayload['ocr_text_excerpt'] = ocr.excerpt;
-          updatedPayload['ocr_engine'] = ocr.engine;
+              preferredOcr.fullText.trim().isEmpty && extractedText.isEmpty;
+          updatedPayload['ocr_text_full'] = preferredOcr.fullText;
+          updatedPayload['ocr_text_excerpt'] = preferredOcr.excerpt;
+          updatedPayload['ocr_engine'] = preferredOcr.engine;
           updatedPayload['ocr_lang_hints'] = languageHints;
           updatedPayload['ocr_dpi'] = dpi;
-          updatedPayload['ocr_retry_attempted'] = ocr.retryAttempted;
-          updatedPayload['ocr_retry_attempts'] = ocr.retryAttempts;
-          updatedPayload['ocr_retry_hints'] = ocr.retryHintsTried.join(',');
-          updatedPayload['ocr_is_truncated'] = ocr.isTruncated;
-          updatedPayload['ocr_page_count'] = ocr.pageCount;
-          updatedPayload['ocr_processed_pages'] = ocr.processedPages;
+          updatedPayload['ocr_retry_attempted'] = preferredOcr.retryAttempted;
+          updatedPayload['ocr_retry_attempts'] = preferredOcr.retryAttempts;
+          updatedPayload['ocr_retry_hints'] =
+              preferredOcr.retryHintsTried.join(',');
+          updatedPayload['ocr_is_truncated'] = preferredOcr.isTruncated;
+          updatedPayload['ocr_page_count'] = preferredOcr.pageCount;
+          updatedPayload['ocr_processed_pages'] = preferredOcr.processedPages;
+          updatedPayload['ocr_auto_status'] = 'ok';
+          updatedPayload['ocr_auto_last_success_ms'] =
+              DateTime.now().millisecondsSinceEpoch;
+          updatedPayload.remove('ocr_auto_last_failure_ms');
+          await persistPayload(
+            updatedPayload,
+            updatedPayload['ocr_auto_last_success_ms'] as int,
+          );
+          _autoOcrCompletedShas.add(attachment.sha256);
+          updated += 1;
+        } else {
+          updatedPayload['ocr_auto_status'] = 'failed';
+          updatedPayload['ocr_auto_last_failure_ms'] =
+              DateTime.now().millisecondsSinceEpoch;
+          updatedPayload['ocr_auto_retry_count'] = retryCount + 1;
+          await persistPayload(
+            updatedPayload,
+            updatedPayload['ocr_auto_last_failure_ms'] as int,
+          );
+        }
+      } catch (_) {
+        final failedPayload = Map<String, Object?>.from(payload);
+        failedPayload.remove('ocr_auto_running_ms');
+        failedPayload['ocr_auto_status'] = 'failed';
+        failedPayload['ocr_auto_last_failure_ms'] =
+            DateTime.now().millisecondsSinceEpoch;
+        failedPayload['ocr_auto_retry_count'] = retryCount + 1;
+        try {
+          await persistPayload(
+            failedPayload,
+            failedPayload['ocr_auto_last_failure_ms'] as int,
+          );
+        } catch (_) {
+          // ignore per-attachment status persistence failures.
+        }
+      }
+    }
+
+    return updated;
+  }
+
+  Future<int> _runAutoDocxOcrForRecentOfficeDocs({
+    required NativeAppBackend backend,
+    required Uint8List sessionKey,
+    required ContentEnrichmentConfig? contentConfig,
+    required Future<PlatformPdfOcrResult?> Function(
+      Uint8List bytes, {
+      required int pageCount,
+      required String languageHints,
+    }) runDocxOcr,
+  }) async {
+    if (!(contentConfig?.ocrEnabled ?? true)) return 0;
+
+    final hints = contentConfig?.ocrLanguageHints.trim() ?? '';
+    final languageHints = hints.isEmpty ? 'device_plus_en' : hints;
+    final recent = await backend.listRecentAttachments(sessionKey, limit: 80);
+    var updated = 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    for (final attachment in recent) {
+      final mime = attachment.mimeType.trim().toLowerCase();
+      if (!isDocxMimeType(mime)) continue;
+      if (_autoOcrCompletedShas.contains(attachment.sha256)) continue;
+
+      final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+        sessionKey,
+        sha256: attachment.sha256,
+      );
+      final payload = _decodePayloadObject(payloadJson);
+      if (payload == null) continue;
+      if (!shouldAttemptDocxOcr(payload, nowMs: now)) continue;
+
+      final pageCountHint =
+          _asInt(payload['page_count']) > 0 ? _asInt(payload['page_count']) : 1;
+      final attemptMs = DateTime.now().millisecondsSinceEpoch;
+      final retryCount = _asInt(payload['ocr_auto_retry_count']);
+
+      Future<void> persistPayload(Map<String, Object?> next, int ts) async {
+        await backend.markAttachmentAnnotationOkJson(
+          sessionKey,
+          attachmentSha256: attachment.sha256,
+          lang: 'und',
+          modelName: 'document_extract.v1',
+          payloadJson: jsonEncode(next),
+          nowMs: ts,
+        );
+      }
+
+      try {
+        final runningPayload = Map<String, Object?>.from(payload);
+        runningPayload['ocr_auto_status'] = 'running';
+        runningPayload['ocr_auto_running_ms'] = attemptMs;
+        runningPayload['ocr_auto_last_attempt_ms'] = attemptMs;
+        runningPayload['ocr_auto_attempted_ms'] = attemptMs;
+        runningPayload['ocr_auto_retry_count'] = retryCount;
+        await persistPayload(runningPayload, attemptMs);
+
+        final bytes = await backend.readAttachmentBytes(
+          sessionKey,
+          sha256: attachment.sha256,
+        );
+        if (bytes.isEmpty) {
+          final failedPayload = Map<String, Object?>.from(runningPayload);
+          failedPayload.remove('ocr_auto_running_ms');
+          failedPayload['ocr_auto_status'] = 'failed';
+          failedPayload['ocr_auto_last_failure_ms'] =
+              DateTime.now().millisecondsSinceEpoch;
+          failedPayload['ocr_auto_retry_count'] = retryCount + 1;
+          await persistPayload(
+            failedPayload,
+            failedPayload['ocr_auto_last_failure_ms'] as int,
+          );
+          continue;
+        }
+
+        final ocr = await runDocxOcr(
+          bytes,
+          pageCount: pageCountHint,
+          languageHints: languageHints,
+        );
+
+        final updatedPayload = Map<String, Object?>.from(runningPayload);
+        updatedPayload.remove('ocr_auto_running_ms');
+        if (ocr != null) {
+          final extractedFull =
+              (payload['extracted_text_full'] ?? '').toString();
+          final extractedExcerpt =
+              (payload['extracted_text_excerpt'] ?? '').toString();
+          final preferredOcr = _preferExtractedTextIfRuntimeOcr(
+            ocr: ocr,
+            extractedFull: extractedFull,
+            extractedExcerpt: extractedExcerpt,
+          );
+          final extractedText = (extractedExcerpt.trim().isNotEmpty
+                  ? extractedExcerpt
+                  : extractedFull)
+              .trim();
+          updatedPayload['needs_ocr'] =
+              preferredOcr.fullText.trim().isEmpty && extractedText.isEmpty;
+          updatedPayload['ocr_text_full'] = preferredOcr.fullText;
+          updatedPayload['ocr_text_excerpt'] = preferredOcr.excerpt;
+          updatedPayload['ocr_engine'] = preferredOcr.engine;
+          updatedPayload['ocr_lang_hints'] = languageHints;
+          updatedPayload['ocr_dpi'] = 0;
+          updatedPayload['ocr_retry_attempted'] = preferredOcr.retryAttempted;
+          updatedPayload['ocr_retry_attempts'] = preferredOcr.retryAttempts;
+          updatedPayload['ocr_retry_hints'] =
+              preferredOcr.retryHintsTried.join(',');
+          updatedPayload['ocr_is_truncated'] = preferredOcr.isTruncated;
+          updatedPayload['ocr_page_count'] = preferredOcr.pageCount;
+          updatedPayload['ocr_processed_pages'] = preferredOcr.processedPages;
           updatedPayload['ocr_auto_status'] = 'ok';
           updatedPayload['ocr_auto_last_success_ms'] =
               DateTime.now().millisecondsSinceEpoch;
@@ -415,7 +617,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final audioTranscribeConfigured = contentBackgroundEnabled &&
           (contentConfig?.audioTranscribeEnabled ?? false);
 
-      MediaEnrichmentClient? annotationClient;
+      MediaEnrichmentClient? annotationPrimaryClient;
       var annotationModelName = gatewayConfig.modelName;
 
       final desiredMode = mediaAnnotationConfig.providerMode.trim();
@@ -462,6 +664,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         return activeOpenAiProfile();
       }
 
+      var hasCloudAnnotationModel = false;
       if (mediaAnnotationConfig.annotateEnabled) {
         if (desiredMode == 'cloud_gateway') {
           if (subscriptionStatus == SubscriptionStatus.entitled &&
@@ -471,11 +674,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                 mediaAnnotationConfig.cloudModelName?.trim().isNotEmpty == true
                     ? mediaAnnotationConfig.cloudModelName!.trim()
                     : gatewayConfig.modelName;
+            hasCloudAnnotationModel = annotationModelName.trim().isNotEmpty;
           }
         } else {
           final profile = effectiveOpenAiProfile();
           if (profile != null) {
-            annotationClient = _ByokMediaEnrichmentClient(
+            annotationPrimaryClient = _ByokMediaEnrichmentClient(
               sessionKey: Uint8List.fromList(sessionKey),
               profileId: profile.id,
               modelName: profile.modelName,
@@ -485,12 +689,14 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
+      final allowImageOcrFallback = mediaAnnotationConfig.annotateEnabled &&
+          subscriptionStatus != SubscriptionStatus.entitled &&
+          (contentConfig?.ocrEnabled ?? true);
+
       final annotationEnabled = mediaAnnotationConfig.annotateEnabled &&
-          (annotationClient != null ||
-              (annotationModelName.trim().isNotEmpty &&
-                  subscriptionStatus == SubscriptionStatus.entitled &&
-                  hasGateway &&
-                  hasIdToken));
+          (annotationPrimaryClient != null ||
+              hasCloudAnnotationModel ||
+              allowImageOcrFallback);
       final audioTranscribeCloudAvailable =
           subscriptionStatus == SubscriptionStatus.entitled &&
               hasGateway &&
@@ -562,6 +768,11 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
+      final rawConfiguredOcrHints = contentConfig?.ocrLanguageHints ?? '';
+      final configuredOcrHints = rawConfiguredOcrHints.trim().isEmpty
+          ? 'device_plus_en'
+          : rawConfiguredOcrHints.trim();
+
       var processedAutoPdfOcr = 0;
       if (documentExtractEnabled) {
         try {
@@ -575,7 +786,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                 sessionKey: Uint8List.fromList(sessionKey),
                 pdfBytes: bytes,
                 pageCountHint: pageCount,
-                languageHints: 'device_plus_en',
+                languageHints: configuredOcrHints,
                 subscriptionStatus: subscriptionStatus,
                 mediaAnnotationConfig: mediaAnnotationConfig,
                 llmProfiles: llmProfiles,
@@ -587,6 +798,35 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           );
         } catch (_) {
           processedAutoPdfOcr = 0;
+        }
+      }
+
+      var processedAutoDocxOcr = 0;
+      if (documentExtractEnabled) {
+        try {
+          processedAutoDocxOcr = await _runAutoDocxOcrForRecentOfficeDocs(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+            contentConfig: contentConfig,
+            runDocxOcr: (bytes,
+                {required pageCount, required languageHints}) async {
+              return tryConfiguredDocxOcr(
+                backend: backend,
+                sessionKey: Uint8List.fromList(sessionKey),
+                docxBytes: bytes,
+                pageCountHint: pageCount,
+                languageHints: languageHints,
+                subscriptionStatus: subscriptionStatus,
+                mediaAnnotationConfig: mediaAnnotationConfig,
+                llmProfiles: llmProfiles,
+                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+                cloudIdToken: idToken?.trim() ?? '',
+                cloudModelName: gatewayConfig.modelName,
+              );
+            },
+          );
+        } catch (_) {
+          processedAutoDocxOcr = 0;
         }
       }
 
@@ -664,11 +904,23 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           annotationModelName: annotationModelName,
         );
 
-        final client = annotationClient == null
-            ? cloudClient
+        MediaEnrichmentClient? annotationClientForRunner =
+            annotationPrimaryClient;
+        if (annotationClientForRunner == null && hasCloudAnnotationModel) {
+          annotationClientForRunner = cloudClient;
+        }
+        if (allowImageOcrFallback) {
+          annotationClientForRunner = OcrFallbackMediaAnnotationClient(
+            primaryClient: annotationClientForRunner,
+            languageHints: configuredOcrHints,
+          );
+        }
+
+        final client = (!geoReverseEnabled || annotationClientForRunner == null)
+            ? (annotationClientForRunner ?? cloudClient)
             : _CompositeMediaEnrichmentClient(
                 placeClient: cloudClient,
-                annotationClient: annotationClient,
+                annotationClient: annotationClientForRunner,
               );
 
         final runner = MediaEnrichmentRunner(
@@ -690,6 +942,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final didEnrichAny = processedUrl > 0 ||
           processedDocs > 0 ||
           processedAutoPdfOcr > 0 ||
+          processedAutoDocxOcr > 0 ||
           processedAudioTranscripts > 0 ||
           result.didEnrichAny;
       if (didEnrichAny) {

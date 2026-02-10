@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -20,6 +21,7 @@ String fileExtensionForSystemOpenMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
   if (normalized == 'application/pdf') return '.pdf';
   if (normalized == 'text/plain') return '.txt';
+  if (normalized == kDocxMimeType) return '.docx';
   if (normalized == 'text/markdown') return '.md';
   if (normalized == 'application/json') return '.json';
   if (normalized == 'application/xml') return '.xml';
@@ -257,11 +259,12 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final autoOcrRunning = autoOcrStatus == 'running';
     final mime = attachment.mimeType.trim().toLowerCase();
     final isPdf = mime == 'application/pdf';
+    final isDocx = isDocxMimeType(mime);
     final isVideoManifest = mime == kSecondLoopVideoManifestMimeType;
     final runOcr = onRunOcr;
     final runOcrAction = runOcr;
     final openWithSystem = onOpenWithSystem;
-    final supportsOcr = isPdf || isVideoManifest;
+    final supportsOcr = isPdf || isDocx || isVideoManifest;
     final canRunOcr = supportsOcr && runOcr != null;
     final canOpenWithSystem = isPdf && openWithSystem != null;
     final ocrInProgress = ocrRunning || autoOcrRunning;

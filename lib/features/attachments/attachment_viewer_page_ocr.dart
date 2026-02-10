@@ -11,9 +11,52 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
   bool _isPdfAttachment() =>
       widget.attachment.mimeType.trim().toLowerCase() == 'application/pdf';
 
+  bool _isDocxAttachment() => isDocxMimeType(widget.attachment.mimeType);
+
+  bool _supportsDocumentOcrAttachment() =>
+      _isPdfAttachment() || _isDocxAttachment();
+
   bool _isVideoManifestAttachment() =>
       widget.attachment.mimeType.trim().toLowerCase() ==
       kSecondLoopVideoManifestMimeType;
+
+  bool _isRuntimeOcrEngine(String engine) {
+    final normalized = engine.trim().toLowerCase();
+    return normalized.startsWith('desktop_rust_');
+  }
+
+  String _buildExcerpt(String fullText, {int maxChars = 1200}) {
+    final trimmed = fullText.trim();
+    if (trimmed.length <= maxChars) return trimmed;
+    return '${trimmed.substring(0, maxChars).trimRight()}…';
+  }
+
+  PlatformPdfOcrResult _preferExtractedTextIfRuntimeOcr(
+    PlatformPdfOcrResult ocr,
+    Map<String, Object?> payload,
+  ) {
+    if (!_isRuntimeOcrEngine(ocr.engine)) return ocr;
+
+    final extractedFull =
+        (payload['extracted_text_full'] ?? '').toString().trim();
+    if (extractedFull.isEmpty) return ocr;
+    if (!shouldPreferExtractedTextOverOcr(
+      extractedText: extractedFull,
+      ocrText: ocr.fullText,
+    )) {
+      return ocr;
+    }
+
+    final extractedExcerpt =
+        (payload['extracted_text_excerpt'] ?? '').toString().trim();
+    return ocr.copyWith(
+      fullText: extractedFull,
+      excerpt: extractedExcerpt.isNotEmpty
+          ? extractedExcerpt
+          : _buildExcerpt(extractedFull),
+      engine: '${ocr.engine}+prefer_extracted',
+    );
+  }
 
   Future<void> _runVideoManifestOcr() async {
     if (_runningDocumentOcr) return;
@@ -145,7 +188,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
 
   Future<void> _runDocumentOcr() async {
     if (_runningDocumentOcr) return;
-    if (!_isPdfAttachment()) return;
+    if (!_supportsDocumentOcrAttachment()) return;
     final backendAny = AppBackendScope.of(context);
     if (backendAny is! NativeAppBackend) return;
     final backend = backendAny;
@@ -200,27 +243,45 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           idToken = null;
         }
       }
+
+      final isPdf = _isPdfAttachment();
       final pageCountHint = asInt(existingPayload['page_count']) ?? 1;
       PlatformPdfOcrResult? platformOcr;
-      platformOcr = await tryConfiguredMultimodalPdfOcr(
-        backend: backend,
-        sessionKey: sessionKey,
-        pdfBytes: bytes,
-        pageCountHint: pageCountHint,
-        languageHints: languageHints,
-        subscriptionStatus: subscriptionStatus,
-        mediaAnnotationConfig: mediaConfig,
-        llmProfiles: llmProfiles,
-        cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-        cloudIdToken: idToken?.trim() ?? '',
-        cloudModelName: gatewayConfig.modelName,
-      );
-      platformOcr ??= await PlatformPdfOcr.tryOcrPdfBytes(
-        bytes,
-        maxPages: maxPages,
-        dpi: dpi,
-        languageHints: languageHints,
-      );
+      if (isPdf) {
+        platformOcr = await tryConfiguredMultimodalPdfOcr(
+          backend: backend,
+          sessionKey: sessionKey,
+          pdfBytes: bytes,
+          pageCountHint: pageCountHint,
+          languageHints: languageHints,
+          subscriptionStatus: subscriptionStatus,
+          mediaAnnotationConfig: mediaConfig,
+          llmProfiles: llmProfiles,
+          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+          cloudIdToken: idToken?.trim() ?? '',
+          cloudModelName: gatewayConfig.modelName,
+        );
+        platformOcr ??= await PlatformPdfOcr.tryOcrPdfBytes(
+          bytes,
+          maxPages: maxPages,
+          dpi: dpi,
+          languageHints: languageHints,
+        );
+      } else if (_isDocxAttachment()) {
+        platformOcr = await tryConfiguredDocxOcr(
+          backend: backend,
+          sessionKey: sessionKey,
+          docxBytes: bytes,
+          pageCountHint: pageCountHint,
+          languageHints: languageHints,
+          subscriptionStatus: subscriptionStatus,
+          mediaAnnotationConfig: mediaConfig,
+          llmProfiles: llmProfiles,
+          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+          cloudIdToken: idToken?.trim() ?? '',
+          cloudModelName: gatewayConfig.modelName,
+        );
+      }
 
       if (platformOcr == null) {
         final detail = PlatformPdfOcr.lastErrorMessage;
@@ -236,24 +297,29 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         return;
       }
 
+      platformOcr =
+          _preferExtractedTextIfRuntimeOcr(platformOcr, existingPayload);
+
       final extractedFull =
           existingPayload['extracted_text_full']?.toString() ?? '';
       final extractedExcerpt =
           existingPayload['extracted_text_excerpt']?.toString() ?? '';
       final pageCount =
           asInt(existingPayload['page_count']) ?? platformOcr.pageCount;
+      final hasExtractedText =
+          extractedExcerpt.trim().isNotEmpty || extractedFull.trim().isNotEmpty;
       final payloadJson = jsonEncode(<String, Object?>{
         'schema': 'secondloop.document_extract.v1',
         'mime_type': widget.attachment.mimeType,
         'extracted_text_full': extractedFull,
         'extracted_text_excerpt': extractedExcerpt,
-        'needs_ocr': platformOcr.fullText.trim().isEmpty,
+        'needs_ocr': platformOcr.fullText.trim().isEmpty && !hasExtractedText,
         'page_count': pageCount,
         'ocr_text_full': platformOcr.fullText,
         'ocr_text_excerpt': platformOcr.excerpt,
         'ocr_engine': platformOcr.engine,
         'ocr_lang_hints': languageHints,
-        'ocr_dpi': dpi,
+        'ocr_dpi': isPdf ? dpi : 0,
         'ocr_retry_attempted': platformOcr.retryAttempted,
         'ocr_retry_attempts': platformOcr.retryAttempts,
         'ocr_retry_hints': platformOcr.retryHintsTried.join(','),
