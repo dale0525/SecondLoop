@@ -101,11 +101,78 @@ final class _MemClient implements AudioTranscribeClient {
 }
 
 void main() {
-  test('normalizeAudioTranscribeEngine only allows whisper or multimodal', () {
+  test('normalizeAudioTranscribeEngine allows local runtime and byok modes',
+      () {
     expect(normalizeAudioTranscribeEngine('whisper'), 'whisper');
     expect(normalizeAudioTranscribeEngine('multimodal_llm'), 'multimodal_llm');
+    expect(normalizeAudioTranscribeEngine('local_runtime'), 'local_runtime');
     expect(normalizeAudioTranscribeEngine('auto'), 'whisper');
     expect(normalizeAudioTranscribeEngine('unknown'), 'whisper');
+  });
+
+  test('fallback client uses next client when cloud and byok fail', () async {
+    final cloud = _MemClient(engineName: 'cloud_gateway', modelName: 'cloud')
+      ..shouldFail = true;
+    final byok = _MemClient(engineName: 'whisper', modelName: 'byok-whisper')
+      ..shouldFail = true;
+    final local =
+        _MemClient(engineName: 'local_runtime', modelName: 'local-runtime');
+
+    final client = FallbackAudioTranscribeClient(
+      chain: [cloud, byok, local],
+    );
+
+    final response = await client.transcribe(
+      lang: 'en',
+      mimeType: 'audio/mpeg',
+      audioBytes: Uint8List.fromList(const <int>[0x49, 0x44, 0x33]),
+    );
+
+    expect(cloud.calls, 1);
+    expect(byok.calls, 1);
+    expect(local.calls, 1);
+    expect(client.engineName, 'local_runtime');
+    expect(client.modelName, 'local-runtime');
+    expect(response.transcriptFull, contains('hello world'));
+  });
+
+  test('local runtime client parses transcript payload', () async {
+    final client = LocalRuntimeAudioTranscribeClient(
+      modelName: 'runtime-whisper-small',
+      appDirProvider: () async => '/tmp/secondloop-test',
+      requestLocalRuntimeTranscribe: ({
+        required appDir,
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        expect(appDir, '/tmp/secondloop-test');
+        expect(lang, 'zh');
+        expect(mimeType, 'audio/mp4');
+        expect(audioBytes, isNotEmpty);
+        return jsonEncode({
+          'text': 'hello from local runtime',
+          'duration': 8.5,
+          'segments': [
+            {'start': 0.0, 'text': 'hello'},
+            {'start': 0.7, 'text': 'from local runtime'},
+          ],
+        });
+      },
+    );
+
+    final result = await client.transcribe(
+      lang: 'zh',
+      mimeType: 'audio/mp4',
+      audioBytes: Uint8List.fromList(const <int>[0x00, 0x00, 0x00, 0x18]),
+    );
+
+    expect(client.engineName, 'local_runtime');
+    expect(client.modelName, 'runtime-whisper-small');
+    expect(result.transcriptFull, 'hello from local runtime');
+    expect(result.durationMs, 8500);
+    expect(result.segments.length, 2);
+    expect(result.segments.last.tMs, 700);
   });
 
   test('runner transcribes pending audio and writes transcript payload',

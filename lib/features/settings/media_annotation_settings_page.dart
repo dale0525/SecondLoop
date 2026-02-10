@@ -11,6 +11,7 @@ import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
+import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -740,18 +741,45 @@ class _MediaAnnotationSettingsPageState
                     ListTile(
                       key: MediaAnnotationSettingsPage.audioApiProfileTileKey,
                       title: Text(t.audioTranscribe.configureApi.title),
-                      subtitle:
-                          Text(_audioTranscribeApiProfileSubtitle(context)),
+                      subtitle: Text(
+                        _audioTranscribeApiProfileSubtitle(
+                          context,
+                          localRuntime: contentConfig != null &&
+                              _isLocalRuntimeAudioTranscribeEngine(
+                                contentConfig.audioTranscribeEngine,
+                              ),
+                        ),
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(_apiProfileLabel(context, config.byokProfileId)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right),
+                          Text(
+                            contentConfig != null &&
+                                    _isLocalRuntimeAudioTranscribeEngine(
+                                      contentConfig.audioTranscribeEngine,
+                                    )
+                                ? (_isZhOcrLocale(context)
+                                    ? '本地模式'
+                                    : 'Local mode')
+                                : _apiProfileLabel(
+                                    context, config.byokProfileId),
+                          ),
+                          if (!(contentConfig != null &&
+                              _isLocalRuntimeAudioTranscribeEngine(
+                                contentConfig.audioTranscribeEngine,
+                              ))) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right),
+                          ],
                         ],
                       ),
-                      onTap:
-                          _busy ? null : () => _pickApiProfileOverride(config),
+                      onTap: _busy ||
+                              (contentConfig != null &&
+                                  _isLocalRuntimeAudioTranscribeEngine(
+                                    contentConfig.audioTranscribeEngine,
+                                  ))
+                          ? null
+                          : () => _pickApiProfileOverride(config),
                     ),
                   ]),
                   const SizedBox(height: 16),

@@ -32,6 +32,7 @@ import '../../src/rust/db.dart';
 import '../../i18n/strings.g.dart';
 
 part 'media_enrichment_gate_clients.dart';
+part 'media_enrichment_gate_audio_transcribe.dart';
 
 String _autoPdfOcrStatusFromPayload(Map<String, Object?>? payload) {
   return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
@@ -702,13 +703,23 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           (annotationPrimaryClient != null ||
               hasCloudAnnotationModel ||
               allowImageOcrFallback);
-      final audioTranscribeCloudAvailable =
+      final audioTranscribeCloudEnabled = desiredMode == 'cloud_gateway' &&
           subscriptionStatus == SubscriptionStatus.entitled &&
-              hasGateway &&
-              hasIdToken;
+          hasGateway &&
+          hasIdToken;
       final audioTranscribeByokProfile = effectiveOpenAiProfile();
-      final audioTranscribeEnabled = audioTranscribeConfigured &&
-          (audioTranscribeCloudAvailable || audioTranscribeByokProfile != null);
+      final audioTranscribeSelection = _buildAudioTranscribeClientSelection(
+        cloudEnabled: audioTranscribeCloudEnabled,
+        byokProfile: audioTranscribeByokProfile,
+        effectiveEngine: normalizeAudioTranscribeEngine(
+          contentConfig?.audioTranscribeEngine ?? 'whisper',
+        ),
+        gatewayBaseUrl: gatewayConfig.baseUrl,
+        cloudIdToken: idToken?.trim() ?? '',
+        sessionKey: Uint8List.fromList(sessionKey),
+      );
+      final audioTranscribeEnabled =
+          audioTranscribeConfigured && audioTranscribeSelection.hasAnyClient;
 
       if (!geoReverseEnabled &&
           !annotationEnabled &&
@@ -843,49 +854,21 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         final network = await getNetwork();
         final allowedByNetwork = network != MediaEnrichmentNetwork.offline &&
             (!contentRequiresWifi || network == MediaEnrichmentNetwork.wifi);
-        if (allowedByNetwork) {
-          final effectiveEngine = normalizeAudioTranscribeEngine(
-            contentConfig?.audioTranscribeEngine ?? 'whisper',
-          );
+
+        final client = allowedByNetwork
+            ? audioTranscribeSelection.networkClient
+            : audioTranscribeSelection.offlineClient;
+        if (client != null) {
           final store = BackendAudioTranscribeStore(
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
           );
-          AudioTranscribeClient? client;
-          if (audioTranscribeCloudAvailable) {
-            // Cloud transcription mode is selected by gateway config:
-            // - with CLOUD_AUDIO_TRANSCRIBE_WHISPER_MODEL_NAME => whisper route
-            // - without it => server-routed multimodal route.
-            // Client-side engine setting must not override cloud behavior.
-            client = CloudGatewayWhisperAudioTranscribeClient(
-              gatewayBaseUrl: gatewayConfig.baseUrl,
-              idToken: idToken!.trim(),
-              modelName: 'cloud',
-            );
-          } else if (effectiveEngine == 'multimodal_llm') {
-            if (audioTranscribeByokProfile != null) {
-              client = ByokMultimodalAudioTranscribeClient(
-                sessionKey: Uint8List.fromList(sessionKey),
-                profileId: audioTranscribeByokProfile.id,
-                modelName: audioTranscribeByokProfile.modelName,
-              );
-            }
-          } else if (audioTranscribeByokProfile != null) {
-            client = ByokWhisperAudioTranscribeClient(
-              sessionKey: Uint8List.fromList(sessionKey),
-              profileId: audioTranscribeByokProfile.id,
-              modelName: audioTranscribeByokProfile.modelName,
-            );
-          }
-
-          if (client != null) {
-            final runner = AudioTranscribeRunner(
-              store: store,
-              client: client,
-            );
-            final result = await runner.runOnce(limit: 5);
-            processedAudioTranscripts = result.processed;
-          }
+          final runner = AudioTranscribeRunner(
+            store: store,
+            client: client,
+          );
+          final result = await runner.runOnce(limit: 5);
+          processedAudioTranscripts = result.processed;
         }
       }
 
