@@ -68,7 +68,6 @@ import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/llm_profiles_page.dart';
 import '../settings/settings_page.dart';
-import 'audio_recording_policy.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_sanitizer.dart';
@@ -380,6 +379,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _stopRequested = false;
   bool _desktopDropActive = false;
   bool _recordingAudio = false;
+  bool _voiceInputMode = false;
+  bool _pressToTalkActive = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
@@ -401,6 +402,7 @@ class _ChatPageState extends State<ChatPage> {
 
   AudioRecorder? _audioRecorderInstance;
   SpeechToText? _speechToTextInstance;
+  String _pressToTalkTranscript = '';
 
   void _setState(VoidCallback fn) => setState(fn);
 
@@ -431,6 +433,8 @@ class _ChatPageState extends State<ChatPage> {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
+  bool get _isComposerBusy =>
+      _sending || _asking || _recordingAudio || _pressToTalkActive;
 
   @override
   void initState() {

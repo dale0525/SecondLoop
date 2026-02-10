@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1214 (607 per locale)
+/// Strings: 1220 (610 per locale)
 ///
-/// Built on 2026-02-10 at 12:30 UTC
+/// Built on 2026-02-10 at 12:32 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -367,8 +367,12 @@ class _StringsChatEn {
   String get attachPickMedia => 'Choose media';
   String get attachTakePhoto => 'Take photo';
   String get attachRecordAudio => 'Record audio';
+  String get switchToVoiceInput => 'Switch to voice';
+  String get switchToKeyboardInput => 'Switch to keyboard';
+  String get holdToTalk => 'Hold to talk';
+  String get releaseToConvert => 'Release to convert to text';
   String get recordingInProgress => 'Recording…';
-  String get recordingHint => 'Tap Stop to finish, or Cancel to discard.';
+  String get recordingHint => 'Tap Stop to send audio, or Cancel to discard.';
   String get cameraTooltip => 'Take photo';
   String get photoMessage => 'Photo';
   String get editMessageTitle => 'Edit message';
@@ -381,8 +385,6 @@ class _StringsChatEn {
       'Microphone permission is required to record audio.';
   String audioRecordFailed({required Object error}) =>
       'Audio record failed: ${error}';
-  String get audioRecordNoSpeechFallback =>
-      'No speech detected, sent as audio file.';
   String editFailed({required Object error}) => 'Edit failed: ${error}';
   String deleteFailed({required Object error}) => 'Delete failed: ${error}';
   String get noMessagesYet => 'No messages yet';
@@ -3141,9 +3143,17 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   String get attachRecordAudio => '录音';
   @override
+  String get switchToVoiceInput => '切换到语音输入';
+  @override
+  String get switchToKeyboardInput => '切换到键盘输入';
+  @override
+  String get holdToTalk => '按住说话';
+  @override
+  String get releaseToConvert => '松开后转为文字';
+  @override
   String get recordingInProgress => '正在录音…';
   @override
-  String get recordingHint => '点击停止完成录音，或点击取消放弃。';
+  String get recordingHint => '点击停止发送音频，或点击取消放弃。';
   @override
   String get cameraTooltip => '拍照';
   @override
@@ -3163,8 +3173,6 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get audioRecordPermissionDenied => '需要麦克风权限才能录音。';
   @override
   String audioRecordFailed({required Object error}) => '录音失败：${error}';
-  @override
-  String get audioRecordNoSpeechFallback => '未识别到语音，已作为音频文件发送。';
   @override
   String editFailed({required Object error}) => '编辑失败：${error}';
   @override
@@ -7625,10 +7633,18 @@ extension on Translations {
         return 'Take photo';
       case 'chat.attachRecordAudio':
         return 'Record audio';
+      case 'chat.switchToVoiceInput':
+        return 'Switch to voice';
+      case 'chat.switchToKeyboardInput':
+        return 'Switch to keyboard';
+      case 'chat.holdToTalk':
+        return 'Hold to talk';
+      case 'chat.releaseToConvert':
+        return 'Release to convert to text';
       case 'chat.recordingInProgress':
         return 'Recording…';
       case 'chat.recordingHint':
-        return 'Tap Stop to finish, or Cancel to discard.';
+        return 'Tap Stop to send audio, or Cancel to discard.';
       case 'chat.cameraTooltip':
         return 'Take photo';
       case 'chat.photoMessage':
@@ -7649,8 +7665,6 @@ extension on Translations {
         return 'Microphone permission is required to record audio.';
       case 'chat.audioRecordFailed':
         return ({required Object error}) => 'Audio record failed: ${error}';
-      case 'chat.audioRecordNoSpeechFallback':
-        return 'No speech detected, sent as audio file.';
       case 'chat.editFailed':
         return ({required Object error}) => 'Edit failed: ${error}';
       case 'chat.deleteFailed':
@@ -8869,10 +8883,18 @@ extension on _StringsZhCn {
         return '拍照';
       case 'chat.attachRecordAudio':
         return '录音';
+      case 'chat.switchToVoiceInput':
+        return '切换到语音输入';
+      case 'chat.switchToKeyboardInput':
+        return '切换到键盘输入';
+      case 'chat.holdToTalk':
+        return '按住说话';
+      case 'chat.releaseToConvert':
+        return '松开后转为文字';
       case 'chat.recordingInProgress':
         return '正在录音…';
       case 'chat.recordingHint':
-        return '点击停止完成录音，或点击取消放弃。';
+        return '点击停止发送音频，或点击取消放弃。';
       case 'chat.cameraTooltip':
         return '拍照';
       case 'chat.photoMessage':
@@ -8893,8 +8915,6 @@ extension on _StringsZhCn {
         return '需要麦克风权限才能录音。';
       case 'chat.audioRecordFailed':
         return ({required Object error}) => '录音失败：${error}';
-      case 'chat.audioRecordNoSpeechFallback':
-        return '未识别到语音，已作为音频文件发送。';
       case 'chat.editFailed':
         return ({required Object error}) => '编辑失败：${error}';
       case 'chat.deleteFailed':
