@@ -3,23 +3,26 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/bootstrap_shared_worktree_env.sh [--dry-run] [--skip-pixi-envs]
+Usage: bash scripts/bootstrap_shared_worktree_env.sh [--dry-run] [--skip-pixi-envs] [--skip-env-local-link]
 
 Bootstrap shared caches for a git worktree checkout.
 
-By default this links these paths to the git-common-dir shared storage:
-- .tool
-- .pixi/envs (bucketed by pixi.lock hash)
+By default this links these paths for worktree reuse:
+- .tool (to git-common-dir shared storage)
+- .pixi/envs (bucketed by pixi.lock hash, under git-common-dir shared storage)
+- .env.local (to primary worktree when available)
 
 Options:
   --dry-run         Print actions without changing files.
-  --skip-pixi-envs Keep .pixi/envs untouched.
+  --skip-pixi-envs      Keep .pixi/envs untouched.
+  --skip-env-local-link Keep .env.local untouched.
   -h, --help        Show this help message.
 EOF
 }
 
 dry_run=0
 skip_pixi_envs=0
+skip_env_local_link=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-pixi-envs)
       skip_pixi_envs=1
+      shift
+      ;;
+    --skip-env-local-link)
+      skip_env_local_link=1
       shift
       ;;
     -h|--help)
@@ -75,6 +82,49 @@ hash_file() {
 
   echo "Missing dependency: shasum or sha256sum" >&2
   exit 1
+}
+
+resolve_primary_worktree_root() {
+  local primary_root
+  primary_root="$(cd "${common_dir}/.." 2>/dev/null && pwd)" || return 1
+  if [[ "${primary_root}" == "${repo_root}" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "${primary_root}"
+}
+
+link_env_local_from_primary() {
+  local primary_root="$1"
+  local primary_env="${primary_root}/.env.local"
+  local local_env="${repo_root}/.env.local"
+
+  if [[ ! -f "${primary_env}" ]]; then
+    echo "Skipping .env.local link: primary worktree has no .env.local (${primary_env})"
+    return 0
+  fi
+
+  if [[ -L "${local_env}" ]]; then
+    local current_link
+    current_link="$(readlink "${local_env}")"
+    if [[ "${current_link}" == "${primary_env}" ]]; then
+      echo "Already linked: .env.local -> ${primary_env}"
+      return 0
+    fi
+
+    echo "Updating link for .env.local"
+    run_cmd rm "${local_env}"
+    run_cmd ln -s "${primary_env}" "${local_env}"
+    return 0
+  fi
+
+  if [[ -e "${local_env}" ]]; then
+    echo "Keeping existing .env.local (not symlink): ${local_env}"
+    return 0
+  fi
+
+  echo "Linking .env.local -> ${primary_env}"
+  run_cmd ln -s "${primary_env}" "${local_env}"
 }
 
 link_to_shared() {
@@ -178,6 +228,17 @@ if [[ "$skip_pixi_envs" -eq 0 ]]; then
   link_to_shared "$repo_root/.pixi/envs" "$shared_pixi_envs" ".pixi/envs"
 else
   echo "Skipping .pixi/envs linking (--skip-pixi-envs)."
+fi
+
+if [[ "$skip_env_local_link" -eq 0 ]]; then
+  primary_root="$(resolve_primary_worktree_root || true)"
+  if [[ -n "${primary_root}" ]]; then
+    link_env_local_from_primary "${primary_root}"
+  else
+    echo "Skipping .env.local link: current checkout is primary worktree."
+  fi
+else
+  echo "Skipping .env.local linking (--skip-env-local-link)."
 fi
 
 echo "Done. Shared worktree cache is ready."

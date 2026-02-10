@@ -7,7 +7,6 @@ import hashlib
 import json
 import os
 import re
-import ssl
 import subprocess
 import sys
 import textwrap
@@ -16,6 +15,13 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+try:
+    from scripts.release_ai_llm import llm_config as _llm_config
+    from scripts.release_ai_llm import openai_chat_json as _openai_chat_json
+except ModuleNotFoundError:
+    from release_ai_llm import llm_config as _llm_config
+    from release_ai_llm import openai_chat_json as _openai_chat_json
 
 SEMVER_TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 PR_NUMBER_RE = re.compile(r"(?:#|pull request\s+#)(\d+)", re.IGNORECASE)
@@ -388,93 +394,6 @@ def _command_collect_facts(args: argparse.Namespace) -> None:
     }
     _write_json(Path(args.output), facts)
     print(f"release-ai: wrote facts -> {args.output} ({len(changes)} change(s))")
-
-
-def _llm_config() -> dict[str, Any]:
-    api_key = os.getenv("RELEASE_LLM_API_KEY", "").strip()
-    model = os.getenv("RELEASE_LLM_MODEL", "").strip()
-    base_url = os.getenv("RELEASE_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-    timeout_seconds = int(os.getenv("RELEASE_LLM_TIMEOUT_SECONDS", "60"))
-    retries = int(os.getenv("RELEASE_LLM_MAX_RETRIES", "2"))
-    ca_bundle = os.getenv("RELEASE_LLM_CA_BUNDLE", "").strip()
-    insecure_skip_verify = os.getenv("RELEASE_LLM_INSECURE_SKIP_VERIFY", "0").strip().lower() in {"1", "true", "yes", "on"}
-
-    if not api_key:
-        raise RuntimeError("missing RELEASE_LLM_API_KEY")
-    if not model:
-        raise RuntimeError("missing RELEASE_LLM_MODEL")
-    if ca_bundle and not Path(ca_bundle).is_file():
-        raise RuntimeError(f"RELEASE_LLM_CA_BUNDLE does not exist: {ca_bundle}")
-
-    return {
-        "api_key": api_key,
-        "model": model,
-        "base_url": base_url,
-        "timeout_seconds": timeout_seconds,
-        "retries": retries,
-        "ca_bundle": ca_bundle,
-        "insecure_skip_verify": insecure_skip_verify,
-    }
-
-
-def _extract_json_object(raw_text: str) -> dict[str, Any]:
-    stripped = raw_text.strip()
-    if stripped.startswith("{") and stripped.endswith("}"):
-        return json.loads(stripped)
-
-    start = stripped.find("{")
-    end = stripped.rfind("}")
-    if start >= 0 and end > start:
-        candidate = stripped[start : end + 1]
-        return json.loads(candidate)
-    raise ValueError("LLM response does not contain a JSON object")
-
-
-def _openai_chat_json(messages: list[dict[str, str]], *, config: dict[str, Any]) -> dict[str, Any]:
-    payload = {
-        "model": config["model"],
-        "temperature": 0,
-        "messages": messages,
-    }
-
-    urlopen_kwargs: dict[str, Any] = {"timeout": config["timeout_seconds"]}
-    ca_bundle = str(config.get("ca_bundle", "")).strip()
-    if bool(config.get("insecure_skip_verify")):
-        urlopen_kwargs["context"] = ssl._create_unverified_context()
-    elif ca_bundle:
-        urlopen_kwargs["context"] = ssl.create_default_context(cafile=ca_bundle)
-
-    for attempt in range(config["retries"] + 1):
-        try:
-            request = urllib.request.Request(
-                url=f"{config['base_url']}/chat/completions",
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {config['api_key']}",
-                    "Content-Type": "application/json",
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(request, **urlopen_kwargs) as response:
-                raw = response.read().decode("utf-8")
-            parsed = json.loads(raw)
-            content = (
-                parsed.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-                .strip()
-            )
-            if not content:
-                raise RuntimeError("empty LLM response")
-            return _extract_json_object(content)
-        except Exception as exc:  # noqa: BLE001
-            if attempt >= config["retries"]:
-                if "CERTIFICATE_VERIFY_FAILED" in str(exc):
-                    hint = "Set RELEASE_LLM_CA_BUNDLE (or SSL_CERT_FILE) to a trusted CA bundle. For local dry-run only, use RELEASE_LLM_INSECURE_SKIP_VERIFY=1."
-                    raise RuntimeError(f"LLM TLS certificate verify failed: {exc}. {hint}") from exc
-                raise RuntimeError(f"LLM call failed after retries: {exc}") from exc
-
-    raise RuntimeError("LLM call failed")
 
 
 def _summarize_changes_for_prompt(facts: dict[str, Any]) -> list[dict[str, Any]]:

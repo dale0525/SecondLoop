@@ -50,6 +50,8 @@ Required env/secrets for release automation:
 - `RELEASE_LLM_API_KEY`
 - `RELEASE_LLM_MODEL`
 - Optional secret: `RELEASE_LLM_BASE_URL`
+- Optional local env: `RELEASE_LLM_ENDPOINT` (full endpoint override, e.g. `/chat/completions`)
+- Optional local env: `RELEASE_LLM_AUTH_HEADER` / `RELEASE_LLM_AUTH_SCHEME` (custom auth header for non-standard gateways)
 - Optional local env: `RELEASE_LLM_CA_BUNDLE` (CA file path when custom LLM endpoint uses private CA)
 - Optional variable: `RELEASE_NOTES_LOCALES`
 
