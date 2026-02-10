@@ -33,6 +33,7 @@ import '../../ui/sl_button.dart';
 import '../../ui/sl_focus_ring.dart';
 import '../../ui/sl_icon_button_frame.dart';
 import '../../ui/sl_icon_button.dart';
+import '../../ui/sl_delete_confirm_dialog.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import '../../ui/sl_typing_indicator.dart';

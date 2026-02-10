@@ -288,6 +288,7 @@ void main() {
       await tester.tap(
           find.byKey(const ValueKey('message_delete_pending_failed_user')));
       await tester.pumpAndSettle();
+      await _confirmChatMessageDelete(tester);
 
       expect(
         find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
@@ -371,6 +372,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('message_action_delete')));
       await tester.pumpAndSettle();
+      await _confirmChatMessageDelete(tester);
 
       expect(
         find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
@@ -466,6 +468,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('message_context_delete')));
       await tester.pumpAndSettle();
+      await _confirmChatMessageDelete(tester);
 
       expect(
         find.byKey(const ValueKey('chat_message_row_pending_failed_user')),
@@ -476,6 +479,12 @@ void main() {
       debugDefaultTargetPlatformOverride = originalPlatformOverride;
     }
   });
+}
+
+Future<void> _confirmChatMessageDelete(WidgetTester tester) async {
+  expect(find.byType(AlertDialog), findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey('chat_delete_message_confirm')));
+  await tester.pumpAndSettle();
 }
 
 final class _FailingAskBackend extends TestAppBackend {

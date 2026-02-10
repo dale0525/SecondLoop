@@ -8,6 +8,7 @@ import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
+import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_surface.dart';
 import '../settings/actions_settings_store.dart';
 import 'review_backoff.dart';
@@ -127,32 +128,15 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
 
   Future<void> _dismiss(Todo todo) async {
     final t = context.t;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.actions.todoDelete.dialog.title),
-          content: Text(t.actions.todoDelete.dialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.common.actions.cancel),
-            ),
-            FilledButton(
-              key: ValueKey('review_queue_delete_confirm_${todo.id}'),
-              onPressed: () => Navigator.of(context).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
-              ),
-              child: Text(t.actions.todoDelete.dialog.confirm),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showSlDeleteConfirmDialog(
+      context,
+      title: t.actions.todoDelete.dialog.title,
+      message: t.actions.todoDelete.dialog.message,
+      confirmLabel: t.actions.todoDelete.dialog.confirm,
+      confirmButtonKey: ValueKey('review_queue_delete_confirm_${todo.id}'),
     );
     if (!mounted) return;
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;

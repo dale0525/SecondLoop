@@ -628,6 +628,10 @@
     "editMessageTitle": "Edit message",
     "messageUpdated": "Message updated",
     "messageDeleted": "Message deleted",
+    "deleteMessageDialog": {
+      "title": "Delete message?",
+      "message": "This will permanently delete this message and its attachments."
+    },
     "photoFailed": "Photo failed: $error",
     "editFailed": "Edit failed: $error",
     "deleteFailed": "Delete failed: $error",

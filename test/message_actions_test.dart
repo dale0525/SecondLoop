@@ -42,6 +42,7 @@ void main() {
     expect(find.byKey(const ValueKey('message_actions_sheet')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
+    await _confirmChatMessageDelete(tester);
 
     expect(find.text('hello'), findsNothing);
     expect(backend.deletedMessageIds, contains('m1'));
@@ -82,10 +83,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
-
-    expect(find.byType(AlertDialog), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('chat_delete_todo_confirm')));
-    await tester.pumpAndSettle();
+    await _confirmChatTodoDelete(tester);
 
     expect(find.text('hello'), findsNothing);
     expect(backend.deletedTodoIds, contains('t1'));
@@ -165,6 +163,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('message_delete_m1')));
     await tester.pumpAndSettle();
+    await _confirmChatMessageDelete(tester);
 
     expect(find.text('hello'), findsNothing);
     expect(backend.deletedMessageIds, contains('m1'));
@@ -588,9 +587,22 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
+    await _confirmChatMessageDelete(tester);
     expect(find.text('ai'), findsNothing);
     expect(backend.deletedMessageIds, contains('m2'));
   });
+}
+
+Future<void> _confirmChatMessageDelete(WidgetTester tester) async {
+  expect(find.byType(AlertDialog), findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey('chat_delete_message_confirm')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _confirmChatTodoDelete(WidgetTester tester) async {
+  expect(find.byType(AlertDialog), findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey('chat_delete_todo_confirm')));
+  await tester.pumpAndSettle();
 }
 
 Widget _wrapChat({required AppBackend backend}) {

@@ -710,6 +710,15 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       final messenger = ScaffoldMessenger.of(context);
 
       if (message.id == _kFailedAskMessageId) {
+        final confirmed = await showSlDeleteConfirmDialog(
+          context,
+          title: t.chat.deleteMessageDialog.title,
+          message: t.chat.deleteMessageDialog.message,
+          confirmButtonKey: const ValueKey('chat_delete_message_confirm'),
+        );
+        if (!mounted) return;
+        if (!confirmed) return;
+
         _setState(() {
           _askFailureQuestion = null;
           _askFailureMessage = null;
@@ -734,32 +743,15 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       final targetTodo = resolvedLinkedTodoInfo?.todo;
       final isSourceEntry = resolvedLinkedTodoInfo?.isSourceEntry == true;
       if (targetTodo != null && isSourceEntry) {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text(t.actions.todoDelete.dialog.title),
-              content: Text(t.actions.todoDelete.dialog.message),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(t.common.actions.cancel),
-                ),
-                FilledButton(
-                  key: const ValueKey('chat_delete_todo_confirm'),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  ),
-                  child: Text(t.actions.todoDelete.dialog.confirm),
-                ),
-              ],
-            );
-          },
+        final confirmed = await showSlDeleteConfirmDialog(
+          context,
+          title: t.actions.todoDelete.dialog.title,
+          message: t.actions.todoDelete.dialog.message,
+          confirmLabel: t.actions.todoDelete.dialog.confirm,
+          confirmButtonKey: const ValueKey('chat_delete_todo_confirm'),
         );
         if (!mounted) return;
-        if (confirmed != true) return;
+        if (!confirmed) return;
 
         await backend.deleteTodo(sessionKey, todoId: targetTodo.id);
         if (!mounted) return;
@@ -773,6 +765,15 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         );
         return;
       }
+
+      final confirmed = await showSlDeleteConfirmDialog(
+        context,
+        title: t.chat.deleteMessageDialog.title,
+        message: t.chat.deleteMessageDialog.message,
+        confirmButtonKey: const ValueKey('chat_delete_message_confirm'),
+      );
+      if (!mounted) return;
+      if (!confirmed) return;
 
       await backend.purgeMessageAttachments(sessionKey, message.id);
       try {

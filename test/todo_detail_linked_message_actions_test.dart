@@ -346,7 +346,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester
+        .tap(find.byKey(const ValueKey('todo_detail_delete_message_confirm')));
+    await tester.pumpAndSettle();
+
     expect(find.text('before'), findsNothing);
     expect(backend.deletedMessageIds, contains('m1'));
     expect(backend.deletedTodoIds, isEmpty);

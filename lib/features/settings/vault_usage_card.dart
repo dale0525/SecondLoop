@@ -13,6 +13,7 @@ import '../../core/sync/sync_engine_gate.dart';
 import '../../features/attachments/attachment_viewer_page.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../ui/sl_delete_confirm_dialog.dart';
 import '../../ui/sl_surface.dart';
 
 String _formatBytes(int bytes) {
@@ -396,36 +397,20 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   Future<void> _deleteAttachment(VaultAttachmentUsageItem item) async {
     if (_deletingAttachmentSha != null) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        final itemTitle = item.mimeType.isEmpty ? item.sha256 : item.mimeType;
-        final itemDetails = <String>[
-          itemTitle,
-          _formatBytes(item.byteLen),
-          item.sha256,
-        ].join('\n');
-        return AlertDialog(
-          title: Text(context.t.common.actions.delete),
-          content: Text(itemDetails),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
-              ),
-              child: Text(context.t.common.actions.delete),
-            ),
-          ],
-        );
-      },
+    final itemTitle = item.mimeType.isEmpty ? item.sha256 : item.mimeType;
+    final itemDetails = <String>[
+      itemTitle,
+      _formatBytes(item.byteLen),
+      item.sha256,
+    ].join('\n');
+    final confirmed = await showSlDeleteConfirmDialog(
+      context,
+      title: context.t.common.actions.delete,
+      message: itemDetails,
+      confirmButtonKey:
+          ValueKey('vault_usage_attachment_delete_confirm_${item.sha256}'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     final auth = await _resolveManagedVaultAuth();
     if (auth == null || !mounted) return;

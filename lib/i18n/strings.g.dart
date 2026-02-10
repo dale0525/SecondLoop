@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1198 (599 per locale)
+/// Strings: 1202 (601 per locale)
 ///
-/// Built on 2026-02-09 at 15:56 UTC
+/// Built on 2026-02-10 at 03:57 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -371,6 +371,8 @@ class _StringsChatEn {
   String get editMessageTitle => 'Edit message';
   String get messageUpdated => 'Message updated';
   String get messageDeleted => 'Message deleted';
+  late final _StringsChatDeleteMessageDialogEn deleteMessageDialog =
+      _StringsChatDeleteMessageDialogEn._(_root);
   String photoFailed({required Object error}) => 'Photo failed: ${error}';
   String editFailed({required Object error}) => 'Edit failed: ${error}';
   String deleteFailed({required Object error}) => 'Delete failed: ${error}';
@@ -1188,6 +1190,18 @@ class _StringsSettingsDebugSemanticSearchEn {
   // Translations
   String get title => 'Debug: Semantic search';
   String get subtitle => 'Search similar messages + rebuild embeddings index';
+}
+
+// Path: chat.deleteMessageDialog
+class _StringsChatDeleteMessageDialogEn {
+  _StringsChatDeleteMessageDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete message?';
+  String get message =>
+      'This will permanently delete this message and its attachments.';
 }
 
 // Path: chat.messageActions
@@ -3126,6 +3140,9 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   String get messageDeleted => '消息已删除';
   @override
+  late final _StringsChatDeleteMessageDialogZhCn deleteMessageDialog =
+      _StringsChatDeleteMessageDialogZhCn._(_root);
+  @override
   String photoFailed({required Object error}) => '拍照失败：${error}';
   @override
   String editFailed({required Object error}) => '编辑失败：${error}';
@@ -4376,6 +4393,23 @@ class _StringsSettingsDebugSemanticSearchZhCn
   String get title => '调试：语义检索';
   @override
   String get subtitle => '搜索相似消息 + 重建向量索引';
+}
+
+// Path: chat.deleteMessageDialog
+class _StringsChatDeleteMessageDialogZhCn
+    extends _StringsChatDeleteMessageDialogEn {
+  _StringsChatDeleteMessageDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除信息？';
+  @override
+  String get message => '这将永久删除该信息及其附件。';
 }
 
 // Path: chat.messageActions
@@ -7578,6 +7612,10 @@ extension on Translations {
         return 'Message updated';
       case 'chat.messageDeleted':
         return 'Message deleted';
+      case 'chat.deleteMessageDialog.title':
+        return 'Delete message?';
+      case 'chat.deleteMessageDialog.message':
+        return 'This will permanently delete this message and its attachments.';
       case 'chat.photoFailed':
         return ({required Object error}) => 'Photo failed: ${error}';
       case 'chat.editFailed':
@@ -8806,6 +8844,10 @@ extension on _StringsZhCn {
         return '消息已更新';
       case 'chat.messageDeleted':
         return '消息已删除';
+      case 'chat.deleteMessageDialog.title':
+        return '删除信息？';
+      case 'chat.deleteMessageDialog.message':
+        return '这将永久删除该信息及其附件。';
       case 'chat.photoFailed':
         return ({required Object error}) => '拍照失败：${error}';
       case 'chat.editFailed':

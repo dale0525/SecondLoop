@@ -628,6 +628,10 @@
     "editMessageTitle": "编辑消息",
     "messageUpdated": "消息已更新",
     "messageDeleted": "消息已删除",
+    "deleteMessageDialog": {
+      "title": "删除信息？",
+      "message": "这将永久删除该信息及其附件。"
+    },
     "photoFailed": "拍照失败：$error",
     "editFailed": "编辑失败：$error",
     "deleteFailed": "删除失败：$error",
