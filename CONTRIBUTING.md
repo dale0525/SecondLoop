@@ -44,7 +44,7 @@ PR CI should not require secrets (fork PRs don't have access to them). Keep Clou
 
 Release workflow: `.github/workflows/release.yml` (tag `v*`, but app release tags are validated as strict `vX.Y.Z`).
 
-Use `pixi run release` (no positional version) to run preflight + AI bump decision + automatic tag publish. Local runs can read release env vars from `.env.local`.
+Use `pixi run release` (no positional version) to run preflight + AI bump decision + automatic tag publish. Local runs can read release env vars from `.env.local`. In local `--dry-run`, the script sets `RELEASE_LLM_INSECURE_SKIP_VERIFY=1` so LLM calls are not blocked by local TLS trust-chain issues; real release jobs on GitHub Actions still run with normal certificate verification.
 
 Required env/secrets for release automation:
 - `RELEASE_LLM_API_KEY`

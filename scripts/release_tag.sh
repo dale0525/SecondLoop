@@ -17,6 +17,7 @@ Notes:
   - Computes release tag automatically via scripts/release_ai.py.
   - Tag format is strict SemVer: vX.Y.Z.
   - Requires RELEASE_LLM_API_KEY and RELEASE_LLM_MODEL.
+  - In --dry-run, local LLM calls skip TLS cert verification.
   - Loads env from .env.local when present.
   - This command only publishes app tags.
   - Runtime release tags are managed separately via: pixi run release-runtime vX.Y.Z[.W]
@@ -94,6 +95,11 @@ if [[ -z "${RELEASE_LLM_API_KEY:-}" ]]; then
 fi
 if [[ -z "${RELEASE_LLM_MODEL:-}" ]]; then
   die "Missing RELEASE_LLM_MODEL"
+fi
+
+if (( dry_run )); then
+  export RELEASE_LLM_INSECURE_SKIP_VERIFY=1
+  echo "release: (dry-run) local LLM TLS certificate verification disabled"
 fi
 
 run() {
