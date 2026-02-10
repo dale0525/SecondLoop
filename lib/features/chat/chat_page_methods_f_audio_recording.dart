@@ -1,7 +1,6 @@
 part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
-const Duration kAudioRecordingMaxDuration = Duration(minutes: 30);
 const Duration _kAudioRecordingUiTick = Duration(milliseconds: 250);
 
 enum AudioRecordingFailureKind {
@@ -119,6 +118,10 @@ bool shouldOpenMicrophoneSettings(AudioRecordingFailureKind kind) {
       kind == AudioRecordingFailureKind.noMicrophone;
 }
 
+bool shouldKeepScreenAwakeDuringRecording({required bool isWeb}) {
+  return !isWeb;
+}
+
 extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   AudioRecorder get _audioRecorder =>
       _audioRecorderInstance ??= AudioRecorder();
@@ -168,6 +171,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
       if (!mounted) return;
       _setState(() => _recordingAudio = true);
+      await _setRecordingWakeLock(true);
 
       final action = await _showAudioRecordingSheet(startedAt: startedAt);
       final shouldSend = action == _AudioRecordingSheetAction.stop;
@@ -213,6 +217,8 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
           // Ignore file cleanup failures.
         }
       }
+
+      await _setRecordingWakeLock(false);
 
       if (mounted) {
         _setState(() => _recordingAudio = false);
@@ -272,6 +278,18 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
   }
 
+  Future<void> _setRecordingWakeLock(bool enabled) async {
+    if (!shouldKeepScreenAwakeDuringRecording(isWeb: kIsWeb)) {
+      return;
+    }
+
+    try {
+      await WakelockPlus.toggle(enable: enabled);
+    } catch (_) {
+      // Ignore wakelock failures and keep recording flow available.
+    }
+  }
+
   Future<_AudioRecordingSheetAction?> _showAudioRecordingSheet({
     required DateTime startedAt,
   }) {
@@ -309,11 +327,6 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       }
 
       if (!sheetContext.mounted) return;
-
-      if (nextElapsed >= kAudioRecordingMaxDuration) {
-        Navigator.of(sheetContext).pop(_AudioRecordingSheetAction.stop);
-        return;
-      }
 
       setSheetState(() {
         elapsed = nextElapsed;
@@ -383,9 +396,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
                     en: 'Recording paused. Tap Resume when ready.',
                   )
                 : context.t.chat.recordingHint;
-            final maxDurationHint = _localizedByLanguage(
-              zh: '最长 ${formatAudioRecordingElapsed(kAudioRecordingMaxDuration)}，到时会自动停止并发送。',
-              en: 'Up to ${formatAudioRecordingElapsed(kAudioRecordingMaxDuration)}. Recording auto-stops and sends at limit.',
+            final manualStopHint = _localizedByLanguage(
+              zh: '录音不会自动停止，完成后请点击停止发送。',
+              en: 'Recording does not auto-stop. Tap Stop when you are done.',
             );
 
             return SafeArea(
@@ -423,7 +436,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      maxDurationHint,
+                      manualStopHint,
                       textAlign: TextAlign.center,
                       style: Theme.of(sheetContext).textTheme.bodySmall,
                     ),

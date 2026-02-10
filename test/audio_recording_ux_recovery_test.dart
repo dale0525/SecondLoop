@@ -85,4 +85,20 @@ void main() {
       );
     });
   });
+
+  group('shouldKeepScreenAwakeDuringRecording', () {
+    test('returns true for non-web environments', () {
+      expect(
+        shouldKeepScreenAwakeDuringRecording(isWeb: false),
+        isTrue,
+      );
+    });
+
+    test('returns false for web environments', () {
+      expect(
+        shouldKeepScreenAwakeDuringRecording(isWeb: true),
+        isFalse,
+      );
+    });
+  });
 }
