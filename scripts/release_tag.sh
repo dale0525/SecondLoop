@@ -8,6 +8,7 @@ Usage:
 
 Options:
   --dry-run          Execute checks + tag + notes preview, but skip git tag/push
+  --skip-llm         Dry-run only: skip LLM bump/notes checks (for local troubleshooting)
   --remote <name>    Git remote name (default: origin)
   --allow-dirty      Allow tagging with uncommitted changes
   --force            Move tag if it already exists (DANGEROUS)
@@ -16,7 +17,7 @@ Notes:
   - Requires current branch to be 'main' and up-to-date with <remote>/main.
   - Computes release tag automatically via scripts/release_ai.py.
   - Tag format is strict SemVer: vX.Y.Z.
-  - Requires RELEASE_LLM_API_KEY and RELEASE_LLM_MODEL.
+  - Requires RELEASE_LLM_API_KEY and RELEASE_LLM_MODEL (unless --dry-run --skip-llm).
   - Loads env from .env.local when present.
   - This command only publishes app tags.
   - Runtime release tags are managed separately via: pixi run release-runtime vX.Y.Z[.W]
@@ -37,6 +38,7 @@ require_cmd git
 require_cmd python3
 
 dry_run=0
+skip_llm=0
 remote="origin"
 allow_dirty=0
 force=0
@@ -51,6 +53,10 @@ while [[ ${#args[@]} -gt 0 ]]; do
       ;;
     --dry-run)
       dry_run=1
+      args=("${args[@]:1}")
+      ;;
+    --skip-llm)
+      skip_llm=1
       args=("${args[@]:1}")
       ;;
     --remote)
@@ -89,11 +95,22 @@ if [[ -f "${dotenv_file}" ]]; then
   set +a
 fi
 
-if [[ -z "${RELEASE_LLM_API_KEY:-}" ]]; then
-  die "Missing RELEASE_LLM_API_KEY"
+if (( skip_llm && ! dry_run )); then
+  die "--skip-llm only works with --dry-run"
 fi
-if [[ -z "${RELEASE_LLM_MODEL:-}" ]]; then
-  die "Missing RELEASE_LLM_MODEL"
+
+requires_llm=1
+if (( dry_run && skip_llm )); then
+  requires_llm=0
+fi
+
+if (( requires_llm )); then
+  if [[ -z "${RELEASE_LLM_API_KEY:-}" ]]; then
+    die "Missing RELEASE_LLM_API_KEY"
+  fi
+  if [[ -z "${RELEASE_LLM_MODEL:-}" ]]; then
+    die "Missing RELEASE_LLM_MODEL"
+  fi
 fi
 
 run() {
@@ -166,6 +183,14 @@ if [[ -n "${repo_slug}" ]]; then
 fi
 
 run_readonly "${collect_cmd[@]}"
+
+if (( dry_run && skip_llm )); then
+  echo "release: (dry-run) skipping LLM-dependent checks (--skip-llm enabled)."
+  echo "release: (dry-run) skipped decide-bump/compute-tag/notes preview."
+  echo "release: (dry-run) GitHub Actions release job will still validate and generate release notes."
+  exit 0
+fi
+
 run_readonly python3 scripts/release_ai.py decide-bump --facts "${facts_json}" --output "${decision_json}"
 run_readonly python3 scripts/release_ai.py compute-tag --facts "${facts_json}" --decision "${decision_json}" --output "${tag_json}"
 

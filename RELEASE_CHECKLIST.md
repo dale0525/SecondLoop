@@ -92,6 +92,14 @@ pixi run release --dry-run
 
 `--dry-run` 仍会执行事实收集、版本判定、tag 计算，并生成/校验多语言 release notes 预览到 `dist/release-notes/` 与 `dist/release-notes.md`。
 
+如果本地只想做非 LLM 的快速演练（例如证书环境未就绪），可用：
+
+```bash
+pixi run release --dry-run --skip-llm
+```
+
+该模式只执行 git/preflight/facts 收集，不执行 bump 判定、tag 计算与 notes 生成；正式发布时仍由 GitHub Actions 完整校验。
+
 > 失败策略是 **Fail Fast**：
 > - LLM 调用失败
 > - bump 规则冲突
