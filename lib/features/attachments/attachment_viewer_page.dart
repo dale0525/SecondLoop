@@ -15,7 +15,10 @@ import '../../core/backend/native_backend.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/content_enrichment/docx_ocr.dart';
+import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
+import '../../core/content_enrichment/ocr_result_preference.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/media_enrichment/media_enrichment_availability.dart';
 import '../../core/session/session_scope.dart';
@@ -845,7 +848,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 }
                 if (!isImage) {
                   Future<void> Function()? runOcr;
-                  if (_isPdfAttachment()) {
+                  if (_supportsDocumentOcrAttachment()) {
                     runOcr = _runDocumentOcr;
                   } else if (_isVideoManifestAttachment()) {
                     runOcr = _runVideoManifestOcr;

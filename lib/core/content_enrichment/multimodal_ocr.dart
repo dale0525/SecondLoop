@@ -147,10 +147,11 @@ Future<PlatformPdfOcrResult?> tryMultimodalOcrViaCloud({
   );
 }
 
-Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
+Future<PlatformPdfOcrResult?> tryConfiguredMultimodalMediaOcr({
   required NativeAppBackend backend,
   required Uint8List sessionKey,
-  required Uint8List pdfBytes,
+  required String mimeType,
+  required Uint8List mediaBytes,
   required int pageCountHint,
   required String languageHints,
   required SubscriptionStatus subscriptionStatus,
@@ -159,13 +160,11 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
   required String cloudGatewayBaseUrl,
   required String cloudIdToken,
   required String cloudModelName,
-  Future<PlatformPdfRenderedImage?> Function(
-    Uint8List bytes, {
-    PlatformPdfRenderPreset preset,
-  })? renderPdfToImage,
   TryCloudOcrForPdf? tryCloudOcr,
   TryByokOcrForPdf? tryByokOcr,
 }) async {
+  if (mediaBytes.isEmpty) return null;
+
   final canUseCloud = canUseCloudMultimodalOcr(
     subscriptionStatus: subscriptionStatus,
     mediaAnnotationConfig: mediaAnnotationConfig,
@@ -182,18 +181,7 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
     return null;
   }
 
-  final rendered =
-      await (renderPdfToImage ?? PlatformPdfRender.tryRenderPdfToLongImage)(
-    pdfBytes,
-    preset: PlatformPdfRenderPreset.common,
-  );
-  if (rendered == null || rendered.imageBytes.isEmpty) {
-    return null;
-  }
-
-  final normalizedPageCount = rendered.processedPages > 0
-      ? rendered.processedPages
-      : (rendered.pageCount > 0 ? rendered.pageCount : pageCountHint);
+  final normalizedPageCount = pageCountHint < 1 ? 1 : pageCountHint;
 
   final cloudRunner = tryCloudOcr ??
       ({
@@ -235,8 +223,8 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
   if (canUseCloud) {
     try {
       final cloud = await cloudRunner(
-        mimeType: rendered.mimeType,
-        mediaBytes: rendered.imageBytes,
+        mimeType: mimeType,
+        mediaBytes: mediaBytes,
         pageCountHint: normalizedPageCount,
       );
       if (cloud != null) return cloud;
@@ -247,8 +235,8 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
         final byok = await byokRunner(
           profileId: byokProfile.id,
           modelName: byokProfile.modelName,
-          mimeType: rendered.mimeType,
-          mediaBytes: rendered.imageBytes,
+          mimeType: mimeType,
+          mediaBytes: mediaBytes,
           pageCountHint: normalizedPageCount,
         );
         if (byok != null) return byok;
@@ -264,14 +252,64 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
     return await byokRunner(
       profileId: byokProfile.id,
       modelName: byokProfile.modelName,
-      mimeType: rendered.mimeType,
-      mediaBytes: rendered.imageBytes,
+      mimeType: mimeType,
+      mediaBytes: mediaBytes,
       pageCountHint: normalizedPageCount,
     );
   } catch (_) {
     // BYOK fallback order: byok -> caller handles runtime OCR -> native OCR.
     return null;
   }
+}
+
+Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
+  required NativeAppBackend backend,
+  required Uint8List sessionKey,
+  required Uint8List pdfBytes,
+  required int pageCountHint,
+  required String languageHints,
+  required SubscriptionStatus subscriptionStatus,
+  required MediaAnnotationConfig mediaAnnotationConfig,
+  required List<LlmProfile> llmProfiles,
+  required String cloudGatewayBaseUrl,
+  required String cloudIdToken,
+  required String cloudModelName,
+  Future<PlatformPdfRenderedImage?> Function(
+    Uint8List bytes, {
+    PlatformPdfRenderPreset preset,
+  })? renderPdfToImage,
+  TryCloudOcrForPdf? tryCloudOcr,
+  TryByokOcrForPdf? tryByokOcr,
+}) async {
+  final rendered =
+      await (renderPdfToImage ?? PlatformPdfRender.tryRenderPdfToLongImage)(
+    pdfBytes,
+    preset: PlatformPdfRenderPreset.common,
+  );
+  if (rendered == null || rendered.imageBytes.isEmpty) {
+    return null;
+  }
+
+  final normalizedPageCount = rendered.processedPages > 0
+      ? rendered.processedPages
+      : (rendered.pageCount > 0 ? rendered.pageCount : pageCountHint);
+
+  return tryConfiguredMultimodalMediaOcr(
+    backend: backend,
+    sessionKey: sessionKey,
+    mimeType: rendered.mimeType,
+    mediaBytes: rendered.imageBytes,
+    pageCountHint: normalizedPageCount,
+    languageHints: languageHints,
+    subscriptionStatus: subscriptionStatus,
+    mediaAnnotationConfig: mediaAnnotationConfig,
+    llmProfiles: llmProfiles,
+    cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+    cloudIdToken: cloudIdToken,
+    cloudModelName: cloudModelName,
+    tryCloudOcr: tryCloudOcr,
+    tryByokOcr: tryByokOcr,
+  );
 }
 
 String? extractOcrMarkdownFromMediaAnnotationPayload(String payloadJson) {
