@@ -82,19 +82,26 @@ void main() {
 
     expect(find.text('Old caption'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('attachment_annotation_edit')),
-    );
+    final editFinder = find.byKey(const ValueKey('attachment_annotation_edit'));
+    await tester.ensureVisible(editFinder);
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const ValueKey('attachment_annotation_edit_field')),
-      'New caption',
-    );
+    await tester.tap(editFinder);
+    await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('attachment_annotation_edit_save')),
-    );
+    final editFieldFinder =
+        find.byKey(const ValueKey('attachment_annotation_edit_field'));
+    await tester.ensureVisible(editFieldFinder);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(editFieldFinder, 'New caption');
+
+    final saveFinder =
+        find.byKey(const ValueKey('attachment_annotation_edit_save'));
+    await tester.ensureVisible(saveFinder);
+    await tester.pumpAndSettle();
+
+    await tester.tap(saveFinder);
     await tester.pumpAndSettle();
 
     expect(find.text('New caption'), findsOneWidget);

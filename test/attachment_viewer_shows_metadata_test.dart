@@ -65,6 +65,46 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('Image attachment uses unified attachment detail layout',
+      (tester) async {
+    final backend = _Backend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+    );
+
+    const attachment = Attachment(
+      sha256: 'abc',
+      mimeType: 'image/png',
+      path: 'attachments/abc.bin',
+      byteLen: 67,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(attachment: attachment),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('attachment_image_detail_scroll')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_image_preview_surface')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('Attachment viewer shows captured time + location when present',
       (tester) async {
     final backend = _Backend(bytesBySha: {'abc': _tinyJpegWithExif()});
