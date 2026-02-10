@@ -1,199 +1,15 @@
 part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
-const Duration _kPressToTalkListenFor = Duration(seconds: 90);
-const Duration _kPressToTalkPauseFor = Duration(seconds: 4);
-const Duration _kPressToTalkFinalizeTimeout = Duration(seconds: 6);
-const Duration _kPressToTalkLateStartStopDelay = Duration(milliseconds: 450);
-const Duration _kPressToTalkPollInterval = Duration(milliseconds: 60);
 
 enum _AudioRecordingSheetAction {
   stop,
   cancel,
 }
 
-enum _AudioFailureContext {
-  speechToText,
-  recording,
-}
-
 extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   AudioRecorder get _audioRecorder =>
       _audioRecorderInstance ??= AudioRecorder();
-
-  SpeechToText get _speechToText => _speechToTextInstance ??= SpeechToText();
-
-  void _toggleVoiceInputMode() {
-    if (_isComposerBusy) return;
-
-    final nextValue = !_voiceInputMode;
-    _setState(() => _voiceInputMode = nextValue);
-
-    if (nextValue) {
-      unawaited(_prepareSpeechToText(showError: true));
-      return;
-    }
-
-    if (_isDesktopPlatform) {
-      _inputFocusNode.requestFocus();
-    }
-  }
-
-  void _onPressToTalkPointerDown(PointerDownEvent event) {
-    unawaited(_startPressToTalkCapture());
-  }
-
-  void _onPressToTalkPointerUp(PointerUpEvent event) {
-    unawaited(_finishPressToTalkCapture(commitTranscript: true));
-  }
-
-  void _onPressToTalkPointerCancel(PointerCancelEvent event) {
-    unawaited(_finishPressToTalkCapture(commitTranscript: false));
-  }
-
-  Future<void> _startPressToTalkCapture() async {
-    if (_sending ||
-        _asking ||
-        _recordingAudio ||
-        _pressToTalkActive ||
-        _pressToTalkRecognizing) {
-      return;
-    }
-    if (!_supportsPressToTalk || !_voiceInputMode) return;
-    if (!mounted) return;
-
-    final locale = Localizations.localeOf(context);
-    final sessionToken = ++_pressToTalkSessionToken;
-    _setState(() {
-      _pressToTalkActive = true;
-      _pressToTalkRecognizing = false;
-      _pressToTalkTranscript = '';
-    });
-
-    final started = await _startSpeechToTextCapture(
-      locale: locale,
-      onWords: (words) {
-        if (_pressToTalkSessionToken != sessionToken) return;
-        _pressToTalkTranscript = words.trim();
-      },
-      listenFor: _kPressToTalkListenFor,
-    );
-
-    if (!mounted) return;
-    if (!_pressToTalkActive) {
-      if (started) {
-        if (_pressToTalkRecognizing) {
-          await Future<void>.delayed(_kPressToTalkLateStartStopDelay);
-          if (!mounted || _pressToTalkSessionToken != sessionToken) {
-            return;
-          }
-        }
-        await _stopSpeechToTextCapture();
-      }
-      if (!_pressToTalkRecognizing) {
-        return;
-      }
-    }
-
-    if (!started) {
-      _setState(() {
-        _pressToTalkActive = false;
-        _pressToTalkRecognizing = false;
-      });
-    }
-  }
-
-  Future<void> _finishPressToTalkCapture({
-    required bool commitTranscript,
-  }) async {
-    if (!_pressToTalkActive) return;
-
-    final sessionToken = _pressToTalkSessionToken;
-    if (mounted) {
-      _setState(() {
-        _pressToTalkActive = false;
-        _pressToTalkRecognizing = commitTranscript;
-        if (commitTranscript) {
-          _voiceInputMode = false;
-        }
-      });
-    }
-
-    await _stopSpeechToTextCapture();
-
-    final transcript = commitTranscript
-        ? await _waitForPressToTalkTranscript(sessionToken: sessionToken)
-        : '';
-
-    if (!mounted) return;
-    _setState(() {
-      _pressToTalkRecognizing = false;
-      _pressToTalkTranscript = '';
-    });
-
-    if (commitTranscript && transcript.isNotEmpty) {
-      _appendTranscriptToComposer(transcript);
-      return;
-    }
-
-    if (commitTranscript) {
-      _showAudioErrorSnackBar(
-        'speech_result_empty',
-        context: _AudioFailureContext.speechToText,
-      );
-    }
-  }
-
-  Future<String> _waitForPressToTalkTranscript({
-    required int sessionToken,
-  }) async {
-    var transcript = _currentPressToTalkTranscript();
-    if (transcript.isNotEmpty) return transcript;
-
-    final deadline = DateTime.now().add(_kPressToTalkFinalizeTimeout);
-    while (DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(_kPressToTalkPollInterval);
-      if (!mounted || _pressToTalkSessionToken != sessionToken) {
-        return '';
-      }
-
-      transcript = _currentPressToTalkTranscript();
-      if (transcript.isNotEmpty) {
-        return transcript;
-      }
-    }
-
-    return _currentPressToTalkTranscript();
-  }
-
-  String _currentPressToTalkTranscript() {
-    final streamTranscript = _pressToTalkTranscript.trim();
-    if (streamTranscript.isNotEmpty) {
-      return streamTranscript;
-    }
-
-    final speech = _speechToTextInstance;
-    final fallbackTranscript = speech?.lastRecognizedWords.trim() ?? '';
-    if (fallbackTranscript.isNotEmpty) {
-      return fallbackTranscript;
-    }
-
-    return '';
-  }
-
-  void _appendTranscriptToComposer(String transcript) {
-    final normalized = transcript.trim();
-    if (normalized.isEmpty) return;
-
-    final existing = _controller.text.trim();
-    final nextText = existing.isEmpty ? normalized : '$existing $normalized';
-
-    _controller.value = TextEditingValue(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: nextText.length),
-      composing: TextRange.empty,
-    );
-  }
 
   Future<void> _recordAndSendAudioFromSheet() async {
     if (_isComposerBusy) return;
@@ -203,18 +19,12 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     try {
       hasPermission = await _audioRecorder.hasPermission();
     } catch (error) {
-      _showAudioErrorSnackBar(
-        error,
-        context: _AudioFailureContext.recording,
-      );
+      _showAudioErrorSnackBar(error);
       return;
     }
 
     if (!hasPermission) {
-      _showAudioErrorSnackBar(
-        'permission_denied',
-        context: _AudioFailureContext.recording,
-      );
+      _showAudioErrorSnackBar('permission_denied');
       return;
     }
 
@@ -264,10 +74,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
       );
     } catch (error) {
-      _showAudioErrorSnackBar(
-        error,
-        context: _AudioFailureContext.recording,
-      );
+      _showAudioErrorSnackBar(error);
     } finally {
       if (recorderStarted) {
         try {
@@ -296,7 +103,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     Uint8List audioBytes, {
     required String filename,
   }) async {
-    if (_sending || _asking || _pressToTalkActive || _pressToTalkRecognizing) {
+    if (_sending || _asking) {
       return;
     }
 
@@ -354,136 +161,18 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     );
   }
 
-  Future<bool> _prepareSpeechToText({
-    required bool showError,
-  }) async {
-    final speech = _speechToText;
-
-    bool hasPermission;
-    try {
-      hasPermission = await speech.hasPermission;
-    } catch (error) {
-      if (showError) {
-        _showAudioErrorSnackBar(
-          error,
-          context: _AudioFailureContext.speechToText,
-        );
-      }
-      return false;
-    }
-
-    bool isAvailable;
-    try {
-      isAvailable = await speech.initialize(
-        finalTimeout: _kPressToTalkFinalizeTimeout,
-      );
-    } catch (error) {
-      if (showError) {
-        _showAudioErrorSnackBar(
-          error,
-          context: _AudioFailureContext.speechToText,
-        );
-      }
-      return false;
-    }
-
-    if (!isAvailable) {
-      if (showError) {
-        _showAudioErrorSnackBar(
-          hasPermission
-              ? 'speech_recognition_unavailable'
-              : 'permission_denied',
-          context: _AudioFailureContext.speechToText,
-        );
-      }
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<bool> _startSpeechToTextCapture({
-    required Locale locale,
-    required void Function(String words) onWords,
-    required Duration listenFor,
-  }) async {
-    final isReady = await _prepareSpeechToText(showError: true);
-    if (!isReady) {
-      return false;
-    }
-
-    final speech = _speechToText;
-    final localeId = await _resolveSpeechLocaleId(locale);
-
-    try {
-      await speech.listen(
-        localeId: localeId,
-        listenFor: listenFor,
-        pauseFor: _kPressToTalkPauseFor,
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: false,
-          listenMode: ListenMode.dictation,
-        ),
-        onResult: (result) {
-          final normalized = result.recognizedWords.trim();
-          if (normalized.isEmpty) return;
-          onWords(normalized);
-        },
-      );
-      return true;
-    } catch (error) {
-      _showAudioErrorSnackBar(
-        error,
-        context: _AudioFailureContext.speechToText,
-      );
-      return false;
-    }
-  }
-
-  Future<void> _stopSpeechToTextCapture() async {
-    final speech = _speechToTextInstance;
-    if (speech == null) return;
-
-    try {
-      await speech.stop();
-      return;
-    } catch (_) {
-      if (!speech.isListening) {
-        return;
-      }
-    }
-
-    try {
-      await speech.cancel();
-    } catch (_) {
-      // Ignore stop failures.
-    }
-  }
-
-  void _showAudioErrorSnackBar(
-    Object error, {
-    required _AudioFailureContext context,
-  }) {
+  void _showAudioErrorSnackBar(Object error) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(this.context).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          _describeAudioError(
-            error,
-            context: context,
-          ),
-        ),
+        content: Text(_describeAudioError(error)),
         duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  String _describeAudioError(
-    Object error, {
-    required _AudioFailureContext context,
-  }) {
+  String _describeAudioError(Object error) {
     final raw = '$error';
     final normalized = raw.toLowerCase();
 
@@ -491,35 +180,15 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         normalized.contains('denied') ||
         normalized.contains('record_audio') ||
         normalized.contains('not allowed')) {
-      return this.context.t.chat.audioRecordPermissionDenied;
-    }
-
-    if (normalized.contains('speech_recognition_unavailable') ||
-        normalized.contains('speech recognizer') ||
-        normalized.contains('recognizer not available') ||
-        normalized.contains('recognizer unavailable') ||
-        normalized.contains('service not available')) {
-      return _localizedByLanguage(
-        zh: '当前设备语音识别服务不可用，请检查系统语音服务设置。',
-        en: 'Speech recognition service is unavailable on this device.',
-      );
-    }
-
-    if (normalized.contains('speech_result_empty') ||
-        normalized.contains('no match') ||
-        normalized.contains('no speech')) {
-      return _localizedByLanguage(
-        zh: '没有识别到语音内容，请再试一次。',
-        en: 'No speech was recognized. Please try again.',
-      );
+      return context.t.chat.audioRecordPermissionDenied;
     }
 
     if (normalized.contains('network') ||
         normalized.contains('timeout') ||
         normalized.contains('timed out')) {
       return _localizedByLanguage(
-        zh: '语音识别网络异常，请检查网络后重试。',
-        en: 'Speech recognition network issue. Please check your connection.',
+        zh: '录音上传网络异常，请检查网络后重试。',
+        en: 'Audio upload network issue. Please check your connection.',
       );
     }
 
@@ -551,29 +220,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       );
     }
 
-    if (context == _AudioFailureContext.speechToText &&
-        (normalized.contains('cancelled') || normalized.contains('canceled'))) {
-      return _localizedByLanguage(
-        zh: '语音识别已取消。',
-        en: 'Speech recognition was canceled.',
-      );
-    }
-
-    return this.context.t.chat.audioRecordFailed(error: raw);
-  }
-
-  String _pressToTalkRecognizingTitle() {
-    return _localizedByLanguage(
-      zh: '正在识别…',
-      en: 'Recognizing…',
-    );
-  }
-
-  String _pressToTalkRecognizingHint() {
-    return _localizedByLanguage(
-      zh: '请稍候，识别结果会自动填入输入框。',
-      en: 'Please wait, recognized text will be inserted automatically.',
-    );
+    return context.t.chat.audioRecordFailed(error: raw);
   }
 
   String _localizedByLanguage({
@@ -582,36 +229,5 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   }) {
     final code = Localizations.localeOf(context).languageCode.toLowerCase();
     return code.startsWith('zh') ? zh : en;
-  }
-
-  Future<String?> _resolveSpeechLocaleId(Locale locale) async {
-    final speech = _speechToText;
-    List<LocaleName> locales;
-    try {
-      locales = await speech.locales();
-    } catch (_) {
-      return null;
-    }
-    if (locales.isEmpty) return null;
-
-    final languageTag = locale.toLanguageTag().toLowerCase();
-    final underscoreTag = locale.toString().toLowerCase();
-
-    for (final item in locales) {
-      final current = item.localeId.toLowerCase();
-      if (current == languageTag || current == underscoreTag) {
-        return item.localeId;
-      }
-    }
-
-    final langPrefix = locale.languageCode.toLowerCase();
-    for (final item in locales) {
-      final current = item.localeId.toLowerCase();
-      if (current.startsWith(langPrefix)) {
-        return item.localeId;
-      }
-    }
-
-    return null;
   }
 }
