@@ -381,6 +381,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _recordingAudio = false;
   bool _voiceInputMode = false;
   bool _pressToTalkActive = false;
+  bool _pressToTalkRecognizing = false;
+  int _pressToTalkSessionToken = 0;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
@@ -442,7 +444,11 @@ class _ChatPageState extends State<ChatPage> {
       _isDesktopPlatform && _supportsAudioRecording && !_supportsPressToTalk;
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
   bool get _isComposerBusy =>
-      _sending || _asking || _recordingAudio || _pressToTalkActive;
+      _sending ||
+      _asking ||
+      _recordingAudio ||
+      _pressToTalkActive ||
+      _pressToTalkRecognizing;
 
   @override
   void initState() {

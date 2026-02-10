@@ -319,6 +319,10 @@ extension _ChatPageStateBuild on _ChatPageState {
                           child: const Icon(Icons.arrow_downward_rounded),
                         ),
                       ),
+                    _buildPressToTalkCenterOverlay(
+                      context,
+                      tokens: tokens,
+                    ),
                   ],
                 ),
               ),

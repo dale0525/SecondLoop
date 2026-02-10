@@ -765,7 +765,7 @@ packages:
     source: hosted
     version: "3.1.4"
   plugin_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: plugin_platform_interface
       sha256: "4820fbfdb9478b1ebae27888254d445073732dae3d6ea81f0b7e06d5dedc3f02"
@@ -985,7 +985,7 @@ packages:
     source: hosted
     version: "1.1.0"
   speech_to_text_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: speech_to_text_platform_interface
       sha256: a1935847704e41ee468aad83181ddd2423d0833abe55d769c59afca07adb5114

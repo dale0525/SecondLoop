@@ -213,6 +213,104 @@ extension _ChatPageStateVoiceComposerUi on _ChatPageState {
     );
   }
 
+  Widget _buildPressToTalkCenterOverlay(
+    BuildContext context, {
+    required SlTokens tokens,
+  }) {
+    if (!_pressToTalkActive && !_pressToTalkRecognizing) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final isRecording = _pressToTalkActive;
+    final title = isRecording
+        ? context.t.chat.recordingInProgress
+        : _pressToTalkRecognizingTitle();
+    final subtitle = isRecording
+        ? context.t.chat.releaseToConvert
+        : _pressToTalkRecognizingHint();
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Center(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: Container(
+              key: ValueKey<String>(
+                isRecording
+                    ? 'chat_press_to_talk_overlay_recording'
+                    : 'chat_press_to_talk_overlay_recognizing',
+              ),
+              constraints: const BoxConstraints(maxWidth: 280),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: tokens.surface.withOpacity(0.96),
+                borderRadius: BorderRadius.circular(tokens.radiusLg),
+                border: Border.all(color: tokens.borderSubtle),
+                boxShadow: [
+                  BoxShadow(
+                    color: colorScheme.shadow.withOpacity(0.16),
+                    blurRadius: 20,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            isRecording
+                                ? colorScheme.primary
+                                : colorScheme.secondary,
+                          ),
+                        ),
+                        Icon(
+                          isRecording
+                              ? Icons.mic_rounded
+                              : Icons.graphic_eq_rounded,
+                          color: isRecording
+                              ? colorScheme.primary
+                              : colorScheme.secondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompactAttachButton(BuildContext context) {
     if (!_supportsImageUpload && !_supportsAudioRecording) {
       return const SizedBox.shrink();

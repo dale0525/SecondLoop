@@ -2,10 +2,17 @@ part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
 const Duration _kPressToTalkListenFor = Duration(seconds: 90);
+const Duration _kPressToTalkFinalizeTimeout = Duration(seconds: 2);
+const Duration _kPressToTalkPollInterval = Duration(milliseconds: 60);
 
 enum _AudioRecordingSheetAction {
   stop,
   cancel,
+}
+
+enum _AudioFailureContext {
+  speechToText,
+  recording,
 }
 
 extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
@@ -38,26 +45,35 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   }
 
   Future<void> _startPressToTalkCapture() async {
-    if (_sending || _asking || _recordingAudio || _pressToTalkActive) return;
+    if (_sending ||
+        _asking ||
+        _recordingAudio ||
+        _pressToTalkActive ||
+        _pressToTalkRecognizing) {
+      return;
+    }
     if (!_supportsPressToTalk || !_voiceInputMode) return;
     if (!mounted) return;
 
     final locale = Localizations.localeOf(context);
+    final sessionToken = ++_pressToTalkSessionToken;
     _setState(() {
       _pressToTalkActive = true;
+      _pressToTalkRecognizing = false;
       _pressToTalkTranscript = '';
     });
 
     final started = await _startSpeechToTextCapture(
       locale: locale,
       onWords: (words) {
+        if (_pressToTalkSessionToken != sessionToken) return;
         _pressToTalkTranscript = words.trim();
       },
       listenFor: _kPressToTalkListenFor,
     );
 
     if (!mounted) return;
-    if (!_pressToTalkActive) {
+    if (!_pressToTalkActive && !_pressToTalkRecognizing) {
       if (started) {
         await _stopSpeechToTextCapture();
       }
@@ -65,7 +81,10 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
 
     if (!started) {
-      _setState(() => _pressToTalkActive = false);
+      _setState(() {
+        _pressToTalkActive = false;
+        _pressToTalkRecognizing = false;
+      });
     }
   }
 
@@ -74,18 +93,62 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   }) async {
     if (!_pressToTalkActive) return;
 
+    final sessionToken = _pressToTalkSessionToken;
+    if (mounted) {
+      _setState(() {
+        _pressToTalkActive = false;
+        _pressToTalkRecognizing = commitTranscript;
+        if (commitTranscript) {
+          _voiceInputMode = false;
+        }
+      });
+    }
+
     await _stopSpeechToTextCapture();
-    final transcript = _pressToTalkTranscript.trim();
+
+    final transcript = commitTranscript
+        ? await _waitForPressToTalkTranscript(sessionToken: sessionToken)
+        : '';
 
     if (!mounted) return;
     _setState(() {
-      _pressToTalkActive = false;
+      _pressToTalkRecognizing = false;
       _pressToTalkTranscript = '';
     });
 
     if (commitTranscript && transcript.isNotEmpty) {
       _appendTranscriptToComposer(transcript);
+      return;
     }
+
+    if (commitTranscript) {
+      _showAudioErrorSnackBar(
+        'speech_result_empty',
+        context: _AudioFailureContext.speechToText,
+      );
+    }
+  }
+
+  Future<String> _waitForPressToTalkTranscript({
+    required int sessionToken,
+  }) async {
+    var transcript = _pressToTalkTranscript.trim();
+    if (transcript.isNotEmpty) return transcript;
+
+    final deadline = DateTime.now().add(_kPressToTalkFinalizeTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(_kPressToTalkPollInterval);
+      if (!mounted || _pressToTalkSessionToken != sessionToken) {
+        return '';
+      }
+
+      transcript = _pressToTalkTranscript.trim();
+      if (transcript.isNotEmpty) {
+        return transcript;
+      }
+    }
+
+    return '';
   }
 
   void _appendTranscriptToComposer(String transcript) {
@@ -106,14 +169,21 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     if (_isComposerBusy) return;
     if (!_supportsAudioRecording) return;
 
-    final hasPermission = await _audioRecorder.hasPermission();
+    bool hasPermission;
+    try {
+      hasPermission = await _audioRecorder.hasPermission();
+    } catch (error) {
+      _showAudioErrorSnackBar(
+        error,
+        context: _AudioFailureContext.recording,
+      );
+      return;
+    }
+
     if (!hasPermission) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordPermissionDenied),
-          duration: const Duration(seconds: 3),
-        ),
+      _showAudioErrorSnackBar(
+        'permission_denied',
+        context: _AudioFailureContext.recording,
       );
       return;
     }
@@ -163,13 +233,10 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         bytes,
         filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
+    } catch (error) {
+      _showAudioErrorSnackBar(
+        error,
+        context: _AudioFailureContext.recording,
       );
     } finally {
       if (recorderStarted) {
@@ -199,7 +266,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     Uint8List audioBytes, {
     required String filename,
   }) async {
-    if (_sending || _asking || _pressToTalkActive) return;
+    if (_sending || _asking || _pressToTalkActive || _pressToTalkRecognizing) {
+      return;
+    }
 
     _setState(() => _sending = true);
     try {
@@ -277,17 +346,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
 
     if (!isAvailable) {
-      if (!mounted) return false;
-      final errorMessage = hasPermission
-          ? context.t.chat.audioRecordFailed(
-              error: 'speech_recognition_unavailable',
-            )
-          : context.t.chat.audioRecordPermissionDenied;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          duration: const Duration(seconds: 3),
-        ),
+      _showAudioErrorSnackBar(
+        hasPermission ? 'speech_recognition_unavailable' : 'permission_denied',
+        context: _AudioFailureContext.speechToText,
       );
       return false;
     }
@@ -309,13 +370,10 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         },
       );
       return true;
-    } catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
+    } catch (error) {
+      _showAudioErrorSnackBar(
+        error,
+        context: _AudioFailureContext.speechToText,
       );
       return false;
     }
@@ -326,14 +384,140 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     if (speech == null) return;
 
     try {
-      if (speech.isListening) {
-        await speech.stop();
-      } else {
-        await speech.cancel();
-      }
+      await speech.stop();
+      return;
+    } catch (_) {
+      // Fall through to cancel.
+    }
+
+    try {
+      await speech.cancel();
     } catch (_) {
       // Ignore stop failures.
     }
+  }
+
+  void _showAudioErrorSnackBar(
+    Object error, {
+    required _AudioFailureContext context,
+  }) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(this.context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _describeAudioError(
+            error,
+            context: context,
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  String _describeAudioError(
+    Object error, {
+    required _AudioFailureContext context,
+  }) {
+    final raw = '$error';
+    final normalized = raw.toLowerCase();
+
+    if (normalized.contains('permission') ||
+        normalized.contains('denied') ||
+        normalized.contains('record_audio') ||
+        normalized.contains('not allowed')) {
+      return this.context.t.chat.audioRecordPermissionDenied;
+    }
+
+    if (normalized.contains('speech_recognition_unavailable') ||
+        normalized.contains('speech recognizer') ||
+        normalized.contains('recognizer not available') ||
+        normalized.contains('recognizer unavailable') ||
+        normalized.contains('service not available')) {
+      return _localizedByLanguage(
+        zh: '当前设备语音识别服务不可用，请检查系统语音服务设置。',
+        en: 'Speech recognition service is unavailable on this device.',
+      );
+    }
+
+    if (normalized.contains('speech_result_empty') ||
+        normalized.contains('no match') ||
+        normalized.contains('no speech')) {
+      return _localizedByLanguage(
+        zh: '没有识别到语音内容，请再试一次。',
+        en: 'No speech was recognized. Please try again.',
+      );
+    }
+
+    if (normalized.contains('network') ||
+        normalized.contains('timeout') ||
+        normalized.contains('timed out')) {
+      return _localizedByLanguage(
+        zh: '语音识别网络异常，请检查网络后重试。',
+        en: 'Speech recognition network issue. Please check your connection.',
+      );
+    }
+
+    if (normalized.contains('audio session') ||
+        normalized.contains('microphone') && normalized.contains('in use') ||
+        normalized.contains('busy')) {
+      return _localizedByLanguage(
+        zh: '麦克风可能正被其他应用占用，请稍后重试。',
+        en: 'Microphone appears busy. Please close other apps using audio.',
+      );
+    }
+
+    if (normalized.contains('no microphone') ||
+        normalized.contains('no input device') ||
+        normalized.contains('input device') ||
+        normalized.contains('audio source') ||
+        normalized.contains('microphone unavailable')) {
+      return _localizedByLanguage(
+        zh: '未检测到可用麦克风，请检查系统输入设备设置。',
+        en: 'No microphone input is available. Check system input settings.',
+      );
+    }
+
+    if (normalized.contains('recording_path_empty') ||
+        normalized.contains('recording_bytes_empty')) {
+      return _localizedByLanguage(
+        zh: '录音内容为空，请重试并确保麦克风输入正常。',
+        en: 'Recording is empty. Please retry and check microphone input.',
+      );
+    }
+
+    if (context == _AudioFailureContext.speechToText &&
+        (normalized.contains('cancelled') || normalized.contains('canceled'))) {
+      return _localizedByLanguage(
+        zh: '语音识别已取消。',
+        en: 'Speech recognition was canceled.',
+      );
+    }
+
+    return this.context.t.chat.audioRecordFailed(error: raw);
+  }
+
+  String _pressToTalkRecognizingTitle() {
+    return _localizedByLanguage(
+      zh: '正在识别…',
+      en: 'Recognizing…',
+    );
+  }
+
+  String _pressToTalkRecognizingHint() {
+    return _localizedByLanguage(
+      zh: '请稍候，识别结果会自动填入输入框。',
+      en: 'Please wait, recognized text will be inserted automatically.',
+    );
+  }
+
+  String _localizedByLanguage({
+    required String zh,
+    required String en,
+  }) {
+    final code = Localizations.localeOf(context).languageCode.toLowerCase();
+    return code.startsWith('zh') ? zh : en;
   }
 
   Future<String?> _resolveSpeechLocaleId(Locale locale) async {
