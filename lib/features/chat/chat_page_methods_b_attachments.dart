@@ -203,88 +203,138 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     );
 
     final normalizedMimeType = mimeType.trim();
-
-    String shaToLink;
-    late final String shaToBackup;
-    if (normalizedMimeType.startsWith('video/')) {
-      final original = await backend.insertAttachment(
+    Message? message;
+    try {
+      message = await backend.insertMessage(
         sessionKey,
-        bytes: rawBytes,
-        mimeType: normalizedMimeType,
+        widget.conversation.id,
+        role: 'user',
+        content: '',
       );
-      shaToBackup = original.sha256;
+      final messageId = message.id;
 
-      final manifest = jsonEncode({
-        'schema': 'secondloop.video_manifest.v1',
-        'original_sha256': original.sha256,
-        'original_mime_type': normalizedMimeType,
-      });
-      final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
-      final manifestAttachment = await backend.insertAttachment(
-        sessionKey,
-        bytes: manifestBytes,
-        mimeType: 'application/x.secondloop.video+json',
-      );
-      shaToLink = manifestAttachment.sha256;
-    } else if (normalizedMimeType.startsWith('audio/')) {
-      final proxy = useLocalAudioTranscode
-          ? await AudioTranscodeWorker.transcodeToM4aProxy(
-              rawBytes,
-              sourceMimeType: normalizedMimeType,
-            )
-          : AudioTranscodeResult(
-              bytes: rawBytes,
-              mimeType: normalizedMimeType,
-              didTranscode: false,
-            );
-      final attachment = await backend.insertAttachment(
-        sessionKey,
-        bytes: proxy.bytes,
-        mimeType: proxy.mimeType,
-      );
-      shaToLink = attachment.sha256;
-      shaToBackup = attachment.sha256;
-    } else {
-      final attachment = await backend.insertAttachment(
-        sessionKey,
-        bytes: rawBytes,
-        mimeType: normalizedMimeType,
-      );
-      shaToLink = attachment.sha256;
-      shaToBackup = attachment.sha256;
-    }
+      if (mounted) {
+        final pendingAttachment = Attachment(
+          sha256: 'pending_$messageId',
+          mimeType: normalizedMimeType,
+          path: '',
+          byteLen: rawBytes.length,
+          createdAtMs: DateTime.now().millisecondsSinceEpoch,
+        );
+        _setState(() {
+          _attachmentLinkingMessageIds.add(messageId);
+          _attachmentsCacheByMessageId[messageId] = [pendingAttachment];
+        });
+      }
+      syncEngine?.notifyLocalMutation();
+      if (mounted) {
+        _refreshAfterAttachmentMutation();
+      }
 
-    unawaited(
-      _maybeEnqueueCloudMediaBackup(
-        backend,
-        sessionKey,
-        shaToBackup,
-      ),
-    );
+      String shaToLink;
+      late final String shaToBackup;
+      if (normalizedMimeType.startsWith('video/')) {
+        final original = await backend.insertAttachment(
+          sessionKey,
+          bytes: rawBytes,
+          mimeType: normalizedMimeType,
+        );
+        shaToBackup = original.sha256;
 
-    final message = await backend.insertMessage(
-      sessionKey,
-      widget.conversation.id,
-      role: 'user',
-      content: '',
-    );
-    await backend.linkAttachmentToMessage(
-      sessionKey,
-      message.id,
-      attachmentSha256: shaToLink,
-    );
-    unawaited(
-      const RustAttachmentMetadataStore().upsert(
+        final manifest = jsonEncode({
+          'schema': 'secondloop.video_manifest.v1',
+          'original_sha256': original.sha256,
+          'original_mime_type': normalizedMimeType,
+        });
+        final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
+        final manifestAttachment = await backend.insertAttachment(
+          sessionKey,
+          bytes: manifestBytes,
+          mimeType: 'application/x.secondloop.video+json',
+        );
+        shaToLink = manifestAttachment.sha256;
+      } else if (normalizedMimeType.startsWith('audio/')) {
+        final proxy = useLocalAudioTranscode
+            ? await AudioTranscodeWorker.transcodeToM4aProxy(
+                rawBytes,
+                sourceMimeType: normalizedMimeType,
+              )
+            : AudioTranscodeResult(
+                bytes: rawBytes,
+                mimeType: normalizedMimeType,
+                didTranscode: false,
+              );
+        final attachment = await backend.insertAttachment(
+          sessionKey,
+          bytes: proxy.bytes,
+          mimeType: proxy.mimeType,
+        );
+        shaToLink = attachment.sha256;
+        shaToBackup = attachment.sha256;
+      } else {
+        final attachment = await backend.insertAttachment(
+          sessionKey,
+          bytes: rawBytes,
+          mimeType: normalizedMimeType,
+        );
+        shaToLink = attachment.sha256;
+        shaToBackup = attachment.sha256;
+      }
+
+      unawaited(
+        _maybeEnqueueCloudMediaBackup(
+          backend,
+          sessionKey,
+          shaToBackup,
+        ),
+      );
+
+      await backend.linkAttachmentToMessage(
         sessionKey,
+        message.id,
         attachmentSha256: shaToLink,
-        filenames: [filename],
-      ).catchError((_) {}),
-    );
+      );
+      unawaited(
+        const RustAttachmentMetadataStore().upsert(
+          sessionKey,
+          attachmentSha256: shaToLink,
+          filenames: [filename],
+        ).catchError((_) {}),
+      );
 
-    syncEngine?.notifyLocalMutation();
-    if (!mounted) return shaToLink;
-    _refreshAfterAttachmentMutation();
+      syncEngine?.notifyLocalMutation();
+      if (!mounted) return shaToLink;
+      _setState(() {
+        _attachmentLinkingMessageIds.remove(messageId);
+      });
+      _refreshAfterAttachmentMutation();
 
-    return shaToLink;
+      return shaToLink;
+    } catch (_) {
+      if (message != null) {
+        try {
+          await backend.purgeMessageAttachments(sessionKey, message.id);
+          syncEngine?.notifyLocalMutation();
+          if (mounted) {
+            _refreshAfterAttachmentMutation();
+          }
+        } catch (_) {
+          // ignore cleanup failures
+        }
+      }
+      rethrow;
+    } finally {
+      if (message != null && mounted) {
+        final messageId = message.id;
+        _setState(() {
+          _attachmentLinkingMessageIds.remove(messageId);
+          if (_attachmentsCacheByMessageId[messageId]
+                  ?.any((item) => item.sha256.startsWith('pending_')) ==
+              true) {
+            _attachmentsCacheByMessageId.remove(messageId);
+          }
+        });
+      }
+    }
   }
 }

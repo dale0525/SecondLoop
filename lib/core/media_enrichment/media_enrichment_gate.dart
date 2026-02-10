@@ -29,6 +29,30 @@ import '../../i18n/strings.g.dart';
 
 part 'media_enrichment_gate_clients.dart';
 
+String _autoPdfOcrStatusFromPayload(Map<String, Object?>? payload) {
+  return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
+}
+
+bool shouldNotifyAutoPdfOcrStatusTransition({
+  required Map<String, Object?>? previousPayload,
+  required Map<String, Object?> nextPayload,
+}) {
+  final previousStatus = _autoPdfOcrStatusFromPayload(previousPayload);
+  final nextStatus = _autoPdfOcrStatusFromPayload(nextPayload);
+  if (nextStatus.isEmpty || previousStatus == nextStatus) {
+    return false;
+  }
+
+  if (nextStatus == 'running') return true;
+
+  if (previousStatus == 'running' &&
+      (nextStatus == 'ok' || nextStatus == 'failed')) {
+    return true;
+  }
+
+  return false;
+}
+
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});
 
@@ -179,6 +203,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       Uint8List bytes, {
       required int pageCount,
     }) runMultimodalPdfOcr,
+    VoidCallback? onAutoPdfOcrStatusChanged,
   }) async {
     if (!(contentConfig?.ocrEnabled ?? true)) return 0;
     // Auto OCR no longer enforces a user-facing page cap.
@@ -228,6 +253,20 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         );
       }
 
+      void notifyStatusTransition(
+        Map<String, Object?> previousPayload,
+        Map<String, Object?> nextPayload,
+      ) {
+        if (onAutoPdfOcrStatusChanged == null) return;
+        if (!shouldNotifyAutoPdfOcrStatusTransition(
+          previousPayload: previousPayload,
+          nextPayload: nextPayload,
+        )) {
+          return;
+        }
+        onAutoPdfOcrStatusChanged();
+      }
+
       try {
         final runningPayload = Map<String, Object?>.from(payload);
         runningPayload['ocr_auto_status'] = 'running';
@@ -236,6 +275,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         runningPayload['ocr_auto_attempted_ms'] = attemptMs;
         runningPayload['ocr_auto_retry_count'] = retryCount;
         await persistPayload(runningPayload, attemptMs);
+        notifyStatusTransition(payload, runningPayload);
 
         final bytes = await backend.readAttachmentBytes(
           sessionKey,
@@ -252,6 +292,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             failedPayload,
             failedPayload['ocr_auto_last_failure_ms'] as int,
           );
+          notifyStatusTransition(runningPayload, failedPayload);
           continue;
         }
 
@@ -292,6 +333,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             updatedPayload,
             updatedPayload['ocr_auto_last_success_ms'] as int,
           );
+          notifyStatusTransition(runningPayload, updatedPayload);
           _autoOcrCompletedShas.add(attachment.sha256);
           updated += 1;
         } else {
@@ -303,6 +345,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             updatedPayload,
             updatedPayload['ocr_auto_last_failure_ms'] as int,
           );
+          notifyStatusTransition(runningPayload, updatedPayload);
         }
       } catch (_) {
         final failedPayload = Map<String, Object?>.from(payload);
@@ -316,6 +359,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             failedPayload,
             failedPayload['ocr_auto_last_failure_ms'] as int,
           );
+          notifyStatusTransition(payload, failedPayload);
         } catch (_) {
           // ignore per-attachment status persistence failures.
         }
@@ -583,6 +627,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                 cloudIdToken: idToken?.trim() ?? '',
                 cloudModelName: gatewayConfig.modelName,
               );
+            },
+            onAutoPdfOcrStatusChanged: () {
+              syncEngine?.notifyExternalChange();
             },
           );
         } catch (_) {

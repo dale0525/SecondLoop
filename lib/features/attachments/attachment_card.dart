@@ -184,10 +184,30 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
 }
 
 bool _isAttachmentOcrRunning(Map<String, Object?> payload) {
+  return attachmentCardOcrInProgressFromPayload(payload);
+}
+
+bool attachmentCardOcrInProgressFromPayload(Map<String, Object?> payload) {
   final status =
       (payload['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
-  if (status == 'running') return true;
-  return payload['ocr_running'] == true;
+  if (status == 'running' || status == 'queued' || status == 'retrying') {
+    return true;
+  }
+  if (payload['ocr_running'] == true) return true;
+
+  if (status == 'ok' || status == 'failed') {
+    return false;
+  }
+
+  if (payload['needs_ocr'] != true) return false;
+
+  bool hasText(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isNotEmpty;
+  }
+
+  return !hasText(payload['ocr_text_excerpt']) &&
+      !hasText(payload['ocr_text_full']);
 }
 
 Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(

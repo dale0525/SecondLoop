@@ -215,6 +215,81 @@ void main() {
     }
   });
 
+  testWidgets('Desktop: file bubble appears before attachment write completes',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    FilePicker? oldPicker;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final backend = _TestBackend()
+        ..insertAttachmentDelay = const Duration(seconds: 1);
+      final picker = _TestFilePicker(
+        result: FilePickerResult([
+          PlatformFile(
+            name: 'scan.pdf',
+            size: 5,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3, 4, 5]),
+          ),
+        ]),
+      );
+      FilePicker.platform = picker;
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Chat',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => backend.insertMessageCalls >= 1,
+        maxTicks: 20,
+        step: const Duration(milliseconds: 20),
+      );
+
+      expect(backend.insertAttachmentStartedCalls, 1);
+      expect(backend.insertAttachmentCompletedCalls, 0);
+      expect(backend.insertMessageCalls, 1);
+
+      await _pumpUntil(
+        tester,
+        () => backend.insertAttachmentCompletedCalls >= 1,
+        maxTicks: 120,
+        step: const Duration(milliseconds: 20),
+      );
+
+      expect(backend.linkCalls, 1);
+      expect(picker.allowMultipleCalls, [true]);
+    } finally {
+      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
   testWidgets('Desktop: sending URL creates URL attachment', (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -593,6 +668,8 @@ final class _TestBackend extends NativeAppBackend {
   _TestBackend() : super(appDirProvider: () async => '/tmp/secondloop_test');
 
   int insertAttachmentCalls = 0;
+  int insertAttachmentStartedCalls = 0;
+  int insertAttachmentCompletedCalls = 0;
   int insertMessageCalls = 0;
   int linkCalls = 0;
   final List<String> insertedAttachmentMimeTypes = <String>[];
@@ -605,6 +682,7 @@ final class _TestBackend extends NativeAppBackend {
   final Map<String, List<Attachment>> _attachmentsByMessageId =
       <String, List<Attachment>>{};
   final Map<String, Uint8List> _attachmentBytesBySha = <String, Uint8List>{};
+  Duration insertAttachmentDelay = Duration.zero;
 
   @override
   Future<List<Message>> listMessages(
@@ -682,7 +760,12 @@ final class _TestBackend extends NativeAppBackend {
     required Uint8List bytes,
     required String mimeType,
   }) async {
+    insertAttachmentStartedCalls++;
+    if (insertAttachmentDelay > Duration.zero) {
+      await Future<void>.delayed(insertAttachmentDelay);
+    }
     insertAttachmentCalls++;
+    insertAttachmentCompletedCalls++;
     insertedAttachmentMimeTypes.add(mimeType);
     final sha = 'sha${++_attachmentSeq}';
     _attachmentBytesBySha[sha] = bytes;

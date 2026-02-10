@@ -59,4 +59,34 @@ void main() {
 
     expect(summary, 'Invoice total is 123.45 USD.');
   });
+
+  test('attachment card marks queued auto OCR as in progress', () {
+    final running = attachmentCardOcrInProgressFromPayload(
+      const <String, Object?>{
+        'ocr_auto_status': 'queued',
+      },
+    );
+
+    expect(running, isTrue);
+  });
+
+  test('attachment card marks needs_ocr with no OCR text as in progress', () {
+    final running = attachmentCardOcrInProgressFromPayload(
+      const <String, Object?>{
+        'needs_ocr': true,
+      },
+    );
+
+    expect(running, isTrue);
+  });
+
+  test('attachment card marks needs_ocr false as not in progress', () {
+    final running = attachmentCardOcrInProgressFromPayload(
+      const <String, Object?>{
+        'needs_ocr': false,
+      },
+    );
+
+    expect(running, isFalse);
+  });
 }

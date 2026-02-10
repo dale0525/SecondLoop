@@ -357,6 +357,7 @@ class _ChatPageState extends State<ChatPage> {
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
       <String, List<Attachment>>{};
+  final Set<String> _attachmentLinkingMessageIds = <String>{};
   final Map<String, Future<_AttachmentEnrichment>>
       _attachmentEnrichmentFuturesBySha256 =
       <String, Future<_AttachmentEnrichment>>{};

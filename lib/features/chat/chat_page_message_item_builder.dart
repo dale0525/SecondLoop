@@ -556,6 +556,13 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   stableMsg.id,
                                 )
                                     .then((items) {
+                                  if (items.isEmpty &&
+                                      _attachmentLinkingMessageIds
+                                          .contains(stableMsg.id)) {
+                                    return _attachmentsCacheByMessageId[
+                                            stableMsg.id] ??
+                                        const <Attachment>[];
+                                  }
                                   _attachmentsCacheByMessageId[stableMsg.id] =
                                       items;
                                   return items;
@@ -918,6 +925,11 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                     stableMsg.id,
                   )
                       .then((items) {
+                    if (items.isEmpty &&
+                        _attachmentLinkingMessageIds.contains(stableMsg.id)) {
+                      return _attachmentsCacheByMessageId[stableMsg.id] ??
+                          const <Attachment>[];
+                    }
                     _attachmentsCacheByMessageId[stableMsg.id] = items;
                     return items;
                   }),
