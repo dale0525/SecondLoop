@@ -486,8 +486,18 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     required String lang,
     required String mimeType,
     required Uint8List audioBytes,
-  }) async {
-    throw StateError('audio_transcribe_local_runtime_unavailable');
+  }) {
+    return _requestNativeAudioTranscribeMethod(
+      methodName: 'localRuntimeTranscribe',
+      unavailableError: 'audio_transcribe_local_runtime_unavailable',
+      failedError: 'audio_transcribe_local_runtime_failed',
+      emptyError: 'audio_transcribe_local_runtime_empty',
+      invalidPayloadError: 'audio_transcribe_local_runtime_invalid_payload',
+      appDir: appDir,
+      lang: lang,
+      mimeType: mimeType,
+      audioBytes: audioBytes,
+    );
   }
 }
 
@@ -538,79 +548,104 @@ final class NativeSttAudioTranscribeClient implements AudioTranscribeClient {
     required String lang,
     required String mimeType,
     required Uint8List audioBytes,
-  }) async {
-    if (kIsWeb) {
-      throw StateError('audio_transcribe_native_stt_unavailable');
+  }) {
+    return _requestNativeAudioTranscribeMethod(
+      methodName: 'nativeSttTranscribe',
+      unavailableError: 'audio_transcribe_native_stt_unavailable',
+      failedError: 'audio_transcribe_native_stt_failed',
+      emptyError: 'audio_transcribe_native_stt_empty',
+      invalidPayloadError: 'audio_transcribe_native_stt_invalid_payload',
+      lang: lang,
+      mimeType: mimeType,
+      audioBytes: audioBytes,
+    );
+  }
+}
+
+Future<String> _requestNativeAudioTranscribeMethod({
+  required String methodName,
+  required String unavailableError,
+  required String failedError,
+  required String emptyError,
+  required String invalidPayloadError,
+  required String lang,
+  required String mimeType,
+  required Uint8List audioBytes,
+  String? appDir,
+}) async {
+  if (kIsWeb) {
+    throw StateError(unavailableError);
+  }
+
+  final tempDir = await Directory.systemTemp.createTemp(
+    'secondloop-$methodName-',
+  );
+  final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
+    mimeType,
+  );
+  final audioFile = File('${tempDir.path}/input.$ext');
+
+  try {
+    await audioFile.writeAsBytes(audioBytes, flush: true);
+    final raw = await _nativeAudioTranscribeChannel.invokeMethod<dynamic>(
+      methodName,
+      <String, Object?>{
+        'file_path': audioFile.path,
+        'lang': lang.trim(),
+        'mime_type': mimeType,
+        if ((appDir ?? '').trim().isNotEmpty) 'app_dir': appDir!.trim(),
+      },
+    );
+
+    if (raw is String) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) {
+        throw StateError(emptyError);
+      }
+      return trimmed;
+    }
+    if (raw is! Map) {
+      throw StateError(invalidPayloadError);
     }
 
-    final tempDir =
-        await Directory.systemTemp.createTemp('secondloop-native-stt-');
-    final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
-      mimeType,
-    );
-    final audioFile = File('${tempDir.path}/input.$ext');
+    final payload = <String, Object?>{};
+    raw.forEach((key, value) {
+      payload[key.toString()] = value;
+    });
 
-    try {
-      await audioFile.writeAsBytes(audioBytes, flush: true);
-      final raw = await _nativeAudioTranscribeChannel.invokeMethod<dynamic>(
-        'nativeSttTranscribe',
-        <String, Object?>{
-          'file_path': audioFile.path,
-          'lang': lang.trim(),
-          'mime_type': mimeType,
-        },
-      );
+    final text = (payload['text'] ??
+            payload['transcript'] ??
+            payload['transcript_full'] ??
+            '')
+        .toString()
+        .trim();
+    if (text.isEmpty) {
+      throw StateError(emptyError);
+    }
+    payload['text'] = text;
 
-      if (raw is String) {
-        final trimmed = raw.trim();
-        if (trimmed.isEmpty) {
-          throw StateError('audio_transcribe_native_stt_empty');
-        }
-        return trimmed;
-      }
-      if (raw is! Map) {
-        throw StateError('audio_transcribe_native_stt_invalid_payload');
-      }
+    final durationMs = payload['duration_ms'];
+    if (payload['duration'] == null && durationMs is num) {
+      payload['duration'] = durationMs / 1000;
+    }
 
-      final payload = <String, Object?>{};
-      raw.forEach((key, value) {
-        payload[key.toString()] = value;
-      });
-
-      final text = (payload['text'] ??
-              payload['transcript'] ??
-              payload['transcript_full'] ??
-              '')
-          .toString()
-          .trim();
-      if (text.isEmpty) {
-        throw StateError('audio_transcribe_native_stt_empty');
-      }
-      payload['text'] = text;
-
-      final durationMs = payload['duration_ms'];
-      if (payload['duration'] == null && durationMs is num) {
-        payload['duration'] = durationMs / 1000;
-      }
-
-      return jsonEncode(payload);
-    } on MissingPluginException {
-      throw StateError('audio_transcribe_native_stt_unavailable');
-    } on PlatformException catch (error) {
-      final code = error.code.trim();
-      final message = (error.message ?? '').trim();
-      final detail = [
-        if (code.isNotEmpty) code,
-        if (message.isNotEmpty) message,
-      ].join(':');
-      if (detail.isEmpty) {
-        throw StateError('audio_transcribe_native_stt_failed');
-      }
-      throw StateError('audio_transcribe_native_stt_failed:$detail');
-    } finally {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
+    return jsonEncode(payload);
+  } on MissingPluginException {
+    throw StateError(unavailableError);
+  } on PlatformException catch (error) {
+    final code = error.code.trim();
+    final message = (error.message ?? '').trim();
+    final detail = [
+      if (code.isNotEmpty) code,
+      if (message.isNotEmpty) message,
+    ].join(':');
+    if (detail.isEmpty) {
+      throw StateError(failedError);
+    }
+    throw StateError('$failedError:$detail');
+  } finally {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
     }
   }
 }

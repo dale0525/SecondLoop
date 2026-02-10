@@ -52,6 +52,8 @@ class AppDelegate: FlutterAppDelegate {
       }
 
       switch call.method {
+      case "localRuntimeTranscribe":
+        self.handleLocalRuntimeTranscribe(call: call, result: result)
       case "nativeSttTranscribe":
         self.handleNativeSttTranscribe(call: call, result: result)
       default:

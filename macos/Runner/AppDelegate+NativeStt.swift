@@ -2,12 +2,74 @@ import Cocoa
 import FlutterMacOS
 import Speech
 
+private enum AudioTranscribeMethodKind {
+  case localRuntime
+  case nativeStt
+
+  var unavailableCode: String {
+    switch self {
+    case .localRuntime:
+      return "local_runtime_unavailable"
+    case .nativeStt:
+      return "native_stt_unavailable"
+    }
+  }
+
+  var invalidArgsCode: String {
+    switch self {
+    case .localRuntime:
+      return "local_runtime_invalid_args"
+    case .nativeStt:
+      return "native_stt_invalid_args"
+    }
+  }
+
+  var fileMissingCode: String {
+    switch self {
+    case .localRuntime:
+      return "local_runtime_file_missing"
+    case .nativeStt:
+      return "native_stt_file_missing"
+    }
+  }
+
+  var failedCode: String {
+    switch self {
+    case .localRuntime:
+      return "local_runtime_failed"
+    case .nativeStt:
+      return "native_stt_failed"
+    }
+  }
+
+  var requiresOnDeviceRecognition: Bool {
+    switch self {
+    case .localRuntime:
+      return true
+    case .nativeStt:
+      return false
+    }
+  }
+}
+
 extension AppDelegate {
-  private func handleNativeSttTranscribe(call: FlutterMethodCall, result: @escaping FlutterResult) {
+  func handleLocalRuntimeTranscribe(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    handleAudioTranscribe(call: call, result: result, kind: .localRuntime)
+  }
+
+  func handleNativeSttTranscribe(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    handleAudioTranscribe(call: call, result: result, kind: .nativeStt)
+  }
+
+  private func handleAudioTranscribe(
+    call: FlutterMethodCall,
+    result: @escaping FlutterResult,
+    kind: AudioTranscribeMethodKind
+  ) {
     guard #available(macOS 10.15, *) else {
       result(
         FlutterError(
-          code: "native_stt_unavailable",
+          code: kind.unavailableCode,
           message: "Speech recognition requires macOS 10.15+",
           details: nil
         )
@@ -19,7 +81,7 @@ extension AppDelegate {
           let filePathRaw = args["file_path"] as? String else {
       result(
         FlutterError(
-          code: "native_stt_invalid_args",
+          code: kind.invalidArgsCode,
           message: "Missing file_path",
           details: nil
         )
@@ -31,7 +93,7 @@ extension AppDelegate {
     if filePath.isEmpty || !FileManager.default.fileExists(atPath: filePath) {
       result(
         FlutterError(
-          code: "native_stt_file_missing",
+          code: kind.fileMissingCode,
           message: "Audio file does not exist",
           details: nil
         )
@@ -44,13 +106,14 @@ extension AppDelegate {
 
     runNativeSttTranscribe(
       audioFilePath: filePath,
-      preferredLang: preferredLang
+      preferredLang: preferredLang,
+      requiresOnDeviceRecognition: kind.requiresOnDeviceRecognition
     ) { payload, errorMessage in
       DispatchQueue.main.async {
         if let errorMessage = errorMessage {
           result(
             FlutterError(
-              code: "native_stt_failed",
+              code: kind.failedCode,
               message: errorMessage,
               details: nil
             )
@@ -66,6 +129,7 @@ extension AppDelegate {
   private func runNativeSttTranscribe(
     audioFilePath: String,
     preferredLang: String,
+    requiresOnDeviceRecognition: Bool,
     completion: @escaping ([String: Any]?, String?) -> Void
   ) {
     requestSpeechAuthorizationIfNeeded { [weak self] authorized, authError in
@@ -84,7 +148,7 @@ extension AppDelegate {
         completion(nil, "speech_recognizer_unavailable")
         return
       }
-      guard recognizer.supportsOnDeviceRecognition else {
+      if requiresOnDeviceRecognition && !recognizer.supportsOnDeviceRecognition {
         completion(nil, "speech_on_device_unavailable")
         return
       }
@@ -93,7 +157,7 @@ extension AppDelegate {
         url: URL(fileURLWithPath: audioFilePath)
       )
       request.shouldReportPartialResults = false
-      request.requiresOnDeviceRecognition = true
+      request.requiresOnDeviceRecognition = requiresOnDeviceRecognition
 
       var didComplete = false
       var task: SFSpeechRecognitionTask?
@@ -242,5 +306,4 @@ extension AppDelegate {
     }
     return unique
   }
-
 }
