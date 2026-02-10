@@ -2,6 +2,7 @@ part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
 const Duration _kPressToTalkListenFor = Duration(seconds: 90);
+const Duration _kPressToTalkPauseFor = Duration(seconds: 4);
 const Duration _kPressToTalkFinalizeTimeout = Duration(seconds: 6);
 const Duration _kPressToTalkPollInterval = Duration(milliseconds: 60);
 
@@ -27,7 +28,12 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     final nextValue = !_voiceInputMode;
     _setState(() => _voiceInputMode = nextValue);
 
-    if (!nextValue && _isDesktopPlatform) {
+    if (nextValue) {
+      unawaited(_prepareSpeechToText(showError: true));
+      return;
+    }
+
+    if (_isDesktopPlatform) {
       _inputFocusNode.requestFocus();
     }
   }
@@ -134,7 +140,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   Future<String> _waitForPressToTalkTranscript({
     required int sessionToken,
   }) async {
-    var transcript = _pressToTalkTranscript.trim();
+    var transcript = _currentPressToTalkTranscript();
     if (transcript.isNotEmpty) return transcript;
 
     final deadline = DateTime.now().add(_kPressToTalkFinalizeTimeout);
@@ -144,10 +150,25 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         return '';
       }
 
-      transcript = _pressToTalkTranscript.trim();
+      transcript = _currentPressToTalkTranscript();
       if (transcript.isNotEmpty) {
         return transcript;
       }
+    }
+
+    return _currentPressToTalkTranscript();
+  }
+
+  String _currentPressToTalkTranscript() {
+    final streamTranscript = _pressToTalkTranscript.trim();
+    if (streamTranscript.isNotEmpty) {
+      return streamTranscript;
+    }
+
+    final speech = _speechToTextInstance;
+    final fallbackTranscript = speech?.lastRecognizedWords.trim() ?? '';
+    if (fallbackTranscript.isNotEmpty) {
+      return fallbackTranscript;
     }
 
     return '';
@@ -326,18 +347,22 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     );
   }
 
-  Future<bool> _startSpeechToTextCapture({
-    required Locale locale,
-    required void Function(String words) onWords,
-    required Duration listenFor,
+  Future<bool> _prepareSpeechToText({
+    required bool showError,
   }) async {
     final speech = _speechToText;
 
     bool hasPermission;
     try {
       hasPermission = await speech.hasPermission;
-    } catch (_) {
-      hasPermission = false;
+    } catch (error) {
+      if (showError) {
+        _showAudioErrorSnackBar(
+          error,
+          context: _AudioFailureContext.speechToText,
+        );
+      }
+      return false;
     }
 
     bool isAvailable;
@@ -345,27 +370,53 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       isAvailable = await speech.initialize(
         finalTimeout: _kPressToTalkFinalizeTimeout,
       );
-    } catch (_) {
-      isAvailable = false;
-    }
-
-    if (!isAvailable) {
-      _showAudioErrorSnackBar(
-        hasPermission ? 'speech_recognition_unavailable' : 'permission_denied',
-        context: _AudioFailureContext.speechToText,
-      );
+    } catch (error) {
+      if (showError) {
+        _showAudioErrorSnackBar(
+          error,
+          context: _AudioFailureContext.speechToText,
+        );
+      }
       return false;
     }
 
+    if (!isAvailable) {
+      if (showError) {
+        _showAudioErrorSnackBar(
+          hasPermission
+              ? 'speech_recognition_unavailable'
+              : 'permission_denied',
+          context: _AudioFailureContext.speechToText,
+        );
+      }
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<bool> _startSpeechToTextCapture({
+    required Locale locale,
+    required void Function(String words) onWords,
+    required Duration listenFor,
+  }) async {
+    final isReady = await _prepareSpeechToText(showError: true);
+    if (!isReady) {
+      return false;
+    }
+
+    final speech = _speechToText;
     final localeId = await _resolveSpeechLocaleId(locale);
 
     try {
       await speech.listen(
         localeId: localeId,
         listenFor: listenFor,
+        pauseFor: _kPressToTalkPauseFor,
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
+          listenMode: ListenMode.dictation,
         ),
         onResult: (result) {
           final normalized = result.recognizedWords.trim();
