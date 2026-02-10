@@ -26,6 +26,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
   Future<void> _askAi({String? questionOverride}) async {
     if (_asking) return;
     if (_sending) return;
+    if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
 
     final question = (questionOverride ?? _controller.text).trim();
     if (question.isEmpty) return;

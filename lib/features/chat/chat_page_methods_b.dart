@@ -502,6 +502,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<void> _send() async {
     if (_sending) return;
     if (_asking) return;
+    if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
 
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -671,7 +673,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<void> _openAttachmentSheet() async {
     if (_sending) return;
     if (_asking) return;
-    if (!_supportsImageUpload) return;
+    if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
+    if (!_supportsImageUpload && !_supportsAudioRecording) return;
 
     if (_isDesktopPlatform) {
       await _pickAndSendAttachmentFromFile();
@@ -705,6 +709,16 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                     unawaited(_captureAndSendPhoto());
                   },
                 ),
+              if (_supportsAudioRecording)
+                ListTile(
+                  key: const ValueKey('chat_attach_record_audio'),
+                  leading: const Icon(Icons.mic_rounded),
+                  title: Text(context.t.chat.attachRecordAudio),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_recordAndSendAudioFromSheet());
+                  },
+                ),
             ],
           ),
         );
@@ -715,6 +729,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<void> _captureAndSendPhoto() async {
     if (_sending) return;
     if (_asking) return;
+    if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
     if (!_supportsCamera) return;
 
     _setState(() => _sending = true);
@@ -811,6 +827,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<void> _pickAndSendAttachmentFromFile() async {
     if (_sending) return;
     if (_asking) return;
+    if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
 
     _setState(() => _sending = true);
     try {
