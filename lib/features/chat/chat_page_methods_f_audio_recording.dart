@@ -2,7 +2,7 @@ part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
 const Duration _kPressToTalkListenFor = Duration(seconds: 90);
-const Duration _kPressToTalkFinalizeTimeout = Duration(seconds: 2);
+const Duration _kPressToTalkFinalizeTimeout = Duration(seconds: 6);
 const Duration _kPressToTalkPollInterval = Duration(milliseconds: 60);
 
 enum _AudioRecordingSheetAction {
@@ -73,11 +73,13 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     );
 
     if (!mounted) return;
-    if (!_pressToTalkActive && !_pressToTalkRecognizing) {
+    if (!_pressToTalkActive) {
       if (started) {
         await _stopSpeechToTextCapture();
       }
-      return;
+      if (!_pressToTalkRecognizing) {
+        return;
+      }
     }
 
     if (!started) {
@@ -340,7 +342,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
     bool isAvailable;
     try {
-      isAvailable = await speech.initialize();
+      isAvailable = await speech.initialize(
+        finalTimeout: _kPressToTalkFinalizeTimeout,
+      );
     } catch (_) {
       isAvailable = false;
     }
@@ -387,7 +391,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       await speech.stop();
       return;
     } catch (_) {
-      // Fall through to cancel.
+      if (!speech.isListening) {
+        return;
+      }
     }
 
     try {
