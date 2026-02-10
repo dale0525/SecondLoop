@@ -7,7 +7,7 @@ Usage:
   pixi run release
 
 Options:
-  --dry-run          Execute checks + tag computation, but skip git tag/push
+  --dry-run          Execute checks + tag + notes preview, but skip git tag/push
   --remote <name>    Git remote name (default: origin)
   --allow-dirty      Allow tagging with uncommitted changes
   --force            Move tag if it already exists (DANGEROUS)
@@ -186,6 +186,18 @@ fi
 
 if (( dry_run )); then
   echo "release: (dry-run) computed next app tag ${tag}"
+fi
+
+if (( dry_run )); then
+  release_notes_locales="${RELEASE_NOTES_LOCALES:-zh-CN,en-US}"
+  notes_dir="${dist_dir}/release-notes"
+  notes_markdown="${dist_dir}/release-notes.md"
+
+  run_readonly python3 scripts/release_ai.py generate-notes --facts "${facts_json}" --tag "${tag}" --locales "${release_notes_locales}" --output-dir "${notes_dir}"
+  run_readonly python3 scripts/release_ai.py validate-notes --facts "${facts_json}" --tag "${tag}" --locales "${release_notes_locales}" --notes-dir "${notes_dir}"
+  run_readonly python3 scripts/release_ai.py render-markdown --tag "${tag}" --locales "${release_notes_locales}" --notes-dir "${notes_dir}" --output "${notes_markdown}"
+
+  echo "release: (dry-run) generated release notes preview at ${notes_markdown} for locales: ${release_notes_locales}"
 fi
 
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then

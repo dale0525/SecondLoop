@@ -83,6 +83,14 @@ pixi run release
 - 调用 LLM 判定 bump（`major/minor/patch`）
 - 计算并打 `vX.Y.Z` tag，push 到远端触发工作流
 
+如果只想先演练（不打 tag、不 push），可运行：
+
+```bash
+pixi run release --dry-run
+```
+
+`--dry-run` 仍会执行事实收集、版本判定、tag 计算，并生成/校验多语言 release notes 预览到 `dist/release-notes/` 与 `dist/release-notes.md`。
+
 > 失败策略是 **Fail Fast**：
 > - LLM 调用失败
 > - bump 规则冲突
