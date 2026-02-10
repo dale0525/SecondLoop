@@ -35,6 +35,59 @@ require_cmd() {
 require_cmd git
 require_cmd python3
 
+if ! command -v gh >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
+  die "Missing required command: gh or curl"
+fi
+
+fetch_releases_json() {
+  local repo_slug="$1"
+  local out_file="$2"
+
+  local token
+  token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if command -v gh >/dev/null 2>&1; then
+    local gh_args=(
+      api
+      --silent
+      -H
+      "Accept: application/vnd.github+json"
+      "/repos/${repo_slug}/releases?per_page=100"
+    )
+    if [[ -n "${token}" ]]; then
+      GH_TOKEN="${token}" gh "${gh_args[@]}" > "${out_file}" 2>/dev/null && return 0
+    else
+      gh "${gh_args[@]}" > "${out_file}" 2>/dev/null && return 0
+    fi
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    local url="https://api.github.com/repos/${repo_slug}/releases?per_page=100"
+    local curl_args=(
+      --fail
+      --silent
+      --show-error
+      --location
+      --retry
+      3
+      --connect-timeout
+      15
+      --max-time
+      60
+      -H
+      "User-Agent: secondloop-release-preflight"
+      -H
+      "Accept: application/vnd.github+json"
+    )
+    if [[ -n "${token}" ]]; then
+      curl_args+=( -H "Authorization: Bearer ${token}" )
+    fi
+    curl "${curl_args[@]}" "${url}" > "${out_file}" && return 0
+  fi
+
+  return 1
+}
+
 remote="origin"
 repo="${SECONDLOOP_GITHUB_REPO:-}"
 runtime_tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG:-}"
@@ -102,12 +155,17 @@ if [[ -z "${repo}" ]]; then
   die "Cannot resolve repository slug. Pass --repo owner/repo."
 fi
 
-python3 - "${repo}" "${runtime_tag}" <<'PY'
+release_api_payload="$(mktemp)"
+trap 'rm -f "${release_api_payload}"' EXIT
+
+if ! fetch_releases_json "${repo}" "${release_api_payload}"; then
+  die "cannot fetch releases for ${repo} (try setting GH_TOKEN/GITHUB_TOKEN or running gh auth login)"
+fi
+
+python3 - "${repo}" "${runtime_tag}" "${release_api_payload}" <<'PY'
 import json
-import os
 import re
 import sys
-import urllib.request
 
 
 def fail(message: str) -> None:
@@ -117,22 +175,17 @@ def fail(message: str) -> None:
 
 repo = sys.argv[1].strip()
 configured_runtime_tag = sys.argv[2].strip()
-
-request = urllib.request.Request(
-    f"https://api.github.com/repos/{repo}/releases?per_page=100",
-    headers={"User-Agent": "secondloop-release-preflight"},
-)
-token = (os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN") or "").strip()
-if token:
-    request.add_header("Authorization", f"Bearer {token}")
+payload_path = sys.argv[3].strip()
 
 try:
-    with urllib.request.urlopen(request, timeout=30) as response:
-        releases = json.loads(response.read().decode("utf-8"))
+    with open(payload_path, "r", encoding="utf-8") as handle:
+        releases = json.load(handle)
 except Exception as exc:
-    fail(f"cannot fetch releases for {repo}: {exc}")
+    fail(f"cannot parse GitHub releases payload for {repo}: {exc}")
 
 if not isinstance(releases, list):
+    if isinstance(releases, dict) and "message" in releases:
+        fail(f"GitHub API error for {repo}: {releases.get('message')}")
     fail(f"unexpected GitHub releases response type: {type(releases).__name__}")
 
 runtime_release = None
