@@ -4,6 +4,7 @@ const String _kRecordedAudioMimeType = 'audio/mp4';
 const Duration _kPressToTalkListenFor = Duration(seconds: 90);
 const Duration _kPressToTalkPauseFor = Duration(seconds: 4);
 const Duration _kPressToTalkFinalizeTimeout = Duration(seconds: 6);
+const Duration _kPressToTalkLateStartStopDelay = Duration(milliseconds: 450);
 const Duration _kPressToTalkPollInterval = Duration(milliseconds: 60);
 
 enum _AudioRecordingSheetAction {
@@ -38,15 +39,15 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
   }
 
-  void _onPressToTalkLongPressStart(LongPressStartDetails details) {
+  void _onPressToTalkPointerDown(PointerDownEvent event) {
     unawaited(_startPressToTalkCapture());
   }
 
-  void _onPressToTalkLongPressEnd(LongPressEndDetails details) {
+  void _onPressToTalkPointerUp(PointerUpEvent event) {
     unawaited(_finishPressToTalkCapture(commitTranscript: true));
   }
 
-  void _onPressToTalkLongPressCancel() {
+  void _onPressToTalkPointerCancel(PointerCancelEvent event) {
     unawaited(_finishPressToTalkCapture(commitTranscript: false));
   }
 
@@ -81,6 +82,12 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     if (!mounted) return;
     if (!_pressToTalkActive) {
       if (started) {
+        if (_pressToTalkRecognizing) {
+          await Future<void>.delayed(_kPressToTalkLateStartStopDelay);
+          if (!mounted || _pressToTalkSessionToken != sessionToken) {
+            return;
+          }
+        }
         await _stopSpeechToTextCapture();
       }
       if (!_pressToTalkRecognizing) {

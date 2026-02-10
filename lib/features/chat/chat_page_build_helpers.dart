@@ -186,10 +186,10 @@ extension _ChatPageStateVoiceComposerUi on _ChatPageState {
       key: const ValueKey('chat_press_to_talk'),
       button: true,
       label: label,
-      child: GestureDetector(
-        onLongPressStart: _onPressToTalkLongPressStart,
-        onLongPressEnd: _onPressToTalkLongPressEnd,
-        onLongPressCancel: _onPressToTalkLongPressCancel,
+      child: Listener(
+        onPointerDown: _onPressToTalkPointerDown,
+        onPointerUp: _onPressToTalkPointerUp,
+        onPointerCancel: _onPressToTalkPointerCancel,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
