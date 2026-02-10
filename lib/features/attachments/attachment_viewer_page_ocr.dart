@@ -20,44 +20,6 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       widget.attachment.mimeType.trim().toLowerCase() ==
       kSecondLoopVideoManifestMimeType;
 
-  bool _isRuntimeOcrEngine(String engine) {
-    final normalized = engine.trim().toLowerCase();
-    return normalized.startsWith('desktop_rust_');
-  }
-
-  String _buildExcerpt(String fullText, {int maxChars = 1200}) {
-    final trimmed = fullText.trim();
-    if (trimmed.length <= maxChars) return trimmed;
-    return '${trimmed.substring(0, maxChars).trimRight()}…';
-  }
-
-  PlatformPdfOcrResult _preferExtractedTextIfRuntimeOcr(
-    PlatformPdfOcrResult ocr,
-    Map<String, Object?> payload,
-  ) {
-    if (!_isRuntimeOcrEngine(ocr.engine)) return ocr;
-
-    final extractedFull =
-        (payload['extracted_text_full'] ?? '').toString().trim();
-    if (extractedFull.isEmpty) return ocr;
-    if (!shouldPreferExtractedTextOverOcr(
-      extractedText: extractedFull,
-      ocrText: ocr.fullText,
-    )) {
-      return ocr;
-    }
-
-    final extractedExcerpt =
-        (payload['extracted_text_excerpt'] ?? '').toString().trim();
-    return ocr.copyWith(
-      fullText: extractedFull,
-      excerpt: extractedExcerpt.isNotEmpty
-          ? extractedExcerpt
-          : _buildExcerpt(extractedFull),
-      engine: '${ocr.engine}+prefer_extracted',
-    );
-  }
-
   Future<void> _runVideoManifestOcr() async {
     if (_runningDocumentOcr) return;
     if (!_isVideoManifestAttachment()) return;
@@ -297,13 +259,16 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         return;
       }
 
-      platformOcr =
-          _preferExtractedTextIfRuntimeOcr(platformOcr, existingPayload);
-
       final extractedFull =
           existingPayload['extracted_text_full']?.toString() ?? '';
       final extractedExcerpt =
           existingPayload['extracted_text_excerpt']?.toString() ?? '';
+      platformOcr = maybePreferExtractedTextForRuntimeOcr(
+        ocr: platformOcr,
+        extractedFull: extractedFull,
+        extractedExcerpt: extractedExcerpt,
+      );
+
       final pageCount =
           asInt(existingPayload['page_count']) ?? platformOcr.pageCount;
       final hasExtractedText =

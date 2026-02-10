@@ -18,7 +18,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/docx_ocr.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
-import '../../core/content_enrichment/ocr_text_quality.dart';
+import '../../core/content_enrichment/ocr_result_preference.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/media_enrichment/media_enrichment_availability.dart';
 import '../../core/session/session_scope.dart';

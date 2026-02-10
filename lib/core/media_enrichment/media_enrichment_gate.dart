@@ -19,7 +19,7 @@ import '../content_enrichment/content_enrichment_config_store.dart';
 import '../content_enrichment/docx_ocr.dart';
 import '../content_enrichment/docx_ocr_policy.dart';
 import '../content_enrichment/multimodal_ocr.dart';
-import '../content_enrichment/ocr_text_quality.dart';
+import '../content_enrichment/ocr_result_preference.dart';
 import '../content_enrichment/pdf_ocr_auto_policy.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
@@ -164,42 +164,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     return 0;
   }
 
-  static bool _isRuntimeOcrEngine(String engine) {
-    final normalized = engine.trim().toLowerCase();
-    return normalized.startsWith('desktop_rust_');
-  }
-
-  static String _buildExcerptFromText(String fullText, {int maxChars = 1200}) {
-    final trimmed = fullText.trim();
-    if (trimmed.length <= maxChars) return trimmed;
-    return '${trimmed.substring(0, maxChars).trimRight()}…';
-  }
-
-  static PlatformPdfOcrResult _preferExtractedTextIfRuntimeOcr({
-    required PlatformPdfOcrResult ocr,
-    required String extractedFull,
-    required String extractedExcerpt,
-  }) {
-    if (!_isRuntimeOcrEngine(ocr.engine)) return ocr;
-
-    final full = extractedFull.trim();
-    if (full.isEmpty) return ocr;
-
-    if (!shouldPreferExtractedTextOverOcr(
-      extractedText: full,
-      ocrText: ocr.fullText,
-    )) {
-      return ocr;
-    }
-
-    final excerpt = extractedExcerpt.trim();
-    return ocr.copyWith(
-      fullText: full,
-      excerpt: excerpt.isNotEmpty ? excerpt : _buildExcerptFromText(full),
-      engine: '${ocr.engine}+prefer_extracted',
-    );
-  }
-
   static Map<String, Object?>? _decodePayloadObject(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     try {
@@ -312,7 +276,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
               (payload['extracted_text_full'] ?? '').toString();
           final extractedExcerpt =
               (payload['extracted_text_excerpt'] ?? '').toString();
-          final preferredOcr = _preferExtractedTextIfRuntimeOcr(
+          final preferredOcr = maybePreferExtractedTextForRuntimeOcr(
             ocr: ocr,
             extractedFull: extractedFull,
             extractedExcerpt: extractedExcerpt,
@@ -463,7 +427,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
               (payload['extracted_text_full'] ?? '').toString();
           final extractedExcerpt =
               (payload['extracted_text_excerpt'] ?? '').toString();
-          final preferredOcr = _preferExtractedTextIfRuntimeOcr(
+          final preferredOcr = maybePreferExtractedTextForRuntimeOcr(
             ocr: ocr,
             extractedFull: extractedFull,
             extractedExcerpt: extractedExcerpt,
