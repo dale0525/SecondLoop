@@ -12,6 +12,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
@@ -398,6 +399,7 @@ class _ChatPageState extends State<ChatPage> {
   int _todoAgendaBannerCollapseSignal = 0;
 
   AudioRecorder? _audioRecorderInstance;
+  _PendingAudioUploadRetry? _pendingAudioUploadRetry;
 
   void _setState(VoidCallback fn) => setState(fn);
 
