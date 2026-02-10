@@ -5,6 +5,10 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
     NativeAppBackend backend,
     Uint8List sessionKey,
   ) async {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+
     MediaAnnotationConfig? config;
     try {
       config = await const RustMediaAnnotationConfigStore().read(sessionKey);
@@ -19,9 +23,14 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
       return (enabled: false, canRunNow: false);
     }
 
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    ContentEnrichmentConfig? contentConfig;
+    try {
+      contentConfig = await const RustContentEnrichmentConfigStore()
+          .readContentEnrichment(sessionKey);
+    } catch (_) {
+      contentConfig = null;
+    }
+
     final gatewayConfig =
         cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
@@ -35,14 +44,6 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
       }
     }
     final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
-
-    final desiredMode = config.providerMode.trim();
-    if (desiredMode == 'cloud_gateway') {
-      final canRun = subscriptionStatus == SubscriptionStatus.entitled &&
-          hasGateway &&
-          hasIdToken;
-      return (enabled: true, canRunNow: canRun);
-    }
 
     List<LlmProfile> llmProfiles = const <LlmProfile>[];
     try {
@@ -65,24 +66,35 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
       return null;
     }
 
+    bool canUseOpenAiProfile(LlmProfile? profile) {
+      return profile != null && profile.providerType == 'openai-compatible';
+    }
+
     final canUseCloud = subscriptionStatus == SubscriptionStatus.entitled &&
         hasGateway &&
         hasIdToken;
+    final allowRuntimeOcrFallback =
+        subscriptionStatus != SubscriptionStatus.entitled &&
+            (contentConfig?.ocrEnabled ?? true);
+
+    final desiredMode = config.providerMode.trim();
+    if (desiredMode == 'cloud_gateway') {
+      final canRun = canUseCloud || allowRuntimeOcrFallback;
+      return (enabled: true, canRunNow: canRun);
+    }
 
     if (desiredMode == 'byok_profile') {
       final id = config.byokProfileId?.trim();
       final profile = id == null || id.isEmpty ? null : findProfile(id);
-      final canRun =
-          profile != null && profile.providerType == 'openai-compatible';
+      final canRun = canUseOpenAiProfile(profile) || allowRuntimeOcrFallback;
       return (enabled: true, canRunNow: canRun);
     }
 
-    if (canUseCloud) {
+    if (canUseCloud || allowRuntimeOcrFallback) {
       return (enabled: true, canRunNow: true);
     }
 
-    final active = activeProfile();
-    final canRun = active != null && active.providerType == 'openai-compatible';
+    final canRun = canUseOpenAiProfile(activeProfile());
     return (enabled: true, canRunNow: canRun);
   }
 }

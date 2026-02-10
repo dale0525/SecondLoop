@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
+import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -46,6 +47,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('A long caption'), findsOneWidget);
+  });
+
+  testWidgets(
+      'AttachmentViewerPage shows full OCR text when image fallback payload exists',
+      (tester) async {
+    final longOcr = List<String>.generate(80, (i) => 'token_$i').join(' ');
+    final caption =
+        'OCR fallback caption: ${longOcr.substring(0, 120).trimRight()}...';
+
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': caption},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode({
+          'caption_long': caption,
+          'tags': const <String>['ocr_fallback'],
+          'ocr_text': longOcr,
+        }),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(caption), findsNothing);
+    expect(
+      find.byKey(const ValueKey('attachment_annotation_ocr_text')),
+      findsNothing,
+    );
+    expect(find.textContaining('token_79'), findsOneWidget);
   });
 
   testWidgets(
@@ -115,6 +167,65 @@ Uint8List _tinyPngBytes() {
   const b64 =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBApGq4QAAAABJRU5ErkJggg==';
   return Uint8List.fromList(base64Decode(b64));
+}
+
+final class _NativeImageBackend extends NativeAppBackend {
+  _NativeImageBackend({
+    required Map<String, Uint8List> bytesBySha,
+    required Map<String, String?> annotationCaptionBySha,
+    required Map<String, String?> annotationPayloadJsonBySha,
+  })  : _bytesBySha = Map<String, Uint8List>.from(bytesBySha),
+        _annotationCaptionBySha =
+            Map<String, String?>.from(annotationCaptionBySha),
+        _annotationPayloadJsonBySha =
+            Map<String, String?>.from(annotationPayloadJsonBySha),
+        super(appDirProvider: () async => '/tmp/secondloop_test');
+
+  final Map<String, Uint8List> _bytesBySha;
+  final Map<String, String?> _annotationCaptionBySha;
+  final Map<String, String?> _annotationPayloadJsonBySha;
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    final bytes = _bytesBySha[sha256];
+    if (bytes == null) throw StateError('missing_bytes:$sha256');
+    return bytes;
+  }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return _annotationCaptionBySha[sha256];
+  }
+
+  @override
+  Future<String?> readAttachmentAnnotationPayloadJson(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    return _annotationPayloadJsonBySha[sha256];
+  }
 }
 
 final class _Backend extends TestAppBackend

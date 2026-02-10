@@ -370,6 +370,38 @@ void main() {
     expect(find.text('A B C D E F G H I J K L M N O P'), findsNothing);
   });
 
+  testWidgets(
+      'NonImageAttachmentView supports legacy image ocr_text payload field',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-pdf-legacy-ocr',
+      mimeType: 'application/pdf',
+      path: 'attachments/sha-pdf-legacy-ocr.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final payload = <String, Object?>{
+      'needs_ocr': false,
+      'ocr_text': '[page 1]\nLegacy OCR line one\nLegacy OCR line two',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('Legacy OCR line one'), findsOneWidget);
+    expect(find.textContaining('Legacy OCR line two'), findsOneWidget);
+  });
+
   testWidgets('NonImageAttachmentView shows PDF OCR debug marker',
       (tester) async {
     const attachment = Attachment(

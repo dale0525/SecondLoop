@@ -308,6 +308,105 @@ fn message_embedding_prefers_ocr_excerpt_for_spaced_cjk_garbled_extracted() {
 }
 
 #[test]
+fn message_embedding_includes_legacy_ocr_text_field() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
+    let message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
+
+    let attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"img", "image/jpeg").expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)
+        .expect("link attachment");
+
+    let now = message.created_at_ms;
+    let ann_json = serde_json::json!({
+        "caption_long": "ocr fallback caption",
+        "ocr_text": "keyword_legacy_ocr_text"
+    });
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment.sha256,
+        "en",
+        "manual_edit",
+        &ann_json,
+        now,
+    )
+    .expect("mark annotation ok");
+
+    let embedder = CaptureEmbedder::new(384);
+    let processed = db::process_pending_message_embeddings(&conn, &key, &embedder, 10)
+        .expect("process embeddings");
+    assert_eq!(processed, 1);
+
+    let seen = embedder.seen_texts();
+    assert_eq!(seen.len(), 1);
+    assert!(seen[0].contains("keyword_legacy_ocr_text"));
+}
+
+#[test]
+fn message_embedding_merges_docx_extracted_and_ocr_text() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create conversation");
+    let message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
+
+    let attachment = db::insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        b"docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    .expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)
+        .expect("link attachment");
+
+    let now = message.created_at_ms;
+    let ann_json = serde_json::json!({
+        "schema": "secondloop.document_extract.v1",
+        "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "extracted_text_excerpt": "keyword_docx_body",
+        "ocr_text_full": "keyword_docx_image"
+    });
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment.sha256,
+        "und",
+        "document_extract.v1",
+        &ann_json,
+        now,
+    )
+    .expect("mark annotation ok");
+
+    let embedder = CaptureEmbedder::new(384);
+    let processed = db::process_pending_message_embeddings(&conn, &key, &embedder, 10)
+        .expect("process embeddings");
+    assert_eq!(processed, 1);
+
+    let seen = embedder.seen_texts();
+    assert_eq!(seen.len(), 1);
+    assert!(seen[0].contains("keyword_docx_body"));
+    assert!(seen[0].contains("keyword_docx_image"));
+}
+
+#[test]
 fn message_embedding_includes_audio_transcript_excerpt() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");

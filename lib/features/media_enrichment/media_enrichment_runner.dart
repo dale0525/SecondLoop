@@ -115,10 +115,12 @@ final class MediaEnrichmentRunnerSettings {
   const MediaEnrichmentRunnerSettings({
     required this.annotationEnabled,
     required this.annotationWifiOnly,
+    this.annotationRequiresNetwork = true,
   });
 
   final bool annotationEnabled;
   final bool annotationWifiOnly;
+  final bool annotationRequiresNetwork;
 }
 
 final class MediaEnrichmentRunResult {
@@ -159,8 +161,10 @@ final class MediaEnrichmentRunner {
   }) async {
     final nowMs = _nowMs();
     final network = await getNetwork();
+    final canRunAnnotationOffline =
+        settings.annotationEnabled && !settings.annotationRequiresNetwork;
 
-    if (network == MediaEnrichmentNetwork.offline) {
+    if (network == MediaEnrichmentNetwork.offline && !canRunAnnotationOffline) {
       return const MediaEnrichmentRunResult(
         processedPlaces: 0,
         processedAnnotations: 0,
@@ -172,50 +176,53 @@ final class MediaEnrichmentRunner {
     var processedAnnotations = 0;
     var needsAnnotationCellularConfirmation = false;
 
-    final duePlaces = await store.listDuePlaces(nowMs: nowMs);
-    for (final item in duePlaces) {
-      if (item.status == 'ok') continue;
-      try {
-        final exif = await store.readAttachmentExifMetadata(
-          attachmentSha256: item.attachmentSha256,
-        );
-        if (exif == null || exif.latitude == null || exif.longitude == null) {
-          throw StateError('missing_exif_location:${item.attachmentSha256}');
+    if (network != MediaEnrichmentNetwork.offline) {
+      final duePlaces = await store.listDuePlaces(nowMs: nowMs);
+      for (final item in duePlaces) {
+        if (item.status == 'ok') continue;
+        try {
+          final exif = await store.readAttachmentExifMetadata(
+            attachmentSha256: item.attachmentSha256,
+          );
+          if (exif == null || exif.latitude == null || exif.longitude == null) {
+            throw StateError('missing_exif_location:${item.attachmentSha256}');
+          }
+          final payloadJson = await client.reverseGeocode(
+            lat: exif.latitude!,
+            lon: exif.longitude!,
+            lang: item.lang,
+          );
+          await store.markPlaceOk(
+            attachmentSha256: item.attachmentSha256,
+            lang: item.lang,
+            payloadJson: payloadJson,
+            nowMs: nowMs,
+          );
+          processedPlaces += 1;
+        } catch (e) {
+          final attempts = item.attempts + 1;
+          final nextRetryAtMs = nowMs + _backoffMs(attempts);
+          await store.markPlaceFailed(
+            attachmentSha256: item.attachmentSha256,
+            error: e.toString(),
+            attempts: attempts,
+            nextRetryAtMs: nextRetryAtMs,
+            nowMs: nowMs,
+          );
         }
-        final payloadJson = await client.reverseGeocode(
-          lat: exif.latitude!,
-          lon: exif.longitude!,
-          lang: item.lang,
-        );
-        await store.markPlaceOk(
-          attachmentSha256: item.attachmentSha256,
-          lang: item.lang,
-          payloadJson: payloadJson,
-          nowMs: nowMs,
-        );
-        processedPlaces += 1;
-      } catch (e) {
-        final attempts = item.attempts + 1;
-        final nextRetryAtMs = nowMs + _backoffMs(attempts);
-        await store.markPlaceFailed(
-          attachmentSha256: item.attachmentSha256,
-          error: e.toString(),
-          attempts: attempts,
-          nextRetryAtMs: nextRetryAtMs,
-          nowMs: nowMs,
-        );
       }
     }
 
     final annotationAllowed = settings.annotationEnabled &&
-        (!settings.annotationWifiOnly ||
+        (!settings.annotationRequiresNetwork ||
+            !settings.annotationWifiOnly ||
             network == MediaEnrichmentNetwork.wifi ||
             (network == MediaEnrichmentNetwork.cellular &&
                 allowAnnotationCellular));
 
     if (settings.annotationEnabled && !annotationAllowed) {
       final dueAnnotations = await store.listDueAnnotations(nowMs: nowMs);
-      if (dueAnnotations.isNotEmpty) {
+      if (dueAnnotations.isNotEmpty && settings.annotationRequiresNetwork) {
         needsAnnotationCellularConfirmation = true;
       }
     }
@@ -228,7 +235,10 @@ final class MediaEnrichmentRunner {
           final bytes = await store.readAttachmentBytes(
             attachmentSha256: item.attachmentSha256,
           );
-          final mimeType = _sniffMimeType(bytes);
+          final mimeType = _resolveAnnotationMimeType(
+            bytes,
+            allowUnknownForOfflineFallback: !settings.annotationRequiresNetwork,
+          );
           final payloadJson = await client.annotateImage(
             lang: item.lang,
             mimeType: mimeType,
@@ -269,6 +279,18 @@ final class MediaEnrichmentRunner {
     return Duration(seconds: seconds).inMilliseconds;
   }
 
+  static String _resolveAnnotationMimeType(
+    Uint8List bytes, {
+    required bool allowUnknownForOfflineFallback,
+  }) {
+    try {
+      return _sniffMimeType(bytes);
+    } catch (_) {
+      if (!allowUnknownForOfflineFallback) rethrow;
+      return 'image/unknown';
+    }
+  }
+
   static String _sniffMimeType(Uint8List bytes) {
     if (bytes.lengthInBytes >= 3 &&
         bytes[0] == 0xFF &&
@@ -299,6 +321,51 @@ final class MediaEnrichmentRunner {
         bytes[10] == 0x42 &&
         bytes[11] == 0x50) {
       return 'image/webp';
+    }
+
+    if (bytes.lengthInBytes >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38) {
+      return 'image/gif';
+    }
+
+    if (bytes.lengthInBytes >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return 'image/bmp';
+    }
+
+    if (bytes.lengthInBytes >= 4 &&
+        ((bytes[0] == 0x49 &&
+                bytes[1] == 0x49 &&
+                bytes[2] == 0x2A &&
+                bytes[3] == 0x00) ||
+            (bytes[0] == 0x4D &&
+                bytes[1] == 0x4D &&
+                bytes[2] == 0x00 &&
+                bytes[3] == 0x2A))) {
+      return 'image/tiff';
+    }
+
+    if (bytes.lengthInBytes >= 12 &&
+        bytes[4] == 0x66 &&
+        bytes[5] == 0x74 &&
+        bytes[6] == 0x79 &&
+        bytes[7] == 0x70) {
+      final brand = String.fromCharCodes(bytes.sublist(8, 12));
+      switch (brand) {
+        case 'heic':
+        case 'heix':
+        case 'hevc':
+        case 'hevx':
+          return 'image/heic';
+        case 'mif1':
+        case 'msf1':
+          return 'image/heif';
+        case 'avif':
+        case 'avis':
+          return 'image/avif';
+      }
     }
 
     throw StateError('unknown_image_mime_type');
