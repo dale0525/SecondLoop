@@ -160,71 +160,7 @@ Widget _buildComposerInlineButton(
   );
 }
 
-extension _ChatPageStateVoiceComposerUi on _ChatPageState {
-  Widget _buildVoiceModeToggleButton(BuildContext context) {
-    if (!_supportsAudioRecording) return const SizedBox.shrink();
-
-    final isVoiceMode = _voiceInputMode;
-    final icon = isVoiceMode ? Icons.keyboard_rounded : Icons.mic_none_rounded;
-    final tooltip = isVoiceMode
-        ? context.t.chat.switchToKeyboardInput
-        : context.t.chat.switchToVoiceInput;
-
-    return SlIconButton(
-      key: const ValueKey('chat_toggle_voice_input'),
-      icon: icon,
-      size: 44,
-      iconSize: 22,
-      tooltip: tooltip,
-      onPressed: _isComposerBusy ? null : _toggleVoiceInputMode,
-    );
-  }
-
-  Widget _buildPressToTalkButton(
-    BuildContext context, {
-    required SlTokens tokens,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isActive = _pressToTalkActive;
-
-    final backgroundColor =
-        isActive ? colorScheme.primary.withOpacity(0.16) : tokens.surface;
-    final borderColor = isActive ? colorScheme.primary : tokens.borderSubtle;
-    final textColor = isActive ? colorScheme.primary : colorScheme.onSurface;
-    final label =
-        isActive ? context.t.chat.releaseToConvert : context.t.chat.holdToTalk;
-
-    return Semantics(
-      key: const ValueKey('chat_press_to_talk'),
-      button: true,
-      label: label,
-      child: GestureDetector(
-        onLongPressStart: _onPressToTalkLongPressStart,
-        onLongPressEnd: _onPressToTalkLongPressEnd,
-        onLongPressCancel: _onPressToTalkLongPressCancel,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(tokens.radiusMd),
-            border: Border.all(color: borderColor),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
+extension _ChatPageStateComposerUi on _ChatPageState {
   Widget _buildCompactAttachButton(BuildContext context) {
     if (!_supportsImageUpload && !_supportsAudioRecording) {
       return const SizedBox.shrink();
@@ -232,13 +168,31 @@ extension _ChatPageStateVoiceComposerUi on _ChatPageState {
 
     return Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: SlIconButton(
-        key: const ValueKey('chat_attach'),
-        icon: Icons.add_rounded,
-        size: 44,
-        iconSize: 22,
-        tooltip: context.t.chat.attachTooltip,
-        onPressed: _isComposerBusy ? null : _openAttachmentSheet,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_supportsDesktopRecordAudioAction) ...[
+            SlIconButton(
+              key: const ValueKey('chat_record_audio'),
+              icon: Icons.mic_rounded,
+              size: 44,
+              iconSize: 22,
+              tooltip: context.t.chat.attachRecordAudio,
+              onPressed: _isComposerBusy
+                  ? null
+                  : () => unawaited(_recordAndSendAudioFromSheet()),
+            ),
+            const SizedBox(width: 8),
+          ],
+          SlIconButton(
+            key: const ValueKey('chat_attach'),
+            icon: Icons.add_rounded,
+            size: 44,
+            iconSize: 22,
+            tooltip: context.t.chat.attachTooltip,
+            onPressed: _isComposerBusy ? null : _openAttachmentSheet,
+          ),
+        ],
       ),
     );
   }
@@ -269,10 +223,6 @@ extension _ChatPageStateVoiceComposerUi on _ChatPageState {
               borderColor: tokens.borderSubtle,
             ),
           );
-        }
-
-        if (_voiceInputMode && _supportsAudioRecording) {
-          return _buildCompactAttachButton(context);
         }
 
         if (!hasText) {

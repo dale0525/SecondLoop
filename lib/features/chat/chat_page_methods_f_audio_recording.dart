@@ -1,119 +1,150 @@
 part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
-const Duration _kPressToTalkListenFor = Duration(seconds: 90);
+const Duration _kAudioRecordingUiTick = Duration(milliseconds: 250);
+
+enum AudioRecordingFailureKind {
+  permissionDenied,
+  network,
+  microphoneBusy,
+  noMicrophone,
+  emptyRecording,
+  canceled,
+  unknown,
+}
 
 enum _AudioRecordingSheetAction {
   stop,
   cancel,
 }
 
+enum _AudioSnackBarRetryAction {
+  retryRecording,
+  retryUpload,
+}
+
+final class _PendingAudioUploadRetry {
+  _PendingAudioUploadRetry({
+    required this.audioBytes,
+    required this.filename,
+  });
+
+  final Uint8List audioBytes;
+  final String filename;
+}
+
+String formatAudioRecordingElapsed(Duration duration) {
+  final safe = duration.isNegative ? Duration.zero : duration;
+  final hours = safe.inHours;
+  final minutes = safe.inMinutes.remainder(60);
+  final seconds = safe.inSeconds.remainder(60);
+
+  String two(int value) => value.toString().padLeft(2, '0');
+
+  if (hours > 0) {
+    return '${two(hours)}:${two(minutes)}:${two(seconds)}';
+  }
+  return '${two(minutes)}:${two(seconds)}';
+}
+
+double normalizeAudioRecordingAmplitude(double dbfs) {
+  if (!dbfs.isFinite) return 0;
+  final clamped = dbfs.clamp(-60.0, 0.0).toDouble();
+  return (clamped + 60.0) / 60.0;
+}
+
+AudioRecordingFailureKind classifyAudioRecordingFailure(Object error) {
+  final normalized = '$error'.toLowerCase();
+
+  if (normalized.contains('permission') ||
+      normalized.contains('denied') ||
+      normalized.contains('record_audio') ||
+      normalized.contains('not allowed')) {
+    return AudioRecordingFailureKind.permissionDenied;
+  }
+
+  if (normalized.contains('network') ||
+      normalized.contains('timeout') ||
+      normalized.contains('timed out') ||
+      normalized.contains('socket')) {
+    return AudioRecordingFailureKind.network;
+  }
+
+  if (normalized.contains('audio session') ||
+      normalized.contains('microphone') && normalized.contains('in use') ||
+      normalized.contains('busy')) {
+    return AudioRecordingFailureKind.microphoneBusy;
+  }
+
+  if (normalized.contains('no microphone') ||
+      normalized.contains('no input device') ||
+      normalized.contains('input device') ||
+      normalized.contains('audio source') ||
+      normalized.contains('microphone unavailable')) {
+    return AudioRecordingFailureKind.noMicrophone;
+  }
+
+  if (normalized.contains('recording_path_empty') ||
+      normalized.contains('recording_bytes_empty')) {
+    return AudioRecordingFailureKind.emptyRecording;
+  }
+
+  if (normalized.contains('cancelled') ||
+      normalized.contains('canceled') ||
+      normalized.contains('cancelled_by_user') ||
+      normalized.contains('cancelled by user')) {
+    return AudioRecordingFailureKind.canceled;
+  }
+
+  return AudioRecordingFailureKind.unknown;
+}
+
+bool canRetryAudioFailure(AudioRecordingFailureKind kind) {
+  switch (kind) {
+    case AudioRecordingFailureKind.network:
+    case AudioRecordingFailureKind.microphoneBusy:
+    case AudioRecordingFailureKind.unknown:
+      return true;
+    case AudioRecordingFailureKind.permissionDenied:
+    case AudioRecordingFailureKind.noMicrophone:
+    case AudioRecordingFailureKind.emptyRecording:
+    case AudioRecordingFailureKind.canceled:
+      return false;
+  }
+}
+
+bool shouldOpenMicrophoneSettings(AudioRecordingFailureKind kind) {
+  return kind == AudioRecordingFailureKind.permissionDenied ||
+      kind == AudioRecordingFailureKind.noMicrophone;
+}
+
+bool shouldKeepScreenAwakeDuringRecording({required bool isWeb}) {
+  return !isWeb;
+}
+
 extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   AudioRecorder get _audioRecorder =>
       _audioRecorderInstance ??= AudioRecorder();
-
-  SpeechToText get _speechToText => _speechToTextInstance ??= SpeechToText();
-
-  void _toggleVoiceInputMode() {
-    if (_isComposerBusy) return;
-
-    final nextValue = !_voiceInputMode;
-    _setState(() => _voiceInputMode = nextValue);
-
-    if (!nextValue && _isDesktopPlatform) {
-      _inputFocusNode.requestFocus();
-    }
-  }
-
-  void _onPressToTalkLongPressStart(LongPressStartDetails details) {
-    unawaited(_startPressToTalkCapture());
-  }
-
-  void _onPressToTalkLongPressEnd(LongPressEndDetails details) {
-    unawaited(_finishPressToTalkCapture(commitTranscript: true));
-  }
-
-  void _onPressToTalkLongPressCancel() {
-    unawaited(_finishPressToTalkCapture(commitTranscript: false));
-  }
-
-  Future<void> _startPressToTalkCapture() async {
-    if (_sending || _asking || _recordingAudio || _pressToTalkActive) return;
-    if (!_supportsAudioRecording || !_voiceInputMode) return;
-    if (!mounted) return;
-
-    final locale = Localizations.localeOf(context);
-    _setState(() {
-      _pressToTalkActive = true;
-      _pressToTalkTranscript = '';
-    });
-
-    final started = await _startSpeechToTextCapture(
-      locale: locale,
-      onWords: (words) {
-        _pressToTalkTranscript = words.trim();
-      },
-      listenFor: _kPressToTalkListenFor,
-    );
-
-    if (!mounted) return;
-    if (!_pressToTalkActive) {
-      if (started) {
-        await _stopSpeechToTextCapture();
-      }
-      return;
-    }
-
-    if (!started) {
-      _setState(() => _pressToTalkActive = false);
-    }
-  }
-
-  Future<void> _finishPressToTalkCapture({
-    required bool commitTranscript,
-  }) async {
-    if (!_pressToTalkActive) return;
-
-    await _stopSpeechToTextCapture();
-    final transcript = _pressToTalkTranscript.trim();
-
-    if (!mounted) return;
-    _setState(() {
-      _pressToTalkActive = false;
-      _pressToTalkTranscript = '';
-    });
-
-    if (commitTranscript && transcript.isNotEmpty) {
-      _appendTranscriptToComposer(transcript);
-    }
-  }
-
-  void _appendTranscriptToComposer(String transcript) {
-    final normalized = transcript.trim();
-    if (normalized.isEmpty) return;
-
-    final existing = _controller.text.trim();
-    final nextText = existing.isEmpty ? normalized : '$existing $normalized';
-
-    _controller.value = TextEditingValue(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: nextText.length),
-      composing: TextRange.empty,
-    );
-  }
 
   Future<void> _recordAndSendAudioFromSheet() async {
     if (_isComposerBusy) return;
     if (!_supportsAudioRecording) return;
 
-    final hasPermission = await _audioRecorder.hasPermission();
+    bool hasPermission;
+    try {
+      hasPermission = await _audioRecorder.hasPermission();
+    } catch (error) {
+      _showAudioErrorSnackBar(
+        error,
+        retryAction: _AudioSnackBarRetryAction.retryRecording,
+      );
+      return;
+    }
+
     if (!hasPermission) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordPermissionDenied),
-          duration: const Duration(seconds: 3),
-        ),
+      _showAudioErrorSnackBar(
+        'permission_denied',
+        retryAction: _AudioSnackBarRetryAction.retryRecording,
       );
       return;
     }
@@ -140,8 +171,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
       if (!mounted) return;
       _setState(() => _recordingAudio = true);
+      await _setRecordingWakeLock(true);
 
-      final action = await _showAudioRecordingSheet();
+      final action = await _showAudioRecordingSheet(startedAt: startedAt);
       final shouldSend = action == _AudioRecordingSheetAction.stop;
 
       recordedPath = await _audioRecorder.stop();
@@ -159,17 +191,14 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         throw Exception('recording_bytes_empty');
       }
 
-      await _sendRecordedAudioAttachment(
+      await _uploadRecordedAudioWithRecovery(
         bytes,
         filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
+    } catch (error) {
+      _showAudioErrorSnackBar(
+        error,
+        retryAction: _AudioSnackBarRetryAction.retryRecording,
       );
     } finally {
       if (recorderStarted) {
@@ -189,17 +218,53 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         }
       }
 
+      await _setRecordingWakeLock(false);
+
       if (mounted) {
         _setState(() => _recordingAudio = false);
       }
     }
   }
 
+  Future<void> _uploadRecordedAudioWithRecovery(
+    Uint8List audioBytes, {
+    required String filename,
+  }) async {
+    try {
+      await _sendRecordedAudioAttachment(
+        audioBytes,
+        filename: filename,
+      );
+      _pendingAudioUploadRetry = null;
+    } catch (error) {
+      _pendingAudioUploadRetry = _PendingAudioUploadRetry(
+        audioBytes: Uint8List.fromList(audioBytes),
+        filename: filename,
+      );
+      _showAudioErrorSnackBar(
+        error,
+        retryAction: _AudioSnackBarRetryAction.retryUpload,
+      );
+    }
+  }
+
+  Future<void> _retryPendingRecordedAudioUpload() async {
+    final pending = _pendingAudioUploadRetry;
+    if (pending == null) return;
+
+    await _uploadRecordedAudioWithRecovery(
+      pending.audioBytes,
+      filename: pending.filename,
+    );
+  }
+
   Future<void> _sendRecordedAudioAttachment(
     Uint8List audioBytes, {
     required String filename,
   }) async {
-    if (_sending || _asking || _pressToTalkActive) return;
+    if (_sending || _asking) {
+      return;
+    }
 
     _setState(() => _sending = true);
     try {
@@ -213,145 +278,408 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
   }
 
-  Future<_AudioRecordingSheetAction?> _showAudioRecordingSheet() {
+  Future<void> _setRecordingWakeLock(bool enabled) async {
+    if (!shouldKeepScreenAwakeDuringRecording(isWeb: kIsWeb)) {
+      return;
+    }
+
+    try {
+      await WakelockPlus.toggle(enable: enabled);
+    } catch (_) {
+      // Ignore wakelock failures and keep recording flow available.
+    }
+  }
+
+  Future<_AudioRecordingSheetAction?> _showAudioRecordingSheet({
+    required DateTime startedAt,
+  }) {
+    Timer? ticker;
+    var initialized = false;
+    var paused = false;
+    var togglingPause = false;
+    var pausedDuration = Duration.zero;
+    DateTime? pausedAt;
+    var elapsed = Duration.zero;
+    var normalizedAmplitude = 0.0;
+
+    Duration computeElapsed() {
+      final anchor = paused ? (pausedAt ?? DateTime.now()) : DateTime.now();
+      final next = anchor.difference(startedAt) - pausedDuration;
+      if (next.isNegative) return Duration.zero;
+      return next;
+    }
+
+    Future<void> refreshUi(
+      BuildContext sheetContext,
+      StateSetter setSheetState,
+    ) async {
+      final nextElapsed = computeElapsed();
+      var nextAmplitude = normalizedAmplitude;
+      if (!paused) {
+        try {
+          final amplitude = await _audioRecorder.getAmplitude();
+          nextAmplitude = normalizeAudioRecordingAmplitude(amplitude.current);
+        } catch (_) {
+          nextAmplitude = 0;
+        }
+      } else {
+        nextAmplitude = 0;
+      }
+
+      if (!sheetContext.mounted) return;
+
+      setSheetState(() {
+        elapsed = nextElapsed;
+        normalizedAmplitude = nextAmplitude;
+      });
+    }
+
+    Future<void> togglePause(
+      BuildContext sheetContext,
+      StateSetter setSheetState,
+    ) async {
+      if (togglingPause) return;
+
+      setSheetState(() => togglingPause = true);
+      try {
+        if (paused) {
+          final pausedAnchor = pausedAt;
+          await _audioRecorder.resume();
+          if (pausedAnchor != null) {
+            pausedDuration += DateTime.now().difference(pausedAnchor);
+          }
+          paused = false;
+          pausedAt = null;
+        } else {
+          await _audioRecorder.pause();
+          pausedAt = DateTime.now();
+          paused = true;
+        }
+        if (!sheetContext.mounted) return;
+        await refreshUi(sheetContext, setSheetState);
+      } catch (error) {
+        _showAudioErrorSnackBar(
+          error,
+          retryAction: _AudioSnackBarRetryAction.retryRecording,
+        );
+      } finally {
+        if (sheetContext.mounted) {
+          setSheetState(() => togglingPause = false);
+        }
+      }
+    }
+
     return showModalBottomSheet<_AudioRecordingSheetAction>(
       context: context,
       showDragHandle: true,
       isDismissible: false,
       enableDrag: false,
       builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                key: const ValueKey('chat_recording_status'),
-                leading: const Icon(Icons.mic_rounded),
-                title: Text(context.t.chat.recordingInProgress),
-                subtitle: Text(context.t.chat.recordingHint),
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            if (!initialized) {
+              initialized = true;
+              elapsed = computeElapsed();
+              ticker = Timer.periodic(_kAudioRecordingUiTick, (_) {
+                unawaited(refreshUi(sheetContext, setSheetState));
+              });
+              unawaited(refreshUi(sheetContext, setSheetState));
+            }
+
+            final elapsedLabel = formatAudioRecordingElapsed(elapsed);
+            final pauseResumeLabel = paused
+                ? _localizedByLanguage(zh: '继续', en: 'Resume')
+                : _localizedByLanguage(zh: '暂停', en: 'Pause');
+            final statusHint = paused
+                ? _localizedByLanguage(
+                    zh: '录音已暂停，点击继续后可接着录。',
+                    en: 'Recording paused. Tap Resume when ready.',
+                  )
+                : context.t.chat.recordingHint;
+            final manualStopHint = _localizedByLanguage(
+              zh: '录音不会自动停止，完成后请点击停止发送。',
+              en: 'Recording does not auto-stop. Tap Stop when you are done.',
+            );
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ListTile(
+                      key: const ValueKey('chat_recording_status'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.mic_rounded),
+                      title: Text(context.t.chat.recordingInProgress),
+                      subtitle: Text(statusHint),
+                    ),
+                    const SizedBox(height: 4),
+                    Center(
+                      child: Text(
+                        elapsedLabel,
+                        key: const ValueKey('chat_recording_elapsed'),
+                        style: Theme.of(sheetContext)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildRecordingWaveform(
+                      normalizedAmplitude,
+                      paused: paused,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      manualStopHint,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(sheetContext).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('chat_recording_cancel'),
+                            onPressed: () {
+                              Navigator.of(sheetContext)
+                                  .pop(_AudioRecordingSheetAction.cancel);
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                            label: Text(context.t.common.actions.cancel),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('chat_recording_pause_resume'),
+                            onPressed: togglingPause
+                                ? null
+                                : () => unawaited(
+                                      togglePause(
+                                        sheetContext,
+                                        setSheetState,
+                                      ),
+                                    ),
+                            icon: Icon(
+                              paused
+                                  ? Icons.play_arrow_rounded
+                                  : Icons.pause_rounded,
+                            ),
+                            label: Text(pauseResumeLabel),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton.icon(
+                            key: const ValueKey('chat_recording_stop'),
+                            onPressed: () {
+                              Navigator.of(sheetContext)
+                                  .pop(_AudioRecordingSheetAction.stop);
+                            },
+                            icon: const Icon(Icons.stop_circle_outlined),
+                            label: Text(context.t.common.actions.stop),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              ListTile(
-                key: const ValueKey('chat_recording_stop'),
-                leading: const Icon(Icons.stop_circle_outlined),
-                title: Text(context.t.common.actions.stop),
-                onTap: () {
-                  Navigator.of(sheetContext)
-                      .pop(_AudioRecordingSheetAction.stop);
-                },
-              ),
-              ListTile(
-                key: const ValueKey('chat_recording_cancel'),
-                leading: const Icon(Icons.close_rounded),
-                title: Text(context.t.common.actions.cancel),
-                onTap: () {
-                  Navigator.of(sheetContext)
-                      .pop(_AudioRecordingSheetAction.cancel);
-                },
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
+    ).whenComplete(() {
+      ticker?.cancel();
+    });
+  }
+
+  Widget _buildRecordingWaveform(
+    double normalizedAmplitude, {
+    required bool paused,
+  }) {
+    final amplitude = normalizedAmplitude.clamp(0.0, 1.0).toDouble();
+    final bars = List<Widget>.generate(9, (index) {
+      final distanceToCenter = (index - 4).abs().toDouble();
+      final emphasis = 1.0 - (distanceToCenter * 0.12);
+      final dynamicBoost = paused ? 0.0 : amplitude * 22 * emphasis;
+      final targetHeight = 10 + dynamicBoost;
+
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        width: 6,
+        height: targetHeight,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: paused
+              ? Theme.of(context).colorScheme.outline
+              : Theme.of(context).colorScheme.primary,
+        ),
+      );
+    });
+
+    return Center(
+      child: Row(
+        key: const ValueKey('chat_recording_waveform'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < bars.length; i++) ...[
+            bars[i],
+            if (i != bars.length - 1) const SizedBox(width: 4),
+          ],
+        ],
+      ),
     );
   }
 
-  Future<bool> _startSpeechToTextCapture({
-    required Locale locale,
-    required void Function(String words) onWords,
-    required Duration listenFor,
-  }) async {
-    final speech = _speechToText;
+  void _showAudioErrorSnackBar(
+    Object error, {
+    _AudioSnackBarRetryAction? retryAction,
+  }) {
+    if (!mounted) return;
 
-    bool isAvailable;
-    try {
-      isAvailable = await speech.initialize();
-    } catch (_) {
-      isAvailable = false;
-    }
+    final kind = classifyAudioRecordingFailure(error);
 
-    if (!isAvailable) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordPermissionDenied),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return false;
-    }
-
-    final localeId = await _resolveSpeechLocaleId(locale);
-
-    try {
-      await speech.listen(
-        localeId: localeId,
-        listenFor: listenFor,
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: false,
-        ),
-        onResult: (result) {
-          final normalized = result.recognizedWords.trim();
-          if (normalized.isEmpty) return;
-          onWords(normalized);
-        },
-      );
-      return true;
-    } catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.audioRecordFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return false;
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_describeAudioError(error)),
+        duration: const Duration(seconds: 3),
+        action: _buildAudioErrorSnackBarAction(kind, retryAction),
+      ),
+    );
   }
 
-  Future<void> _stopSpeechToTextCapture() async {
-    final speech = _speechToTextInstance;
-    if (speech == null) return;
-
-    try {
-      if (speech.isListening) {
-        await speech.stop();
-      } else {
-        await speech.cancel();
-      }
-    } catch (_) {
-      // Ignore stop failures.
-    }
-  }
-
-  Future<String?> _resolveSpeechLocaleId(Locale locale) async {
-    final speech = _speechToText;
-    List<LocaleName> locales;
-    try {
-      locales = await speech.locales();
-    } catch (_) {
-      return null;
-    }
-    if (locales.isEmpty) return null;
-
-    final languageTag = locale.toLanguageTag().toLowerCase();
-    final underscoreTag = locale.toString().toLowerCase();
-
-    for (final item in locales) {
-      final current = item.localeId.toLowerCase();
-      if (current == languageTag || current == underscoreTag) {
-        return item.localeId;
-      }
+  SnackBarAction? _buildAudioErrorSnackBarAction(
+    AudioRecordingFailureKind kind,
+    _AudioSnackBarRetryAction? retryAction,
+  ) {
+    if (shouldOpenMicrophoneSettings(kind)) {
+      return SnackBarAction(
+        label: _localizedByLanguage(zh: '去设置', en: 'Settings'),
+        onPressed: () => unawaited(_openMicrophoneSettings()),
+      );
     }
 
-    final langPrefix = locale.languageCode.toLowerCase();
-    for (final item in locales) {
-      final current = item.localeId.toLowerCase();
-      if (current.startsWith(langPrefix)) {
-        return item.localeId;
-      }
+    if (retryAction == _AudioSnackBarRetryAction.retryUpload &&
+        canRetryAudioFailure(kind)) {
+      return SnackBarAction(
+        label: context.t.common.actions.retry,
+        onPressed: () => unawaited(_retryPendingRecordedAudioUpload()),
+      );
+    }
+
+    if (retryAction == _AudioSnackBarRetryAction.retryRecording &&
+        canRetryAudioFailure(kind)) {
+      return SnackBarAction(
+        label: context.t.common.actions.retry,
+        onPressed: () => unawaited(_recordAndSendAudioFromSheet()),
+      );
     }
 
     return null;
+  }
+
+  Future<void> _openMicrophoneSettings() async {
+    for (final uri in _microphoneSettingsUris()) {
+      try {
+        final opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (opened) return;
+      } catch (_) {
+        // Try next candidate.
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _localizedByLanguage(
+            zh: '无法自动打开系统设置，请手动前往系统隐私里开启麦克风权限。',
+            en: 'Unable to open system settings automatically. Please enable microphone permission manually.',
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  List<Uri> _microphoneSettingsUris() {
+    if (kIsWeb) return const <Uri>[];
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+        return <Uri>[Uri.parse('app-settings:')];
+      case TargetPlatform.macOS:
+        return <Uri>[
+          Uri.parse(
+            'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+          ),
+          Uri.parse('x-apple.systempreferences:'),
+        ];
+      case TargetPlatform.windows:
+        return <Uri>[
+          Uri.parse('ms-settings:privacy-microphone'),
+          Uri.parse('ms-settings:sound'),
+        ];
+      case TargetPlatform.linux:
+        return const <Uri>[];
+      case TargetPlatform.fuchsia:
+        return const <Uri>[];
+    }
+  }
+
+  String _describeAudioError(Object error) {
+    final kind = classifyAudioRecordingFailure(error);
+
+    switch (kind) {
+      case AudioRecordingFailureKind.permissionDenied:
+        return context.t.chat.audioRecordPermissionDenied;
+      case AudioRecordingFailureKind.network:
+        return _localizedByLanguage(
+          zh: '录音上传网络异常，请检查网络后重试。',
+          en: 'Audio upload network issue. Please check your connection.',
+        );
+      case AudioRecordingFailureKind.microphoneBusy:
+        return _localizedByLanguage(
+          zh: '麦克风可能正被其他应用占用，请稍后重试。',
+          en: 'Microphone appears busy. Please close other apps using audio.',
+        );
+      case AudioRecordingFailureKind.noMicrophone:
+        return _localizedByLanguage(
+          zh: '未检测到可用麦克风，请检查系统输入设备设置。',
+          en: 'No microphone input is available. Check system input settings.',
+        );
+      case AudioRecordingFailureKind.emptyRecording:
+        return _localizedByLanguage(
+          zh: '录音内容为空，请重试并确保麦克风输入正常。',
+          en: 'Recording is empty. Please retry and check microphone input.',
+        );
+      case AudioRecordingFailureKind.canceled:
+        return _localizedByLanguage(
+          zh: '录音已取消。',
+          en: 'Recording canceled.',
+        );
+      case AudioRecordingFailureKind.unknown:
+        return context.t.chat.audioRecordFailed(error: '$error');
+    }
+  }
+
+  String _localizedByLanguage({
+    required String zh,
+    required String en,
+  }) {
+    final code = Localizations.localeOf(context).languageCode.toLowerCase();
+    return code.startsWith('zh') ? zh : en;
   }
 }

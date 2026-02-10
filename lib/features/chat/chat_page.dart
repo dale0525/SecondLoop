@@ -12,7 +12,8 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:speech_to_text/speech_to_text.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
@@ -380,8 +381,6 @@ class _ChatPageState extends State<ChatPage> {
   bool _stopRequested = false;
   bool _desktopDropActive = false;
   bool _recordingAudio = false;
-  bool _voiceInputMode = false;
-  bool _pressToTalkActive = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
@@ -402,8 +401,7 @@ class _ChatPageState extends State<ChatPage> {
   int _todoAgendaBannerCollapseSignal = 0;
 
   AudioRecorder? _audioRecorderInstance;
-  SpeechToText? _speechToTextInstance;
-  String _pressToTalkTranscript = '';
+  _PendingAudioUploadRetry? _pendingAudioUploadRetry;
 
   void _setState(VoidCallback fn) => setState(fn);
 
@@ -432,10 +430,13 @@ class _ChatPageState extends State<ChatPage> {
   bool get _supportsAudioRecording =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows);
+  bool get _supportsDesktopRecordAudioAction =>
+      _isDesktopPlatform && _supportsAudioRecording;
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
-  bool get _isComposerBusy =>
-      _sending || _asking || _recordingAudio || _pressToTalkActive;
+  bool get _isComposerBusy => _sending || _asking || _recordingAudio;
 
   @override
   void initState() {
@@ -454,7 +455,6 @@ class _ChatPageState extends State<ChatPage> {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     unawaited(_audioRecorderInstance?.dispose());
-    unawaited(_speechToTextInstance?.cancel());
     _controller.dispose();
     _inputFocusNode.dispose();
     _scrollController.dispose();
