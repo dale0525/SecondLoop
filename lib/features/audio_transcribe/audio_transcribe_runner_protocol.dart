@@ -27,7 +27,7 @@ String _audioInputFormatByMimeType(String mimeType) {
 
 String _multimodalTranscribePrompt(String lang) {
   final trimmed = lang.trim();
-  if (trimmed.isEmpty) {
+  if (trimmed.isEmpty || isAutoAudioTranscribeLang(trimmed)) {
     return 'Transcribe the provided audio and return plain text only.';
   }
   return 'Transcribe the provided audio in language "$trimmed" and return plain text only.';

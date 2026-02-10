@@ -332,40 +332,51 @@ extension AppDelegate {
       candidates.append(canonical)
     }
 
-    let isAutoLanguage = lower.isEmpty || lower == "auto" || lower == "und"
-
-    if !isAutoLanguage {
-      appendUnique(normalized)
-      if let range = normalized.range(of: "-") {
-        appendUnique(String(normalized[..<range.lowerBound]))
+    func appendLanguageAndBase(_ value: String) {
+      let canonical = value.replacingOccurrences(of: "_", with: "-")
+      appendUnique(canonical)
+      if let range = canonical.range(of: "-") {
+        appendUnique(String(canonical[..<range.lowerBound]))
       }
     }
 
-    if lower.hasPrefix("zh") {
-      if lower.contains("hant") || lower.hasSuffix("-tw") || lower.hasSuffix("-hk") || lower.hasSuffix("-mo") {
-        appendUnique("zh-TW")
-        appendUnique("zh-HK")
-        appendUnique("zh-CN")
-      } else {
-        appendUnique("zh-CN")
-        appendUnique("zh-TW")
-      }
-    } else if lower.hasPrefix("ja") {
-      appendUnique("ja-JP")
-    } else if lower.hasPrefix("ko") {
-      appendUnique("ko-KR")
-    } else if lower.hasPrefix("fr") {
-      appendUnique("fr-FR")
-    } else if lower.hasPrefix("de") {
-      appendUnique("de-DE")
-    } else if lower.hasPrefix("es") {
-      appendUnique("es-ES")
-    } else if lower.hasPrefix("en") {
-      appendUnique("en-US")
-    }
+    let isAutoLanguage =
+      lower.isEmpty || lower == "auto" || lower == "und" || lower == "unknown"
 
-    if isAutoLanguage || lower.hasPrefix("en") {
+    if isAutoLanguage {
+      for preferred in Locale.preferredLanguages {
+        appendLanguageAndBase(preferred)
+      }
+      appendLanguageAndBase(Locale.current.identifier)
+      appendLanguageAndBase(Locale.autoupdatingCurrent.identifier)
+      appendUnique("zh-CN")
+      appendUnique("zh-TW")
       appendUnique("en-US")
+    } else {
+      appendLanguageAndBase(normalized)
+
+      if lower.hasPrefix("zh") {
+        if lower.contains("hant") || lower.hasSuffix("-tw") || lower.hasSuffix("-hk") || lower.hasSuffix("-mo") {
+          appendUnique("zh-TW")
+          appendUnique("zh-HK")
+          appendUnique("zh-CN")
+        } else {
+          appendUnique("zh-CN")
+          appendUnique("zh-TW")
+        }
+      } else if lower.hasPrefix("ja") {
+        appendUnique("ja-JP")
+      } else if lower.hasPrefix("ko") {
+        appendUnique("ko-KR")
+      } else if lower.hasPrefix("fr") {
+        appendUnique("fr-FR")
+      } else if lower.hasPrefix("de") {
+        appendUnique("de-DE")
+      } else if lower.hasPrefix("es") {
+        appendUnique("es-ES")
+      } else if lower.hasPrefix("en") {
+        appendUnique("en-US")
+      }
     }
 
     if candidates.isEmpty {

@@ -50,9 +50,17 @@ fn audio_input_format_by_mime_type(mime_type: &str) -> &'static str {
     }
 }
 
+fn is_auto_transcribe_lang(lang: &str) -> bool {
+    let trimmed = lang.trim();
+    trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("auto")
+        || trimmed.eq_ignore_ascii_case("und")
+        || trimmed.eq_ignore_ascii_case("unknown")
+}
+
 fn multimodal_transcribe_prompt(lang: &str) -> String {
     let trimmed = lang.trim();
-    if trimmed.is_empty() {
+    if is_auto_transcribe_lang(trimmed) {
         "Transcribe the provided audio and return plain text only.".to_string()
     } else {
         format!(
@@ -449,13 +457,15 @@ pub fn audio_transcribe_byok_profile(
     let file_part = multipart::Part::bytes(audio_bytes)
         .file_name(format!("audio.{ext}"))
         .mime_str(mime_type)?;
-    let form = multipart::Form::new()
+    let mut form = multipart::Form::new()
         .text("model", model_name)
         .text("response_format", "verbose_json")
-        .text("language", lang.trim().to_string())
         .text("timestamp_granularities[]", "segment")
         .text("stream", "true")
         .part("file", file_part);
+    if !is_auto_transcribe_lang(&lang) {
+        form = form.text("language", lang.trim().to_string());
+    }
 
     let client = Client::new();
     let response = client

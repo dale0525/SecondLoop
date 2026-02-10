@@ -67,9 +67,8 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
 
   Widget? _buildDesktopRuntimeHealthTile(BuildContext context) {
     final status = _linuxOcrModelStatus;
-    if (!status.supported) return null;
 
-    final actionEnabled = !_busy && !_linuxOcrBusy;
+    final actionEnabled = !_busy && !_linuxOcrBusy && status.supported;
     final colorScheme = Theme.of(context).colorScheme;
     final zh = Localizations.localeOf(context)
         .languageCode
@@ -133,10 +132,16 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                   ),
                 ),
                 Icon(
-                  status.installed ? Icons.check_circle : Icons.error_outline,
-                  color: status.installed
-                      ? colorScheme.primary
-                      : colorScheme.error,
+                  !status.supported
+                      ? Icons.info_outline
+                      : (status.installed
+                          ? Icons.check_circle
+                          : Icons.error_outline),
+                  color: !status.supported
+                      ? colorScheme.secondary
+                      : (status.installed
+                          ? colorScheme.primary
+                          : colorScheme.error),
                   size: 18,
                 ),
               ],
@@ -169,7 +174,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                     zh ? '修复安装' : 'Repair Install',
                   ),
                 ),
-                if (status.installed)
+                if (status.installed && status.supported)
                   OutlinedButton.icon(
                     key: MediaAnnotationSettingsPage
                         .linuxOcrModelDeleteButtonKey,
@@ -196,6 +201,14 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
               .startsWith('zh')
           ? '正在修复运行时...'
           : 'Repairing runtime...';
+    }
+    if (!status.supported) {
+      return Localizations.localeOf(context)
+              .languageCode
+              .toLowerCase()
+              .startsWith('zh')
+          ? '当前无法读取本地 runtime 状态。可先尝试“修复安装”。'
+          : 'Runtime status unavailable right now. Try Repair Install first.';
     }
     if (!status.installed) {
       final reason = status.message?.trim();
