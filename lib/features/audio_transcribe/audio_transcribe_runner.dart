@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
