@@ -13,10 +13,10 @@ Secrets：
 - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`（必须 `https://`，且不能包含 `staging` / `stage`）
 - `SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD`
 - `RELEASE_LLM_API_KEY`（用于判定版本 bump 与生成多语言 release notes）
-
-Variables：
 - `RELEASE_LLM_MODEL`（必需）
 - `RELEASE_LLM_BASE_URL`（可选，默认 `https://api.openai.com/v1`）
+
+Variables：
 - `RELEASE_NOTES_LOCALES`（可选，默认 `zh-CN,en-US`）
 
 ### Android release 签名（强烈建议）

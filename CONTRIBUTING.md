@@ -49,6 +49,7 @@ Use `pixi run release` (no positional version) to run preflight + AI bump decisi
 Required env/secrets for release automation:
 - `RELEASE_LLM_API_KEY`
 - `RELEASE_LLM_MODEL`
-- Optional: `RELEASE_LLM_BASE_URL`, `RELEASE_NOTES_LOCALES`
+- Optional secret: `RELEASE_LLM_BASE_URL`
+- Optional variable: `RELEASE_NOTES_LOCALES`
 
 See `RELEASE_CHECKLIST.md` for the full checklist, including Android signing + Play/App Store readiness notes.
