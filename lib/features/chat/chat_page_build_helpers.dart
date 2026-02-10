@@ -150,7 +150,7 @@ Widget _buildComposerInlineButton(
 
 extension _ChatPageStateVoiceComposerUi on _ChatPageState {
   Widget _buildVoiceModeToggleButton(BuildContext context) {
-    if (!_supportsAudioRecording) return const SizedBox.shrink();
+    if (!_supportsPressToTalk) return const SizedBox.shrink();
 
     final isVoiceMode = _voiceInputMode;
     final icon = isVoiceMode ? Icons.keyboard_rounded : Icons.mic_none_rounded;
@@ -220,13 +220,31 @@ extension _ChatPageStateVoiceComposerUi on _ChatPageState {
 
     return Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: SlIconButton(
-        key: const ValueKey('chat_attach'),
-        icon: Icons.add_rounded,
-        size: 44,
-        iconSize: 22,
-        tooltip: context.t.chat.attachTooltip,
-        onPressed: _isComposerBusy ? null : _openAttachmentSheet,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_supportsDesktopRecordAudioAction) ...[
+            SlIconButton(
+              key: const ValueKey('chat_record_audio'),
+              icon: Icons.mic_rounded,
+              size: 44,
+              iconSize: 22,
+              tooltip: context.t.chat.attachRecordAudio,
+              onPressed: _isComposerBusy
+                  ? null
+                  : () => unawaited(_recordAndSendAudioFromSheet()),
+            ),
+            const SizedBox(width: 8),
+          ],
+          SlIconButton(
+            key: const ValueKey('chat_attach'),
+            icon: Icons.add_rounded,
+            size: 44,
+            iconSize: 22,
+            tooltip: context.t.chat.attachTooltip,
+            onPressed: _isComposerBusy ? null : _openAttachmentSheet,
+          ),
+        ],
       ),
     );
   }
@@ -259,7 +277,7 @@ extension _ChatPageStateVoiceComposerUi on _ChatPageState {
           );
         }
 
-        if (_voiceInputMode && _supportsAudioRecording) {
+        if (_voiceInputMode && _supportsPressToTalk) {
           return _buildCompactAttachButton(context);
         }
 

@@ -431,7 +431,15 @@ class _ChatPageState extends State<ChatPage> {
   bool get _supportsAudioRecording =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows);
+  bool get _supportsPressToTalk =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
+  bool get _supportsDesktopRecordAudioAction =>
+      _isDesktopPlatform && _supportsAudioRecording && !_supportsPressToTalk;
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
   bool get _isComposerBusy =>
       _sending || _asking || _recordingAudio || _pressToTalkActive;

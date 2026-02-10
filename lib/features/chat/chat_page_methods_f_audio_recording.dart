@@ -39,7 +39,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
   Future<void> _startPressToTalkCapture() async {
     if (_sending || _asking || _recordingAudio || _pressToTalkActive) return;
-    if (!_supportsAudioRecording || !_voiceInputMode) return;
+    if (!_supportsPressToTalk || !_voiceInputMode) return;
     if (!mounted) return;
 
     final locale = Localizations.localeOf(context);
@@ -262,6 +262,13 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   }) async {
     final speech = _speechToText;
 
+    bool hasPermission;
+    try {
+      hasPermission = await speech.hasPermission;
+    } catch (_) {
+      hasPermission = false;
+    }
+
     bool isAvailable;
     try {
       isAvailable = await speech.initialize();
@@ -271,9 +278,14 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
     if (!isAvailable) {
       if (!mounted) return false;
+      final errorMessage = hasPermission
+          ? context.t.chat.audioRecordFailed(
+              error: 'speech_recognition_unavailable',
+            )
+          : context.t.chat.audioRecordPermissionDenied;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.t.chat.audioRecordPermissionDenied),
+          content: Text(errorMessage),
           duration: const Duration(seconds: 3),
         ),
       );

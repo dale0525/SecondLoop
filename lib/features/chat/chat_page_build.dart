@@ -357,13 +357,12 @@ extension _ChatPageStateBuild on _ChatPageState {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                if (_supportsAudioRecording) ...[
+                                if (_supportsPressToTalk) ...[
                                   _buildVoiceModeToggleButton(context),
                                   const SizedBox(width: 4),
                                 ],
                                 Expanded(
-                                  child: _voiceInputMode &&
-                                          _supportsAudioRecording
+                                  child: _voiceInputMode && _supportsPressToTalk
                                       ? _buildPressToTalkButton(
                                           context,
                                           tokens: tokens,
@@ -852,22 +851,46 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  if (_supportsImageUpload) ...[
-                                    Semantics(
-                                      label: context.t.chat.attachTooltip,
-                                      button: true,
-                                      child: SlIconButton(
-                                        key: const ValueKey('chat_attach'),
-                                        icon: Icons.add_rounded,
-                                        size: 44,
-                                        iconSize: 22,
-                                        tooltip: context.t.chat.attachTooltip,
-                                        onPressed: _isComposerBusy
-                                            ? null
-                                            : _openAttachmentSheet,
+                                  if (_supportsImageUpload ||
+                                      _supportsDesktopRecordAudioAction) ...[
+                                    if (_supportsDesktopRecordAudioAction) ...[
+                                      Semantics(
+                                        label: context.t.chat.attachRecordAudio,
+                                        button: true,
+                                        child: SlIconButton(
+                                          key: const ValueKey(
+                                              'chat_record_audio'),
+                                          icon: Icons.mic_rounded,
+                                          size: 44,
+                                          iconSize: 22,
+                                          tooltip:
+                                              context.t.chat.attachRecordAudio,
+                                          onPressed: _isComposerBusy
+                                              ? null
+                                              : () => unawaited(
+                                                    _recordAndSendAudioFromSheet(),
+                                                  ),
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    if (_supportsImageUpload) ...[
+                                      Semantics(
+                                        label: context.t.chat.attachTooltip,
+                                        button: true,
+                                        child: SlIconButton(
+                                          key: const ValueKey('chat_attach'),
+                                          icon: Icons.add_rounded,
+                                          size: 44,
+                                          iconSize: 22,
+                                          tooltip: context.t.chat.attachTooltip,
+                                          onPressed: _isComposerBusy
+                                              ? null
+                                              : _openAttachmentSheet,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
                                   ],
                                   ValueListenableBuilder<TextEditingValue>(
                                     valueListenable: _controller,
