@@ -499,7 +499,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             updatedPayload,
             updatedPayload['ocr_auto_last_success_ms'] as int,
           );
-          notifyStatusTransition(runningPayload, updatedPayload);
           _autoOcrCompletedShas.add(attachment.sha256);
           updated += 1;
         } else {
@@ -511,7 +510,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             updatedPayload,
             updatedPayload['ocr_auto_last_failure_ms'] as int,
           );
-          notifyStatusTransition(runningPayload, updatedPayload);
         }
       } catch (_) {
         final failedPayload = Map<String, Object?>.from(payload);
@@ -525,7 +523,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             failedPayload,
             failedPayload['ocr_auto_last_failure_ms'] as int,
           );
-          notifyStatusTransition(payload, failedPayload);
         } catch (_) {
           // ignore per-attachment status persistence failures.
         }

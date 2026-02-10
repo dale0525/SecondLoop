@@ -93,4 +93,8 @@ SecondLoop: missing SECONDLOOP_FIREBASE_WEB_API_KEY.
 EOF
 fi
 
-exec dart pub global run fvm:main flutter "$@" "${defines[@]}"
+if (( ${#defines[@]} > 0 )); then
+  exec dart pub global run fvm:main flutter "$@" "${defines[@]}"
+fi
+
+exec dart pub global run fvm:main flutter "$@"
