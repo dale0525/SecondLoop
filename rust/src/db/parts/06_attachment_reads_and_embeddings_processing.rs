@@ -93,7 +93,18 @@ fn read_attachment_annotation_excerpt_optional(
 
     let ocr_excerpt = payload_str_trimmed(&payload, "ocr_text_excerpt");
     let ocr_full = payload_str_trimmed(&payload, "ocr_text_full");
-    let ocr = ocr_excerpt.or(ocr_full);
+    let ocr_legacy = payload_str_trimmed(&payload, "ocr_text");
+    let ocr = ocr_excerpt.or(ocr_full).or(ocr_legacy);
+
+    let mime_type = payload_str_trimmed(&payload, "mime_type").unwrap_or_default();
+    if is_docx_mime_type(mime_type) {
+        if let (Some(extracted_text), Some(ocr_text)) = (extracted, ocr) {
+            let merged = merge_attachment_excerpt(extracted_text, ocr_text);
+            if !merged.is_empty() {
+                return Ok(Some(merged));
+            }
+        }
+    }
 
     let prefer_ocr = match (ocr, extracted) {
         (Some(_), Some(extracted_text)) => looks_degraded_ascii_text(extracted_text),
@@ -124,6 +135,33 @@ fn payload_str_trimmed<'a>(payload: &'a serde_json::Value, key: &str) -> Option<
         .and_then(|v| v.as_str())
         .map(str::trim)
         .filter(|v| !v.is_empty())
+}
+
+fn is_docx_mime_type(mime_type: &str) -> bool {
+    mime_type
+        .trim()
+        .eq_ignore_ascii_case("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+}
+
+fn merge_attachment_excerpt(first: &str, second: &str) -> String {
+    let a = first.trim();
+    let b = second.trim();
+    if a.is_empty() {
+        return b.to_string();
+    }
+    if b.is_empty() {
+        return a.to_string();
+    }
+    if a == b {
+        return a.to_string();
+    }
+    if a.contains(b) {
+        return a.to_string();
+    }
+    if b.contains(a) {
+        return b.to_string();
+    }
+    format!("{a}\n\n{b}")
 }
 
 fn looks_degraded_ascii_text(raw: &str) -> bool {

@@ -263,11 +263,13 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           existingPayload['extracted_text_full']?.toString() ?? '';
       final extractedExcerpt =
           existingPayload['extracted_text_excerpt']?.toString() ?? '';
-      platformOcr = maybePreferExtractedTextForRuntimeOcr(
-        ocr: platformOcr,
-        extractedFull: extractedFull,
-        extractedExcerpt: extractedExcerpt,
-      );
+      if (isPdf) {
+        platformOcr = maybePreferExtractedTextForRuntimeOcr(
+          ocr: platformOcr,
+          extractedFull: extractedFull,
+          extractedExcerpt: extractedExcerpt,
+        );
+      }
 
       final pageCount =
           asInt(existingPayload['page_count']) ?? platformOcr.pageCount;

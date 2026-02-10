@@ -4,10 +4,48 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
   Widget _buildImageAttachmentDetail(Uint8List bytes) {
     final exifFromBytes = tryReadImageExifMetadata(bytes);
 
+    String resolveImageOcrText(Map<String, Object?>? payload) {
+      if (payload == null) return '';
+
+      String read(String key) {
+        return (payload[key] ?? '').toString().trim();
+      }
+
+      final ocrText = read('ocr_text');
+      if (ocrText.isNotEmpty) return ocrText;
+
+      final full = read('ocr_text_full');
+      if (full.isNotEmpty) return full;
+
+      return read('ocr_text_excerpt');
+    }
+
+    Widget buildImageOcrCard(String ocrText) {
+      return SlSurface(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              context.t.attachments.content.ocrTitle,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              ocrText,
+              key: const ValueKey('attachment_annotation_ocr_text'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      );
+    }
+
     Widget buildContent(
       AttachmentExifMetadata? persisted,
       String? placeDisplayName,
       String? annotationCaption,
+      Map<String, Object?>? annotationPayload,
     ) {
       final persistedCapturedAtMs = persisted?.capturedAtMs;
       final persistedCapturedAt = persistedCapturedAtMs == null
@@ -33,7 +71,11 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
         longitude: longitude,
       );
 
-      final hasAnnotation = (annotationCaption ?? '').trim().isNotEmpty;
+      final caption = (annotationCaption ?? '').trim();
+      final hasAnnotation = caption.isNotEmpty;
+      final ocrText = resolveImageOcrText(annotationPayload);
+      final hasOcrText = ocrText.isNotEmpty;
+      final showOcrText = hasOcrText && ocrText != caption;
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 880),
@@ -76,12 +118,43 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                 if (hasAnnotation)
                   _buildAnnotationCard(
                     context,
-                    captionLong: annotationCaption!,
+                    captionLong: caption,
                   ),
+                if (showOcrText) const SizedBox(height: 12),
+                if (showOcrText) buildImageOcrCard(ocrText),
               ],
             ),
           ),
         ),
+      );
+    }
+
+    Widget buildWithAnnotationPayload(
+      AttachmentExifMetadata? persisted,
+      String? placeDisplayName,
+      String? annotationCaption,
+    ) {
+      final payloadFuture = _annotationPayloadFuture;
+      if (payloadFuture == null) {
+        return buildContent(
+          persisted,
+          placeDisplayName,
+          annotationCaption,
+          _annotationPayload,
+        );
+      }
+
+      return FutureBuilder<Map<String, Object?>?>(
+        future: payloadFuture,
+        initialData: _annotationPayload,
+        builder: (context, payloadSnapshot) {
+          return buildContent(
+            persisted,
+            placeDisplayName,
+            annotationCaption,
+            payloadSnapshot.data,
+          );
+        },
       );
     }
 
@@ -91,14 +164,14 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
     ) {
       final annotationFuture = _annotationCaptionFuture;
       if (annotationFuture == null) {
-        return buildContent(persisted, placeDisplayName, null);
+        return buildWithAnnotationPayload(persisted, placeDisplayName, null);
       }
 
       return FutureBuilder<String?>(
         future: annotationFuture,
         initialData: _annotationCaption,
         builder: (context, annotationSnapshot) {
-          return buildContent(
+          return buildWithAnnotationPayload(
             persisted,
             placeDisplayName,
             annotationSnapshot.data,
