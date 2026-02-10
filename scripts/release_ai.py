@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import textwrap
@@ -395,11 +396,14 @@ def _llm_config() -> dict[str, Any]:
     base_url = os.getenv("RELEASE_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
     timeout_seconds = int(os.getenv("RELEASE_LLM_TIMEOUT_SECONDS", "60"))
     retries = int(os.getenv("RELEASE_LLM_MAX_RETRIES", "2"))
+    ca_bundle = os.getenv("RELEASE_LLM_CA_BUNDLE", "").strip()
 
     if not api_key:
         raise RuntimeError("missing RELEASE_LLM_API_KEY")
     if not model:
         raise RuntimeError("missing RELEASE_LLM_MODEL")
+    if ca_bundle and not Path(ca_bundle).is_file():
+        raise RuntimeError(f"RELEASE_LLM_CA_BUNDLE does not exist: {ca_bundle}")
 
     return {
         "api_key": api_key,
@@ -407,6 +411,7 @@ def _llm_config() -> dict[str, Any]:
         "base_url": base_url,
         "timeout_seconds": timeout_seconds,
         "retries": retries,
+        "ca_bundle": ca_bundle,
     }
 
 
@@ -430,6 +435,11 @@ def _openai_chat_json(messages: list[dict[str, str]], *, config: dict[str, Any])
         "messages": messages,
     }
 
+    urlopen_kwargs: dict[str, Any] = {"timeout": config["timeout_seconds"]}
+    ca_bundle = str(config.get("ca_bundle", "")).strip()
+    if ca_bundle:
+        urlopen_kwargs["context"] = ssl.create_default_context(cafile=ca_bundle)
+
     for attempt in range(config["retries"] + 1):
         try:
             request = urllib.request.Request(
@@ -441,7 +451,7 @@ def _openai_chat_json(messages: list[dict[str, str]], *, config: dict[str, Any])
                 },
                 method="POST",
             )
-            with urllib.request.urlopen(request, timeout=config["timeout_seconds"]) as response:
+            with urllib.request.urlopen(request, **urlopen_kwargs) as response:
                 raw = response.read().decode("utf-8")
             parsed = json.loads(raw)
             content = (
@@ -455,6 +465,9 @@ def _openai_chat_json(messages: list[dict[str, str]], *, config: dict[str, Any])
             return _extract_json_object(content)
         except Exception as exc:  # noqa: BLE001
             if attempt >= config["retries"]:
+                if "CERTIFICATE_VERIFY_FAILED" in str(exc):
+                    hint = "Set RELEASE_LLM_CA_BUNDLE (or SSL_CERT_FILE) to a trusted CA bundle."
+                    raise RuntimeError(f"LLM TLS certificate verify failed: {exc}. {hint}") from exc
                 raise RuntimeError(f"LLM call failed after retries: {exc}") from exc
 
     raise RuntimeError("LLM call failed")

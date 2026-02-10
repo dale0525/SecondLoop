@@ -63,6 +63,7 @@ base64 -i ~/secondloop-signing/upload-keystore.jks | tr -d '\n'
 - `.env.local` 未提交（应被 gitignore）
 - 已配置 prod secrets，且 URL 不包含 staging
 - 本地环境已配置 `RELEASE_LLM_API_KEY`、`RELEASE_LLM_MODEL`（可直接写在 `.env.local`）
+- 若本地自建 LLM 网关使用私有 CA，额外在 `.env.local` 配置 `RELEASE_LLM_CA_BUNDLE=/path/to/ca.pem`
 
 版本号策略（自动）：
 - 仅允许三段 tag：`vX.Y.Z`
