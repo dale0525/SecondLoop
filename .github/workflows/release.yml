@@ -10,7 +10,19 @@ permissions:
   contents: write
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release preflight
+        shell: bash
+        run: bash scripts/release_preflight.sh --repo "${GITHUB_REPOSITORY}"
+
   android:
+    needs: preflight
     runs-on: ubuntu-latest
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
@@ -115,12 +127,12 @@ jobs:
           path: dist/*.a*
 
   windows:
+    needs: preflight
     runs-on: windows-latest
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
-      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ vars.SECONDLOOP_DESKTOP_RUNTIME_TAG }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -137,8 +149,6 @@ jobs:
           if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD" }
-          if (-not $Env:SECONDLOOP_DESKTOP_RUNTIME_TAG) { throw "Missing repo variable SECONDLOOP_DESKTOP_RUNTIME_TAG" }
-          if ($Env:SECONDLOOP_DESKTOP_RUNTIME_TAG -notmatch '^desktop-runtime-v\d+\.\d+\.\d+(\.\d+)?$') { throw "SECONDLOOP_DESKTOP_RUNTIME_TAG must be desktop-runtime-vX.Y.Z(.W)" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD.StartsWith("https://")) { throw "Prod gateway URL must start with https://" }
           if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
@@ -151,9 +161,7 @@ jobs:
           dart run tools/prepare_desktop_runtime.dart `
             --platform=windows `
             --arch=$runtimeArch `
-            --runtime-tag=$Env:SECONDLOOP_DESKTOP_RUNTIME_TAG `
-            --repo=$Env:GITHUB_REPOSITORY `
-            --require-runtime-tag
+            --repo=$Env:GITHUB_REPOSITORY
       - name: Install FFmpeg
         shell: pwsh
         run: choco install ffmpeg --yes --no-progress
@@ -191,12 +199,12 @@ jobs:
           path: dist/*.zip
 
   macos:
+    needs: preflight
     runs-on: macos-latest
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
-      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ vars.SECONDLOOP_DESKTOP_RUNTIME_TAG }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -219,11 +227,6 @@ jobs:
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
-          : "${SECONDLOOP_DESKTOP_RUNTIME_TAG:?Missing repo variable SECONDLOOP_DESKTOP_RUNTIME_TAG}"
-          if [[ ! "${SECONDLOOP_DESKTOP_RUNTIME_TAG}" =~ ^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "SECONDLOOP_DESKTOP_RUNTIME_TAG must be desktop-runtime-vX.Y.Z(.W)"
-            exit 1
-          fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
@@ -254,9 +257,7 @@ jobs:
           dart run tools/prepare_desktop_runtime.dart \
             --platform=macos \
             --arch="${runtime_arch}" \
-            --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
-            --repo="${GITHUB_REPOSITORY}" \
-            --require-runtime-tag
+            --repo="${GITHUB_REPOSITORY}"
       - name: Install FFmpeg
         shell: bash
         run: brew install ffmpeg
@@ -322,12 +323,12 @@ jobs:
           path: dist/*.dmg
 
   linux:
+    needs: preflight
     runs-on: ubuntu-latest
     env:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
-      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ vars.SECONDLOOP_DESKTOP_RUNTIME_TAG }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -360,11 +361,6 @@ jobs:
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
-          : "${SECONDLOOP_DESKTOP_RUNTIME_TAG:?Missing repo variable SECONDLOOP_DESKTOP_RUNTIME_TAG}"
-          if [[ ! "${SECONDLOOP_DESKTOP_RUNTIME_TAG}" =~ ^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "SECONDLOOP_DESKTOP_RUNTIME_TAG must be desktop-runtime-vX.Y.Z(.W)"
-            exit 1
-          fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
@@ -389,9 +385,7 @@ jobs:
           dart run tools/prepare_desktop_runtime.dart \
             --platform=linux \
             --arch=x64 \
-            --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
-            --repo="${GITHUB_REPOSITORY}" \
-            --require-runtime-tag
+            --repo="${GITHUB_REPOSITORY}"
       - name: Prepare bundled FFmpeg
         shell: bash
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=linux
@@ -430,7 +424,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
-    needs: [android, windows, macos, linux]
+    needs: [preflight, android, windows, macos, linux]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4

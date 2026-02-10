@@ -84,6 +84,10 @@ if [[ -z "${tag}" ]]; then
   exit 2
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+cd "${repo_root}"
+
 if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
   die "Invalid tag '${tag}'. Expected vX.Y.Z or vX.Y.Z.W (e.g. v0.1.0, v0.1.0.1)."
 fi
@@ -117,6 +121,8 @@ if (( ! allow_dirty )); then
 fi
 
 run git fetch "${remote}" --tags
+
+run bash scripts/release_preflight.sh --remote "${remote}"
 
 if ! git show-ref --verify --quiet "refs/remotes/${remote}/main"; then
   die "Remote '${remote}' does not have branch '${remote}/main' (did you fetch?)"

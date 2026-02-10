@@ -1,8 +1,14 @@
-use anyhow::{anyhow, Result};
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use anyhow::anyhow;
+use anyhow::Result;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use base64::prelude::*;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use image::RgbImage;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use lopdf::Document;
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use super::super::pdf_page_image_decode::{
     collect_page_image_candidates, decode_pdf_image_to_rgb_with_reason, PdfImageCandidate,
 };

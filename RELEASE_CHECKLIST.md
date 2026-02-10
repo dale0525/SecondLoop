@@ -67,6 +67,10 @@ base64 -i ~/secondloop-signing/upload-keystore.jks | tr -d '\n'
 pixi run release v0.1.0
 ```
 
+`pixi run release vX.Y.Z` 现在还会自动做 release preflight：
+- 校验最新 `desktop-runtime-v*` release 是否包含四个平台所需运行时资产（linux/windows/macos x64 + macos arm64）
+- 校验 `pubspec.lock` 中 `file_selector_linux` 是否保持 `0.9.2+1`（避免 Linux release 编译兼容性回退）
+
 或手动：
 
 ```bash
