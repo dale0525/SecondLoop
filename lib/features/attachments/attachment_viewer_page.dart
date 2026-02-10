@@ -591,6 +591,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   Widget _buildAnnotationCard(
     BuildContext context, {
     required String captionLong,
+    String? titleText,
   }) {
     final caption = captionLong.trim();
     if (caption.isEmpty) return const SizedBox.shrink();
@@ -661,6 +662,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     final canEdit =
         AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
+    final resolvedTitle =
+        (titleText ?? context.t.settings.mediaAnnotation.title).trim();
 
     return SlSurface(
       padding: const EdgeInsets.all(12),
@@ -671,7 +674,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
             children: [
               Expanded(
                 child: Text(
-                  context.t.settings.mediaAnnotation.title,
+                  resolvedTitle,
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
               ),

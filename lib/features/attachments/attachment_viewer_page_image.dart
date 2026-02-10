@@ -20,6 +20,44 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       return read('ocr_text_excerpt');
     }
 
+    bool isOcrFallbackPayload(Map<String, Object?>? payload) {
+      if (payload == null) return false;
+
+      bool hasOcrFallbackTag(dynamic rawTags) {
+        if (rawTags is String) {
+          return rawTags
+              .split(',')
+              .map((part) => part.trim().toLowerCase())
+              .any(
+                (tag) => tag == 'ocr_fallback' || tag == 'ocr_fallback_no_text',
+              );
+        }
+        if (rawTags is Iterable) {
+          for (final raw in rawTags) {
+            final tag = raw.toString().trim().toLowerCase();
+            if (tag == 'ocr_fallback' || tag == 'ocr_fallback_no_text') {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      if (hasOcrFallbackTag(payload['tags'])) return true;
+
+      String readLower(String key) {
+        return (payload[key] ?? '').toString().trim().toLowerCase();
+      }
+
+      final model = readLower('model_name');
+      if (model == 'ocr_fallback') return true;
+      if (readLower('model') == 'ocr_fallback') return true;
+      if (readLower('route') == 'ocr_fallback') return true;
+
+      final caption = readLower('caption_long');
+      return caption.startsWith('ocr fallback caption:');
+    }
+
     Widget buildImageOcrCard(String ocrText) {
       return SlSurface(
         padding: const EdgeInsets.all(12),
@@ -72,10 +110,15 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       );
 
       final caption = (annotationCaption ?? '').trim();
-      final hasAnnotation = caption.isNotEmpty;
       final ocrText = resolveImageOcrText(annotationPayload);
       final hasOcrText = ocrText.isNotEmpty;
-      final showOcrText = hasOcrText && ocrText != caption;
+      final isOcrFallback = isOcrFallbackPayload(annotationPayload);
+      final annotationText = isOcrFallback && hasOcrText ? ocrText : caption;
+      final hasAnnotation = annotationText.isNotEmpty;
+      final annotationTitle = isOcrFallback
+          ? context.t.attachments.content.ocrTitle
+          : context.t.settings.mediaAnnotation.title;
+      final showOcrText = hasOcrText && ocrText != annotationText;
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 880),
@@ -118,7 +161,8 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                 if (hasAnnotation)
                   _buildAnnotationCard(
                     context,
-                    captionLong: caption,
+                    captionLong: annotationText,
+                    titleText: annotationTitle,
                   ),
                 if (showOcrText) const SizedBox(height: 12),
                 if (showOcrText) buildImageOcrCard(ocrText),

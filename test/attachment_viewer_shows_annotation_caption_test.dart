@@ -92,10 +92,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(caption), findsOneWidget);
+    expect(find.text(caption), findsNothing);
     expect(
       find.byKey(const ValueKey('attachment_annotation_ocr_text')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.textContaining('token_79'), findsOneWidget);
   });
