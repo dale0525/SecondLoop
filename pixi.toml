@@ -26,7 +26,7 @@ init-env = "bash scripts/init_env.sh"
 install-git-hooks = "bash scripts/install_git_hooks.sh"
 
 # Release helpers (maintainers).
-# - release / release-app: publish app tag (triggers app release workflow)
+# - release / release-app: auto-compute app tag with LLM and publish (triggers app release workflow)
 # - release-runtime: publish desktop runtime tag (triggers desktop runtime workflow)
 release = "bash scripts/release_tag.sh"
 release-app = "bash scripts/release_tag.sh"
