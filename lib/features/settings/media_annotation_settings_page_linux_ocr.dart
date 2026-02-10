@@ -58,12 +58,6 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
               : () => _pickDocumentOcrEngineMode(contentConfig, mediaConfig),
         ),
     ];
-
-    final runtimeTile = _buildDesktopRuntimeHealthTile(context);
-    if (runtimeTile != null) {
-      children.add(runtimeTile);
-    }
-
     return <Widget>[
       mediaAnnotationSectionTitle(context, t.documentOcr.title),
       const SizedBox(height: 8),
@@ -81,6 +75,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
         .languageCode
         .toLowerCase()
         .startsWith('zh');
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
 
     return Padding(
       key: MediaAnnotationSettingsPage.linuxOcrModelTileKey,
@@ -117,7 +112,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        zh ? '桌面 OCR 运行时' : 'Desktop OCR Runtime',
+                        zh ? '本地转写运行时' : 'Local Transcribe Runtime',
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
@@ -125,9 +120,13 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        zh
-                            ? '用于离线 OCR 的内置运行时状态。'
-                            : 'Health status for bundled offline OCR runtime.',
+                        isMacOS
+                            ? (zh
+                                ? 'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。'
+                                : 'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).')
+                            : (zh
+                                ? '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。'
+                                : 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.'),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -254,11 +253,11 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
           context: context,
           builder: (dialogContext) {
             return AlertDialog(
-              title: Text(zh ? '清除桌面运行时' : 'Clear Desktop Runtime'),
+              title: Text(zh ? '清除本地运行时' : 'Clear Local Runtime'),
               content: Text(
                 zh
-                    ? '清除后会删除已安装的桌面 OCR 运行时文件。'
-                    : 'This removes installed desktop OCR runtime files.',
+                    ? '清除后会删除本地 OCR/转写共用的桌面 runtime 文件。'
+                    : 'This removes shared desktop runtime files used by local OCR/transcription.',
               ),
               actions: [
                 TextButton(

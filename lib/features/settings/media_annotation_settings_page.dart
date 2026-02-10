@@ -782,6 +782,16 @@ class _MediaAnnotationSettingsPageState
                           : () => _pickApiProfileOverride(config),
                     ),
                   ]),
+                  ...() {
+                    final runtimeTile = _buildDesktopRuntimeHealthTile(context);
+                    if (runtimeTile == null) {
+                      return const <Widget>[];
+                    }
+                    return <Widget>[
+                      const SizedBox(height: 12),
+                      runtimeTile,
+                    ];
+                  }(),
                   const SizedBox(height: 16),
                   ..._buildDocumentOcrSection(context),
                   const SizedBox(height: 16),
