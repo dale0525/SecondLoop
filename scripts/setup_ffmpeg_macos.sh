@@ -7,7 +7,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 repo_root="${PWD}"
-target_dir="${repo_root}/.tools/ffmpeg/macos"
+target_dir="${repo_root}/.tool/ffmpeg/macos"
 target_bin="${target_dir}/ffmpeg"
 download_url="${SECONDLOOP_FFMPEG_MACOS_URL:-https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip}"
 

@@ -27,7 +27,7 @@ Future<void> main(List<String> args) async {
   if (sourcePath == null || sourcePath.trim().isEmpty) {
     stderr.writeln(
       'prepare-bundled-ffmpeg: unable to locate ffmpeg in '
-      'project paths (.tools/.tool/.pixi) or PATH. '
+      'project paths (.tool/.pixi) or PATH. '
       'Provide --source-bin=/absolute/path/to/ffmpeg',
     );
     exit(2);

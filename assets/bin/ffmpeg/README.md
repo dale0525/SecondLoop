@@ -17,9 +17,9 @@ path directly, so desktop transcode no longer depends on end-user system
 How binaries are prepared:
 
 - Use a runnable desktop `ffmpeg` binary (static builds are recommended).
-- macOS helper script downloads a static binary into `.tools/ffmpeg/macos/ffmpeg`:
+- macOS helper script downloads a static binary into `.tool/ffmpeg/macos/ffmpeg`:
   - `bash scripts/setup_ffmpeg_macos.sh`
-- Windows helper script downloads a static binary into `.tools/ffmpeg/windows/ffmpeg.exe`:
+- Windows helper script downloads a static binary into `.tool/ffmpeg/windows/ffmpeg.exe`:
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_ffmpeg_windows.ps1`
 - Then prepare bundled assets:
   - `pixi run prepare-ffmpeg` (auto-detect host platform)

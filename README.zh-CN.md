@@ -90,6 +90,12 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 pixi run setup-flutter
 ```
 
+如果你使用 git worktree（尤其 worktree 路径不固定/临时目录），建议每个 worktree 初始化一次共享缓存与工具链：
+
+```bash
+pixi run bootstrap-shared-worktree-env
+```
+
 3) 常用命令：
 
 ```bash
@@ -107,10 +113,12 @@ pixi run run-windows
 备注：
 - `run-macos` 仅在 macOS 可用。
 - `run-linux` 仅在 Linux 可用。
-- `run-windows` 仅在 Windows 可用，并会自动执行预检初始化（将 `nuget.exe` 下载到 `.tool/nuget/`，并将静态 `ffmpeg.exe` 下载到 `.tools/ffmpeg/windows`）。
+- `run-windows` 仅在 Windows 可用，并会自动执行预检初始化（将 `nuget.exe` 下载到 `.tool/nuget/`，并将静态 `ffmpeg.exe` 下载到 `.tool/ffmpeg/windows`）。
 - Android 相关任务会把 SDK/NDK 与 Rust targets 安装到 `.tool/`（无需系统级 Android SDK）。
-- 所有 `run-xxx` 任务在首次执行时都会自动触发 `setup-flutter` 与 `init-env`，因此新 clone 后可以直接执行 `pixi run run-xxx`。
-- 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`；macOS 会自动下载静态二进制到 `.tools/ffmpeg/macos`，也可放在 `.tools` 或通过 `--source-bin` 指定（无需系统级安装）。
+- `bootstrap-shared-worktree-env` 会将 `.tool`、`.pixi/envs` 软链接到 `git rev-parse --git-common-dir` 下的共享目录，避免每个 worktree 重复准备依赖。
+- 所有 `run-xxx` 任务在首次执行时都会自动触发 `bootstrap-shared-worktree-env`、`setup-flutter` 与 `init-env`，因此新 clone 后可以直接执行 `pixi run run-xxx`。
+- `build-android-apk` / `build-android-apk-cn` 也会在构建前自动触发 `bootstrap-shared-worktree-env`。
+- 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`；macOS 会自动下载静态二进制到 `.tool/ffmpeg/macos`，也可放在 `.tool` 或通过 `--source-bin` 指定（无需系统级安装）。
 
 如需执行任意 Flutter/Dart/Cargo 命令：
 

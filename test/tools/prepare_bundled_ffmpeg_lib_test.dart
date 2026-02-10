@@ -74,9 +74,9 @@ void main() {
     expect(resolved, isNull);
   });
 
-  test('resolveFfmpegFromProjectPaths prefers .tools platform binary', () {
+  test('resolveFfmpegFromProjectPaths prefers .tool platform binary', () {
     final existing = <String>{
-      '/repo/.tools/ffmpeg/macos/ffmpeg',
+      '/repo/.tool/ffmpeg/macos/ffmpeg',
       '/repo/.pixi/envs/default/bin/ffmpeg',
     };
 
@@ -86,7 +86,7 @@ void main() {
       isFile: existing.contains,
     );
 
-    expect(resolved, '/repo/.tools/ffmpeg/macos/ffmpeg');
+    expect(resolved, '/repo/.tool/ffmpeg/macos/ffmpeg');
   });
 
   test('resolveFfmpegFromProjectPaths falls back to .pixi env binary', () {

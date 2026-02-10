@@ -53,12 +53,6 @@ String? resolveFfmpegFromProjectPaths({
   final candidates = <String>[
     _joinPath(
       projectRoot,
-      <String>['.tools', 'ffmpeg', platformFolder, executable],
-      platform,
-    ),
-    _joinPath(projectRoot, <String>['.tools', 'ffmpeg', executable], platform),
-    _joinPath(
-      projectRoot,
       <String>['.tool', 'ffmpeg', platformFolder, executable],
       platform,
     ),

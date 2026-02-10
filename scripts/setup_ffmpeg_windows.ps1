@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $repoRootPath = $repoRoot.Path
-$targetDir = Join-Path (Join-Path (Join-Path $repoRootPath '.tools') 'ffmpeg') 'windows'
+$targetDir = Join-Path (Join-Path (Join-Path $repoRootPath '.tool') 'ffmpeg') 'windows'
 $targetBin = Join-Path $targetDir 'ffmpeg.exe'
 $downloadUrl = $env:SECONDLOOP_FFMPEG_WINDOWS_URL
 if ([string]::IsNullOrWhiteSpace($downloadUrl)) {
