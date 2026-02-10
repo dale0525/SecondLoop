@@ -5,10 +5,13 @@ name = "SecondLoop"
 platforms = ["osx-arm64", "linux-64", "win-64"]
 version = "0.1.0"
 
+[activation.env]
+PUB_CACHE = "$PIXI_PROJECT_ROOT/.tool/pub-cache"
+
 [tasks]
 # Bootstrap task (first clone / new machine / Flutter drift).
 # Installs and pins the required Flutter SDK via FVM, then runs flutter pub get.
-setup-flutter = "dart pub global activate fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
+setup-flutter = "dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
 
 # Generic command entry points (keeps task count low).
 # Common usage:
