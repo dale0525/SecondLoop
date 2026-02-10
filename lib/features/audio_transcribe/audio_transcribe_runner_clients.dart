@@ -1,5 +1,9 @@
 part of 'audio_transcribe_runner.dart';
 
+const MethodChannel _nativeAudioTranscribeChannel = MethodChannel(
+  'secondloop/audio_transcribe',
+);
+
 final class FallbackAudioTranscribeClient implements AudioTranscribeClient {
   FallbackAudioTranscribeClient({
     required List<AudioTranscribeClient> chain,
@@ -535,6 +539,78 @@ final class NativeSttAudioTranscribeClient implements AudioTranscribeClient {
     required String mimeType,
     required Uint8List audioBytes,
   }) async {
-    throw StateError('audio_transcribe_native_stt_unavailable');
+    if (kIsWeb) {
+      throw StateError('audio_transcribe_native_stt_unavailable');
+    }
+
+    final tempDir =
+        await Directory.systemTemp.createTemp('secondloop-native-stt-');
+    final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
+      mimeType,
+    );
+    final audioFile = File('${tempDir.path}/input.$ext');
+
+    try {
+      await audioFile.writeAsBytes(audioBytes, flush: true);
+      final raw = await _nativeAudioTranscribeChannel.invokeMethod<dynamic>(
+        'nativeSttTranscribe',
+        <String, Object?>{
+          'file_path': audioFile.path,
+          'lang': lang.trim(),
+          'mime_type': mimeType,
+        },
+      );
+
+      if (raw is String) {
+        final trimmed = raw.trim();
+        if (trimmed.isEmpty) {
+          throw StateError('audio_transcribe_native_stt_empty');
+        }
+        return trimmed;
+      }
+      if (raw is! Map) {
+        throw StateError('audio_transcribe_native_stt_invalid_payload');
+      }
+
+      final payload = <String, Object?>{};
+      raw.forEach((key, value) {
+        payload[key.toString()] = value;
+      });
+
+      final text = (payload['text'] ??
+              payload['transcript'] ??
+              payload['transcript_full'] ??
+              '')
+          .toString()
+          .trim();
+      if (text.isEmpty) {
+        throw StateError('audio_transcribe_native_stt_empty');
+      }
+      payload['text'] = text;
+
+      final durationMs = payload['duration_ms'];
+      if (payload['duration'] == null && durationMs is num) {
+        payload['duration'] = durationMs / 1000;
+      }
+
+      return jsonEncode(payload);
+    } on MissingPluginException {
+      throw StateError('audio_transcribe_native_stt_unavailable');
+    } on PlatformException catch (error) {
+      final code = error.code.trim();
+      final message = (error.message ?? '').trim();
+      final detail = [
+        if (code.isNotEmpty) code,
+        if (message.isNotEmpty) message,
+      ].join(':');
+      if (detail.isEmpty) {
+        throw StateError('audio_transcribe_native_stt_failed');
+      }
+      throw StateError('audio_transcribe_native_stt_failed:$detail');
+    } finally {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    }
   }
 }

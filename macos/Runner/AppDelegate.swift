@@ -41,6 +41,24 @@ class AppDelegate: FlutterAppDelegate {
       }
     }
 
+    let audioTranscribeChannel = FlutterMethodChannel(
+      name: "secondloop/audio_transcribe",
+      binaryMessenger: controller.engine.binaryMessenger
+    )
+    audioTranscribeChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else {
+        result(nil)
+        return
+      }
+
+      switch call.method {
+      case "nativeSttTranscribe":
+        self.handleNativeSttTranscribe(call: call, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let ocrChannel = FlutterMethodChannel(
       name: "secondloop/ocr",
       binaryMessenger: controller.engine.binaryMessenger
