@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -129,7 +130,8 @@ void main() {
     expect(payload, contains('fallback caption'));
   });
 
-  test('throws when OCR fallback text signal is too weak', () async {
+  test('returns no-text payload when OCR fallback text signal is too weak',
+      () async {
     final client = OcrFallbackMediaAnnotationClient(
       languageHints: 'device_plus_en',
       minOcrTextScore: 20,
@@ -145,13 +147,15 @@ void main() {
       },
     );
 
-    await expectLater(
-      () => client.annotateImage(
-        lang: 'en',
-        mimeType: 'image/png',
-        imageBytes: Uint8List.fromList(<int>[7, 8, 9]),
-      ),
-      throwsStateError,
+    final payloadJson = await client.annotateImage(
+      lang: 'en',
+      mimeType: 'image/png',
+      imageBytes: Uint8List.fromList(<int>[7, 8, 9]),
     );
+
+    final payload = jsonDecode(payloadJson) as Map<String, Object?>;
+    expect(payload['caption_long'], '');
+    expect(payload['ocr_text'], '');
+    expect(payload['tags'], const <String>['ocr_fallback_no_text']);
   });
 }

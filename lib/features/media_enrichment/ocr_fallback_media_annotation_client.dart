@@ -79,7 +79,7 @@ final class OcrFallbackMediaAnnotationClient implements MediaEnrichmentClient {
 
     final full = ocr.fullText.trim();
     if (!hasSufficientOcrTextSignal(full, minScore: minOcrTextScore)) {
-      throw StateError('ocr_fallback_text_too_short');
+      return _buildNoTextFallbackPayload();
     }
 
     return jsonEncode(<String, Object?>{
@@ -112,4 +112,12 @@ String _buildFallbackCaption(String ocrText) {
     return 'OCR fallback caption: $singleLine';
   }
   return 'OCR fallback caption: ${singleLine.substring(0, 160).trimRight()}...';
+}
+
+String _buildNoTextFallbackPayload() {
+  return jsonEncode(const <String, Object?>{
+    'caption_long': '',
+    'tags': <String>['ocr_fallback_no_text'],
+    'ocr_text': '',
+  });
 }

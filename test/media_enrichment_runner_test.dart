@@ -287,6 +287,121 @@ void main() {
     expect(client.annotateCalls, 0);
   });
 
+  test('offline still processes local annotation fallback', () async {
+    final store = _MemStore(
+      places: const [],
+      annotations: const [
+        MediaEnrichmentAnnotationItem(
+          attachmentSha256: 'a',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      exifBySha: const {},
+      bytesBySha: {
+        'a': Uint8List.fromList([0xFF, 0xD8, 0xFF]),
+      },
+    );
+    final client = _MemClient();
+
+    final runner = MediaEnrichmentRunner(
+      store: store,
+      client: client,
+      settings: const MediaEnrichmentRunnerSettings(
+        annotationEnabled: true,
+        annotationWifiOnly: true,
+        annotationRequiresNetwork: false,
+      ),
+      getNetwork: () async => MediaEnrichmentNetwork.offline,
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce();
+    expect(result.processedPlaces, 0);
+    expect(result.processedAnnotations, 1);
+    expect(result.needsAnnotationCellularConfirmation, isFalse);
+    expect(store.annotationOkPayloadBySha['a'], isNotNull);
+    expect(client.annotateCalls, 1);
+  });
+
+  test('cellular wifi-only does not block local annotation fallback', () async {
+    final store = _MemStore(
+      places: const [],
+      annotations: const [
+        MediaEnrichmentAnnotationItem(
+          attachmentSha256: 'a',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      exifBySha: const {},
+      bytesBySha: {
+        'a': Uint8List.fromList([0xFF, 0xD8, 0xFF]),
+      },
+    );
+    final client = _MemClient();
+
+    final runner = MediaEnrichmentRunner(
+      store: store,
+      client: client,
+      settings: const MediaEnrichmentRunnerSettings(
+        annotationEnabled: true,
+        annotationWifiOnly: true,
+        annotationRequiresNetwork: false,
+      ),
+      getNetwork: () async => MediaEnrichmentNetwork.cellular,
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce();
+    expect(result.processedPlaces, 0);
+    expect(result.processedAnnotations, 1);
+    expect(result.needsAnnotationCellularConfirmation, isFalse);
+    expect(store.annotationOkPayloadBySha['a'], isNotNull);
+    expect(client.annotateCalls, 1);
+  });
+
+  test('local annotation fallback tolerates unknown image mime', () async {
+    final store = _MemStore(
+      places: const [],
+      annotations: const [
+        MediaEnrichmentAnnotationItem(
+          attachmentSha256: 'a',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      exifBySha: const {},
+      bytesBySha: {
+        'a': Uint8List.fromList([0x00, 0x11, 0x22, 0x33]),
+      },
+    );
+    final client = _MemClient();
+
+    final runner = MediaEnrichmentRunner(
+      store: store,
+      client: client,
+      settings: const MediaEnrichmentRunnerSettings(
+        annotationEnabled: true,
+        annotationWifiOnly: true,
+        annotationRequiresNetwork: false,
+      ),
+      getNetwork: () async => MediaEnrichmentNetwork.wifi,
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce();
+    expect(result.processedAnnotations, 1);
+    expect(store.annotationOkPayloadBySha['a'], isNotNull);
+    expect(client.lastAnnotateMimeType, 'image/unknown');
+  });
+
   test('failure => marks failed and schedules retry', () async {
     final store = _MemStore(
       places: const [

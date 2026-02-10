@@ -931,6 +931,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           settings: MediaEnrichmentRunnerSettings(
             annotationEnabled: annotationEnabled,
             annotationWifiOnly: true,
+            annotationRequiresNetwork:
+                annotationPrimaryClient != null || hasCloudAnnotationModel,
           ),
           getNetwork: getNetwork,
         );
