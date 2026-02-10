@@ -42,6 +42,7 @@ fi
 fetch_releases_json() {
   local repo_slug="$1"
   local out_file="$2"
+  local tmp_file="${out_file}.tmp.$$"
 
   local token
   token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
@@ -49,16 +50,26 @@ fetch_releases_json() {
   if command -v gh >/dev/null 2>&1; then
     local gh_args=(
       api
-      --silent
       -H
       "Accept: application/vnd.github+json"
       "/repos/${repo_slug}/releases?per_page=100"
     )
     if [[ -n "${token}" ]]; then
-      GH_TOKEN="${token}" gh "${gh_args[@]}" > "${out_file}" 2>/dev/null && return 0
+      if GH_TOKEN="${token}" gh "${gh_args[@]}" > "${tmp_file}" 2>/dev/null; then
+        if [[ -s "${tmp_file}" ]]; then
+          mv "${tmp_file}" "${out_file}"
+          return 0
+        fi
+      fi
     else
-      gh "${gh_args[@]}" > "${out_file}" 2>/dev/null && return 0
+      if gh "${gh_args[@]}" > "${tmp_file}" 2>/dev/null; then
+        if [[ -s "${tmp_file}" ]]; then
+          mv "${tmp_file}" "${out_file}"
+          return 0
+        fi
+      fi
     fi
+    rm -f "${tmp_file}"
   fi
 
   if command -v curl >/dev/null 2>&1; then
@@ -82,9 +93,16 @@ fetch_releases_json() {
     if [[ -n "${token}" ]]; then
       curl_args+=( -H "Authorization: Bearer ${token}" )
     fi
-    curl "${curl_args[@]}" "${url}" > "${out_file}" && return 0
+    if curl "${curl_args[@]}" "${url}" > "${tmp_file}"; then
+      if [[ -s "${tmp_file}" ]]; then
+        mv "${tmp_file}" "${out_file}"
+        return 0
+      fi
+    fi
+    rm -f "${tmp_file}"
   fi
 
+  rm -f "${tmp_file}"
   return 1
 }
 
@@ -160,6 +178,10 @@ trap 'rm -f "${release_api_payload}"' EXIT
 
 if ! fetch_releases_json "${repo}" "${release_api_payload}"; then
   die "cannot fetch releases for ${repo} (try setting GH_TOKEN/GITHUB_TOKEN or running gh auth login)"
+fi
+
+if [[ ! -s "${release_api_payload}" ]]; then
+  die "cannot fetch releases for ${repo}: empty API response"
 fi
 
 python3 - "${repo}" "${runtime_tag}" "${release_api_payload}" <<'PY'
