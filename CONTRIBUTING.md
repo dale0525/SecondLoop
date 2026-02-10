@@ -42,6 +42,14 @@ PR CI should not require secrets (fork PRs don't have access to them). Keep Clou
 
 ## Release (maintainers)
 
-Release workflow: `.github/workflows/release.yml` (tag `v*`).
+Release workflow: `.github/workflows/release.yml` (tag `v*`, but app release tags are validated as strict `vX.Y.Z`).
+
+Use `pixi run release` (no positional version) to run preflight + AI bump decision + automatic tag publish.
+
+Required env/secrets for release automation:
+- `RELEASE_LLM_API_KEY`
+- `RELEASE_LLM_MODEL`
+- Optional secret: `RELEASE_LLM_BASE_URL`
+- Optional variable: `RELEASE_NOTES_LOCALES`
 
 See `RELEASE_CHECKLIST.md` for the full checklist, including Android signing + Play/App Store readiness notes.

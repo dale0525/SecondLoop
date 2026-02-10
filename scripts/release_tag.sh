@@ -4,8 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  pixi run release vX.Y.Z
-  pixi run release vX.Y.Z.W
+  pixi run release
 
 Options:
   --dry-run          Print commands without running them
@@ -15,7 +14,9 @@ Options:
 
 Notes:
   - Requires current branch to be 'main' and up-to-date with <remote>/main.
-  - Tag format must match: vX.Y.Z or vX.Y.Z.W (e.g. v0.1.0, v0.1.0.1).
+  - Computes release tag automatically via scripts/release_ai.py.
+  - Tag format is strict SemVer: vX.Y.Z.
+  - Requires RELEASE_LLM_API_KEY and RELEASE_LLM_MODEL.
   - This command only publishes app tags.
   - Runtime release tags are managed separately via: pixi run release-runtime vX.Y.Z[.W]
 EOF
@@ -32,6 +33,7 @@ require_cmd() {
 }
 
 require_cmd git
+require_cmd python3
 
 dry_run=0
 remote="origin"
@@ -39,7 +41,6 @@ allow_dirty=0
 force=0
 
 args=("$@")
-tag=""
 
 while [[ ${#args[@]} -gt 0 ]]; do
   case "${args[0]}" in
@@ -70,26 +71,20 @@ while [[ ${#args[@]} -gt 0 ]]; do
       die "Unknown option: ${args[0]}"
       ;;
     *)
-      if [[ -n "${tag}" ]]; then
-        die "Unexpected extra argument: ${args[0]}"
-      fi
-      tag="${args[0]}"
-      args=("${args[@]:1}")
+      die "Unexpected argument: ${args[0]}. Usage: pixi run release"
       ;;
   esac
 done
-
-if [[ -z "${tag}" ]]; then
-  usage
-  exit 2
-fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
-if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-  die "Invalid tag '${tag}'. Expected vX.Y.Z or vX.Y.Z.W (e.g. v0.1.0, v0.1.0.1)."
+if [[ -z "${RELEASE_LLM_API_KEY:-}" ]]; then
+  die "Missing RELEASE_LLM_API_KEY"
+fi
+if [[ -z "${RELEASE_LLM_MODEL:-}" ]]; then
+  die "Missing RELEASE_LLM_MODEL"
 fi
 
 run() {
@@ -134,9 +129,51 @@ if [[ "${head_sha}" != "${remote_main_sha}" ]]; then
   die "main is not up-to-date with ${remote}/main (HEAD=${head_sha}, ${remote}/main=${remote_main_sha})"
 fi
 
+repo_slug=""
+remote_url="$(git remote get-url "${remote}" 2>/dev/null || true)"
+if [[ "${remote_url}" =~ ^https://github\.com/([^/]+/[^/.]+)(\.git)?$ ]]; then
+  repo_slug="${BASH_REMATCH[1]}"
+elif [[ "${remote_url}" =~ ^git@github\.com:([^/]+/[^/.]+)(\.git)?$ ]]; then
+  repo_slug="${BASH_REMATCH[1]}"
+fi
+
+dist_dir="dist"
+facts_json="${dist_dir}/release_facts.json"
+decision_json="${dist_dir}/release_version_decision.json"
+tag_json="${dist_dir}/release_tag.json"
+run mkdir -p "${dist_dir}"
+
+collect_cmd=(python3 scripts/release_ai.py collect-facts --base-tag auto --head HEAD --output "${facts_json}")
+if [[ -n "${repo_slug}" ]]; then
+  collect_cmd+=(--repo "${repo_slug}")
+fi
+run "${collect_cmd[@]}"
+run python3 scripts/release_ai.py decide-bump --facts "${facts_json}" --output "${decision_json}"
+run python3 scripts/release_ai.py compute-tag --facts "${facts_json}" --decision "${decision_json}" --output "${tag_json}"
+
+if (( dry_run )); then
+  tag="<computed-by-release-ai>"
+  echo "release: (dry-run) would compute next app tag via release_ai pipeline"
+else
+  tag="$(python3 - <<'PY' "${tag_json}"
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as f:
+    payload = json.load(f)
+
+print(payload['tag'])
+PY
+)"
+
+  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    die "Invalid computed tag '${tag}'. Expected vX.Y.Z."
+  fi
+fi
+
 if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
   if (( ! force )); then
-    die "Tag '${tag}' already exists. Use --force to move it (not recommended)."
+    die "Computed tag '${tag}' already exists. Use --force to move it (not recommended)."
   fi
 fi
 
