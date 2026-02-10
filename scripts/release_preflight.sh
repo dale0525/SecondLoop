@@ -18,7 +18,9 @@ Options:
 Checks:
   1) Latest desktop runtime release payload completeness:
      linux/x64, windows/x64, macos/x64, macos/arm64
-  2) Linux plugin lock pin: file_selector_linux == 0.9.2+1
+  2) Linux plugin lock pins:
+     - file_selector_linux == 0.9.2+1
+     - url_launcher_linux == 3.1.1
 EOF
 }
 
@@ -294,30 +296,42 @@ if missing:
 print(f"release-preflight: runtime assets ready -> {runtime_tag}")
 PY
 
-locked_file_selector_linux_version="$(python3 - <<'PY'
+read_locked_pubspec_version() {
+  local package_name="$1"
+  python3 - "${package_name}" <<'PY'
 import re
 import sys
 from pathlib import Path
 
-content = Path('pubspec.lock').read_text(encoding='utf-8')
-match = re.search(
-    r"\n  file_selector_linux:\n(?:    .*\n)*?    version: \"([^\"]+)\"",
-    content,
+package_name = sys.argv[1]
+pattern = re.compile(
+    rf"\n  {re.escape(package_name)}:\n(?:    .*\n)*?    version: \"([^\"]+)\"",
+    re.MULTILINE,
 )
+content = Path('pubspec.lock').read_text(encoding='utf-8')
+match = pattern.search(content)
 if not match:
     print("")
     raise SystemExit(0)
 print(match.group(1))
 PY
-)"
+}
 
+locked_file_selector_linux_version="$(read_locked_pubspec_version file_selector_linux)"
 if [[ -z "${locked_file_selector_linux_version}" ]]; then
   die "cannot find file_selector_linux version in pubspec.lock"
 fi
-
 if [[ "${locked_file_selector_linux_version}" != "0.9.2+1" ]]; then
   die "file_selector_linux must stay pinned to 0.9.2+1 (current lock: ${locked_file_selector_linux_version})"
 fi
-
 echo "release-preflight: file_selector_linux lock pin OK (${locked_file_selector_linux_version})"
+
+locked_url_launcher_linux_version="$(read_locked_pubspec_version url_launcher_linux)"
+if [[ -z "${locked_url_launcher_linux_version}" ]]; then
+  die "cannot find url_launcher_linux version in pubspec.lock"
+fi
+if [[ "${locked_url_launcher_linux_version}" != "3.1.1" ]]; then
+  die "url_launcher_linux must stay pinned to 3.1.1 for Flutter 3.19 Linux compatibility (current lock: ${locked_url_launcher_linux_version})"
+fi
+echo "release-preflight: url_launcher_linux lock pin OK (${locked_url_launcher_linux_version})"
 echo "release-preflight: all checks passed"

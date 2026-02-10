@@ -93,6 +93,24 @@ Future<void> main(List<String> args) async {
     localEnv: localEnv,
   );
 
+  final platformName = _platformName(platform);
+  final archName = _archName(arch);
+  await _installRuntimeTag(
+    config: config,
+    repo: repo,
+    runtimeTag: runtimeTag,
+    platformName: platformName,
+    archName: archName,
+  );
+}
+
+Future<void> _installRuntimeTag({
+  required _Config config,
+  required String repo,
+  required String runtimeTag,
+  required String platformName,
+  required String archName,
+}) async {
   if (!RegExp(_runtimeTagPattern).hasMatch(runtimeTag)) {
     throw StateError(
       'Invalid runtime tag: $runtimeTag. '
@@ -101,8 +119,6 @@ Future<void> main(List<String> args) async {
   }
 
   final runtimeVersion = runtimeTag.substring(_runtimeTagPrefix.length);
-  final platformName = _platformName(platform);
-  final archName = _archName(arch);
   final archiveBaseName =
       'desktop-runtime-$platformName-$archName-$runtimeVersion.tar.gz';
   final partsListName = '$archiveBaseName.parts.txt';
@@ -199,14 +215,19 @@ Future<void> main(List<String> args) async {
     '${outputDir.path}.tmp-${DateTime.now().millisecondsSinceEpoch}',
   );
   await tempDir.create(recursive: true);
-  await _extractArchive(assembledArchive, tempDir.path);
+  try {
+    await _extractArchive(assembledArchive, tempDir.path);
+    await _validateRuntimePayload(tempDir);
 
-  if (await outputDir.exists()) {
-    await outputDir.delete(recursive: true);
+    if (await outputDir.exists()) {
+      await outputDir.delete(recursive: true);
+    }
+    await tempDir.rename(outputDir.path);
+  } finally {
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
   }
-  await tempDir.rename(outputDir.path);
-
-  await _validateRuntimePayload(outputDir);
 
   await _writeInstallMarker(
     outputDir: outputDir,

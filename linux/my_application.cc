@@ -20,6 +20,12 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+struct _MyApplication {
+  GtkApplication parent_instance;
+  char** dart_entrypoint_arguments;
+  FlMethodChannel* ocr_channel;
+};
+
 namespace {
 
 constexpr char kOcrChannelName[] = "secondloop/ocr";
@@ -102,6 +108,25 @@ PdfRenderPreset resolve_pdf_render_preset(FlValue* args) {
       read_positive_int_arg(args, "max_pages", kCommonPdfOcrMaxPages, 10000),
       read_positive_int_arg(args, "dpi", kCommonPdfOcrDpi, 600),
   };
+}
+
+PopplerDocument* open_poppler_document_from_bytes(const uint8_t* bytes,
+                                                  size_t bytes_len,
+                                                  GError** error) {
+  if (bytes == nullptr || bytes_len == 0) {
+    return nullptr;
+  }
+
+  GBytes* pdf_bytes =
+      g_bytes_new(bytes, static_cast<gsize>(bytes_len));
+  if (pdf_bytes == nullptr) {
+    return nullptr;
+  }
+
+  PopplerDocument* document =
+      poppler_document_new_from_bytes(pdf_bytes, nullptr, error);
+  g_bytes_unref(pdf_bytes);
+  return document;
 }
 
 std::string trim_ascii(std::string text) {
@@ -433,16 +458,9 @@ FlValue* run_pdf_ocr_with_tesseract(FlValue* args) {
   }
   const std::string tesseract_lang = resolve_tesseract_lang(language_hints);
 
-  gchar* pdf_buffer = static_cast<gchar*>(g_malloc(bytes_len));
-  if (pdf_buffer == nullptr) {
-    return nullptr;
-  }
-  std::memcpy(pdf_buffer, bytes, bytes_len);
-
   GError* error = nullptr;
-  PopplerDocument* document = poppler_document_new_from_data(
-      pdf_buffer, static_cast<int>(bytes_len), nullptr, &error);
-  g_free(pdf_buffer);
+  PopplerDocument* document =
+      open_poppler_document_from_bytes(bytes, bytes_len, &error);
 
   if (error != nullptr) {
     g_error_free(error);
@@ -585,16 +603,9 @@ FlValue* run_render_pdf_to_long_image(FlValue* args) {
 
   const auto preset = resolve_pdf_render_preset(args);
 
-  gchar* pdf_buffer = static_cast<gchar*>(g_malloc(bytes_len));
-  if (pdf_buffer == nullptr) {
-    return nullptr;
-  }
-  std::memcpy(pdf_buffer, bytes, bytes_len);
-
   GError* error = nullptr;
-  PopplerDocument* document = poppler_document_new_from_data(
-      pdf_buffer, static_cast<int>(bytes_len), nullptr, &error);
-  g_free(pdf_buffer);
+  PopplerDocument* document =
+      open_poppler_document_from_bytes(bytes, bytes_len, &error);
 
   if (error != nullptr) {
     g_error_free(error);
@@ -835,12 +846,6 @@ void create_channels(MyApplication* self, FlView* view) {
 }
 
 }  // namespace
-
-struct _MyApplication {
-  GtkApplication parent_instance;
-  char** dart_entrypoint_arguments;
-  FlMethodChannel* ocr_channel;
-};
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
