@@ -124,6 +124,54 @@ void main() {
     }
   });
 
+  testWidgets('Android: voice toggle switches between text and hold-to-talk',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final backend = _TestBackend();
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Chat',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_press_to_talk')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('chat_toggle_voice_input')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat_press_to_talk')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_input')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('chat_toggle_voice_input')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_press_to_talk')), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
   testWidgets('Desktop: attach button uploads image attachment',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;

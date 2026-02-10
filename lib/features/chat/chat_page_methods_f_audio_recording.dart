@@ -1,6 +1,7 @@
 part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
+const Duration _kPressToTalkListenFor = Duration(seconds: 90);
 
 enum _AudioRecordingSheetAction {
   stop,
@@ -13,8 +14,96 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
   SpeechToText get _speechToText => _speechToTextInstance ??= SpeechToText();
 
+  void _toggleVoiceInputMode() {
+    if (_isComposerBusy) return;
+
+    final nextValue = !_voiceInputMode;
+    _setState(() => _voiceInputMode = nextValue);
+
+    if (!nextValue && _isDesktopPlatform) {
+      _inputFocusNode.requestFocus();
+    }
+  }
+
+  void _onPressToTalkLongPressStart(LongPressStartDetails details) {
+    unawaited(_startPressToTalkCapture());
+  }
+
+  void _onPressToTalkLongPressEnd(LongPressEndDetails details) {
+    unawaited(_finishPressToTalkCapture(commitTranscript: true));
+  }
+
+  void _onPressToTalkLongPressCancel() {
+    unawaited(_finishPressToTalkCapture(commitTranscript: false));
+  }
+
+  Future<void> _startPressToTalkCapture() async {
+    if (_sending || _asking || _recordingAudio || _pressToTalkActive) return;
+    if (!_supportsAudioRecording || !_voiceInputMode) return;
+    if (!mounted) return;
+
+    final locale = Localizations.localeOf(context);
+    _setState(() {
+      _pressToTalkActive = true;
+      _pressToTalkTranscript = '';
+    });
+
+    final started = await _startSpeechToTextCapture(
+      locale: locale,
+      onWords: (words) {
+        _pressToTalkTranscript = words.trim();
+      },
+      listenFor: _kPressToTalkListenFor,
+    );
+
+    if (!mounted) return;
+    if (!_pressToTalkActive) {
+      if (started) {
+        await _stopSpeechToTextCapture();
+      }
+      return;
+    }
+
+    if (!started) {
+      _setState(() => _pressToTalkActive = false);
+    }
+  }
+
+  Future<void> _finishPressToTalkCapture({
+    required bool commitTranscript,
+  }) async {
+    if (!_pressToTalkActive) return;
+
+    await _stopSpeechToTextCapture();
+    final transcript = _pressToTalkTranscript.trim();
+
+    if (!mounted) return;
+    _setState(() {
+      _pressToTalkActive = false;
+      _pressToTalkTranscript = '';
+    });
+
+    if (commitTranscript && transcript.isNotEmpty) {
+      _appendTranscriptToComposer(transcript);
+    }
+  }
+
+  void _appendTranscriptToComposer(String transcript) {
+    final normalized = transcript.trim();
+    if (normalized.isEmpty) return;
+
+    final existing = _controller.text.trim();
+    final nextText = existing.isEmpty ? normalized : '$existing $normalized';
+
+    _controller.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+      composing: TextRange.empty,
+    );
+  }
+
   Future<void> _recordAndSendAudioFromSheet() async {
-    if (_sending || _asking || _recordingAudio) return;
+    if (_isComposerBusy) return;
     if (!_supportsAudioRecording) return;
 
     final hasPermission = await _audioRecorder.hasPermission();
@@ -29,14 +118,11 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       return;
     }
 
-    if (!mounted) return;
-    final locale = Localizations.localeOf(context);
     final tempDir = await getTemporaryDirectory();
     final startedAt = DateTime.now();
     final filePath =
         '${tempDir.path}/secondloop_record_${startedAt.millisecondsSinceEpoch}.m4a';
 
-    String transcript = '';
     var recorderStarted = false;
     String? recordedPath;
 
@@ -52,40 +138,29 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       );
       recorderStarted = true;
 
-      await _startSpeechToTextCapture(
-        locale: locale,
-        onWords: (words) {
-          final normalized = words.trim();
-          if (normalized.isEmpty) return;
-          transcript = normalized;
-        },
-      );
-
       if (!mounted) return;
       _setState(() => _recordingAudio = true);
+
       final action = await _showAudioRecordingSheet();
-      final shouldProcess = action == _AudioRecordingSheetAction.stop;
+      final shouldSend = action == _AudioRecordingSheetAction.stop;
 
       recordedPath = await _audioRecorder.stop();
       recorderStarted = false;
-      await _stopSpeechToTextCapture();
 
-      if (!shouldProcess) return;
+      if (!shouldSend) return;
 
       final path = recordedPath?.trim();
       if (path == null || path.isEmpty) {
         throw Exception('recording_path_empty');
       }
+
       final bytes = await File(path).readAsBytes();
       if (bytes.isEmpty) {
         throw Exception('recording_bytes_empty');
       }
 
-      final duration = DateTime.now().difference(startedAt);
-      await _handleRecordedAudioPayload(
-        duration: duration,
-        audioBytes: bytes,
-        transcript: transcript,
+      await _sendRecordedAudioAttachment(
+        bytes,
         filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
       );
     } catch (e) {
@@ -101,23 +176,40 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         try {
           await _audioRecorder.stop();
         } catch (_) {
-          // Ignore stop errors during cleanup.
+          // Ignore stop failures during cleanup.
         }
       }
-      await _stopSpeechToTextCapture();
 
       final pathToDelete = recordedPath?.trim();
       if (pathToDelete != null && pathToDelete.isNotEmpty) {
         try {
           await File(pathToDelete).delete();
         } catch (_) {
-          // Ignore cleanup failures.
+          // Ignore file cleanup failures.
         }
       }
 
       if (mounted) {
         _setState(() => _recordingAudio = false);
       }
+    }
+  }
+
+  Future<void> _sendRecordedAudioAttachment(
+    Uint8List audioBytes, {
+    required String filename,
+  }) async {
+    if (_sending || _asking || _pressToTalkActive) return;
+
+    _setState(() => _sending = true);
+    try {
+      await _sendFileAttachment(
+        audioBytes,
+        _kRecordedAudioMimeType,
+        filename: filename,
+      );
+    } finally {
+      if (mounted) _setState(() => _sending = false);
     }
   }
 
@@ -163,91 +255,10 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     );
   }
 
-  Future<void> _handleRecordedAudioPayload({
-    required Duration duration,
-    required Uint8List audioBytes,
-    required String transcript,
-    required String filename,
-  }) async {
-    if (_sending || _asking) return;
-
-    _setState(() => _sending = true);
-    try {
-      final dispatch = decideAudioRecordingDispatch(duration);
-      if (dispatch == AudioRecordingDispatch.transcribeAsText) {
-        final normalized = transcript.trim();
-        if (normalized.isNotEmpty) {
-          await _sendTextMessageFromAudioTranscript(normalized);
-          return;
-        }
-
-        await _sendFileAttachment(
-          audioBytes,
-          _kRecordedAudioMimeType,
-          filename: filename,
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(context.t.chat.audioRecordNoSpeechFallback),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-
-      await _sendFileAttachment(
-        audioBytes,
-        _kRecordedAudioMimeType,
-        filename: filename,
-      );
-    } finally {
-      if (mounted) _setState(() => _sending = false);
-    }
-  }
-
-  Future<void> _sendTextMessageFromAudioTranscript(String text) async {
-    final normalized = text.trim();
-    if (normalized.isEmpty) return;
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    final sentAsUrlAttachment = await _trySendTextAsUrlAttachment(normalized);
-    Message? sentMessage;
-
-    if (!sentAsUrlAttachment) {
-      sentMessage = await backend.insertMessage(
-        sessionKey,
-        widget.conversation.id,
-        role: 'user',
-        content: normalized,
-      );
-      syncEngine?.notifyLocalMutation();
-      if (mounted) {
-        _refreshAfterAttachmentMutation();
-      }
-    }
-
-    if (sentMessage != null) {
-      _messageAutoActionsQueue ??= MessageAutoActionsQueue(
-        backend: backend,
-        sessionKey: sessionKey,
-        handler: _handleMessageAutoActions,
-      );
-      _messageAutoActionsQueue!.enqueue(
-        message: sentMessage,
-        rawText: normalized,
-        createdAtMs: sentMessage.createdAtMs,
-      );
-    }
-  }
-
-  Future<void> _startSpeechToTextCapture({
+  Future<bool> _startSpeechToTextCapture({
     required Locale locale,
     required void Function(String words) onWords,
+    required Duration listenFor,
   }) async {
     final speech = _speechToText;
 
@@ -257,25 +268,44 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     } catch (_) {
       isAvailable = false;
     }
-    if (!isAvailable) return;
+
+    if (!isAvailable) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.audioRecordPermissionDenied),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
 
     final localeId = await _resolveSpeechLocaleId(locale);
 
     try {
       await speech.listen(
         localeId: localeId,
-        listenFor: kAudioRecordingTranscribeThreshold,
+        listenFor: listenFor,
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
         ),
         onResult: (result) {
-          if (result.recognizedWords.trim().isEmpty) return;
-          onWords(result.recognizedWords);
+          final normalized = result.recognizedWords.trim();
+          if (normalized.isEmpty) return;
+          onWords(normalized);
         },
       );
-    } catch (_) {
-      // Ignore speech-to-text failures and fallback to sending audio file.
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.audioRecordFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return false;
     }
   }
 
@@ -290,7 +320,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         await speech.cancel();
       }
     } catch (_) {
-      // Ignore speech-to-text stop failures.
+      // Ignore stop failures.
     }
   }
 

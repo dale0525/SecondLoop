@@ -503,6 +503,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_sending) return;
     if (_asking) return;
     if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
 
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -673,6 +674,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_sending) return;
     if (_asking) return;
     if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
     if (!_supportsImageUpload && !_supportsAudioRecording) return;
 
     if (_isDesktopPlatform) {
@@ -728,6 +730,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_sending) return;
     if (_asking) return;
     if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
     if (!_supportsCamera) return;
 
     _setState(() => _sending = true);
@@ -825,6 +828,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_sending) return;
     if (_asking) return;
     if (_recordingAudio) return;
+    if (_pressToTalkActive) return;
 
     _setState(() => _sending = true);
     try {
