@@ -37,6 +37,7 @@ import 'non_image_attachment_view.dart';
 import 'platform_pdf_ocr.dart';
 import 'video_keyframe_ocr_worker.dart';
 
+part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
@@ -745,7 +746,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
-    final exifFuture = _exifFuture;
     final appBarTitle = _resolveAppBarTitle(
       widget.attachment,
       metadata: _metadata,
@@ -869,126 +869,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   );
                 }
 
-                final exifFromBytes = tryReadImageExifMetadata(bytes);
-
-                Widget buildContent(
-                  AttachmentExifMetadata? persisted,
-                  String? placeDisplayName,
-                  String? annotationCaption,
-                ) {
-                  final persistedCapturedAtMs = persisted?.capturedAtMs;
-                  final persistedCapturedAt = persistedCapturedAtMs == null
-                      ? null
-                      : DateTime.fromMillisecondsSinceEpoch(
-                          persistedCapturedAtMs.toInt(),
-                          isUtc: true,
-                        ).toLocal();
-
-                  final persistedLatitude = persisted?.latitude;
-                  final persistedLongitude = persisted?.longitude;
-                  final hasPersistedLocation = persistedLatitude != null &&
-                      persistedLongitude != null &&
-                      !(persistedLatitude == 0.0 && persistedLongitude == 0.0);
-
-                  final capturedAt =
-                      persistedCapturedAt ?? exifFromBytes?.capturedAt;
-                  final latitude = hasPersistedLocation
-                      ? persistedLatitude
-                      : exifFromBytes?.latitude;
-                  final longitude = hasPersistedLocation
-                      ? persistedLongitude
-                      : exifFromBytes?.longitude;
-                  _maybeScheduleInlinePlaceResolve(
-                    latitude: latitude,
-                    longitude: longitude,
-                  );
-
-                  return Column(
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: InteractiveViewer(
-                            child: Image.memory(bytes, fit: BoxFit.contain),
-                          ),
-                        ),
-                      ),
-                      SafeArea(
-                        top: false,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildMetadataCard(
-                                context,
-                                byteLen: widget.attachment.byteLen.toInt(),
-                                capturedAt: capturedAt,
-                                latitude: latitude,
-                                longitude: longitude,
-                                placeDisplayName: placeDisplayName,
-                              ),
-                              if ((annotationCaption ?? '').trim().isNotEmpty)
-                                const SizedBox(height: 12),
-                              if ((annotationCaption ?? '').trim().isNotEmpty)
-                                _buildAnnotationCard(
-                                  context,
-                                  captionLong: annotationCaption!,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                }
-
-                Widget buildWithAnnotation(
-                  AttachmentExifMetadata? persisted,
-                  String? placeDisplayName,
-                ) {
-                  final annotationFuture = _annotationCaptionFuture;
-                  if (annotationFuture == null) {
-                    return buildContent(persisted, placeDisplayName, null);
-                  }
-
-                  return FutureBuilder<String?>(
-                    future: annotationFuture,
-                    initialData: _annotationCaption,
-                    builder: (context, annotationSnapshot) {
-                      return buildContent(
-                        persisted,
-                        placeDisplayName,
-                        annotationSnapshot.data,
-                      );
-                    },
-                  );
-                }
-
-                Widget buildWithPlace(AttachmentExifMetadata? persisted) {
-                  final placeFuture = _placeFuture;
-                  if (placeFuture == null) {
-                    return buildWithAnnotation(persisted, null);
-                  }
-
-                  return FutureBuilder<String?>(
-                    future: placeFuture,
-                    initialData: _placeDisplayName,
-                    builder: (context, placeSnapshot) {
-                      return buildWithAnnotation(persisted, placeSnapshot.data);
-                    },
-                  );
-                }
-
-                if (exifFuture == null) {
-                  return buildWithPlace(null);
-                }
-
-                return FutureBuilder<AttachmentExifMetadata?>(
-                  future: exifFuture,
-                  builder: (context, metaSnapshot) {
-                    return buildWithPlace(metaSnapshot.data);
-                  },
-                );
+                return _buildImageAttachmentDetail(bytes);
               },
             ),
     );
