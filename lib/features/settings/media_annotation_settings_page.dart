@@ -712,9 +712,9 @@ class _MediaAnnotationSettingsPageState
         .toLowerCase()
         .startsWith('zh');
     if (zh) {
-      return '默认跟随 Ask AI，可改为已有 OpenAI-compatible API profile。';
+      return '默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。';
     }
-    return 'Default follows Ask AI. You can choose an existing OpenAI-compatible API profile.';
+    return 'Default follows the active API profile. You can choose an existing OpenAI-compatible API profile.';
   }
 
   Future<void> _pickApiProfileOverride(MediaAnnotationConfig config) async {

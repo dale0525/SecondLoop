@@ -51,14 +51,14 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
   }
 
   String _mediaUnderstandingTitle(BuildContext context) {
-    return _isZhLocale(context) ? '媒体理解' : 'Media understanding';
+    return _isZhLocale(context) ? '智能化（旧版入口）' : 'Intelligence (legacy entry)';
   }
 
   String _mediaUnderstandingSubtitle(BuildContext context) {
     if (_isZhLocale(context)) {
-      return '统一控制音频转写、文档 OCR 和图片注释。关闭后会隐藏下方详细设置。';
+      return '旧版兼容入口：统一控制音频转写、文档 OCR 和图片注释。';
     }
-    return 'One switch controls audio transcription, document OCR, and image annotations. Turn off to hide details below.';
+    return 'Legacy compatibility entry: one switch controls audio transcription, document OCR, and image annotations.';
   }
 
   String _useSecondLoopCloudTitle(BuildContext context) {
@@ -69,9 +69,9 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
 
   String _useSecondLoopCloudSubtitle(BuildContext context) {
     if (_isZhLocale(context)) {
-      return '开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。在 Pro 生效且用量未耗尽前，下方设置优先使用 SecondLoop Cloud 用量。';
+      return '开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。';
     }
-    return 'When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention. While Pro is active and quota remains, settings below prioritize SecondLoop Cloud usage.';
+    return 'When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention.';
   }
 
   String _mediaUnderstandingWifiOnlyTitle(BuildContext context) {
@@ -80,9 +80,9 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
 
   String _mediaUnderstandingWifiOnlySubtitle(BuildContext context) {
     if (_isZhLocale(context)) {
-      return '仅在 Wi-Fi 下进行媒体理解处理。关闭后可使用蜂窝网络。';
+      return '仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。';
     }
-    return 'Run media understanding only on Wi-Fi. Turn off to allow cellular data.';
+    return 'Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected.';
   }
 
   Future<void> _setMediaUnderstandingEnabled({
