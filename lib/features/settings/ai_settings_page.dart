@@ -924,18 +924,11 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                 title: mediaPreferenceLabels.local.title,
                 subtitle: mediaPreferenceLabels.local.description,
               ),
-              ListTile(
-                key: const ValueKey('ai_settings_open_media_understanding'),
-                title: Text(t.mediaUnderstanding.actions.openSettings),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MediaAnnotationSettingsPage(),
-                    ),
-                  );
-                },
-              ),
+              if (AppBackendScope.maybeOf(context) != null &&
+                  SessionScope.maybeOf(context) != null)
+                const MediaAnnotationSettingsPage(
+                  embedded: true,
+                ),
               ListTile(
                 key: const ValueKey('ai_settings_open_media_cloud_account'),
                 title: Text(t.mediaUnderstanding.actions.openCloudAccount),

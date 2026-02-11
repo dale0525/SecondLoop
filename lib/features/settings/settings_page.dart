@@ -30,7 +30,6 @@ import 'cloud_account_page.dart';
 import 'embedding_profiles_page.dart';
 import 'ai_settings_page.dart';
 import 'llm_profiles_page.dart';
-import 'media_annotation_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
 import 'diagnostics_page.dart';

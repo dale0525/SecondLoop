@@ -29,12 +29,16 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
     this.configStore,
     this.contentConfigStore,
     this.linuxOcrModelStore,
+    this.embedded = false,
   });
 
   final MediaAnnotationConfigStore? configStore;
   final ContentEnrichmentConfigStore? contentConfigStore;
   final LinuxOcrModelStore? linuxOcrModelStore;
+  final bool embedded;
 
+  static const embeddedRootKey =
+      ValueKey('media_annotation_settings_embedded_root');
   static const annotateSwitchKey =
       ValueKey('media_annotation_settings_annotate_switch');
   static const searchSwitchKey =
@@ -608,218 +612,235 @@ class _MediaAnnotationSettingsPageState
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  List<Widget> _buildSettingsChildren(BuildContext context) {
     final config = _config;
     final contentConfig = _contentConfig;
     final t = context.t.settings.mediaAnnotation;
+
+    return [
+      if (_loadError != null)
+        SlSurface(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            context.t.errors.loadFailed(error: '$_loadError'),
+          ),
+        ),
+      if (_contentLoadError != null)
+        SlSurface(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            context.t.errors.loadFailed(error: '$_contentLoadError'),
+          ),
+        ),
+      if (config == null && _loadError == null && !widget.embedded)
+        const Center(child: CircularProgressIndicator()),
+      if (config != null)
+        ...() {
+          final mediaUnderstandingEnabled =
+              _isMediaUnderstandingEnabled(config, contentConfig);
+          final subscriptionStatus =
+              SubscriptionScope.maybeOf(context)?.status ??
+                  SubscriptionStatus.unknown;
+          final showSecondLoopCloudSwitch =
+              subscriptionStatus == SubscriptionStatus.entitled;
+          final useSecondLoopCloud =
+              config.providerMode == _kProviderCloudGateway;
+
+          return <Widget>[
+            mediaAnnotationSectionTitle(
+              context,
+              _mediaUnderstandingTitle(context),
+            ),
+            const SizedBox(height: 8),
+            mediaAnnotationSectionCard([
+              SwitchListTile(
+                key: MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey,
+                title: Text(_mediaUnderstandingTitle(context)),
+                subtitle: Text(_mediaUnderstandingSubtitle(context)),
+                value: mediaUnderstandingEnabled,
+                onChanged: _busy || contentConfig == null
+                    ? null
+                    : (value) async {
+                        await _setMediaUnderstandingEnabled(
+                          enabled: value,
+                          config: config,
+                          contentConfig: contentConfig,
+                        );
+                      },
+              ),
+            ]),
+            if (mediaUnderstandingEnabled) ...[
+              const SizedBox(height: 16),
+              mediaAnnotationSectionCard([
+                if (showSecondLoopCloudSwitch)
+                  SwitchListTile(
+                    key:
+                        MediaAnnotationSettingsPage.useSecondLoopCloudSwitchKey,
+                    title: Text(_useSecondLoopCloudTitle(context)),
+                    subtitle: Text(_useSecondLoopCloudSubtitle(context)),
+                    value: useSecondLoopCloud,
+                    onChanged: _busy
+                        ? null
+                        : (value) async {
+                            await _setUseSecondLoopCloudEnabled(
+                              enabled: value,
+                              config: config,
+                            );
+                          },
+                  ),
+                SwitchListTile(
+                  key: MediaAnnotationSettingsPage.wifiOnlySwitchKey,
+                  title: Text(_mediaUnderstandingWifiOnlyTitle(context)),
+                  subtitle: Text(_mediaUnderstandingWifiOnlySubtitle(context)),
+                  value: !config.allowCellular,
+                  onChanged: _busy
+                      ? null
+                      : (wifiOnly) async {
+                          await _setMediaUnderstandingWifiOnly(
+                            wifiOnly: wifiOnly,
+                            config: config,
+                          );
+                        },
+                ),
+              ]),
+              const SizedBox(height: 16),
+              mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
+              const SizedBox(height: 8),
+              mediaAnnotationSectionCard([
+                ListTile(
+                  title: Text(t.audioTranscribe.enabled.title),
+                  subtitle: Text(t.audioTranscribe.enabled.subtitle),
+                ),
+                ListTile(
+                  title: Text(t.audioTranscribe.engine.title),
+                  subtitle: Text(t.audioTranscribe.engine.subtitle),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        contentConfig == null
+                            ? t.audioTranscribe.engine.notAvailable
+                            : _audioTranscribeEngineLabel(
+                                context,
+                                contentConfig.audioTranscribeEngine,
+                              ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                  onTap: _busy || contentConfig == null
+                      ? null
+                      : () => _pickAudioTranscribeEngine(contentConfig),
+                ),
+                ListTile(
+                  key: MediaAnnotationSettingsPage.audioApiProfileTileKey,
+                  title: Text(t.audioTranscribe.configureApi.title),
+                  subtitle: Text(
+                    _audioTranscribeApiProfileSubtitle(
+                      context,
+                      localRuntime: contentConfig != null &&
+                          _isLocalRuntimeAudioTranscribeEngine(
+                            contentConfig.audioTranscribeEngine,
+                          ),
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        contentConfig != null &&
+                                _isLocalRuntimeAudioTranscribeEngine(
+                                  contentConfig.audioTranscribeEngine,
+                                )
+                            ? (_isZhOcrLocale(context) ? '本地模式' : 'Local mode')
+                            : _apiProfileLabel(context, config.byokProfileId),
+                      ),
+                      if (!(contentConfig != null &&
+                          _isLocalRuntimeAudioTranscribeEngine(
+                            contentConfig.audioTranscribeEngine,
+                          ))) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ],
+                  ),
+                  onTap: _busy ||
+                          (contentConfig != null &&
+                              _isLocalRuntimeAudioTranscribeEngine(
+                                contentConfig.audioTranscribeEngine,
+                              ))
+                      ? null
+                      : () => _pickApiProfileOverride(config),
+                ),
+              ]),
+              ...() {
+                final runtimeTile = _buildDesktopRuntimeHealthTile(context);
+                if (runtimeTile == null) {
+                  return const <Widget>[];
+                }
+                return <Widget>[
+                  const SizedBox(height: 12),
+                  runtimeTile,
+                ];
+              }(),
+              const SizedBox(height: 16),
+              ..._buildDocumentOcrSection(context),
+              const SizedBox(height: 16),
+              mediaAnnotationSectionTitle(context, t.providerSettings.title),
+              const SizedBox(height: 8),
+              mediaAnnotationSectionCard([
+                ListTile(
+                  key: MediaAnnotationSettingsPage.imageApiProfileTileKey,
+                  title: Text(t.byokProfile.title),
+                  subtitle: Text(_imageApiProfileSubtitle(context)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_apiProfileLabel(context, config.byokProfileId)),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                  onTap: _busy ? null : () => _pickApiProfileOverride(config),
+                ),
+              ]),
+            ],
+          ];
+        }(),
+    ];
+  }
+
+  Widget _buildSettingsListView(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: _buildSettingsChildren(context),
+    );
+  }
+
+  Widget _buildEmbeddedSettings(BuildContext context) {
+    return Padding(
+      key: MediaAnnotationSettingsPage.embeddedRootKey,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _buildSettingsChildren(context),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t.settings.mediaAnnotation;
+    if (widget.embedded) {
+      return _buildEmbeddedSettings(context);
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(t.title),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_loadError != null)
-            SlSurface(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                context.t.errors.loadFailed(error: '$_loadError'),
-              ),
-            ),
-          if (_contentLoadError != null)
-            SlSurface(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                context.t.errors.loadFailed(error: '$_contentLoadError'),
-              ),
-            ),
-          if (config == null && _loadError == null)
-            const Center(child: CircularProgressIndicator()),
-          if (config != null)
-            ...() {
-              final mediaUnderstandingEnabled =
-                  _isMediaUnderstandingEnabled(config, contentConfig);
-              final subscriptionStatus =
-                  SubscriptionScope.maybeOf(context)?.status ??
-                      SubscriptionStatus.unknown;
-              final showSecondLoopCloudSwitch =
-                  subscriptionStatus == SubscriptionStatus.entitled;
-              final useSecondLoopCloud =
-                  config.providerMode == _kProviderCloudGateway;
-
-              return <Widget>[
-                mediaAnnotationSectionTitle(
-                  context,
-                  _mediaUnderstandingTitle(context),
-                ),
-                const SizedBox(height: 8),
-                mediaAnnotationSectionCard([
-                  SwitchListTile(
-                    key:
-                        MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey,
-                    title: Text(_mediaUnderstandingTitle(context)),
-                    subtitle: Text(_mediaUnderstandingSubtitle(context)),
-                    value: mediaUnderstandingEnabled,
-                    onChanged: _busy || contentConfig == null
-                        ? null
-                        : (value) async {
-                            await _setMediaUnderstandingEnabled(
-                              enabled: value,
-                              config: config,
-                              contentConfig: contentConfig,
-                            );
-                          },
-                  ),
-                ]),
-                if (mediaUnderstandingEnabled) ...[
-                  const SizedBox(height: 16),
-                  mediaAnnotationSectionCard([
-                    if (showSecondLoopCloudSwitch)
-                      SwitchListTile(
-                        key: MediaAnnotationSettingsPage
-                            .useSecondLoopCloudSwitchKey,
-                        title: Text(_useSecondLoopCloudTitle(context)),
-                        subtitle: Text(_useSecondLoopCloudSubtitle(context)),
-                        value: useSecondLoopCloud,
-                        onChanged: _busy
-                            ? null
-                            : (value) async {
-                                await _setUseSecondLoopCloudEnabled(
-                                  enabled: value,
-                                  config: config,
-                                );
-                              },
-                      ),
-                    SwitchListTile(
-                      key: MediaAnnotationSettingsPage.wifiOnlySwitchKey,
-                      title: Text(_mediaUnderstandingWifiOnlyTitle(context)),
-                      subtitle:
-                          Text(_mediaUnderstandingWifiOnlySubtitle(context)),
-                      value: !config.allowCellular,
-                      onChanged: _busy
-                          ? null
-                          : (wifiOnly) async {
-                              await _setMediaUnderstandingWifiOnly(
-                                wifiOnly: wifiOnly,
-                                config: config,
-                              );
-                            },
-                    ),
-                  ]),
-                  const SizedBox(height: 16),
-                  mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
-                  const SizedBox(height: 8),
-                  mediaAnnotationSectionCard([
-                    ListTile(
-                      title: Text(t.audioTranscribe.enabled.title),
-                      subtitle: Text(t.audioTranscribe.enabled.subtitle),
-                    ),
-                    ListTile(
-                      title: Text(t.audioTranscribe.engine.title),
-                      subtitle: Text(t.audioTranscribe.engine.subtitle),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            contentConfig == null
-                                ? t.audioTranscribe.engine.notAvailable
-                                : _audioTranscribeEngineLabel(
-                                    context,
-                                    contentConfig.audioTranscribeEngine,
-                                  ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right),
-                        ],
-                      ),
-                      onTap: _busy || contentConfig == null
-                          ? null
-                          : () => _pickAudioTranscribeEngine(contentConfig),
-                    ),
-                    ListTile(
-                      key: MediaAnnotationSettingsPage.audioApiProfileTileKey,
-                      title: Text(t.audioTranscribe.configureApi.title),
-                      subtitle: Text(
-                        _audioTranscribeApiProfileSubtitle(
-                          context,
-                          localRuntime: contentConfig != null &&
-                              _isLocalRuntimeAudioTranscribeEngine(
-                                contentConfig.audioTranscribeEngine,
-                              ),
-                        ),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            contentConfig != null &&
-                                    _isLocalRuntimeAudioTranscribeEngine(
-                                      contentConfig.audioTranscribeEngine,
-                                    )
-                                ? (_isZhOcrLocale(context)
-                                    ? '本地模式'
-                                    : 'Local mode')
-                                : _apiProfileLabel(
-                                    context, config.byokProfileId),
-                          ),
-                          if (!(contentConfig != null &&
-                              _isLocalRuntimeAudioTranscribeEngine(
-                                contentConfig.audioTranscribeEngine,
-                              ))) ...[
-                            const SizedBox(width: 4),
-                            const Icon(Icons.chevron_right),
-                          ],
-                        ],
-                      ),
-                      onTap: _busy ||
-                              (contentConfig != null &&
-                                  _isLocalRuntimeAudioTranscribeEngine(
-                                    contentConfig.audioTranscribeEngine,
-                                  ))
-                          ? null
-                          : () => _pickApiProfileOverride(config),
-                    ),
-                  ]),
-                  ...() {
-                    final runtimeTile = _buildDesktopRuntimeHealthTile(context);
-                    if (runtimeTile == null) {
-                      return const <Widget>[];
-                    }
-                    return <Widget>[
-                      const SizedBox(height: 12),
-                      runtimeTile,
-                    ];
-                  }(),
-                  const SizedBox(height: 16),
-                  ..._buildDocumentOcrSection(context),
-                  const SizedBox(height: 16),
-                  mediaAnnotationSectionTitle(
-                      context, t.providerSettings.title),
-                  const SizedBox(height: 8),
-                  mediaAnnotationSectionCard([
-                    ListTile(
-                      key: MediaAnnotationSettingsPage.imageApiProfileTileKey,
-                      title: Text(t.byokProfile.title),
-                      subtitle: Text(_imageApiProfileSubtitle(context)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(_apiProfileLabel(context, config.byokProfileId)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right),
-                        ],
-                      ),
-                      onTap:
-                          _busy ? null : () => _pickApiProfileOverride(config),
-                    ),
-                  ]),
-                ],
-              ];
-            }(),
-        ],
-      ),
+      body: _buildSettingsListView(context),
     );
   }
 }

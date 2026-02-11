@@ -274,6 +274,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                   },
           ),
           ListTile(
+            key: const ValueKey('settings_media_annotation'),
             title: Text(context.t.settings.mediaAnnotation.title),
             subtitle: Text(context.t.settings.mediaAnnotation.subtitle),
             onTap: _busy
@@ -281,7 +282,10 @@ extension _SettingsPageBuild on _SettingsPageState {
                 : () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const MediaAnnotationSettingsPage(),
+                        builder: (_) => const AiSettingsPage(
+                          focusSection: AiSettingsSection.mediaUnderstanding,
+                          highlightFocus: true,
+                        ),
                       ),
                     );
                   },

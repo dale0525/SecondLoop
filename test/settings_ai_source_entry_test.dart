@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/media_annotation_settings_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
@@ -49,5 +50,64 @@ void main() {
     expect(find.byType(AiSettingsPage), findsOneWidget);
     expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
         findsOneWidget);
+  });
+
+  testWidgets('Media understanding entry opens unified AI settings page',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: Scaffold(body: SettingsPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final mediaEntry = find.byKey(const ValueKey('settings_media_annotation'));
+    await tester.dragUntilVisible(
+      mediaEntry,
+      find.byType(ListView),
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
+
+    expect(mediaEntry, findsOneWidget);
+
+    await tester.tap(mediaEntry);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiSettingsPage), findsOneWidget);
+
+    final listView = find.byType(ListView).first;
+    final mediaSection =
+        find.byKey(const ValueKey('ai_settings_section_media_understanding'));
+    await tester.dragUntilVisible(
+      mediaSection,
+      listView,
+      const Offset(0, -260),
+    );
+    await tester.pumpAndSettle();
+
+    expect(mediaSection, findsOneWidget);
+
+    final embeddedRoot =
+        find.byKey(MediaAnnotationSettingsPage.embeddedRootKey);
+    await tester.dragUntilVisible(
+      embeddedRoot,
+      listView,
+      const Offset(0, -260),
+    );
+    await tester.pumpAndSettle();
+
+    expect(embeddedRoot, findsOneWidget);
   });
 }
