@@ -435,15 +435,26 @@ Future<void> _validateRuntimePayload(Directory outputDir) async {
   );
 }
 
+String _basenameFromAnyPath(String path) {
+  if (path.isEmpty) return path;
+  final normalized = path.replaceAll('\\', '/');
+  final slashIndex = normalized.lastIndexOf('/');
+  if (slashIndex < 0) return normalized;
+  if (slashIndex + 1 >= normalized.length) return '';
+  return normalized.substring(slashIndex + 1);
+}
+
+String basenameFromAnyPathForTest(String path) => _basenameFromAnyPath(path);
+
 Future<bool> _hasRequiredRuntimePayload(Directory outputDir) async {
   if (!await outputDir.exists()) return false;
   final basenames = <String>{};
   await for (final entity in outputDir.list(recursive: true)) {
     if (entity is! File) continue;
-    final path = entity.path;
-    final unix = path.split('/');
-    final windows = path.split('\\');
-    basenames.add((windows.length > unix.length ? windows.last : unix.last));
+    final basename = _basenameFromAnyPath(entity.path);
+    if (basename.isNotEmpty) {
+      basenames.add(basename);
+    }
   }
 
   bool containsAny(List<String> aliases) {

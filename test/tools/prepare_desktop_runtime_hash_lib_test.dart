@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tools/prepare_desktop_runtime_hash_lib.dart';
+import '../../tools/prepare_desktop_runtime.dart' as runtime;
 
 void main() {
   test('extractSha256FromCommandOutput parses sha256sum output', () {
@@ -41,5 +42,23 @@ CertUtil: -hashfile command completed successfully.
 
   test('extractSha256FromCommandOutput returns null when digest missing', () {
     expect(extractSha256FromCommandOutput('no digest\n'), isNull);
+  });
+
+  test('basenameFromAnyPathForTest parses mixed Windows path separators', () {
+    expect(
+      runtime.basenameFromAnyPathForTest(
+        r'assets/ocr/desktop_runtime.tmp-12345\models\onnxruntime.dll',
+      ),
+      'onnxruntime.dll',
+    );
+  });
+
+  test('basenameFromAnyPathForTest parses pure Windows path separators', () {
+    expect(
+      runtime.basenameFromAnyPathForTest(
+        r'D:\a\SecondLoop\assets\ocr\desktop_runtime\models\ch_PP-OCRv5_mobile_det.onnx',
+      ),
+      'ch_PP-OCRv5_mobile_det.onnx',
+    );
   });
 }
