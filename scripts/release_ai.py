@@ -19,9 +19,19 @@ from typing import Any
 try:
     from scripts.release_ai_llm import llm_config as _llm_config
     from scripts.release_ai_llm import openai_chat_json as _openai_chat_json
+    from scripts.release_ai_release_base import (
+        fetch_repo_releases as _fetch_repo_releases,
+    )
+    from scripts.release_ai_release_base import (
+        find_latest_published_semver_tag as _find_latest_published_semver_tag,
+    )
 except ModuleNotFoundError:
     from release_ai_llm import llm_config as _llm_config
     from release_ai_llm import openai_chat_json as _openai_chat_json
+    from release_ai_release_base import fetch_repo_releases as _fetch_repo_releases
+    from release_ai_release_base import (
+        find_latest_published_semver_tag as _find_latest_published_semver_tag,
+    )
 
 SEMVER_TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 PR_NUMBER_RE = re.compile(r"(?:#|pull request\s+#)(\d+)", re.IGNORECASE)
@@ -227,7 +237,7 @@ def _github_token() -> str | None:
     return None
 
 
-def _github_get(path: str, *, token: str | None) -> dict[str, Any]:
+def _github_get(path: str, *, token: str | None) -> Any:
     url = f"https://api.github.com{path}"
     headers = {
         "Accept": "application/vnd.github+json",
@@ -259,6 +269,48 @@ def _latest_semver_before(head_ref: str, *, exclude_tag: str | None) -> str | No
     return find_latest_semver_tag(semver_tags)
 
 
+def find_latest_published_semver_tag(
+    releases: list[dict[str, Any]],
+    *,
+    head_tag: str,
+    exclude_tag: str | None = None,
+    allowed_tags: set[str] | None = None,
+) -> str | None:
+    return _find_latest_published_semver_tag(
+        releases,
+        head_tag=head_tag,
+        parse_semver_tag=parse_semver_tag,
+        exclude_tag=exclude_tag,
+        allowed_tags=allowed_tags,
+    )
+
+
+def _latest_published_release_before(
+    repo: str,
+    head_ref: str,
+    *,
+    exclude_tag: str | None,
+    token: str | None,
+) -> str | None:
+    merged_tags = _run_git(["tag", "--merged", head_ref]).splitlines()
+    merged_semver_tags = {tag.strip() for tag in merged_tags if parse_semver_tag(tag.strip())}
+
+    try:
+        releases = _fetch_repo_releases(
+            repo,
+            github_get=lambda path: _github_get(path, token=token),
+        )
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"cannot fetch GitHub releases for {repo}: {exc}") from exc
+
+    return find_latest_published_semver_tag(
+        releases,
+        head_tag=head_ref,
+        exclude_tag=exclude_tag,
+        allowed_tags=merged_semver_tags,
+    )
+
+
 def _collect_commits(range_expr: str) -> list[dict[str, str]]:
     output = _run_git([
         "log",
@@ -288,9 +340,24 @@ def _command_collect_facts(args: argparse.Namespace) -> None:
         _die(str(exc))
 
     repo = args.repo or _infer_repo_slug()
+    token = _github_token()
     base_tag = args.base_tag
+    auto_base_source = args.auto_base_source
     if base_tag == "auto":
-        base_tag = _latest_semver_before(head_ref, exclude_tag=args.head_tag)
+        if auto_base_source == "github-releases":
+            if not repo:
+                _die("auto base source 'github-releases' requires --repo or an origin GitHub remote")
+            try:
+                base_tag = _latest_published_release_before(
+                    repo,
+                    head_ref,
+                    exclude_tag=args.head_tag,
+                    token=token,
+                )
+            except RuntimeError as exc:
+                _die(str(exc))
+        else:
+            base_tag = _latest_semver_before(head_ref, exclude_tag=args.head_tag)
 
     range_expr = f"{base_tag}..{head_ref}" if base_tag else head_ref
 
@@ -299,7 +366,6 @@ def _command_collect_facts(args: argparse.Namespace) -> None:
     except RuntimeError as exc:
         _die(str(exc))
 
-    token = _github_token()
     commit_to_prs: dict[str, list[int]] = {}
     pr_to_commits: dict[int, list[dict[str, str]]] = {}
     for commit in commits:
@@ -860,6 +926,12 @@ def _build_parser() -> argparse.ArgumentParser:
     collect = subparsers.add_parser("collect-facts", help="Collect release facts from git + GitHub PR metadata")
     collect.add_argument("--repo", default="", help="GitHub repo slug (owner/repo). Auto-detect from origin when omitted.")
     collect.add_argument("--base-tag", default="auto", help="Base tag for compare range. Use 'auto' to detect latest semver tag.")
+    collect.add_argument(
+        "--auto-base-source",
+        default="git-tags",
+        choices=["git-tags", "github-releases"],
+        help="When --base-tag=auto, choose baseline from git tags or published GitHub releases.",
+    )
     collect.add_argument("--head", default="HEAD", help="Git ref used as compare range head when --head-tag is not provided.")
     collect.add_argument("--head-tag", default="", help="Semver tag used as compare range head (for CI tag release jobs).")
     collect.add_argument("--output", required=True, help="Output JSON path.")
