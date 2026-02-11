@@ -59,6 +59,84 @@ if [[ ! -d "$input_dir" ]]; then
   exit 1
 fi
 
+python3 - "$input_dir" "$platform" <<'PY'
+import pathlib
+import sys
+
+
+def fail(message: str) -> None:
+    print(f"build-desktop-runtime: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+root = pathlib.Path(sys.argv[1]).resolve()
+platform = sys.argv[2].strip().lower()
+if not root.is_dir():
+    fail(f"input directory does not exist: {root}")
+
+all_files = {
+    path.name
+    for path in root.rglob("*")
+    if path.is_file()
+}
+
+det_aliases = {
+    "ch_PP-OCRv5_mobile_det.onnx",
+    "ch_PP-OCRv4_det_infer.onnx",
+    "ch_PP-OCRv3_det_infer.onnx",
+}
+cls_aliases = {
+    "ch_ppocr_mobile_v2.0_cls_infer.onnx",
+}
+rec_aliases = {
+    "ch_PP-OCRv5_rec_mobile_infer.onnx",
+    "ch_PP-OCRv5_mobile_rec.onnx",
+    "ch_PP-OCRv4_rec_infer.onnx",
+    "ch_PP-OCRv3_rec_infer.onnx",
+    "latin_PP-OCRv3_rec_infer.onnx",
+    "arabic_PP-OCRv3_rec_infer.onnx",
+    "cyrillic_PP-OCRv3_rec_infer.onnx",
+    "devanagari_PP-OCRv3_rec_infer.onnx",
+    "japan_PP-OCRv3_rec_infer.onnx",
+    "korean_PP-OCRv3_rec_infer.onnx",
+    "chinese_cht_PP-OCRv3_rec_infer.onnx",
+}
+
+if platform == "windows":
+    has_onnxruntime = any(
+        name.lower().startswith("onnxruntime") and name.lower().endswith(".dll")
+        for name in all_files
+    )
+elif platform == "macos":
+    has_onnxruntime = any(
+        name.startswith("libonnxruntime") and ".dylib" in name
+        for name in all_files
+    )
+elif platform == "linux":
+    has_onnxruntime = any(
+        name.startswith("libonnxruntime") and ".so" in name
+        for name in all_files
+    )
+else:
+    fail(f"unsupported platform: {platform}")
+
+missing_sections = []
+if not (all_files & det_aliases):
+    missing_sections.append("DET model")
+if not (all_files & cls_aliases):
+    missing_sections.append("CLS model")
+if not (all_files & rec_aliases):
+    missing_sections.append("REC model")
+if not has_onnxruntime:
+    missing_sections.append("ONNX Runtime dynamic library")
+
+if missing_sections:
+    fail(
+        "runtime payload missing required files in "
+        f"{root}: {', '.join(missing_sections)}"
+    )
+PY
+
 if [[ -z "$version" ]]; then
   version="$(date -u +%Y%m%d%H%M%S)"
 fi

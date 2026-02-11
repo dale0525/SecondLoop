@@ -232,21 +232,6 @@ std::optional<std::string> create_temp_file_path(const char* prefix) {
   return path;
 }
 
-bool write_bytes_to_file(const std::string& path, const uint8_t* bytes,
-                         size_t length) {
-  if (bytes == nullptr || length == 0) {
-    return false;
-  }
-  GError* error = nullptr;
-  gboolean ok = g_file_set_contents(
-      path.c_str(), reinterpret_cast<const gchar*>(bytes),
-      static_cast<gssize>(length), &error);
-  if (error != nullptr) {
-    g_error_free(error);
-  }
-  return ok == TRUE;
-}
-
 bool save_pixbuf_as_png(GdkPixbuf* pixbuf, const std::string& path) {
   if (pixbuf == nullptr) {
     return false;
