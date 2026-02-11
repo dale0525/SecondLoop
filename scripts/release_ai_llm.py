@@ -10,17 +10,32 @@ from pathlib import Path
 from typing import Any
 
 
+def _normalize_env_value(name: str, default: str = "") -> str:
+    value = os.getenv(name, default).strip()
+    if not value:
+        return ""
+
+    prefix = f"{name}="
+    if value.startswith(prefix):
+        value = value[len(prefix) :].strip()
+
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        value = value[1:-1].strip()
+
+    return value
+
+
 def llm_config() -> dict[str, Any]:
-    api_key = os.getenv("RELEASE_LLM_API_KEY", "").strip()
-    model = os.getenv("RELEASE_LLM_MODEL", "").strip()
-    base_url = os.getenv("RELEASE_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-    endpoint = os.getenv("RELEASE_LLM_ENDPOINT", "").strip()
-    timeout_seconds = int(os.getenv("RELEASE_LLM_TIMEOUT_SECONDS", "60"))
-    retries = int(os.getenv("RELEASE_LLM_MAX_RETRIES", "2"))
-    ca_bundle = os.getenv("RELEASE_LLM_CA_BUNDLE", "").strip()
-    insecure_skip_verify = os.getenv("RELEASE_LLM_INSECURE_SKIP_VERIFY", "0").strip().lower() in {"1", "true", "yes", "on"}
-    auth_header = os.getenv("RELEASE_LLM_AUTH_HEADER", "").strip()
-    auth_scheme = os.getenv("RELEASE_LLM_AUTH_SCHEME", "Bearer").strip()
+    api_key = _normalize_env_value("RELEASE_LLM_API_KEY")
+    model = _normalize_env_value("RELEASE_LLM_MODEL")
+    base_url = _normalize_env_value("RELEASE_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    endpoint = _normalize_env_value("RELEASE_LLM_ENDPOINT")
+    timeout_seconds = int(_normalize_env_value("RELEASE_LLM_TIMEOUT_SECONDS", "60") or "60")
+    retries = int(_normalize_env_value("RELEASE_LLM_MAX_RETRIES", "2") or "2")
+    ca_bundle = _normalize_env_value("RELEASE_LLM_CA_BUNDLE")
+    insecure_skip_verify = _normalize_env_value("RELEASE_LLM_INSECURE_SKIP_VERIFY", "0").lower() in {"1", "true", "yes", "on"}
+    auth_header = _normalize_env_value("RELEASE_LLM_AUTH_HEADER")
+    auth_scheme = _normalize_env_value("RELEASE_LLM_AUTH_SCHEME", "Bearer")
 
     if not api_key:
         raise RuntimeError("missing RELEASE_LLM_API_KEY")
@@ -113,14 +128,6 @@ def _extract_content(parsed: dict[str, Any]) -> str:
     return ""
 
 
-def _looks_like_portkey(config: dict[str, Any]) -> bool:
-    candidates = [
-        str(config.get("endpoint", "")).strip(),
-        str(config.get("base_url", "")).strip(),
-    ]
-    return any("portkey.ai" in value.lower() for value in candidates if value)
-
-
 def _auth_header_variants(config: dict[str, Any]) -> list[dict[str, str]]:
     api_key = str(config["api_key"])
     auth_header = str(config.get("auth_header", "")).strip()
@@ -131,8 +138,6 @@ def _auth_header_variants(config: dict[str, Any]) -> list[dict[str, str]]:
         prefix = f"{auth_scheme} " if auth_scheme else ""
         variants.append({auth_header: f"{prefix}{api_key}"})
     else:
-        if _looks_like_portkey(config):
-            variants.append({"x-portkey-api-key": api_key})
         variants.extend(
             [
                 {"Authorization": f"Bearer {api_key}"},

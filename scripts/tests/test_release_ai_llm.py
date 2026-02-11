@@ -47,6 +47,24 @@ class ReleaseAiLlmTests(unittest.TestCase):
         self.assertEqual(config["timeout_seconds"], 45)
         self.assertEqual(config["retries"], 4)
 
+    def test_llm_config_normalizes_literal_secret_values(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "RELEASE_LLM_API_KEY": "RELEASE_LLM_API_KEY='k-test'",
+                "RELEASE_LLM_MODEL": "RELEASE_LLM_MODEL=\"gpt-test\"",
+                "RELEASE_LLM_BASE_URL": "RELEASE_LLM_BASE_URL=https://gateway.example/v1/",
+                "RELEASE_LLM_ENDPOINT": "RELEASE_LLM_ENDPOINT='https://gateway.example/v1/chat/completions'",
+            },
+            clear=False,
+        ):
+            config = llm_config()
+
+        self.assertEqual(config["api_key"], "k-test")
+        self.assertEqual(config["model"], "gpt-test")
+        self.assertEqual(config["base_url"], "https://gateway.example/v1")
+        self.assertEqual(config["endpoint"], "https://gateway.example/v1/chat/completions")
+
     def test_openai_chat_json_fallbacks_to_responses_and_api_key(self) -> None:
         calls: list[tuple[str, dict[str, str], dict[str, object]]] = []
 
@@ -107,53 +125,6 @@ class ReleaseAiLlmTests(unittest.TestCase):
         for _, _, payload in response_calls:
             self.assertIn("input", payload)
             self.assertNotIn("messages", payload)
-
-    def test_openai_chat_json_supports_portkey_default_auth_header(self) -> None:
-        calls: list[tuple[str, dict[str, str]]] = []
-
-        def fake_urlopen(request, **_kwargs):  # type: ignore[no-untyped-def]
-            headers = {key.lower(): value for key, value in request.header_items()}
-            calls.append((request.full_url, headers))
-
-            if request.full_url.endswith("/chat/completions") and "x-portkey-api-key" in headers:
-                payload = json.loads(request.data.decode("utf-8"))
-                self.assertIn("messages", payload)
-                return _FakeResponse(
-                    {
-                        "choices": [
-                            {
-                                "message": {
-                                    "content": "{\"bump\":\"patch\",\"reason\":\"portkey\",\"confidence\":0.7,\"evidence_change_ids\":[]}",
-                                }
-                            }
-                        ]
-                    }
-                )
-
-            body = io.BytesIO(b'{"error":{"message":"Portkey Error: Invalid API Key. Error Code: 03"}}')
-            raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", hdrs=None, fp=body)
-
-        config = {
-            "api_key": "pk-live-test",
-            "model": "openai/gpt-4o-mini",
-            "base_url": "https://api.portkey.ai/v1",
-            "endpoint": "",
-            "timeout_seconds": 10,
-            "retries": 0,
-            "ca_bundle": "",
-            "insecure_skip_verify": False,
-            "auth_header": "",
-            "auth_scheme": "Bearer",
-        }
-
-        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
-            result = openai_chat_json(
-                messages=[{"role": "user", "content": "hello"}],
-                config=config,
-            )
-
-        self.assertEqual(result["bump"], "patch")
-        self.assertTrue(any("x-portkey-api-key" in headers for _, headers in calls))
 
     def test_openai_chat_json_supports_custom_auth_header(self) -> None:
         def fake_urlopen(request, **_kwargs):  # type: ignore[no-untyped-def]
