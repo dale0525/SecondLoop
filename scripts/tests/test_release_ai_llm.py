@@ -47,6 +47,24 @@ class ReleaseAiLlmTests(unittest.TestCase):
         self.assertEqual(config["timeout_seconds"], 45)
         self.assertEqual(config["retries"], 4)
 
+    def test_llm_config_normalizes_literal_secret_values(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "RELEASE_LLM_API_KEY": "RELEASE_LLM_API_KEY='k-test'",
+                "RELEASE_LLM_MODEL": "RELEASE_LLM_MODEL=\"gpt-test\"",
+                "RELEASE_LLM_BASE_URL": "RELEASE_LLM_BASE_URL=https://gateway.example/v1/",
+                "RELEASE_LLM_ENDPOINT": "RELEASE_LLM_ENDPOINT='https://gateway.example/v1/chat/completions'",
+            },
+            clear=False,
+        ):
+            config = llm_config()
+
+        self.assertEqual(config["api_key"], "k-test")
+        self.assertEqual(config["model"], "gpt-test")
+        self.assertEqual(config["base_url"], "https://gateway.example/v1")
+        self.assertEqual(config["endpoint"], "https://gateway.example/v1/chat/completions")
+
     def test_openai_chat_json_fallbacks_to_responses_and_api_key(self) -> None:
         calls: list[tuple[str, dict[str, str], dict[str, object]]] = []
 
