@@ -117,4 +117,51 @@ void main() {
 
     expect(resolved, r'C:\repo\.pixi\envs\default\Library\bin\ffmpeg.exe');
   });
+
+  test('resolveBundledFfmpegSource rewrites chocolatey shim path', () {
+    final existing = <String>{
+      r'C:\ProgramData\chocolatey\lib\ffmpeg\tools\ffmpeg\bin\ffmpeg.exe',
+    };
+
+    final resolved = resolveBundledFfmpegSource(
+      sourcePath: r'C:\ProgramData\chocolatey\bin\ffmpeg.exe',
+      platform: DesktopPlatform.windows,
+      chocolateyInstall: r'C:\ProgramData\chocolatey',
+      isFile: existing.contains,
+    );
+
+    expect(
+      resolved,
+      r'C:\ProgramData\chocolatey\lib\ffmpeg\tools\ffmpeg\bin\ffmpeg.exe',
+    );
+  });
+
+  test('resolveBundledFfmpegSource infers chocolatey root from source path',
+      () {
+    final existing = <String>{
+      r'C:\ProgramData\chocolatey\lib\ffmpeg\tools\ffmpeg\bin\ffmpeg.exe',
+    };
+
+    final resolved = resolveBundledFfmpegSource(
+      sourcePath: r'C:\ProgramData\chocolatey\bin\ffmpeg.exe',
+      platform: DesktopPlatform.windows,
+      isFile: existing.contains,
+    );
+
+    expect(
+      resolved,
+      r'C:\ProgramData\chocolatey\lib\ffmpeg\tools\ffmpeg\bin\ffmpeg.exe',
+    );
+  });
+
+  test('resolveBundledFfmpegSource keeps non-shim source path', () {
+    final resolved = resolveBundledFfmpegSource(
+      sourcePath: r'C:\ffmpeg\bin\ffmpeg.exe',
+      platform: DesktopPlatform.windows,
+      chocolateyInstall: r'C:\ProgramData\chocolatey',
+      isFile: (_) => false,
+    );
+
+    expect(resolved, r'C:\ffmpeg\bin\ffmpeg.exe');
+  });
 }

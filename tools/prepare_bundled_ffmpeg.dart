@@ -33,12 +33,24 @@ Future<void> main(List<String> args) async {
     exit(2);
   }
 
-  final sourceFile = File(sourcePath);
+  final resolvedSourcePath = resolveBundledFfmpegSource(
+    sourcePath: sourcePath,
+    platform: platform,
+    chocolateyInstall: Platform.environment['ChocolateyInstall'],
+    isFile: (candidate) => File(candidate).existsSync(),
+  );
+  final sourceFile = File(resolvedSourcePath);
   if (!sourceFile.existsSync()) {
     stderr.writeln(
-      'prepare-bundled-ffmpeg: source ffmpeg does not exist: $sourcePath',
+      'prepare-bundled-ffmpeg: source ffmpeg does not exist: $resolvedSourcePath',
     );
     exit(2);
+  }
+
+  if (!_pathsEqual(sourcePath, resolvedSourcePath, platform)) {
+    stdout.writeln(
+      'prepare-bundled-ffmpeg: resolved source $sourcePath -> $resolvedSourcePath',
+    );
   }
 
   final outputRoot = config.outputRoot ??
@@ -62,6 +74,22 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  final sourceVerify = await Process.run(
+    sourceFile.absolute.path,
+    const <String>['-version'],
+  );
+  if (sourceVerify.exitCode != 0) {
+    stderr.writeln(
+      'prepare-bundled-ffmpeg: source ffmpeg verification failed '
+      '(exit=${sourceVerify.exitCode})',
+    );
+    final sourceVerifyStderr = '${sourceVerify.stderr}'.trim();
+    if (sourceVerifyStderr.isNotEmpty) {
+      stderr.writeln(sourceVerifyStderr);
+    }
+    exit(sourceVerify.exitCode == 0 ? 1 : sourceVerify.exitCode);
+  }
+
   final targetFile = File(targetPath);
   targetFile.parent.createSync(recursive: true);
 
@@ -83,7 +111,13 @@ Future<void> main(List<String> args) async {
       'prepare-bundled-ffmpeg: bundled ffmpeg verification failed '
       '(exit=${verify.exitCode})',
     );
-    stderr.writeln('${verify.stderr}'.trim());
+    final verifyStderr = '${verify.stderr}'.trim();
+    final verifyStdout = '${verify.stdout}'.trim();
+    if (verifyStderr.isNotEmpty) {
+      stderr.writeln(verifyStderr);
+    } else if (verifyStdout.isNotEmpty) {
+      stderr.writeln(verifyStdout);
+    }
     exit(verify.exitCode == 0 ? 1 : verify.exitCode);
   }
 
@@ -206,6 +240,15 @@ String _join(String base, String part) {
   final separator = Platform.pathSeparator;
   if (base.endsWith(separator)) return '$base$part';
   return '$base$separator$part';
+}
+
+bool _pathsEqual(String left, String right, DesktopPlatform platform) {
+  if (platform != DesktopPlatform.windows) return left == right;
+  return _normalizeWindowsPath(left) == _normalizeWindowsPath(right);
+}
+
+String _normalizeWindowsPath(String value) {
+  return value.replaceAll('/', r'\').toLowerCase();
 }
 
 void _printUsage() {
