@@ -1,9 +1,16 @@
+import argparse
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from scripts.release_ai import (
+    _command_collect_facts,
     SemVer,
     bump_semver,
     classify_change,
+    find_latest_published_semver_tag,
     find_latest_semver_tag,
     parse_semver_tag,
     validate_locale_notes,
@@ -87,6 +94,60 @@ class ValidationTests(unittest.TestCase):
                 expected_version="v1.2.3",
                 required_change_ids=["pr#1", "pr#2"],
             )
+
+
+class PublishedReleaseBaseTests(unittest.TestCase):
+    def test_find_latest_published_semver_tag_skips_current_draft_and_prerelease(self) -> None:
+        releases = [
+            {"tag_name": "v0.4.1", "draft": False, "prerelease": False},
+            {"tag_name": "v0.4.0", "draft": False, "prerelease": False},
+            {"tag_name": "v0.3.9", "draft": False, "prerelease": True},
+            {"tag_name": "v0.3.8", "draft": True, "prerelease": False},
+            {"tag_name": "desktop-runtime-v0.1.0", "draft": False, "prerelease": False},
+        ]
+
+        self.assertEqual(
+            find_latest_published_semver_tag(releases, head_tag="v0.4.1"),
+            "v0.4.0",
+        )
+
+    @mock.patch("scripts.release_ai._github_token", return_value="token")
+    @mock.patch("scripts.release_ai._latest_published_release_before", return_value="v0.3.0")
+    @mock.patch("scripts.release_ai._collect_commits", return_value=[])
+    @mock.patch("scripts.release_ai._run_git", return_value="deadbeef\n")
+    def test_collect_facts_uses_published_release_base_when_requested(
+        self,
+        mock_run_git: mock.Mock,
+        mock_collect_commits: mock.Mock,
+        mock_latest_release_base: mock.Mock,
+        mock_token: mock.Mock,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "facts.json"
+            args = argparse.Namespace(
+                repo="acme/secondloop",
+                base_tag="auto",
+                auto_base_source="github-releases",
+                head="HEAD",
+                head_tag="v0.4.1",
+                output=str(output),
+            )
+
+            _command_collect_facts(args)
+
+            payload = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["base_tag"], "v0.3.0")
+        self.assertEqual(payload["compare_range"], "v0.3.0..v0.4.1")
+        mock_latest_release_base.assert_called_once_with(
+            "acme/secondloop",
+            "v0.4.1",
+            exclude_tag="v0.4.1",
+            token="token",
+        )
+        mock_collect_commits.assert_called_once_with("v0.3.0..v0.4.1")
+        mock_run_git.assert_called_once_with(["rev-parse", "v0.4.1"])
+        mock_token.assert_called_once()
 
 
 if __name__ == "__main__":

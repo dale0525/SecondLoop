@@ -493,6 +493,7 @@ jobs:
           python3 scripts/release_ai.py collect-facts \
             --repo "${GITHUB_REPOSITORY}" \
             --base-tag auto \
+            --auto-base-source github-releases \
             --head-tag "${GITHUB_REF_NAME}" \
             --output dist/release_facts.json
       - name: Generate and validate release notes assets
