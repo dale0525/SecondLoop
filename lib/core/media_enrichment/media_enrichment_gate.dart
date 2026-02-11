@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/audio_transcribe/audio_transcribe_runner.dart';
 import '../../features/attachments/platform_pdf_ocr.dart';
@@ -10,6 +9,7 @@ import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
+import '../ai/media_capability_source_prefs.dart';
 import '../ai/media_capability_wifi_prefs.dart';
 import '../ai/media_source_prefs.dart';
 import '../backend/app_backend.dart';
@@ -691,17 +691,37 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       }
 
       final hasOpenAiByokProfile = effectiveOpenAiProfile() != null;
-      final prefs = await SharedPreferences.getInstance();
-      final mediaPreference =
-          switch ((prefs.getString(MediaSourcePrefs.prefsKey) ?? '').trim()) {
-        'cloud' => MediaSourcePreference.cloud,
-        'byok' => MediaSourcePreference.byok,
-        'local' => MediaSourcePreference.local,
-        _ => MediaSourcePreference.auto,
-      };
+      MediaSourcePreference imagePreference;
+      MediaSourcePreference audioPreference;
+      MediaSourcePreference ocrPreference;
+      try {
+        imagePreference = await MediaSourcePrefs.read();
+      } catch (_) {
+        imagePreference = MediaSourcePreference.auto;
+      }
+      try {
+        audioPreference = await MediaCapabilitySourcePrefs.readAudio();
+      } catch (_) {
+        audioPreference = MediaSourcePreference.auto;
+      }
+      try {
+        ocrPreference = await MediaCapabilitySourcePrefs.readDocumentOcr();
+      } catch (_) {
+        ocrPreference = MediaSourcePreference.auto;
+      }
 
       final effectiveRoute = resolveMediaSourceRoute(
-        mediaPreference,
+        imagePreference,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasOpenAiByokProfile,
+      );
+      final audioRoute = resolveMediaSourceRoute(
+        audioPreference,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasOpenAiByokProfile,
+      );
+      final ocrRoute = resolveMediaSourceRoute(
+        ocrPreference,
         cloudAvailable: cloudAvailable,
         hasByokProfile: hasOpenAiByokProfile,
       );
@@ -758,12 +778,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                   hasCloudAnnotationModel ||
                   allowImageOcrFallback);
       final audioTranscribeCloudEnabled =
-          effectiveRoute == MediaSourceRouteKind.cloudGateway && cloudAvailable;
+          audioRoute == MediaSourceRouteKind.cloudGateway && cloudAvailable;
       final audioTranscribeByokProfile =
-          effectiveRoute == MediaSourceRouteKind.local
+          audioRoute == MediaSourceRouteKind.local
               ? null
               : effectiveOpenAiProfile();
-      final effectiveAudioEngine = effectiveRoute == MediaSourceRouteKind.local
+      final effectiveAudioEngine = audioRoute == MediaSourceRouteKind.local
           ? 'local_runtime'
           : normalizeAudioTranscribeEngine(
               contentConfig?.audioTranscribeEngine ?? 'whisper',
@@ -845,8 +865,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           ? 'device_plus_en'
           : rawConfiguredOcrHints.trim();
 
-      final shouldTryMultimodalOcr =
-          effectiveRoute != MediaSourceRouteKind.local;
+      final shouldTryMultimodalOcr = ocrRoute != MediaSourceRouteKind.local;
       final networkForOcr = await getNetwork();
       final canUseNetworkOcr =
           networkForOcr != MediaEnrichmentNetwork.offline &&

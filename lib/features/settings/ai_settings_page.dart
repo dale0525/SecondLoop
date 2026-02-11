@@ -7,6 +7,7 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/embeddings_source_prefs.dart';
+import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -65,6 +66,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   MediaSourcePreference _mediaPreference = MediaSourcePreference.auto;
   bool _mediaLoading = true;
   bool _mediaPreferenceSaving = false;
+  bool _imageWifiOnly = true;
+  bool _imageWifiSaving = false;
   int _mediaLoadGeneration = 0;
 
   Timer? _clearHighlightTimer;
@@ -286,12 +289,22 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       preference = MediaSourcePreference.auto;
     }
 
+    bool imageWifiOnly;
+    try {
+      imageWifiOnly = await MediaCapabilityWifiPrefs.readImageWifiOnly(
+        fallbackWifiOnly: true,
+      );
+    } catch (_) {
+      imageWifiOnly = true;
+    }
+
     final route = await _resolveMediaRouteWithPreference(preference);
 
     if (!mounted || generation != _mediaLoadGeneration) return;
     setState(() {
       _mediaPreference = preference;
       _mediaRoute = route;
+      _imageWifiOnly = imageWifiOnly;
       _mediaLoading = false;
     });
   }
@@ -352,6 +365,24 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     } finally {
       if (mounted) {
         setState(() => _mediaPreferenceSaving = false);
+      }
+    }
+  }
+
+  Future<void> _setImageWifiOnly(bool wifiOnly) async {
+    if (_imageWifiSaving || _imageWifiOnly == wifiOnly) return;
+    setState(() => _imageWifiSaving = true);
+
+    try {
+      await MediaCapabilityWifiPrefs.write(
+        MediaCapabilityWifiScope.imageCaption,
+        wifiOnly: wifiOnly,
+      );
+      if (!mounted) return;
+      setState(() => _imageWifiOnly = wifiOnly);
+    } finally {
+      if (mounted) {
+        setState(() => _imageWifiSaving = false);
       }
     }
   }
@@ -504,6 +535,25 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       MediaSourceRouteKind.byok => status.byok,
       MediaSourceRouteKind.local => status.local,
     };
+  }
+
+  bool _isZhLocale(BuildContext context) {
+    return Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+  }
+
+  String _imageLocalSourceSubtitle(BuildContext context) {
+    return _isZhLocale(context)
+        ? '使用本地文字识别，也就是 OCR。'
+        : 'Use local text recognition (OCR) on-device.';
+  }
+
+  String _wifiOnlyHint(BuildContext context) {
+    return _isZhLocale(context)
+        ? '仅Wi-Fi（仅对 SecondLoop Cloud / BYOK 生效，本地能力不受影响）'
+        : 'Wi-Fi only (applies to SecondLoop Cloud / BYOK only; local capability is unaffected).';
   }
 
   Widget _buildWarningBanner(
@@ -896,7 +946,18 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                 key: const ValueKey('ai_settings_media_mode_local'),
                 value: MediaSourcePreference.local,
                 title: mediaPreferenceLabels.local.title,
-                subtitle: mediaPreferenceLabels.local.description,
+                subtitle: _imageLocalSourceSubtitle(context),
+              ),
+              SwitchListTile(
+                key: const ValueKey('ai_settings_media_image_wifi_only'),
+                title: Text(_isZhLocale(context) ? '仅Wi-Fi' : 'Wi-Fi only'),
+                subtitle: Text(_wifiOnlyHint(context)),
+                value: _imageWifiOnly,
+                onChanged: _mediaLoading || _imageWifiSaving
+                    ? null
+                    : (value) {
+                        unawaited(_setImageWifiOnly(value));
+                      },
               ),
               if (AppBackendScope.maybeOf(context) != null &&
                   SessionScope.maybeOf(context) != null)

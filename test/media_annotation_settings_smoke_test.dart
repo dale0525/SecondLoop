@@ -11,6 +11,7 @@ import 'package:secondloop/core/content_enrichment/content_enrichment_config_sto
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/content_enrichment/linux_ocr_model_store.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/core/ai/media_source_prefs.dart';
 import 'package:secondloop/core/media_annotation/media_annotation_config_store.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
@@ -264,6 +265,11 @@ bool _wifiSwitchValue(WidgetTester tester, Finder finder) {
   return tester.widget<SwitchListTile>(finder).value;
 }
 
+bool _sourceRadioSelected(WidgetTester tester, Finder finder) {
+  final tile = tester.widget<RadioListTile<MediaSourcePreference>>(finder);
+  return tile.value == tile.groupValue;
+}
+
 void main() {
   testWidgets('Media understanding settings shows one master switch only',
       (tester) async {
@@ -496,7 +502,7 @@ void main() {
     expect(store.writes.last.allowCellular, isFalse);
   });
 
-  testWidgets('Embedded Wi-Fi toggles apply independently by capability',
+  testWidgets('Embedded audio/OCR Wi-Fi toggles are independent',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -524,34 +530,27 @@ void main() {
       linuxOcrModelStore: linuxModelStore,
       embedded: true,
     );
-    await tester.pump(const Duration(milliseconds: 200));
-
-    expect(
-      find.byKey(MediaAnnotationSettingsPage.embeddedRootKey),
-      findsOneWidget,
-    );
 
     final audioWifiSwitch =
         find.byKey(MediaAnnotationSettingsPage.audioWifiOnlySwitchKey);
     final ocrWifiSwitch =
         find.byKey(MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey);
-    final imageWifiSwitch =
-        find.byKey(MediaAnnotationSettingsPage.imageWifiOnlySwitchKey);
 
     expect(audioWifiSwitch, findsOneWidget);
     expect(ocrWifiSwitch, findsOneWidget);
-    expect(imageWifiSwitch, findsOneWidget);
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.imageWifiOnlySwitchKey),
+      findsNothing,
+    );
 
     expect(_wifiSwitchValue(tester, audioWifiSwitch), isTrue);
     expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
-    expect(_wifiSwitchValue(tester, imageWifiSwitch), isTrue);
 
     await tester.tap(audioWifiSwitch);
     await tester.pumpAndSettle();
 
     expect(_wifiSwitchValue(tester, audioWifiSwitch), isFalse);
     expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
-    expect(_wifiSwitchValue(tester, imageWifiSwitch), isTrue);
 
     await _pumpPage(
       tester,
@@ -563,7 +562,54 @@ void main() {
 
     expect(_wifiSwitchValue(tester, audioWifiSwitch), isFalse);
     expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
-    expect(_wifiSwitchValue(tester, imageWifiSwitch), isTrue);
+  });
+
+  testWidgets('Embedded audio/OCR source radios default to auto',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: false,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+      embedded: true,
+    );
+
+    final audioAuto =
+        find.byKey(const ValueKey('media_annotation_settings_audio_mode_auto'));
+    final ocrAuto =
+        find.byKey(const ValueKey('media_annotation_settings_ocr_mode_auto'));
+
+    expect(audioAuto, findsOneWidget);
+    expect(ocrAuto, findsOneWidget);
+    expect(_sourceRadioSelected(tester, audioAuto), isTrue);
+    expect(_sourceRadioSelected(tester, ocrAuto), isTrue);
+
+    final audioByok =
+        find.byKey(const ValueKey('media_annotation_settings_audio_mode_byok'));
+    await tester.tap(audioByok);
+    await tester.pumpAndSettle();
+
+    expect(_sourceRadioSelected(tester, audioByok), isTrue);
+    expect(find.text('Transcription engine'), findsOneWidget);
   });
 
   testWidgets(

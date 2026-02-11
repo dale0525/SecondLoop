@@ -123,7 +123,6 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
         _mutateState(() {
           _audioWifiOnly = wifiOnly;
           _ocrWifiOnly = wifiOnly;
-          _imageWifiOnly = wifiOnly;
         });
       }
     } catch (_) {

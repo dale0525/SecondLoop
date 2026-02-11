@@ -8,6 +8,57 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     required MediaAnnotationConfig mediaConfig,
   }) {
     final t = context.t.settings.mediaAnnotation;
+    if (showWifiOnly) {
+      final sourceLabels =
+          context.t.settings.aiSelection.mediaUnderstanding.preference;
+      return <Widget>[
+        mediaAnnotationSectionTitle(context, t.documentOcr.title),
+        const SizedBox(height: 8),
+        mediaAnnotationSectionCard([
+          _buildSourcePreferenceTile(
+            value: MediaSourcePreference.auto,
+            groupValue: _ocrSourcePreference,
+            onChanged: _setOcrSourcePreference,
+            tileKey: const ValueKey('media_annotation_settings_ocr_mode_auto'),
+            title: sourceLabels.auto.title,
+            subtitle: sourceLabels.auto.description,
+          ),
+          _buildSourcePreferenceTile(
+            value: MediaSourcePreference.cloud,
+            groupValue: _ocrSourcePreference,
+            onChanged: _setOcrSourcePreference,
+            tileKey: const ValueKey('media_annotation_settings_ocr_mode_cloud'),
+            title: sourceLabels.cloud.title,
+            subtitle: sourceLabels.cloud.description,
+          ),
+          _buildSourcePreferenceTile(
+            value: MediaSourcePreference.byok,
+            groupValue: _ocrSourcePreference,
+            onChanged: _setOcrSourcePreference,
+            tileKey: const ValueKey('media_annotation_settings_ocr_mode_byok'),
+            title: sourceLabels.byok.title,
+            subtitle: sourceLabels.byok.description,
+          ),
+          _buildSourcePreferenceTile(
+            value: MediaSourcePreference.local,
+            groupValue: _ocrSourcePreference,
+            onChanged: _setOcrSourcePreference,
+            tileKey: const ValueKey('media_annotation_settings_ocr_mode_local'),
+            title: sourceLabels.local.title,
+            subtitle: sourceLabels.local.description,
+          ),
+          _buildScopedWifiOnlyTile(
+            tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
+            wifiOnly: _ocrWifiOnly,
+            onChanged: (wifiOnly) => _setCapabilityWifiOnly(
+              scope: MediaCapabilityWifiScope.documentOcr,
+              wifiOnly: wifiOnly,
+            ),
+          ),
+        ]),
+      ];
+    }
+
     final contentConfig = _contentConfig;
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
@@ -57,16 +108,6 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
           onTap: _busy || proUser
               ? null
               : () => _pickDocumentOcrEngineMode(contentConfig, mediaConfig),
-        ),
-      if (showWifiOnly)
-        _buildScopedWifiOnlyTile(
-          tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
-          capabilityTitle: t.documentOcr.title,
-          wifiOnly: _ocrWifiOnly,
-          onChanged: (wifiOnly) => _setCapabilityWifiOnly(
-            scope: MediaCapabilityWifiScope.documentOcr,
-            wifiOnly: wifiOnly,
-          ),
         ),
     ];
     return <Widget>[
@@ -122,7 +163,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        zh ? '本地转写运行时' : 'Local Transcribe Runtime',
+                        zh ? '本地能力引擎' : 'Local Capability Engine',
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
