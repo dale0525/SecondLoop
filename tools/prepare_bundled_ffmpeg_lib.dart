@@ -76,6 +76,48 @@ String? resolveFfmpegFromProjectPaths({
   return null;
 }
 
+String resolveBundledFfmpegSource({
+  required String sourcePath,
+  required DesktopPlatform platform,
+  required bool Function(String candidatePath) isFile,
+  String? chocolateyInstall,
+}) {
+  if (platform != DesktopPlatform.windows) return sourcePath;
+
+  final trimmedSource = sourcePath.trim();
+  if (trimmedSource.isEmpty) return sourcePath;
+
+  final normalizedSource = _normalizeWindowsPath(trimmedSource).toLowerCase();
+  if (!normalizedSource.endsWith(r'\chocolatey\bin\ffmpeg.exe')) {
+    return sourcePath;
+  }
+
+  final root = _resolveChocolateyRoot(
+    sourcePath: trimmedSource,
+    chocolateyInstall: chocolateyInstall,
+  );
+  if (root == null || root.isEmpty) return sourcePath;
+
+  final candidates = <String>[
+    _joinPath(
+      root,
+      <String>['lib', 'ffmpeg', 'tools', 'ffmpeg', 'bin', 'ffmpeg.exe'],
+      DesktopPlatform.windows,
+    ),
+    _joinPath(
+      root,
+      <String>['lib', 'ffmpeg', 'tools', 'ffmpeg.exe'],
+      DesktopPlatform.windows,
+    ),
+  ];
+
+  for (final candidate in candidates) {
+    if (isFile(candidate)) return candidate;
+  }
+
+  return sourcePath;
+}
+
 String? resolveFfmpegFromPath({
   required String pathEnv,
   required DesktopPlatform platform,
@@ -127,6 +169,24 @@ String _joinPath(
     out = _joinDirectoryAndFile(out, part, platform);
   }
   return out;
+}
+
+String? _resolveChocolateyRoot({
+  required String sourcePath,
+  String? chocolateyInstall,
+}) {
+  final fromEnv = _trimOuterQuotes((chocolateyInstall ?? '').trim());
+  if (fromEnv.isNotEmpty) return fromEnv;
+
+  const suffix = r'\bin\ffmpeg.exe';
+  final normalized = _normalizeWindowsPath(sourcePath);
+  if (!normalized.toLowerCase().endsWith(suffix)) return null;
+
+  return normalized.substring(0, normalized.length - suffix.length);
+}
+
+String _normalizeWindowsPath(String value) {
+  return value.replaceAll('/', r'\');
 }
 
 String _trimOuterQuotes(String value) {
