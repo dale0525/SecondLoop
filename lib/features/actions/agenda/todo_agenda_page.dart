@@ -32,6 +32,11 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
   static const _kDoneDotColor = Color(0xFF22C55E);
   static const _kDonePageSize = 20;
   static const _kLoadMoreThresholdPx = 240.0;
+  static const List<String> _kSelectableStatuses = <String>[
+    'open',
+    'in_progress',
+    'done',
+  ];
 
   final ScrollController _scrollController = ScrollController();
 
@@ -158,13 +163,6 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         'done' => context.t.actions.todoStatus.done,
         'dismissed' => context.t.actions.todoStatus.dismissed,
         _ => status,
-      };
-
-  String _nextStatusForTap(String status) => switch (status) {
-        'inbox' => 'in_progress',
-        'open' => 'in_progress',
-        'in_progress' => 'done',
-        _ => 'open',
       };
 
   Future<void> _setStatus(Todo todo, String newStatus) async {
@@ -487,15 +485,16 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                       ),
                                     ),
                                     const SizedBox(width: 10),
-                                    _TodoStatusButton(
-                                      buttonKey: ValueKey(
-                                        'todo_agenda_toggle_status_${todo.id}',
+                                    _TodoStatusSelector(
+                                      statuses: _kSelectableStatuses,
+                                      selectedStatus: todo.status,
+                                      statusLabelBuilder: (status) =>
+                                          _statusLabel(context, status),
+                                      buttonKeyBuilder: (status) => ValueKey(
+                                        'todo_agenda_set_status_${todo.id}_$status',
                                       ),
-                                      label: _statusLabel(context, todo.status),
-                                      onPressed: () => _setStatus(
-                                        todo,
-                                        _nextStatusForTap(todo.status),
-                                      ),
+                                      onSelected: (status) =>
+                                          _setStatus(todo, status),
                                     ),
                                     const SizedBox(width: 8),
                                     SlIconButton(
@@ -566,15 +565,53 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
   }
 }
 
+final class _TodoStatusSelector extends StatelessWidget {
+  const _TodoStatusSelector({
+    required this.statuses,
+    required this.selectedStatus,
+    required this.statusLabelBuilder,
+    required this.onSelected,
+    this.buttonKeyBuilder,
+  });
+
+  final List<String> statuses;
+  final String selectedStatus;
+  final String Function(String status) statusLabelBuilder;
+  final ValueChanged<String> onSelected;
+  final Key? Function(String status)? buttonKeyBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final status in statuses)
+          _TodoStatusButton(
+            buttonKey: buttonKeyBuilder?.call(status),
+            label: statusLabelBuilder(status),
+            selected: status == selectedStatus,
+            onPressed: () {
+              if (status == selectedStatus) return;
+              onSelected(status);
+            },
+          ),
+      ],
+    );
+  }
+}
+
 final class _TodoStatusButton extends StatelessWidget {
   const _TodoStatusButton({
     required this.label,
     required this.onPressed,
+    required this.selected,
     this.buttonKey,
   });
 
   final String label;
   final VoidCallback onPressed;
+  final bool selected;
   final Key? buttonKey;
 
   @override
@@ -584,33 +621,48 @@ final class _TodoStatusButton extends StatelessWidget {
 
     final colorScheme = theme.colorScheme;
     final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
+      final base = selected ? colorScheme.primary : colorScheme.onSurface;
       if (states.contains(MaterialState.pressed)) {
-        return colorScheme.primary.withOpacity(0.18);
+        return base.withOpacity(0.16);
       }
       if (states.contains(MaterialState.hovered) ||
           states.contains(MaterialState.focused)) {
-        return colorScheme.primary.withOpacity(0.12);
+        return base.withOpacity(0.1);
       }
       return null;
     });
+
+    final foreground =
+        selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final border = selected
+        ? colorScheme.primary.withOpacity(
+            theme.brightness == Brightness.dark ? 0.58 : 0.4,
+          )
+        : tokens.borderSubtle;
+    final background = selected
+        ? colorScheme.primary.withOpacity(
+            theme.brightness == Brightness.dark ? 0.2 : 0.08,
+          )
+        : tokens.surface2;
 
     return OutlinedButton.icon(
       key: buttonKey,
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        backgroundColor: tokens.surface2,
+        foregroundColor: foreground,
+        backgroundColor: background,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         minimumSize: const Size(0, 38),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
         ),
-        side: BorderSide(color: tokens.borderSubtle),
+        side: BorderSide(color: border),
       ).copyWith(overlayColor: overlay),
       icon: Icon(
-        Icons.swap_horiz_rounded,
+        selected ? Icons.check_rounded : Icons.circle_outlined,
         size: 16,
-        color: colorScheme.onSurfaceVariant,
+        color: foreground,
       ),
       label: Text(
         label,

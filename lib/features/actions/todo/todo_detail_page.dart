@@ -42,6 +42,12 @@ class TodoDetailPage extends StatefulWidget {
 }
 
 class _TodoDetailPageState extends State<TodoDetailPage> {
+  static const List<String> _kSelectableStatuses = <String>[
+    'open',
+    'in_progress',
+    'done',
+  ];
+
   late Todo _todo = widget.initialTodo;
   Future<List<TodoActivity>>? _activitiesFuture;
   final _noteController = TextEditingController();
@@ -126,13 +132,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         'done' => context.t.actions.todoStatus.done,
         'dismissed' => context.t.actions.todoStatus.dismissed,
         _ => status,
-      };
-
-  String _nextStatusForTap(String status) => switch (status) {
-        'inbox' => 'in_progress',
-        'open' => 'in_progress',
-        'in_progress' => 'done',
-        _ => 'open',
       };
 
   String? _formatDue(BuildContext context) {
@@ -633,14 +632,21 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                       ),
                       const SizedBox(height: 10),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _TodoStatusButton(
-                            label: _statusLabel(context, _todo.status),
-                            onPressed: () => unawaited(
-                              _setStatus(_nextStatusForTap(_todo.status)),
+                          Expanded(
+                            child: _TodoStatusSelector(
+                              statuses: _kSelectableStatuses,
+                              selectedStatus: _todo.status,
+                              statusLabelBuilder: (status) =>
+                                  _statusLabel(context, status),
+                              buttonKeyBuilder: (status) =>
+                                  ValueKey('todo_detail_set_status_$status'),
+                              onSelected: (status) =>
+                                  unawaited(_setStatus(status)),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           SlIconButton(
                             key: const ValueKey('todo_detail_delete'),
                             tooltip: context.t.common.actions.delete,
@@ -819,10 +825,14 @@ final class _TodoStatusButton extends StatelessWidget {
   const _TodoStatusButton({
     required this.label,
     required this.onPressed,
+    required this.selected,
+    this.buttonKey,
   });
 
   final String label;
   final VoidCallback onPressed;
+  final bool selected;
+  final Key? buttonKey;
 
   @override
   Widget build(BuildContext context) {
@@ -831,30 +841,46 @@ final class _TodoStatusButton extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
+      final base = selected ? colorScheme.primary : colorScheme.onSurface;
       if (states.contains(MaterialState.pressed)) {
-        return colorScheme.primary.withOpacity(0.18);
+        return base.withOpacity(0.16);
       }
       if (states.contains(MaterialState.hovered) ||
           states.contains(MaterialState.focused)) {
-        return colorScheme.primary.withOpacity(0.12);
+        return base.withOpacity(0.1);
       }
       return null;
     });
 
+    final foreground =
+        selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final border = selected
+        ? colorScheme.primary.withOpacity(
+            theme.brightness == Brightness.dark ? 0.58 : 0.4,
+          )
+        : tokens.borderSubtle;
+    final background = selected
+        ? colorScheme.primary.withOpacity(
+            theme.brightness == Brightness.dark ? 0.2 : 0.08,
+          )
+        : tokens.surface2;
+
     return OutlinedButton.icon(
+      key: buttonKey,
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        backgroundColor: tokens.surface2,
+        foregroundColor: foreground,
+        backgroundColor: background,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         minimumSize: const Size(0, 38),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: const StadiumBorder(),
-        side: BorderSide(color: tokens.borderSubtle),
+        side: BorderSide(color: border),
       ).copyWith(overlayColor: overlay),
       icon: Icon(
-        Icons.swap_horiz_rounded,
+        selected ? Icons.check_rounded : Icons.circle_outlined,
         size: 16,
-        color: colorScheme.onSurfaceVariant,
+        color: foreground,
       ),
       label: Text(
         label,
@@ -862,6 +888,42 @@ final class _TodoStatusButton extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+final class _TodoStatusSelector extends StatelessWidget {
+  const _TodoStatusSelector({
+    required this.statuses,
+    required this.selectedStatus,
+    required this.statusLabelBuilder,
+    required this.onSelected,
+    this.buttonKeyBuilder,
+  });
+
+  final List<String> statuses;
+  final String selectedStatus;
+  final String Function(String status) statusLabelBuilder;
+  final ValueChanged<String> onSelected;
+  final Key? Function(String status)? buttonKeyBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final status in statuses)
+          _TodoStatusButton(
+            buttonKey: buttonKeyBuilder?.call(status),
+            label: statusLabelBuilder(status),
+            selected: status == selectedStatus,
+            onPressed: () {
+              if (status == selectedStatus) return;
+              onSelected(status);
+            },
+          ),
+      ],
     );
   }
 }
