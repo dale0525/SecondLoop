@@ -894,21 +894,46 @@ extension _ChatPageStateBuild on _ChatPageState {
                                       return Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          SlButton(
-                                            buttonKey:
-                                                const ValueKey('chat_ask_ai'),
-                                            icon: const Icon(
-                                              Icons.auto_awesome_rounded,
-                                              size: 18,
+                                          if (_showConfigureAiEntry) ...[
+                                            SlButton(
+                                              buttonKey: const ValueKey(
+                                                'chat_configure_ai',
+                                              ),
+                                              icon: const Icon(
+                                                Icons.settings_suggest_rounded,
+                                                size: 18,
+                                              ),
+                                              variant:
+                                                  SlButtonVariant.secondary,
+                                              onPressed: _isComposerBusy
+                                                  ? null
+                                                  : _openAskAiSettingsFromComposer,
+                                              child: Text(
+                                                context.t.common.actions
+                                                    .configureAi,
+                                              ),
                                             ),
-                                            variant: SlButtonVariant.secondary,
-                                            onPressed:
-                                                _isComposerBusy ? null : _askAi,
-                                            child: Text(
-                                              context.t.common.actions.askAi,
+                                            const SizedBox(width: 8),
+                                          ] else if (_canAskAiNow) ...[
+                                            SlButton(
+                                              buttonKey: const ValueKey(
+                                                'chat_ask_ai',
+                                              ),
+                                              icon: const Icon(
+                                                Icons.auto_awesome_rounded,
+                                                size: 18,
+                                              ),
+                                              variant:
+                                                  SlButtonVariant.secondary,
+                                              onPressed: _isComposerBusy
+                                                  ? null
+                                                  : _askAi,
+                                              child: Text(
+                                                context.t.common.actions.askAi,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 8),
+                                            const SizedBox(width: 8),
+                                          ],
                                           SlButton(
                                             buttonKey:
                                                 const ValueKey('chat_send'),

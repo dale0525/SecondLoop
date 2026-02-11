@@ -6,12 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI shows setup dialog when no LLM profile', (tester) async {
+  testWidgets('Ask AI shows configure entry when no LLM profile',
+      (tester) async {
     final backend = _NoLlmProfileBackend();
 
     await tester.pumpWidget(
@@ -39,10 +41,16 @@ void main() {
 
     await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
+
+    expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chat_configure_ai')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('ask_ai_setup_dialog')), findsOneWidget);
+    expect(find.byType(AiSettingsPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
+        findsOneWidget);
     expect(backend.calls, isNot(contains('processPending')));
     expect(backend.calls, isNot(contains('askAiStream')));
   });

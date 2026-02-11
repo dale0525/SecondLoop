@@ -47,17 +47,33 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
 
-    final route = await decideAskAiRoute(
-      backend,
-      sessionKey,
-      cloudIdToken: cloudIdToken,
-      cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-      subscriptionStatus: subscriptionStatus,
-    );
+    AskAiRouteKind route;
+    if (_composerAskAiRouteLoading) {
+      try {
+        route = await decideAskAiRoute(
+          backend,
+          sessionKey,
+          cloudIdToken: cloudIdToken,
+          cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+          subscriptionStatus: subscriptionStatus,
+        );
+      } catch (_) {
+        route = AskAiRouteKind.needsSetup;
+      }
+
+      if (mounted) {
+        _setState(() {
+          _composerAskAiRouteLoading = false;
+          _composerAskAiRoute = route;
+        });
+      }
+    } else {
+      route = _composerAskAiRoute;
+    }
 
     if (route == AskAiRouteKind.needsSetup) {
-      final configured = await _ensureAskAiConfigured(backend, sessionKey);
-      if (!configured) return;
+      await _openAskAiSettingsFromComposer();
+      return;
     }
 
     final consented = await _ensureAskAiDataConsent();
@@ -597,67 +613,5 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     } catch (_) {
       return false;
     }
-  }
-
-  Future<bool> _ensureAskAiConfigured(
-    AppBackend backend,
-    Uint8List sessionKey,
-  ) async {
-    try {
-      final hasActiveProfile = await hasActiveLlmProfile(backend, sessionKey);
-      if (hasActiveProfile) return true;
-    } catch (_) {
-      return true;
-    }
-    if (!mounted) return false;
-
-    final action = await showDialog<_AskAiSetupAction>(
-      context: context,
-      builder: (context) {
-        final t = context.t;
-        return AlertDialog(
-          key: const ValueKey('ask_ai_setup_dialog'),
-          title: Text(t.chat.askAiSetup.title),
-          content: Text(t.chat.askAiSetup.body),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(t.common.actions.cancel),
-            ),
-            TextButton(
-              key: const ValueKey('ask_ai_setup_subscribe'),
-              onPressed: () =>
-                  Navigator.of(context).pop(_AskAiSetupAction.subscribe),
-              child: Text(t.chat.askAiSetup.actions.subscribe),
-            ),
-            FilledButton(
-              key: const ValueKey('ask_ai_setup_configure_byok'),
-              onPressed: () =>
-                  Navigator.of(context).pop(_AskAiSetupAction.configureByok),
-              child: Text(t.chat.askAiSetup.actions.configureByok),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted) return false;
-
-    switch (action) {
-      case _AskAiSetupAction.configureByok:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
-        );
-        break;
-      case _AskAiSetupAction.subscribe:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CloudAccountPage()),
-        );
-        break;
-      case null:
-        break;
-    }
-
-    return false;
   }
 }

@@ -17,6 +17,7 @@
       "continueLabel": "继续",
       "send": "发送",
       "askAi": "问 AI",
+      "configureAi": "配置 AI",
       "stop": "停止",
       "stopping": "正在停止…",
       "edit": "编辑",
@@ -250,6 +251,42 @@
     "embeddingProfiles": {
       "title": "API Key（语义搜索）",
       "subtitle": "高级：使用你自己的服务商与 Key"
+    },
+    "aiSelection": {
+      "title": "AI 来源",
+      "subtitle": "统一管理各项 AI 能力的来源与策略。",
+      "askAi": {
+        "title": "问 AI",
+        "description": "用于聊天提问与记忆检索的模型来源。",
+        "setupHint": "当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。",
+        "status": {
+          "loading": "正在检查当前路由...",
+          "cloud": "当前路由：SecondLoop Cloud",
+          "byok": "当前路由：API 密钥配置（BYOK）",
+          "notConfigured": "当前路由：需要先配置"
+        },
+        "actions": {
+          "openCloud": "打开 Cloud 账户",
+          "openByok": "打开 API 密钥"
+        }
+      },
+      "embeddings": {
+        "title": "语义搜索与向量",
+        "description": "用于记忆召回、待办关联和问 AI 检索质量。",
+        "status": "可配置 Cloud 或 API 密钥来源以启用语义能力。",
+        "actions": {
+          "openEmbeddingProfiles": "打开向量 API 密钥",
+          "openCloudAccount": "打开 Cloud 账户"
+        }
+      },
+      "mediaUnderstanding": {
+        "title": "媒体理解",
+        "description": "OCR、图片描述和音频转写的来源选择。",
+        "status": "在媒体设置中管理 runtime / 本地 / Cloud 策略。",
+        "actions": {
+          "openSettings": "打开媒体理解设置"
+        }
+      }
     },
     "semanticParseAutoActions": {
       "title": "AI 语义动作",

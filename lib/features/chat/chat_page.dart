@@ -68,7 +68,7 @@ import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
 import '../settings/cloud_account_page.dart';
-import '../settings/llm_profiles_page.dart';
+import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
@@ -85,6 +85,7 @@ part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
 part 'chat_page_methods_f_audio_recording.dart';
+part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
@@ -384,6 +385,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
+  bool _composerAskAiRouteLoading = true;
   String? _hoveredMessageId;
   String? _pendingQuestion;
   String _streamingAnswer = '';
@@ -394,6 +396,7 @@ class _ChatPageState extends State<ChatPage> {
   int? _askFailureCreatedAtMs;
   String? _askAttemptAnchorMessageId;
   String? _askFailureAnchorMessageId;
+  AskAiRouteKind _composerAskAiRoute = AskAiRouteKind.needsSetup;
   StreamSubscription<String>? _askSub;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -468,6 +471,7 @@ class _ChatPageState extends State<ChatPage> {
     _reviewCountFuture ??= _loadReviewQueueCount();
     _agendaFuture ??= _loadTodoAgendaSummary();
     _attachSyncEngine();
+    unawaited(_refreshComposerAskAiRoute());
   }
 
   @override
@@ -663,9 +667,4 @@ enum _MessageAction {
   edit,
   linkTodo,
   delete,
-}
-
-enum _AskAiSetupAction {
-  subscribe,
-  configureByok,
 }

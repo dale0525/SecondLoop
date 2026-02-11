@@ -17,6 +17,7 @@
       "continueLabel": "Continue",
       "send": "Send",
       "askAi": "Ask AI",
+      "configureAi": "Configure AI",
       "stop": "Stop",
       "stopping": "Stopping…",
       "edit": "Edit",
@@ -250,6 +251,42 @@
     "embeddingProfiles": {
       "title": "API keys (Semantic search)",
       "subtitle": "Advanced: use your own provider and key"
+    },
+    "aiSelection": {
+      "title": "AI source",
+      "subtitle": "Choose where each AI capability runs.",
+      "askAi": {
+        "title": "Ask AI",
+        "description": "Chat assistant provider for your messages and memory.",
+        "setupHint": "Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.",
+        "status": {
+          "loading": "Checking current route...",
+          "cloud": "Current route: SecondLoop Cloud",
+          "byok": "Current route: API key profile (BYOK)",
+          "notConfigured": "Current route: setup required"
+        },
+        "actions": {
+          "openCloud": "Open Cloud account",
+          "openByok": "Open API keys"
+        }
+      },
+      "embeddings": {
+        "title": "Semantic search & embeddings",
+        "description": "Used for recall, todo linking, and Ask AI retrieval quality.",
+        "status": "Configure cloud or API key profiles for semantic capabilities.",
+        "actions": {
+          "openEmbeddingProfiles": "Open embedding API keys",
+          "openCloudAccount": "Open Cloud account"
+        }
+      },
+      "mediaUnderstanding": {
+        "title": "Media understanding",
+        "description": "OCR, captions, and audio transcription source selection.",
+        "status": "Manage runtime/local/cloud strategy in media settings.",
+        "actions": {
+          "openSettings": "Open media understanding settings"
+        }
+      }
     },
     "semanticParseAutoActions": {
       "title": "AI semantic actions",

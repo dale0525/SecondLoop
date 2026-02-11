@@ -84,17 +84,19 @@ void main() {
     expect(sendSize.width, greaterThanOrEqualTo(44));
     expect(sendSize.height, greaterThanOrEqualTo(44));
 
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('chat_ask_ai')),
-        matching: find.byIcon(Icons.auto_awesome_rounded),
+        of: find.byKey(const ValueKey('chat_configure_ai')),
+        matching: find.byIcon(Icons.settings_suggest_rounded),
       ),
       findsOneWidget,
     );
-    final askSize = tester.getSize(find.byKey(const ValueKey('chat_ask_ai')));
-    expect(askSize.width, greaterThanOrEqualTo(44));
-    expect(askSize.height, greaterThanOrEqualTo(44));
+    final configureSize =
+        tester.getSize(find.byKey(const ValueKey('chat_configure_ai')));
+    expect(configureSize.width, greaterThanOrEqualTo(44));
+    expect(configureSize.height, greaterThanOrEqualTo(44));
 
     expect(find.byType(SlSurface), findsWidgets);
     expect(

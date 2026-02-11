@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1220 (610 per locale)
+/// Strings: 1262 (631 per locale)
 ///
-/// Built on 2026-02-10 at 12:41 UTC
+/// Built on 2026-02-11 at 05:34 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -301,6 +301,8 @@ class _StringsSettingsEn {
       _StringsSettingsLlmProfilesEn._(_root);
   late final _StringsSettingsEmbeddingProfilesEn embeddingProfiles =
       _StringsSettingsEmbeddingProfilesEn._(_root);
+  late final _StringsSettingsAiSelectionEn aiSelection =
+      _StringsSettingsAiSelectionEn._(_root);
   late final _StringsSettingsSemanticParseAutoActionsEn
       semanticParseAutoActions =
       _StringsSettingsSemanticParseAutoActionsEn._(_root);
@@ -600,6 +602,7 @@ class _StringsCommonActionsEn {
   String get continueLabel => 'Continue';
   String get send => 'Send';
   String get askAi => 'Ask AI';
+  String get configureAi => 'Configure AI';
   String get stop => 'Stop';
   String get stopping => 'Stopping…';
   String get edit => 'Edit';
@@ -934,6 +937,24 @@ class _StringsSettingsEmbeddingProfilesEn {
   // Translations
   String get title => 'API keys (Semantic search)';
   String get subtitle => 'Advanced: use your own provider and key';
+}
+
+// Path: settings.aiSelection
+class _StringsSettingsAiSelectionEn {
+  _StringsSettingsAiSelectionEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'AI source';
+  String get subtitle => 'Choose where each AI capability runs.';
+  late final _StringsSettingsAiSelectionAskAiEn askAi =
+      _StringsSettingsAiSelectionAskAiEn._(_root);
+  late final _StringsSettingsAiSelectionEmbeddingsEn embeddings =
+      _StringsSettingsAiSelectionEmbeddingsEn._(_root);
+  late final _StringsSettingsAiSelectionMediaUnderstandingEn
+      mediaUnderstanding =
+      _StringsSettingsAiSelectionMediaUnderstandingEn._(_root);
 }
 
 // Path: settings.semanticParseAutoActions
@@ -1807,6 +1828,55 @@ class _StringsSettingsThemeOptionsEn {
   String get dark => 'Dark';
 }
 
+// Path: settings.aiSelection.askAi
+class _StringsSettingsAiSelectionAskAiEn {
+  _StringsSettingsAiSelectionAskAiEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Ask AI';
+  String get description =>
+      'Chat assistant provider for your messages and memory.';
+  String get setupHint =>
+      'Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.';
+  late final _StringsSettingsAiSelectionAskAiStatusEn status =
+      _StringsSettingsAiSelectionAskAiStatusEn._(_root);
+  late final _StringsSettingsAiSelectionAskAiActionsEn actions =
+      _StringsSettingsAiSelectionAskAiActionsEn._(_root);
+}
+
+// Path: settings.aiSelection.embeddings
+class _StringsSettingsAiSelectionEmbeddingsEn {
+  _StringsSettingsAiSelectionEmbeddingsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Semantic search & embeddings';
+  String get description =>
+      'Used for recall, todo linking, and Ask AI retrieval quality.';
+  String get status =>
+      'Configure cloud or API key profiles for semantic capabilities.';
+  late final _StringsSettingsAiSelectionEmbeddingsActionsEn actions =
+      _StringsSettingsAiSelectionEmbeddingsActionsEn._(_root);
+}
+
+// Path: settings.aiSelection.mediaUnderstanding
+class _StringsSettingsAiSelectionMediaUnderstandingEn {
+  _StringsSettingsAiSelectionMediaUnderstandingEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Media understanding';
+  String get description =>
+      'OCR, captions, and audio transcription source selection.';
+  String get status => 'Manage runtime/local/cloud strategy in media settings.';
+  late final _StringsSettingsAiSelectionMediaUnderstandingActionsEn actions =
+      _StringsSettingsAiSelectionMediaUnderstandingActionsEn._(_root);
+}
+
 // Path: settings.semanticParseAutoActions.dialogActions
 class _StringsSettingsSemanticParseAutoActionsDialogActionsEn {
   _StringsSettingsSemanticParseAutoActionsDialogActionsEn._(this._root);
@@ -2458,6 +2528,51 @@ class _StringsEmbeddingProfilesReindexDialogActionsEn {
   String get continueLabel => 'Continue';
 }
 
+// Path: settings.aiSelection.askAi.status
+class _StringsSettingsAiSelectionAskAiStatusEn {
+  _StringsSettingsAiSelectionAskAiStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get loading => 'Checking current route...';
+  String get cloud => 'Current route: SecondLoop Cloud';
+  String get byok => 'Current route: API key profile (BYOK)';
+  String get notConfigured => 'Current route: setup required';
+}
+
+// Path: settings.aiSelection.askAi.actions
+class _StringsSettingsAiSelectionAskAiActionsEn {
+  _StringsSettingsAiSelectionAskAiActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get openCloud => 'Open Cloud account';
+  String get openByok => 'Open API keys';
+}
+
+// Path: settings.aiSelection.embeddings.actions
+class _StringsSettingsAiSelectionEmbeddingsActionsEn {
+  _StringsSettingsAiSelectionEmbeddingsActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get openEmbeddingProfiles => 'Open embedding API keys';
+  String get openCloudAccount => 'Open Cloud account';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.actions
+class _StringsSettingsAiSelectionMediaUnderstandingActionsEn {
+  _StringsSettingsAiSelectionMediaUnderstandingActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get openSettings => 'Open media understanding settings';
+}
+
 // Path: settings.mediaAnnotation.documentOcr.enabled
 class _StringsSettingsMediaAnnotationDocumentOcrEnabledEn {
   _StringsSettingsMediaAnnotationDocumentOcrEnabledEn._(this._root);
@@ -3044,6 +3159,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsEmbeddingProfilesZhCn embeddingProfiles =
       _StringsSettingsEmbeddingProfilesZhCn._(_root);
   @override
+  late final _StringsSettingsAiSelectionZhCn aiSelection =
+      _StringsSettingsAiSelectionZhCn._(_root);
+  @override
   late final _StringsSettingsSemanticParseAutoActionsZhCn
       semanticParseAutoActions =
       _StringsSettingsSemanticParseAutoActionsZhCn._(_root);
@@ -3510,6 +3628,8 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   String get send => '发送';
   @override
   String get askAi => '问 AI';
+  @override
+  String get configureAi => '配置 AI';
   @override
   String get stop => '停止';
   @override
@@ -4024,6 +4144,32 @@ class _StringsSettingsEmbeddingProfilesZhCn
   String get title => 'API Key（语义搜索）';
   @override
   String get subtitle => '高级：使用你自己的服务商与 Key';
+}
+
+// Path: settings.aiSelection
+class _StringsSettingsAiSelectionZhCn extends _StringsSettingsAiSelectionEn {
+  _StringsSettingsAiSelectionZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'AI 来源';
+  @override
+  String get subtitle => '统一管理各项 AI 能力的来源与策略。';
+  @override
+  late final _StringsSettingsAiSelectionAskAiZhCn askAi =
+      _StringsSettingsAiSelectionAskAiZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsZhCn embeddings =
+      _StringsSettingsAiSelectionEmbeddingsZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingZhCn
+      mediaUnderstanding =
+      _StringsSettingsAiSelectionMediaUnderstandingZhCn._(_root);
 }
 
 // Path: settings.semanticParseAutoActions
@@ -5330,6 +5476,75 @@ class _StringsSettingsThemeOptionsZhCn extends _StringsSettingsThemeOptionsEn {
   String get dark => '深色';
 }
 
+// Path: settings.aiSelection.askAi
+class _StringsSettingsAiSelectionAskAiZhCn
+    extends _StringsSettingsAiSelectionAskAiEn {
+  _StringsSettingsAiSelectionAskAiZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '问 AI';
+  @override
+  String get description => '用于聊天提问与记忆检索的模型来源。';
+  @override
+  String get setupHint => '当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。';
+  @override
+  late final _StringsSettingsAiSelectionAskAiStatusZhCn status =
+      _StringsSettingsAiSelectionAskAiStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionAskAiActionsZhCn actions =
+      _StringsSettingsAiSelectionAskAiActionsZhCn._(_root);
+}
+
+// Path: settings.aiSelection.embeddings
+class _StringsSettingsAiSelectionEmbeddingsZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsEn {
+  _StringsSettingsAiSelectionEmbeddingsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '语义搜索与向量';
+  @override
+  String get description => '用于记忆召回、待办关联和问 AI 检索质量。';
+  @override
+  String get status => '可配置 Cloud 或 API 密钥来源以启用语义能力。';
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsActionsZhCn actions =
+      _StringsSettingsAiSelectionEmbeddingsActionsZhCn._(_root);
+}
+
+// Path: settings.aiSelection.mediaUnderstanding
+class _StringsSettingsAiSelectionMediaUnderstandingZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingEn {
+  _StringsSettingsAiSelectionMediaUnderstandingZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '媒体理解';
+  @override
+  String get description => 'OCR、图片描述和音频转写的来源选择。';
+  @override
+  String get status => '在媒体设置中管理 runtime / 本地 / Cloud 策略。';
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn actions =
+      _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn._(_root);
+}
+
 // Path: settings.semanticParseAutoActions.dialogActions
 class _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
     extends _StringsSettingsSemanticParseAutoActionsDialogActionsEn {
@@ -6298,6 +6513,76 @@ class _StringsEmbeddingProfilesReindexDialogActionsZhCn
   String get continueLabel => '继续';
 }
 
+// Path: settings.aiSelection.askAi.status
+class _StringsSettingsAiSelectionAskAiStatusZhCn
+    extends _StringsSettingsAiSelectionAskAiStatusEn {
+  _StringsSettingsAiSelectionAskAiStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get loading => '正在检查当前路由...';
+  @override
+  String get cloud => '当前路由：SecondLoop Cloud';
+  @override
+  String get byok => '当前路由：API 密钥配置（BYOK）';
+  @override
+  String get notConfigured => '当前路由：需要先配置';
+}
+
+// Path: settings.aiSelection.askAi.actions
+class _StringsSettingsAiSelectionAskAiActionsZhCn
+    extends _StringsSettingsAiSelectionAskAiActionsEn {
+  _StringsSettingsAiSelectionAskAiActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get openCloud => '打开 Cloud 账户';
+  @override
+  String get openByok => '打开 API 密钥';
+}
+
+// Path: settings.aiSelection.embeddings.actions
+class _StringsSettingsAiSelectionEmbeddingsActionsZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsActionsEn {
+  _StringsSettingsAiSelectionEmbeddingsActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get openEmbeddingProfiles => '打开向量 API 密钥';
+  @override
+  String get openCloudAccount => '打开 Cloud 账户';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.actions
+class _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingActionsEn {
+  _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get openSettings => '打开媒体理解设置';
+}
+
 // Path: settings.mediaAnnotation.documentOcr.enabled
 class _StringsSettingsMediaAnnotationDocumentOcrEnabledZhCn
     extends _StringsSettingsMediaAnnotationDocumentOcrEnabledEn {
@@ -6884,6 +7169,8 @@ extension on Translations {
         return 'Send';
       case 'common.actions.askAi':
         return 'Ask AI';
+      case 'common.actions.configureAi':
+        return 'Configure AI';
       case 'common.actions.stop':
         return 'Stop';
       case 'common.actions.stopping':
@@ -7197,6 +7484,46 @@ extension on Translations {
         return 'API keys (Semantic search)';
       case 'settings.embeddingProfiles.subtitle':
         return 'Advanced: use your own provider and key';
+      case 'settings.aiSelection.title':
+        return 'AI source';
+      case 'settings.aiSelection.subtitle':
+        return 'Choose where each AI capability runs.';
+      case 'settings.aiSelection.askAi.title':
+        return 'Ask AI';
+      case 'settings.aiSelection.askAi.description':
+        return 'Chat assistant provider for your messages and memory.';
+      case 'settings.aiSelection.askAi.setupHint':
+        return 'Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.';
+      case 'settings.aiSelection.askAi.status.loading':
+        return 'Checking current route...';
+      case 'settings.aiSelection.askAi.status.cloud':
+        return 'Current route: SecondLoop Cloud';
+      case 'settings.aiSelection.askAi.status.byok':
+        return 'Current route: API key profile (BYOK)';
+      case 'settings.aiSelection.askAi.status.notConfigured':
+        return 'Current route: setup required';
+      case 'settings.aiSelection.askAi.actions.openCloud':
+        return 'Open Cloud account';
+      case 'settings.aiSelection.askAi.actions.openByok':
+        return 'Open API keys';
+      case 'settings.aiSelection.embeddings.title':
+        return 'Semantic search & embeddings';
+      case 'settings.aiSelection.embeddings.description':
+        return 'Used for recall, todo linking, and Ask AI retrieval quality.';
+      case 'settings.aiSelection.embeddings.status':
+        return 'Configure cloud or API key profiles for semantic capabilities.';
+      case 'settings.aiSelection.embeddings.actions.openEmbeddingProfiles':
+        return 'Open embedding API keys';
+      case 'settings.aiSelection.embeddings.actions.openCloudAccount':
+        return 'Open Cloud account';
+      case 'settings.aiSelection.mediaUnderstanding.title':
+        return 'Media understanding';
+      case 'settings.aiSelection.mediaUnderstanding.description':
+        return 'OCR, captions, and audio transcription source selection.';
+      case 'settings.aiSelection.mediaUnderstanding.status':
+        return 'Manage runtime/local/cloud strategy in media settings.';
+      case 'settings.aiSelection.mediaUnderstanding.actions.openSettings':
+        return 'Open media understanding settings';
       case 'settings.semanticParseAutoActions.title':
         return 'AI semantic actions';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
@@ -8139,6 +8466,8 @@ extension on _StringsZhCn {
         return '发送';
       case 'common.actions.askAi':
         return '问 AI';
+      case 'common.actions.configureAi':
+        return '配置 AI';
       case 'common.actions.stop':
         return '停止';
       case 'common.actions.stopping':
@@ -8451,6 +8780,46 @@ extension on _StringsZhCn {
         return 'API Key（语义搜索）';
       case 'settings.embeddingProfiles.subtitle':
         return '高级：使用你自己的服务商与 Key';
+      case 'settings.aiSelection.title':
+        return 'AI 来源';
+      case 'settings.aiSelection.subtitle':
+        return '统一管理各项 AI 能力的来源与策略。';
+      case 'settings.aiSelection.askAi.title':
+        return '问 AI';
+      case 'settings.aiSelection.askAi.description':
+        return '用于聊天提问与记忆检索的模型来源。';
+      case 'settings.aiSelection.askAi.setupHint':
+        return '当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。';
+      case 'settings.aiSelection.askAi.status.loading':
+        return '正在检查当前路由...';
+      case 'settings.aiSelection.askAi.status.cloud':
+        return '当前路由：SecondLoop Cloud';
+      case 'settings.aiSelection.askAi.status.byok':
+        return '当前路由：API 密钥配置（BYOK）';
+      case 'settings.aiSelection.askAi.status.notConfigured':
+        return '当前路由：需要先配置';
+      case 'settings.aiSelection.askAi.actions.openCloud':
+        return '打开 Cloud 账户';
+      case 'settings.aiSelection.askAi.actions.openByok':
+        return '打开 API 密钥';
+      case 'settings.aiSelection.embeddings.title':
+        return '语义搜索与向量';
+      case 'settings.aiSelection.embeddings.description':
+        return '用于记忆召回、待办关联和问 AI 检索质量。';
+      case 'settings.aiSelection.embeddings.status':
+        return '可配置 Cloud 或 API 密钥来源以启用语义能力。';
+      case 'settings.aiSelection.embeddings.actions.openEmbeddingProfiles':
+        return '打开向量 API 密钥';
+      case 'settings.aiSelection.embeddings.actions.openCloudAccount':
+        return '打开 Cloud 账户';
+      case 'settings.aiSelection.mediaUnderstanding.title':
+        return '媒体理解';
+      case 'settings.aiSelection.mediaUnderstanding.description':
+        return 'OCR、图片描述和音频转写的来源选择。';
+      case 'settings.aiSelection.mediaUnderstanding.status':
+        return '在媒体设置中管理 runtime / 本地 / Cloud 策略。';
+      case 'settings.aiSelection.mediaUnderstanding.actions.openSettings':
+        return '打开媒体理解设置';
       case 'settings.semanticParseAutoActions.title':
         return 'AI 语义动作';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
