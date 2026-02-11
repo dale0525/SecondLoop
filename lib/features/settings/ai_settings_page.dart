@@ -306,6 +306,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       if (!mounted) return;
       setState(() => _askAiPreference = next);
       await _reloadAskAiState(forceLoading: false);
+      if (next == AskAiSourcePreference.byok &&
+          _askAiRoute != AskAiRouteKind.byok) {
+        await _openLlmProfilesForByokSetupAndRefreshRoutes();
+      }
     } finally {
       if (mounted) {
         setState(() => _askAiPreferenceSaving = false);
@@ -338,11 +342,34 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       if (!mounted) return;
       setState(() => _mediaPreference = next);
       await _reloadMediaState(forceLoading: false);
+      if (next == MediaSourcePreference.byok &&
+          _mediaRoute != MediaSourceRouteKind.byok) {
+        await _openLlmProfilesForByokSetupAndRefreshRoutes();
+      }
     } finally {
       if (mounted) {
         setState(() => _mediaPreferenceSaving = false);
       }
     }
+  }
+
+  Future<void> _openLlmProfilesForByokSetupAndRefreshRoutes() async {
+    if (!mounted) return;
+    if (AppBackendScope.maybeOf(context) == null) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LlmProfilesPage(
+          focusTarget: LlmProfilesFocusTarget.addProfileForm,
+          highlightFocus: true,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _reloadAskAiState(forceLoading: false);
+    await _reloadEmbeddingsState(forceLoading: false);
+    await _reloadMediaState(forceLoading: false);
   }
 
   void _scheduleInitialFocus() {
