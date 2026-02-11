@@ -30,6 +30,7 @@ void main() {
             body: AudioAttachmentPlayerView(
               attachment: attachment,
               bytes: _tinyM4a,
+              displayTitle: 'Audio attachment',
               initialAnnotationPayload: const <String, Object?>{
                 'duration_ms': 42000,
                 'transcript_excerpt': 'hello transcript excerpt',
@@ -54,7 +55,7 @@ void main() {
         findsNothing);
     expect(find.byKey(const ValueKey('attachment_text_full_markdown_display')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('attachment_transcript_retry')),
+    expect(find.byKey(const ValueKey('attachment_text_full_regenerate')),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('attachment_metadata_format')), findsNothing);
@@ -74,7 +75,8 @@ void main() {
     expect(savedFull, '# Edited Full');
     expect(find.text('Full text'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('attachment_transcript_retry')));
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_full_regenerate')));
     await tester.pump();
     expect(retryInvoked, 1);
   });

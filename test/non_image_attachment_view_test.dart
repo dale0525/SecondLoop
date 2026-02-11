@@ -14,7 +14,9 @@ void main() {
     expect(fileExtensionForSystemOpenMimeType('application/pdf'), '.pdf');
     expect(fileExtensionForSystemOpenMimeType('APPLICATION/PDF'), '.pdf');
     expect(
-        fileExtensionForSystemOpenMimeType('application/octet-stream'), '.bin');
+      fileExtensionForSystemOpenMimeType('application/octet-stream'),
+      '.bin',
+    );
   });
 
   test('buildPdfOcrDebugMarker only emits in debug mode', () {
@@ -54,7 +56,7 @@ void main() {
     expect(shown, contains('source=ocr'));
   });
 
-  testWidgets('NonImageAttachmentView renders markdown and action buttons',
+  testWidgets('NonImageAttachmentView renders markdown with compact sections',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-url',
@@ -82,18 +84,11 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        const MaterialApp(
-          home: Scaffold(),
-        ),
-      ),
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
         MaterialApp(
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: bytes,
+            displayTitle: 'Attachment',
             initialAnnotationPayload: payload,
           ),
         ),
@@ -102,25 +97,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Example Title'), findsOneWidget);
-    expect(find.text('Original URL'), findsOneWidget);
-    expect(find.text('https://example.com/p'), findsOneWidget);
-    expect(find.text('Canonical URL'), findsOneWidget);
-    expect(find.text('https://example.com/canonical'), findsOneWidget);
+    expect(find.text('Original URL'), findsNothing);
+    expect(find.text('https://example.com/p'), findsNothing);
+    expect(find.text('Canonical URL'), findsNothing);
+    expect(find.text('https://example.com/canonical'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('attachment_non_image_preview_surface')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('attachment_text_summary_display')),
         findsNothing);
     expect(find.byKey(const ValueKey('attachment_text_full_markdown_display')),
         findsOneWidget);
     expect(find.text('Excerpt Heading'), findsNothing);
     expect(find.byKey(const ValueKey('attachment_content_share_button')),
-        findsOneWidget);
+        findsNothing);
     expect(find.byKey(const ValueKey('attachment_content_download_button')),
-        findsOneWidget);
+        findsNothing);
     expect(find.text('Size'), findsNothing);
     expect(find.text('Full text'), findsNothing);
     expect(find.text('Full Heading'), findsOneWidget);
   });
 
-  testWidgets('NonImageAttachmentView shows None when summary/full are missing',
+  testWidgets('NonImageAttachmentView shows None when full text is missing',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-empty',
@@ -136,6 +135,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: const <String, Object?>{},
           ),
         ),
@@ -172,6 +172,7 @@ void main() {
             body: NonImageAttachmentView(
               attachment: attachment,
               bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+              displayTitle: 'PDF attachment',
               initialAnnotationPayload: payload,
               onSaveFull: (value) async {
                 savedFull = value;
@@ -200,7 +201,7 @@ void main() {
     expect(savedFull, '## Updated full');
   });
 
-  testWidgets('NonImageAttachmentView shows OCR required for textless PDF',
+  testWidgets('NonImageAttachmentView reruns OCR via options dialog',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-pdf',
@@ -215,6 +216,7 @@ void main() {
       'extracted_text_excerpt': '',
     };
     var runInvoked = 0;
+    var selectedHint = 'device_plus_en';
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -222,30 +224,48 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: payload,
             onRunOcr: () async {
               runInvoked += 1;
             },
+            ocrLanguageHints: selectedHint,
+            onOcrLanguageHintsChanged: (next) => selectedHint = next,
           ),
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('OCR required'), findsOneWidget);
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_full_regenerate')));
+    await tester.pumpAndSettle();
+
     expect(
-      find.text('This PDF appears to contain no selectable text.'),
+      find.byKey(const ValueKey('attachment_ocr_regenerate_dialog')),
       findsOneWidget,
     );
-    expect(find.text('Run OCR'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('attachment_ocr_language_hint_dialog_field')),
+      findsOneWidget,
+    );
 
-    await tester.ensureVisible(find.text('Run OCR'));
-    await tester.tap(find.text('Run OCR'));
-    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('attachment_ocr_language_hint_dialog_field')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chinese + English').last);
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_ocr_regenerate_confirm')));
+    await tester.pumpAndSettle();
+
     expect(runInvoked, 1);
+    expect(selectedHint, 'zh_en');
   });
 
-  testWidgets('NonImageAttachmentView shows Run OCR for video manifest',
+  testWidgets('NonImageAttachmentView reruns OCR for video manifest',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-video-manifest',
@@ -271,6 +291,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: bytes,
+            displayTitle: 'Video attachment',
             onRunOcr: () async {
               runInvoked += 1;
             },
@@ -280,106 +301,17 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Run OCR'), findsOneWidget);
-    await tester.ensureVisible(find.text('Run OCR'));
-    await tester.tap(find.text('Run OCR'));
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_full_regenerate')));
     await tester.pump();
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_ocr_regenerate_confirm')));
+    await tester.pump();
+
     expect(runInvoked, 1);
   });
 
-  testWidgets('NonImageAttachmentView shows Retry after OCR text is ready',
-      (tester) async {
-    const attachment = Attachment(
-      sha256: 'sha-pdf-ready',
-      mimeType: 'application/pdf',
-      path: 'attachments/sha-pdf-ready.bin',
-      byteLen: 256,
-      createdAtMs: 0,
-    );
-    final payload = <String, Object?>{
-      'needs_ocr': false,
-      'extracted_text_excerpt': 'Already extracted',
-      'ocr_text_excerpt': 'OCR fallback',
-    };
-    var runInvoked = 0;
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: NonImageAttachmentView(
-            attachment: attachment,
-            bytes: Uint8List.fromList(const <int>[1, 2, 3]),
-            initialAnnotationPayload: payload,
-            onRunOcr: () async {
-              runInvoked += 1;
-            },
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('OCR required'), findsNothing);
-    expect(find.text('Retry'), findsOneWidget);
-    expect(find.text('Already extracted'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Retry'));
-    await tester.tap(find.text('Retry'));
-    await tester.pump();
-    expect(runInvoked, 1);
-  });
-
-  testWidgets('NonImageAttachmentView lets user change OCR language hint',
-      (tester) async {
-    const attachment = Attachment(
-      sha256: 'sha-pdf-lang',
-      mimeType: 'application/pdf',
-      path: 'attachments/sha-pdf-lang.bin',
-      byteLen: 256,
-      createdAtMs: 0,
-    );
-    final payload = <String, Object?>{
-      'needs_ocr': true,
-      'extracted_text_excerpt': '',
-    };
-    var selectedHint = 'device_plus_en';
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: NonImageAttachmentView(
-            attachment: attachment,
-            bytes: Uint8List.fromList(const <int>[1, 2, 3]),
-            initialAnnotationPayload: payload,
-            onRunOcr: () async {},
-            ocrLanguageHints: selectedHint,
-            onOcrLanguageHintsChanged: (next) => selectedHint = next,
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('attachment_ocr_language_hint_field')),
-      findsOneWidget,
-    );
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('attachment_ocr_language_hint_field')),
-    );
-    await tester.tap(
-      find.byKey(const ValueKey('attachment_ocr_language_hint_field')),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Chinese + English').last);
-    await tester.tap(find.text('Chinese + English').last);
-    await tester.pumpAndSettle();
-
-    expect(selectedHint, 'zh_en');
-  });
-
-  testWidgets('NonImageAttachmentView disables OCR action while running',
+  testWidgets('NonImageAttachmentView disables regenerate action while running',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-pdf-running',
@@ -399,6 +331,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: payload,
             onRunOcr: () async {},
             ocrRunning: true,
@@ -408,9 +341,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('OCR in progress…'), findsOneWidget);
-    final button = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('attachment_run_ocr_button')),
+    final button = tester.widget<IconButton>(
+      find.byKey(const ValueKey('attachment_text_full_regenerate')),
     );
     expect(button.onPressed, isNull);
   });
@@ -438,6 +370,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: payload,
           ),
         ),
@@ -449,8 +382,7 @@ void main() {
     expect(find.text('A B C D E F G H I J K L M N O P'), findsNothing);
   });
 
-  testWidgets(
-      'NonImageAttachmentView supports legacy image ocr_text payload field',
+  testWidgets('NonImageAttachmentView supports legacy image ocr_text field',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-pdf-legacy-ocr',
@@ -470,6 +402,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: payload,
           ),
         ),
@@ -503,6 +436,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: payload,
           ),
         ),
@@ -510,7 +444,6 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('pdf_ocr_debug_marker')), findsOneWidget);
     expect(find.textContaining('source=extracted'), findsOneWidget);
     expect(find.textContaining('hints=none'), findsOneWidget);
   });
@@ -543,6 +476,7 @@ void main() {
           home: NonImageAttachmentView(
             attachment: attachment,
             bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
             initialAnnotationPayload: payload,
           ),
         ),
@@ -551,8 +485,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('Preparing semantic search…'), findsNothing);
-    expect(find.byKey(const ValueKey('attachment_no_text_status')),
-        findsOneWidget);
-    expect(find.text('OCR failed on this device.'), findsOneWidget);
+    expect(find.text('Preview unavailable'), findsOneWidget);
   });
 }

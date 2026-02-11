@@ -19,7 +19,6 @@ import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/content_enrichment/ocr_result_preference.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
-import '../../core/media_enrichment/media_enrichment_availability.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
@@ -32,7 +31,6 @@ import 'audio_attachment_player.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_payload_refresh_policy.dart';
-import 'image_exif_metadata.dart';
 import 'non_image_attachment_view.dart';
 import 'platform_pdf_ocr.dart';
 import 'video_keyframe_ocr_worker.dart';
@@ -73,8 +71,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _runningDocumentOcr = false;
   String? _documentOcrStatusText;
   String _documentOcrLanguageHints = 'device_plus_en';
-  Timer? _inlinePlaceResolveTimer;
-  bool _inlinePlaceResolveScheduled = false;
   bool _attemptedSyncDownload = false;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -105,6 +101,33 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       await Share.shareXFiles(
         [XFile(file.path, mimeType: widget.attachment.mimeType)],
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openAttachmentWithSystem(Uint8List bytes) async {
+    try {
+      final file = await _materializeTempDownloadFile(bytes);
+      final launched = await launchUrl(
+        Uri.file(file.path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t.errors
+                .loadFailed(error: 'could not open externally')),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,7 +194,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
   @override
   void dispose() {
-    _inlinePlaceResolveTimer?.cancel();
     _detachSyncEngine();
     super.dispose();
   }
@@ -299,84 +321,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }).whenComplete(() {
       _loadingAnnotationPayload = false;
     });
-  }
-
-  void _maybeScheduleInlinePlaceResolve({
-    required double? latitude,
-    required double? longitude,
-  }) {
-    if (_inlinePlaceResolveScheduled) return;
-    if (latitude == null || longitude == null) return;
-    if (latitude == 0.0 && longitude == 0.0) return;
-    final existing = _placeDisplayName?.trim();
-    if (existing != null && existing.isNotEmpty) return;
-    if (_loadingPlace) return;
-
-    _inlinePlaceResolveScheduled = true;
-    _inlinePlaceResolveTimer?.cancel();
-    _inlinePlaceResolveTimer = Timer(const Duration(seconds: 12), () {
-      if (!mounted) return;
-      final current = _placeDisplayName?.trim();
-      if (current != null && current.isNotEmpty) return;
-      if (_loadingPlace) return;
-      unawaited(_resolvePlaceInline(latitude: latitude, longitude: longitude));
-    });
-  }
-
-  Future<void> _resolvePlaceInline({
-    required double latitude,
-    required double longitude,
-  }) async {
-    try {
-      final backendAny = AppBackendScope.of(context);
-      if (backendAny is! NativeAppBackend) return;
-      final backend = backendAny;
-      final sessionKey = SessionScope.of(context).sessionKey;
-      final syncEngine = SyncEngineScope.maybeOf(context);
-      final lang = Localizations.localeOf(context).toLanguageTag();
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final gatewayConfig =
-          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-
-      String? idToken;
-      try {
-        idToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        idToken = null;
-      }
-      if (!mounted) return;
-
-      final availability = resolveMediaEnrichmentAvailability(
-        subscriptionStatus: subscriptionStatus,
-        cloudIdToken: idToken?.trim(),
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-      );
-      if (!availability.geoReverseAvailable) return;
-
-      final payloadJson = await backend.geoReverseCloudGateway(
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-        idToken: idToken!.trim(),
-        lat: latitude,
-        lon: longitude,
-        lang: lang,
-      );
-      await backend.markAttachmentPlaceOkJson(
-        Uint8List.fromList(sessionKey),
-        attachmentSha256: widget.attachment.sha256,
-        lang: lang,
-        payloadJson: payloadJson,
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-      );
-
-      if (!mounted) return;
-      syncEngine?.notifyExternalChange();
-      setState(() => _startPlaceLoad());
-    } catch (_) {
-      // Best-effort fallback; background runner will keep retrying.
-      return;
-    }
   }
 
   Future<Uint8List> _loadBytes() async {
@@ -559,67 +503,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }
   }
 
-  Widget _buildMetadataCard(
-    BuildContext context, {
-    required DateTime? capturedAt,
-    required double? latitude,
-    required double? longitude,
-    required String? placeDisplayName,
-  }) {
-    final placeName = placeDisplayName?.trim();
-    final hasPlaceName = placeName != null && placeName.isNotEmpty;
-    final hasLocation = latitude != null &&
-        longitude != null &&
-        !(latitude == 0.0 && longitude == 0.0);
-    final hasCapturedAt = capturedAt != null;
-
-    if (!hasCapturedAt && !hasLocation && !hasPlaceName) {
-      return const SizedBox.shrink();
-    }
-
-    return SlSurface(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (capturedAt != null) ...[
-            Text(
-              context.t.attachments.metadata.capturedAt,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formatCapturedAt(capturedAt),
-              key: const ValueKey('attachment_metadata_captured_at'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          if (hasLocation || hasPlaceName) ...[
-            if (capturedAt != null) const SizedBox(height: 10),
-            Text(
-              context.t.attachments.metadata.location,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 4),
-            if (hasPlaceName)
-              Text(
-                placeName,
-                key: const ValueKey('attachment_metadata_location_name'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (hasPlaceName && hasLocation) const SizedBox(height: 2),
-            if (hasLocation)
-              Text(
-                formatLatLon(latitude, longitude),
-                key: const ValueKey('attachment_metadata_location'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
   bool get _canEditAttachmentText =>
       AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
 
@@ -755,6 +638,22 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 final bytes = snapshot.data;
                 final disabled = bytes == null;
                 return IconButton(
+                  key: const ValueKey('attachment_viewer_open_with_system'),
+                  tooltip: context.t.attachments.content.openWithSystem,
+                  onPressed: disabled
+                      ? null
+                      : () => unawaited(_openAttachmentWithSystem(bytes)),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                );
+              },
+            ),
+          if (bytesFuture != null)
+            FutureBuilder<Uint8List>(
+              future: bytesFuture,
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                final disabled = bytes == null;
+                return IconButton(
                   key: const ValueKey('attachment_viewer_download'),
                   tooltip: context.t.common.actions.pull,
                   onPressed: disabled
@@ -818,6 +717,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   return AudioAttachmentPlayerView(
                     attachment: widget.attachment,
                     bytes: bytes,
+                    displayTitle: appBarTitle,
                     metadataFuture: _metadataFuture,
                     initialMetadata: _metadata,
                     annotationPayloadFuture: _annotationPayloadFuture,
@@ -840,6 +740,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   return NonImageAttachmentView(
                     attachment: widget.attachment,
                     bytes: bytes,
+                    displayTitle: appBarTitle,
                     metadataFuture: _metadataFuture,
                     initialMetadata: _metadata,
                     annotationPayloadFuture: _annotationPayloadFuture,
@@ -854,7 +755,10 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   );
                 }
 
-                return _buildImageAttachmentDetail(bytes);
+                return _buildImageAttachmentDetail(
+                  bytes,
+                  title: appBarTitle,
+                );
               },
             ),
     );

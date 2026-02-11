@@ -1,9 +1,51 @@
 part of 'attachment_viewer_page.dart';
 
 extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
-  Widget _buildImageAttachmentDetail(Uint8List bytes) {
-    final exifFromBytes = tryReadImageExifMetadata(bytes);
+  Future<void> _showFullSizeImagePreview(Uint8List bytes) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          key: const ValueKey('attachment_image_full_preview_dialog'),
+          insetPadding: const EdgeInsets.all(16),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black,
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 5,
+                    child: Center(
+                      child: Image.memory(bytes, fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  key: const ValueKey('attachment_image_full_preview_close'),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  tooltip: MaterialLocalizations.of(dialogContext)
+                      .closeButtonTooltip,
+                  icon: const Icon(Icons.close_rounded),
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
+  Widget _buildImageAttachmentDetail(
+    Uint8List bytes, {
+    required String title,
+  }) {
     Widget buildSection(
       Widget child, {
       required double maxWidth,
@@ -19,46 +61,19 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
     }
 
     Widget buildContent(
-      AttachmentExifMetadata? persisted,
-      String? placeDisplayName,
       String? annotationCaption,
       Map<String, Object?>? annotationPayload,
     ) {
-      final persistedCapturedAtMs = persisted?.capturedAtMs;
-      final persistedCapturedAt = persistedCapturedAtMs == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(
-              persistedCapturedAtMs.toInt(),
-              isUtc: true,
-            ).toLocal();
-
-      final persistedLatitude = persisted?.latitude;
-      final persistedLongitude = persisted?.longitude;
-      final hasPersistedLocation = persistedLatitude != null &&
-          persistedLongitude != null &&
-          !(persistedLatitude == 0.0 && persistedLongitude == 0.0);
-
-      final capturedAt = persistedCapturedAt ?? exifFromBytes?.capturedAt;
-      final latitude =
-          hasPersistedLocation ? persistedLatitude : exifFromBytes?.latitude;
-      final longitude =
-          hasPersistedLocation ? persistedLongitude : exifFromBytes?.longitude;
-      _maybeScheduleInlinePlaceResolve(
-        latitude: latitude,
-        longitude: longitude,
-      );
-
       final textContent = resolveAttachmentDetailTextContent(
         annotationPayload,
         annotationCaption: annotationCaption,
       );
       final canRetryRecognition =
           _canRetryAttachmentRecognition && textContent.hasAny;
-
-      final retryButton = canRetryRecognition
+      final trailing = canRetryRecognition
           ? IconButton(
-              key: const ValueKey('attachment_annotation_retry'),
-              tooltip: context.t.common.actions.retry,
+              key: const ValueKey('attachment_text_full_regenerate'),
+              tooltip: context.t.attachments.content.rerunOcr,
               onPressed: _retryingAttachmentRecognition
                   ? null
                   : () => unawaited(_retryAttachmentRecognition()),
@@ -68,13 +83,13 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.refresh_rounded),
+                  : const Icon(Icons.auto_awesome_rounded),
             )
           : null;
 
       return Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
+          constraints: const BoxConstraints(maxWidth: 960),
           child: SingleChildScrollView(
             key: const ValueKey('attachment_image_detail_scroll'),
             padding: const EdgeInsets.all(16),
@@ -83,38 +98,62 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
               children: [
                 buildSection(
                   SlSurface(
-                    key: const ValueKey('attachment_image_preview_surface'),
-                    padding: const EdgeInsets.all(12),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final previewHeight =
-                            (constraints.maxWidth * 0.72).clamp(220.0, 560.0);
-                        return SizedBox(
-                          height: previewHeight,
-                          child: Center(
-                            child: InteractiveViewer(
-                              minScale: 1,
-                              maxScale: 4,
-                              child: Image.memory(bytes, fit: BoxFit.contain),
-                            ),
-                          ),
-                        );
-                      },
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                  maxWidth: 860,
+                  maxWidth: 820,
+                  alignment: Alignment.centerLeft,
                 ),
                 const SizedBox(height: 14),
                 buildSection(
-                  _buildMetadataCard(
-                    context,
-                    capturedAt: capturedAt,
-                    latitude: latitude,
-                    longitude: longitude,
-                    placeDisplayName: placeDisplayName,
+                  SlSurface(
+                    key: const ValueKey('attachment_image_preview_surface'),
+                    padding: const EdgeInsets.all(12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          key: const ValueKey(
+                            'attachment_image_preview_tap_target',
+                          ),
+                          onTap: () =>
+                              unawaited(_showFullSizeImagePreview(bytes)),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final previewHeight =
+                                  (constraints.maxWidth * 0.62)
+                                      .clamp(220.0, 520.0);
+                              return SizedBox(
+                                height: previewHeight,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceVariant,
+                                  ),
+                                  child: Center(
+                                    child: Image.memory(
+                                      bytes,
+                                      fit: BoxFit.contain,
+                                      gaplessPlayback: true,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  maxWidth: 620,
-                  alignment: Alignment.centerLeft,
+                  maxWidth: 860,
                 ),
                 const SizedBox(height: 14),
                 buildSection(
@@ -125,11 +164,10 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                     text: textContent.full,
                     markdown: true,
                     emptyText: attachmentDetailEmptyTextLabel(context),
-                    trailing: retryButton,
+                    trailing: trailing,
                     onSave: _canEditAttachmentText ? _saveAttachmentFull : null,
                   ),
-                  maxWidth: 780,
-                  alignment: Alignment.centerRight,
+                  maxWidth: 820,
                 ),
               ],
             ),
@@ -138,19 +176,10 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       );
     }
 
-    Widget buildWithAnnotationPayload(
-      AttachmentExifMetadata? persisted,
-      String? placeDisplayName,
-      String? annotationCaption,
-    ) {
+    Widget buildWithAnnotationPayload(String? annotationCaption) {
       final payloadFuture = _annotationPayloadFuture;
       if (payloadFuture == null) {
-        return buildContent(
-          persisted,
-          placeDisplayName,
-          annotationCaption,
-          _annotationPayload,
-        );
+        return buildContent(annotationCaption, _annotationPayload);
       }
 
       return FutureBuilder<Map<String, Object?>?>(
@@ -158,8 +187,6 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
         initialData: _annotationPayload,
         builder: (context, payloadSnapshot) {
           return buildContent(
-            persisted,
-            placeDisplayName,
             annotationCaption,
             payloadSnapshot.data,
           );
@@ -167,52 +194,16 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       );
     }
 
-    Widget buildWithAnnotation(
-      AttachmentExifMetadata? persisted,
-      String? placeDisplayName,
-    ) {
-      final annotationFuture = _annotationCaptionFuture;
-      if (annotationFuture == null) {
-        return buildWithAnnotationPayload(persisted, placeDisplayName, null);
-      }
-
-      return FutureBuilder<String?>(
-        future: annotationFuture,
-        initialData: _annotationCaption,
-        builder: (context, annotationSnapshot) {
-          return buildWithAnnotationPayload(
-            persisted,
-            placeDisplayName,
-            annotationSnapshot.data,
-          );
-        },
-      );
+    final annotationFuture = _annotationCaptionFuture;
+    if (annotationFuture == null) {
+      return buildWithAnnotationPayload(_annotationCaption);
     }
 
-    Widget buildWithPlace(AttachmentExifMetadata? persisted) {
-      final placeFuture = _placeFuture;
-      if (placeFuture == null) {
-        return buildWithAnnotation(persisted, null);
-      }
-
-      return FutureBuilder<String?>(
-        future: placeFuture,
-        initialData: _placeDisplayName,
-        builder: (context, placeSnapshot) {
-          return buildWithAnnotation(persisted, placeSnapshot.data);
-        },
-      );
-    }
-
-    final exifFuture = _exifFuture;
-    if (exifFuture == null) {
-      return buildWithPlace(null);
-    }
-
-    return FutureBuilder<AttachmentExifMetadata?>(
-      future: exifFuture,
-      builder: (context, metaSnapshot) {
-        return buildWithPlace(metaSnapshot.data);
+    return FutureBuilder<String?>(
+      future: annotationFuture,
+      initialData: _annotationCaption,
+      builder: (context, annotationSnapshot) {
+        return buildWithAnnotationPayload(annotationSnapshot.data);
       },
     );
   }

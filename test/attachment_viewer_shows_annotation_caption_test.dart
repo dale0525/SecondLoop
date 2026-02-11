@@ -139,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final retryFinder =
-        find.byKey(const ValueKey('attachment_annotation_retry'));
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
     expect(retryFinder, findsOneWidget);
 
     await tester.ensureVisible(retryFinder);

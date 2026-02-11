@@ -14,7 +14,8 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('AttachmentViewerPage shows place enrichment when available',
+  testWidgets(
+      'AttachmentViewerPage keeps place enrichment hidden in compact layout',
       (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
@@ -54,9 +55,9 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('attachment_metadata_location_name')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Seattle'), findsOneWidget);
+    expect(find.text('Seattle'), findsNothing);
   });
 }
 
