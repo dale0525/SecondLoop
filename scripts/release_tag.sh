@@ -201,7 +201,7 @@ if (( dry_run )); then
 
   run_readonly python3 scripts/release_ai.py generate-notes --facts "${facts_json}" --tag "${tag}" --locales "${release_notes_locales}" --output-dir "${notes_dir}"
   run_readonly python3 scripts/release_ai.py validate-notes --facts "${facts_json}" --tag "${tag}" --locales "${release_notes_locales}" --notes-dir "${notes_dir}"
-  run_readonly python3 scripts/release_ai.py render-markdown --tag "${tag}" --locales "${release_notes_locales}" --notes-dir "${notes_dir}" --output "${notes_markdown}"
+  run_readonly python3 scripts/release_ai.py render-markdown --tag "${tag}" --locales "${release_notes_locales}" --notes-dir "${notes_dir}" --facts "${facts_json}" --output "${notes_markdown}"
 
   echo "release: (dry-run) generated release notes preview at ${notes_markdown} for locales: ${release_notes_locales}"
 fi

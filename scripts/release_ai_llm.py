@@ -30,7 +30,7 @@ def llm_config() -> dict[str, Any]:
     model = _normalize_env_value("RELEASE_LLM_MODEL")
     base_url = _normalize_env_value("RELEASE_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     endpoint = _normalize_env_value("RELEASE_LLM_ENDPOINT")
-    timeout_seconds = int(_normalize_env_value("RELEASE_LLM_TIMEOUT_SECONDS", "60") or "60")
+    timeout_seconds = int(_normalize_env_value("RELEASE_LLM_TIMEOUT_SECONDS", "300") or "300")
     retries = int(_normalize_env_value("RELEASE_LLM_MAX_RETRIES", "2") or "2")
     ca_bundle = _normalize_env_value("RELEASE_LLM_CA_BUNDLE")
     insecure_skip_verify = _normalize_env_value("RELEASE_LLM_INSECURE_SKIP_VERIFY", "0").lower() in {"1", "true", "yes", "on"}

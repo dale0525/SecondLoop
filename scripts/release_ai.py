@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.release_ai_curation import curate_user_facing_changes_with_llm
     from scripts.release_ai_llm import llm_config as _llm_config
     from scripts.release_ai_llm import openai_chat_json as _openai_chat_json
     from scripts.release_ai_release_base import (
@@ -25,21 +26,38 @@ try:
     from scripts.release_ai_release_base import (
         find_latest_published_semver_tag as _find_latest_published_semver_tag,
     )
+    from scripts.release_ai_notes import (
+        _change_links_from_facts,
+        _default_maintenance_summary,
+        _default_section_titles,
+        _format_change_refs,
+        _locale_headings,
+        _select_user_facing_changes,
+    )
+    from scripts.release_ai_text import _extract_release_notes_section
 except ModuleNotFoundError:
+    from release_ai_curation import curate_user_facing_changes_with_llm
     from release_ai_llm import llm_config as _llm_config
     from release_ai_llm import openai_chat_json as _openai_chat_json
     from release_ai_release_base import fetch_repo_releases as _fetch_repo_releases
     from release_ai_release_base import (
         find_latest_published_semver_tag as _find_latest_published_semver_tag,
     )
+    from release_ai_notes import (
+        _change_links_from_facts,
+        _default_maintenance_summary,
+        _default_section_titles,
+        _format_change_refs,
+        _locale_headings,
+        _select_user_facing_changes,
+    )
+    from release_ai_text import _extract_release_notes_section
 
 SEMVER_TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 PR_NUMBER_RE = re.compile(r"(?:#|pull request\s+#)(\d+)", re.IGNORECASE)
 BREAKING_RE = re.compile(r"\bbreaking(?:\s+change)?\b|!:", re.IGNORECASE)
 FEATURE_RE = re.compile(r"\bfeat(?:ure)?\b", re.IGNORECASE)
 FIX_RE = re.compile(r"\bfix(?:es|ed)?\b|\bbug\b|\bhotfix\b", re.IGNORECASE)
-SECRET_LINE_RE = re.compile(r"(?i)(api[_-]?key|token|secret|password)")
-LONG_SECRET_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9_\-]{24,}(?![A-Za-z0-9])")
 
 
 @dataclass(frozen=True, order=True)
@@ -117,8 +135,10 @@ def validate_locale_notes(
         )
 
     sections = notes.get("sections")
-    if not isinstance(sections, list) or not sections:
-        raise ValueError("notes must contain non-empty sections")
+    if not isinstance(sections, list):
+        raise ValueError("notes sections must be a list")
+    if required_change_ids and not sections:
+        raise ValueError("notes must contain non-empty sections when releasable changes exist")
 
     covered: set[str] = set()
     valid_ids = set(required_change_ids)
@@ -192,36 +212,6 @@ def _infer_repo_slug() -> str | None:
     if ssh_match:
         return ssh_match.group(1)
     return None
-
-
-def _sanitize_text(text: str, *, max_len: int = 1200) -> str:
-    lines: list[str] = []
-    for raw_line in text.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        if SECRET_LINE_RE.search(line):
-            line = "[redacted sensitive line]"
-        else:
-            line = LONG_SECRET_RE.sub("[redacted]", line)
-        lines.append(line)
-
-    sanitized = "\n".join(lines).strip()
-    if len(sanitized) > max_len:
-        sanitized = sanitized[:max_len].rstrip() + "..."
-    return sanitized
-
-
-def _extract_release_notes_section(body: str) -> str:
-    if not body.strip():
-        return ""
-    pattern = re.compile(
-        r"(?ims)^#{1,6}\s*release\s*notes?\s*$\n(?P<section>.*?)(?:^#{1,6}\s+|\Z)"
-    )
-    match = pattern.search(body)
-    if match:
-        return _sanitize_text(match.group("section"))
-    return _sanitize_text(body)
 
 
 def _extract_pr_numbers(subject: str, body: str) -> list[int]:
@@ -571,22 +561,6 @@ def _command_compute_tag(args: argparse.Namespace) -> None:
     print(f"release-ai: wrote next tag -> {args.output} ({tag})")
 
 
-def _default_section_titles(locale: str) -> dict[str, str]:
-    if locale.lower().startswith("zh"):
-        return {
-            "breaking": "破坏性变更",
-            "feature": "新功能",
-            "fix": "问题修复",
-            "chore": "其他更新",
-        }
-    return {
-        "breaking": "Breaking Changes",
-        "feature": "New Features",
-        "fix": "Fixes",
-        "chore": "Other Changes",
-    }
-
-
 def _translate_notes_with_llm(
     *,
     locale: str,
@@ -649,13 +623,34 @@ def _build_notes_for_locale(
     tag: str,
     config: dict[str, Any],
 ) -> dict[str, Any]:
+    selected_changes = list(facts.get("changes", [])) if bool(facts.get("changes_curated")) else _select_user_facing_changes(list(facts.get("changes", [])))
+    required_change_ids = [str(change["id"]) for change in selected_changes]
+
+    if not selected_changes:
+        notes = {
+            "schema_version": 1,
+            "generated_at": _now_iso(),
+            "locale": locale,
+            "version": tag,
+            "summary": _default_maintenance_summary(locale, tag),
+            "highlights": [],
+            "sections": [],
+        }
+        validate_locale_notes(
+            notes,
+            expected_locale=locale,
+            expected_version=tag,
+            required_change_ids=[],
+        )
+        return notes
+
     grouped: dict[str, list[dict[str, Any]]] = {
         "breaking": [],
         "feature": [],
         "fix": [],
         "chore": [],
     }
-    for change in facts.get("changes", []):
+    for change in selected_changes:
         key = str(change.get("type", "chore"))
         if key not in grouped:
             key = "chore"
@@ -714,7 +709,7 @@ def _build_notes_for_locale(
 
     summary = str(localized.get("summary", "")).strip()
     if not summary:
-        summary = f"{len(facts.get('changes', []))} updates in {tag}."
+        summary = f"{len(selected_changes)} user-facing update(s) in {tag}."
 
     raw_highlights = localized.get("highlights")
     highlights: list[dict[str, Any]] = []
@@ -754,7 +749,6 @@ def _build_notes_for_locale(
         "sections": sections_output,
     }
 
-    required_change_ids = [str(change["id"]) for change in facts.get("changes", [])]
     validate_locale_notes(
         notes,
         expected_locale=locale,
@@ -787,13 +781,23 @@ def _command_generate_notes(args: argparse.Namespace) -> None:
 
     config = _llm_config()
 
+    curated_changes = curate_user_facing_changes_with_llm(
+        changes=list(facts.get("changes", [])),
+        tag=tag,
+        config=config,
+        llm_call=_openai_chat_json,
+    )
+    curated_facts = dict(facts)
+    curated_facts["changes"] = curated_changes
+    curated_facts["changes_curated"] = True
+
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     note_files: list[dict[str, str]] = []
     for locale in locales:
         notes = _build_notes_for_locale(
-            facts=facts,
+            facts=curated_facts,
             locale=locale,
             tag=tag,
             config=config,
@@ -816,6 +820,7 @@ def _command_generate_notes(args: argparse.Namespace) -> None:
         "version": tag,
         "default_locale": default_locale,
         "supported_locales": locales,
+        "included_change_ids": [str(change.get("id", "")).strip() for change in curated_changes if str(change.get("id", "")).strip()],
         "notes": note_files,
     }
     manifest_path = output_dir / f"release-notes-{tag}-manifest.json"
@@ -829,7 +834,16 @@ def _command_validate_notes(args: argparse.Namespace) -> None:
     locales = [locale.strip() for locale in args.locales.split(",") if locale.strip()]
     output_dir = Path(args.notes_dir)
 
-    required_change_ids = [str(change["id"]) for change in facts.get("changes", [])]
+    manifest_path = output_dir / f"release-notes-{tag}-manifest.json"
+    if not manifest_path.exists():
+        raise RuntimeError(f"missing manifest: {manifest_path}")
+    manifest = _read_json(manifest_path)
+
+    included_change_ids = manifest.get("included_change_ids")
+    if isinstance(included_change_ids, list):
+        required_change_ids = [str(change_id).strip() for change_id in included_change_ids if str(change_id).strip()]
+    else:
+        required_change_ids = [str(change["id"]) for change in _select_user_facing_changes(list(facts.get("changes", [])))]
 
     for locale in locales:
         note_path = output_dir / f"release-notes-{tag}-{locale}.json"
@@ -843,10 +857,6 @@ def _command_validate_notes(args: argparse.Namespace) -> None:
             required_change_ids=required_change_ids,
         )
 
-    manifest_path = output_dir / f"release-notes-{tag}-manifest.json"
-    if not manifest_path.exists():
-        raise RuntimeError(f"missing manifest: {manifest_path}")
-    manifest = _read_json(manifest_path)
     if manifest.get("version") != tag:
         raise RuntimeError("manifest version mismatch")
 
@@ -873,13 +883,15 @@ def _command_render_markdown(args: argparse.Namespace) -> None:
     output_dir = Path(args.notes_dir)
     tag = args.tag
     locales = [locale.strip() for locale in args.locales.split(",") if locale.strip()]
+    locale_headings = _locale_headings(locales)
+    links = _change_links_from_facts(str(args.facts).strip())
 
     lines: list[str] = [f"# Release {tag}"]
     for locale in locales:
         note_path = output_dir / f"release-notes-{tag}-{locale}.json"
         notes = _read_json(note_path)
         lines.append("")
-        lines.append(f"## {locale}")
+        lines.append(f"## {locale_headings.get(locale, locale)}")
         summary = str(notes.get("summary", "")).strip()
         if summary:
             lines.append(summary)
@@ -892,8 +904,7 @@ def _command_render_markdown(args: argparse.Namespace) -> None:
                 text = str(highlight.get("text", "")).strip()
                 if not text:
                     continue
-                change_ids = highlight.get("change_ids", [])
-                refs = " ".join(f"[{change_id}]" for change_id in change_ids)
+                refs = _format_change_refs(highlight.get("change_ids", []), links)
                 lines.append(f"- {text} {refs}".rstrip())
 
         sections = notes.get("sections")
@@ -907,7 +918,7 @@ def _command_render_markdown(args: argparse.Namespace) -> None:
                 lines.append(f"### {title}")
                 for item in items:
                     text = str(item.get("text", "")).strip()
-                    refs = " ".join(f"[{change_id}]" for change_id in item.get("change_ids", []))
+                    refs = _format_change_refs(item.get("change_ids", []), links)
                     lines.append(f"- {text} {refs}".rstrip())
 
     output_path = Path(args.output)
@@ -966,6 +977,7 @@ def _build_parser() -> argparse.ArgumentParser:
     render.add_argument("--tag", required=True, help="Release tag (vX.Y.Z).")
     render.add_argument("--locales", default="zh-CN,en-US", help="Comma-separated locales.")
     render.add_argument("--notes-dir", required=True, help="Directory containing generated note assets.")
+    render.add_argument("--facts", default="", help="Optional facts JSON path for rendering linked references.")
     render.add_argument("--output", required=True, help="Output markdown path.")
     render.set_defaults(func=_command_render_markdown)
 

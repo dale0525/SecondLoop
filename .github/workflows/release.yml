@@ -535,6 +535,7 @@ jobs:
             --tag "${GITHUB_REF_NAME}" \
             --locales "${RELEASE_NOTES_LOCALES}" \
             --notes-dir "${notes_dir}" \
+            --facts dist/release_facts.json \
             --output dist/release-notes.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
