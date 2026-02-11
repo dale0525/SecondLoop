@@ -13,14 +13,19 @@ import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
+bool _switchValue(WidgetTester tester, Finder finder) {
+  return tester.widget<SwitchListTile>(finder).value;
+}
+
 void main() {
   testWidgets(
-      'Settings: cloud embeddings toggle does not reset when subscription is unknown',
+      'Settings: cloud embeddings preference does not reset when subscription is unknown',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': true,
@@ -52,10 +57,33 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('embeddings_data_consent_v1'), true);
-    expect(find.text('Smarter search'), findsOneWidget);
+
+    final aiEntry = find.byKey(const ValueKey('settings_ai_source'));
+    await tester.dragUntilVisible(
+      aiEntry,
+      find.byType(ListView),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(aiEntry);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiSettingsPage), findsOneWidget);
+    final cloudEmbeddingsSwitch =
+        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
+    await tester.dragUntilVisible(
+      cloudEmbeddingsSwitch,
+      find.byType(ListView).first,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
   });
 
-  testWidgets('Settings: cloud embeddings toggle updates after consent prompt',
+  testWidgets(
+      'Settings: cloud embeddings prompt updates unified AI settings toggle',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,
@@ -111,15 +139,27 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    final toggle = find.widgetWithText(SwitchListTile, 'Smarter search');
+    final aiEntry = find.byKey(const ValueKey('settings_ai_source'));
     await tester.dragUntilVisible(
-      toggle,
+      aiEntry,
       find.byType(ListView),
-      const Offset(0, -200),
+      const Offset(0, -220),
     );
     await tester.pumpAndSettle();
 
-    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    await tester.tap(aiEntry);
+    await tester.pumpAndSettle();
+
+    final cloudEmbeddingsSwitch =
+        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
+    await tester.dragUntilVisible(
+      cloudEmbeddingsSwitch,
+      find.byType(ListView).first,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
   });
 }
 

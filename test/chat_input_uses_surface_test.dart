@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -13,6 +14,8 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets('Chat input uses SlSurface container', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
     final backend = _Backend();
     await tester.pumpWidget(
       wrapWithI18n(
@@ -70,7 +73,8 @@ void main() {
     expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
 
     await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello');
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
     expect(
@@ -84,17 +88,19 @@ void main() {
     expect(sendSize.width, greaterThanOrEqualTo(44));
     expect(sendSize.height, greaterThanOrEqualTo(44));
 
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('chat_ask_ai')),
-        matching: find.byIcon(Icons.auto_awesome_rounded),
+        of: find.byKey(const ValueKey('chat_configure_ai')),
+        matching: find.byIcon(Icons.settings_suggest_rounded),
       ),
       findsOneWidget,
     );
-    final askSize = tester.getSize(find.byKey(const ValueKey('chat_ask_ai')));
-    expect(askSize.width, greaterThanOrEqualTo(44));
-    expect(askSize.height, greaterThanOrEqualTo(44));
+    final configureSize =
+        tester.getSize(find.byKey(const ValueKey('chat_configure_ai')));
+    expect(configureSize.width, greaterThanOrEqualTo(44));
+    expect(configureSize.height, greaterThanOrEqualTo(44));
 
     expect(find.byType(SlSurface), findsWidgets);
     expect(

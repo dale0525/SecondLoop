@@ -6,34 +6,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/embedding_profiles_page.dart';
+import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI shows configure entry when no LLM profile',
+  testWidgets(
+      'Selecting Ask AI BYOK routes user directly to LLM profiles setup',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-
-    final backend = _NoLlmProfileBackend();
 
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
           home: AppBackendScope(
-            backend: backend,
+            backend: _NoLlmProfileBackend(),
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const ChatPage(
-                conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
-                  createdAtMs: 0,
-                  updatedAtMs: 0,
-                ),
+              child: const MediaQuery(
+                data: MediaQueryData(disableAnimations: true),
+                child: AiSettingsPage(),
               ),
             ),
           ),
@@ -42,27 +38,53 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
+    await tester
+        .tap(find.byKey(const ValueKey('ai_settings_ask_ai_mode_byok')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(find.byType(LlmProfilesPage), findsOneWidget);
+  });
+
+  testWidgets(
+      'Selecting Embeddings BYOK routes user directly to embedding profiles setup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _NoLlmProfileBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MediaQuery(
+                data: MediaQueryData(disableAnimations: true),
+                child: AiSettingsPage(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('chat_configure_ai')));
+    final listView = find.byType(ListView).first;
+    final byokTile =
+        find.byKey(const ValueKey('ai_settings_embeddings_mode_byok'));
+    await tester.dragUntilVisible(byokTile, listView, const Offset(0, -220));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AiSettingsPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
-        findsOneWidget);
-    expect(backend.calls, isNot(contains('processPending')));
-    expect(backend.calls, isNot(contains('askAiStream')));
+    await tester.tap(byokTile);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(find.byType(EmbeddingProfilesPage), findsOneWidget);
   });
 }
 
 final class _NoLlmProfileBackend extends AppBackend {
-  final List<String> calls = <String>[];
-
   @override
   Future<void> init() async {}
 
@@ -143,10 +165,8 @@ final class _NoLlmProfileBackend extends AppBackend {
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,
-  }) async {
-    calls.add('processPending');
-    return 0;
-  }
+  }) async =>
+      0;
 
   @override
   Future<List<SimilarMessage>> searchSimilarMessages(
@@ -198,16 +218,37 @@ final class _NoLlmProfileBackend extends AppBackend {
   Future<void> deleteLlmProfile(Uint8List key, String profileId) async {}
 
   @override
+  Future<List<EmbeddingProfile>> listEmbeddingProfiles(Uint8List key) async =>
+      const <EmbeddingProfile>[];
+
+  @override
+  Future<EmbeddingProfile> createEmbeddingProfile(
+    Uint8List key, {
+    required String name,
+    required String providerType,
+    String? baseUrl,
+    String? apiKey,
+    required String modelName,
+    bool setActive = true,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> setActiveEmbeddingProfile(
+      Uint8List key, String profileId) async {}
+
+  @override
+  Future<void> deleteEmbeddingProfile(Uint8List key, String profileId) async {}
+
+  @override
   Stream<String> askAiStream(
     Uint8List key,
     String conversationId, {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) {
-    calls.add('askAiStream');
-    return const Stream<String>.empty();
-  }
+  }) =>
+      const Stream<String>.empty();
 
   @override
   Stream<String> askAiStreamCloudGateway(
@@ -224,7 +265,7 @@ final class _NoLlmProfileBackend extends AppBackend {
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 2));
+      Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<void> syncWebdavTestConnection({

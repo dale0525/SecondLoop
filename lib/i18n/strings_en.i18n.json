@@ -17,6 +17,7 @@
       "continueLabel": "Continue",
       "send": "Send",
       "askAi": "Ask AI",
+      "configureAi": "Configure AI",
       "stop": "Stop",
       "stopping": "Stopping…",
       "edit": "Edit",
@@ -250,6 +251,107 @@
     "embeddingProfiles": {
       "title": "API keys (Semantic search)",
       "subtitle": "Advanced: use your own provider and key"
+    },
+    "aiSelection": {
+      "title": "Intelligence",
+      "subtitle": "Unified settings for Ask AI, embeddings, OCR, speech recognition, and image understanding.",
+      "askAi": {
+        "title": "Ask AI",
+        "description": "Chat assistant provider for your messages and memory.",
+        "setupHint": "Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.",
+        "preferenceUnavailableHint": "The selected Ask AI source is unavailable. Open Cloud account or API keys to finish setup.",
+        "status": {
+          "loading": "Checking current route...",
+          "cloud": "Current route: SecondLoop Cloud",
+          "byok": "Current route: API key profile (BYOK)",
+          "notConfigured": "Current route: setup required"
+        },
+        "preference": {
+          "auto": {
+            "title": "Auto",
+            "description": "Prefer Cloud when available, otherwise use BYOK."
+          },
+          "cloud": {
+            "title": "SecondLoop Cloud",
+            "description": "Use Cloud only. Ask AI stays unavailable until Cloud is ready."
+          },
+          "byok": {
+            "title": "API key (BYOK)",
+            "description": "Use BYOK only. Ask AI stays unavailable until an active profile exists."
+          }
+        },
+        "actions": {
+          "openCloud": "Open Cloud account",
+          "openByok": "Open API keys"
+        }
+      },
+      "embeddings": {
+        "title": "Semantic search & embeddings",
+        "description": "Used for recall, todo linking, and Ask AI retrieval quality.",
+        "preferenceUnavailableHint": "Selected embeddings source is unavailable. Running on fallback route.",
+        "status": {
+          "loading": "Checking current route...",
+          "cloud": "Current route: SecondLoop Cloud",
+          "byok": "Current route: Embedding API key (BYOK)",
+          "local": "Current route: Local embeddings runtime"
+        },
+        "preference": {
+          "auto": {
+            "title": "Auto",
+            "description": "Prefer Cloud, then BYOK, then local runtime."
+          },
+          "cloud": {
+            "title": "SecondLoop Cloud",
+            "description": "Prefer Cloud. If unavailable, fallback to BYOK or local runtime."
+          },
+          "byok": {
+            "title": "API key (BYOK)",
+            "description": "Prefer BYOK. Automatically fallback to local runtime on failure."
+          },
+          "local": {
+            "title": "Local runtime",
+            "description": "Run embeddings only on local runtime when available."
+          }
+        },
+        "actions": {
+          "openEmbeddingProfiles": "Open embedding API keys",
+          "openCloudAccount": "Open Cloud account"
+        }
+      },
+      "mediaUnderstanding": {
+        "title": "Media understanding",
+        "description": "OCR, captions, and audio transcription source selection.",
+        "preferenceUnavailableHint": "Selected media source is unavailable. Running on fallback route.",
+        "status": {
+          "loading": "Checking current route...",
+          "cloud": "Current route: SecondLoop Cloud",
+          "byok": "Current route: API key profile (BYOK)",
+          "local": "Current route: Local runtime/native capabilities"
+        },
+        "preference": {
+          "auto": {
+            "title": "Auto",
+            "description": "Prefer Cloud, then BYOK, then local capabilities."
+          },
+          "cloud": {
+            "title": "SecondLoop Cloud",
+            "description": "Prefer Cloud. If unavailable, fallback to BYOK or local capabilities."
+          },
+          "byok": {
+            "title": "API key (BYOK)",
+            "description": "Prefer BYOK. Automatically fallback to local capabilities on failure."
+          },
+          "local": {
+            "title": "Local capabilities",
+            "description": "Prefer local runtime/native media understanding only."
+          }
+        },
+        "actions": {
+          "openSettings": "Open media understanding settings",
+          "openCloudAccount": "Open Cloud account",
+          "openByok": "Open API keys"
+        }
+      }
     },
     "semanticParseAutoActions": {
       "title": "AI semantic actions",
@@ -889,7 +991,7 @@
   "llmProfiles": {
     "title": "AI profiles",
     "refreshTooltip": "Refresh",
-    "activeProfileHelp": "Active profile is used for Ask AI.",
+    "activeProfileHelp": "The active profile is reused as the general LLM API profile across intelligence features.",
     "noProfilesYet": "No profiles yet.",
     "addProfile": "Add profile",
     "deleted": "AI profile deleted",

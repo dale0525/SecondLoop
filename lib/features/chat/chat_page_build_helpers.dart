@@ -234,16 +234,30 @@ extension _ChatPageStateComposerUi on _ChatPageState {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildComposerInlineButton(
-                context,
-                key: const ValueKey('chat_ask_ai'),
-                label: context.t.common.actions.askAi,
-                icon: Icons.auto_awesome_rounded,
-                onPressed: _isComposerBusy ? null : _askAi,
-                backgroundColor: colorScheme.secondaryContainer,
-                foregroundColor: colorScheme.onSecondaryContainer,
-              ),
-              const SizedBox(width: 8),
+              if (_showConfigureAiEntry) ...[
+                _buildComposerInlineButton(
+                  context,
+                  key: const ValueKey('chat_configure_ai'),
+                  label: context.t.common.actions.configureAi,
+                  icon: Icons.settings_suggest_rounded,
+                  onPressed:
+                      _isComposerBusy ? null : _openAskAiSettingsFromComposer,
+                  backgroundColor: colorScheme.secondaryContainer,
+                  foregroundColor: colorScheme.onSecondaryContainer,
+                ),
+                const SizedBox(width: 8),
+              ] else if (_canAskAiNow) ...[
+                _buildComposerInlineButton(
+                  context,
+                  key: const ValueKey('chat_ask_ai'),
+                  label: context.t.common.actions.askAi,
+                  icon: Icons.auto_awesome_rounded,
+                  onPressed: _isComposerBusy ? null : _askAi,
+                  backgroundColor: colorScheme.secondaryContainer,
+                  foregroundColor: colorScheme.onSecondaryContainer,
+                ),
+                const SizedBox(width: 8),
+              ],
               _buildComposerInlineButton(
                 context,
                 key: const ValueKey('chat_send'),

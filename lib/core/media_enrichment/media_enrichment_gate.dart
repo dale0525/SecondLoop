@@ -9,6 +9,9 @@ import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
+import '../ai/media_capability_source_prefs.dart';
+import '../ai/media_capability_wifi_prefs.dart';
+import '../ai/media_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
@@ -558,6 +561,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     if (backendAny is! NativeAppBackend) return;
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
 
     _running = true;
     try {
@@ -593,6 +597,26 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         );
       });
 
+      final fallbackWifiOnly = !mediaAnnotationConfig.allowCellular;
+      var audioWifiOnly = fallbackWifiOnly;
+      var ocrWifiOnly = fallbackWifiOnly;
+      var imageWifiOnly = fallbackWifiOnly;
+      try {
+        audioWifiOnly = await MediaCapabilityWifiPrefs.readAudioWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+        ocrWifiOnly = await MediaCapabilityWifiPrefs.readOcrWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+        imageWifiOnly = await MediaCapabilityWifiPrefs.readImageWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+      } catch (_) {
+        audioWifiOnly = fallbackWifiOnly;
+        ocrWifiOnly = fallbackWifiOnly;
+        imageWifiOnly = fallbackWifiOnly;
+      }
+
       final geoReverseEnabled = availability.geoReverseAvailable;
 
       ContentEnrichmentConfig? contentConfig;
@@ -619,9 +643,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       MediaEnrichmentClient? annotationPrimaryClient;
       var annotationModelName = gatewayConfig.modelName;
 
-      final desiredMode = mediaAnnotationConfig.providerMode.trim();
       final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
       final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
+      final cloudAvailable =
+          subscriptionStatus == SubscriptionStatus.entitled &&
+              hasGateway &&
+              hasIdToken;
 
       List<LlmProfile> llmProfiles = const <LlmProfile>[];
       try {
@@ -663,19 +690,71 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         return activeOpenAiProfile();
       }
 
+      final hasOpenAiByokProfile = effectiveOpenAiProfile() != null;
+      MediaSourcePreference imagePreference;
+      MediaSourcePreference audioPreference;
+      MediaSourcePreference ocrPreference;
+      try {
+        imagePreference = await MediaSourcePrefs.read();
+      } catch (_) {
+        imagePreference = MediaSourcePreference.auto;
+      }
+      try {
+        audioPreference = await MediaCapabilitySourcePrefs.readAudio();
+      } catch (_) {
+        audioPreference = MediaSourcePreference.auto;
+      }
+      try {
+        ocrPreference = await MediaCapabilitySourcePrefs.readDocumentOcr();
+      } catch (_) {
+        ocrPreference = MediaSourcePreference.auto;
+      }
+
+      final effectiveRoute = resolveMediaSourceRoute(
+        imagePreference,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasOpenAiByokProfile,
+      );
+      final audioRoute = resolveMediaSourceRoute(
+        audioPreference,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasOpenAiByokProfile,
+      );
+      final ocrRoute = resolveMediaSourceRoute(
+        ocrPreference,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasOpenAiByokProfile,
+      );
+      final effectiveDesiredMode = switch (effectiveRoute) {
+        MediaSourceRouteKind.cloudGateway => 'cloud_gateway',
+        MediaSourceRouteKind.byok => 'byok_profile',
+        MediaSourceRouteKind.local => 'follow_ask_ai',
+      };
+
+      final effectiveMediaAnnotationConfig = MediaAnnotationConfig(
+        annotateEnabled: mediaAnnotationConfig.annotateEnabled,
+        searchEnabled: mediaAnnotationConfig.searchEnabled,
+        allowCellular: mediaAnnotationConfig.allowCellular,
+        providerMode: effectiveDesiredMode,
+        byokProfileId: effectiveRoute == MediaSourceRouteKind.local
+            ? null
+            : mediaAnnotationConfig.byokProfileId,
+        cloudModelName: mediaAnnotationConfig.cloudModelName,
+      );
+
       var hasCloudAnnotationModel = false;
-      if (mediaAnnotationConfig.annotateEnabled) {
-        if (desiredMode == 'cloud_gateway') {
-          if (subscriptionStatus == SubscriptionStatus.entitled &&
-              hasGateway &&
-              hasIdToken) {
-            annotationModelName =
-                mediaAnnotationConfig.cloudModelName?.trim().isNotEmpty == true
-                    ? mediaAnnotationConfig.cloudModelName!.trim()
-                    : gatewayConfig.modelName;
+      if (effectiveMediaAnnotationConfig.annotateEnabled) {
+        if (effectiveDesiredMode == 'cloud_gateway') {
+          if (cloudAvailable) {
+            annotationModelName = effectiveMediaAnnotationConfig.cloudModelName
+                        ?.trim()
+                        .isNotEmpty ==
+                    true
+                ? effectiveMediaAnnotationConfig.cloudModelName!.trim()
+                : gatewayConfig.modelName;
             hasCloudAnnotationModel = annotationModelName.trim().isNotEmpty;
           }
-        } else {
+        } else if (effectiveDesiredMode == 'byok_profile') {
           final profile = effectiveOpenAiProfile();
           if (profile != null) {
             annotationPrimaryClient = _ByokMediaEnrichmentClient(
@@ -688,25 +767,31 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
-      final allowImageOcrFallback = mediaAnnotationConfig.annotateEnabled &&
-          subscriptionStatus != SubscriptionStatus.entitled &&
-          (contentConfig?.ocrEnabled ?? true);
+      final allowImageOcrFallback =
+          effectiveMediaAnnotationConfig.annotateEnabled &&
+              (contentConfig?.ocrEnabled ?? true) &&
+              effectiveRoute != MediaSourceRouteKind.cloudGateway;
 
-      final annotationEnabled = mediaAnnotationConfig.annotateEnabled &&
-          (annotationPrimaryClient != null ||
-              hasCloudAnnotationModel ||
-              allowImageOcrFallback);
-      final audioTranscribeCloudEnabled = desiredMode == 'cloud_gateway' &&
-          subscriptionStatus == SubscriptionStatus.entitled &&
-          hasGateway &&
-          hasIdToken;
-      final audioTranscribeByokProfile = effectiveOpenAiProfile();
+      final annotationEnabled =
+          effectiveMediaAnnotationConfig.annotateEnabled &&
+              (annotationPrimaryClient != null ||
+                  hasCloudAnnotationModel ||
+                  allowImageOcrFallback);
+      final audioTranscribeCloudEnabled =
+          audioRoute == MediaSourceRouteKind.cloudGateway && cloudAvailable;
+      final audioTranscribeByokProfile =
+          audioRoute == MediaSourceRouteKind.local
+              ? null
+              : effectiveOpenAiProfile();
+      final effectiveAudioEngine = audioRoute == MediaSourceRouteKind.local
+          ? 'local_runtime'
+          : normalizeAudioTranscribeEngine(
+              contentConfig?.audioTranscribeEngine ?? 'whisper',
+            );
       final audioTranscribeSelection = _buildAudioTranscribeClientSelection(
         cloudEnabled: audioTranscribeCloudEnabled,
         byokProfile: audioTranscribeByokProfile,
-        effectiveEngine: normalizeAudioTranscribeEngine(
-          contentConfig?.audioTranscribeEngine ?? 'whisper',
-        ),
+        effectiveEngine: effectiveAudioEngine,
         gatewayBaseUrl: gatewayConfig.baseUrl,
         cloudIdToken: idToken?.trim() ?? '',
         sessionKey: Uint8List.fromList(sessionKey),
@@ -723,8 +808,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         _schedule(_kIdleInterval);
         return;
       }
-
-      final syncEngine = SyncEngineScope.maybeOf(context);
 
       MediaEnrichmentNetwork? lastNetwork;
       MediaEnrichmentNetwork? cachedNetwork;
@@ -782,6 +865,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           ? 'device_plus_en'
           : rawConfiguredOcrHints.trim();
 
+      final shouldTryMultimodalOcr = ocrRoute != MediaSourceRouteKind.local;
+      final networkForOcr = await getNetwork();
+      final canUseNetworkOcr =
+          networkForOcr != MediaEnrichmentNetwork.offline &&
+              (!ocrWifiOnly || networkForOcr == MediaEnrichmentNetwork.wifi);
+
       var processedAutoPdfOcr = 0;
       if (documentExtractEnabled) {
         try {
@@ -789,21 +878,23 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
-            runMultimodalPdfOcr: (bytes, {required pageCount}) {
-              return tryConfiguredMultimodalPdfOcr(
-                backend: backend,
-                sessionKey: Uint8List.fromList(sessionKey),
-                pdfBytes: bytes,
-                pageCountHint: pageCount,
-                languageHints: configuredOcrHints,
-                subscriptionStatus: subscriptionStatus,
-                mediaAnnotationConfig: mediaAnnotationConfig,
-                llmProfiles: llmProfiles,
-                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-                cloudIdToken: idToken?.trim() ?? '',
-                cloudModelName: gatewayConfig.modelName,
-              );
-            },
+            runMultimodalPdfOcr: shouldTryMultimodalOcr && canUseNetworkOcr
+                ? (bytes, {required pageCount}) {
+                    return tryConfiguredMultimodalPdfOcr(
+                      backend: backend,
+                      sessionKey: Uint8List.fromList(sessionKey),
+                      pdfBytes: bytes,
+                      pageCountHint: pageCount,
+                      languageHints: configuredOcrHints,
+                      subscriptionStatus: subscriptionStatus,
+                      mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+                      llmProfiles: llmProfiles,
+                      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+                      cloudIdToken: idToken?.trim() ?? '',
+                      cloudModelName: gatewayConfig.modelName,
+                    );
+                  }
+                : (bytes, {required pageCount}) async => null,
             onAutoPdfOcrStatusChanged: () {
               syncEngine?.notifyExternalChange();
             },
@@ -814,7 +905,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       }
 
       var processedAutoDocxOcr = 0;
-      if (documentExtractEnabled) {
+      if (documentExtractEnabled &&
+          shouldTryMultimodalOcr &&
+          canUseNetworkOcr) {
         try {
           processedAutoDocxOcr = await _runAutoDocxOcrForRecentOfficeDocs(
             backend: backend,
@@ -829,7 +922,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                 pageCountHint: pageCount,
                 languageHints: languageHints,
                 subscriptionStatus: subscriptionStatus,
-                mediaAnnotationConfig: mediaAnnotationConfig,
+                mediaAnnotationConfig: effectiveMediaAnnotationConfig,
                 llmProfiles: llmProfiles,
                 cloudGatewayBaseUrl: gatewayConfig.baseUrl,
                 cloudIdToken: idToken?.trim() ?? '',
@@ -845,8 +938,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       var processedAudioTranscripts = 0;
       if (audioTranscribeEnabled) {
         final network = await getNetwork();
+        final audioRequiresWifi = contentRequiresWifi || audioWifiOnly;
         final allowedByNetwork = network != MediaEnrichmentNetwork.offline &&
-            (!contentRequiresWifi || network == MediaEnrichmentNetwork.wifi);
+            (!audioRequiresWifi || network == MediaEnrichmentNetwork.wifi);
 
         final client = allowedByNetwork
             ? audioTranscribeSelection.networkClient
@@ -920,7 +1014,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         );
 
         result = await runner.runOnce(
-          allowAnnotationCellular: mediaAnnotationConfig.allowCellular,
+          allowAnnotationCellular: !imageWifiOnly,
         );
         if (!mounted) return;
       }
@@ -937,12 +1031,21 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       if (result.needsAnnotationCellularConfirmation &&
           !_cellularPromptShown &&
-          !mediaAnnotationConfig.allowCellular &&
+          imageWifiOnly &&
           lastNetwork == MediaEnrichmentNetwork.cellular) {
         _cellularPromptShown = true;
         final allowed = await _promptAllowCellular();
         if (!mounted) return;
         if (allowed) {
+          try {
+            await MediaCapabilityWifiPrefs.write(
+              MediaCapabilityWifiScope.imageCaption,
+              wifiOnly: false,
+            );
+            imageWifiOnly = false;
+          } catch (_) {
+            imageWifiOnly = false;
+          }
           await configStore.write(
             Uint8List.fromList(sessionKey),
             MediaAnnotationConfig(

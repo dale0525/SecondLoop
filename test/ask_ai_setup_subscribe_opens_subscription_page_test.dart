@@ -8,13 +8,14 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
-import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI setup subscribe opens cloud account page',
+  testWidgets('Configure AI entry opens unified intelligence settings',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
@@ -51,17 +52,41 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byKey(const ValueKey('chat_input')), 'hello?');
+        find.byKey(const ValueKey('chat_input')),
+        'hello?',
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('chat_configure_ai')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AiSettingsPage), findsOneWidget);
+      expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
+          findsOneWidget);
+
+      expect(
+        find.byKey(const ValueKey('ai_settings_open_cloud_account')),
+        findsNothing,
+      );
+
+      final llmProfilesEntry =
+          find.byKey(const ValueKey('ai_settings_open_llm_profiles'));
+      await tester.dragUntilVisible(
+        llmProfilesEntry,
+        find.byType(ListView).first,
+        const Offset(0, -220),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(llmProfilesEntry);
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 800));
 
-      expect(find.byKey(const ValueKey('ask_ai_setup_dialog')), findsOneWidget);
-
-      await tester.tap(find.byKey(const ValueKey('ask_ai_setup_subscribe')));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(CloudAccountPage), findsOneWidget);
+      expect(find.byType(LlmProfilesPage), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

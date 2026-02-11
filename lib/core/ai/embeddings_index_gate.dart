@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ai_routing.dart';
+import 'embeddings_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_scope.dart';
@@ -156,6 +157,14 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       final cloudEmbeddingsSelected =
           prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
 
+      final preference = switch (
+          (prefs.getString(EmbeddingsSourcePrefs.prefsKey) ?? '').trim()) {
+        'cloud' => EmbeddingsSourcePreference.cloud,
+        'byok' => EmbeddingsSourcePreference.byok,
+        'local' => EmbeddingsSourcePreference.local,
+        _ => EmbeddingsSourcePreference.auto,
+      };
+
       String? cloudIdToken;
       try {
         cloudIdToken = await cloudAuthScope?.controller.getIdToken();
@@ -169,10 +178,26 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
               cloudIdToken.trim().isNotEmpty &&
               cloudGatewayConfig.baseUrl.trim().isNotEmpty;
 
+      var hasByokProfile = false;
+      try {
+        final profiles = await backend.listEmbeddingProfiles(sessionKey);
+        hasByokProfile = profiles.any((p) => p.isActive);
+      } catch (_) {
+        hasByokProfile = false;
+      }
+
+      final route = resolveEmbeddingsSourceRoute(
+        preference,
+        cloudEmbeddingsSelected: cloudEmbeddingsSelected,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasByokProfile,
+      );
+
       final result = await _processBatch(
         backend,
         sessionKey,
-        cloudEmbeddingsSelected: cloudEmbeddingsSelected,
+        route: route,
+        hasByokProfile: hasByokProfile,
         cloudAvailable: cloudAvailable,
         cloudIdToken: cloudIdToken,
         cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
@@ -195,12 +220,13 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
   Future<_IndexBatchResult> _processBatch(
     AppBackend backend,
     Uint8List sessionKey, {
-    required bool cloudEmbeddingsSelected,
+    required EmbeddingsSourceRouteKind route,
+    required bool hasByokProfile,
     required bool cloudAvailable,
     required String? cloudIdToken,
     required String cloudGatewayBaseUrl,
   }) async {
-    if (cloudAvailable && cloudEmbeddingsSelected) {
+    Future<_IndexBatchResult> processCloud() async {
       final processed =
           await backend.processPendingTodoThreadEmbeddingsCloudGateway(
         sessionKey,
@@ -213,24 +239,51 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       return _IndexBatchResult(processed: processed, isRemote: true);
     }
 
-    // If cloud embeddings were selected but are temporarily unavailable, fall
-    // back to local/BYOK indexing. With multi-index embeddings, this doesn't
-    // wipe the cloud index.
-
-    try {
-      final processed = await backend.processPendingTodoThreadEmbeddingsBrok(
-        sessionKey,
-        todoLimit: _kTodoBatchLimitRemote,
-        activityLimit: _kActivityBatchLimitRemote,
-      );
-      return _IndexBatchResult(processed: processed, isRemote: true);
-    } catch (_) {
+    Future<_IndexBatchResult> processLocal() async {
       final processed = await backend.processPendingTodoThreadEmbeddings(
         sessionKey,
         todoLimit: _kTodoBatchLimitLocal,
         activityLimit: _kActivityBatchLimitLocal,
       );
       return _IndexBatchResult(processed: processed, isRemote: false);
+    }
+
+    Future<_IndexBatchResult> processByokWithFallback() async {
+      try {
+        final processed = await backend.processPendingTodoThreadEmbeddingsBrok(
+          sessionKey,
+          todoLimit: _kTodoBatchLimitRemote,
+          activityLimit: _kActivityBatchLimitRemote,
+        );
+        return _IndexBatchResult(processed: processed, isRemote: true);
+      } catch (_) {
+        return processLocal();
+      }
+    }
+
+    switch (route) {
+      case EmbeddingsSourceRouteKind.cloudGateway:
+        if (cloudAvailable) {
+          try {
+            return await processCloud();
+          } catch (_) {
+            if (hasByokProfile) {
+              return processByokWithFallback();
+            }
+            return processLocal();
+          }
+        }
+        if (hasByokProfile) {
+          return processByokWithFallback();
+        }
+        return processLocal();
+      case EmbeddingsSourceRouteKind.byok:
+        if (hasByokProfile) {
+          return processByokWithFallback();
+        }
+        return processLocal();
+      case EmbeddingsSourceRouteKind.local:
+        return processLocal();
     }
   }
 

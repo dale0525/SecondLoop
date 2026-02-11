@@ -31,12 +31,12 @@ extension _MediaAnnotationSettingsPageOcrExtension
     if (proUser) {
       if (zh) {
         return cloudEnabled
-            ? 'Pro 订阅用户跟随媒体理解开关，云端 OCR 用量计入 Ask AI。'
-            : 'Pro 订阅用户跟随媒体理解开关。开启“使用 SecondLoop Cloud”后，OCR 将走云端并计入 Ask AI 用量。';
+            ? 'Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。'
+            : 'Pro 订阅用户可启用“使用 SecondLoop Cloud”来执行云端 OCR，并计入 Ask AI 用量。';
       }
       return cloudEnabled
-          ? 'Pro follows the media understanding switch. Cloud OCR usage is counted under Ask AI.'
-          : 'Pro follows the media understanding switch. Turn on Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.';
+          ? 'Pro can use SecondLoop Cloud. Cloud OCR usage is counted under Ask AI.'
+          : 'Pro can enable Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.';
     }
     if (zh) {
       return '免费版可在本地 OCR 与 BYOK 多模态 OCR 之间选择。';
@@ -191,9 +191,9 @@ extension _MediaAnnotationSettingsPageOcrExtension
           : 'Local runtime transcription is active and does not use a BYOK profile.';
     }
     if (zh) {
-      return '默认跟随 Ask AI，可改为已有 OpenAI-compatible API profile。';
+      return '默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。';
     }
-    return 'Default follows Ask AI. You can choose an existing OpenAI-compatible API profile.';
+    return 'Default follows the active API profile. You can choose an existing OpenAI-compatible API profile.';
   }
 
   bool _isLocalRuntimeAudioTranscribeEngine(String engine) {

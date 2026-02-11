@@ -11,6 +11,7 @@ import 'package:secondloop/core/content_enrichment/content_enrichment_config_sto
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/content_enrichment/linux_ocr_model_store.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/core/ai/media_source_prefs.dart';
 import 'package:secondloop/core/media_annotation/media_annotation_config_store.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
@@ -213,16 +214,21 @@ Future<void> _pumpPage(
   CloudAuthController? cloudAuthController,
   String cloudGatewayBaseUrl = 'https://gateway.test',
   AppBackend? backend,
+  bool embedded = false,
 }) async {
+  Widget page = MediaAnnotationSettingsPage(
+    configStore: store,
+    contentConfigStore: contentStore,
+    linuxOcrModelStore: linuxOcrModelStore,
+    embedded: embedded,
+  );
+  if (embedded) {
+    page = SingleChildScrollView(child: page);
+  }
+
   Widget home = SubscriptionScope(
     controller: _FakeSubscriptionController(subscriptionStatus),
-    child: Scaffold(
-      body: MediaAnnotationSettingsPage(
-        configStore: store,
-        contentConfigStore: contentStore,
-        linuxOcrModelStore: linuxOcrModelStore,
-      ),
-    ),
+    child: Scaffold(body: page),
   );
   if (backend != null) {
     home = AppBackendScope(
@@ -253,6 +259,15 @@ Future<void> _pumpPage(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+bool _wifiSwitchValue(WidgetTester tester, Finder finder) {
+  return tester.widget<SwitchListTile>(finder).value;
+}
+
+bool _sourceRadioSelected(WidgetTester tester, Finder finder) {
+  final tile = tester.widget<RadioListTile<MediaSourcePreference>>(finder);
+  return tile.value == tile.groupValue;
 }
 
 void main() {
@@ -485,6 +500,135 @@ void main() {
     await tester.tap(wifiOnlySwitch);
     await tester.pumpAndSettle();
     expect(store.writes.last.allowCellular, isFalse);
+  });
+
+  testWidgets('Embedded audio/OCR Wi-Fi toggles are independent',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: false,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+      embedded: true,
+    );
+
+    final audioWifiSwitch =
+        find.byKey(MediaAnnotationSettingsPage.audioWifiOnlySwitchKey);
+    final ocrWifiSwitch =
+        find.byKey(MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey);
+
+    expect(audioWifiSwitch, findsOneWidget);
+    expect(ocrWifiSwitch, findsOneWidget);
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.imageWifiOnlySwitchKey),
+      findsNothing,
+    );
+
+    expect(_wifiSwitchValue(tester, audioWifiSwitch), isTrue);
+    expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
+
+    await tester.tap(audioWifiSwitch);
+    await tester.pumpAndSettle();
+
+    expect(_wifiSwitchValue(tester, audioWifiSwitch), isFalse);
+    expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+      embedded: true,
+    );
+
+    expect(_wifiSwitchValue(tester, audioWifiSwitch), isFalse);
+    expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
+  });
+
+  testWidgets('Embedded audio/OCR source radios default to auto',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: false,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+      embedded: true,
+    );
+
+    final audioAuto =
+        find.byKey(const ValueKey('media_annotation_settings_audio_mode_auto'));
+    final ocrAuto =
+        find.byKey(const ValueKey('media_annotation_settings_ocr_mode_auto'));
+
+    expect(audioAuto, findsOneWidget);
+    expect(ocrAuto, findsOneWidget);
+    expect(_sourceRadioSelected(tester, audioAuto), isTrue);
+    expect(_sourceRadioSelected(tester, ocrAuto), isTrue);
+
+    expect(
+      find.byKey(const ValueKey('media_annotation_settings_audio_card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('media_annotation_settings_ocr_card')),
+      findsOneWidget,
+    );
+    expect(find.text('Description & route'), findsNothing);
+    expect(
+      find.byKey(
+          const ValueKey('media_annotation_settings_audio_open_api_keys')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('media_annotation_settings_ocr_open_api_keys')),
+      findsOneWidget,
+    );
+
+    final audioByok =
+        find.byKey(const ValueKey('media_annotation_settings_audio_mode_byok'));
+    await tester.tap(audioByok);
+    await tester.pumpAndSettle();
+
+    expect(_sourceRadioSelected(tester, audioByok), isTrue);
+    expect(find.text('Transcription engine'), findsOneWidget);
   });
 
   testWidgets(
@@ -727,6 +871,54 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(runtimeTile, findsOneWidget);
+  });
+
+  testWidgets('Local capability engine card uses unified capability layout',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: true,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final runtimeTile =
+        find.byKey(MediaAnnotationSettingsPage.linuxOcrModelTileKey);
+    await tester.scrollUntilVisible(
+      runtimeTile,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    expect(runtimeTile, findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey(
+            'media_annotation_settings_local_capability_status_tile'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

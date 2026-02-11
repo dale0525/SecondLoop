@@ -2,37 +2,30 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
-import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Ask AI shows configure entry when no LLM profile',
+  testWidgets('LLM profiles can highlight add-profile section on entry',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final backend = _NoLlmProfileBackend();
-
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
           home: AppBackendScope(
-            backend: backend,
+            backend: _NoLlmProfileBackend(),
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const ChatPage(
-                conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
-                  createdAtMs: 0,
-                  updatedAtMs: 0,
+              child: const MediaQuery(
+                data: MediaQueryData(disableAnimations: true),
+                child: LlmProfilesPage(
+                  focusTarget: LlmProfilesFocusTarget.addProfileForm,
+                  highlightFocus: true,
                 ),
               ),
             ),
@@ -40,29 +33,17 @@ void main() {
         ),
       ),
     );
+
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('chat_configure_ai')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(AiSettingsPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
-        findsOneWidget);
-    expect(backend.calls, isNot(contains('processPending')));
-    expect(backend.calls, isNot(contains('askAiStream')));
+    expect(
+      find.byKey(const ValueKey('llm_profiles_focus_add_highlight_marker')),
+      findsOneWidget,
+    );
   });
 }
 
 final class _NoLlmProfileBackend extends AppBackend {
-  final List<String> calls = <String>[];
-
   @override
   Future<void> init() async {}
 
@@ -143,10 +124,8 @@ final class _NoLlmProfileBackend extends AppBackend {
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,
-  }) async {
-    calls.add('processPending');
-    return 0;
-  }
+  }) async =>
+      0;
 
   @override
   Future<List<SimilarMessage>> searchSimilarMessages(
@@ -204,10 +183,8 @@ final class _NoLlmProfileBackend extends AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) {
-    calls.add('askAiStream');
-    return const Stream<String>.empty();
-  }
+  }) =>
+      const Stream<String>.empty();
 
   @override
   Stream<String> askAiStreamCloudGateway(
@@ -224,7 +201,7 @@ final class _NoLlmProfileBackend extends AppBackend {
 
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 2));
+      Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<void> syncWebdavTestConnection({
