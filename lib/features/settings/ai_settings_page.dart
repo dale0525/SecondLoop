@@ -326,6 +326,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       if (!mounted) return;
       setState(() => _embeddingsPreference = next);
       await _reloadEmbeddingsState(forceLoading: false);
+      if (next == EmbeddingsSourcePreference.byok &&
+          _embeddingsRoute != EmbeddingsSourceRouteKind.byok) {
+        await _openEmbeddingProfilesForByokSetupAndRefreshRoutes();
+      }
     } finally {
       if (mounted) {
         setState(() => _embeddingsPreferenceSaving = false);
@@ -351,6 +355,23 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         setState(() => _mediaPreferenceSaving = false);
       }
     }
+  }
+
+  Future<void> _openEmbeddingProfilesForByokSetupAndRefreshRoutes() async {
+    if (!mounted) return;
+    if (AppBackendScope.maybeOf(context) == null) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const EmbeddingProfilesPage(
+          focusTarget: EmbeddingProfilesFocusTarget.addProfileForm,
+          highlightFocus: true,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _reloadEmbeddingsState(forceLoading: false);
   }
 
   Future<void> _openLlmProfilesForByokSetupAndRefreshRoutes() async {
