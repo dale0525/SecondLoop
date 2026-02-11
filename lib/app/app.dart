@@ -31,6 +31,7 @@ import '../features/share/share_ingest_gate.dart';
 import '../features/share/share_intent_listener.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
+import '../core/notifications/review_reminder_notifications_gate.dart';
 
 class SecondLoopApp extends StatefulWidget {
   SecondLoopApp({
@@ -328,21 +329,27 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                     child: ShareIntentListener(
                                       child: LockGate(
                                         child: SyncEngineGate(
-                                          child: MediaEnrichmentGate(
-                                            child: SemanticParseAutoActionsGate(
-                                              child: MessageEmbeddingsIndexGate(
-                                                child: EmbeddingsIndexGate(
-                                                  child:
-                                                      CloudSyncSwitchPromptGate(
-                                                    navigatorKey: _navigatorKey,
-                                                    child: ShareIngestGate(
-                                                      child:
-                                                          QuickCaptureOverlay(
-                                                        navigatorKey:
-                                                            _navigatorKey,
-                                                        child: child ??
-                                                            const SizedBox
-                                                                .shrink(),
+                                          child:
+                                              ReviewReminderNotificationsGate(
+                                            child: MediaEnrichmentGate(
+                                              child:
+                                                  SemanticParseAutoActionsGate(
+                                                child:
+                                                    MessageEmbeddingsIndexGate(
+                                                  child: EmbeddingsIndexGate(
+                                                    child:
+                                                        CloudSyncSwitchPromptGate(
+                                                      navigatorKey:
+                                                          _navigatorKey,
+                                                      child: ShareIngestGate(
+                                                        child:
+                                                            QuickCaptureOverlay(
+                                                          navigatorKey:
+                                                              _navigatorKey,
+                                                          child: child ??
+                                                              const SizedBox
+                                                                  .shrink(),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
