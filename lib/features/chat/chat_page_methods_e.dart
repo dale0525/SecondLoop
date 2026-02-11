@@ -49,17 +49,13 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
     AskAiRouteKind route;
     if (_composerAskAiRouteLoading) {
-      try {
-        route = await decideAskAiRoute(
-          backend,
-          sessionKey,
-          cloudIdToken: cloudIdToken,
-          cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-          subscriptionStatus: subscriptionStatus,
-        );
-      } catch (_) {
-        route = AskAiRouteKind.needsSetup;
-      }
+      route = await _resolveAskAiRouteWithPreference(
+        backend,
+        sessionKey,
+        cloudIdToken: cloudIdToken,
+        cloudGatewayConfig: cloudGatewayConfig,
+        subscriptionStatus: subscriptionStatus,
+      );
 
       if (mounted) {
         _setState(() {

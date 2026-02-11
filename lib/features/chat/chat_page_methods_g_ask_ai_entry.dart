@@ -9,6 +9,50 @@ extension _ChatPageStateAskAiEntry on _ChatPageState {
       !_composerAskAiRouteLoading &&
       _composerAskAiRoute == AskAiRouteKind.needsSetup;
 
+  Future<AskAiRouteKind> _resolveAskAiRouteWithPreference(
+    AppBackend backend,
+    Uint8List sessionKey, {
+    required String? cloudIdToken,
+    required CloudGatewayConfig cloudGatewayConfig,
+    required SubscriptionStatus subscriptionStatus,
+  }) async {
+    AskAiRouteKind defaultRoute;
+    try {
+      defaultRoute = await decideAskAiRoute(
+        backend,
+        sessionKey,
+        cloudIdToken: cloudIdToken,
+        cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+        subscriptionStatus: subscriptionStatus,
+      );
+    } catch (_) {
+      return AskAiRouteKind.needsSetup;
+    }
+
+    AskAiSourcePreference preference;
+    try {
+      preference = await AskAiSourcePrefs.read();
+    } catch (_) {
+      preference = AskAiSourcePreference.auto;
+    }
+
+    var hasByokWhenCloudRoute = false;
+    if (preference == AskAiSourcePreference.byok &&
+        defaultRoute == AskAiRouteKind.cloudGateway) {
+      try {
+        hasByokWhenCloudRoute = await hasActiveLlmProfile(backend, sessionKey);
+      } catch (_) {
+        hasByokWhenCloudRoute = false;
+      }
+    }
+
+    return applyAskAiSourcePreference(
+      defaultRoute,
+      preference,
+      hasByokWhenCloudRoute: hasByokWhenCloudRoute,
+    );
+  }
+
   Future<void> _refreshComposerAskAiRoute() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -25,18 +69,13 @@ extension _ChatPageStateAskAiEntry on _ChatPageState {
       cloudIdToken = null;
     }
 
-    AskAiRouteKind nextRoute;
-    try {
-      nextRoute = await decideAskAiRoute(
-        backend,
-        sessionKey,
-        cloudIdToken: cloudIdToken,
-        cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-        subscriptionStatus: subscriptionStatus,
-      );
-    } catch (_) {
-      nextRoute = AskAiRouteKind.needsSetup;
-    }
+    final nextRoute = await _resolveAskAiRouteWithPreference(
+      backend,
+      sessionKey,
+      cloudIdToken: cloudIdToken,
+      cloudGatewayConfig: cloudGatewayConfig,
+      subscriptionStatus: subscriptionStatus,
+    );
 
     if (!mounted) return;
     if (_composerAskAiRoute == nextRoute && !_composerAskAiRouteLoading) {

@@ -17,6 +17,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/semantic_parse.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';

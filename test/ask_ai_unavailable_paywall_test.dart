@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -14,6 +15,8 @@ import 'test_i18n.dart';
 void main() {
   testWidgets('Ask AI shows configure entry when no LLM profile',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
     final backend = _NoLlmProfileBackend();
 
     await tester.pumpWidget(
@@ -40,7 +43,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);

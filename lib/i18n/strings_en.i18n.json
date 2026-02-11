@@ -259,11 +259,26 @@
         "title": "Ask AI",
         "description": "Chat assistant provider for your messages and memory.",
         "setupHint": "Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.",
+        "preferenceUnavailableHint": "The selected Ask AI source is unavailable. Open Cloud account or API keys to finish setup.",
         "status": {
           "loading": "Checking current route...",
           "cloud": "Current route: SecondLoop Cloud",
           "byok": "Current route: API key profile (BYOK)",
           "notConfigured": "Current route: setup required"
+        },
+        "preference": {
+          "auto": {
+            "title": "Auto",
+            "description": "Prefer Cloud when available, otherwise use BYOK."
+          },
+          "cloud": {
+            "title": "SecondLoop Cloud",
+            "description": "Use Cloud only. Ask AI stays unavailable until Cloud is ready."
+          },
+          "byok": {
+            "title": "API key (BYOK)",
+            "description": "Use BYOK only. Ask AI stays unavailable until an active profile exists."
+          }
         },
         "actions": {
           "openCloud": "Open Cloud account",

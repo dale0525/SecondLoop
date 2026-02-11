@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
@@ -44,13 +45,18 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   bool _didRunInitialFocus = false;
   AiSettingsSection? _highlightedSection;
 
-  Future<AskAiRouteKind>? _askAiRouteFuture;
+  AskAiRouteKind _askAiRoute = AskAiRouteKind.needsSetup;
+  AskAiSourcePreference _askAiPreference = AskAiSourcePreference.auto;
+  bool _askAiLoading = true;
+  bool _askAiPreferenceSaving = false;
+  int _askAiLoadGeneration = 0;
+
   Timer? _clearHighlightTimer;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _askAiRouteFuture = _resolveAskAiRoute();
+    unawaited(_reloadAskAiState(forceLoading: _askAiLoading));
     _scheduleInitialFocus();
   }
 
@@ -69,8 +75,14 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     };
   }
 
-  Future<AskAiRouteKind> _resolveAskAiRoute() async {
-    final backend = AppBackendScope.of(context);
+  Future<AskAiRouteKind> _resolveAskAiRouteWithPreference(
+    AskAiSourcePreference preference,
+  ) async {
+    final backend = AppBackendScope.maybeOf(context);
+    if (backend == null) {
+      return AskAiRouteKind.needsSetup;
+    }
+
     final sessionKey = SessionScope.of(context).sessionKey;
     final cloudAuthScope = CloudAuthScope.maybeOf(context);
     final cloudGatewayConfig =
@@ -85,8 +97,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       cloudIdToken = null;
     }
 
+    AskAiRouteKind defaultRoute;
     try {
-      return await decideAskAiRoute(
+      defaultRoute = await decideAskAiRoute(
         backend,
         sessionKey,
         cloudIdToken: cloudIdToken,
@@ -95,6 +108,61 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       );
     } catch (_) {
       return AskAiRouteKind.needsSetup;
+    }
+
+    var hasByokWhenCloudRoute = false;
+    if (preference == AskAiSourcePreference.byok &&
+        defaultRoute == AskAiRouteKind.cloudGateway) {
+      try {
+        hasByokWhenCloudRoute = await hasActiveLlmProfile(backend, sessionKey);
+      } catch (_) {
+        hasByokWhenCloudRoute = false;
+      }
+    }
+
+    return applyAskAiSourcePreference(
+      defaultRoute,
+      preference,
+      hasByokWhenCloudRoute: hasByokWhenCloudRoute,
+    );
+  }
+
+  Future<void> _reloadAskAiState({required bool forceLoading}) async {
+    final generation = ++_askAiLoadGeneration;
+    if (forceLoading && mounted) {
+      setState(() => _askAiLoading = true);
+    }
+
+    AskAiSourcePreference preference;
+    try {
+      preference = await AskAiSourcePrefs.read();
+    } catch (_) {
+      preference = AskAiSourcePreference.auto;
+    }
+
+    final route = await _resolveAskAiRouteWithPreference(preference);
+
+    if (!mounted || generation != _askAiLoadGeneration) return;
+    setState(() {
+      _askAiPreference = preference;
+      _askAiRoute = route;
+      _askAiLoading = false;
+    });
+  }
+
+  Future<void> _setAskAiPreference(AskAiSourcePreference next) async {
+    if (_askAiPreferenceSaving || _askAiPreference == next) return;
+    setState(() => _askAiPreferenceSaving = true);
+
+    try {
+      await AskAiSourcePrefs.write(next);
+      if (!mounted) return;
+      setState(() => _askAiPreference = next);
+      await _reloadAskAiState(forceLoading: false);
+    } finally {
+      if (mounted) {
+        setState(() => _askAiPreferenceSaving = false);
+      }
     }
   }
 
@@ -144,9 +212,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     });
   }
 
-  String _askAiStatusLabel(BuildContext context, AskAiRouteKind route) {
+  String _askAiStatusLabel(BuildContext context) {
+    if (_askAiLoading) {
+      return context.t.settings.aiSelection.askAi.status.loading;
+    }
+
     final status = context.t.settings.aiSelection.askAi.status;
-    return switch (route) {
+    return switch (_askAiRoute) {
       AskAiRouteKind.cloudGateway => status.cloud,
       AskAiRouteKind.byok => status.byok,
       AskAiRouteKind.needsSetup => status.notConfigured,
@@ -251,9 +323,67 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     );
   }
 
+  Widget _buildAskAiPreferenceTile(
+    BuildContext context, {
+    required AskAiSourcePreference value,
+    required String title,
+    required String subtitle,
+    required Key key,
+  }) {
+    return RadioListTile<AskAiSourcePreference>(
+      key: key,
+      value: value,
+      groupValue: _askAiPreference,
+      onChanged: _askAiPreferenceSaving
+          ? null
+          : (next) {
+              if (next == null) return;
+              unawaited(_setAskAiPreference(next));
+            },
+      title: Text(title),
+      subtitle: Text(subtitle),
+      controlAffinity: ListTileControlAffinity.leading,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = context.t.settings.aiSelection;
+    final askAiPreferenceLabels = t.askAi.preference;
+
+    final askAiWarning = _askAiRoute == AskAiRouteKind.needsSetup
+        ? Container(
+            key: const ValueKey('ai_settings_ask_ai_setup_hint'),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: Theme.of(context).colorScheme.errorContainer.withOpacity(
+                    0.45,
+                  ),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _askAiPreference == AskAiSourcePreference.auto
+                        ? t.askAi.setupHint
+                        : t.askAi.preferenceUnavailableHint,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(t.title)),
@@ -263,83 +393,62 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         children: [
           Text(t.subtitle),
           const SizedBox(height: 12),
-          FutureBuilder<AskAiRouteKind>(
-            future: _askAiRouteFuture,
-            builder: (context, snapshot) {
-              final route = snapshot.connectionState == ConnectionState.done
-                  ? (snapshot.data ?? AskAiRouteKind.needsSetup)
-                  : AskAiRouteKind.needsSetup;
-              final statusLabel =
-                  snapshot.connectionState == ConnectionState.done
-                      ? _askAiStatusLabel(context, route)
-                      : t.askAi.status.loading;
-
-              return _buildSectionCard(
+          _buildSectionCard(
+            context,
+            anchorKey: _askAiSectionAnchorKey,
+            cardKey: const ValueKey('ai_settings_section_ask_ai'),
+            section: AiSettingsSection.askAi,
+            title: t.askAi.title,
+            description: t.askAi.description,
+            statusLabel: _askAiStatusLabel(context),
+            warning: askAiWarning,
+            actions: [
+              _buildAskAiPreferenceTile(
                 context,
-                anchorKey: _askAiSectionAnchorKey,
-                cardKey: const ValueKey('ai_settings_section_ask_ai'),
-                section: AiSettingsSection.askAi,
-                title: t.askAi.title,
-                description: t.askAi.description,
-                statusLabel: statusLabel,
-                warning: route == AskAiRouteKind.needsSetup
-                    ? Container(
-                        key: const ValueKey('ai_settings_ask_ai_setup_hint'),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          color: Theme.of(context)
-                              .colorScheme
-                              .errorContainer
-                              .withOpacity(0.45),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 18,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onErrorContainer,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(t.askAi.setupHint)),
-                          ],
-                        ),
-                      )
-                    : null,
-                actions: [
-                  ListTile(
-                    key: const ValueKey('ai_settings_open_cloud_account'),
-                    title: Text(t.askAi.actions.openCloud),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CloudAccountPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    key: const ValueKey('ai_settings_open_llm_profiles'),
-                    title: Text(t.askAi.actions.openByok),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LlmProfilesPage(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              );
-            },
+                key: const ValueKey('ai_settings_ask_ai_mode_auto'),
+                value: AskAiSourcePreference.auto,
+                title: askAiPreferenceLabels.auto.title,
+                subtitle: askAiPreferenceLabels.auto.description,
+              ),
+              _buildAskAiPreferenceTile(
+                context,
+                key: const ValueKey('ai_settings_ask_ai_mode_cloud'),
+                value: AskAiSourcePreference.cloud,
+                title: askAiPreferenceLabels.cloud.title,
+                subtitle: askAiPreferenceLabels.cloud.description,
+              ),
+              _buildAskAiPreferenceTile(
+                context,
+                key: const ValueKey('ai_settings_ask_ai_mode_byok'),
+                value: AskAiSourcePreference.byok,
+                title: askAiPreferenceLabels.byok.title,
+                subtitle: askAiPreferenceLabels.byok.description,
+              ),
+              ListTile(
+                key: const ValueKey('ai_settings_open_cloud_account'),
+                title: Text(t.askAi.actions.openCloud),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CloudAccountPage(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                key: const ValueKey('ai_settings_open_llm_profiles'),
+                title: Text(t.askAi.actions.openByok),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const LlmProfilesPage(),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           _buildSectionCard(

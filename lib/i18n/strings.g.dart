@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1262 (631 per locale)
+/// Strings: 1276 (638 per locale)
 ///
-/// Built on 2026-02-11 at 05:34 UTC
+/// Built on 2026-02-11 at 06:00 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1840,8 +1840,12 @@ class _StringsSettingsAiSelectionAskAiEn {
       'Chat assistant provider for your messages and memory.';
   String get setupHint =>
       'Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.';
+  String get preferenceUnavailableHint =>
+      'The selected Ask AI source is unavailable. Open Cloud account or API keys to finish setup.';
   late final _StringsSettingsAiSelectionAskAiStatusEn status =
       _StringsSettingsAiSelectionAskAiStatusEn._(_root);
+  late final _StringsSettingsAiSelectionAskAiPreferenceEn preference =
+      _StringsSettingsAiSelectionAskAiPreferenceEn._(_root);
   late final _StringsSettingsAiSelectionAskAiActionsEn actions =
       _StringsSettingsAiSelectionAskAiActionsEn._(_root);
 }
@@ -2541,6 +2545,21 @@ class _StringsSettingsAiSelectionAskAiStatusEn {
   String get notConfigured => 'Current route: setup required';
 }
 
+// Path: settings.aiSelection.askAi.preference
+class _StringsSettingsAiSelectionAskAiPreferenceEn {
+  _StringsSettingsAiSelectionAskAiPreferenceEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsAiSelectionAskAiPreferenceAutoEn auto =
+      _StringsSettingsAiSelectionAskAiPreferenceAutoEn._(_root);
+  late final _StringsSettingsAiSelectionAskAiPreferenceCloudEn cloud =
+      _StringsSettingsAiSelectionAskAiPreferenceCloudEn._(_root);
+  late final _StringsSettingsAiSelectionAskAiPreferenceByokEn byok =
+      _StringsSettingsAiSelectionAskAiPreferenceByokEn._(_root);
+}
+
 // Path: settings.aiSelection.askAi.actions
 class _StringsSettingsAiSelectionAskAiActionsEn {
   _StringsSettingsAiSelectionAskAiActionsEn._(this._root);
@@ -2810,6 +2829,41 @@ class _StringsSettingsSubscriptionBenefitsItemsEn {
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn._(_root);
+}
+
+// Path: settings.aiSelection.askAi.preference.auto
+class _StringsSettingsAiSelectionAskAiPreferenceAutoEn {
+  _StringsSettingsAiSelectionAskAiPreferenceAutoEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Auto';
+  String get description => 'Prefer Cloud when available, otherwise use BYOK.';
+}
+
+// Path: settings.aiSelection.askAi.preference.cloud
+class _StringsSettingsAiSelectionAskAiPreferenceCloudEn {
+  _StringsSettingsAiSelectionAskAiPreferenceCloudEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'SecondLoop Cloud';
+  String get description =>
+      'Use Cloud only. Ask AI stays unavailable until Cloud is ready.';
+}
+
+// Path: settings.aiSelection.askAi.preference.byok
+class _StringsSettingsAiSelectionAskAiPreferenceByokEn {
+  _StringsSettingsAiSelectionAskAiPreferenceByokEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'API key (BYOK)';
+  String get description =>
+      'Use BYOK only. Ask AI stays unavailable until an active profile exists.';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.languageHints.labels
@@ -5494,8 +5548,14 @@ class _StringsSettingsAiSelectionAskAiZhCn
   @override
   String get setupHint => '当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。';
   @override
+  String get preferenceUnavailableHint =>
+      '你选择的问 AI 来源当前不可用。请先完善 Cloud 或 API 密钥配置。';
+  @override
   late final _StringsSettingsAiSelectionAskAiStatusZhCn status =
       _StringsSettingsAiSelectionAskAiStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionAskAiPreferenceZhCn preference =
+      _StringsSettingsAiSelectionAskAiPreferenceZhCn._(_root);
   @override
   late final _StringsSettingsAiSelectionAskAiActionsZhCn actions =
       _StringsSettingsAiSelectionAskAiActionsZhCn._(_root);
@@ -6534,6 +6594,28 @@ class _StringsSettingsAiSelectionAskAiStatusZhCn
   String get notConfigured => '当前路由：需要先配置';
 }
 
+// Path: settings.aiSelection.askAi.preference
+class _StringsSettingsAiSelectionAskAiPreferenceZhCn
+    extends _StringsSettingsAiSelectionAskAiPreferenceEn {
+  _StringsSettingsAiSelectionAskAiPreferenceZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsAiSelectionAskAiPreferenceAutoZhCn auto =
+      _StringsSettingsAiSelectionAskAiPreferenceAutoZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionAskAiPreferenceCloudZhCn cloud =
+      _StringsSettingsAiSelectionAskAiPreferenceCloudZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionAskAiPreferenceByokZhCn byok =
+      _StringsSettingsAiSelectionAskAiPreferenceByokZhCn._(_root);
+}
+
 // Path: settings.aiSelection.askAi.actions
 class _StringsSettingsAiSelectionAskAiActionsZhCn
     extends _StringsSettingsAiSelectionAskAiActionsEn {
@@ -6936,6 +7018,57 @@ class _StringsSettingsSubscriptionBenefitsItemsZhCn
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn._(_root);
+}
+
+// Path: settings.aiSelection.askAi.preference.auto
+class _StringsSettingsAiSelectionAskAiPreferenceAutoZhCn
+    extends _StringsSettingsAiSelectionAskAiPreferenceAutoEn {
+  _StringsSettingsAiSelectionAskAiPreferenceAutoZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '自动';
+  @override
+  String get description => '优先使用 Cloud，不可用时自动使用 BYOK。';
+}
+
+// Path: settings.aiSelection.askAi.preference.cloud
+class _StringsSettingsAiSelectionAskAiPreferenceCloudZhCn
+    extends _StringsSettingsAiSelectionAskAiPreferenceCloudEn {
+  _StringsSettingsAiSelectionAskAiPreferenceCloudZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'SecondLoop Cloud';
+  @override
+  String get description => '仅使用 Cloud。Cloud 不可用时问 AI 会保持不可用。';
+}
+
+// Path: settings.aiSelection.askAi.preference.byok
+class _StringsSettingsAiSelectionAskAiPreferenceByokZhCn
+    extends _StringsSettingsAiSelectionAskAiPreferenceByokEn {
+  _StringsSettingsAiSelectionAskAiPreferenceByokZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'API 密钥（BYOK）';
+  @override
+  String get description => '仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.languageHints.labels
@@ -7494,6 +7627,8 @@ extension on Translations {
         return 'Chat assistant provider for your messages and memory.';
       case 'settings.aiSelection.askAi.setupHint':
         return 'Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.';
+      case 'settings.aiSelection.askAi.preferenceUnavailableHint':
+        return 'The selected Ask AI source is unavailable. Open Cloud account or API keys to finish setup.';
       case 'settings.aiSelection.askAi.status.loading':
         return 'Checking current route...';
       case 'settings.aiSelection.askAi.status.cloud':
@@ -7502,6 +7637,18 @@ extension on Translations {
         return 'Current route: API key profile (BYOK)';
       case 'settings.aiSelection.askAi.status.notConfigured':
         return 'Current route: setup required';
+      case 'settings.aiSelection.askAi.preference.auto.title':
+        return 'Auto';
+      case 'settings.aiSelection.askAi.preference.auto.description':
+        return 'Prefer Cloud when available, otherwise use BYOK.';
+      case 'settings.aiSelection.askAi.preference.cloud.title':
+        return 'SecondLoop Cloud';
+      case 'settings.aiSelection.askAi.preference.cloud.description':
+        return 'Use Cloud only. Ask AI stays unavailable until Cloud is ready.';
+      case 'settings.aiSelection.askAi.preference.byok.title':
+        return 'API key (BYOK)';
+      case 'settings.aiSelection.askAi.preference.byok.description':
+        return 'Use BYOK only. Ask AI stays unavailable until an active profile exists.';
       case 'settings.aiSelection.askAi.actions.openCloud':
         return 'Open Cloud account';
       case 'settings.aiSelection.askAi.actions.openByok':
@@ -8790,6 +8937,8 @@ extension on _StringsZhCn {
         return '用于聊天提问与记忆检索的模型来源。';
       case 'settings.aiSelection.askAi.setupHint':
         return '当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。';
+      case 'settings.aiSelection.askAi.preferenceUnavailableHint':
+        return '你选择的问 AI 来源当前不可用。请先完善 Cloud 或 API 密钥配置。';
       case 'settings.aiSelection.askAi.status.loading':
         return '正在检查当前路由...';
       case 'settings.aiSelection.askAi.status.cloud':
@@ -8798,6 +8947,18 @@ extension on _StringsZhCn {
         return '当前路由：API 密钥配置（BYOK）';
       case 'settings.aiSelection.askAi.status.notConfigured':
         return '当前路由：需要先配置';
+      case 'settings.aiSelection.askAi.preference.auto.title':
+        return '自动';
+      case 'settings.aiSelection.askAi.preference.auto.description':
+        return '优先使用 Cloud，不可用时自动使用 BYOK。';
+      case 'settings.aiSelection.askAi.preference.cloud.title':
+        return 'SecondLoop Cloud';
+      case 'settings.aiSelection.askAi.preference.cloud.description':
+        return '仅使用 Cloud。Cloud 不可用时问 AI 会保持不可用。';
+      case 'settings.aiSelection.askAi.preference.byok.title':
+        return 'API 密钥（BYOK）';
+      case 'settings.aiSelection.askAi.preference.byok.description':
+        return '仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。';
       case 'settings.aiSelection.askAi.actions.openCloud':
         return '打开 Cloud 账户';
       case 'settings.aiSelection.askAi.actions.openByok':

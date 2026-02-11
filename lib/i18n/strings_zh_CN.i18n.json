@@ -259,11 +259,26 @@
         "title": "问 AI",
         "description": "用于聊天提问与记忆检索的模型来源。",
         "setupHint": "当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。",
+        "preferenceUnavailableHint": "你选择的问 AI 来源当前不可用。请先完善 Cloud 或 API 密钥配置。",
         "status": {
           "loading": "正在检查当前路由...",
           "cloud": "当前路由：SecondLoop Cloud",
           "byok": "当前路由：API 密钥配置（BYOK）",
           "notConfigured": "当前路由：需要先配置"
+        },
+        "preference": {
+          "auto": {
+            "title": "自动",
+            "description": "优先使用 Cloud，不可用时自动使用 BYOK。"
+          },
+          "cloud": {
+            "title": "SecondLoop Cloud",
+            "description": "仅使用 Cloud。Cloud 不可用时问 AI 会保持不可用。"
+          },
+          "byok": {
+            "title": "API 密钥（BYOK）",
+            "description": "仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。"
+          }
         },
         "actions": {
           "openCloud": "打开 Cloud 账户",

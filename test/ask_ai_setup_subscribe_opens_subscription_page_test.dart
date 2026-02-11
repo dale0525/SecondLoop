@@ -54,7 +54,8 @@ void main() {
         find.byKey(const ValueKey('chat_input')),
         'hello?',
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 50));
 
       expect(find.byKey(const ValueKey('chat_configure_ai')), findsOneWidget);
       expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);

@@ -943,10 +943,16 @@ class AppBackendScope extends InheritedWidget {
 
   final AppBackend backend;
 
+  static AppBackend? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<AppBackendScope>()
+        ?.backend;
+  }
+
   static AppBackend of(BuildContext context) {
-    final scope = context.dependOnInheritedWidgetOfExactType<AppBackendScope>();
-    assert(scope != null, 'No AppBackendScope found in widget tree');
-    return scope!.backend;
+    final backend = maybeOf(context);
+    assert(backend != null, 'No AppBackendScope found in widget tree');
+    return backend!;
   }
 
   @override
