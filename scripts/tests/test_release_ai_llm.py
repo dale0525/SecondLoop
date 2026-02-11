@@ -108,6 +108,53 @@ class ReleaseAiLlmTests(unittest.TestCase):
             self.assertIn("input", payload)
             self.assertNotIn("messages", payload)
 
+    def test_openai_chat_json_supports_portkey_default_auth_header(self) -> None:
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        def fake_urlopen(request, **_kwargs):  # type: ignore[no-untyped-def]
+            headers = {key.lower(): value for key, value in request.header_items()}
+            calls.append((request.full_url, headers))
+
+            if request.full_url.endswith("/chat/completions") and "x-portkey-api-key" in headers:
+                payload = json.loads(request.data.decode("utf-8"))
+                self.assertIn("messages", payload)
+                return _FakeResponse(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": "{\"bump\":\"patch\",\"reason\":\"portkey\",\"confidence\":0.7,\"evidence_change_ids\":[]}",
+                                }
+                            }
+                        ]
+                    }
+                )
+
+            body = io.BytesIO(b'{"error":{"message":"Portkey Error: Invalid API Key. Error Code: 03"}}')
+            raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", hdrs=None, fp=body)
+
+        config = {
+            "api_key": "pk-live-test",
+            "model": "openai/gpt-4o-mini",
+            "base_url": "https://api.portkey.ai/v1",
+            "endpoint": "",
+            "timeout_seconds": 10,
+            "retries": 0,
+            "ca_bundle": "",
+            "insecure_skip_verify": False,
+            "auth_header": "",
+            "auth_scheme": "Bearer",
+        }
+
+        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            result = openai_chat_json(
+                messages=[{"role": "user", "content": "hello"}],
+                config=config,
+            )
+
+        self.assertEqual(result["bump"], "patch")
+        self.assertTrue(any("x-portkey-api-key" in headers for _, headers in calls))
+
     def test_openai_chat_json_supports_custom_auth_header(self) -> None:
         def fake_urlopen(request, **_kwargs):  # type: ignore[no-untyped-def]
             headers = {key.lower(): value for key, value in request.header_items()}

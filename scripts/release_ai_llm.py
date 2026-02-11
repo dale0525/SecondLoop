@@ -113,6 +113,14 @@ def _extract_content(parsed: dict[str, Any]) -> str:
     return ""
 
 
+def _looks_like_portkey(config: dict[str, Any]) -> bool:
+    candidates = [
+        str(config.get("endpoint", "")).strip(),
+        str(config.get("base_url", "")).strip(),
+    ]
+    return any("portkey.ai" in value.lower() for value in candidates if value)
+
+
 def _auth_header_variants(config: dict[str, Any]) -> list[dict[str, str]]:
     api_key = str(config["api_key"])
     auth_header = str(config.get("auth_header", "")).strip()
@@ -123,6 +131,8 @@ def _auth_header_variants(config: dict[str, Any]) -> list[dict[str, str]]:
         prefix = f"{auth_scheme} " if auth_scheme else ""
         variants.append({auth_header: f"{prefix}{api_key}"})
     else:
+        if _looks_like_portkey(config):
+            variants.append({"x-portkey-api-key": api_key})
         variants.extend(
             [
                 {"Authorization": f"Bearer {api_key}"},
