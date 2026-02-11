@@ -47,6 +47,19 @@ class ReleaseAiLlmTests(unittest.TestCase):
         self.assertEqual(config["timeout_seconds"], 45)
         self.assertEqual(config["retries"], 4)
 
+    def test_llm_config_uses_300s_default_timeout(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "RELEASE_LLM_API_KEY": "k-test",
+                "RELEASE_LLM_MODEL": "gpt-test",
+            },
+            clear=False,
+        ):
+            config = llm_config()
+
+        self.assertEqual(config["timeout_seconds"], 300)
+
     def test_llm_config_normalizes_literal_secret_values(self) -> None:
         with mock.patch.dict(
             os.environ,
