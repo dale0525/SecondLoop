@@ -16,6 +16,8 @@ from scripts.release_ai import (
     validate_locale_notes,
 )
 
+from scripts.release_ai_release_base import fetch_repo_releases
+
 
 class SemVerTests(unittest.TestCase):
     def test_parse_semver_tag(self) -> None:
@@ -148,6 +150,60 @@ class PublishedReleaseBaseTests(unittest.TestCase):
         mock_collect_commits.assert_called_once_with("v0.3.0..v0.4.1")
         mock_run_git.assert_called_once_with(["rev-parse", "v0.4.1"])
         mock_token.assert_called_once()
+
+
+class ReleaseFetchTests(unittest.TestCase):
+    def test_fetch_repo_releases_handles_pagination(self) -> None:
+        calls: list[str] = []
+
+        def github_get(path: str) -> object:
+            calls.append(path)
+            if path.endswith("page=1"):
+                return [
+                    {
+                        "tag_name": f"v0.1.{index}",
+                        "draft": False,
+                        "prerelease": False,
+                    }
+                    for index in range(100)
+                ]
+            if path.endswith("page=2"):
+                return [
+                    {"tag_name": "v0.2.0", "draft": False, "prerelease": False},
+                    {"tag_name": "v0.2.1", "draft": False, "prerelease": False},
+                ]
+            self.fail(f"unexpected path: {path}")
+
+        releases = fetch_repo_releases("acme/secondloop", github_get=github_get)
+
+        self.assertEqual(len(releases), 102)
+        self.assertEqual(
+            calls,
+            [
+                "/repos/acme/secondloop/releases?per_page=100&page=1",
+                "/repos/acme/secondloop/releases?per_page=100&page=2",
+            ],
+        )
+
+    def test_fetch_repo_releases_surfaces_github_api_error(self) -> None:
+        def github_get(_: str) -> object:
+            return {"message": "Forbidden"}
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "GitHub API error for acme/secondloop: Forbidden",
+        ):
+            fetch_repo_releases("acme/secondloop", github_get=github_get)
+
+    def test_fetch_repo_releases_rejects_unexpected_payload_type(self) -> None:
+        def github_get(_: str) -> object:
+            return "invalid"
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "unexpected GitHub releases response type: str",
+        ):
+            fetch_repo_releases("acme/secondloop", github_get=github_get)
 
 
 if __name__ == "__main__":
