@@ -101,6 +101,9 @@ void main() {
       find.byKey(const ValueKey('attachment_image_preview_tap_target')),
       findsOneWidget,
     );
+    final previewSize = tester
+        .getSize(find.byKey(const ValueKey('attachment_image_preview_box')));
+    expect(previewSize.height, lessThanOrEqualTo(300));
   });
 
   testWidgets('Attachment viewer hides metadata cards even when EXIF exists',

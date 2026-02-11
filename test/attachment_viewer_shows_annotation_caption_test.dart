@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -167,6 +168,73 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentViewerPage keeps existing full text visible while retry is pending',
+      (tester) async {
+    final longOcr =
+        List<String>.generate(40, (i) => 'stable_token_$i').join(' ');
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': 'OCR fallback caption'},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode({
+          'caption_long': 'OCR fallback caption',
+          'ocr_text': longOcr,
+          'ocr_lang_hints': 'device_plus_en',
+        }),
+      },
+      clearPayloadOnRetry: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('stable_token_39'), findsWidgets);
+
+    final regenerateFinder =
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
+    await tester.ensureVisible(regenerateFinder);
+    await tester.tap(regenerateFinder);
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_ocr_regenerate_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(backend.retryEnqueueCalls, 1);
+    expect(backend.retryMarkFailedCalls, 1);
+    expect(
+      find.byKey(const ValueKey('attachment_text_full_empty')),
+      findsNothing,
+    );
+    final markdown = tester.widget<MarkdownBody>(
+      find.byKey(const ValueKey('attachment_text_full_markdown_display')),
+    );
+    expect(markdown.data, contains('stable_token_39'));
+  });
+
+  testWidgets(
       'AttachmentViewerPage shows retry action for recognized image annotation',
       (tester) async {
     final backend = _NativeImageBackend(
@@ -292,6 +360,7 @@ final class _NativeImageBackend extends NativeAppBackend {
     required Map<String, Uint8List> bytesBySha,
     required Map<String, String?> annotationCaptionBySha,
     required Map<String, String?> annotationPayloadJsonBySha,
+    this.clearPayloadOnRetry = false,
   })  : _bytesBySha = Map<String, Uint8List>.from(bytesBySha),
         _annotationCaptionBySha =
             Map<String, String?>.from(annotationCaptionBySha),
@@ -302,6 +371,7 @@ final class _NativeImageBackend extends NativeAppBackend {
   final Map<String, Uint8List> _bytesBySha;
   final Map<String, String?> _annotationCaptionBySha;
   final Map<String, String?> _annotationPayloadJsonBySha;
+  final bool clearPayloadOnRetry;
   int retryEnqueueCalls = 0;
   int retryMarkFailedCalls = 0;
 
@@ -367,6 +437,11 @@ final class _NativeImageBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     retryMarkFailedCalls += 1;
+    if (clearPayloadOnRetry) {
+      _annotationCaptionBySha[attachmentSha256] = null;
+      _annotationPayloadJsonBySha[attachmentSha256] =
+          jsonEncode(<String, Object?>{});
+    }
   }
 }
 

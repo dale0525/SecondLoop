@@ -66,10 +66,12 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _loadingMetadata = false;
   bool _loadingAnnotationPayload = false;
   bool _retryingAttachmentRecognition = false;
+  bool _awaitingAttachmentRecognitionResult = false;
   String? _placeDisplayName;
   String? _annotationCaption;
   AttachmentMetadata? _metadata;
   Map<String, Object?>? _annotationPayload;
+  Map<String, Object?>? _lastNonEmptyAnnotationPayload;
   bool _runningDocumentOcr = false;
   String? _documentOcrStatusText;
   String _documentOcrLanguageHints = 'device_plus_en';
@@ -172,6 +174,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     super.didChangeDependencies();
     _bytesFuture ??= _loadBytes();
     final isImage = widget.attachment.mimeType.startsWith('image/');
+    if (_metadataFuture == null) {
+      _startMetadataLoad();
+    }
     if (isImage) {
       _exifFuture ??= _loadPersistedExif();
       if (_placeFuture == null) {
@@ -184,9 +189,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         _startAnnotationPayloadLoad();
       }
     } else {
-      if (_metadataFuture == null) {
-        _startMetadataLoad();
-      }
       if (_annotationPayloadFuture == null) {
         _startAnnotationPayloadLoad();
       }
@@ -288,11 +290,74 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     });
   }
 
+  AttachmentDetailTextContent _resolveIntrinsicTextContentForPayload(
+    Map<String, Object?>? payload,
+  ) {
+    return resolveAttachmentDetailTextContent(
+      payload,
+      annotationCaption: null,
+    );
+  }
+
+  String _payloadOcrAutoStatus(Map<String, Object?>? payload) {
+    return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
+  }
+
+  bool _payloadOcrTerminalWithoutText(Map<String, Object?>? payload) {
+    final status = _payloadOcrAutoStatus(payload);
+    return status == 'ok' || status == 'failed';
+  }
+
+  String? _preserveAnnotationCaptionWhileRecognition(String? nextCaption) {
+    final normalized = (nextCaption ?? '').trim();
+    if (normalized.isNotEmpty) return normalized;
+    if (!_awaitingAttachmentRecognitionResult) return null;
+    final existing = (_annotationCaption ?? '').trim();
+    return existing.isEmpty ? null : existing;
+  }
+
+  Map<String, Object?>? _resolveDisplayAnnotationPayload(
+    Map<String, Object?>? nextPayload,
+  ) {
+    final nextTextContent = _resolveIntrinsicTextContentForPayload(nextPayload);
+    if (nextTextContent.hasAny) {
+      _awaitingAttachmentRecognitionResult = false;
+      _documentOcrStatusText = null;
+      _lastNonEmptyAnnotationPayload = nextPayload;
+      return nextPayload;
+    }
+
+    if (_awaitingAttachmentRecognitionResult &&
+        _payloadOcrTerminalWithoutText(nextPayload)) {
+      _awaitingAttachmentRecognitionResult = false;
+      final status = _payloadOcrAutoStatus(nextPayload);
+      if (status == 'failed') {
+        _documentOcrStatusText = context.t.attachments.content.ocrFailed;
+      }
+    }
+
+    final fallbackPayload =
+        _lastNonEmptyAnnotationPayload ?? _annotationPayload;
+    final fallbackTextContent =
+        _resolveIntrinsicTextContentForPayload(fallbackPayload);
+    final shouldPreserveCurrentText = (_awaitingAttachmentRecognitionResult ||
+            _retryingAttachmentRecognition) &&
+        !nextTextContent.hasAny &&
+        fallbackTextContent.hasAny;
+
+    if (shouldPreserveCurrentText) {
+      return fallbackPayload;
+    }
+
+    return nextPayload;
+  }
+
   void _startAnnotationCaptionLoad() {
     _loadingAnnotation = true;
     _annotationCaptionFuture = _loadAnnotationCaptionLong().then((value) {
-      _annotationCaption = value?.trim();
-      return value;
+      final nextCaption = _preserveAnnotationCaptionWhileRecognition(value);
+      _annotationCaption = nextCaption;
+      return nextCaption;
     }).whenComplete(() {
       _loadingAnnotation = false;
     });
@@ -311,15 +376,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   void _startAnnotationPayloadLoad() {
     _loadingAnnotationPayload = true;
     _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
-      _annotationPayload = value;
-      final ocrText =
-          ((value?['ocr_text_excerpt'] ?? value?['ocr_text_full']) ?? '')
-              .toString()
-              .trim();
-      if (ocrText.isNotEmpty) {
-        _documentOcrStatusText = null;
-      }
-      return value;
+      final displayPayload = _resolveDisplayAnnotationPayload(value);
+      _annotationPayload = displayPayload;
+      return displayPayload;
     }).whenComplete(() {
       _loadingAnnotationPayload = false;
     });
@@ -556,7 +615,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final lang = Localizations.localeOf(context).toLanguageTag();
 
-    setState(() => _retryingAttachmentRecognition = true);
+    setState(() {
+      _retryingAttachmentRecognition = true;
+      _awaitingAttachmentRecognitionResult = true;
+      _documentOcrStatusText = context.t.attachments.content.ocrRunning;
+    });
     try {
       final hint = (ocrLanguageHints ?? '').trim();
       if (hint.isNotEmpty) {
@@ -585,6 +648,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       setState(() {});
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _awaitingAttachmentRecognitionResult = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.t.errors.loadFailed(error: '$e')),
@@ -646,6 +712,12 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       setState(() {
         _annotationPayload = nextPayload;
         _annotationPayloadFuture = Future.value(nextPayload);
+        final nextTextContent = _resolveIntrinsicTextContentForPayload(
+          nextPayload,
+        );
+        if (nextTextContent.hasAny) {
+          _lastNonEmptyAnnotationPayload = nextPayload;
+        }
         if (widget.attachment.mimeType.startsWith('image/')) {
           final nextCaption =
               (nextPayload['caption_long'] ?? '').toString().trim();
@@ -713,160 +785,174 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
-    final appBarTitle = _resolveAppBarTitle(
-      widget.attachment,
-      metadata: _metadata,
-    );
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(appBarTitle),
-        actions: [
-          if (bytesFuture != null)
-            FutureBuilder<Uint8List>(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                final bytes = snapshot.data;
-                final disabled = bytes == null;
-                return IconButton(
-                  key: const ValueKey('attachment_viewer_share'),
-                  tooltip: context.t.common.actions.share,
-                  onPressed: disabled
-                      ? null
-                      : () => unawaited(_shareAttachment(bytes)),
-                  icon: const Icon(Icons.share_rounded),
-                );
-              },
-            ),
-          if (bytesFuture != null)
-            FutureBuilder<Uint8List>(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                final bytes = snapshot.data;
-                final disabled = bytes == null;
-                return IconButton(
-                  key: const ValueKey('attachment_viewer_open_with_system'),
-                  tooltip: context.t.attachments.content.openWithSystem,
-                  onPressed: disabled
-                      ? null
-                      : () => unawaited(_openAttachmentWithSystem(bytes)),
-                  icon: const Icon(Icons.open_in_new_rounded),
-                );
-              },
-            ),
-          if (bytesFuture != null)
-            FutureBuilder<Uint8List>(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                final bytes = snapshot.data;
-                final disabled = bytes == null;
-                return IconButton(
-                  key: const ValueKey('attachment_viewer_download'),
-                  tooltip: context.t.common.actions.pull,
-                  onPressed: disabled
-                      ? null
-                      : () => unawaited(_downloadAttachment(bytes)),
-                  icon: const Icon(Icons.download_rounded),
-                );
-              },
-            ),
-        ],
-      ),
-      body: bytesFuture == null
-          ? const Center(child: CircularProgressIndicator())
-          : FutureBuilder(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  final err = snapshot.error;
-                  final isWifiConsentError = err is StateError &&
-                      err.message == 'media_download_requires_wifi';
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.broken_image_outlined, size: 48),
-                          const SizedBox(height: 12),
-                          Text(
-                            isWifiConsentError
-                                ? context.t.sync.mediaPreview
-                                    .chatThumbnailsWifiOnlySubtitle
-                                : context.t.errors.loadFailed(error: '$err'),
-                            textAlign: TextAlign.center,
+    final metadataFuture = _metadataFuture;
+
+    return FutureBuilder<AttachmentMetadata?>(
+      future: metadataFuture,
+      initialData: _metadata,
+      builder: (context, metadataSnapshot) {
+        final metadata = metadataSnapshot.data ?? _metadata;
+        final appBarTitle = _resolveAppBarTitle(
+          widget.attachment,
+          metadata: metadata,
+        );
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(appBarTitle),
+            actions: [
+              if (bytesFuture != null)
+                FutureBuilder<Uint8List>(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    final bytes = snapshot.data;
+                    final disabled = bytes == null;
+                    return IconButton(
+                      key: const ValueKey('attachment_viewer_share'),
+                      tooltip: context.t.common.actions.share,
+                      onPressed: disabled
+                          ? null
+                          : () => unawaited(_shareAttachment(bytes)),
+                      icon: const Icon(Icons.share_rounded),
+                    );
+                  },
+                ),
+              if (bytesFuture != null)
+                FutureBuilder<Uint8List>(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    final bytes = snapshot.data;
+                    final disabled = bytes == null;
+                    return IconButton(
+                      key: const ValueKey('attachment_viewer_open_with_system'),
+                      tooltip: context.t.attachments.content.openWithSystem,
+                      onPressed: disabled
+                          ? null
+                          : () => unawaited(_openAttachmentWithSystem(bytes)),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                    );
+                  },
+                ),
+              if (bytesFuture != null)
+                FutureBuilder<Uint8List>(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    final bytes = snapshot.data;
+                    final disabled = bytes == null;
+                    return IconButton(
+                      key: const ValueKey('attachment_viewer_download'),
+                      tooltip: context.t.common.actions.pull,
+                      onPressed: disabled
+                          ? null
+                          : () => unawaited(_downloadAttachment(bytes)),
+                      icon: const Icon(Icons.download_rounded),
+                    );
+                  },
+                ),
+            ],
+          ),
+          body: bytesFuture == null
+              ? const Center(child: CircularProgressIndicator())
+              : FutureBuilder(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      final err = snapshot.error;
+                      final isWifiConsentError = err is StateError &&
+                          err.message == 'media_download_requires_wifi';
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.broken_image_outlined, size: 48),
+                              const SizedBox(height: 12),
+                              Text(
+                                isWifiConsentError
+                                    ? context.t.sync.mediaPreview
+                                        .chatThumbnailsWifiOnlySubtitle
+                                    : context.t.errors
+                                        .loadFailed(error: '$err'),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _bytesFuture = _loadBytes();
+                                  });
+                                },
+                                icon: const Icon(Icons.refresh),
+                                label: Text(context.t.common.actions.refresh),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _bytesFuture = _loadBytes();
-                              });
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: Text(context.t.common.actions.refresh),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
+                        ),
+                      );
+                    }
 
-                final bytes = snapshot.data;
-                if (bytes == null) return const SizedBox.shrink();
+                    final bytes = snapshot.data;
+                    if (bytes == null) return const SizedBox.shrink();
 
-                final isImage = widget.attachment.mimeType.startsWith('image/');
-                final isAudio = widget.attachment.mimeType.startsWith('audio/');
-                if (isAudio) {
-                  return AudioAttachmentPlayerView(
-                    attachment: widget.attachment,
-                    bytes: bytes,
-                    displayTitle: appBarTitle,
-                    metadataFuture: _metadataFuture,
-                    initialMetadata: _metadata,
-                    annotationPayloadFuture: _annotationPayloadFuture,
-                    initialAnnotationPayload: _annotationPayload,
-                    onRetryRecognition: _canRetryAttachmentRecognition
-                        ? _retryAttachmentRecognition
-                        : null,
-                    onSaveFull:
-                        _canEditAttachmentText ? _saveAttachmentFull : null,
-                  );
-                }
-                if (!isImage) {
-                  Future<void> Function()? runOcr;
-                  if (_supportsDocumentOcrAttachment()) {
-                    runOcr = _runDocumentOcr;
-                  } else if (_isVideoManifestAttachment()) {
-                    runOcr = _runVideoManifestOcr;
-                  }
+                    final isImage =
+                        widget.attachment.mimeType.startsWith('image/');
+                    final isAudio =
+                        widget.attachment.mimeType.startsWith('audio/');
+                    if (isAudio) {
+                      return AudioAttachmentPlayerView(
+                        attachment: widget.attachment,
+                        bytes: bytes,
+                        displayTitle: appBarTitle,
+                        metadataFuture: _metadataFuture,
+                        initialMetadata: metadata,
+                        annotationPayloadFuture: _annotationPayloadFuture,
+                        initialAnnotationPayload: _annotationPayload,
+                        onRetryRecognition: _canRetryAttachmentRecognition
+                            ? _retryAttachmentRecognition
+                            : null,
+                        onSaveFull:
+                            _canEditAttachmentText ? _saveAttachmentFull : null,
+                      );
+                    }
+                    if (!isImage) {
+                      Future<void> Function()? runOcr;
+                      if (_supportsDocumentOcrAttachment()) {
+                        runOcr = _runDocumentOcr;
+                      } else if (_isVideoManifestAttachment()) {
+                        runOcr = _runVideoManifestOcr;
+                      }
 
-                  return NonImageAttachmentView(
-                    attachment: widget.attachment,
-                    bytes: bytes,
-                    displayTitle: appBarTitle,
-                    metadataFuture: _metadataFuture,
-                    initialMetadata: _metadata,
-                    annotationPayloadFuture: _annotationPayloadFuture,
-                    initialAnnotationPayload: _annotationPayload,
-                    onRunOcr: runOcr,
-                    ocrRunning: _runningDocumentOcr,
-                    ocrStatusText: _documentOcrStatusText,
-                    ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
-                    onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
-                    onSaveFull:
-                        _canEditAttachmentText ? _saveAttachmentFull : null,
-                  );
-                }
+                      return NonImageAttachmentView(
+                        attachment: widget.attachment,
+                        bytes: bytes,
+                        displayTitle: appBarTitle,
+                        metadataFuture: _metadataFuture,
+                        initialMetadata: metadata,
+                        annotationPayloadFuture: _annotationPayloadFuture,
+                        initialAnnotationPayload: _annotationPayload,
+                        onRunOcr: runOcr,
+                        ocrRunning: _runningDocumentOcr,
+                        ocrStatusText: _documentOcrStatusText,
+                        ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
+                        onOcrLanguageHintsChanged:
+                            _updateDocumentOcrLanguageHints,
+                        onSaveFull:
+                            _canEditAttachmentText ? _saveAttachmentFull : null,
+                      );
+                    }
 
-                return _buildImageAttachmentDetail(
-                  bytes,
-                  title: appBarTitle,
-                );
-              },
-            ),
+                    return _buildImageAttachmentDetail(
+                      bytes,
+                      title: appBarTitle,
+                    );
+                  },
+                ),
+        );
+      },
     );
   }
 }

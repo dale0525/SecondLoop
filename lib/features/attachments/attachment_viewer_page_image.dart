@@ -90,6 +90,17 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                   : const Icon(Icons.auto_awesome_rounded),
             )
           : null;
+      final recognitionStatus = (() {
+        final status = (_documentOcrStatusText ?? '').trim();
+        if (status.isNotEmpty) return status;
+        if (_awaitingAttachmentRecognitionResult) {
+          return context.t.attachments.content.ocrRunning;
+        }
+        return '';
+      })();
+      final showRecognitionStatus = recognitionStatus.isNotEmpty;
+      final recognitionRunning = _awaitingAttachmentRecognitionResult ||
+          _retryingAttachmentRecognition;
 
       return Center(
         child: ConstrainedBox(
@@ -132,9 +143,11 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final previewHeight =
-                                  (constraints.maxWidth * 0.62)
-                                      .clamp(220.0, 520.0);
+                                  (constraints.maxWidth * 0.42)
+                                      .clamp(160.0, 300.0);
                               return SizedBox(
+                                key: const ValueKey(
+                                    'attachment_image_preview_box'),
                                 height: previewHeight,
                                 child: DecoratedBox(
                                   decoration: BoxDecoration(
@@ -159,6 +172,45 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                   ),
                   maxWidth: 860,
                 ),
+                if (showRecognitionStatus) ...[
+                  const SizedBox(height: 14),
+                  buildSection(
+                    SlSurface(
+                      key:
+                          const ValueKey('attachment_image_recognition_status'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          if (recognitionRunning)
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 16,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              recognitionStatus,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    maxWidth: 820,
+                  ),
+                ],
                 const SizedBox(height: 14),
                 buildSection(
                   AttachmentTextEditorCard(
