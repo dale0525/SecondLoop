@@ -187,14 +187,176 @@ if [[ ! -s "${release_api_payload}" ]]; then
 fi
 
 python3 - "${repo}" "${runtime_tag}" "${release_api_payload}" <<'PY'
+import hashlib
 import json
+import os
+import pathlib
 import re
 import sys
+import tarfile
+import tempfile
+import urllib.error
+import urllib.request
 
 
 def fail(message: str) -> None:
     print(f"release-preflight: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+def runtime_headers() -> dict[str, str]:
+    headers = {
+        "User-Agent": "secondloop-release-preflight",
+        "Accept": "application/octet-stream",
+    }
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token and token.strip():
+        headers["Authorization"] = f"Bearer {token.strip()}"
+    return headers
+
+
+def download_asset_text(asset: dict, timeout: int = 120) -> str:
+    url = str(asset.get("browser_download_url", "")).strip()
+    if not url:
+        raise RuntimeError(f"asset missing browser_download_url: {asset.get('name')}")
+
+    request = urllib.request.Request(url, headers=runtime_headers())
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"HTTP {exc.code} when downloading asset {asset.get('name')}"
+        ) from exc
+    except Exception as exc:
+        raise RuntimeError(f"cannot download asset {asset.get('name')}: {exc}") from exc
+
+
+def stream_asset(asset: dict, sink, digest) -> None:
+    url = str(asset.get("browser_download_url", "")).strip()
+    if not url:
+        raise RuntimeError(f"asset missing browser_download_url: {asset.get('name')}")
+
+    request = urllib.request.Request(url, headers=runtime_headers())
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                sink.write(chunk)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"HTTP {exc.code} when downloading asset {asset.get('name')}"
+        ) from exc
+    except Exception as exc:
+        raise RuntimeError(f"cannot download asset {asset.get('name')}: {exc}") from exc
+
+
+def first_sha_token(raw: str) -> str:
+    token = raw.strip().split()[0] if raw.strip() else ""
+    if not token:
+        raise RuntimeError("empty sha256 content")
+    return token
+
+
+def has_platform_runtime_lib(file_names: set[str], platform: str) -> bool:
+    lowered = {name.lower() for name in file_names}
+    if platform == "windows":
+        return any(name.startswith("onnxruntime") and name.endswith(".dll") for name in lowered)
+    if platform == "macos":
+        return any(
+            name.startswith("libonnxruntime")
+            and ".dylib" in name
+            and "providers_shared" not in name
+            for name in lowered
+        )
+    if platform == "linux":
+        return any(
+            name.startswith("libonnxruntime")
+            and ".so" in name
+            and "providers_shared" not in name
+            for name in lowered
+        )
+    raise RuntimeError(f"unsupported platform: {platform}")
+
+
+def inspect_archive_payload(archive_path: pathlib.Path) -> set[str]:
+    basenames = set()
+    try:
+        with tarfile.open(archive_path, "r:gz") as handle:
+            for member in handle.getmembers():
+                if member.isfile():
+                    basenames.add(pathlib.PurePosixPath(member.name).name)
+    except Exception as exc:
+        raise RuntimeError(f"cannot inspect runtime archive {archive_path.name}: {exc}") from exc
+    return basenames
+
+
+def validate_target_payload(
+    *,
+    platform: str,
+    arch: str,
+    runtime_version: str,
+    assets_by_name: dict[str, dict],
+    det_aliases: set[str],
+    cls_aliases: set[str],
+    rec_aliases: set[str],
+) -> None:
+    archive_base = f"desktop-runtime-{platform}-{arch}-{runtime_version}.tar.gz"
+    parts_list_name = archive_base + ".parts.txt"
+    sha_name = archive_base + ".sha256"
+
+    parts_list_asset = assets_by_name.get(parts_list_name)
+    sha_asset = assets_by_name.get(sha_name)
+    if parts_list_asset is None:
+        raise RuntimeError(f"missing {parts_list_name}")
+    if sha_asset is None:
+        raise RuntimeError(f"missing {sha_name}")
+
+    parts_raw = download_asset_text(parts_list_asset)
+    part_names = [line.strip() for line in parts_raw.splitlines() if line.strip()]
+    if not part_names:
+        raise RuntimeError(f"part list is empty: {parts_list_name}")
+
+    missing_parts = [name for name in part_names if name not in assets_by_name]
+    if missing_parts:
+        raise RuntimeError(
+            f"part list references missing assets: {', '.join(missing_parts)}"
+        )
+
+    expected_sha = first_sha_token(download_asset_text(sha_asset))
+
+    with tempfile.TemporaryDirectory(prefix=f"runtime-{platform}-{arch}-") as temp_dir:
+        archive_path = pathlib.Path(temp_dir) / archive_base
+        digest = hashlib.sha256()
+        with archive_path.open("wb") as sink:
+            for part_name in part_names:
+                stream_asset(assets_by_name[part_name], sink, digest)
+        actual_sha = digest.hexdigest()
+        if actual_sha.lower() != expected_sha.lower():
+            raise RuntimeError(
+                "sha256 mismatch for assembled archive "
+                f"(expected={expected_sha} actual={actual_sha})"
+            )
+
+        basenames = inspect_archive_payload(archive_path)
+
+    missing_sections = []
+    if not (basenames & det_aliases):
+        missing_sections.append("DET model")
+    if not (basenames & cls_aliases):
+        missing_sections.append("CLS model")
+    if not (basenames & rec_aliases):
+        missing_sections.append("REC model")
+    if not has_platform_runtime_lib(basenames, platform):
+        missing_sections.append("ONNX Runtime dynamic library")
+
+    if missing_sections:
+        raise RuntimeError(
+            "runtime payload missing required files: " + ", ".join(missing_sections)
+        )
 
 
 repo = sys.argv[1].strip()
@@ -252,11 +414,16 @@ runtime_version = runtime_tag.replace("desktop-runtime-", "", 1)
 assets = runtime_release.get("assets", [])
 if not isinstance(assets, list):
     assets = []
-asset_names = {
-    str(asset.get("name", "")).strip()
-    for asset in assets
-    if isinstance(asset, dict)
-}
+
+assets_by_name = {}
+for asset in assets:
+    if not isinstance(asset, dict):
+        continue
+    name = str(asset.get("name", "")).strip()
+    if name:
+        assets_by_name[name] = asset
+
+asset_names = set(assets_by_name.keys())
 
 required_targets = [
     ("linux", "x64"),
@@ -293,7 +460,52 @@ if missing:
         lines.append(f"  - {platform}/{arch}: missing {', '.join(names)}")
     fail("\n".join(lines))
 
+det_aliases = {
+    "ch_PP-OCRv5_mobile_det.onnx",
+    "ch_PP-OCRv4_det_infer.onnx",
+    "ch_PP-OCRv3_det_infer.onnx",
+}
+cls_aliases = {
+    "ch_ppocr_mobile_v2.0_cls_infer.onnx",
+}
+rec_aliases = {
+    "ch_PP-OCRv5_rec_mobile_infer.onnx",
+    "ch_PP-OCRv5_mobile_rec.onnx",
+    "ch_PP-OCRv4_rec_infer.onnx",
+    "ch_PP-OCRv3_rec_infer.onnx",
+    "latin_PP-OCRv3_rec_infer.onnx",
+    "arabic_PP-OCRv3_rec_infer.onnx",
+    "cyrillic_PP-OCRv3_rec_infer.onnx",
+    "devanagari_PP-OCRv3_rec_infer.onnx",
+    "japan_PP-OCRv3_rec_infer.onnx",
+    "korean_PP-OCRv3_rec_infer.onnx",
+    "chinese_cht_PP-OCRv3_rec_infer.onnx",
+}
+
+payload_errors = []
+for platform, arch in required_targets:
+    try:
+        validate_target_payload(
+            platform=platform,
+            arch=arch,
+            runtime_version=runtime_version,
+            assets_by_name=assets_by_name,
+            det_aliases=det_aliases,
+            cls_aliases=cls_aliases,
+            rec_aliases=rec_aliases,
+        )
+    except RuntimeError as exc:
+        payload_errors.append(f"  - {platform}/{arch}: {exc}")
+
+if payload_errors:
+    lines = [
+        f"runtime release '{runtime_tag}' payload validation failed:",
+        *payload_errors,
+    ]
+    fail("\n".join(lines))
+
 print(f"release-preflight: runtime assets ready -> {runtime_tag}")
+print(f"release-preflight: resolved_runtime_tag={runtime_tag}")
 PY
 
 read_locked_pubspec_version() {
