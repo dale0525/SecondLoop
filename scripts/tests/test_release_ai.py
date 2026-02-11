@@ -6,7 +6,10 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.release_ai import (
+    _build_notes_for_locale,
     _command_collect_facts,
+    _command_render_markdown,
+    _select_user_facing_changes,
     SemVer,
     bump_semver,
     classify_change,
@@ -204,6 +207,127 @@ class ReleaseFetchTests(unittest.TestCase):
             "unexpected GitHub releases response type: str",
         ):
             fetch_repo_releases("acme/secondloop", github_get=github_get)
+
+
+class RenderMarkdownTests(unittest.TestCase):
+    def test_render_markdown_uses_language_name_and_reference_links(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            notes_dir = Path(tmp_dir)
+            note_path = notes_dir / "release-notes-v1.2.3-en_US.json"
+            note_path.write_text(
+                json.dumps(
+                    {
+                        "locale": "en_US",
+                        "version": "v1.2.3",
+                        "summary": "Summary text",
+                        "highlights": [
+                            {
+                                "text": "Highlight text",
+                                "change_ids": ["pr#1"],
+                            }
+                        ],
+                        "sections": [
+                            {
+                                "key": "fix",
+                                "title": "Fixes",
+                                "items": [
+                                    {
+                                        "text": "Fixed crash",
+                                        "change_ids": ["commit:c6b1cc9"],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            facts_path = notes_dir / "facts.json"
+            facts_path.write_text(
+                json.dumps(
+                    {
+                        "changes": [
+                            {
+                                "id": "pr#1",
+                                "url": "https://github.com/acme/secondloop/pull/1",
+                            },
+                            {
+                                "id": "commit:c6b1cc9",
+                                "url": "https://github.com/acme/secondloop/commit/c6b1cc9deadbeef",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            output_path = notes_dir / "release-notes.md"
+            args = argparse.Namespace(
+                tag="v1.2.3",
+                locales="en_US",
+                notes_dir=str(notes_dir),
+                output=str(output_path),
+                facts=str(facts_path),
+            )
+
+            _command_render_markdown(args)
+            content = output_path.read_text(encoding="utf-8")
+
+        self.assertIn("## English", content)
+        self.assertNotIn("## en_US", content)
+        self.assertIn("[pr#1](https://github.com/acme/secondloop/pull/1)", content)
+        self.assertIn("[commit:c6b1cc9](https://github.com/acme/secondloop/commit/c6b1cc9deadbeef)", content)
+
+
+class UserFacingSelectionTests(unittest.TestCase):
+    def test_select_user_facing_changes_excludes_technical_only_items(self) -> None:
+        changes = [
+            {
+                "id": "pr#1",
+                "type": "fix",
+                "title": "fix(ci): stabilize release workflow",
+                "description": "Adjust CI timeout and workflow details",
+                "labels": ["ci", "infrastructure"],
+            },
+            {
+                "id": "pr#2",
+                "type": "feature",
+                "title": "feat(app): add release notes dialog",
+                "description": "Show release notes to users after update",
+                "labels": ["feature"],
+            },
+        ]
+
+        selected = _select_user_facing_changes(changes)
+        self.assertEqual([change["id"] for change in selected], ["pr#2"])
+
+    def test_build_notes_skips_llm_when_no_user_facing_changes(self) -> None:
+        facts = {
+            "changes": [
+                {
+                    "id": "pr#9",
+                    "type": "fix",
+                    "title": "fix(ci): release workflow retry logic",
+                    "description": "Internal pipeline tuning",
+                    "labels": ["ci"],
+                }
+            ]
+        }
+
+        with mock.patch("scripts.release_ai._translate_notes_with_llm") as mock_translate:
+            notes = _build_notes_for_locale(
+                facts=facts,
+                locale="en-US",
+                tag="v1.2.3",
+                config={"api_key": "k", "model": "m"},
+            )
+
+        mock_translate.assert_not_called()
+        self.assertEqual(notes["sections"], [])
+        self.assertEqual(notes["highlights"], [])
+        self.assertIn("maintenance", notes["summary"].lower())
+
 
 
 if __name__ == "__main__":
