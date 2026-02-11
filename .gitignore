@@ -44,3 +44,5 @@ assets/ocr/desktop_runtime/
 
 # Git worktrees
 .worktrees/
+dist/
+scripts/__pycache__/
