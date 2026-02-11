@@ -29,6 +29,8 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'audio_attachment_player.dart';
+import 'attachment_detail_text_content.dart';
+import 'attachment_text_editor_card.dart';
 import 'attachment_payload_refresh_policy.dart';
 import 'image_exif_metadata.dart';
 import 'non_image_attachment_view.dart';
@@ -63,16 +65,14 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _loadingAnnotation = false;
   bool _loadingMetadata = false;
   bool _loadingAnnotationPayload = false;
+  bool _retryingAttachmentRecognition = false;
   String? _placeDisplayName;
   String? _annotationCaption;
   AttachmentMetadata? _metadata;
   Map<String, Object?>? _annotationPayload;
-  bool _editingAnnotationCaption = false;
-  bool _savingAnnotationCaption = false;
   bool _runningDocumentOcr = false;
   String? _documentOcrStatusText;
   String _documentOcrLanguageHints = 'device_plus_en';
-  TextEditingController? _annotationCaptionController;
   Timer? _inlinePlaceResolveTimer;
   bool _inlinePlaceResolveScheduled = false;
   bool _attemptedSyncDownload = false;
@@ -172,7 +172,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   @override
   void dispose() {
     _inlinePlaceResolveTimer?.cancel();
-    _annotationCaptionController?.dispose();
     _detachSyncEngine();
     super.dispose();
   }
@@ -502,6 +501,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   String get _effectiveDocumentOcrLanguageHints =>
       normalizeAttachmentOcrLanguageHint(_documentOcrLanguageHints);
 
+  bool get _canRetryAttachmentRecognition =>
+      AppBackendScope.of(context) is NativeAppBackend;
+
   void _updateDocumentOcrLanguageHints(String value) {
     final normalized = normalizeAttachmentOcrLanguageHint(value);
     if (normalized == _documentOcrLanguageHints) return;
@@ -510,19 +512,55 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     });
   }
 
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-    final gb = mb / 1024;
-    return '${gb.toStringAsFixed(1)} GB';
+  Future<void> _retryAttachmentRecognition() async {
+    if (_retryingAttachmentRecognition) return;
+    final backendAny = AppBackendScope.of(context);
+    if (backendAny is! NativeAppBackend) return;
+
+    final backend = backendAny;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final lang = Localizations.localeOf(context).toLanguageTag();
+
+    setState(() => _retryingAttachmentRecognition = true);
+    try {
+      await backend.markAttachmentAnnotationFailed(
+        sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+        attempts: 0,
+        nextRetryAtMs: nowMs,
+        lastError: 'manual_retry',
+        nowMs: nowMs,
+      );
+      await backend.enqueueAttachmentAnnotation(
+        sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+        lang: lang,
+        nowMs: nowMs,
+      );
+
+      if (!mounted) return;
+      _startAnnotationCaptionLoad();
+      _startAnnotationPayloadLoad();
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _retryingAttachmentRecognition = false);
+      }
+    }
   }
 
   Widget _buildMetadataCard(
     BuildContext context, {
-    required int byteLen,
     required DateTime? capturedAt,
     required double? latitude,
     required double? longitude,
@@ -533,24 +571,18 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final hasLocation = latitude != null &&
         longitude != null &&
         !(latitude == 0.0 && longitude == 0.0);
+    final hasCapturedAt = capturedAt != null;
+
+    if (!hasCapturedAt && !hasLocation && !hasPlaceName) {
+      return const SizedBox.shrink();
+    }
 
     return SlSurface(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            context.t.attachments.metadata.size,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatBytes(byteLen),
-            key: const ValueKey('attachment_metadata_size'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
           if (capturedAt != null) ...[
-            const SizedBox(height: 10),
             Text(
               context.t.attachments.metadata.capturedAt,
               style: Theme.of(context).textTheme.labelMedium,
@@ -563,7 +595,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
             ),
           ],
           if (hasLocation || hasPlaceName) ...[
-            const SizedBox(height: 10),
+            if (capturedAt != null) const SizedBox(height: 10),
             Text(
               context.t.attachments.metadata.location,
               style: Theme.of(context).textTheme.labelMedium,
@@ -588,145 +620,80 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     );
   }
 
-  Widget _buildAnnotationCard(
-    BuildContext context, {
-    required String captionLong,
-    String? titleText,
-  }) {
-    final caption = captionLong.trim();
-    if (caption.isEmpty) return const SizedBox.shrink();
+  bool get _canEditAttachmentText =>
+      AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
 
-    Future<void> save() async {
-      if (_savingAnnotationCaption) return;
-      final controller = _annotationCaptionController;
-      if (controller == null) return;
-
-      final nextCaption = controller.text.trim();
-      if (nextCaption.isEmpty) return;
-
-      final backend = AppBackendScope.of(context);
-      if (backend is! AttachmentAnnotationMutationsBackend) return;
-      final annotationsBackend =
-          backend as AttachmentAnnotationMutationsBackend;
-      final sessionKey = SessionScope.of(context).sessionKey;
-      final syncEngine = SyncEngineScope.maybeOf(context);
-
-      setState(() => _savingAnnotationCaption = true);
-      try {
-        final payload = jsonEncode({
-          'caption_long': nextCaption,
-          'tags': null,
-          'ocr_text': null,
-        });
-        await annotationsBackend.markAttachmentAnnotationOkJson(
-          sessionKey,
-          attachmentSha256: widget.attachment.sha256,
-          lang: Localizations.localeOf(context).toLanguageTag(),
-          modelName: 'manual_edit',
-          payloadJson: payload,
-          nowMs: DateTime.now().millisecondsSinceEpoch,
-        );
-        syncEngine?.notifyLocalMutation();
-
-        if (!mounted) return;
-        setState(() {
-          _savingAnnotationCaption = false;
-          _editingAnnotationCaption = false;
-          _annotationCaptionController?.dispose();
-          _annotationCaptionController = null;
-          _startAnnotationCaptionLoad();
-        });
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.t.errors.saveFailed(error: '$e')),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        setState(() => _savingAnnotationCaption = false);
-      }
-    }
-
-    void beginEdit() {
-      _annotationCaptionController?.dispose();
-      _annotationCaptionController = TextEditingController(text: caption);
-      setState(() => _editingAnnotationCaption = true);
-    }
-
-    void cancelEdit() {
-      _annotationCaptionController?.dispose();
-      _annotationCaptionController = null;
-      setState(() => _editingAnnotationCaption = false);
-    }
-
-    final canEdit =
-        AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
-    final resolvedTitle =
-        (titleText ?? context.t.settings.mediaAnnotation.title).trim();
-
-    return SlSurface(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  resolvedTitle,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-              ),
-              if (!_editingAnnotationCaption && canEdit)
-                IconButton(
-                  key: const ValueKey('attachment_annotation_edit'),
-                  icon: const Icon(Icons.edit_outlined),
-                  tooltip: context.t.common.actions.edit,
-                  onPressed: beginEdit,
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          if (!_editingAnnotationCaption)
-            Text(
-              caption,
-              key: const ValueKey('attachment_annotation_caption'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          if (_editingAnnotationCaption) ...[
-            TextField(
-              key: const ValueKey('attachment_annotation_edit_field'),
-              controller: _annotationCaptionController,
-              enabled: !_savingAnnotationCaption,
-              maxLines: null,
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  key: const ValueKey('attachment_annotation_edit_cancel'),
-                  onPressed: _savingAnnotationCaption ? null : cancelEdit,
-                  child: Text(context.t.common.actions.cancel),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  key: const ValueKey('attachment_annotation_edit_save'),
-                  onPressed:
-                      _savingAnnotationCaption ? null : () => unawaited(save()),
-                  child: Text(context.t.common.actions.save),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
+  AttachmentDetailTextContent _currentAttachmentTextContent() {
+    return resolveAttachmentDetailTextContent(
+      _annotationPayload,
+      annotationCaption: _annotationCaption,
     );
+  }
+
+  Future<void> _saveAttachmentText({
+    String? summary,
+    String? full,
+  }) async {
+    final backendAny = AppBackendScope.of(context);
+    if (backendAny is! AttachmentAnnotationMutationsBackend) return;
+    final annotationsBackend =
+        backendAny as AttachmentAnnotationMutationsBackend;
+
+    final current = _currentAttachmentTextContent();
+    final nextSummary = summary ?? current.summary;
+    final nextFull = full ?? current.full;
+    final nextPayload = buildManualAttachmentTextPayload(
+      existingPayload: _annotationPayload,
+      summary: nextSummary,
+      full: nextFull,
+      mimeType: widget.attachment.mimeType,
+    );
+
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final lang = Localizations.localeOf(context).toLanguageTag();
+    final syncEngine = SyncEngineScope.maybeOf(context);
+
+    try {
+      await annotationsBackend.markAttachmentAnnotationOkJson(
+        sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+        lang: lang,
+        modelName: 'manual_edit',
+        payloadJson: jsonEncode(nextPayload),
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+
+      if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
+      setState(() {
+        _annotationPayload = nextPayload;
+        _annotationPayloadFuture = Future.value(nextPayload);
+        if (widget.attachment.mimeType.startsWith('image/')) {
+          final nextCaption =
+              (nextPayload['caption_long'] ?? '').toString().trim();
+          _annotationCaption = nextCaption;
+          _annotationCaptionFuture = Future.value(nextCaption);
+        }
+      });
+
+      if (!mounted) return;
+      if (backendAny is NativeAppBackend) {
+        _startAnnotationPayloadLoad();
+      }
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveAttachmentFull(String value) {
+    return _saveAttachmentText(full: value);
   }
 
   String _resolveAppBarTitle(
@@ -855,6 +822,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     initialMetadata: _metadata,
                     annotationPayloadFuture: _annotationPayloadFuture,
                     initialAnnotationPayload: _annotationPayload,
+                    onRetryRecognition: _canRetryAttachmentRecognition
+                        ? _retryAttachmentRecognition
+                        : null,
+                    onSaveFull:
+                        _canEditAttachmentText ? _saveAttachmentFull : null,
                   );
                 }
                 if (!isImage) {
@@ -877,6 +849,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     ocrStatusText: _documentOcrStatusText,
                     ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
                     onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
+                    onSaveFull:
+                        _canEditAttachmentText ? _saveAttachmentFull : null,
                   );
                 }
 

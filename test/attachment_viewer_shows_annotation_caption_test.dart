@@ -46,7 +46,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('A long caption'), findsOneWidget);
+    expect(find.text('A long caption'), findsWidgets);
   });
 
   testWidgets(
@@ -94,14 +94,64 @@ void main() {
 
     expect(find.text(caption), findsNothing);
     expect(
-      find.byKey(const ValueKey('attachment_annotation_ocr_text')),
+      find.byKey(const ValueKey('attachment_text_summary_display')),
       findsNothing,
     );
-    expect(find.textContaining('token_79'), findsOneWidget);
+    expect(find.textContaining('token_79'), findsWidgets);
   });
 
   testWidgets(
-      'AttachmentViewerPage allows editing annotation caption and saves',
+      'AttachmentViewerPage shows retry action for recognized image annotation',
+      (tester) async {
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': 'Cloud detected caption'},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode({
+          'caption_long': 'Cloud detected caption',
+          'tags': const <String>['receipt'],
+        }),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final retryFinder =
+        find.byKey(const ValueKey('attachment_annotation_retry'));
+    expect(retryFinder, findsOneWidget);
+
+    await tester.ensureVisible(retryFinder);
+    await tester.tap(retryFinder);
+    await tester.pump();
+
+    expect(backend.retryEnqueueCalls, 1);
+    expect(backend.retryMarkFailedCalls, 1);
+  });
+
+  testWidgets(
+      'AttachmentViewerPage allows editing full text and saves unified payload',
       (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
@@ -132,9 +182,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Old caption'), findsOneWidget);
+    expect(find.text('Old caption'), findsWidgets);
 
-    final editFinder = find.byKey(const ValueKey('attachment_annotation_edit'));
+    final editFinder = find.byKey(const ValueKey('attachment_text_full_edit'));
     await tester.ensureVisible(editFinder);
     await tester.pumpAndSettle();
 
@@ -142,23 +192,25 @@ void main() {
     await tester.pumpAndSettle();
 
     final editFieldFinder =
-        find.byKey(const ValueKey('attachment_annotation_edit_field'));
+        find.byKey(const ValueKey('attachment_text_full_field'));
     await tester.ensureVisible(editFieldFinder);
     await tester.pumpAndSettle();
 
-    await tester.enterText(editFieldFinder, 'New caption');
+    await tester.enterText(editFieldFinder, '# New full markdown');
 
-    final saveFinder =
-        find.byKey(const ValueKey('attachment_annotation_edit_save'));
+    final saveFinder = find.byKey(const ValueKey('attachment_text_full_save'));
     await tester.ensureVisible(saveFinder);
     await tester.pumpAndSettle();
 
     await tester.tap(saveFinder);
     await tester.pumpAndSettle();
 
-    expect(find.text('New caption'), findsOneWidget);
+    expect(find.textContaining('New full markdown'), findsWidgets);
     expect(backend.savedPayloadJsons.length, 1);
-    expect(backend.savedPayloadJsons.single.contains('New caption'), isTrue);
+    expect(
+        backend.savedPayloadJsons.single.contains('manual_full_text'), isTrue);
+    expect(backend.savedPayloadJsons.single.contains('# New full markdown'),
+        isTrue);
   });
 }
 
@@ -184,6 +236,8 @@ final class _NativeImageBackend extends NativeAppBackend {
   final Map<String, Uint8List> _bytesBySha;
   final Map<String, String?> _annotationCaptionBySha;
   final Map<String, String?> _annotationPayloadJsonBySha;
+  int retryEnqueueCalls = 0;
+  int retryMarkFailedCalls = 0;
 
   @override
   Future<Uint8List> readAttachmentBytes(
@@ -225,6 +279,28 @@ final class _NativeImageBackend extends NativeAppBackend {
     required String sha256,
   }) async {
     return _annotationPayloadJsonBySha[sha256];
+  }
+
+  @override
+  Future<void> enqueueAttachmentAnnotation(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String lang,
+    required int nowMs,
+  }) async {
+    retryEnqueueCalls += 1;
+  }
+
+  @override
+  Future<void> markAttachmentAnnotationFailed(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    retryMarkFailedCalls += 1;
   }
 }
 

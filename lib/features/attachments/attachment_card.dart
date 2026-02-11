@@ -255,6 +255,13 @@ String _normalizedTextSnippet(String? raw) {
 }
 
 String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
+  final manualSummary =
+      _normalizedTextSnippet(payload['manual_summary']?.toString());
+  if (manualSummary.isNotEmpty) return manualSummary;
+
+  final summary = _normalizedTextSnippet(payload['summary']?.toString());
+  if (summary.isNotEmpty) return summary;
+
   final preferred = selectAttachmentDisplayText(payload);
   final preferredExcerpt = _normalizedTextSnippet(preferred.excerpt);
   if (preferredExcerpt.isNotEmpty) return preferredExcerpt;

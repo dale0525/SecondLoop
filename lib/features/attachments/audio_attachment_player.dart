@@ -7,6 +7,8 @@ import 'package:just_audio/just_audio.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import 'attachment_detail_text_content.dart';
+import 'attachment_text_editor_card.dart';
 
 String normalizeAudioPlaybackMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -37,6 +39,8 @@ class AudioAttachmentPlayerView extends StatefulWidget {
     this.initialMetadata,
     this.annotationPayloadFuture,
     this.initialAnnotationPayload,
+    this.onRetryRecognition,
+    this.onSaveFull,
     super.key,
   });
 
@@ -46,6 +50,8 @@ class AudioAttachmentPlayerView extends StatefulWidget {
   final AttachmentMetadata? initialMetadata;
   final Future<Map<String, Object?>?>? annotationPayloadFuture;
   final Map<String, Object?>? initialAnnotationPayload;
+  final Future<void> Function()? onRetryRecognition;
+  final Future<void> Function(String value)? onSaveFull;
 
   @override
   State<AudioAttachmentPlayerView> createState() =>
@@ -113,16 +119,6 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     await _player.seek(target);
   }
 
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-    final gb = mb / 1024;
-    return '${gb.toStringAsFixed(1)} GB';
-  }
-
   static String _formatDuration(Duration value) {
     final totalSeconds = value.inSeconds;
     final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
@@ -137,34 +133,6 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   static String _speedLabel(double speed) {
     final rounded = speed.toStringAsFixed(speed % 1 == 0 ? 1 : 2);
     return '${rounded}x';
-  }
-
-  Future<void> _openFullTextDialog(
-    BuildContext context, {
-    required String title,
-    required String text,
-  }) async {
-    if (text.trim().isEmpty) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 520),
-            child: SingleChildScrollView(
-              child: SelectableText(text),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.cancel),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Widget _buildPlayerCard(BuildContext context) {
@@ -313,80 +281,95 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     );
   }
 
-  Widget _buildTranscriptCard(
+  Widget _buildFullSection(
     BuildContext context, {
     required Map<String, Object?>? payload,
   }) {
-    final transcriptTitle = context.t.attachments.content.fullText;
-    final transcriptExcerpt = payload?['transcript_excerpt']?.toString().trim();
-    final transcriptFull = payload?['transcript_full']?.toString().trim();
+    final textContent = resolveAttachmentDetailTextContent(payload);
+    final fullText = textContent.full;
     final durationMsValue = payload?['duration_ms'];
     final durationMs = durationMsValue is num ? durationMsValue.toInt() : null;
+    final showPreparing = fullText.isEmpty && payload == null;
 
-    if ((transcriptExcerpt ?? '').isEmpty && (transcriptFull ?? '').isEmpty) {
-      return SlSurface(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              context.t.sync.progressDialog.preparing,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+    final retryButton = widget.onRetryRecognition == null
+        ? null
+        : IconButton(
+            key: const ValueKey('attachment_transcript_retry'),
+            tooltip: context.t.common.actions.retry,
+            onPressed: () => unawaited(widget.onRetryRecognition!()),
+            icon: const Icon(Icons.refresh_rounded),
+          );
+
+    Widget buildSection(
+      Widget child, {
+      required double maxWidth,
+      Alignment alignment = Alignment.center,
+    }) {
+      return Align(
+        alignment: alignment,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: child,
         ),
       );
     }
 
-    final displayed = (transcriptExcerpt ?? transcriptFull ?? '').trim();
-    final full = (transcriptFull ?? '').trim();
-    final canOpenFull = full.isNotEmpty && full.length > displayed.length;
-
-    return SlSurface(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            transcriptTitle,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          if (durationMs != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              _formatDuration(Duration(milliseconds: durationMs)),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          const SizedBox(height: 8),
-          SelectableText(
-            displayed,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (canOpenFull) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => unawaited(
-                  _openFullTextDialog(
-                    context,
-                    title: transcriptTitle,
-                    text: full,
-                  ),
-                ),
-                icon: const Icon(Icons.open_in_new_outlined, size: 18),
-                label: Text(context.t.common.actions.open),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (durationMs != null) ...[
+          buildSection(
+            SlSurface(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                _formatDuration(Duration(milliseconds: durationMs)),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-          ],
+            maxWidth: 560,
+            alignment: Alignment.centerLeft,
+          ),
+          const SizedBox(height: 14),
         ],
-      ),
+        if (showPreparing) ...[
+          buildSection(
+            SlSurface(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    context.t.sync.progressDialog.preparing,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            maxWidth: 720,
+            alignment: Alignment.centerRight,
+          ),
+          const SizedBox(height: 14),
+        ],
+        buildSection(
+          AttachmentTextEditorCard(
+            fieldKeyPrefix: 'attachment_text_full',
+            label: context.t.attachments.content.fullText,
+            showLabel: false,
+            text: fullText,
+            markdown: true,
+            emptyText: attachmentDetailEmptyTextLabel(context),
+            trailing: retryButton,
+            onSave: widget.onSaveFull,
+          ),
+          maxWidth: 780,
+          alignment: Alignment.centerRight,
+        ),
+      ],
     );
   }
 
@@ -397,57 +380,53 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   }) {
     final title = (metadata?.title ?? payload?['title'])?.toString().trim();
 
+    Widget buildSection(
+      Widget child, {
+      required double maxWidth,
+      Alignment alignment = Alignment.center,
+    }) {
+      return Align(
+        alignment: alignment,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: child,
+        ),
+      );
+    }
+
     return Center(
       key: const ValueKey('audio_attachment_player_view'),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 880),
+        constraints: const BoxConstraints(maxWidth: 920),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SlSurface(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      context.t.attachments.metadata.format,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.attachment.mimeType,
-                      key: const ValueKey('attachment_metadata_format'),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      context.t.attachments.metadata.size,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatBytes(widget.attachment.byteLen.toInt()),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
               if ((title ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
-                SlSurface(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    title!,
-                    style: Theme.of(context).textTheme.titleMedium,
+                buildSection(
+                  SlSurface(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      title!,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
+                  maxWidth: 700,
+                  alignment: Alignment.centerLeft,
                 ),
+                const SizedBox(height: 14),
               ],
-              const SizedBox(height: 12),
-              _buildPlayerCard(context),
-              const SizedBox(height: 12),
-              _buildTranscriptCard(context, payload: payload),
+              buildSection(
+                _buildPlayerCard(context),
+                maxWidth: 760,
+                alignment: Alignment.center,
+              ),
+              const SizedBox(height: 14),
+              _buildFullSection(
+                context,
+                payload: payload,
+              ),
             ],
           ),
         ),
