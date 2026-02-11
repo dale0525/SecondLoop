@@ -4,17 +4,9 @@ extension _SettingsPageBuild on _SettingsPageState {
   Widget _buildSettingsPage(BuildContext context) {
     final enabled = _appLockEnabled;
     final biometricEnabled = _biometricUnlockEnabled;
-    final cloudEmbeddingsEnabled = _cloudEmbeddingsEnabled;
-    final semanticParseEnabled = _semanticParseEnabled;
     final isMobile = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
-    final showCloudEmbeddingsToggle = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux);
     final supportsDesktopHotkey = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows ||
@@ -22,15 +14,11 @@ extension _SettingsPageBuild on _SettingsPageState {
     final isDesktop = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows);
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final cloudUid = (_cloudAuthController?.uid ?? '').trim();
-    final hasCloudAccount = cloudUid.isNotEmpty;
-    final canUseCloudEmbeddings =
-        hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
-    final canUseCloudSemanticParse = canUseCloudEmbeddings;
-    final canUseSemanticParse =
-        canUseCloudSemanticParse || _byokConfigured == true;
+    final isZh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    final featureSettingsTitle = isZh ? '功能设置' : 'Feature settings';
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
@@ -131,7 +119,7 @@ extension _SettingsPageBuild on _SettingsPageState {
         ]),
         const SizedBox(height: 16),
         Text(
-          context.t.settings.sections.cloud,
+          featureSettingsTitle,
           style: Theme.of(context)
               .textTheme
               .titleSmall
@@ -152,46 +140,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          if (showCloudEmbeddingsToggle)
-            SwitchListTile(
-              title: Text(context.t.settings.cloudEmbeddings.title),
-              subtitle: Text(
-                subscriptionStatus == SubscriptionStatus.notEntitled
-                    ? context.t.settings.cloudEmbeddings.subtitleRequiresPro
-                    : !_cloudEmbeddingsConfigured
-                        ? context.t.settings.cloudEmbeddings.subtitleUnset
-                        : (cloudEmbeddingsEnabled ?? false)
-                            ? context.t.settings.cloudEmbeddings.subtitleEnabled
-                            : context
-                                .t.settings.cloudEmbeddings.subtitleDisabled,
-              ),
-              value: cloudEmbeddingsEnabled ?? false,
-              onChanged: (_busy || cloudEmbeddingsEnabled == null)
-                  ? null
-                  : (value) async {
-                      if (value && !canUseCloudEmbeddings) {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CloudAccountPage(),
-                          ),
-                        );
-                        return;
-                      }
-
-                      await _setCloudEmbeddingsEnabled(value);
-                    },
-            ),
-        ]),
-        const SizedBox(height: 16),
-        Text(
-          context.t.settings.sections.aiAdvanced,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        sectionCard([
           ListTile(
             key: const ValueKey('settings_ai_source'),
             title: Text(context.t.settings.aiSelection.title),
@@ -206,58 +154,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          SwitchListTile(
-            title: Text(context.t.settings.semanticParseAutoActions.title),
-            subtitle: Text(
-              !canUseSemanticParse
-                  ? context
-                      .t.settings.semanticParseAutoActions.subtitleRequiresSetup
-                  : !_semanticParseConfigured
-                      ? context
-                          .t.settings.semanticParseAutoActions.subtitleUnset
-                      : (semanticParseEnabled ?? false)
-                          ? context.t.settings.semanticParseAutoActions
-                              .subtitleEnabled
-                          : context.t.settings.semanticParseAutoActions
-                              .subtitleDisabled,
-            ),
-            value: semanticParseEnabled ?? false,
-            onChanged: (_busy || semanticParseEnabled == null)
-                ? null
-                : (value) async {
-                    if (value && !canUseSemanticParse) {
-                      if (subscriptionStatus == SubscriptionStatus.entitled &&
-                          !hasCloudAccount) {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CloudAccountPage(),
-                          ),
-                        );
-                        return;
-                      }
-
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LlmProfilesPage(),
-                        ),
-                      );
-                      return;
-                    }
-
-                    await _setSemanticParseEnabled(value);
-                  },
-          ),
-        ]),
-        const SizedBox(height: 16),
-        Text(
-          context.t.settings.sections.storage,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        sectionCard([
           ListTile(
             title: Text(context.t.settings.sync.title),
             subtitle: Text(context.t.settings.sync.subtitle),

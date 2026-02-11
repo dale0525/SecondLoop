@@ -11,51 +11,65 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     if (showWifiOnly) {
       final sourceLabels =
           context.t.settings.aiSelection.mediaUnderstanding.preference;
+      final ocrRoute = _resolveCapabilityRoute(_ocrSourcePreference);
       return <Widget>[
-        mediaAnnotationSectionTitle(context, t.documentOcr.title),
-        const SizedBox(height: 8),
-        mediaAnnotationSectionCard([
-          _buildSourcePreferenceTile(
-            value: MediaSourcePreference.auto,
-            groupValue: _ocrSourcePreference,
-            onChanged: _setOcrSourcePreference,
-            tileKey: const ValueKey('media_annotation_settings_ocr_mode_auto'),
-            title: sourceLabels.auto.title,
-            subtitle: sourceLabels.auto.description,
-          ),
-          _buildSourcePreferenceTile(
-            value: MediaSourcePreference.cloud,
-            groupValue: _ocrSourcePreference,
-            onChanged: _setOcrSourcePreference,
-            tileKey: const ValueKey('media_annotation_settings_ocr_mode_cloud'),
-            title: sourceLabels.cloud.title,
-            subtitle: sourceLabels.cloud.description,
-          ),
-          _buildSourcePreferenceTile(
-            value: MediaSourcePreference.byok,
-            groupValue: _ocrSourcePreference,
-            onChanged: _setOcrSourcePreference,
-            tileKey: const ValueKey('media_annotation_settings_ocr_mode_byok'),
-            title: sourceLabels.byok.title,
-            subtitle: sourceLabels.byok.description,
-          ),
-          _buildSourcePreferenceTile(
-            value: MediaSourcePreference.local,
-            groupValue: _ocrSourcePreference,
-            onChanged: _setOcrSourcePreference,
-            tileKey: const ValueKey('media_annotation_settings_ocr_mode_local'),
-            title: sourceLabels.local.title,
-            subtitle: sourceLabels.local.description,
-          ),
-          _buildScopedWifiOnlyTile(
-            tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
-            wifiOnly: _ocrWifiOnly,
-            onChanged: (wifiOnly) => _setCapabilityWifiOnly(
-              scope: MediaCapabilityWifiScope.documentOcr,
-              wifiOnly: wifiOnly,
+        mediaAnnotationCapabilityCard(
+          key: const ValueKey('media_annotation_settings_ocr_card'),
+          context: context,
+          title: t.documentOcr.title,
+          description: t.documentOcr.enabled.subtitle,
+          statusLabel: _capabilityRouteLabel(ocrRoute),
+          actions: [
+            _buildSourcePreferenceTile(
+              value: MediaSourcePreference.auto,
+              groupValue: _ocrSourcePreference,
+              onChanged: _setOcrSourcePreference,
+              tileKey:
+                  const ValueKey('media_annotation_settings_ocr_mode_auto'),
+              title: sourceLabels.auto.title,
+              subtitle: sourceLabels.auto.description,
             ),
-          ),
-        ]),
+            _buildSourcePreferenceTile(
+              value: MediaSourcePreference.cloud,
+              groupValue: _ocrSourcePreference,
+              onChanged: _setOcrSourcePreference,
+              tileKey:
+                  const ValueKey('media_annotation_settings_ocr_mode_cloud'),
+              title: sourceLabels.cloud.title,
+              subtitle: sourceLabels.cloud.description,
+            ),
+            _buildSourcePreferenceTile(
+              value: MediaSourcePreference.byok,
+              groupValue: _ocrSourcePreference,
+              onChanged: _setOcrSourcePreference,
+              tileKey:
+                  const ValueKey('media_annotation_settings_ocr_mode_byok'),
+              title: sourceLabels.byok.title,
+              subtitle: sourceLabels.byok.description,
+            ),
+            _buildSourcePreferenceTile(
+              value: MediaSourcePreference.local,
+              groupValue: _ocrSourcePreference,
+              onChanged: _setOcrSourcePreference,
+              tileKey:
+                  const ValueKey('media_annotation_settings_ocr_mode_local'),
+              title: sourceLabels.local.title,
+              subtitle: sourceLabels.local.description,
+            ),
+            _buildScopedWifiOnlyTile(
+              tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
+              wifiOnly: _ocrWifiOnly,
+              onChanged: (wifiOnly) => _setCapabilityWifiOnly(
+                scope: MediaCapabilityWifiScope.documentOcr,
+                wifiOnly: wifiOnly,
+              ),
+            ),
+            _buildOpenApiKeysTile(
+              tileKey:
+                  const ValueKey('media_annotation_settings_ocr_open_api_keys'),
+            ),
+          ],
+        ),
       ];
     }
 
@@ -127,119 +141,96 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
         .toLowerCase()
         .startsWith('zh');
     final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    final statusIcon = !status.supported
+        ? Icons.info_outline
+        : (status.installed ? Icons.check_circle : Icons.error_outline);
+    final statusIconColor = !status.supported
+        ? colorScheme.secondary
+        : (status.installed ? colorScheme.primary : colorScheme.error);
+    final statusLabel = _desktopRuntimeStatusLabel(context, status);
 
-    return Padding(
+    return mediaAnnotationCapabilityCard(
       key: MediaAnnotationSettingsPage.linuxOcrModelTileKey,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colorScheme.outlineVariant),
-          color: colorScheme.surfaceVariant.withOpacity(0.45),
+      context: context,
+      title: zh ? '本地能力引擎' : 'Local Capability Engine',
+      description: isMacOS
+          ? (zh
+              ? 'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。'
+              : 'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).')
+          : (zh
+              ? '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。'
+              : 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.'),
+      statusLabel: _desktopRuntimeSummaryLabel(context, status),
+      actions: [
+        ListTile(
+          key: const ValueKey(
+            'media_annotation_settings_local_capability_status_tile',
+          ),
+          title: Text(zh ? '运行时状态' : 'Runtime status'),
+          subtitle: Text(statusLabel),
+          trailing: Icon(
+            statusIcon,
+            color: statusIconColor,
+            size: 18,
+          ),
         ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: colorScheme.primaryContainer,
-                  ),
-                  child: Icon(
-                    Icons.health_and_safety_outlined,
-                    color: colorScheme.onPrimaryContainer,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        zh ? '本地能力引擎' : 'Local Capability Engine',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        isMacOS
-                            ? (zh
-                                ? 'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。'
-                                : 'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).')
-                            : (zh
-                                ? '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。'
-                                : 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.'),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  !status.supported
-                      ? Icons.info_outline
-                      : (status.installed
-                          ? Icons.check_circle
-                          : Icons.error_outline),
-                  color: !status.supported
-                      ? colorScheme.secondary
-                      : (status.installed
-                          ? colorScheme.primary
-                          : colorScheme.error),
-                  size: 18,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _desktopRuntimeStatusLabel(context, status),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (_linuxOcrBusy) ...[
-              const SizedBox(height: 8),
-              const LinearProgressIndicator(
-                key: ValueKey(
-                    'media_annotation_settings_linux_ocr_download_progress'),
-                minHeight: 6,
-                borderRadius: BorderRadius.all(Radius.circular(999)),
+        if (_linuxOcrBusy)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: LinearProgressIndicator(
+              key: ValueKey(
+                'media_annotation_settings_linux_ocr_download_progress',
               ),
-            ],
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonalIcon(
-                  key: MediaAnnotationSettingsPage
-                      .linuxOcrModelDownloadButtonKey,
-                  onPressed: actionEnabled ? _downloadLinuxOcrModels : null,
-                  icon: const Icon(Icons.build_circle_outlined),
-                  label: Text(
-                    zh ? '修复安装' : 'Repair Install',
-                  ),
-                ),
-                if (status.installed && status.supported)
-                  OutlinedButton.icon(
-                    key: MediaAnnotationSettingsPage
-                        .linuxOcrModelDeleteButtonKey,
-                    onPressed: actionEnabled ? _deleteLinuxOcrModels : null,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    label: Text(zh ? '清除运行时' : 'Clear Runtime'),
-                  ),
-              ],
+              minHeight: 6,
+              borderRadius: BorderRadius.all(Radius.circular(999)),
             ),
-          ],
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                key: MediaAnnotationSettingsPage.linuxOcrModelDownloadButtonKey,
+                onPressed: actionEnabled ? _downloadLinuxOcrModels : null,
+                icon: const Icon(Icons.build_circle_outlined),
+                label: Text(
+                  zh ? '修复安装' : 'Repair Install',
+                ),
+              ),
+              if (status.installed && status.supported)
+                OutlinedButton.icon(
+                  key: MediaAnnotationSettingsPage.linuxOcrModelDeleteButtonKey,
+                  onPressed: actionEnabled ? _deleteLinuxOcrModels : null,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: Text(zh ? '清除运行时' : 'Clear Runtime'),
+                ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
+  }
+
+  String _desktopRuntimeSummaryLabel(
+    BuildContext context,
+    LinuxOcrModelStatus status,
+  ) {
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    if (_linuxOcrBusy) {
+      return zh ? '状态：修复中' : 'Status: repairing';
+    }
+    if (!status.supported) {
+      return zh ? '状态：不可用' : 'Status: unavailable';
+    }
+    if (!status.installed) {
+      return zh ? '状态：未安装' : 'Status: runtime missing';
+    }
+    return zh ? '状态：健康' : 'Status: healthy';
   }
 
   String _desktopRuntimeStatusLabel(

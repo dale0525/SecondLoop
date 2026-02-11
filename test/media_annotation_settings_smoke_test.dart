@@ -603,6 +603,25 @@ void main() {
     expect(_sourceRadioSelected(tester, audioAuto), isTrue);
     expect(_sourceRadioSelected(tester, ocrAuto), isTrue);
 
+    expect(
+      find.byKey(const ValueKey('media_annotation_settings_audio_card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('media_annotation_settings_ocr_card')),
+      findsOneWidget,
+    );
+    expect(find.text('Description & route'), findsNothing);
+    expect(
+      find.byKey(
+          const ValueKey('media_annotation_settings_audio_open_api_keys')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('media_annotation_settings_ocr_open_api_keys')),
+      findsOneWidget,
+    );
+
     final audioByok =
         find.byKey(const ValueKey('media_annotation_settings_audio_mode_byok'));
     await tester.tap(audioByok);
@@ -852,6 +871,54 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(runtimeTile, findsOneWidget);
+  });
+
+  testWidgets('Local capability engine card uses unified capability layout',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: true,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final runtimeTile =
+        find.byKey(MediaAnnotationSettingsPage.linuxOcrModelTileKey);
+    await tester.scrollUntilVisible(
+      runtimeTile,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    expect(runtimeTile, findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey(
+            'media_annotation_settings_local_capability_status_tile'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

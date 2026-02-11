@@ -111,5 +111,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(embeddedRoot, findsOneWidget);
+    expect(
+      find.descendant(of: mediaSection, matching: embeddedRoot),
+      findsNothing,
+    );
   });
 }

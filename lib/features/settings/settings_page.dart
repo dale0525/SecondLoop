@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
-import '../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -28,7 +27,6 @@ import '../../ui/sl_surface.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
 import 'ai_settings_page.dart';
-import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
 import 'diagnostics_page.dart';
@@ -45,11 +43,6 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool? _appLockEnabled;
   bool? _biometricUnlockEnabled;
-  bool? _cloudEmbeddingsEnabled;
-  bool _cloudEmbeddingsConfigured = false;
-  bool? _semanticParseEnabled;
-  bool _semanticParseConfigured = false;
-  bool? _byokConfigured;
   AppLocale? _localeOverride;
   ActionsSettings? _actionsSettings;
   bool _busy = false;
@@ -59,8 +52,6 @@ class _SettingsPageState extends State<SettingsPage> {
   CloudAuthController? _cloudAuthController;
   Listenable? _cloudAuthListenable;
   String? _lastCloudUid;
-  VoidCallback? _cloudEmbeddingsPrefsListener;
-  VoidCallback? _semanticParsePrefsListener;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
@@ -288,80 +279,17 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-
-    void onCloudEmbeddingsPrefChanged() {
-      if (!mounted) return;
-      final next = EmbeddingsDataConsentPrefs.value.value;
-      setState(() {
-        _cloudEmbeddingsConfigured = next != null;
-        _cloudEmbeddingsEnabled = next ?? false;
-      });
-    }
-
-    _cloudEmbeddingsPrefsListener = onCloudEmbeddingsPrefChanged;
-    EmbeddingsDataConsentPrefs.value.addListener(onCloudEmbeddingsPrefChanged);
-
-    void onSemanticParsePrefChanged() {
-      if (!mounted) return;
-      final next = SemanticParseDataConsentPrefs.value.value;
-      setState(() {
-        _semanticParseConfigured = next != null;
-        _semanticParseEnabled = next ?? false;
-      });
-    }
-
-    _semanticParsePrefsListener = onSemanticParsePrefChanged;
-    SemanticParseDataConsentPrefs.value.addListener(onSemanticParsePrefChanged);
-  }
-
-  @override
   void dispose() {
     _subscriptionController?.removeListener(_onSubscriptionChanged);
     _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
-    final listener = _cloudEmbeddingsPrefsListener;
-    if (listener != null) {
-      EmbeddingsDataConsentPrefs.value.removeListener(listener);
-    }
-    final semanticParseListener = _semanticParsePrefsListener;
-    if (semanticParseListener != null) {
-      SemanticParseDataConsentPrefs.value.removeListener(semanticParseListener);
-    }
     super.dispose();
   }
 
   Future<void> _load() async {
-    final backend =
-        context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
-    final sessionKey = SessionScope.of(context).sessionKey;
-
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
     final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
         _defaultSystemUnlockEnabled();
-    final cloudEmbeddingsConfigured =
-        prefs.containsKey(EmbeddingsDataConsentPrefs.prefsKey);
-    final cloudEmbeddingsEnabled = cloudEmbeddingsConfigured
-        ? (prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false)
-        : false;
-    final semanticParseConfigured =
-        prefs.containsKey(SemanticParseDataConsentPrefs.prefsKey);
-    final semanticParseEnabled = semanticParseConfigured
-        ? (prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false)
-        : false;
-
-    bool? byokConfigured;
-    if (backend == null) {
-      byokConfigured = null;
-    } else {
-      try {
-        byokConfigured = await hasActiveLlmProfile(backend, sessionKey);
-      } catch (_) {
-        byokConfigured = null;
-      }
-    }
-
     final rawLocaleOverride = prefs.getString(kAppLocaleOverridePrefsKey);
     AppLocale? localeOverride;
     if (rawLocaleOverride != null && rawLocaleOverride.trim().isNotEmpty) {
@@ -377,11 +305,6 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _appLockEnabled = enabled;
       _biometricUnlockEnabled = biometricEnabled;
-      _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled;
-      _cloudEmbeddingsConfigured = cloudEmbeddingsConfigured;
-      _semanticParseEnabled = semanticParseEnabled;
-      _semanticParseConfigured = semanticParseConfigured;
-      _byokConfigured = byokConfigured;
       _localeOverride = localeOverride;
       _actionsSettings = actionsSettings;
     });
@@ -426,83 +349,6 @@ class _SettingsPageState extends State<SettingsPage> {
     await EmbeddingsDataConsentPrefs.setEnabled(prefs, false);
     if (!mounted) return;
     await _load();
-  }
-
-  Future<void> _setCloudEmbeddingsEnabled(bool enabled) async {
-    if (_busy) return;
-
-    if (enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final t = context.t;
-          return AlertDialog(
-            title: Text(t.settings.cloudEmbeddings.dialogTitle),
-            content: Text(t.settings.cloudEmbeddings.dialogBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.common.actions.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(t.settings.cloudEmbeddings.dialogActions.enable),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() => _busy = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await EmbeddingsDataConsentPrefs.setEnabled(prefs, enabled);
-      await _load();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _setSemanticParseEnabled(bool enabled) async {
-    if (_busy) return;
-
-    if (enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final t = context.t;
-          return AlertDialog(
-            title: Text(t.settings.semanticParseAutoActions.dialogTitle),
-            content: Text(t.settings.semanticParseAutoActions.dialogBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.common.actions.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
-                  t.settings.semanticParseAutoActions.dialogActions.enable,
-                ),
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() => _busy = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
-      await _load();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   String _localeLabel(BuildContext context, AppLocale locale) {

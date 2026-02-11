@@ -73,8 +73,16 @@ void main() {
         findsNothing,
       );
 
-      await tester
-          .tap(find.byKey(const ValueKey('ai_settings_open_llm_profiles')));
+      final llmProfilesEntry =
+          find.byKey(const ValueKey('ai_settings_open_llm_profiles'));
+      await tester.dragUntilVisible(
+        llmProfilesEntry,
+        find.byType(ListView).first,
+        const Offset(0, -220),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(llmProfilesEntry);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 800));
 

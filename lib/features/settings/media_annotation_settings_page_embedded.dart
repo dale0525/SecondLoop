@@ -20,6 +20,64 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
     return 'Only applies to SecondLoop Cloud and BYOK. Local capability is unaffected.';
   }
 
+  bool _isCloudAvailableForCapability(BuildContext context) {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    if (subscriptionStatus != SubscriptionStatus.entitled) {
+      return false;
+    }
+
+    final cloudScope = CloudAuthScope.maybeOf(context);
+    final hasGateway =
+        (cloudScope?.gatewayConfig.baseUrl ?? '').trim().isNotEmpty;
+    final hasCloudAccount =
+        (cloudScope?.controller.uid ?? '').trim().isNotEmpty;
+    return hasGateway && hasCloudAccount;
+  }
+
+  bool _hasOpenAiByokProfile() {
+    final profiles = _llmProfiles;
+    if (profiles == null) return false;
+    return profiles
+        .any((p) => p.isActive && p.providerType == 'openai-compatible');
+  }
+
+  MediaSourceRouteKind _resolveCapabilityRoute(
+      MediaSourcePreference preference) {
+    return resolveMediaSourceRoute(
+      preference,
+      cloudAvailable: _isCloudAvailableForCapability(context),
+      hasByokProfile: _hasOpenAiByokProfile(),
+    );
+  }
+
+  String _capabilityRouteLabel(MediaSourceRouteKind route) {
+    final status = context.t.settings.aiSelection.mediaUnderstanding.status;
+    return switch (route) {
+      MediaSourceRouteKind.cloudGateway => status.cloud,
+      MediaSourceRouteKind.byok => status.byok,
+      MediaSourceRouteKind.local => status.local,
+    };
+  }
+
+  Widget _buildOpenApiKeysTile({required Key tileKey}) {
+    return ListTile(
+      key: tileKey,
+      title: Text(
+          context.t.settings.aiSelection.mediaUnderstanding.actions.openByok),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: _busy
+          ? null
+          : () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const LlmProfilesPage(),
+                ),
+              );
+            },
+    );
+  }
+
   Widget _buildScopedWifiOnlyTile({
     required Key tileKey,
     required bool wifiOnly,
@@ -204,6 +262,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               _MediaAnnotationSettingsPageState._kProviderCloudGateway;
           final sourceLabels =
               context.t.settings.aiSelection.mediaUnderstanding.preference;
+          final audioRoute = _resolveCapabilityRoute(_audioSourcePreference);
 
           return <Widget>[
             if (!embedded) ...[
@@ -267,62 +326,75 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                   ),
                 ]),
               if (!embedded) const SizedBox(height: 16),
-              mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
-              const SizedBox(height: 8),
               if (embedded)
-                mediaAnnotationSectionCard([
-                  _buildSourcePreferenceTile(
-                    value: MediaSourcePreference.auto,
-                    groupValue: _audioSourcePreference,
-                    onChanged: _setAudioSourcePreference,
-                    tileKey: const ValueKey(
-                      'media_annotation_settings_audio_mode_auto',
+                mediaAnnotationCapabilityCard(
+                  key: const ValueKey('media_annotation_settings_audio_card'),
+                  context: context,
+                  title: t.audioTranscribe.title,
+                  description: t.audioTranscribe.enabled.subtitle,
+                  statusLabel: _capabilityRouteLabel(audioRoute),
+                  actions: [
+                    _buildSourcePreferenceTile(
+                      value: MediaSourcePreference.auto,
+                      groupValue: _audioSourcePreference,
+                      onChanged: _setAudioSourcePreference,
+                      tileKey: const ValueKey(
+                        'media_annotation_settings_audio_mode_auto',
+                      ),
+                      title: sourceLabels.auto.title,
+                      subtitle: sourceLabels.auto.description,
                     ),
-                    title: sourceLabels.auto.title,
-                    subtitle: sourceLabels.auto.description,
-                  ),
-                  _buildSourcePreferenceTile(
-                    value: MediaSourcePreference.cloud,
-                    groupValue: _audioSourcePreference,
-                    onChanged: _setAudioSourcePreference,
-                    tileKey: const ValueKey(
-                      'media_annotation_settings_audio_mode_cloud',
+                    _buildSourcePreferenceTile(
+                      value: MediaSourcePreference.cloud,
+                      groupValue: _audioSourcePreference,
+                      onChanged: _setAudioSourcePreference,
+                      tileKey: const ValueKey(
+                        'media_annotation_settings_audio_mode_cloud',
+                      ),
+                      title: sourceLabels.cloud.title,
+                      subtitle: sourceLabels.cloud.description,
                     ),
-                    title: sourceLabels.cloud.title,
-                    subtitle: sourceLabels.cloud.description,
-                  ),
-                  _buildSourcePreferenceTile(
-                    value: MediaSourcePreference.byok,
-                    groupValue: _audioSourcePreference,
-                    onChanged: _setAudioSourcePreference,
-                    tileKey: const ValueKey(
-                      'media_annotation_settings_audio_mode_byok',
+                    _buildSourcePreferenceTile(
+                      value: MediaSourcePreference.byok,
+                      groupValue: _audioSourcePreference,
+                      onChanged: _setAudioSourcePreference,
+                      tileKey: const ValueKey(
+                        'media_annotation_settings_audio_mode_byok',
+                      ),
+                      title: sourceLabels.byok.title,
+                      subtitle: sourceLabels.byok.description,
                     ),
-                    title: sourceLabels.byok.title,
-                    subtitle: sourceLabels.byok.description,
-                  ),
-                  _buildSourcePreferenceTile(
-                    value: MediaSourcePreference.local,
-                    groupValue: _audioSourcePreference,
-                    onChanged: _setAudioSourcePreference,
-                    tileKey: const ValueKey(
-                      'media_annotation_settings_audio_mode_local',
+                    _buildSourcePreferenceTile(
+                      value: MediaSourcePreference.local,
+                      groupValue: _audioSourcePreference,
+                      onChanged: _setAudioSourcePreference,
+                      tileKey: const ValueKey(
+                        'media_annotation_settings_audio_mode_local',
+                      ),
+                      title: sourceLabels.local.title,
+                      subtitle: sourceLabels.local.description,
                     ),
-                    title: sourceLabels.local.title,
-                    subtitle: sourceLabels.local.description,
-                  ),
-                  _buildScopedWifiOnlyTile(
-                    tileKey: MediaAnnotationSettingsPage.audioWifiOnlySwitchKey,
-                    wifiOnly: _audioWifiOnly,
-                    onChanged: (wifiOnly) => _setCapabilityWifiOnly(
-                      scope: MediaCapabilityWifiScope.audioTranscribe,
-                      wifiOnly: wifiOnly,
+                    _buildScopedWifiOnlyTile(
+                      tileKey:
+                          MediaAnnotationSettingsPage.audioWifiOnlySwitchKey,
+                      wifiOnly: _audioWifiOnly,
+                      onChanged: (wifiOnly) => _setCapabilityWifiOnly(
+                        scope: MediaCapabilityWifiScope.audioTranscribe,
+                        wifiOnly: wifiOnly,
+                      ),
                     ),
-                  ),
-                  if (_audioSourcePreference == MediaSourcePreference.byok)
-                    _buildAudioByokEngineTile(contentConfig),
-                ])
-              else
+                    _buildOpenApiKeysTile(
+                      tileKey: const ValueKey(
+                        'media_annotation_settings_audio_open_api_keys',
+                      ),
+                    ),
+                    if (_audioSourcePreference == MediaSourcePreference.byok)
+                      _buildAudioByokEngineTile(contentConfig),
+                  ],
+                )
+              else ...[
+                mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
+                const SizedBox(height: 8),
                 mediaAnnotationSectionCard([
                   ListTile(
                     title: Text(t.audioTranscribe.enabled.title),
@@ -393,6 +465,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                         : () => _pickApiProfileOverride(config),
                   ),
                 ]),
+              ],
               const SizedBox(height: 16),
               ..._buildDocumentOcrSection(
                 context,
@@ -447,9 +520,8 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
   }
 
   Widget _buildEmbeddedSettings(BuildContext context) {
-    return Padding(
+    return Container(
       key: MediaAnnotationSettingsPage.embeddedRootKey,
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: _buildSettingsChildren(context),

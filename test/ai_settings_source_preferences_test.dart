@@ -88,4 +88,57 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('media_capability_image_wifi_only_v1'), isFalse);
   });
+
+  testWidgets('AI settings embeds smart search and semantic action toggles',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': true,
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final semanticSwitch = find.byKey(
+      const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
+    );
+    expect(semanticSwitch, findsOneWidget);
+
+    final listView = find.byType(ListView);
+    await tester.dragUntilVisible(
+      semanticSwitch,
+      listView,
+      const Offset(0, -160),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_switchValue(tester, semanticSwitch), isTrue);
+
+    await tester.tap(semanticSwitch);
+    await tester.pumpAndSettle();
+
+    final cloudEmbeddingsSwitch =
+        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
+    await tester.dragUntilVisible(
+      cloudEmbeddingsSwitch,
+      listView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
+
+    await tester.tap(cloudEmbeddingsSwitch);
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('semantic_parse_data_consent_v1'), isFalse);
+    expect(prefs.getBool('embeddings_data_consent_v1'), isFalse);
+  });
 }
