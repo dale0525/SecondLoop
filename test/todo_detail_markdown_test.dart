@@ -51,6 +51,59 @@ void main() {
 
     expect(find.byType(MarkdownBody), findsOneWidget);
   });
+
+  testWidgets('TodoDetailPage renders status change as visual transition',
+      (tester) async {
+    final backend = _Backend(
+      activities: const [
+        TodoActivity(
+          id: 'a1',
+          todoId: 't1',
+          activityType: 'status_change',
+          fromStatus: 'open',
+          toStatus: 'done',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_detail_status_change_transition')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_detail_status_change_from')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_detail_status_change_to')),
+      findsOneWidget,
+    );
+  });
 }
 
 final class _Backend extends AppBackend {

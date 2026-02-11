@@ -28,6 +28,7 @@ import 'todo_linking.dart';
 import 'todo_thread_match.dart';
 
 part 'todo_detail_page_message_actions.dart';
+part 'todo_detail_page_status_widgets.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -42,6 +43,12 @@ class TodoDetailPage extends StatefulWidget {
 }
 
 class _TodoDetailPageState extends State<TodoDetailPage> {
+  static const List<String> _kSelectableStatuses = <String>[
+    'open',
+    'in_progress',
+    'done',
+  ];
+
   late Todo _todo = widget.initialTodo;
   Future<List<TodoActivity>>? _activitiesFuture;
   final _noteController = TextEditingController();
@@ -126,13 +133,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         'done' => context.t.actions.todoStatus.done,
         'dismissed' => context.t.actions.todoStatus.dismissed,
         _ => status,
-      };
-
-  String _nextStatusForTap(String status) => switch (status) {
-        'inbox' => 'in_progress',
-        'open' => 'in_progress',
-        'in_progress' => 'done',
-        _ => 'open',
       };
 
   String? _formatDue(BuildContext context) {
@@ -313,9 +313,16 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         '${tsLocal.year}-${tsLocal.month.toString().padLeft(2, '0')}-${tsLocal.day.toString().padLeft(2, '0')} '
         '${tsLocal.hour.toString().padLeft(2, '0')}:${tsLocal.minute.toString().padLeft(2, '0')}';
 
+    String statusLabelOrFallback(String? status) {
+      if (status == null || status.isEmpty) return '—';
+      return _statusLabel(context, status);
+    }
+
+    final fromStatusLabel = statusLabelOrFallback(activity.fromStatus);
+    final toStatusLabel = statusLabelOrFallback(activity.toStatus);
+
     final title = switch (activity.activityType) {
-      'status_change' =>
-        '${activity.fromStatus ?? ''} → ${activity.toStatus ?? ''}'.trim(),
+      'status_change' => '$fromStatusLabel → $toStatusLabel',
       'note' => activity.content ?? '',
       'summary' => activity.content ?? '',
       _ => activity.content ?? activity.activityType,
@@ -497,6 +504,15 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       );
     }
 
+    if (activity.activityType == 'status_change') {
+      return buildTile(
+        contentWidget: _TodoStatusChangeTransition(
+          fromStatusLabel: fromStatusLabel,
+          toStatusLabel: toStatusLabel,
+        ),
+      );
+    }
+
     if (sourceMessageId != null && activity.activityType != 'status_change') {
       return FutureBuilder<Message?>(
         future: _messageFuturesById.putIfAbsent(
@@ -633,14 +649,21 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                       ),
                       const SizedBox(height: 10),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _TodoStatusButton(
-                            label: _statusLabel(context, _todo.status),
-                            onPressed: () => unawaited(
-                              _setStatus(_nextStatusForTap(_todo.status)),
+                          Expanded(
+                            child: _TodoStatusSelector(
+                              statuses: _kSelectableStatuses,
+                              selectedStatus: _todo.status,
+                              statusLabelBuilder: (status) =>
+                                  _statusLabel(context, status),
+                              buttonKeyBuilder: (status) =>
+                                  ValueKey('todo_detail_set_status_$status'),
+                              onSelected: (status) =>
+                                  unawaited(_setStatus(status)),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           SlIconButton(
                             key: const ValueKey('todo_detail_delete'),
                             tooltip: context.t.common.actions.delete,
@@ -813,57 +836,6 @@ enum _MessageAction {
   linkTodo,
   edit,
   delete,
-}
-
-final class _TodoStatusButton extends StatelessWidget {
-  const _TodoStatusButton({
-    required this.label,
-    required this.onPressed,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = SlTokens.of(context);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(MaterialState.pressed)) {
-        return colorScheme.primary.withOpacity(0.18);
-      }
-      if (states.contains(MaterialState.hovered) ||
-          states.contains(MaterialState.focused)) {
-        return colorScheme.primary.withOpacity(0.12);
-      }
-      return null;
-    });
-
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        backgroundColor: tokens.surface2,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        minimumSize: const Size(0, 38),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: const StadiumBorder(),
-        side: BorderSide(color: tokens.borderSubtle),
-      ).copyWith(overlayColor: overlay),
-      icon: Icon(
-        Icons.swap_horiz_rounded,
-        size: 16,
-        color: colorScheme.onSurfaceVariant,
-      ),
-      label: Text(
-        label,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
 }
 
 final class _TodoDueChip extends StatelessWidget {
