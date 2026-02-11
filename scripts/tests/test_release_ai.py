@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import tempfile
 import unittest
@@ -8,7 +9,9 @@ from unittest import mock
 from scripts.release_ai import (
     _build_notes_for_locale,
     _command_collect_facts,
+    _command_generate_notes,
     _command_render_markdown,
+    _command_validate_notes,
     _select_user_facing_changes,
     SemVer,
     bump_semver,
@@ -20,6 +23,7 @@ from scripts.release_ai import (
 )
 
 from scripts.release_ai_release_base import fetch_repo_releases
+from scripts.release_ai_curation import curate_user_facing_changes_with_llm
 
 
 class SemVerTests(unittest.TestCase):
@@ -327,6 +331,183 @@ class UserFacingSelectionTests(unittest.TestCase):
         self.assertEqual(notes["sections"], [])
         self.assertEqual(notes["highlights"], [])
         self.assertIn("maintenance", notes["summary"].lower())
+
+
+
+class NotesManifestCurationTests(unittest.TestCase):
+    def test_generate_notes_records_curated_change_ids(self) -> None:
+        facts = {
+            "changes": [
+                {
+                    "id": "pr#20",
+                    "type": "breaking",
+                    "title": "fix(windows): WinRT header and artifact naming",
+                    "description": "Internal Windows build fix",
+                    "labels": ["ci", "build"],
+                },
+                {
+                    "id": "pr#21",
+                    "type": "feature",
+                    "title": "feat(app): first launch release notes dialog",
+                    "description": "Show update notes after app update",
+                    "labels": ["feature"],
+                },
+            ]
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            facts_path = Path(tmp_dir) / "facts.json"
+            facts_path.write_text(json.dumps(facts), encoding="utf-8")
+
+            output_dir = Path(tmp_dir) / "notes"
+            args = argparse.Namespace(
+                facts=str(facts_path),
+                tag="v1.0.1",
+                locales="en-US",
+                output_dir=str(output_dir),
+            )
+
+            def fake_build_notes_for_locale(*, facts, locale, tag, config):  # type: ignore[no-untyped-def]
+                self.assertTrue(facts.get("changes_curated"))
+                self.assertEqual([change["id"] for change in facts["changes"]], ["pr#21"])
+                self.assertEqual(locale, "en-US")
+                self.assertEqual(tag, "v1.0.1")
+                self.assertEqual(config["model"], "gpt-test")
+                return {
+                    "locale": "en-US",
+                    "version": "v1.0.1",
+                    "summary": "Summary",
+                    "highlights": [],
+                    "sections": [
+                        {
+                            "key": "feature",
+                            "title": "New Features",
+                            "items": [{"text": "Show update notes", "change_ids": ["pr#21"]}],
+                        }
+                    ],
+                }
+
+            with (
+                mock.patch("scripts.release_ai._llm_config", return_value={"model": "gpt-test"}),
+                mock.patch(
+                    "scripts.release_ai.curate_user_facing_changes_with_llm",
+                    return_value=[dict(facts["changes"][1])],
+                ),
+                mock.patch(
+                    "scripts.release_ai._build_notes_for_locale",
+                    side_effect=fake_build_notes_for_locale,
+                ),
+            ):
+                _command_generate_notes(args)
+
+            manifest_path = output_dir / "release-notes-v1.0.1-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["included_change_ids"], ["pr#21"])
+
+    def test_validate_notes_prefers_manifest_included_change_ids(self) -> None:
+        facts = {
+            "changes": [
+                {
+                    "id": "pr#1",
+                    "type": "feature",
+                    "title": "feat(app): add release notes dialog",
+                    "description": "Show release notes to users after update",
+                    "labels": ["feature"],
+                },
+                {
+                    "id": "pr#2",
+                    "type": "feature",
+                    "title": "feat(app): add premium banner",
+                    "description": "Show premium upsell to users",
+                    "labels": ["feature"],
+                },
+            ]
+        }
+
+        notes = {
+            "locale": "en-US",
+            "version": "v1.0.1",
+            "summary": "Summary",
+            "highlights": [],
+            "sections": [
+                {
+                    "key": "feature",
+                    "title": "New Features",
+                    "items": [{"text": "Added release notes dialog", "change_ids": ["pr#1"]}],
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            notes_dir = Path(tmp_dir)
+            facts_path = notes_dir / "facts.json"
+            facts_path.write_text(json.dumps(facts), encoding="utf-8")
+
+            note_path = notes_dir / "release-notes-v1.0.1-en-US.json"
+            note_path.write_text(json.dumps(notes), encoding="utf-8")
+            note_sha = hashlib.sha256(note_path.read_bytes()).hexdigest()
+
+            manifest_path = notes_dir / "release-notes-v1.0.1-manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "version": "v1.0.1",
+                        "included_change_ids": ["pr#1"],
+                        "notes": [{"file": note_path.name, "sha256": note_sha}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            args = argparse.Namespace(
+                facts=str(facts_path),
+                tag="v1.0.1",
+                locales="en-US",
+                notes_dir=str(notes_dir),
+            )
+
+            _command_validate_notes(args)
+
+
+class LlmCurationTests(unittest.TestCase):
+    def test_llm_curation_filters_technical_breaking_change(self) -> None:
+        changes = [
+            {
+                "id": "pr#20",
+                "type": "breaking",
+                "title": "fix(windows): WinRT header and artifact naming",
+                "description": "Internal Windows build fix",
+                "labels": ["ci", "build"],
+            },
+            {
+                "id": "pr#21",
+                "type": "feature",
+                "title": "feat(app): first launch release notes dialog",
+                "description": "Show update notes after app update",
+                "labels": ["feature"],
+            },
+        ]
+
+        def fake_llm_call(messages, *, config):  # type: ignore[no-untyped-def]
+            self.assertEqual(config["model"], "gpt-test")
+            self.assertTrue(messages)
+            return {
+                "items": [
+                    {"change_id": "pr#20", "include": False, "type": "chore"},
+                    {"change_id": "pr#21", "include": True, "type": "feature"},
+                ]
+            }
+
+        curated = curate_user_facing_changes_with_llm(
+            changes=changes,
+            tag="v1.0.1",
+            config={"model": "gpt-test"},
+            llm_call=fake_llm_call,
+        )
+
+        self.assertEqual([change["id"] for change in curated], ["pr#21"])
+        self.assertEqual(curated[0]["type"], "feature")
 
 
 

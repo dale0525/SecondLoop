@@ -120,6 +120,22 @@ def _select_user_facing_changes(changes: list[dict[str, Any]]) -> list[dict[str,
     return [change for change in changes if _is_user_facing_change(change)]
 
 
+def _default_section_titles(locale: str) -> dict[str, str]:
+    if locale.lower().startswith("zh"):
+        return {
+            "breaking": "破坏性变更",
+            "feature": "新功能",
+            "fix": "问题修复",
+            "chore": "其他更新",
+        }
+    return {
+        "breaking": "Breaking Changes",
+        "feature": "New Features",
+        "fix": "Fixes",
+        "chore": "Other Changes",
+    }
+
+
 def _default_maintenance_summary(locale: str, tag: str) -> str:
     language, _region = _normalize_locale_token(locale)
     if language == "zh":

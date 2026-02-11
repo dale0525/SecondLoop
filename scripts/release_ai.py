@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.release_ai_curation import curate_user_facing_changes_with_llm
     from scripts.release_ai_llm import llm_config as _llm_config
     from scripts.release_ai_llm import openai_chat_json as _openai_chat_json
     from scripts.release_ai_release_base import (
@@ -28,12 +29,14 @@ try:
     from scripts.release_ai_notes import (
         _change_links_from_facts,
         _default_maintenance_summary,
+        _default_section_titles,
         _format_change_refs,
         _locale_headings,
         _select_user_facing_changes,
     )
     from scripts.release_ai_text import _extract_release_notes_section
 except ModuleNotFoundError:
+    from release_ai_curation import curate_user_facing_changes_with_llm
     from release_ai_llm import llm_config as _llm_config
     from release_ai_llm import openai_chat_json as _openai_chat_json
     from release_ai_release_base import fetch_repo_releases as _fetch_repo_releases
@@ -43,6 +46,7 @@ except ModuleNotFoundError:
     from release_ai_notes import (
         _change_links_from_facts,
         _default_maintenance_summary,
+        _default_section_titles,
         _format_change_refs,
         _locale_headings,
         _select_user_facing_changes,
@@ -557,22 +561,6 @@ def _command_compute_tag(args: argparse.Namespace) -> None:
     print(f"release-ai: wrote next tag -> {args.output} ({tag})")
 
 
-def _default_section_titles(locale: str) -> dict[str, str]:
-    if locale.lower().startswith("zh"):
-        return {
-            "breaking": "破坏性变更",
-            "feature": "新功能",
-            "fix": "问题修复",
-            "chore": "其他更新",
-        }
-    return {
-        "breaking": "Breaking Changes",
-        "feature": "New Features",
-        "fix": "Fixes",
-        "chore": "Other Changes",
-    }
-
-
 def _translate_notes_with_llm(
     *,
     locale: str,
@@ -635,7 +623,7 @@ def _build_notes_for_locale(
     tag: str,
     config: dict[str, Any],
 ) -> dict[str, Any]:
-    selected_changes = _select_user_facing_changes(list(facts.get("changes", [])))
+    selected_changes = list(facts.get("changes", [])) if bool(facts.get("changes_curated")) else _select_user_facing_changes(list(facts.get("changes", [])))
     required_change_ids = [str(change["id"]) for change in selected_changes]
 
     if not selected_changes:
@@ -793,13 +781,23 @@ def _command_generate_notes(args: argparse.Namespace) -> None:
 
     config = _llm_config()
 
+    curated_changes = curate_user_facing_changes_with_llm(
+        changes=list(facts.get("changes", [])),
+        tag=tag,
+        config=config,
+        llm_call=_openai_chat_json,
+    )
+    curated_facts = dict(facts)
+    curated_facts["changes"] = curated_changes
+    curated_facts["changes_curated"] = True
+
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     note_files: list[dict[str, str]] = []
     for locale in locales:
         notes = _build_notes_for_locale(
-            facts=facts,
+            facts=curated_facts,
             locale=locale,
             tag=tag,
             config=config,
@@ -822,6 +820,7 @@ def _command_generate_notes(args: argparse.Namespace) -> None:
         "version": tag,
         "default_locale": default_locale,
         "supported_locales": locales,
+        "included_change_ids": [str(change.get("id", "")).strip() for change in curated_changes if str(change.get("id", "")).strip()],
         "notes": note_files,
     }
     manifest_path = output_dir / f"release-notes-{tag}-manifest.json"
@@ -835,7 +834,16 @@ def _command_validate_notes(args: argparse.Namespace) -> None:
     locales = [locale.strip() for locale in args.locales.split(",") if locale.strip()]
     output_dir = Path(args.notes_dir)
 
-    required_change_ids = [str(change["id"]) for change in _select_user_facing_changes(list(facts.get("changes", [])))]
+    manifest_path = output_dir / f"release-notes-{tag}-manifest.json"
+    if not manifest_path.exists():
+        raise RuntimeError(f"missing manifest: {manifest_path}")
+    manifest = _read_json(manifest_path)
+
+    included_change_ids = manifest.get("included_change_ids")
+    if isinstance(included_change_ids, list):
+        required_change_ids = [str(change_id).strip() for change_id in included_change_ids if str(change_id).strip()]
+    else:
+        required_change_ids = [str(change["id"]) for change in _select_user_facing_changes(list(facts.get("changes", [])))]
 
     for locale in locales:
         note_path = output_dir / f"release-notes-{tag}-{locale}.json"
@@ -849,10 +857,6 @@ def _command_validate_notes(args: argparse.Namespace) -> None:
             required_change_ids=required_change_ids,
         )
 
-    manifest_path = output_dir / f"release-notes-{tag}-manifest.json"
-    if not manifest_path.exists():
-        raise RuntimeError(f"missing manifest: {manifest_path}")
-    manifest = _read_json(manifest_path)
     if manifest.get("version") != tag:
         raise RuntimeError("manifest version mismatch")
 
