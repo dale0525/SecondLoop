@@ -3,7 +3,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../i18n/strings.g.dart';
 import 'review_notification_plan.dart';
+
+typedef NotificationTapHandler = void Function(String? payload);
 
 abstract interface class ReviewReminderNotificationScheduler {
   Future<void> ensureInitialized();
@@ -17,19 +20,25 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     implements ReviewReminderNotificationScheduler {
   FlutterLocalNotificationsReviewReminderScheduler({
     FlutterLocalNotificationsPlugin? plugin,
-  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    NotificationTapHandler? onTap,
+  })  : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+        _onTap = onTap;
 
-  static const int notificationId = 2026021101;
+  static const int notificationIdBase = 2026021100;
+  static const String reviewQueuePayloadPrefix = 'review_queue:';
+
   static const String _androidChannelId = 'review_reminders_v1';
   static const String _androidChannelName = 'Review reminders';
   static const String _androidChannelDescription =
       'Reminders for pending todo reviews';
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final NotificationTapHandler? _onTap;
 
   bool _initialized = false;
   bool _available = true;
   bool _timeZoneInitialized = false;
+  final Set<int> _managedNotificationIds = <int>{};
 
   @override
   Future<void> ensureInitialized() async {
@@ -42,7 +51,18 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     );
 
     try {
-      await _plugin.initialize(initializationSettings);
+      await _plugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (response) {
+          _onTap?.call(response.payload);
+        },
+      );
+
+      final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+      final launchResponse = launchDetails?.notificationResponse;
+      if (launchDetails?.didNotificationLaunchApp == true) {
+        _onTap?.call(launchResponse?.payload);
+      }
     } on MissingPluginException {
       _available = false;
       _initialized = true;
@@ -103,9 +123,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     _configureTimeZone();
     if (!_timeZoneInitialized) return;
 
-    final scheduledAtUtc =
-        DateTime.fromMillisecondsSinceEpoch(plan.scheduleAtUtcMs, isUtc: true);
-    final scheduleAt = tz.TZDateTime.from(scheduledAtUtc, tz.local);
+    await _cancelManagedNotifications();
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -127,23 +145,70 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       ),
     );
 
-    final body = plan.pendingCount == 1
-        ? 'You have 1 task waiting for review.'
-        : 'You have ${plan.pendingCount} tasks waiting for review.';
+    final title = t.actions.reviewQueue.title;
+    for (var i = 0; i < plan.items.length; i++) {
+      final item = plan.items[i];
+      final notificationId = notificationIdBase + i;
+      final scheduledAtUtc = DateTime.fromMillisecondsSinceEpoch(
+        item.scheduleAtUtcMs,
+        isUtc: true,
+      );
+      final scheduleAt = tz.TZDateTime.from(scheduledAtUtc, tz.local);
+      final payload = '$reviewQueuePayloadPrefix${item.todoId}';
 
-    try {
-      await _plugin.zonedSchedule(
+      await _scheduleSingleNotification(
+        notificationId: notificationId,
+        title: title,
+        body: item.todoTitle,
+        scheduleAt: scheduleAt,
+        details: details,
+        payload: payload,
+      );
+    }
+  }
+
+  Future<void> _scheduleSingleNotification({
+    required int notificationId,
+    required String title,
+    required String body,
+    required tz.TZDateTime scheduleAt,
+    required NotificationDetails details,
+    required String payload,
+  }) async {
+    Future<void> scheduleWithMode(AndroidScheduleMode mode) {
+      return _plugin.zonedSchedule(
         notificationId,
-        'Review reminder',
+        title,
         body,
         scheduleAt,
         details,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'review_queue',
+        androidScheduleMode: mode,
+        payload: payload,
       );
+    }
+
+    try {
+      await scheduleWithMode(AndroidScheduleMode.exactAllowWhileIdle);
+      _managedNotificationIds.add(notificationId);
+      return;
     } on MissingPluginException {
+      return;
+    } on PlatformException {
+      // Exact alarms can be blocked on newer Android versions.
+    } catch (_) {
+      return;
+    }
+
+    try {
+      await scheduleWithMode(AndroidScheduleMode.inexactAllowWhileIdle);
+      _managedNotificationIds.add(notificationId);
+    } on MissingPluginException {
+      // ignore
+    } on PlatformException {
+      // ignore
+    } catch (_) {
       // ignore
     }
   }
@@ -153,9 +218,31 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     await ensureInitialized();
     if (!_available) return;
 
+    await _cancelManagedNotifications();
+  }
+
+  Future<void> _cancelManagedNotifications() async {
+    if (_managedNotificationIds.isEmpty) {
+      for (var i = 0; i < kReviewReminderMaxItems; i++) {
+        await _cancelNotification(notificationIdBase + i);
+      }
+      return;
+    }
+
+    for (final notificationId in _managedNotificationIds) {
+      await _cancelNotification(notificationId);
+    }
+    _managedNotificationIds.clear();
+  }
+
+  Future<void> _cancelNotification(int notificationId) async {
     try {
       await _plugin.cancel(notificationId);
     } on MissingPluginException {
+      // ignore
+    } on PlatformException {
+      // ignore
+    } catch (_) {
       // ignore
     }
   }

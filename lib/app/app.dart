@@ -331,6 +331,7 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                         child: SyncEngineGate(
                                           child:
                                               ReviewReminderNotificationsGate(
+                                            navigatorKey: _navigatorKey,
                                             child: MediaEnrichmentGate(
                                               child:
                                                   SemanticParseAutoActionsGate(

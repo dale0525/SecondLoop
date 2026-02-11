@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
+import '../../features/actions/review/review_queue_page.dart';
 import '../backend/app_backend.dart';
 import '../session/session_scope.dart';
 import '../sync/sync_engine.dart';
@@ -11,10 +12,20 @@ import '../sync/sync_engine_gate.dart';
 import 'review_reminder_notification_coordinator.dart';
 import 'review_reminder_notification_scheduler.dart';
 
+typedef ReviewReminderSchedulerFactory = ReviewReminderNotificationScheduler
+    Function(NotificationTapHandler onTap);
+
 final class ReviewReminderNotificationsGate extends StatefulWidget {
-  const ReviewReminderNotificationsGate({required this.child, super.key});
+  const ReviewReminderNotificationsGate({
+    required this.child,
+    required this.navigatorKey,
+    this.schedulerFactory,
+    super.key,
+  });
 
   final Widget child;
+  final GlobalKey<NavigatorState> navigatorKey;
+  final ReviewReminderSchedulerFactory? schedulerFactory;
 
   @override
   State<ReviewReminderNotificationsGate> createState() =>
@@ -25,8 +36,11 @@ final class _ReviewReminderNotificationsGateState
     extends State<ReviewReminderNotificationsGate> with WidgetsBindingObserver {
   static const _kRefreshDebounce = Duration(milliseconds: 500);
 
-  final ReviewReminderNotificationScheduler _scheduler =
-      FlutterLocalNotificationsReviewReminderScheduler();
+  late final ReviewReminderNotificationScheduler _scheduler =
+      (widget.schedulerFactory ??
+          (onTap) => FlutterLocalNotificationsReviewReminderScheduler(
+                onTap: onTap,
+              ))(_handleNotificationTap);
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -34,6 +48,7 @@ final class _ReviewReminderNotificationsGateState
   Timer? _refreshTimer;
   bool _refreshInFlight = false;
   bool _refreshQueued = false;
+  bool _openingReviewQueueFromNotification = false;
 
   Object? _backendIdentity;
   Uint8List? _sessionKey;
@@ -147,6 +162,33 @@ final class _ReviewReminderNotificationsGateState
         _refreshQueued = false;
         unawaited(_runRefresh());
       }
+    }
+  }
+
+  void _handleNotificationTap(String? payload) {
+    if (payload == null || payload.isEmpty) return;
+    if (!payload.startsWith(
+      FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix,
+    )) {
+      return;
+    }
+
+    unawaited(_openReviewQueueFromNotification());
+  }
+
+  Future<void> _openReviewQueueFromNotification() async {
+    if (!mounted || _openingReviewQueueFromNotification) return;
+
+    final navigator = widget.navigatorKey.currentState;
+    if (navigator == null || !navigator.mounted) return;
+
+    _openingReviewQueueFromNotification = true;
+    try {
+      await navigator.push(
+        MaterialPageRoute(builder: (_) => const ReviewQueuePage()),
+      );
+    } finally {
+      _openingReviewQueueFromNotification = false;
     }
   }
 

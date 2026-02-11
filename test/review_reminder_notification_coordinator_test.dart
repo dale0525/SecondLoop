@@ -29,6 +29,7 @@ void main() {
     expect(scheduler.initializedCount, 1);
     expect(scheduler.scheduledPlans.length, 1);
     expect(scheduler.scheduledPlans.single.pendingCount, 1);
+    expect(scheduler.scheduledPlans.single.items.single.todoId, 'todo:1');
     expect(scheduler.cancelCount, 0);
   });
 
