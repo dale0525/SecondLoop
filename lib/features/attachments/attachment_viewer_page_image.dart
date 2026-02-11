@@ -58,15 +58,38 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       return caption.startsWith('ocr fallback caption:');
     }
 
-    Widget buildImageOcrCard(String ocrText) {
+    Widget buildImageOcrCard(
+      String ocrText, {
+      Future<void> Function()? onRetry,
+      bool retrying = false,
+    }) {
       return SlSurface(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              context.t.attachments.content.ocrTitle,
-              style: Theme.of(context).textTheme.labelMedium,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.t.attachments.content.ocrTitle,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+                if (onRetry != null)
+                  IconButton(
+                    key: const ValueKey('attachment_annotation_retry_ocr'),
+                    tooltip: context.t.common.actions.retry,
+                    onPressed: retrying ? null : () => unawaited(onRetry()),
+                    icon: retrying
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             SelectableText(
@@ -119,6 +142,8 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
           ? context.t.attachments.content.ocrTitle
           : context.t.settings.mediaAnnotation.title;
       final showOcrText = hasOcrText && ocrText != annotationText;
+      final canRetryRecognition =
+          _canRetryAttachmentRecognition && (hasAnnotation || hasOcrText);
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 880),
@@ -151,7 +176,6 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                 const SizedBox(height: 12),
                 _buildMetadataCard(
                   context,
-                  byteLen: widget.attachment.byteLen.toInt(),
                   capturedAt: capturedAt,
                   latitude: latitude,
                   longitude: longitude,
@@ -163,9 +187,20 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                     context,
                     captionLong: annotationText,
                     titleText: annotationTitle,
+                    onRetry: canRetryRecognition
+                        ? _retryAttachmentRecognition
+                        : null,
+                    retrying: _retryingAttachmentRecognition,
                   ),
                 if (showOcrText) const SizedBox(height: 12),
-                if (showOcrText) buildImageOcrCard(ocrText),
+                if (showOcrText)
+                  buildImageOcrCard(
+                    ocrText,
+                    onRetry: canRetryRecognition
+                        ? _retryAttachmentRecognition
+                        : null,
+                    retrying: _retryingAttachmentRecognition,
+                  ),
               ],
             ),
           ),

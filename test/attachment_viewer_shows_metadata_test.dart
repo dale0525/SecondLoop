@@ -14,7 +14,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Attachment viewer shows basic metadata when no EXIF',
+  testWidgets(
+      'Attachment viewer hides size and keeps core actions when no EXIF',
       (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
@@ -45,13 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-        find.byKey(const ValueKey('attachment_metadata_size')), findsOneWidget);
-    expect(
-      tester
-          .widget<Text>(find.byKey(const ValueKey('attachment_metadata_size')))
-          .data,
-      '67 B',
-    );
+        find.byKey(const ValueKey('attachment_metadata_size')), findsNothing);
 
     expect(find.byKey(const ValueKey('attachment_metadata_captured_at')),
         findsNothing);

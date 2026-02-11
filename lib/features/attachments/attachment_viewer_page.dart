@@ -63,6 +63,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _loadingAnnotation = false;
   bool _loadingMetadata = false;
   bool _loadingAnnotationPayload = false;
+  bool _retryingAttachmentRecognition = false;
   String? _placeDisplayName;
   String? _annotationCaption;
   AttachmentMetadata? _metadata;
@@ -502,6 +503,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   String get _effectiveDocumentOcrLanguageHints =>
       normalizeAttachmentOcrLanguageHint(_documentOcrLanguageHints);
 
+  bool get _canRetryAttachmentRecognition =>
+      AppBackendScope.of(context) is NativeAppBackend;
+
   void _updateDocumentOcrLanguageHints(String value) {
     final normalized = normalizeAttachmentOcrLanguageHint(value);
     if (normalized == _documentOcrLanguageHints) return;
@@ -510,19 +514,55 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     });
   }
 
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-    final gb = mb / 1024;
-    return '${gb.toStringAsFixed(1)} GB';
+  Future<void> _retryAttachmentRecognition() async {
+    if (_retryingAttachmentRecognition) return;
+    final backendAny = AppBackendScope.of(context);
+    if (backendAny is! NativeAppBackend) return;
+
+    final backend = backendAny;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final lang = Localizations.localeOf(context).toLanguageTag();
+
+    setState(() => _retryingAttachmentRecognition = true);
+    try {
+      await backend.markAttachmentAnnotationFailed(
+        sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+        attempts: 0,
+        nextRetryAtMs: nowMs,
+        lastError: 'manual_retry',
+        nowMs: nowMs,
+      );
+      await backend.enqueueAttachmentAnnotation(
+        sessionKey,
+        attachmentSha256: widget.attachment.sha256,
+        lang: lang,
+        nowMs: nowMs,
+      );
+
+      if (!mounted) return;
+      _startAnnotationCaptionLoad();
+      _startAnnotationPayloadLoad();
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _retryingAttachmentRecognition = false);
+      }
+    }
   }
 
   Widget _buildMetadataCard(
     BuildContext context, {
-    required int byteLen,
     required DateTime? capturedAt,
     required double? latitude,
     required double? longitude,
@@ -533,24 +573,18 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final hasLocation = latitude != null &&
         longitude != null &&
         !(latitude == 0.0 && longitude == 0.0);
+    final hasCapturedAt = capturedAt != null;
+
+    if (!hasCapturedAt && !hasLocation && !hasPlaceName) {
+      return const SizedBox.shrink();
+    }
 
     return SlSurface(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            context.t.attachments.metadata.size,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatBytes(byteLen),
-            key: const ValueKey('attachment_metadata_size'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
           if (capturedAt != null) ...[
-            const SizedBox(height: 10),
             Text(
               context.t.attachments.metadata.capturedAt,
               style: Theme.of(context).textTheme.labelMedium,
@@ -563,7 +597,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
             ),
           ],
           if (hasLocation || hasPlaceName) ...[
-            const SizedBox(height: 10),
+            if (capturedAt != null) const SizedBox(height: 10),
             Text(
               context.t.attachments.metadata.location,
               style: Theme.of(context).textTheme.labelMedium,
@@ -592,6 +626,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     BuildContext context, {
     required String captionLong,
     String? titleText,
+    Future<void> Function()? onRetry,
+    bool retrying = false,
   }) {
     final caption = captionLong.trim();
     if (caption.isEmpty) return const SizedBox.shrink();
@@ -678,6 +714,19 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
               ),
+              if (!_editingAnnotationCaption && onRetry != null)
+                IconButton(
+                  key: const ValueKey('attachment_annotation_retry'),
+                  tooltip: context.t.common.actions.retry,
+                  onPressed: retrying ? null : () => unawaited(onRetry()),
+                  icon: retrying
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                ),
               if (!_editingAnnotationCaption && canEdit)
                 IconButton(
                   key: const ValueKey('attachment_annotation_edit'),
@@ -855,6 +904,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     initialMetadata: _metadata,
                     annotationPayloadFuture: _annotationPayloadFuture,
                     initialAnnotationPayload: _annotationPayload,
+                    onRetryRecognition: _canRetryAttachmentRecognition
+                        ? _retryAttachmentRecognition
+                        : null,
                   );
                 }
                 if (!isImage) {

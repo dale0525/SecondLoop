@@ -9,7 +9,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('AudioAttachmentPlayerView renders transcript excerpt',
+  testWidgets(
+      'AudioAttachmentPlayerView renders transcript excerpt and retry action',
       (tester) async {
     final attachment = Attachment(
       sha256: 'audio-transcript-sha',
@@ -18,6 +19,8 @@ void main() {
       byteLen: _tinyM4a.length,
       createdAtMs: 0,
     );
+
+    var retryInvoked = 0;
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -32,6 +35,9 @@ void main() {
                 'transcript_full':
                     'hello transcript excerpt with more details for full text',
               },
+              onRetryRecognition: () async {
+                retryInvoked += 1;
+              },
             ),
           ),
         ),
@@ -42,6 +48,14 @@ void main() {
 
     expect(find.textContaining('hello transcript excerpt'), findsOneWidget);
     expect(find.byIcon(Icons.open_in_new_outlined), findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_transcript_retry')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('attachment_metadata_format')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('attachment_transcript_retry')));
+    await tester.pump();
+    expect(retryInvoked, 1);
   });
 }
 

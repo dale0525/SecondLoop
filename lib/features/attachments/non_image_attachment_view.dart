@@ -330,52 +330,29 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
             children: [
               SlSurface(
                 padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Text(
-                      context.t.attachments.metadata.size,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatBytes(attachment.byteLen.toInt()),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (canOpenWithSystem) ...[
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          onPressed: () => unawaited(openWithSystem()),
-                          icon: const Icon(Icons.open_in_new_outlined),
-                          label: Text(
-                            context.t.attachments.content.openWithSystem,
-                          ),
+                    if (canOpenWithSystem)
+                      OutlinedButton.icon(
+                        onPressed: () => unawaited(openWithSystem()),
+                        icon: const Icon(Icons.open_in_new_outlined),
+                        label: Text(
+                          context.t.attachments.content.openWithSystem,
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          key:
-                              const ValueKey('attachment_content_share_button'),
-                          onPressed: () => unawaited(_shareAttachment(context)),
-                          icon: const Icon(Icons.share_outlined),
-                          label: Text(context.t.common.actions.share),
-                        ),
-                        OutlinedButton.icon(
-                          key: const ValueKey(
-                              'attachment_content_download_button'),
-                          onPressed: () =>
-                              unawaited(_downloadAttachment(context)),
-                          icon: const Icon(Icons.download_rounded),
-                          label: Text(context.t.common.actions.pull),
-                        ),
-                      ],
+                    OutlinedButton.icon(
+                      key: const ValueKey('attachment_content_share_button'),
+                      onPressed: () => unawaited(_shareAttachment(context)),
+                      icon: const Icon(Icons.share_outlined),
+                      label: Text(context.t.common.actions.share),
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('attachment_content_download_button'),
+                      onPressed: () => unawaited(_downloadAttachment(context)),
+                      icon: const Icon(Icons.download_rounded),
+                      label: Text(context.t.common.actions.pull),
                     ),
                   ],
                 ),
@@ -529,7 +506,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                               label: Text(
                                 showNeedsOcrState
                                     ? context.t.attachments.content.runOcr
-                                    : context.t.attachments.content.rerunOcr,
+                                    : context.t.common.actions.retry,
                               ),
                             ),
                           ],
@@ -615,16 +592,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         ),
       ),
     );
-  }
-
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-    final gb = mb / 1024;
-    return '${gb.toStringAsFixed(1)} GB';
   }
 
   String _fileExtensionForDownload() {

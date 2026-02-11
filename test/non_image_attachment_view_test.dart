@@ -115,6 +115,7 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('attachment_content_download_button')),
         findsOneWidget);
+    expect(find.text('Size'), findsNothing);
 
     await tester.tap(find.text('Full text'));
     await tester.pumpAndSettle();
@@ -208,7 +209,7 @@ void main() {
     expect(runInvoked, 1);
   });
 
-  testWidgets('NonImageAttachmentView shows Re-run OCR after OCR is ready',
+  testWidgets('NonImageAttachmentView shows Retry after OCR text is ready',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-pdf-ready',
@@ -241,11 +242,11 @@ void main() {
     await tester.pump();
 
     expect(find.text('OCR required'), findsNothing);
-    expect(find.text('Re-run OCR'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
     expect(find.text('Already extracted'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Re-run OCR'));
-    await tester.tap(find.text('Re-run OCR'));
+    await tester.ensureVisible(find.text('Retry'));
+    await tester.tap(find.text('Retry'));
     await tester.pump();
     expect(runInvoked, 1);
   });

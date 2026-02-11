@@ -101,6 +101,56 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentViewerPage shows retry action for recognized image annotation',
+      (tester) async {
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': 'Cloud detected caption'},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode({
+          'caption_long': 'Cloud detected caption',
+          'tags': const <String>['receipt'],
+        }),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final retryFinder =
+        find.byKey(const ValueKey('attachment_annotation_retry'));
+    expect(retryFinder, findsOneWidget);
+
+    await tester.ensureVisible(retryFinder);
+    await tester.tap(retryFinder);
+    await tester.pump();
+
+    expect(backend.retryEnqueueCalls, 1);
+    expect(backend.retryMarkFailedCalls, 1);
+  });
+
+  testWidgets(
       'AttachmentViewerPage allows editing annotation caption and saves',
       (tester) async {
     final backend = _Backend(
@@ -184,6 +234,8 @@ final class _NativeImageBackend extends NativeAppBackend {
   final Map<String, Uint8List> _bytesBySha;
   final Map<String, String?> _annotationCaptionBySha;
   final Map<String, String?> _annotationPayloadJsonBySha;
+  int retryEnqueueCalls = 0;
+  int retryMarkFailedCalls = 0;
 
   @override
   Future<Uint8List> readAttachmentBytes(
@@ -225,6 +277,28 @@ final class _NativeImageBackend extends NativeAppBackend {
     required String sha256,
   }) async {
     return _annotationPayloadJsonBySha[sha256];
+  }
+
+  @override
+  Future<void> enqueueAttachmentAnnotation(
+    Uint8List key, {
+    required String attachmentSha256,
+    required String lang,
+    required int nowMs,
+  }) async {
+    retryEnqueueCalls += 1;
+  }
+
+  @override
+  Future<void> markAttachmentAnnotationFailed(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    retryMarkFailedCalls += 1;
   }
 }
 

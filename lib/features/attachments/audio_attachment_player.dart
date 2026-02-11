@@ -37,6 +37,7 @@ class AudioAttachmentPlayerView extends StatefulWidget {
     this.initialMetadata,
     this.annotationPayloadFuture,
     this.initialAnnotationPayload,
+    this.onRetryRecognition,
     super.key,
   });
 
@@ -46,6 +47,7 @@ class AudioAttachmentPlayerView extends StatefulWidget {
   final AttachmentMetadata? initialMetadata;
   final Future<Map<String, Object?>?>? annotationPayloadFuture;
   final Map<String, Object?>? initialAnnotationPayload;
+  final Future<void> Function()? onRetryRecognition;
 
   @override
   State<AudioAttachmentPlayerView> createState() =>
@@ -111,16 +113,6 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     if (target < Duration.zero) target = Duration.zero;
     if (duration > Duration.zero && target > duration) target = duration;
     await _player.seek(target);
-  }
-
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
-    final gb = mb / 1024;
-    return '${gb.toStringAsFixed(1)} GB';
   }
 
   static String _formatDuration(Duration value) {
@@ -316,6 +308,7 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   Widget _buildTranscriptCard(
     BuildContext context, {
     required Map<String, Object?>? payload,
+    required Future<void> Function()? onRetryRecognition,
   }) {
     final transcriptTitle = context.t.attachments.content.fullText;
     final transcriptExcerpt = payload?['transcript_excerpt']?.toString().trim();
@@ -368,6 +361,18 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
             displayed,
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (onRetryRecognition != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const ValueKey('attachment_transcript_retry'),
+                onPressed: () => unawaited(onRetryRecognition()),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(context.t.common.actions.retry),
+              ),
+            ),
+          ],
           if (canOpenFull) ...[
             const SizedBox(height: 8),
             Align(
@@ -406,36 +411,7 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SlSurface(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      context.t.attachments.metadata.format,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.attachment.mimeType,
-                      key: const ValueKey('attachment_metadata_format'),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      context.t.attachments.metadata.size,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatBytes(widget.attachment.byteLen.toInt()),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
               if ((title ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
                 SlSurface(
                   padding: const EdgeInsets.all(12),
                   child: Text(
@@ -443,11 +419,15 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
+                const SizedBox(height: 12),
               ],
-              const SizedBox(height: 12),
               _buildPlayerCard(context),
               const SizedBox(height: 12),
-              _buildTranscriptCard(context, payload: payload),
+              _buildTranscriptCard(
+                context,
+                payload: payload,
+                onRetryRecognition: widget.onRetryRecognition,
+              ),
             ],
           ),
         ),
