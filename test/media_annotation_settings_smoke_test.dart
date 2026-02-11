@@ -213,16 +213,21 @@ Future<void> _pumpPage(
   CloudAuthController? cloudAuthController,
   String cloudGatewayBaseUrl = 'https://gateway.test',
   AppBackend? backend,
+  bool embedded = false,
 }) async {
+  Widget page = MediaAnnotationSettingsPage(
+    configStore: store,
+    contentConfigStore: contentStore,
+    linuxOcrModelStore: linuxOcrModelStore,
+    embedded: embedded,
+  );
+  if (embedded) {
+    page = SingleChildScrollView(child: page);
+  }
+
   Widget home = SubscriptionScope(
     controller: _FakeSubscriptionController(subscriptionStatus),
-    child: Scaffold(
-      body: MediaAnnotationSettingsPage(
-        configStore: store,
-        contentConfigStore: contentStore,
-        linuxOcrModelStore: linuxOcrModelStore,
-      ),
-    ),
+    child: Scaffold(body: page),
   );
   if (backend != null) {
     home = AppBackendScope(
@@ -253,6 +258,10 @@ Future<void> _pumpPage(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+bool _wifiSwitchValue(WidgetTester tester, Finder finder) {
+  return tester.widget<SwitchListTile>(finder).value;
 }
 
 void main() {
@@ -485,6 +494,76 @@ void main() {
     await tester.tap(wifiOnlySwitch);
     await tester.pumpAndSettle();
     expect(store.writes.last.allowCellular, isFalse);
+  });
+
+  testWidgets('Embedded Wi-Fi toggles apply independently by capability',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: false,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+      embedded: true,
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.embeddedRootKey),
+      findsOneWidget,
+    );
+
+    final audioWifiSwitch =
+        find.byKey(MediaAnnotationSettingsPage.audioWifiOnlySwitchKey);
+    final ocrWifiSwitch =
+        find.byKey(MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey);
+    final imageWifiSwitch =
+        find.byKey(MediaAnnotationSettingsPage.imageWifiOnlySwitchKey);
+
+    expect(audioWifiSwitch, findsOneWidget);
+    expect(ocrWifiSwitch, findsOneWidget);
+    expect(imageWifiSwitch, findsOneWidget);
+
+    expect(_wifiSwitchValue(tester, audioWifiSwitch), isTrue);
+    expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
+    expect(_wifiSwitchValue(tester, imageWifiSwitch), isTrue);
+
+    await tester.tap(audioWifiSwitch);
+    await tester.pumpAndSettle();
+
+    expect(_wifiSwitchValue(tester, audioWifiSwitch), isFalse);
+    expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
+    expect(_wifiSwitchValue(tester, imageWifiSwitch), isTrue);
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+      embedded: true,
+    );
+
+    expect(_wifiSwitchValue(tester, audioWifiSwitch), isFalse);
+    expect(_wifiSwitchValue(tester, ocrWifiSwitch), isTrue);
+    expect(_wifiSwitchValue(tester, imageWifiSwitch), isTrue);
   });
 
   testWidgets(

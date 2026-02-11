@@ -117,6 +117,19 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
     required MediaAnnotationConfig config,
   }) async {
     if (_busy) return;
+    try {
+      await MediaCapabilityWifiPrefs.writeAll(wifiOnly: wifiOnly);
+      if (mounted) {
+        _mutateState(() {
+          _audioWifiOnly = wifiOnly;
+          _ocrWifiOnly = wifiOnly;
+          _imageWifiOnly = wifiOnly;
+        });
+      }
+    } catch (_) {
+      // Fall back to legacy config persistence below.
+    }
+
     await _persist(
       MediaAnnotationConfig(
         annotateEnabled: config.annotateEnabled,

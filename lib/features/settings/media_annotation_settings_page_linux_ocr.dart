@@ -62,7 +62,11 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
         _buildScopedWifiOnlyTile(
           tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
           capabilityTitle: t.documentOcr.title,
-          config: mediaConfig,
+          wifiOnly: _ocrWifiOnly,
+          onChanged: (wifiOnly) => _setCapabilityWifiOnly(
+            scope: MediaCapabilityWifiScope.documentOcr,
+            wifiOnly: wifiOnly,
+          ),
         ),
     ];
     return <Widget>[

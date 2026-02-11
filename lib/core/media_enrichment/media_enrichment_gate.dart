@@ -10,6 +10,7 @@ import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
+import '../ai/media_capability_wifi_prefs.dart';
 import '../ai/media_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
@@ -596,6 +597,26 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         );
       });
 
+      final fallbackWifiOnly = !mediaAnnotationConfig.allowCellular;
+      var audioWifiOnly = fallbackWifiOnly;
+      var ocrWifiOnly = fallbackWifiOnly;
+      var imageWifiOnly = fallbackWifiOnly;
+      try {
+        audioWifiOnly = await MediaCapabilityWifiPrefs.readAudioWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+        ocrWifiOnly = await MediaCapabilityWifiPrefs.readOcrWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+        imageWifiOnly = await MediaCapabilityWifiPrefs.readImageWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+      } catch (_) {
+        audioWifiOnly = fallbackWifiOnly;
+        ocrWifiOnly = fallbackWifiOnly;
+        imageWifiOnly = fallbackWifiOnly;
+      }
+
       final geoReverseEnabled = availability.geoReverseAvailable;
 
       ContentEnrichmentConfig? contentConfig;
@@ -826,6 +847,10 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       final shouldTryMultimodalOcr =
           effectiveRoute != MediaSourceRouteKind.local;
+      final networkForOcr = await getNetwork();
+      final canUseNetworkOcr =
+          networkForOcr != MediaEnrichmentNetwork.offline &&
+              (!ocrWifiOnly || networkForOcr == MediaEnrichmentNetwork.wifi);
 
       var processedAutoPdfOcr = 0;
       if (documentExtractEnabled) {
@@ -834,7 +859,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
-            runMultimodalPdfOcr: shouldTryMultimodalOcr
+            runMultimodalPdfOcr: shouldTryMultimodalOcr && canUseNetworkOcr
                 ? (bytes, {required pageCount}) {
                     return tryConfiguredMultimodalPdfOcr(
                       backend: backend,
@@ -861,30 +886,30 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       }
 
       var processedAutoDocxOcr = 0;
-      if (documentExtractEnabled) {
+      if (documentExtractEnabled &&
+          shouldTryMultimodalOcr &&
+          canUseNetworkOcr) {
         try {
           processedAutoDocxOcr = await _runAutoDocxOcrForRecentOfficeDocs(
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
-            runDocxOcr: shouldTryMultimodalOcr
-                ? (bytes, {required pageCount, required languageHints}) async {
-                    return tryConfiguredDocxOcr(
-                      backend: backend,
-                      sessionKey: Uint8List.fromList(sessionKey),
-                      docxBytes: bytes,
-                      pageCountHint: pageCount,
-                      languageHints: languageHints,
-                      subscriptionStatus: subscriptionStatus,
-                      mediaAnnotationConfig: effectiveMediaAnnotationConfig,
-                      llmProfiles: llmProfiles,
-                      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-                      cloudIdToken: idToken?.trim() ?? '',
-                      cloudModelName: gatewayConfig.modelName,
-                    );
-                  }
-                : (bytes, {required pageCount, required languageHints}) async =>
-                    null,
+            runDocxOcr: (bytes,
+                {required pageCount, required languageHints}) async {
+              return tryConfiguredDocxOcr(
+                backend: backend,
+                sessionKey: Uint8List.fromList(sessionKey),
+                docxBytes: bytes,
+                pageCountHint: pageCount,
+                languageHints: languageHints,
+                subscriptionStatus: subscriptionStatus,
+                mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+                llmProfiles: llmProfiles,
+                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+                cloudIdToken: idToken?.trim() ?? '',
+                cloudModelName: gatewayConfig.modelName,
+              );
+            },
           );
         } catch (_) {
           processedAutoDocxOcr = 0;
@@ -894,8 +919,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       var processedAudioTranscripts = 0;
       if (audioTranscribeEnabled) {
         final network = await getNetwork();
+        final audioRequiresWifi = contentRequiresWifi || audioWifiOnly;
         final allowedByNetwork = network != MediaEnrichmentNetwork.offline &&
-            (!contentRequiresWifi || network == MediaEnrichmentNetwork.wifi);
+            (!audioRequiresWifi || network == MediaEnrichmentNetwork.wifi);
 
         final client = allowedByNetwork
             ? audioTranscribeSelection.networkClient
@@ -969,7 +995,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         );
 
         result = await runner.runOnce(
-          allowAnnotationCellular: mediaAnnotationConfig.allowCellular,
+          allowAnnotationCellular: !imageWifiOnly,
         );
         if (!mounted) return;
       }
@@ -986,12 +1012,21 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       if (result.needsAnnotationCellularConfirmation &&
           !_cellularPromptShown &&
-          !mediaAnnotationConfig.allowCellular &&
+          imageWifiOnly &&
           lastNetwork == MediaEnrichmentNetwork.cellular) {
         _cellularPromptShown = true;
         final allowed = await _promptAllowCellular();
         if (!mounted) return;
         if (allowed) {
+          try {
+            await MediaCapabilityWifiPrefs.write(
+              MediaCapabilityWifiScope.imageCaption,
+              wifiOnly: false,
+            );
+            imageWifiOnly = false;
+          } catch (_) {
+            imageWifiOnly = false;
+          }
           await configStore.write(
             Uint8List.fromList(sessionKey),
             MediaAnnotationConfig(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
@@ -105,6 +106,9 @@ class _MediaAnnotationSettingsPageState
     totalBytes: 0,
     source: LinuxOcrModelSource.none,
   );
+  bool _audioWifiOnly = true;
+  bool _ocrWifiOnly = true;
+  bool _imageWifiOnly = true;
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
@@ -467,6 +471,27 @@ class _MediaAnnotationSettingsPageState
           profiles = null;
         }
       }
+
+      final fallbackWifiOnly = !config.allowCellular;
+      var audioWifiOnly = fallbackWifiOnly;
+      var ocrWifiOnly = fallbackWifiOnly;
+      var imageWifiOnly = fallbackWifiOnly;
+      try {
+        audioWifiOnly = await MediaCapabilityWifiPrefs.readAudioWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+        ocrWifiOnly = await MediaCapabilityWifiPrefs.readOcrWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+        imageWifiOnly = await MediaCapabilityWifiPrefs.readImageWifiOnly(
+          fallbackWifiOnly: fallbackWifiOnly,
+        );
+      } catch (_) {
+        audioWifiOnly = fallbackWifiOnly;
+        ocrWifiOnly = fallbackWifiOnly;
+        imageWifiOnly = fallbackWifiOnly;
+      }
+
       if (!mounted) return;
       setState(() {
         _config = config;
@@ -474,6 +499,9 @@ class _MediaAnnotationSettingsPageState
         _contentLoadError = contentLoadError;
         _linuxOcrModelStatus = linuxOcrModelStatus;
         _llmProfiles = profiles;
+        _audioWifiOnly = audioWifiOnly;
+        _ocrWifiOnly = ocrWifiOnly;
+        _imageWifiOnly = imageWifiOnly;
         _loadError = null;
       });
     } catch (e) {
@@ -496,6 +524,43 @@ class _MediaAnnotationSettingsPageState
       await _store.write(sessionKey, next);
       if (!mounted) return;
       setState(() => _config = next);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setCapabilityWifiOnly({
+    required MediaCapabilityWifiScope scope,
+    required bool wifiOnly,
+  }) async {
+    if (_busy) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _busy = true);
+    try {
+      await MediaCapabilityWifiPrefs.write(scope, wifiOnly: wifiOnly);
+      if (!mounted) return;
+      setState(() {
+        switch (scope) {
+          case MediaCapabilityWifiScope.audioTranscribe:
+            _audioWifiOnly = wifiOnly;
+            break;
+          case MediaCapabilityWifiScope.documentOcr:
+            _ocrWifiOnly = wifiOnly;
+            break;
+          case MediaCapabilityWifiScope.imageCaption:
+            _imageWifiOnly = wifiOnly;
+            break;
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -640,20 +705,18 @@ class _MediaAnnotationSettingsPageState
   Widget _buildScopedWifiOnlyTile({
     required Key tileKey,
     required String capabilityTitle,
-    required MediaAnnotationConfig config,
+    required bool wifiOnly,
+    required Future<void> Function(bool wifiOnly) onChanged,
   }) {
     return SwitchListTile(
       key: tileKey,
       title: Text(_scopedWifiOnlyTitle(context, capabilityTitle)),
       subtitle: Text(_scopedWifiOnlySubtitle(context, capabilityTitle)),
-      value: !config.allowCellular,
+      value: wifiOnly,
       onChanged: _busy
           ? null
-          : (wifiOnly) async {
-              await _setMediaUnderstandingWifiOnly(
-                wifiOnly: wifiOnly,
-                config: config,
-              );
+          : (nextWifiOnly) async {
+              await onChanged(nextWifiOnly);
             },
     );
   }
@@ -830,7 +893,11 @@ class _MediaAnnotationSettingsPageState
                   _buildScopedWifiOnlyTile(
                     tileKey: MediaAnnotationSettingsPage.audioWifiOnlySwitchKey,
                     capabilityTitle: t.audioTranscribe.title,
-                    config: config,
+                    wifiOnly: _audioWifiOnly,
+                    onChanged: (wifiOnly) => _setCapabilityWifiOnly(
+                      scope: MediaCapabilityWifiScope.audioTranscribe,
+                      wifiOnly: wifiOnly,
+                    ),
                   ),
               ]),
               ...() {
@@ -874,7 +941,11 @@ class _MediaAnnotationSettingsPageState
                   _buildScopedWifiOnlyTile(
                     tileKey: MediaAnnotationSettingsPage.imageWifiOnlySwitchKey,
                     capabilityTitle: t.imageCaption.title,
-                    config: config,
+                    wifiOnly: _imageWifiOnly,
+                    onChanged: (wifiOnly) => _setCapabilityWifiOnly(
+                      scope: MediaCapabilityWifiScope.imageCaption,
+                      wifiOnly: wifiOnly,
+                    ),
                   ),
               ]),
             ],
