@@ -1,3 +1,4 @@
+import '../../core/content_enrichment/docx_ocr_policy.dart';
 import 'attachment_ocr_text_normalizer.dart';
 
 enum AttachmentTextSource {
@@ -58,32 +59,58 @@ AttachmentTextSelection selectAttachmentDisplayText(
     excerpt: read('readable_text_excerpt'),
     full: read('readable_text_full'),
   );
+  final ocrLegacy = read('ocr_text', normalizeOcr: true);
   final ocr = _TextSource(
     excerpt: read('ocr_text_excerpt', normalizeOcr: true),
     full: read('ocr_text_full', normalizeOcr: true),
   );
+  final ocrWithLegacyFallback = _TextSource(
+    excerpt: ocr.excerpt.isNotEmpty ? ocr.excerpt : ocrLegacy,
+    full: ocr.full.isNotEmpty ? ocr.full : ocrLegacy,
+  );
+
+  if (_isDocxPayload(payload) &&
+      extracted.hasAnyText &&
+      ocrWithLegacyFallback.hasAnyText) {
+    final combinedExcerpt = _mergeWithBlankLine(
+      _bestSnippet(extracted),
+      _bestSnippet(ocrWithLegacyFallback),
+    );
+    final combinedFull = _mergeWithBlankLine(
+      _bestFull(extracted),
+      _bestFull(ocrWithLegacyFallback),
+    );
+    return AttachmentTextSelection(
+      source: AttachmentTextSource.extracted,
+      excerpt: combinedExcerpt,
+      full: combinedFull,
+    );
+  }
 
   final extractedProbe =
       extracted.excerpt.isNotEmpty ? extracted.excerpt : extracted.full;
-  final ocrProbe = ocr.excerpt.isNotEmpty ? ocr.excerpt : ocr.full;
+  final ocrProbe = ocrWithLegacyFallback.excerpt.isNotEmpty
+      ? ocrWithLegacyFallback.excerpt
+      : ocrWithLegacyFallback.full;
   final extractedDegraded =
       extracted.hasAnyText && extractedTextLooksDegraded(extractedProbe);
-  final ocrDegraded = ocr.hasAnyText && extractedTextLooksDegraded(ocrProbe);
-  final preferOcrOverExtracted = ocr.hasAnyText &&
+  final ocrDegraded =
+      ocrWithLegacyFallback.hasAnyText && extractedTextLooksDegraded(ocrProbe);
+  final preferOcrOverExtracted = ocrWithLegacyFallback.hasAnyText &&
       extracted.hasAnyText &&
       extractedDegraded &&
       !ocrDegraded;
 
   final candidates = <(AttachmentTextSource, _TextSource)>[
     if (preferOcrOverExtracted)
-      (AttachmentTextSource.ocr, ocr)
+      (AttachmentTextSource.ocr, ocrWithLegacyFallback)
     else
       (AttachmentTextSource.extracted, extracted),
     (AttachmentTextSource.readable, readable),
     if (preferOcrOverExtracted)
       (AttachmentTextSource.extracted, extracted)
     else
-      (AttachmentTextSource.ocr, ocr),
+      (AttachmentTextSource.ocr, ocrWithLegacyFallback),
   ];
 
   for (final candidate in candidates) {
@@ -101,6 +128,32 @@ AttachmentTextSelection selectAttachmentDisplayText(
     excerpt: '',
     full: '',
   );
+}
+
+String _bestSnippet(_TextSource source) {
+  if (source.excerpt.isNotEmpty) return source.excerpt;
+  return source.full;
+}
+
+String _bestFull(_TextSource source) {
+  if (source.full.isNotEmpty) return source.full;
+  return source.excerpt;
+}
+
+bool _isDocxPayload(Map<String, Object?> payload) {
+  final mime = (payload['mime_type'] ?? '').toString().trim().toLowerCase();
+  return isDocxMimeType(mime);
+}
+
+String _mergeWithBlankLine(String first, String second) {
+  final a = first.trim();
+  final b = second.trim();
+  if (a.isEmpty) return b;
+  if (b.isEmpty) return a;
+  if (a == b) return a;
+  if (a.contains(b)) return a;
+  if (b.contains(a)) return b;
+  return '$a\n\n$b';
 }
 
 bool extractedTextLooksDegraded(String raw) {

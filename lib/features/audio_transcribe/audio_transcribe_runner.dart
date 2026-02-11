@@ -145,6 +145,14 @@ String normalizeAudioTranscribeEngine(String engine) {
   return 'whisper';
 }
 
+bool isAutoAudioTranscribeLang(String lang) {
+  final normalized = lang.trim().toLowerCase();
+  return normalized.isEmpty ||
+      normalized == 'auto' ||
+      normalized == 'und' ||
+      normalized == 'unknown';
+}
+
 bool looksLikeAudioMimeType(String mimeType) {
   return mimeType.trim().toLowerCase().startsWith('audio/');
 }

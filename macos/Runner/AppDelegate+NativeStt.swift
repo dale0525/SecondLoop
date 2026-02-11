@@ -52,6 +52,11 @@ private enum AudioTranscribeMethodKind {
   }
 }
 
+private struct SpeechRecognizerSelection {
+  let recognizer: SFSpeechRecognizer
+  let localeId: String
+}
+
 extension AppDelegate {
   func handleLocalRuntimeTranscribe(call: FlutterMethodCall, result: @escaping FlutterResult) {
     handleAudioTranscribe(call: call, result: result, kind: .localRuntime)
@@ -142,17 +147,15 @@ extension AppDelegate {
         return
       }
 
-      guard let recognizer = self.preferredSpeechRecognizer(
-        for: preferredLang
+      guard let selection = self.preferredSpeechRecognizer(
+        for: preferredLang,
+        requiresOnDeviceRecognition: requiresOnDeviceRecognition
       ) else {
         completion(nil, "speech_recognizer_unavailable")
         return
       }
-      if requiresOnDeviceRecognition && !recognizer.supportsOnDeviceRecognition {
-        completion(nil, "speech_on_device_unavailable")
-        return
-      }
 
+      let recognizer = selection.recognizer
       let request = SFSpeechURLRecognitionRequest(
         url: URL(fileURLWithPath: audioFilePath)
       )
@@ -203,6 +206,7 @@ extension AppDelegate {
 
         var payload: [String: Any] = [
           "text": transcript,
+          "locale": selection.localeId,
         ]
         if let last = speechResult.bestTranscription.segments.last {
           let durationMs = Int(((last.timestamp + last.duration) * 1000).rounded())
@@ -221,89 +225,164 @@ extension AppDelegate {
   private func requestSpeechAuthorizationIfNeeded(
     completion: @escaping (Bool, String?) -> Void
   ) {
+    func resolve(_ authorized: Bool, _ error: String?) {
+      if Thread.isMainThread {
+        completion(authorized, error)
+      } else {
+        DispatchQueue.main.async {
+          completion(authorized, error)
+        }
+      }
+    }
+
     let status = SFSpeechRecognizer.authorizationStatus()
     switch status {
     case .authorized:
-      completion(true, nil)
+      resolve(true, nil)
     case .denied:
-      completion(false, "speech_authorization_denied")
+      resolve(false, "speech_authorization_denied")
     case .restricted:
-      completion(false, "speech_authorization_restricted")
+      resolve(false, "speech_authorization_restricted")
     case .notDetermined:
       SFSpeechRecognizer.requestAuthorization { nextStatus in
         switch nextStatus {
         case .authorized:
-          completion(true, nil)
+          resolve(true, nil)
         case .denied:
-          completion(false, "speech_authorization_denied")
+          resolve(false, "speech_authorization_denied")
         case .restricted:
-          completion(false, "speech_authorization_restricted")
+          resolve(false, "speech_authorization_restricted")
         case .notDetermined:
-          completion(false, "speech_authorization_not_determined")
+          resolve(false, "speech_authorization_not_determined")
         @unknown default:
-          completion(false, "speech_authorization_unknown")
+          resolve(false, "speech_authorization_unknown")
         }
       }
     @unknown default:
-      completion(false, "speech_authorization_unknown")
+      resolve(false, "speech_authorization_unknown")
     }
   }
 
   @available(macOS 10.15, *)
-  private func preferredSpeechRecognizer(for lang: String) -> SFSpeechRecognizer? {
+  private func preferredSpeechRecognizer(
+    for lang: String,
+    requiresOnDeviceRecognition: Bool
+  ) -> SpeechRecognizerSelection? {
+    var deferredSelection: SpeechRecognizerSelection?
+
     for localeId in nativeSttLocaleCandidates(for: lang) {
-      if let recognizer = SFSpeechRecognizer(
-        locale: Locale(identifier: localeId)
-      ) {
-        return recognizer
+      let locale = Locale(identifier: localeId)
+      guard let recognizer = SFSpeechRecognizer(locale: locale) else {
+        continue
+      }
+      if requiresOnDeviceRecognition && !recognizer.supportsOnDeviceRecognition {
+        continue
+      }
+
+      let canonicalId = locale.identifier.replacingOccurrences(of: "_", with: "-")
+      let selection = SpeechRecognizerSelection(
+        recognizer: recognizer,
+        localeId: canonicalId
+      )
+
+      if recognizer.isAvailable {
+        return selection
+      }
+      if deferredSelection == nil {
+        deferredSelection = selection
       }
     }
-    return SFSpeechRecognizer()
+
+    if let deferredSelection = deferredSelection {
+      return deferredSelection
+    }
+
+    guard !requiresOnDeviceRecognition,
+          let recognizer = SFSpeechRecognizer() else {
+      return nil
+    }
+
+    let localeId = recognizer.locale.identifier.replacingOccurrences(of: "_", with: "-")
+    return SpeechRecognizerSelection(
+      recognizer: recognizer,
+      localeId: localeId
+    )
   }
 
   private func nativeSttLocaleCandidates(for lang: String) -> [String] {
     let normalized = lang
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .replacingOccurrences(of: "_", with: "-")
-      .lowercased()
 
+    let lower = normalized.lowercased()
     var candidates = [String]()
-    if normalized.hasPrefix("zh") {
-      candidates.append("zh-CN")
-      candidates.append("zh-TW")
-      candidates.append("en-US")
-    } else if normalized.hasPrefix("ja") {
-      candidates.append("ja-JP")
-      candidates.append("en-US")
-    } else if normalized.hasPrefix("ko") {
-      candidates.append("ko-KR")
-      candidates.append("en-US")
-    } else if normalized.hasPrefix("fr") {
-      candidates.append("fr-FR")
-      candidates.append("en-US")
-    } else if normalized.hasPrefix("de") {
-      candidates.append("de-DE")
-      candidates.append("en-US")
-    } else if normalized.hasPrefix("es") {
-      candidates.append("es-ES")
-      candidates.append("en-US")
-    } else if normalized.hasPrefix("en") {
-      candidates.append("en-US")
-    } else if !normalized.isEmpty {
-      candidates.append(normalized)
-      candidates.append("en-US")
-    } else {
-      candidates.append("en-US")
+
+    func appendUnique(_ value: String) {
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty {
+        return
+      }
+      let canonical = trimmed.replacingOccurrences(of: "_", with: "-")
+      let key = canonical.lowercased()
+      for existing in candidates {
+        if existing.lowercased() == key {
+          return
+        }
+      }
+      candidates.append(canonical)
     }
 
-    var unique = [String]()
-    for value in candidates {
-      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-      if trimmed.isEmpty || unique.contains(trimmed) {
-        continue
+    func appendLanguageAndBase(_ value: String) {
+      let canonical = value.replacingOccurrences(of: "_", with: "-")
+      appendUnique(canonical)
+      if let range = canonical.range(of: "-") {
+        appendUnique(String(canonical[..<range.lowerBound]))
       }
-      unique.append(trimmed)
     }
-    return unique
+
+    let isAutoLanguage =
+      lower.isEmpty || lower == "auto" || lower == "und" || lower == "unknown"
+
+    if isAutoLanguage {
+      for preferred in Locale.preferredLanguages {
+        appendLanguageAndBase(preferred)
+      }
+      appendLanguageAndBase(Locale.current.identifier)
+      appendLanguageAndBase(Locale.autoupdatingCurrent.identifier)
+      appendUnique("zh-CN")
+      appendUnique("zh-TW")
+      appendUnique("en-US")
+    } else {
+      appendLanguageAndBase(normalized)
+
+      if lower.hasPrefix("zh") {
+        if lower.contains("hant") || lower.hasSuffix("-tw") || lower.hasSuffix("-hk") || lower.hasSuffix("-mo") {
+          appendUnique("zh-TW")
+          appendUnique("zh-HK")
+          appendUnique("zh-CN")
+        } else {
+          appendUnique("zh-CN")
+          appendUnique("zh-TW")
+        }
+      } else if lower.hasPrefix("ja") {
+        appendUnique("ja-JP")
+      } else if lower.hasPrefix("ko") {
+        appendUnique("ko-KR")
+      } else if lower.hasPrefix("fr") {
+        appendUnique("fr-FR")
+      } else if lower.hasPrefix("de") {
+        appendUnique("de-DE")
+      } else if lower.hasPrefix("es") {
+        appendUnique("es-ES")
+      } else if lower.hasPrefix("en") {
+        appendUnique("en-US")
+      }
+    }
+
+    if candidates.isEmpty {
+      appendUnique("en-US")
+    }
+
+    return candidates
   }
 }

@@ -729,6 +729,49 @@ void main() {
     expect(runtimeTile, findsOneWidget);
   });
 
+  testWidgets(
+      'Audio runtime tile stays visible when runtime status is unavailable',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: false,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final runtimeTile =
+        find.byKey(MediaAnnotationSettingsPage.linuxOcrModelTileKey);
+    await tester.scrollUntilVisible(
+      runtimeTile,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    expect(runtimeTile, findsOneWidget);
+    expect(find.textContaining('runtime'), findsWidgets);
+  });
+
   testWidgets('Linux OCR download shows progress bar while downloading',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

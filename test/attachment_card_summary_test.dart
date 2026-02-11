@@ -60,6 +60,16 @@ void main() {
     expect(summary, 'Invoice total is 123.45 USD.');
   });
 
+  test('attachment card summary supports legacy ocr_text payload', () {
+    final summary = extractAttachmentCardSummaryFromPayload(
+      const <String, Object?>{
+        'ocr_text': 'Legacy OCR summary text',
+      },
+    );
+
+    expect(summary, 'Legacy OCR summary text');
+  });
+
   test('attachment card marks queued auto OCR as in progress', () {
     final running = attachmentCardOcrInProgressFromPayload(
       const <String, Object?>{

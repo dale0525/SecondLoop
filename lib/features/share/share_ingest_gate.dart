@@ -140,7 +140,6 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     Uint8List sessionKey,
     String attachmentSha256, {
     required String mimeType,
-    required String lang,
   }) async {
     if (!looksLikeAudioMimeType(mimeType)) return;
 
@@ -156,7 +155,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     await backend.enqueueAttachmentAnnotation(
       sessionKey,
       attachmentSha256: attachmentSha256,
-      lang: lang,
+      lang: 'und',
       nowMs: DateTime.now().millisecondsSinceEpoch,
     );
   }
@@ -257,7 +256,6 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                   sessionKey,
                   audioAttachment.sha256,
                   mimeType: audioAttachment.mimeType,
-                  lang: lang,
                 ).catchError((_) {}),
               );
             }
@@ -313,7 +311,6 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                 sessionKey,
                 attachment.sha256,
                 mimeType: proxy.mimeType,
-                lang: lang,
               ).catchError((_) {}),
             );
 

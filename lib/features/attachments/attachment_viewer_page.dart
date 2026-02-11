@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/app_backend.dart';
-import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
@@ -27,7 +26,6 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'audio_attachment_player.dart';
@@ -157,6 +155,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       if (_annotationCaptionFuture == null) {
         _startAnnotationCaptionLoad();
       }
+      if (_annotationPayloadFuture == null) {
+        _startAnnotationPayloadLoad();
+      }
     } else {
       if (_metadataFuture == null) {
         _startMetadataLoad();
@@ -203,6 +204,16 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
             didSchedule = true;
             _startAnnotationCaptionLoad();
           }
+        }
+
+        if (!_loadingAnnotationPayload &&
+            shouldRefreshAttachmentAnnotationPayloadOnSync(
+              payload: _annotationPayload,
+              ocrRunning: false,
+              ocrStatusText: null,
+            )) {
+          didSchedule = true;
+          _startAnnotationPayloadLoad();
         }
       } else {
         if (!_loadingMetadata && _metadata == null) {
@@ -473,13 +484,10 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final backend = AppBackendScope.of(context);
     if (backend is! NativeAppBackend) return null;
     final sessionKey = SessionScope.of(context).sessionKey;
-    final appDir = await getNativeAppDir();
     try {
-      final json =
-          await rust_content_extract.dbReadAttachmentAnnotationPayloadJson(
-        appDir: appDir,
-        key: sessionKey,
-        attachmentSha256: widget.attachment.sha256,
+      final json = await backend.readAttachmentAnnotationPayloadJson(
+        sessionKey,
+        sha256: widget.attachment.sha256,
       );
       final raw = json?.trim();
       if (raw == null || raw.isEmpty) return null;
@@ -583,6 +591,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   Widget _buildAnnotationCard(
     BuildContext context, {
     required String captionLong,
+    String? titleText,
   }) {
     final caption = captionLong.trim();
     if (caption.isEmpty) return const SizedBox.shrink();
@@ -653,6 +662,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     final canEdit =
         AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
+    final resolvedTitle =
+        (titleText ?? context.t.settings.mediaAnnotation.title).trim();
 
     return SlSurface(
       padding: const EdgeInsets.all(12),
@@ -663,7 +674,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
             children: [
               Expanded(
                 child: Text(
-                  context.t.settings.mediaAnnotation.title,
+                  resolvedTitle,
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/core/content_enrichment/docx_ocr_policy.dart';
 import 'package:secondloop/features/attachments/attachment_text_source_policy.dart';
 
 void main() {
@@ -36,5 +37,34 @@ void main() {
     );
 
     expect(selected.excerpt, '这是一个正常的中文句子用于测试 OCR 结果。');
+  });
+
+  test('docx keeps extracted text and OCR image text together', () {
+    final selected = selectAttachmentDisplayText(
+      const <String, Object?>{
+        'mime_type': kDocxMimeType,
+        'extracted_text_excerpt': 'Docx body paragraph.',
+        'extracted_text_full': 'Docx body paragraph.\nSecond line.',
+        'ocr_text_excerpt': 'Text inside image.',
+        'ocr_text_full': 'Text inside image.\nImage footer.',
+      },
+    );
+
+    expect(selected.excerpt, 'Docx body paragraph.\n\nText inside image.');
+    expect(
+      selected.full,
+      'Docx body paragraph.\nSecond line.\n\nText inside image.\nImage footer.',
+    );
+  });
+
+  test('falls back to legacy ocr_text key when ocr_text_full is absent', () {
+    final selected = selectAttachmentDisplayText(
+      const <String, Object?>{
+        'ocr_text': '[page 1]\nLegacy OCR payload text',
+      },
+    );
+
+    expect(selected.excerpt, 'Legacy OCR payload text');
+    expect(selected.full, 'Legacy OCR payload text');
   });
 }

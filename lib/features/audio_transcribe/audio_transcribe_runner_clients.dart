@@ -89,15 +89,19 @@ final class CloudGatewayWhisperAudioTranscribeClient
     final boundary =
         'secondloop-audio-${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
     final ext = _fileExtByMimeType(mimeType);
+    final fields = <String, String>{
+      'model': modelName.trim().isEmpty ? 'cloud' : modelName,
+      'response_format': 'verbose_json',
+      'timestamp_granularities[]': 'segment',
+      'stream': 'true',
+    };
+    if (!isAutoAudioTranscribeLang(lang)) {
+      fields['language'] = lang.trim();
+    }
+
     final body = _buildMultipartBody(
       boundary: boundary,
-      fields: <String, String>{
-        'model': modelName.trim().isEmpty ? 'cloud' : modelName,
-        'response_format': 'verbose_json',
-        'language': lang,
-        'timestamp_granularities[]': 'segment',
-        'stream': 'true',
-      },
+      fields: fields,
       fileFieldName: 'file',
       fileName: 'audio.$ext',
       fileMimeType: mimeType,
@@ -587,11 +591,12 @@ Future<String> _requestNativeAudioTranscribeMethod({
 
   try {
     await audioFile.writeAsBytes(audioBytes, flush: true);
+    final normalizedLang = isAutoAudioTranscribeLang(lang) ? '' : lang.trim();
     final raw = await _nativeAudioTranscribeChannel.invokeMethod<dynamic>(
       methodName,
       <String, Object?>{
         'file_path': audioFile.path,
-        'lang': lang.trim(),
+        'lang': normalizedLang,
         'mime_type': mimeType,
         if ((appDir ?? '').trim().isNotEmpty) 'app_dir': appDir!.trim(),
       },

@@ -468,29 +468,23 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
               (payload['extracted_text_full'] ?? '').toString();
           final extractedExcerpt =
               (payload['extracted_text_excerpt'] ?? '').toString();
-          final preferredOcr = maybePreferExtractedTextForRuntimeOcr(
-            ocr: ocr,
-            extractedFull: extractedFull,
-            extractedExcerpt: extractedExcerpt,
-          );
           final extractedText = (extractedExcerpt.trim().isNotEmpty
                   ? extractedExcerpt
                   : extractedFull)
               .trim();
           updatedPayload['needs_ocr'] =
-              preferredOcr.fullText.trim().isEmpty && extractedText.isEmpty;
-          updatedPayload['ocr_text_full'] = preferredOcr.fullText;
-          updatedPayload['ocr_text_excerpt'] = preferredOcr.excerpt;
-          updatedPayload['ocr_engine'] = preferredOcr.engine;
+              ocr.fullText.trim().isEmpty && extractedText.isEmpty;
+          updatedPayload['ocr_text_full'] = ocr.fullText;
+          updatedPayload['ocr_text_excerpt'] = ocr.excerpt;
+          updatedPayload['ocr_engine'] = ocr.engine;
           updatedPayload['ocr_lang_hints'] = languageHints;
           updatedPayload['ocr_dpi'] = 0;
-          updatedPayload['ocr_retry_attempted'] = preferredOcr.retryAttempted;
-          updatedPayload['ocr_retry_attempts'] = preferredOcr.retryAttempts;
-          updatedPayload['ocr_retry_hints'] =
-              preferredOcr.retryHintsTried.join(',');
-          updatedPayload['ocr_is_truncated'] = preferredOcr.isTruncated;
-          updatedPayload['ocr_page_count'] = preferredOcr.pageCount;
-          updatedPayload['ocr_processed_pages'] = preferredOcr.processedPages;
+          updatedPayload['ocr_retry_attempted'] = ocr.retryAttempted;
+          updatedPayload['ocr_retry_attempts'] = ocr.retryAttempts;
+          updatedPayload['ocr_retry_hints'] = ocr.retryHintsTried.join(',');
+          updatedPayload['ocr_is_truncated'] = ocr.isTruncated;
+          updatedPayload['ocr_page_count'] = ocr.pageCount;
+          updatedPayload['ocr_processed_pages'] = ocr.processedPages;
           updatedPayload['ocr_auto_status'] = 'ok';
           updatedPayload['ocr_auto_last_success_ms'] =
               DateTime.now().millisecondsSinceEpoch;
@@ -919,6 +913,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           settings: MediaEnrichmentRunnerSettings(
             annotationEnabled: annotationEnabled,
             annotationWifiOnly: true,
+            annotationRequiresNetwork:
+                annotationPrimaryClient != null || hasCloudAnnotationModel,
           ),
           getNetwork: getNetwork,
         );

@@ -110,6 +110,15 @@ void main() {
     expect(normalizeAudioTranscribeEngine('unknown'), 'whisper');
   });
 
+  test('isAutoAudioTranscribeLang detects auto language hints', () {
+    expect(isAutoAudioTranscribeLang(''), isTrue);
+    expect(isAutoAudioTranscribeLang('auto'), isTrue);
+    expect(isAutoAudioTranscribeLang('und'), isTrue);
+    expect(isAutoAudioTranscribeLang('unknown'), isTrue);
+    expect(isAutoAudioTranscribeLang('zh-CN'), isFalse);
+    expect(isAutoAudioTranscribeLang('en'), isFalse);
+  });
+
   test('fallback client uses next client when cloud and byok fail', () async {
     final cloud = _MemClient(engineName: 'cloud_gateway', modelName: 'cloud')
       ..shouldFail = true;
