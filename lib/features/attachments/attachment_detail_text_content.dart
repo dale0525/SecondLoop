@@ -62,11 +62,18 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('full_text'),
     selected.full,
     read('transcript_full'),
+    read('manual_summary'),
+    read('summary'),
+    selected.excerpt,
+    read('transcript_excerpt'),
     caption,
     read('ocr_text_full', normalizeOcr: true),
     read('ocr_text', normalizeOcr: true),
     read('readable_text_full'),
     read('extracted_text_full'),
+    read('ocr_text_excerpt', normalizeOcr: true),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
   ]);
 
   return AttachmentDetailTextContent(summary: summary, full: full);

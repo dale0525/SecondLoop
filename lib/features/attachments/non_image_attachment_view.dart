@@ -127,7 +127,6 @@ class NonImageAttachmentView extends StatefulWidget {
     this.ocrStatusText,
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
-    this.onSaveSummary,
     this.onSaveFull,
     super.key,
   });
@@ -143,7 +142,6 @@ class NonImageAttachmentView extends StatefulWidget {
   final String? ocrStatusText;
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
-  final Future<void> Function(String value)? onSaveSummary;
   final Future<void> Function(String value)? onSaveFull;
 
   @override
@@ -250,8 +248,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
 
     final selectedTextContent = selectAttachmentDisplayText(payload);
     final textContent = resolveAttachmentDetailTextContent(payload);
-    final summaryText = textContent.summary;
     final fullText = textContent.full;
+    final hasFullText = fullText.isNotEmpty;
     final needsOcr = payload?['needs_ocr'] == true;
     final ocrStatus = (ocrStatusText ?? '').trim();
     final autoOcrStatus =
@@ -268,10 +266,9 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final canRunOcr = supportsOcr && runOcr != null;
     final canOpenWithSystem = isPdf && openWithSystem != null;
     final ocrInProgress = ocrRunning || autoOcrRunning;
-    final hasAnyText = textContent.hasAny;
     final hasOcrEngine =
         (payload?['ocr_engine'] ?? '').toString().trim().isNotEmpty;
-    final showNeedsOcrState = needsOcr || (!hasAnyText && !hasOcrEngine);
+    final showNeedsOcrState = needsOcr || (!hasFullText && !hasOcrEngine);
     final showOcrCard = supportsOcr &&
         (needsOcr || ocrInProgress || ocrStatus.isNotEmpty || canRunOcr);
     final isMobile = defaultTargetPlatform == TargetPlatform.android ||
@@ -286,7 +283,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final processedPages = asInt(payload?['ocr_processed_pages']);
     final autoStatus = autoOcrStatus.isEmpty ? 'none' : autoOcrStatus;
     final selectedHint = normalizeAttachmentOcrLanguageHint(ocrLanguageHints);
-    final showPreparingTextState = !hasAnyText &&
+    final showPreparingTextState = !hasFullText &&
         (ocrInProgress ||
             autoStatus == 'queued' ||
             autoStatus == 'retrying' ||
@@ -307,248 +304,292 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       pageCount: pageCount,
     );
 
+    Widget buildSection(
+      Widget child, {
+      required double maxWidth,
+      Alignment alignment = Alignment.center,
+    }) {
+      return Align(
+        alignment: alignment,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: child,
+        ),
+      );
+    }
+
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 880),
+        constraints: const BoxConstraints(maxWidth: 920),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SlSurface(
-                padding: const EdgeInsets.all(12),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (canOpenWithSystem)
-                      OutlinedButton.icon(
-                        onPressed: () => unawaited(openWithSystem()),
-                        icon: const Icon(Icons.open_in_new_outlined),
-                        label: Text(
-                          context.t.attachments.content.openWithSystem,
-                        ),
-                      ),
-                    OutlinedButton.icon(
-                      key: const ValueKey('attachment_content_share_button'),
-                      onPressed: () => unawaited(_shareAttachment(context)),
-                      icon: const Icon(Icons.share_outlined),
-                      label: Text(context.t.common.actions.share),
-                    ),
-                    OutlinedButton.icon(
-                      key: const ValueKey('attachment_content_download_button'),
-                      onPressed: () => unawaited(_downloadAttachment(context)),
-                      icon: const Icon(Icons.download_rounded),
-                      label: Text(context.t.common.actions.pull),
-                    ),
-                  ],
-                ),
-              ),
-              if ((title ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
+              buildSection(
                 SlSurface(
                   padding: const EdgeInsets.all(12),
-                  child: Text(
-                    title!,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-              ],
-              if ((manifestUrl ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _buildLabeledValueCard(
-                  context,
-                  label: context.t.attachments.url.originalUrl,
-                  value: manifestUrl!,
-                ),
-              ],
-              if ((canonicalUrl ?? '').isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _buildLabeledValueCard(
-                  context,
-                  label: context.t.attachments.url.canonicalUrl,
-                  value: canonicalUrl!,
-                ),
-              ],
-              if (debugMarker != null) ...[
-                const SizedBox(height: 12),
-                SlSurface(
-                  key: const ValueKey('pdf_ocr_debug_marker'),
-                  padding: const EdgeInsets.all(12),
-                  child: SelectableText(
-                    debugMarker,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-              if (showOcrCard) ...[
-                const SizedBox(height: 12),
-                SlSurface(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Text(
-                        showNeedsOcrState
-                            ? context.t.attachments.content.needsOcrTitle
-                            : context.t.attachments.content.ocrTitle,
-                        style: Theme.of(context).textTheme.labelMedium,
+                      if (canOpenWithSystem)
+                        OutlinedButton.icon(
+                          onPressed: () => unawaited(openWithSystem()),
+                          icon: const Icon(Icons.open_in_new_outlined),
+                          label: Text(
+                            context.t.attachments.content.openWithSystem,
+                          ),
+                        ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('attachment_content_share_button'),
+                        onPressed: () => unawaited(_shareAttachment(context)),
+                        icon: const Icon(Icons.share_outlined),
+                        label: Text(context.t.common.actions.share),
                       ),
-                      const SizedBox(height: 4),
-                      if (ocrInProgress)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                ocrStatus.isNotEmpty
-                                    ? ocrStatus
-                                    : context.t.attachments.content.ocrRunning,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        Text(
-                          ocrStatus.isNotEmpty
-                              ? ocrStatus
-                              : showNeedsOcrState
-                                  ? context
-                                      .t.attachments.content.needsOcrSubtitle
-                                  : context
-                                      .t.attachments.content.ocrReadySubtitle,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      if (ocrInProgress && isMobile) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          context.t.attachments.content.keepForegroundHint,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                      if (canRunOcr) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 240,
-                              child: Material(
-                                color: Colors.transparent,
-                                child: DropdownButtonFormField<String>(
-                                  key: const ValueKey(
-                                    'attachment_ocr_language_hint_field',
-                                  ),
-                                  value: selectedHint,
-                                  isExpanded: true,
-                                  decoration: InputDecoration(
-                                    labelText: context
-                                        .t
-                                        .settings
-                                        .mediaAnnotation
-                                        .documentOcr
-                                        .languageHints
-                                        .title,
-                                    border: const OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
-                                  items: [
-                                    for (final hint
-                                        in kAttachmentOcrLanguageHintOptions)
-                                      DropdownMenuItem<String>(
-                                        value: hint,
-                                        child: Text(
-                                          _attachmentOcrLanguageHintLabel(
-                                            context,
-                                            hint,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                  onChanged: ocrInProgress ||
-                                          onOcrLanguageHintsChanged == null
-                                      ? null
-                                      : (next) {
-                                          if (next == null) return;
-                                          onOcrLanguageHintsChanged(next);
-                                        },
-                                ),
-                              ),
-                            ),
-                            FilledButton.icon(
-                              key: const ValueKey('attachment_run_ocr_button'),
-                              onPressed: ocrInProgress || runOcrAction == null
-                                  ? null
-                                  : () => unawaited(runOcrAction()),
-                              icon: const Icon(Icons.document_scanner_outlined),
-                              label: Text(
-                                showNeedsOcrState
-                                    ? context.t.attachments.content.runOcr
-                                    : context.t.common.actions.retry,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      OutlinedButton.icon(
+                        key: const ValueKey(
+                            'attachment_content_download_button'),
+                        onPressed: () =>
+                            unawaited(_downloadAttachment(context)),
+                        icon: const Icon(Icons.download_rounded),
+                        label: Text(context.t.common.actions.pull),
+                      ),
                     ],
                   ),
                 ),
-              ],
-              if (!hasAnyText) ...[
-                const SizedBox(height: 12),
-                SlSurface(
-                  padding: const EdgeInsets.all(12),
-                  child: showPreparingTextState
-                      ? Row(
-                          children: [
-                            const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              context.t.sync.progressDialog.preparing,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        )
-                      : Text(
-                          ocrStatus.isNotEmpty
-                              ? ocrStatus
-                              : showNeedsOcrState
-                                  ? context.t.attachments.content.ocrTitle
-                                  : context.t.attachments.content.ocrFailed,
-                          style: Theme.of(context).textTheme.bodySmall,
-                          key: const ValueKey('attachment_no_text_status'),
-                        ),
+                maxWidth: 760,
+              ),
+              if ((title ?? '').isNotEmpty) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  SlSurface(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      title!,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  maxWidth: 680,
+                  alignment: Alignment.centerLeft,
                 ),
               ],
-              const SizedBox(height: 12),
-              AttachmentTextEditorCard(
-                fieldKeyPrefix: 'attachment_text_summary',
-                label: context.t.attachments.content.summary,
-                text: summaryText,
-                emptyText: attachmentDetailEmptyTextLabel(context),
-                onSave: widget.onSaveSummary,
-              ),
-              const SizedBox(height: 12),
-              AttachmentTextEditorCard(
-                fieldKeyPrefix: 'attachment_text_full',
-                label: context.t.attachments.content.fullText,
-                text: fullText,
-                markdown: true,
-                emptyText: attachmentDetailEmptyTextLabel(context),
-                onSave: widget.onSaveFull,
+              if ((manifestUrl ?? '').isNotEmpty) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  _buildLabeledValueCard(
+                    context,
+                    label: context.t.attachments.url.originalUrl,
+                    value: manifestUrl!,
+                  ),
+                  maxWidth: 720,
+                  alignment: Alignment.centerRight,
+                ),
+              ],
+              if ((canonicalUrl ?? '').isNotEmpty) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  _buildLabeledValueCard(
+                    context,
+                    label: context.t.attachments.url.canonicalUrl,
+                    value: canonicalUrl!,
+                  ),
+                  maxWidth: 720,
+                  alignment: Alignment.centerLeft,
+                ),
+              ],
+              if (debugMarker != null) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  SlSurface(
+                    key: const ValueKey('pdf_ocr_debug_marker'),
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      debugMarker,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  maxWidth: 720,
+                  alignment: Alignment.centerRight,
+                ),
+              ],
+              if (showOcrCard) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  SlSurface(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          showNeedsOcrState
+                              ? context.t.attachments.content.needsOcrTitle
+                              : context.t.attachments.content.ocrTitle,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        if (ocrInProgress)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  ocrStatus.isNotEmpty
+                                      ? ocrStatus
+                                      : context
+                                          .t.attachments.content.ocrRunning,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Text(
+                            ocrStatus.isNotEmpty
+                                ? ocrStatus
+                                : showNeedsOcrState
+                                    ? context
+                                        .t.attachments.content.needsOcrSubtitle
+                                    : context
+                                        .t.attachments.content.ocrReadySubtitle,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (ocrInProgress && isMobile) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            context.t.attachments.content.keepForegroundHint,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        if (canRunOcr) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 240,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: DropdownButtonFormField<String>(
+                                    key: const ValueKey(
+                                      'attachment_ocr_language_hint_field',
+                                    ),
+                                    value: selectedHint,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText: context
+                                          .t
+                                          .settings
+                                          .mediaAnnotation
+                                          .documentOcr
+                                          .languageHints
+                                          .title,
+                                      border: const OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    items: [
+                                      for (final hint
+                                          in kAttachmentOcrLanguageHintOptions)
+                                        DropdownMenuItem<String>(
+                                          value: hint,
+                                          child: Text(
+                                            _attachmentOcrLanguageHintLabel(
+                                              context,
+                                              hint,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                    onChanged: ocrInProgress ||
+                                            onOcrLanguageHintsChanged == null
+                                        ? null
+                                        : (next) {
+                                            if (next == null) return;
+                                            onOcrLanguageHintsChanged(next);
+                                          },
+                                  ),
+                                ),
+                              ),
+                              FilledButton.icon(
+                                key:
+                                    const ValueKey('attachment_run_ocr_button'),
+                                onPressed: ocrInProgress || runOcrAction == null
+                                    ? null
+                                    : () => unawaited(runOcrAction()),
+                                icon:
+                                    const Icon(Icons.document_scanner_outlined),
+                                label: Text(
+                                  showNeedsOcrState
+                                      ? context.t.attachments.content.runOcr
+                                      : context.t.common.actions.retry,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  maxWidth: 760,
+                ),
+              ],
+              if (!hasFullText) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  SlSurface(
+                    padding: const EdgeInsets.all(12),
+                    child: showPreparingTextState
+                        ? Row(
+                            children: [
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                context.t.sync.progressDialog.preparing,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          )
+                        : Text(
+                            ocrStatus.isNotEmpty
+                                ? ocrStatus
+                                : showNeedsOcrState
+                                    ? context.t.attachments.content.ocrTitle
+                                    : context.t.attachments.content.ocrFailed,
+                            style: Theme.of(context).textTheme.bodySmall,
+                            key: const ValueKey('attachment_no_text_status'),
+                          ),
+                  ),
+                  maxWidth: 720,
+                  alignment: Alignment.centerLeft,
+                ),
+              ],
+              const SizedBox(height: 14),
+              buildSection(
+                AttachmentTextEditorCard(
+                  fieldKeyPrefix: 'attachment_text_full',
+                  label: context.t.attachments.content.fullText,
+                  showLabel: false,
+                  text: fullText,
+                  markdown: true,
+                  emptyText: attachmentDetailEmptyTextLabel(context),
+                  onSave: widget.onSaveFull,
+                ),
+                maxWidth: 780,
+                alignment: Alignment.centerRight,
               ),
             ],
           ),

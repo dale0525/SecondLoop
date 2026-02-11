@@ -40,7 +40,6 @@ class AudioAttachmentPlayerView extends StatefulWidget {
     this.annotationPayloadFuture,
     this.initialAnnotationPayload,
     this.onRetryRecognition,
-    this.onSaveSummary,
     this.onSaveFull,
     super.key,
   });
@@ -52,7 +51,6 @@ class AudioAttachmentPlayerView extends StatefulWidget {
   final Future<Map<String, Object?>?>? annotationPayloadFuture;
   final Map<String, Object?>? initialAnnotationPayload;
   final Future<void> Function()? onRetryRecognition;
-  final Future<void> Function(String value)? onSaveSummary;
   final Future<void> Function(String value)? onSaveFull;
 
   @override
@@ -283,14 +281,15 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     );
   }
 
-  Widget _buildSummaryAndFullSection(
+  Widget _buildFullSection(
     BuildContext context, {
     required Map<String, Object?>? payload,
   }) {
     final textContent = resolveAttachmentDetailTextContent(payload);
+    final fullText = textContent.full;
     final durationMsValue = payload?['duration_ms'];
     final durationMs = durationMsValue is num ? durationMsValue.toInt() : null;
-    final showPreparing = !textContent.hasAny && payload == null;
+    final showPreparing = fullText.isEmpty && payload == null;
 
     final retryButton = widget.onRetryRecognition == null
         ? null
@@ -301,55 +300,74 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
             icon: const Icon(Icons.refresh_rounded),
           );
 
+    Widget buildSection(
+      Widget child, {
+      required double maxWidth,
+      Alignment alignment = Alignment.center,
+    }) {
+      return Align(
+        alignment: alignment,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: child,
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (durationMs != null) ...[
-          SlSurface(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              _formatDuration(Duration(milliseconds: durationMs)),
-              style: Theme.of(context).textTheme.bodySmall,
+          buildSection(
+            SlSurface(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                _formatDuration(Duration(milliseconds: durationMs)),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
+            maxWidth: 560,
+            alignment: Alignment.centerLeft,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
         ],
         if (showPreparing) ...[
-          SlSurface(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  context.t.sync.progressDialog.preparing,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+          buildSection(
+            SlSurface(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    context.t.sync.progressDialog.preparing,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
+            maxWidth: 720,
+            alignment: Alignment.centerRight,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
         ],
-        AttachmentTextEditorCard(
-          fieldKeyPrefix: 'attachment_text_summary',
-          label: context.t.attachments.content.summary,
-          text: textContent.summary,
-          emptyText: attachmentDetailEmptyTextLabel(context),
-          trailing: retryButton,
-          onSave: widget.onSaveSummary,
-        ),
-        const SizedBox(height: 12),
-        AttachmentTextEditorCard(
-          fieldKeyPrefix: 'attachment_text_full',
-          label: context.t.attachments.content.fullText,
-          text: textContent.full,
-          markdown: true,
-          emptyText: attachmentDetailEmptyTextLabel(context),
-          onSave: widget.onSaveFull,
+        buildSection(
+          AttachmentTextEditorCard(
+            fieldKeyPrefix: 'attachment_text_full',
+            label: context.t.attachments.content.fullText,
+            showLabel: false,
+            text: fullText,
+            markdown: true,
+            emptyText: attachmentDetailEmptyTextLabel(context),
+            trailing: retryButton,
+            onSave: widget.onSaveFull,
+          ),
+          maxWidth: 780,
+          alignment: Alignment.centerRight,
         ),
       ],
     );
@@ -362,28 +380,50 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   }) {
     final title = (metadata?.title ?? payload?['title'])?.toString().trim();
 
+    Widget buildSection(
+      Widget child, {
+      required double maxWidth,
+      Alignment alignment = Alignment.center,
+    }) {
+      return Align(
+        alignment: alignment,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: child,
+        ),
+      );
+    }
+
     return Center(
       key: const ValueKey('audio_attachment_player_view'),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 880),
+        constraints: const BoxConstraints(maxWidth: 920),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if ((title ?? '').isNotEmpty) ...[
-                SlSurface(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    title!,
-                    style: Theme.of(context).textTheme.titleMedium,
+                buildSection(
+                  SlSurface(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      title!,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
+                  maxWidth: 700,
+                  alignment: Alignment.centerLeft,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
               ],
-              _buildPlayerCard(context),
-              const SizedBox(height: 12),
-              _buildSummaryAndFullSection(
+              buildSection(
+                _buildPlayerCard(context),
+                maxWidth: 760,
+                alignment: Alignment.center,
+              ),
+              const SizedBox(height: 14),
+              _buildFullSection(
                 context,
                 payload: payload,
               ),

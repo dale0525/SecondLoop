@@ -95,7 +95,7 @@ void main() {
     expect(find.text(caption), findsNothing);
     expect(
       find.byKey(const ValueKey('attachment_text_summary_display')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.textContaining('token_79'), findsWidgets);
   });
@@ -151,7 +151,7 @@ void main() {
   });
 
   testWidgets(
-      'AttachmentViewerPage allows editing summary and saves unified payload',
+      'AttachmentViewerPage allows editing full text and saves unified payload',
       (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
@@ -184,8 +184,7 @@ void main() {
 
     expect(find.text('Old caption'), findsWidgets);
 
-    final editFinder =
-        find.byKey(const ValueKey('attachment_text_summary_edit'));
+    final editFinder = find.byKey(const ValueKey('attachment_text_full_edit'));
     await tester.ensureVisible(editFinder);
     await tester.pumpAndSettle();
 
@@ -193,25 +192,25 @@ void main() {
     await tester.pumpAndSettle();
 
     final editFieldFinder =
-        find.byKey(const ValueKey('attachment_text_summary_field'));
+        find.byKey(const ValueKey('attachment_text_full_field'));
     await tester.ensureVisible(editFieldFinder);
     await tester.pumpAndSettle();
 
-    await tester.enterText(editFieldFinder, 'New summary text');
+    await tester.enterText(editFieldFinder, '# New full markdown');
 
-    final saveFinder =
-        find.byKey(const ValueKey('attachment_text_summary_save'));
+    final saveFinder = find.byKey(const ValueKey('attachment_text_full_save'));
     await tester.ensureVisible(saveFinder);
     await tester.pumpAndSettle();
 
     await tester.tap(saveFinder);
     await tester.pumpAndSettle();
 
-    expect(find.text('New summary text'), findsOneWidget);
+    expect(find.textContaining('New full markdown'), findsWidgets);
     expect(backend.savedPayloadJsons.length, 1);
-    expect(backend.savedPayloadJsons.single.contains('manual_summary'), isTrue);
     expect(
-        backend.savedPayloadJsons.single.contains('New summary text'), isTrue);
+        backend.savedPayloadJsons.single.contains('manual_full_text'), isTrue);
+    expect(backend.savedPayloadJsons.single.contains('# New full markdown'),
+        isTrue);
   });
 }
 

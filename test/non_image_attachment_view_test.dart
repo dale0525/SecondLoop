@@ -107,15 +107,16 @@ void main() {
     expect(find.text('Canonical URL'), findsOneWidget);
     expect(find.text('https://example.com/canonical'), findsOneWidget);
     expect(find.byKey(const ValueKey('attachment_text_summary_display')),
-        findsOneWidget);
+        findsNothing);
     expect(find.byKey(const ValueKey('attachment_text_full_markdown_display')),
         findsOneWidget);
-    expect(find.textContaining('# Excerpt Heading'), findsOneWidget);
+    expect(find.text('Excerpt Heading'), findsNothing);
     expect(find.byKey(const ValueKey('attachment_content_share_button')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('attachment_content_download_button')),
         findsOneWidget);
     expect(find.text('Size'), findsNothing);
+    expect(find.text('Full text'), findsNothing);
     expect(find.text('Full Heading'), findsOneWidget);
   });
 
@@ -143,13 +144,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('attachment_text_summary_empty')),
-        findsOneWidget);
+        findsNothing);
     expect(find.byKey(const ValueKey('attachment_text_full_empty')),
         findsOneWidget);
-    expect(find.text('None'), findsWidgets);
+    expect(find.text('None'), findsOneWidget);
   });
 
-  testWidgets('NonImageAttachmentView supports manual edit on summary and full',
+  testWidgets('NonImageAttachmentView supports manual edit on full only',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-editable',
@@ -162,7 +163,6 @@ void main() {
       'summary': 'Old summary',
       'full_text': '# Old full',
     };
-    String? savedSummary;
     String? savedFull;
 
     await tester.pumpWidget(
@@ -173,9 +173,6 @@ void main() {
               attachment: attachment,
               bytes: Uint8List.fromList(const <int>[1, 2, 3]),
               initialAnnotationPayload: payload,
-              onSaveSummary: (value) async {
-                savedSummary = value;
-              },
               onSaveFull: (value) async {
                 savedFull = value;
               },
@@ -186,18 +183,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('attachment_text_summary_edit')).first);
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('attachment_text_summary_field')).first,
-      'Updated summary',
-    );
-    await tester
-        .tap(find.byKey(const ValueKey('attachment_text_summary_save')).first);
-    await tester.pumpAndSettle();
-
-    expect(savedSummary, 'Updated summary');
+    expect(find.byKey(const ValueKey('attachment_text_summary_edit')),
+        findsNothing);
 
     await tester
         .tap(find.byKey(const ValueKey('attachment_text_full_edit')).first);

@@ -10,7 +10,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'AudioAttachmentPlayerView renders unified summary/full, retry, and edit actions',
+      'AudioAttachmentPlayerView renders full text, retry, and edit actions',
       (tester) async {
     final attachment = Attachment(
       sha256: 'audio-transcript-sha',
@@ -21,7 +21,6 @@ void main() {
     );
 
     var retryInvoked = 0;
-    String? savedSummary;
     String? savedFull;
 
     await tester.pumpWidget(
@@ -40,9 +39,6 @@ void main() {
               onRetryRecognition: () async {
                 retryInvoked += 1;
               },
-              onSaveSummary: (value) async {
-                savedSummary = value;
-              },
               onSaveFull: (value) async {
                 savedFull = value;
               },
@@ -55,25 +51,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.byKey(const ValueKey('attachment_text_summary_display')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('attachment_text_full_markdown_display')),
         findsOneWidget);
-    expect(find.textContaining('hello transcript excerpt'), findsWidgets);
     expect(find.byKey(const ValueKey('attachment_transcript_retry')),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('attachment_metadata_format')), findsNothing);
 
-    await tester
-        .tap(find.byKey(const ValueKey('attachment_text_summary_edit')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('attachment_text_summary_field')),
-      'edited summary',
-    );
-    await tester
-        .tap(find.byKey(const ValueKey('attachment_text_summary_save')));
-    await tester.pumpAndSettle();
-
-    expect(savedSummary, 'edited summary');
+    expect(find.byKey(const ValueKey('attachment_text_summary_edit')),
+        findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('attachment_text_full_edit')));
     await tester.pumpAndSettle();
@@ -85,6 +72,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(savedFull, '# Edited Full');
+    expect(find.text('Full text'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('attachment_transcript_retry')));
     await tester.pump();

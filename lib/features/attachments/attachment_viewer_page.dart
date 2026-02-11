@@ -692,10 +692,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }
   }
 
-  Future<void> _saveAttachmentSummary(String value) {
-    return _saveAttachmentText(summary: value);
-  }
-
   Future<void> _saveAttachmentFull(String value) {
     return _saveAttachmentText(full: value);
   }
@@ -829,8 +825,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     onRetryRecognition: _canRetryAttachmentRecognition
                         ? _retryAttachmentRecognition
                         : null,
-                    onSaveSummary:
-                        _canEditAttachmentText ? _saveAttachmentSummary : null,
                     onSaveFull:
                         _canEditAttachmentText ? _saveAttachmentFull : null,
                   );
@@ -855,8 +849,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     ocrStatusText: _documentOcrStatusText,
                     ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
                     onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
-                    onSaveSummary:
-                        _canEditAttachmentText ? _saveAttachmentSummary : null,
                     onSaveFull:
                         _canEditAttachmentText ? _saveAttachmentFull : null,
                   );

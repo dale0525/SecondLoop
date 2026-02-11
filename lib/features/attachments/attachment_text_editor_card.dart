@@ -9,9 +9,10 @@ import '../../ui/sl_surface.dart';
 class AttachmentTextEditorCard extends StatefulWidget {
   const AttachmentTextEditorCard({
     required this.fieldKeyPrefix,
-    required this.label,
     required this.text,
     required this.emptyText,
+    this.label,
+    this.showLabel = true,
     this.onSave,
     this.markdown = false,
     this.trailing,
@@ -19,7 +20,8 @@ class AttachmentTextEditorCard extends StatefulWidget {
   });
 
   final String fieldKeyPrefix;
-  final String label;
+  final String? label;
+  final bool showLabel;
   final String text;
   final String emptyText;
   final Future<void> Function(String value)? onSave;
@@ -87,31 +89,39 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
   Widget build(BuildContext context) {
     final text = widget.text.trim();
     final canEdit = widget.onSave != null;
+    final resolvedLabel = (widget.label ?? '').trim();
+    final hasLabel = widget.showLabel && resolvedLabel.isNotEmpty;
+    final showHeader =
+        hasLabel || (!_editing && (widget.trailing != null || canEdit));
 
     return SlSurface(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.label,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-              ),
-              if (!_editing && widget.trailing != null) widget.trailing!,
-              if (!_editing && canEdit)
-                IconButton(
-                  key: ValueKey('${widget.fieldKeyPrefix}_edit'),
-                  icon: const Icon(Icons.edit_outlined),
-                  tooltip: context.t.common.actions.edit,
-                  onPressed: _beginEdit,
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
+          if (showHeader)
+            Row(
+              children: [
+                if (hasLabel)
+                  Expanded(
+                    child: Text(
+                      resolvedLabel,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  )
+                else
+                  const Spacer(),
+                if (!_editing && widget.trailing != null) widget.trailing!,
+                if (!_editing && canEdit)
+                  IconButton(
+                    key: ValueKey('${widget.fieldKeyPrefix}_edit'),
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: context.t.common.actions.edit,
+                    onPressed: _beginEdit,
+                  ),
+              ],
+            ),
+          if (showHeader) const SizedBox(height: 6),
           if (!_editing)
             if (text.isEmpty)
               Text(
