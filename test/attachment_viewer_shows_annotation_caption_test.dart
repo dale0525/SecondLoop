@@ -101,6 +101,72 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentViewerPage asks OCR options before retry when image fallback uses OCR',
+      (tester) async {
+    final longOcr = List<String>.generate(40, (i) => 'ocr_token_$i').join(' ');
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': 'OCR fallback caption'},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode({
+          'caption_long': 'OCR fallback caption',
+          'ocr_text': longOcr,
+          'ocr_lang_hints': 'device_plus_en',
+        }),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final regenerateFinder =
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
+    await tester.ensureVisible(regenerateFinder);
+    await tester.tap(regenerateFinder);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('attachment_ocr_regenerate_dialog')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('attachment_ocr_language_hint_dialog_field')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chinese + English').last);
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_ocr_regenerate_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(backend.retryEnqueueCalls, 1);
+    expect(backend.retryMarkFailedCalls, 1);
+  });
+
+  testWidgets(
       'AttachmentViewerPage shows retry action for recognized image annotation',
       (tester) async {
     final backend = _NativeImageBackend(

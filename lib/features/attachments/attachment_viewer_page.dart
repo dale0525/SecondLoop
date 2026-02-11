@@ -14,6 +14,7 @@ import '../../core/backend/native_backend.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/docx_ocr.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
@@ -31,6 +32,7 @@ import 'audio_attachment_player.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_payload_refresh_policy.dart';
+import 'attachment_text_source_policy.dart';
 import 'non_image_attachment_view.dart';
 import 'platform_pdf_ocr.dart';
 import 'video_keyframe_ocr_worker.dart';
@@ -456,7 +458,95 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     });
   }
 
-  Future<void> _retryAttachmentRecognition() async {
+  Future<void> _persistContentOcrLanguageHint(
+    Uint8List sessionKey,
+    String languageHint,
+  ) async {
+    final normalized = normalizeAttachmentOcrLanguageHint(languageHint);
+    try {
+      const store = RustContentEnrichmentConfigStore();
+      final current = await store.readContentEnrichment(sessionKey);
+      if (normalizeAttachmentOcrLanguageHint(current.ocrLanguageHints) ==
+          normalized) {
+        return;
+      }
+      final next = ContentEnrichmentConfig(
+        urlFetchEnabled: current.urlFetchEnabled,
+        documentExtractEnabled: current.documentExtractEnabled,
+        documentKeepOriginalMaxBytes: current.documentKeepOriginalMaxBytes,
+        audioTranscribeEnabled: current.audioTranscribeEnabled,
+        audioTranscribeEngine: current.audioTranscribeEngine,
+        videoExtractEnabled: current.videoExtractEnabled,
+        videoProxyEnabled: current.videoProxyEnabled,
+        videoProxyMaxDurationMs: current.videoProxyMaxDurationMs,
+        videoProxyMaxBytes: current.videoProxyMaxBytes,
+        ocrEnabled: current.ocrEnabled,
+        ocrEngineMode: current.ocrEngineMode,
+        ocrLanguageHints: normalized,
+        ocrPdfDpi: current.ocrPdfDpi,
+        ocrPdfAutoMaxPages: current.ocrPdfAutoMaxPages,
+        ocrPdfMaxPages: current.ocrPdfMaxPages,
+        mobileBackgroundEnabled: current.mobileBackgroundEnabled,
+        mobileBackgroundRequiresWifi: current.mobileBackgroundRequiresWifi,
+        mobileBackgroundRequiresCharging:
+            current.mobileBackgroundRequiresCharging,
+      );
+      await store.writeContentEnrichment(sessionKey, next);
+    } catch (_) {
+      // Best-effort preference update.
+    }
+  }
+
+  bool _imageRetryNeedsOcrOptions(Map<String, Object?>? payload) {
+    if (payload == null) return false;
+    final selectedText = selectAttachmentDisplayText(payload);
+    if (selectedText.source == AttachmentTextSource.ocr) {
+      return true;
+    }
+
+    final hasOcrText = ((payload['ocr_text'] ??
+                payload['ocr_text_full'] ??
+                payload['ocr_text_excerpt']) ??
+            '')
+        .toString()
+        .trim()
+        .isNotEmpty;
+    final hasOcrEngine =
+        (payload['ocr_engine'] ?? '').toString().trim().isNotEmpty;
+    return hasOcrText || hasOcrEngine;
+  }
+
+  String _resolveImageRetryOcrLanguageHint(Map<String, Object?>? payload) {
+    final fromPayload = (payload?['ocr_lang_hints'] ?? '').toString().trim();
+    if (fromPayload.isNotEmpty) {
+      return normalizeAttachmentOcrLanguageHint(fromPayload);
+    }
+    return _effectiveDocumentOcrLanguageHints;
+  }
+
+  Future<void> _retryImageRecognitionWithOptionalOcrDialog(
+    Map<String, Object?>? payload,
+  ) async {
+    if (!_imageRetryNeedsOcrOptions(payload)) {
+      await _retryAttachmentRecognition();
+      return;
+    }
+
+    final selectedHint = await showAttachmentOcrLanguageHintDialog(
+      context,
+      initialHint: _resolveImageRetryOcrLanguageHint(payload),
+      title: context.t.attachments.content.rerunOcr,
+      confirmLabel: context.t.attachments.content.rerunOcr,
+    );
+    if (selectedHint == null) return;
+
+    _updateDocumentOcrLanguageHints(selectedHint);
+    await _retryAttachmentRecognition(ocrLanguageHints: selectedHint);
+  }
+
+  Future<void> _retryAttachmentRecognition({
+    String? ocrLanguageHints,
+  }) async {
     if (_retryingAttachmentRecognition) return;
     final backendAny = AppBackendScope.of(context);
     if (backendAny is! NativeAppBackend) return;
@@ -468,6 +558,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     setState(() => _retryingAttachmentRecognition = true);
     try {
+      final hint = (ocrLanguageHints ?? '').trim();
+      if (hint.isNotEmpty) {
+        unawaited(_persistContentOcrLanguageHint(sessionKey, hint));
+      }
+
       await backend.markAttachmentAnnotationFailed(
         sessionKey,
         attachmentSha256: widget.attachment.sha256,
@@ -579,6 +674,14 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     return _saveAttachmentText(full: value);
   }
 
+  String _filenameFromAttachmentPath(Attachment attachment) {
+    final raw = attachment.path.trim();
+    if (raw.isEmpty) return '';
+    final normalized = raw.replaceAll('\\', '/');
+    final filename = normalized.split('/').last.trim();
+    return filename;
+  }
+
   String _resolveAppBarTitle(
     Attachment attachment, {
     required AttachmentMetadata? metadata,
@@ -596,11 +699,14 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         : '';
     if (firstUrl.isNotEmpty) return firstUrl;
 
-    final mime = attachment.mimeType.trim().toLowerCase();
-    if (mime.startsWith('image/')) return 'Image attachment';
-    if (mime.startsWith('video/')) return 'Video attachment';
-    if (mime.startsWith('audio/')) return 'Audio attachment';
-    if (mime == 'application/pdf') return 'PDF attachment';
+    final pathFilename = _filenameFromAttachmentPath(attachment);
+    if (pathFilename.isNotEmpty) return pathFilename;
+
+    final fallbackStem = attachment.sha256.trim();
+    if (fallbackStem.isNotEmpty) {
+      return '$fallbackStem${fileExtensionForSystemOpenMimeType(attachment.mimeType)}';
+    }
+
     return 'Attachment';
   }
 

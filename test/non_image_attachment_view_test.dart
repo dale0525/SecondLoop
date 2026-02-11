@@ -103,7 +103,7 @@ void main() {
     expect(find.text('https://example.com/canonical'), findsNothing);
     expect(
       find.byKey(const ValueKey('attachment_non_image_preview_surface')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.byKey(const ValueKey('attachment_text_summary_display')),
         findsNothing);
@@ -485,6 +485,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('Preparing semantic search…'), findsNothing);
-    expect(find.text('Preview unavailable'), findsOneWidget);
+    expect(find.text('Preview unavailable'), findsNothing);
   });
 }

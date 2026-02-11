@@ -56,6 +56,8 @@ void main() {
       find.byKey(const ValueKey('attachment_viewer_download')),
       findsOneWidget,
     );
+    expect(find.text('abc.bin'), findsWidgets);
+    expect(find.text('Image attachment'), findsNothing);
   });
 
   testWidgets('Image attachment uses compact unified layout', (tester) async {

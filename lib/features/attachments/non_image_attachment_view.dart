@@ -83,7 +83,7 @@ String normalizeAttachmentOcrLanguageHint(String value) {
   return 'device_plus_en';
 }
 
-String _attachmentOcrLanguageHintLabel(BuildContext context, String hint) {
+String attachmentOcrLanguageHintLabel(BuildContext context, String hint) {
   final labels =
       context.t.settings.mediaAnnotation.documentOcr.languageHints.labels;
   switch (hint) {
@@ -105,6 +105,69 @@ String _attachmentOcrLanguageHintLabel(BuildContext context, String hint) {
     default:
       return labels.devicePlusEn;
   }
+}
+
+Future<String?> showAttachmentOcrLanguageHintDialog(
+  BuildContext context, {
+  required String initialHint,
+  String? title,
+  String? confirmLabel,
+}) async {
+  var selectedHint = normalizeAttachmentOcrLanguageHint(initialHint);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            key: const ValueKey('attachment_ocr_regenerate_dialog'),
+            title: Text(title ?? context.t.attachments.content.rerunOcr),
+            content: DropdownButtonFormField<String>(
+              key: const ValueKey('attachment_ocr_language_hint_dialog_field'),
+              value: selectedHint,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: context
+                    .t.settings.mediaAnnotation.documentOcr.languageHints.title,
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                for (final hint in kAttachmentOcrLanguageHintOptions)
+                  DropdownMenuItem<String>(
+                    value: hint,
+                    child: Text(
+                      attachmentOcrLanguageHintLabel(context, hint),
+                    ),
+                  ),
+              ],
+              onChanged: (next) {
+                if (next == null) return;
+                setDialogState(() {
+                  selectedHint = next;
+                });
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(context.t.common.actions.cancel),
+              ),
+              FilledButton(
+                key: const ValueKey('attachment_ocr_regenerate_confirm'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(
+                    confirmLabel ?? context.t.attachments.content.rerunOcr),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  if (confirmed != true) return null;
+  return selectedHint;
 }
 
 class NonImageAttachmentView extends StatefulWidget {
@@ -181,60 +244,14 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     required ValueChanged<String>? onOcrLanguageHintsChanged,
     required Future<void> Function() run,
   }) async {
-    var selectedHint = normalizeAttachmentOcrLanguageHint(initialHint);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              key: const ValueKey('attachment_ocr_regenerate_dialog'),
-              title: Text(context.t.attachments.content.rerunOcr),
-              content: DropdownButtonFormField<String>(
-                key:
-                    const ValueKey('attachment_ocr_language_hint_dialog_field'),
-                value: selectedHint,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: context.t.settings.mediaAnnotation.documentOcr
-                      .languageHints.title,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                ),
-                items: [
-                  for (final hint in kAttachmentOcrLanguageHintOptions)
-                    DropdownMenuItem<String>(
-                      value: hint,
-                      child: Text(
-                        _attachmentOcrLanguageHintLabel(context, hint),
-                      ),
-                    ),
-                ],
-                onChanged: (next) {
-                  if (next == null) return;
-                  setDialogState(() {
-                    selectedHint = next;
-                  });
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: Text(context.t.common.actions.cancel),
-                ),
-                FilledButton(
-                  key: const ValueKey('attachment_ocr_regenerate_confirm'),
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(context.t.attachments.content.rerunOcr),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final selectedHint = await showAttachmentOcrLanguageHintDialog(
+      context,
+      initialHint: initialHint,
+      title: context.t.attachments.content.rerunOcr,
+      confirmLabel: context.t.attachments.content.rerunOcr,
     );
+    if (selectedHint == null) return;
 
-    if (confirmed != true) return;
     onOcrLanguageHintsChanged?.call(selectedHint);
     await run();
   }
@@ -301,6 +318,9 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
             autoOcrStatus == 'retrying' ||
             payload == null);
 
+    final hasPreviewSignal = ocrStatus.isNotEmpty ||
+        showPreparingTextState ||
+        (supportsOcr && showNeedsOcrState);
     final previewHint = () {
       if (ocrStatus.isNotEmpty) return ocrStatus;
       if (showPreparingTextState) {
@@ -309,7 +329,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       if (supportsOcr && showNeedsOcrState) {
         return context.t.attachments.content.needsOcrSubtitle;
       }
-      return context.t.attachments.content.previewUnavailable;
+      return '';
     }();
 
     final ocrEngine = (payload?['ocr_engine'] ?? '').toString().trim();
@@ -393,81 +413,88 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                 maxWidth: 820,
                 alignment: Alignment.centerLeft,
               ),
-              const SizedBox(height: 14),
-              buildSection(
-                SlSurface(
-                  key: const ValueKey('attachment_non_image_preview_surface'),
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color:
-                              Theme.of(context).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(10),
+              if (hasPreviewSignal || debugMarker != null) ...[
+                const SizedBox(height: 14),
+                buildSection(
+                  SlSurface(
+                    key: const ValueKey('attachment_non_image_preview_surface'),
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            _previewIconForMime(mime),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer,
+                            size: 20,
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          _previewIconForMime(mime),
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              mime,
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            if (showPreparingTextState)
-                              Row(
-                                children: [
-                                  const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      previewHint,
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                previewHint,
-                                style: Theme.of(context).textTheme.bodySmall,
+                                mime,
+                                style: Theme.of(context).textTheme.labelMedium,
                               ),
-                            if (debugMarker != null) ...[
-                              const SizedBox(height: 6),
-                              SelectableText(
-                                debugMarker,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
+                              if (previewHint.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                if (showPreparingTextState)
+                                  Row(
+                                    children: [
+                                      const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          previewHint,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                else
+                                  Text(
+                                    previewHint,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                              ],
+                              if (debugMarker != null) ...[
+                                const SizedBox(height: 6),
+                                SelectableText(
+                                  debugMarker,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  maxWidth: 860,
                 ),
-                maxWidth: 860,
-              ),
+              ],
               const SizedBox(height: 14),
               buildSection(
                 AttachmentTextEditorCard(

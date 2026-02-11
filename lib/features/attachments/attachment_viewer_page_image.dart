@@ -76,7 +76,11 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
               tooltip: context.t.attachments.content.rerunOcr,
               onPressed: _retryingAttachmentRecognition
                   ? null
-                  : () => unawaited(_retryAttachmentRecognition()),
+                  : () => unawaited(
+                        _retryImageRecognitionWithOptionalOcrDialog(
+                          annotationPayload,
+                        ),
+                      ),
               icon: _retryingAttachmentRecognition
                   ? const SizedBox(
                       width: 16,
