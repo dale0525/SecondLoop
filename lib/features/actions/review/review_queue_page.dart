@@ -82,6 +82,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
     }
 
     if (changed && mounted) {
+      _notifyLocalMutation();
       // Best-effort refresh of the page.
       setState(() {});
     }
@@ -98,8 +99,15 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
     return pending;
   }
 
+  void _notifyLocalMutation() {
+    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+  }
+
   Future<void> _refresh() async {
-    setState(() => _todosFuture = _loadDueReviewTodos());
+    if (!mounted) return;
+    setState(() {
+      _todosFuture = _loadDueReviewTodos();
+    });
   }
 
   Future<void> _markDone(Todo todo) async {
@@ -111,6 +119,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
       newStatus: _kTodoStatusDone,
     );
     if (!mounted) return;
+    _notifyLocalMutation();
     await _refresh();
   }
 
@@ -123,6 +132,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
       newStatus: _kTodoStatusInProgress,
     );
     if (!mounted) return;
+    _notifyLocalMutation();
     await _refresh();
   }
 
@@ -142,7 +152,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
     final sessionKey = SessionScope.of(context).sessionKey;
     await backend.deleteTodo(sessionKey, todoId: todo.id);
     if (!mounted) return;
-    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+    _notifyLocalMutation();
     await _refresh();
   }
 
@@ -164,6 +174,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
     );
     if (!mounted) return;
+    _notifyLocalMutation();
     await _refresh();
   }
 
@@ -202,6 +213,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
     );
     if (!mounted) return;
+    _notifyLocalMutation();
     await _refresh();
   }
 
