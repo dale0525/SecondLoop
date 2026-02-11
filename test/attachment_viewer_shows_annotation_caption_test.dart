@@ -46,7 +46,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('A long caption'), findsOneWidget);
+    expect(find.text('A long caption'), findsWidgets);
   });
 
   testWidgets(
@@ -94,10 +94,10 @@ void main() {
 
     expect(find.text(caption), findsNothing);
     expect(
-      find.byKey(const ValueKey('attachment_annotation_ocr_text')),
-      findsNothing,
+      find.byKey(const ValueKey('attachment_text_summary_display')),
+      findsOneWidget,
     );
-    expect(find.textContaining('token_79'), findsOneWidget);
+    expect(find.textContaining('token_79'), findsWidgets);
   });
 
   testWidgets(
@@ -151,7 +151,7 @@ void main() {
   });
 
   testWidgets(
-      'AttachmentViewerPage allows editing annotation caption and saves',
+      'AttachmentViewerPage allows editing summary and saves unified payload',
       (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
@@ -182,9 +182,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Old caption'), findsOneWidget);
+    expect(find.text('Old caption'), findsWidgets);
 
-    final editFinder = find.byKey(const ValueKey('attachment_annotation_edit'));
+    final editFinder =
+        find.byKey(const ValueKey('attachment_text_summary_edit'));
     await tester.ensureVisible(editFinder);
     await tester.pumpAndSettle();
 
@@ -192,23 +193,25 @@ void main() {
     await tester.pumpAndSettle();
 
     final editFieldFinder =
-        find.byKey(const ValueKey('attachment_annotation_edit_field'));
+        find.byKey(const ValueKey('attachment_text_summary_field'));
     await tester.ensureVisible(editFieldFinder);
     await tester.pumpAndSettle();
 
-    await tester.enterText(editFieldFinder, 'New caption');
+    await tester.enterText(editFieldFinder, 'New summary text');
 
     final saveFinder =
-        find.byKey(const ValueKey('attachment_annotation_edit_save'));
+        find.byKey(const ValueKey('attachment_text_summary_save'));
     await tester.ensureVisible(saveFinder);
     await tester.pumpAndSettle();
 
     await tester.tap(saveFinder);
     await tester.pumpAndSettle();
 
-    expect(find.text('New caption'), findsOneWidget);
+    expect(find.text('New summary text'), findsOneWidget);
     expect(backend.savedPayloadJsons.length, 1);
-    expect(backend.savedPayloadJsons.single.contains('New caption'), isTrue);
+    expect(backend.savedPayloadJsons.single.contains('manual_summary'), isTrue);
+    expect(
+        backend.savedPayloadJsons.single.contains('New summary text'), isTrue);
   });
 }
 

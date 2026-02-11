@@ -7,6 +7,8 @@ import 'package:just_audio/just_audio.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import 'attachment_detail_text_content.dart';
+import 'attachment_text_editor_card.dart';
 
 String normalizeAudioPlaybackMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -38,6 +40,8 @@ class AudioAttachmentPlayerView extends StatefulWidget {
     this.annotationPayloadFuture,
     this.initialAnnotationPayload,
     this.onRetryRecognition,
+    this.onSaveSummary,
+    this.onSaveFull,
     super.key,
   });
 
@@ -48,6 +52,8 @@ class AudioAttachmentPlayerView extends StatefulWidget {
   final Future<Map<String, Object?>?>? annotationPayloadFuture;
   final Map<String, Object?>? initialAnnotationPayload;
   final Future<void> Function()? onRetryRecognition;
+  final Future<void> Function(String value)? onSaveSummary;
+  final Future<void> Function(String value)? onSaveFull;
 
   @override
   State<AudioAttachmentPlayerView> createState() =>
@@ -129,34 +135,6 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   static String _speedLabel(double speed) {
     final rounded = speed.toStringAsFixed(speed % 1 == 0 ? 1 : 2);
     return '${rounded}x';
-  }
-
-  Future<void> _openFullTextDialog(
-    BuildContext context, {
-    required String title,
-    required String text,
-  }) async {
-    if (text.trim().isEmpty) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 520),
-            child: SingleChildScrollView(
-              child: SelectableText(text),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.cancel),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Widget _buildPlayerCard(BuildContext context) {
@@ -305,93 +283,75 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     );
   }
 
-  Widget _buildTranscriptCard(
+  Widget _buildSummaryAndFullSection(
     BuildContext context, {
     required Map<String, Object?>? payload,
-    required Future<void> Function()? onRetryRecognition,
   }) {
-    final transcriptTitle = context.t.attachments.content.fullText;
-    final transcriptExcerpt = payload?['transcript_excerpt']?.toString().trim();
-    final transcriptFull = payload?['transcript_full']?.toString().trim();
+    final textContent = resolveAttachmentDetailTextContent(payload);
     final durationMsValue = payload?['duration_ms'];
     final durationMs = durationMsValue is num ? durationMsValue.toInt() : null;
+    final showPreparing = !textContent.hasAny && payload == null;
 
-    if ((transcriptExcerpt ?? '').isEmpty && (transcriptFull ?? '').isEmpty) {
-      return SlSurface(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              context.t.sync.progressDialog.preparing,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      );
-    }
+    final retryButton = widget.onRetryRecognition == null
+        ? null
+        : IconButton(
+            key: const ValueKey('attachment_transcript_retry'),
+            tooltip: context.t.common.actions.retry,
+            onPressed: () => unawaited(widget.onRetryRecognition!()),
+            icon: const Icon(Icons.refresh_rounded),
+          );
 
-    final displayed = (transcriptExcerpt ?? transcriptFull ?? '').trim();
-    final full = (transcriptFull ?? '').trim();
-    final canOpenFull = full.isNotEmpty && full.length > displayed.length;
-
-    return SlSurface(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            transcriptTitle,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          if (durationMs != null) ...[
-            const SizedBox(height: 4),
-            Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (durationMs != null) ...[
+          SlSurface(
+            padding: const EdgeInsets.all(12),
+            child: Text(
               _formatDuration(Duration(milliseconds: durationMs)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-          ],
-          const SizedBox(height: 8),
-          SelectableText(
-            displayed,
-            style: Theme.of(context).textTheme.bodySmall,
           ),
-          if (onRetryRecognition != null) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                key: const ValueKey('attachment_transcript_retry'),
-                onPressed: () => unawaited(onRetryRecognition()),
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(context.t.common.actions.retry),
-              ),
-            ),
-          ],
-          if (canOpenFull) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => unawaited(
-                  _openFullTextDialog(
-                    context,
-                    title: transcriptTitle,
-                    text: full,
-                  ),
-                ),
-                icon: const Icon(Icons.open_in_new_outlined, size: 18),
-                label: Text(context.t.common.actions.open),
-              ),
-            ),
-          ],
+          const SizedBox(height: 12),
         ],
-      ),
+        if (showPreparing) ...[
+          SlSurface(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  context.t.sync.progressDialog.preparing,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        AttachmentTextEditorCard(
+          fieldKeyPrefix: 'attachment_text_summary',
+          label: context.t.attachments.content.summary,
+          text: textContent.summary,
+          emptyText: attachmentDetailEmptyTextLabel(context),
+          trailing: retryButton,
+          onSave: widget.onSaveSummary,
+        ),
+        const SizedBox(height: 12),
+        AttachmentTextEditorCard(
+          fieldKeyPrefix: 'attachment_text_full',
+          label: context.t.attachments.content.fullText,
+          text: textContent.full,
+          markdown: true,
+          emptyText: attachmentDetailEmptyTextLabel(context),
+          onSave: widget.onSaveFull,
+        ),
+      ],
     );
   }
 
@@ -423,10 +383,9 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
               ],
               _buildPlayerCard(context),
               const SizedBox(height: 12),
-              _buildTranscriptCard(
+              _buildSummaryAndFullSection(
                 context,
                 payload: payload,
-                onRetryRecognition: widget.onRetryRecognition,
               ),
             ],
           ),

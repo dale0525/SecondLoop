@@ -10,7 +10,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'AudioAttachmentPlayerView renders transcript excerpt and retry action',
+      'AudioAttachmentPlayerView renders unified summary/full, retry, and edit actions',
       (tester) async {
     final attachment = Attachment(
       sha256: 'audio-transcript-sha',
@@ -21,6 +21,8 @@ void main() {
     );
 
     var retryInvoked = 0;
+    String? savedSummary;
+    String? savedFull;
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -38,6 +40,12 @@ void main() {
               onRetryRecognition: () async {
                 retryInvoked += 1;
               },
+              onSaveSummary: (value) async {
+                savedSummary = value;
+              },
+              onSaveFull: (value) async {
+                savedFull = value;
+              },
             ),
           ),
         ),
@@ -46,12 +54,37 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.textContaining('hello transcript excerpt'), findsOneWidget);
-    expect(find.byIcon(Icons.open_in_new_outlined), findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_summary_display')),
+        findsOneWidget);
+    expect(find.textContaining('hello transcript excerpt'), findsWidgets);
     expect(find.byKey(const ValueKey('attachment_transcript_retry')),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('attachment_metadata_format')), findsNothing);
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_summary_edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('attachment_text_summary_field')),
+      'edited summary',
+    );
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_summary_save')));
+    await tester.pumpAndSettle();
+
+    expect(savedSummary, 'edited summary');
+
+    await tester.tap(find.byKey(const ValueKey('attachment_text_full_edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('attachment_text_full_field')),
+      '# Edited Full',
+    );
+    await tester.tap(find.byKey(const ValueKey('attachment_text_full_save')));
+    await tester.pumpAndSettle();
+
+    expect(savedFull, '# Edited Full');
 
     await tester.tap(find.byKey(const ValueKey('attachment_transcript_retry')));
     await tester.pump();

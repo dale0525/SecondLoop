@@ -106,20 +106,111 @@ void main() {
     expect(find.text('https://example.com/p'), findsOneWidget);
     expect(find.text('Canonical URL'), findsOneWidget);
     expect(find.text('https://example.com/canonical'), findsOneWidget);
-    expect(find.byKey(const ValueKey('attachment_content_tab_summary')),
+    expect(find.byKey(const ValueKey('attachment_text_summary_display')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('attachment_content_tab_full')),
+    expect(find.byKey(const ValueKey('attachment_text_full_markdown_display')),
         findsOneWidget);
-    expect(find.text('Excerpt Heading'), findsOneWidget);
+    expect(find.textContaining('# Excerpt Heading'), findsOneWidget);
     expect(find.byKey(const ValueKey('attachment_content_share_button')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('attachment_content_download_button')),
         findsOneWidget);
     expect(find.text('Size'), findsNothing);
-
-    await tester.tap(find.text('Full text'));
-    await tester.pumpAndSettle();
     expect(find.text('Full Heading'), findsOneWidget);
+  });
+
+  testWidgets('NonImageAttachmentView shows None when summary/full are missing',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-empty',
+      mimeType: 'application/pdf',
+      path: 'attachments/sha-empty.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            initialAnnotationPayload: const <String, Object?>{},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('attachment_text_summary_empty')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_empty')),
+        findsOneWidget);
+    expect(find.text('None'), findsWidgets);
+  });
+
+  testWidgets('NonImageAttachmentView supports manual edit on summary and full',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-editable',
+      mimeType: 'application/pdf',
+      path: 'attachments/sha-editable.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final payload = <String, Object?>{
+      'summary': 'Old summary',
+      'full_text': '# Old full',
+    };
+    String? savedSummary;
+    String? savedFull;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: NonImageAttachmentView(
+              attachment: attachment,
+              bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+              initialAnnotationPayload: payload,
+              onSaveSummary: (value) async {
+                savedSummary = value;
+              },
+              onSaveFull: (value) async {
+                savedFull = value;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_summary_edit')).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('attachment_text_summary_field')).first,
+      'Updated summary',
+    );
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_summary_save')).first);
+    await tester.pumpAndSettle();
+
+    expect(savedSummary, 'Updated summary');
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_full_edit')).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('attachment_text_full_field')).first,
+      '## Updated full',
+    );
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_text_full_save')).first);
+    await tester.pumpAndSettle();
+
+    expect(savedFull, '## Updated full');
   });
 
   testWidgets('NonImageAttachmentView shows OCR required for textless PDF',
@@ -399,8 +490,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.textContaining('Legacy OCR line one'), findsOneWidget);
-    expect(find.textContaining('Legacy OCR line two'), findsOneWidget);
+    expect(find.textContaining('Legacy OCR line one'), findsWidgets);
+    expect(find.textContaining('Legacy OCR line two'), findsWidgets);
   });
 
   testWidgets('NonImageAttachmentView shows PDF OCR debug marker',

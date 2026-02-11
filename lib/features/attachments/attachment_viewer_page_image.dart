@@ -4,104 +4,6 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
   Widget _buildImageAttachmentDetail(Uint8List bytes) {
     final exifFromBytes = tryReadImageExifMetadata(bytes);
 
-    String resolveImageOcrText(Map<String, Object?>? payload) {
-      if (payload == null) return '';
-
-      String read(String key) {
-        return (payload[key] ?? '').toString().trim();
-      }
-
-      final ocrText = read('ocr_text');
-      if (ocrText.isNotEmpty) return ocrText;
-
-      final full = read('ocr_text_full');
-      if (full.isNotEmpty) return full;
-
-      return read('ocr_text_excerpt');
-    }
-
-    bool isOcrFallbackPayload(Map<String, Object?>? payload) {
-      if (payload == null) return false;
-
-      bool hasOcrFallbackTag(dynamic rawTags) {
-        if (rawTags is String) {
-          return rawTags
-              .split(',')
-              .map((part) => part.trim().toLowerCase())
-              .any(
-                (tag) => tag == 'ocr_fallback' || tag == 'ocr_fallback_no_text',
-              );
-        }
-        if (rawTags is Iterable) {
-          for (final raw in rawTags) {
-            final tag = raw.toString().trim().toLowerCase();
-            if (tag == 'ocr_fallback' || tag == 'ocr_fallback_no_text') {
-              return true;
-            }
-          }
-        }
-        return false;
-      }
-
-      if (hasOcrFallbackTag(payload['tags'])) return true;
-
-      String readLower(String key) {
-        return (payload[key] ?? '').toString().trim().toLowerCase();
-      }
-
-      final model = readLower('model_name');
-      if (model == 'ocr_fallback') return true;
-      if (readLower('model') == 'ocr_fallback') return true;
-      if (readLower('route') == 'ocr_fallback') return true;
-
-      final caption = readLower('caption_long');
-      return caption.startsWith('ocr fallback caption:');
-    }
-
-    Widget buildImageOcrCard(
-      String ocrText, {
-      Future<void> Function()? onRetry,
-      bool retrying = false,
-    }) {
-      return SlSurface(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    context.t.attachments.content.ocrTitle,
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                ),
-                if (onRetry != null)
-                  IconButton(
-                    key: const ValueKey('attachment_annotation_retry_ocr'),
-                    tooltip: context.t.common.actions.retry,
-                    onPressed: retrying ? null : () => unawaited(onRetry()),
-                    icon: retrying
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh_rounded),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            SelectableText(
-              ocrText,
-              key: const ValueKey('attachment_annotation_ocr_text'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
-      );
-    }
-
     Widget buildContent(
       AttachmentExifMetadata? persisted,
       String? placeDisplayName,
@@ -132,18 +34,30 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
         longitude: longitude,
       );
 
-      final caption = (annotationCaption ?? '').trim();
-      final ocrText = resolveImageOcrText(annotationPayload);
-      final hasOcrText = ocrText.isNotEmpty;
-      final isOcrFallback = isOcrFallbackPayload(annotationPayload);
-      final annotationText = isOcrFallback && hasOcrText ? ocrText : caption;
-      final hasAnnotation = annotationText.isNotEmpty;
-      final annotationTitle = isOcrFallback
-          ? context.t.attachments.content.ocrTitle
-          : context.t.settings.mediaAnnotation.title;
-      final showOcrText = hasOcrText && ocrText != annotationText;
+      final textContent = resolveAttachmentDetailTextContent(
+        annotationPayload,
+        annotationCaption: annotationCaption,
+      );
       final canRetryRecognition =
-          _canRetryAttachmentRecognition && (hasAnnotation || hasOcrText);
+          _canRetryAttachmentRecognition && textContent.hasAny;
+
+      final retryButton = canRetryRecognition
+          ? IconButton(
+              key: const ValueKey('attachment_annotation_retry'),
+              tooltip: context.t.common.actions.retry,
+              onPressed: _retryingAttachmentRecognition
+                  ? null
+                  : () => unawaited(_retryAttachmentRecognition()),
+              icon: _retryingAttachmentRecognition
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+            )
+          : null;
+
       return Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 880),
@@ -181,26 +95,25 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                   longitude: longitude,
                   placeDisplayName: placeDisplayName,
                 ),
-                if (hasAnnotation) const SizedBox(height: 12),
-                if (hasAnnotation)
-                  _buildAnnotationCard(
-                    context,
-                    captionLong: annotationText,
-                    titleText: annotationTitle,
-                    onRetry: canRetryRecognition
-                        ? _retryAttachmentRecognition
-                        : null,
-                    retrying: _retryingAttachmentRecognition,
-                  ),
-                if (showOcrText) const SizedBox(height: 12),
-                if (showOcrText)
-                  buildImageOcrCard(
-                    ocrText,
-                    onRetry: canRetryRecognition
-                        ? _retryAttachmentRecognition
-                        : null,
-                    retrying: _retryingAttachmentRecognition,
-                  ),
+                const SizedBox(height: 12),
+                AttachmentTextEditorCard(
+                  fieldKeyPrefix: 'attachment_text_summary',
+                  label: context.t.attachments.content.summary,
+                  text: textContent.summary,
+                  emptyText: attachmentDetailEmptyTextLabel(context),
+                  trailing: retryButton,
+                  onSave:
+                      _canEditAttachmentText ? _saveAttachmentSummary : null,
+                ),
+                const SizedBox(height: 12),
+                AttachmentTextEditorCard(
+                  fieldKeyPrefix: 'attachment_text_full',
+                  label: context.t.attachments.content.fullText,
+                  text: textContent.full,
+                  markdown: true,
+                  emptyText: attachmentDetailEmptyTextLabel(context),
+                  onSave: _canEditAttachmentText ? _saveAttachmentFull : null,
+                ),
               ],
             ),
           ),

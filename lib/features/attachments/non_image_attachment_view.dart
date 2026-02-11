@@ -14,6 +14,8 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../url_enrichment/url_enrichment_runner.dart';
+import 'attachment_detail_text_content.dart';
+import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_keyframe_ocr_worker.dart';
 
@@ -112,11 +114,6 @@ String _attachmentOcrLanguageHintLabel(BuildContext context, String hint) {
   }
 }
 
-enum _AttachmentTextPane {
-  summary,
-  full,
-}
-
 class NonImageAttachmentView extends StatefulWidget {
   const NonImageAttachmentView({
     required this.attachment,
@@ -130,6 +127,8 @@ class NonImageAttachmentView extends StatefulWidget {
     this.ocrStatusText,
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
+    this.onSaveSummary,
+    this.onSaveFull,
     super.key,
   });
 
@@ -144,14 +143,14 @@ class NonImageAttachmentView extends StatefulWidget {
   final String? ocrStatusText;
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
+  final Future<void> Function(String value)? onSaveSummary;
+  final Future<void> Function(String value)? onSaveFull;
 
   @override
   State<NonImageAttachmentView> createState() => _NonImageAttachmentViewState();
 }
 
 class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
-  _AttachmentTextPane _selectedTextPane = _AttachmentTextPane.summary;
-
   static String? _tryParseUrlManifestUrl(Uint8List bytes) {
     try {
       final raw = utf8.decode(bytes, allowMalformed: false);
@@ -250,8 +249,9 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final canonicalUrl = payload?['canonical_url']?.toString().trim();
 
     final selectedTextContent = selectAttachmentDisplayText(payload);
-    final excerpt = selectedTextContent.excerpt.trim();
-    final full = selectedTextContent.full.trim();
+    final textContent = resolveAttachmentDetailTextContent(payload);
+    final summaryText = textContent.summary;
+    final fullText = textContent.full;
     final needsOcr = payload?['needs_ocr'] == true;
     final ocrStatus = (ocrStatusText ?? '').trim();
     final autoOcrStatus =
@@ -268,25 +268,12 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final canRunOcr = supportsOcr && runOcr != null;
     final canOpenWithSystem = isPdf && openWithSystem != null;
     final ocrInProgress = ocrRunning || autoOcrRunning;
-    final excerptText = excerpt;
-    final fullText = full;
-    final hasAnyText = excerptText.isNotEmpty || fullText.isNotEmpty;
+    final hasAnyText = textContent.hasAny;
     final hasOcrEngine =
         (payload?['ocr_engine'] ?? '').toString().trim().isNotEmpty;
     final showNeedsOcrState = needsOcr || (!hasAnyText && !hasOcrEngine);
     final showOcrCard = supportsOcr &&
         (needsOcr || ocrInProgress || ocrStatus.isNotEmpty || canRunOcr);
-
-    final showSummaryTab = excerptText.isNotEmpty;
-    final showFullTab = fullText.isNotEmpty;
-    final showTextTabs = showSummaryTab && showFullTab;
-    final activePane = showTextTabs
-        ? _selectedTextPane
-        : showSummaryTab
-            ? _AttachmentTextPane.summary
-            : _AttachmentTextPane.full;
-    final selectedMarkdownText =
-        activePane == _AttachmentTextPane.full ? fullText : excerptText;
     final isMobile = defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
     final ocrEngine = (payload?['ocr_engine'] ?? '').toString().trim();
@@ -516,50 +503,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
-              if (hasAnyText) ...[
-                if (showTextTabs)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SegmentedButton<_AttachmentTextPane>(
-                      segments: [
-                        ButtonSegment<_AttachmentTextPane>(
-                          value: _AttachmentTextPane.summary,
-                          label: Text(
-                            context.t.attachments.content.summary,
-                            key: const ValueKey(
-                                'attachment_content_tab_summary'),
-                          ),
-                        ),
-                        ButtonSegment<_AttachmentTextPane>(
-                          value: _AttachmentTextPane.full,
-                          label: Text(
-                            context.t.attachments.content.fullText,
-                            key: const ValueKey('attachment_content_tab_full'),
-                          ),
-                        ),
-                      ],
-                      selected: <_AttachmentTextPane>{_selectedTextPane},
-                      onSelectionChanged: (next) {
-                        final picked = next.firstOrNull;
-                        if (picked == null || picked == _selectedTextPane) {
-                          return;
-                        }
-                        setState(() {
-                          _selectedTextPane = picked;
-                        });
-                      },
-                    ),
-                  ),
-                _buildLabeledValueCard(
-                  context,
-                  label: activePane == _AttachmentTextPane.summary
-                      ? context.t.attachments.content.summary
-                      : context.t.attachments.content.fullText,
-                  value: selectedMarkdownText,
-                  markdown: true,
-                ),
-              ] else
+              if (!hasAnyText) ...[
+                const SizedBox(height: 12),
                 SlSurface(
                   padding: const EdgeInsets.all(12),
                   child: showPreparingTextState
@@ -587,6 +532,24 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                           key: const ValueKey('attachment_no_text_status'),
                         ),
                 ),
+              ],
+              const SizedBox(height: 12),
+              AttachmentTextEditorCard(
+                fieldKeyPrefix: 'attachment_text_summary',
+                label: context.t.attachments.content.summary,
+                text: summaryText,
+                emptyText: attachmentDetailEmptyTextLabel(context),
+                onSave: widget.onSaveSummary,
+              ),
+              const SizedBox(height: 12),
+              AttachmentTextEditorCard(
+                fieldKeyPrefix: 'attachment_text_full',
+                label: context.t.attachments.content.fullText,
+                text: fullText,
+                markdown: true,
+                emptyText: attachmentDetailEmptyTextLabel(context),
+                onSave: widget.onSaveFull,
+              ),
             ],
           ),
         ),
