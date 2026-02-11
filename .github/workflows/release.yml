@@ -137,8 +137,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/SecondLoop-android-${GITHUB_REF_NAME}.apk"
-          cp build/app/outputs/bundle/release/app-release.aab "dist/SecondLoop-android-${GITHUB_REF_NAME}.aab"
+          safe_ref_name="$(printf "%s" "${GITHUB_REF_NAME}" | sed -E "s/[^[:alnum:]._-]+/-/g; s/^-+//; s/-+$//")"
+          if [[ -z "${safe_ref_name}" ]]; then
+            safe_ref_name="run-${GITHUB_RUN_ID}"
+          fi
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/SecondLoop-android-${safe_ref_name}.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "dist/SecondLoop-android-${safe_ref_name}.aab"
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -211,7 +215,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $zip = "dist/SecondLoop-windows-x64-$Env:GITHUB_REF_NAME.zip"
+          $safeRefName = $Env:GITHUB_REF_NAME -replace '[^0-9A-Za-z._-]', '-'
+          $safeRefName = $safeRefName.Trim('-')
+          if ([string]::IsNullOrWhiteSpace($safeRefName)) {
+            $safeRefName = "run-$Env:GITHUB_RUN_ID"
+          }
+          $zip = "dist/SecondLoop-windows-x64-$safeRefName.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath $zip
       - uses: actions/upload-artifact@v4
@@ -341,7 +350,11 @@ jobs:
           app="$(ls -1d build/macos/Build/Products/Release/*.app | head -n 1)"
           stage_dir="$(mktemp -d)"
           cp -R "${app}" "${stage_dir}/"
-          dmg_path="dist/SecondLoop-macos-${GITHUB_REF_NAME}.dmg"
+          safe_ref_name="$(printf "%s" "${GITHUB_REF_NAME}" | sed -E "s/[^[:alnum:]._-]+/-/g; s/^-+//; s/-+$//")"
+          if [[ -z "${safe_ref_name}" ]]; then
+            safe_ref_name="run-${GITHUB_RUN_ID}"
+          fi
+          dmg_path="dist/SecondLoop-macos-${safe_ref_name}.dmg"
           rm -f "${dmg_path}"
           hdiutil create -volname "SecondLoop" -srcfolder "${stage_dir}" -ov -format UDZO "${dmg_path}"
       - uses: actions/upload-artifact@v4
@@ -451,7 +464,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          tar -C build/linux/x64/release -czf "dist/SecondLoop-linux-x64-${GITHUB_REF_NAME}.tar.gz" bundle
+          safe_ref_name="$(printf "%s" "${GITHUB_REF_NAME}" | sed -E "s/[^[:alnum:]._-]+/-/g; s/^-+//; s/-+$//")"
+          if [[ -z "${safe_ref_name}" ]]; then
+            safe_ref_name="run-${GITHUB_RUN_ID}"
+          fi
+          tar -C build/linux/x64/release -czf "dist/SecondLoop-linux-x64-${safe_ref_name}.tar.gz" bundle
       - uses: actions/upload-artifact@v4
         with:
           name: linux
