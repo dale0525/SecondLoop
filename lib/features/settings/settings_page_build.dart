@@ -206,32 +206,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          ListTile(
-            title: Text(context.t.settings.llmProfiles.title),
-            subtitle: Text(context.t.settings.llmProfiles.subtitle),
-            onTap: _busy
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const LlmProfilesPage(),
-                      ),
-                    );
-                  },
-          ),
-          ListTile(
-            title: Text(context.t.settings.embeddingProfiles.title),
-            subtitle: Text(context.t.settings.embeddingProfiles.subtitle),
-            onTap: _busy
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const EmbeddingProfilesPage(),
-                      ),
-                    );
-                  },
-          ),
           SwitchListTile(
             title: Text(context.t.settings.semanticParseAutoActions.title),
             subtitle: Text(
@@ -271,23 +245,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                     }
 
                     await _setSemanticParseEnabled(value);
-                  },
-          ),
-          ListTile(
-            key: const ValueKey('settings_media_annotation'),
-            title: Text(context.t.settings.mediaAnnotation.title),
-            subtitle: Text(context.t.settings.mediaAnnotation.subtitle),
-            onTap: _busy
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const AiSettingsPage(
-                          focusSection: AiSettingsSection.mediaUnderstanding,
-                          highlightFocus: true,
-                        ),
-                      ),
-                    );
                   },
           ),
         ]),

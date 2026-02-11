@@ -3,22 +3,23 @@ part of 'media_annotation_settings_page.dart';
 extension _MediaAnnotationSettingsPageLinuxOcrExtension
     on _MediaAnnotationSettingsPageState {
   List<Widget> _buildDocumentOcrSection(
-    BuildContext context,
-  ) {
+    BuildContext context, {
+    required bool showWifiOnly,
+    required MediaAnnotationConfig mediaConfig,
+  }) {
     final t = context.t.settings.mediaAnnotation;
     final contentConfig = _contentConfig;
-    final mediaConfig = _config;
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
     final proUser = subscriptionStatus == SubscriptionStatus.entitled;
-    final cloudEnabled = mediaConfig?.providerMode ==
+    final cloudEnabled = mediaConfig.providerMode ==
         _MediaAnnotationSettingsPageState._kProviderCloudGateway;
     final children = <Widget>[
       ListTile(
         title: Text(t.documentOcr.enabled.title),
         subtitle: Text(t.documentOcr.enabled.subtitle),
       ),
-      if (contentConfig != null && mediaConfig != null)
+      if (contentConfig != null)
         ListTile(
           key: MediaAnnotationSettingsPage.ocrModeTileKey,
           title: Text(_documentOcrEngineTitle(context)),
@@ -56,6 +57,12 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
           onTap: _busy || proUser
               ? null
               : () => _pickDocumentOcrEngineMode(contentConfig, mediaConfig),
+        ),
+      if (showWifiOnly)
+        _buildScopedWifiOnlyTile(
+          tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
+          capabilityTitle: t.documentOcr.title,
+          config: mediaConfig,
         ),
     ];
     return <Widget>[

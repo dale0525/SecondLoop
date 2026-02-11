@@ -52,6 +52,12 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
       ValueKey('media_annotation_settings_media_understanding_switch');
   static const wifiOnlySwitchKey =
       ValueKey('media_annotation_settings_wifi_only_switch');
+  static const audioWifiOnlySwitchKey =
+      ValueKey('media_annotation_settings_audio_wifi_only_switch');
+  static const ocrWifiOnlySwitchKey =
+      ValueKey('media_annotation_settings_ocr_wifi_only_switch');
+  static const imageWifiOnlySwitchKey =
+      ValueKey('media_annotation_settings_image_wifi_only_switch');
   static const audioApiProfileTileKey =
       ValueKey('media_annotation_settings_audio_api_profile_tile');
   static const imageApiProfileTileKey =
@@ -612,10 +618,51 @@ class _MediaAnnotationSettingsPageState
     );
   }
 
+  String _scopedWifiOnlyTitle(BuildContext context, String capabilityTitle) {
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    return zh ? '$capabilityTitle 仅 Wi-Fi' : '$capabilityTitle · Wi-Fi only';
+  }
+
+  String _scopedWifiOnlySubtitle(BuildContext context, String capabilityTitle) {
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    if (zh) {
+      return '仅在 Wi-Fi 下处理$capabilityTitle相关任务。';
+    }
+    return 'Process $capabilityTitle tasks on Wi-Fi only.';
+  }
+
+  Widget _buildScopedWifiOnlyTile({
+    required Key tileKey,
+    required String capabilityTitle,
+    required MediaAnnotationConfig config,
+  }) {
+    return SwitchListTile(
+      key: tileKey,
+      title: Text(_scopedWifiOnlyTitle(context, capabilityTitle)),
+      subtitle: Text(_scopedWifiOnlySubtitle(context, capabilityTitle)),
+      value: !config.allowCellular,
+      onChanged: _busy
+          ? null
+          : (wifiOnly) async {
+              await _setMediaUnderstandingWifiOnly(
+                wifiOnly: wifiOnly,
+                config: config,
+              );
+            },
+    );
+  }
+
   List<Widget> _buildSettingsChildren(BuildContext context) {
     final config = _config;
     final contentConfig = _contentConfig;
     final t = context.t.settings.mediaAnnotation;
+    final embedded = widget.embedded;
 
     return [
       if (_loadError != null)
@@ -632,78 +679,84 @@ class _MediaAnnotationSettingsPageState
             context.t.errors.loadFailed(error: '$_contentLoadError'),
           ),
         ),
-      if (config == null && _loadError == null && !widget.embedded)
+      if (config == null && _loadError == null && !embedded)
         const Center(child: CircularProgressIndicator()),
       if (config != null)
         ...() {
           final mediaUnderstandingEnabled =
               _isMediaUnderstandingEnabled(config, contentConfig);
+          final shouldShowDetailedSettings =
+              embedded || mediaUnderstandingEnabled;
           final subscriptionStatus =
               SubscriptionScope.maybeOf(context)?.status ??
                   SubscriptionStatus.unknown;
           final showSecondLoopCloudSwitch =
-              subscriptionStatus == SubscriptionStatus.entitled;
+              !embedded && subscriptionStatus == SubscriptionStatus.entitled;
           final useSecondLoopCloud =
               config.providerMode == _kProviderCloudGateway;
 
           return <Widget>[
-            mediaAnnotationSectionTitle(
-              context,
-              _mediaUnderstandingTitle(context),
-            ),
-            const SizedBox(height: 8),
-            mediaAnnotationSectionCard([
-              SwitchListTile(
-                key: MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey,
-                title: Text(_mediaUnderstandingTitle(context)),
-                subtitle: Text(_mediaUnderstandingSubtitle(context)),
-                value: mediaUnderstandingEnabled,
-                onChanged: _busy || contentConfig == null
-                    ? null
-                    : (value) async {
-                        await _setMediaUnderstandingEnabled(
-                          enabled: value,
-                          config: config,
-                          contentConfig: contentConfig,
-                        );
-                      },
+            if (!embedded) ...[
+              mediaAnnotationSectionTitle(
+                context,
+                _mediaUnderstandingTitle(context),
               ),
-            ]),
-            if (mediaUnderstandingEnabled) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               mediaAnnotationSectionCard([
-                if (showSecondLoopCloudSwitch)
-                  SwitchListTile(
-                    key:
-                        MediaAnnotationSettingsPage.useSecondLoopCloudSwitchKey,
-                    title: Text(_useSecondLoopCloudTitle(context)),
-                    subtitle: Text(_useSecondLoopCloudSubtitle(context)),
-                    value: useSecondLoopCloud,
-                    onChanged: _busy
-                        ? null
-                        : (value) async {
-                            await _setUseSecondLoopCloudEnabled(
-                              enabled: value,
-                              config: config,
-                            );
-                          },
-                  ),
                 SwitchListTile(
-                  key: MediaAnnotationSettingsPage.wifiOnlySwitchKey,
-                  title: Text(_mediaUnderstandingWifiOnlyTitle(context)),
-                  subtitle: Text(_mediaUnderstandingWifiOnlySubtitle(context)),
-                  value: !config.allowCellular,
-                  onChanged: _busy
+                  key: MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey,
+                  title: Text(_mediaUnderstandingTitle(context)),
+                  subtitle: Text(_mediaUnderstandingSubtitle(context)),
+                  value: mediaUnderstandingEnabled,
+                  onChanged: _busy || contentConfig == null
                       ? null
-                      : (wifiOnly) async {
-                          await _setMediaUnderstandingWifiOnly(
-                            wifiOnly: wifiOnly,
+                      : (value) async {
+                          await _setMediaUnderstandingEnabled(
+                            enabled: value,
                             config: config,
+                            contentConfig: contentConfig,
                           );
                         },
                 ),
               ]),
+            ],
+            if (shouldShowDetailedSettings) ...[
               const SizedBox(height: 16),
+              if (!embedded)
+                mediaAnnotationSectionCard([
+                  if (showSecondLoopCloudSwitch)
+                    SwitchListTile(
+                      key: MediaAnnotationSettingsPage
+                          .useSecondLoopCloudSwitchKey,
+                      title: Text(_useSecondLoopCloudTitle(context)),
+                      subtitle: Text(_useSecondLoopCloudSubtitle(context)),
+                      value: useSecondLoopCloud,
+                      onChanged: _busy
+                          ? null
+                          : (value) async {
+                              await _setUseSecondLoopCloudEnabled(
+                                enabled: value,
+                                config: config,
+                              );
+                            },
+                    ),
+                  SwitchListTile(
+                    key: MediaAnnotationSettingsPage.wifiOnlySwitchKey,
+                    title: Text(_mediaUnderstandingWifiOnlyTitle(context)),
+                    subtitle:
+                        Text(_mediaUnderstandingWifiOnlySubtitle(context)),
+                    value: !config.allowCellular,
+                    onChanged: _busy
+                        ? null
+                        : (wifiOnly) async {
+                            await _setMediaUnderstandingWifiOnly(
+                              wifiOnly: wifiOnly,
+                              config: config,
+                            );
+                          },
+                  ),
+                ]),
+              if (!embedded) const SizedBox(height: 16),
               mediaAnnotationSectionTitle(context, t.audioTranscribe.title),
               const SizedBox(height: 8),
               mediaAnnotationSectionCard([
@@ -773,6 +826,12 @@ class _MediaAnnotationSettingsPageState
                       ? null
                       : () => _pickApiProfileOverride(config),
                 ),
+                if (embedded)
+                  _buildScopedWifiOnlyTile(
+                    tileKey: MediaAnnotationSettingsPage.audioWifiOnlySwitchKey,
+                    capabilityTitle: t.audioTranscribe.title,
+                    config: config,
+                  ),
               ]),
               ...() {
                 final runtimeTile = _buildDesktopRuntimeHealthTile(context);
@@ -785,9 +844,16 @@ class _MediaAnnotationSettingsPageState
                 ];
               }(),
               const SizedBox(height: 16),
-              ..._buildDocumentOcrSection(context),
+              ..._buildDocumentOcrSection(
+                context,
+                showWifiOnly: embedded,
+                mediaConfig: config,
+              ),
               const SizedBox(height: 16),
-              mediaAnnotationSectionTitle(context, t.providerSettings.title),
+              mediaAnnotationSectionTitle(
+                context,
+                embedded ? t.imageCaption.title : t.providerSettings.title,
+              ),
               const SizedBox(height: 8),
               mediaAnnotationSectionCard([
                 ListTile(
@@ -804,6 +870,12 @@ class _MediaAnnotationSettingsPageState
                   ),
                   onTap: _busy ? null : () => _pickApiProfileOverride(config),
                 ),
+                if (embedded)
+                  _buildScopedWifiOnlyTile(
+                    tileKey: MediaAnnotationSettingsPage.imageWifiOnlySwitchKey,
+                    capabilityTitle: t.imageCaption.title,
+                    config: config,
+                  ),
               ]),
             ],
           ];

@@ -253,8 +253,8 @@
       "subtitle": "Advanced: use your own provider and key"
     },
     "aiSelection": {
-      "title": "AI source",
-      "subtitle": "Choose where each AI capability runs.",
+      "title": "Intelligence",
+      "subtitle": "Unified settings for Ask AI, embeddings, OCR, speech recognition, and image understanding.",
       "askAi": {
         "title": "Ask AI",
         "description": "Chat assistant provider for your messages and memory.",
@@ -991,7 +991,7 @@
   "llmProfiles": {
     "title": "AI profiles",
     "refreshTooltip": "Refresh",
-    "activeProfileHelp": "Active profile is used for Ask AI.",
+    "activeProfileHelp": "The active profile is reused as the general LLM API profile across intelligence features.",
     "noProfilesYet": "No profiles yet.",
     "addProfile": "Add profile",
     "deleted": "AI profile deleted",

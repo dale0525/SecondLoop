@@ -253,8 +253,8 @@
       "subtitle": "高级：使用你自己的服务商与 Key"
     },
     "aiSelection": {
-      "title": "AI 来源",
-      "subtitle": "统一管理各项 AI 能力的来源与策略。",
+      "title": "智能化",
+      "subtitle": "统一管理问答、向量、OCR、语音识别与图片理解能力。",
       "askAi": {
         "title": "问 AI",
         "description": "用于聊天提问与记忆检索的模型来源。",
@@ -991,7 +991,7 @@
   "llmProfiles": {
     "title": "AI 配置",
     "refreshTooltip": "刷新",
-    "activeProfileHelp": "当前选择的配置将用于「问 AI」。",
+    "activeProfileHelp": "当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。",
     "noProfilesYet": "暂无配置。",
     "addProfile": "添加配置",
     "deleted": "配置已删除",

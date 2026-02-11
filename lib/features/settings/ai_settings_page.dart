@@ -15,7 +15,6 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
-import 'cloud_account_page.dart';
 import 'embedding_profiles_page.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_page.dart';
@@ -794,18 +793,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                 subtitle: askAiPreferenceLabels.byok.description,
               ),
               ListTile(
-                key: const ValueKey('ai_settings_open_cloud_account'),
-                title: Text(t.askAi.actions.openCloud),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CloudAccountPage(),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
                 key: const ValueKey('ai_settings_open_llm_profiles'),
                 title: Text(t.askAi.actions.openByok),
                 trailing: const Icon(Icons.chevron_right),
@@ -870,19 +857,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                   );
                 },
               ),
-              ListTile(
-                key:
-                    const ValueKey('ai_settings_open_embeddings_cloud_account'),
-                title: Text(t.embeddings.actions.openCloudAccount),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CloudAccountPage(),
-                    ),
-                  );
-                },
-              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -891,7 +865,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
             anchorKey: _mediaSectionAnchorKey,
             cardKey: const ValueKey('ai_settings_section_media_understanding'),
             section: AiSettingsSection.mediaUnderstanding,
-            title: t.mediaUnderstanding.title,
+            title: context.t.settings.mediaAnnotation.imageCaption.title,
             description: t.mediaUnderstanding.description,
             statusLabel: _mediaStatusLabel(context),
             warning: mediaWarning,
@@ -929,18 +903,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                 const MediaAnnotationSettingsPage(
                   embedded: true,
                 ),
-              ListTile(
-                key: const ValueKey('ai_settings_open_media_cloud_account'),
-                title: Text(t.mediaUnderstanding.actions.openCloudAccount),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CloudAccountPage(),
-                    ),
-                  );
-                },
-              ),
               ListTile(
                 key: const ValueKey('ai_settings_open_media_llm_profiles'),
                 title: Text(t.mediaUnderstanding.actions.openByok),

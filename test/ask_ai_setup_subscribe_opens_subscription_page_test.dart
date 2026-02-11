@@ -9,13 +9,14 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Configure AI entry can open cloud account page', (tester) async {
+  testWidgets('Configure AI entry opens unified intelligence settings',
+      (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
       SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
@@ -67,11 +68,17 @@ void main() {
       expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
           findsOneWidget);
 
-      await tester
-          .tap(find.byKey(const ValueKey('ai_settings_open_cloud_account')));
-      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('ai_settings_open_cloud_account')),
+        findsNothing,
+      );
 
-      expect(find.byType(CloudAccountPage), findsOneWidget);
+      await tester
+          .tap(find.byKey(const ValueKey('ai_settings_open_llm_profiles')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+
+      expect(find.byType(LlmProfilesPage), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

@@ -52,7 +52,8 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('Media understanding entry opens unified AI settings page',
+  testWidgets(
+      'Media capabilities are configured inside unified AI settings page',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -72,17 +73,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final mediaEntry = find.byKey(const ValueKey('settings_media_annotation'));
+    expect(
+        find.byKey(const ValueKey('settings_media_annotation')), findsNothing);
+
+    final aiEntry = find.byKey(const ValueKey('settings_ai_source'));
     await tester.dragUntilVisible(
-      mediaEntry,
+      aiEntry,
       find.byType(ListView),
       const Offset(0, -240),
     );
     await tester.pumpAndSettle();
 
-    expect(mediaEntry, findsOneWidget);
-
-    await tester.tap(mediaEntry);
+    await tester.tap(aiEntry);
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);

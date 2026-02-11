@@ -27,7 +27,6 @@ import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
-import 'embedding_profiles_page.dart';
 import 'ai_settings_page.dart';
 import 'llm_profiles_page.dart';
 import 'sync_settings_page.dart';

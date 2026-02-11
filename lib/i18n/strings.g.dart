@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1328 (664 per locale)
 ///
-/// Built on 2026-02-11 at 06:43 UTC
+/// Built on 2026-02-11 at 10:47 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -520,7 +520,8 @@ class _StringsLlmProfilesEn {
   // Translations
   String get title => 'AI profiles';
   String get refreshTooltip => 'Refresh';
-  String get activeProfileHelp => 'Active profile is used for Ask AI.';
+  String get activeProfileHelp =>
+      'The active profile is reused as the general LLM API profile across intelligence features.';
   String get noProfilesYet => 'No profiles yet.';
   String get addProfile => 'Add profile';
   String get deleted => 'AI profile deleted';
@@ -946,8 +947,9 @@ class _StringsSettingsAiSelectionEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'AI source';
-  String get subtitle => 'Choose where each AI capability runs.';
+  String get title => 'Intelligence';
+  String get subtitle =>
+      'Unified settings for Ask AI, embeddings, OCR, speech recognition, and image understanding.';
   late final _StringsSettingsAiSelectionAskAiEn askAi =
       _StringsSettingsAiSelectionAskAiEn._(_root);
   late final _StringsSettingsAiSelectionEmbeddingsEn embeddings =
@@ -3724,7 +3726,7 @@ class _StringsLlmProfilesZhCn extends _StringsLlmProfilesEn {
   @override
   String get refreshTooltip => '刷新';
   @override
-  String get activeProfileHelp => '当前选择的配置将用于「问 AI」。';
+  String get activeProfileHelp => '当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。';
   @override
   String get noProfilesYet => '暂无配置。';
   @override
@@ -4381,9 +4383,9 @@ class _StringsSettingsAiSelectionZhCn extends _StringsSettingsAiSelectionEn {
 
   // Translations
   @override
-  String get title => 'AI 来源';
+  String get title => '智能化';
   @override
-  String get subtitle => '统一管理各项 AI 能力的来源与策略。';
+  String get subtitle => '统一管理问答、向量、OCR、语音识别与图片理解能力。';
   @override
   late final _StringsSettingsAiSelectionAskAiZhCn askAi =
       _StringsSettingsAiSelectionAskAiZhCn._(_root);
@@ -8042,9 +8044,9 @@ extension on Translations {
       case 'settings.embeddingProfiles.subtitle':
         return 'Advanced: use your own provider and key';
       case 'settings.aiSelection.title':
-        return 'AI source';
+        return 'Intelligence';
       case 'settings.aiSelection.subtitle':
-        return 'Choose where each AI capability runs.';
+        return 'Unified settings for Ask AI, embeddings, OCR, speech recognition, and image understanding.';
       case 'settings.aiSelection.askAi.title':
         return 'Ask AI';
       case 'settings.aiSelection.askAi.description':
@@ -8969,7 +8971,7 @@ extension on Translations {
       case 'llmProfiles.refreshTooltip':
         return 'Refresh';
       case 'llmProfiles.activeProfileHelp':
-        return 'Active profile is used for Ask AI.';
+        return 'The active profile is reused as the general LLM API profile across intelligence features.';
       case 'llmProfiles.noProfilesYet':
         return 'No profiles yet.';
       case 'llmProfiles.addProfile':
@@ -9404,9 +9406,9 @@ extension on _StringsZhCn {
       case 'settings.embeddingProfiles.subtitle':
         return '高级：使用你自己的服务商与 Key';
       case 'settings.aiSelection.title':
-        return 'AI 来源';
+        return '智能化';
       case 'settings.aiSelection.subtitle':
-        return '统一管理各项 AI 能力的来源与策略。';
+        return '统一管理问答、向量、OCR、语音识别与图片理解能力。';
       case 'settings.aiSelection.askAi.title':
         return '问 AI';
       case 'settings.aiSelection.askAi.description':
@@ -10322,7 +10324,7 @@ extension on _StringsZhCn {
       case 'llmProfiles.refreshTooltip':
         return '刷新';
       case 'llmProfiles.activeProfileHelp':
-        return '当前选择的配置将用于「问 AI」。';
+        return '当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。';
       case 'llmProfiles.noProfilesYet':
         return '暂无配置。';
       case 'llmProfiles.addProfile':
