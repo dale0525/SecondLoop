@@ -207,10 +207,27 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           !_stopRequested &&
           _streamingAnswer.isNotEmpty;
       final showHoverMenu = !isPending && _hoveredMessageId == stableMsg.id;
-      final canEditMessage =
-          isUser && stableMsg.id != _kFailedAskMessageId && !isPending;
-
       final supportsAttachments = attachmentsBackend != null && !isPending;
+      final attachmentsLoadedForEdit = !supportsAttachments ||
+          _attachmentLinkingMessageIds.contains(stableMsg.id) ||
+          _attachmentsCacheByMessageId.containsKey(stableMsg.id);
+
+      if (supportsAttachments && !attachmentsLoadedForEdit) {
+        unawaited(
+          _loadMessageAttachmentsForUi(
+            messageId: stableMsg.id,
+            attachmentsBackend: attachmentsBackend,
+            sessionKey: sessionKey,
+          ),
+        );
+      }
+
+      final canEditMessage = isUser &&
+          stableMsg.id != _kFailedAskMessageId &&
+          !isPending &&
+          (!supportsAttachments ||
+              (attachmentsLoadedForEdit &&
+                  !_messageHasAttachmentInCache(stableMsg.id)));
 
       final rawText = textOverride ?? stableMsg.content;
       final assistantActions = (!isPending && stableMsg.role == 'assistant')
@@ -547,56 +564,16 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                             FutureBuilder(
                               initialData:
                                   _attachmentsCacheByMessageId[stableMsg.id],
-                              future:
-                                  _attachmentsFuturesByMessageId.putIfAbsent(
-                                stableMsg.id,
-                                () => attachmentsBackend
-                                    .listMessageAttachments(
-                                  sessionKey,
-                                  stableMsg.id,
-                                )
-                                    .then((items) {
-                                  if (items.isEmpty &&
-                                      _attachmentLinkingMessageIds
-                                          .contains(stableMsg.id)) {
-                                    return _attachmentsCacheByMessageId[
-                                            stableMsg.id] ??
-                                        const <Attachment>[];
-                                  }
-                                  _attachmentsCacheByMessageId[stableMsg.id] =
-                                      items;
-                                  return items;
-                                }),
+                              future: _loadMessageAttachmentsForUi(
+                                messageId: stableMsg.id,
+                                attachmentsBackend: attachmentsBackend,
+                                sessionKey: sessionKey,
                               ),
                               builder: (context, snapshot) {
                                 final items =
                                     snapshot.data ?? const <Attachment>[];
                                 if (items.isEmpty) {
                                   return const SizedBox.shrink();
-                                }
-
-                                double estimateAttachmentPreviewWidth(
-                                  Attachment attachment,
-                                ) {
-                                  if (attachment.mimeType
-                                      .startsWith('image/')) {
-                                    // 180px preview + 1px border on each side.
-                                    return 180 + 2;
-                                  }
-                                  // AttachmentCard uses maxWidth=220 with the same SlSurface border.
-                                  return 220 + 2;
-                                }
-
-                                double estimateRowWidth(
-                                    List<Attachment> items) {
-                                  const spacing = 8.0;
-                                  var sum = 0.0;
-                                  for (var i = 0; i < items.length; i++) {
-                                    sum += estimateAttachmentPreviewWidth(
-                                        items[i]);
-                                    if (i != items.length - 1) sum += spacing;
-                                  }
-                                  return sum;
                                 }
 
                                 return Padding(
@@ -607,7 +584,10 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                     builder: (context, constraints) {
                                       const spacing = 8.0;
                                       final estimatedRowWidth =
-                                          estimateRowWidth(items);
+                                          _estimateAttachmentRowWidth(
+                                        items,
+                                        spacing: spacing,
+                                      );
                                       final shouldScroll = estimatedRowWidth >
                                           constraints.maxWidth;
 
@@ -688,7 +668,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                       final double? enrichmentWidth =
                                           firstImage == null
                                               ? null
-                                              : estimateAttachmentPreviewWidth(
+                                              : _estimateAttachmentPreviewWidth(
                                                   firstImage,
                                                 )
                                                   .clamp(
@@ -917,22 +897,10 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
             if (supportsAttachments && annotationJobsBySha256.isNotEmpty)
               FutureBuilder<List<Attachment>>(
                 initialData: _attachmentsCacheByMessageId[stableMsg.id],
-                future: _attachmentsFuturesByMessageId.putIfAbsent(
-                  stableMsg.id,
-                  () => attachmentsBackend
-                      .listMessageAttachments(
-                    sessionKey,
-                    stableMsg.id,
-                  )
-                      .then((items) {
-                    if (items.isEmpty &&
-                        _attachmentLinkingMessageIds.contains(stableMsg.id)) {
-                      return _attachmentsCacheByMessageId[stableMsg.id] ??
-                          const <Attachment>[];
-                    }
-                    _attachmentsCacheByMessageId[stableMsg.id] = items;
-                    return items;
-                  }),
+                future: _loadMessageAttachmentsForUi(
+                  messageId: stableMsg.id,
+                  attachmentsBackend: attachmentsBackend,
+                  sessionKey: sessionKey,
                 ),
                 builder: (context, snapshot) {
                   final items = snapshot.data ?? const <Attachment>[];

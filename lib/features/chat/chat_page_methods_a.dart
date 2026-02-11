@@ -105,8 +105,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return;
     }
 
-    final canEdit =
-        message.role == 'user' && message.id != _kFailedAskMessageId;
+    final canEdit = await _canEditMessage(message);
     final displayText = _displayTextForMessage(message).trim();
     if (!mounted) return;
 
@@ -367,8 +366,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return;
     }
 
-    final canEdit =
-        message.role == 'user' && message.id != _kFailedAskMessageId;
+    final canEdit = await _canEditMessage(message);
     final linkedTodo = await _resolveLinkedTodoInfo(message);
     final canConvertToTodo =
         linkedTodo == null && _displayTextForMessage(message).trim().isNotEmpty;
