@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/audio_transcribe/audio_transcribe_runner.dart';
 import '../../features/attachments/platform_pdf_ocr.dart';
@@ -9,6 +10,7 @@ import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
+import '../ai/media_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
@@ -558,6 +560,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     if (backendAny is! NativeAppBackend) return;
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
 
     _running = true;
     try {
@@ -619,9 +622,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       MediaEnrichmentClient? annotationPrimaryClient;
       var annotationModelName = gatewayConfig.modelName;
 
-      final desiredMode = mediaAnnotationConfig.providerMode.trim();
       final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
       final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
+      final cloudAvailable =
+          subscriptionStatus == SubscriptionStatus.entitled &&
+              hasGateway &&
+              hasIdToken;
 
       List<LlmProfile> llmProfiles = const <LlmProfile>[];
       try {
@@ -663,19 +669,51 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         return activeOpenAiProfile();
       }
 
+      final hasOpenAiByokProfile = effectiveOpenAiProfile() != null;
+      final prefs = await SharedPreferences.getInstance();
+      final mediaPreference =
+          switch ((prefs.getString(MediaSourcePrefs.prefsKey) ?? '').trim()) {
+        'cloud' => MediaSourcePreference.cloud,
+        'byok' => MediaSourcePreference.byok,
+        'local' => MediaSourcePreference.local,
+        _ => MediaSourcePreference.auto,
+      };
+
+      final effectiveRoute = resolveMediaSourceRoute(
+        mediaPreference,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasOpenAiByokProfile,
+      );
+      final effectiveDesiredMode = switch (effectiveRoute) {
+        MediaSourceRouteKind.cloudGateway => 'cloud_gateway',
+        MediaSourceRouteKind.byok => 'byok_profile',
+        MediaSourceRouteKind.local => 'follow_ask_ai',
+      };
+
+      final effectiveMediaAnnotationConfig = MediaAnnotationConfig(
+        annotateEnabled: mediaAnnotationConfig.annotateEnabled,
+        searchEnabled: mediaAnnotationConfig.searchEnabled,
+        allowCellular: mediaAnnotationConfig.allowCellular,
+        providerMode: effectiveDesiredMode,
+        byokProfileId: effectiveRoute == MediaSourceRouteKind.local
+            ? null
+            : mediaAnnotationConfig.byokProfileId,
+        cloudModelName: mediaAnnotationConfig.cloudModelName,
+      );
+
       var hasCloudAnnotationModel = false;
-      if (mediaAnnotationConfig.annotateEnabled) {
-        if (desiredMode == 'cloud_gateway') {
-          if (subscriptionStatus == SubscriptionStatus.entitled &&
-              hasGateway &&
-              hasIdToken) {
-            annotationModelName =
-                mediaAnnotationConfig.cloudModelName?.trim().isNotEmpty == true
-                    ? mediaAnnotationConfig.cloudModelName!.trim()
-                    : gatewayConfig.modelName;
+      if (effectiveMediaAnnotationConfig.annotateEnabled) {
+        if (effectiveDesiredMode == 'cloud_gateway') {
+          if (cloudAvailable) {
+            annotationModelName = effectiveMediaAnnotationConfig.cloudModelName
+                        ?.trim()
+                        .isNotEmpty ==
+                    true
+                ? effectiveMediaAnnotationConfig.cloudModelName!.trim()
+                : gatewayConfig.modelName;
             hasCloudAnnotationModel = annotationModelName.trim().isNotEmpty;
           }
-        } else {
+        } else if (effectiveDesiredMode == 'byok_profile') {
           final profile = effectiveOpenAiProfile();
           if (profile != null) {
             annotationPrimaryClient = _ByokMediaEnrichmentClient(
@@ -688,25 +726,31 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
-      final allowImageOcrFallback = mediaAnnotationConfig.annotateEnabled &&
-          subscriptionStatus != SubscriptionStatus.entitled &&
-          (contentConfig?.ocrEnabled ?? true);
+      final allowImageOcrFallback =
+          effectiveMediaAnnotationConfig.annotateEnabled &&
+              (contentConfig?.ocrEnabled ?? true) &&
+              effectiveRoute != MediaSourceRouteKind.cloudGateway;
 
-      final annotationEnabled = mediaAnnotationConfig.annotateEnabled &&
-          (annotationPrimaryClient != null ||
-              hasCloudAnnotationModel ||
-              allowImageOcrFallback);
-      final audioTranscribeCloudEnabled = desiredMode == 'cloud_gateway' &&
-          subscriptionStatus == SubscriptionStatus.entitled &&
-          hasGateway &&
-          hasIdToken;
-      final audioTranscribeByokProfile = effectiveOpenAiProfile();
+      final annotationEnabled =
+          effectiveMediaAnnotationConfig.annotateEnabled &&
+              (annotationPrimaryClient != null ||
+                  hasCloudAnnotationModel ||
+                  allowImageOcrFallback);
+      final audioTranscribeCloudEnabled =
+          effectiveRoute == MediaSourceRouteKind.cloudGateway && cloudAvailable;
+      final audioTranscribeByokProfile =
+          effectiveRoute == MediaSourceRouteKind.local
+              ? null
+              : effectiveOpenAiProfile();
+      final effectiveAudioEngine = effectiveRoute == MediaSourceRouteKind.local
+          ? 'local_runtime'
+          : normalizeAudioTranscribeEngine(
+              contentConfig?.audioTranscribeEngine ?? 'whisper',
+            );
       final audioTranscribeSelection = _buildAudioTranscribeClientSelection(
         cloudEnabled: audioTranscribeCloudEnabled,
         byokProfile: audioTranscribeByokProfile,
-        effectiveEngine: normalizeAudioTranscribeEngine(
-          contentConfig?.audioTranscribeEngine ?? 'whisper',
-        ),
+        effectiveEngine: effectiveAudioEngine,
         gatewayBaseUrl: gatewayConfig.baseUrl,
         cloudIdToken: idToken?.trim() ?? '',
         sessionKey: Uint8List.fromList(sessionKey),
@@ -723,8 +767,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         _schedule(_kIdleInterval);
         return;
       }
-
-      final syncEngine = SyncEngineScope.maybeOf(context);
 
       MediaEnrichmentNetwork? lastNetwork;
       MediaEnrichmentNetwork? cachedNetwork;
@@ -782,6 +824,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           ? 'device_plus_en'
           : rawConfiguredOcrHints.trim();
 
+      final shouldTryMultimodalOcr =
+          effectiveRoute != MediaSourceRouteKind.local;
+
       var processedAutoPdfOcr = 0;
       if (documentExtractEnabled) {
         try {
@@ -789,21 +834,23 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
-            runMultimodalPdfOcr: (bytes, {required pageCount}) {
-              return tryConfiguredMultimodalPdfOcr(
-                backend: backend,
-                sessionKey: Uint8List.fromList(sessionKey),
-                pdfBytes: bytes,
-                pageCountHint: pageCount,
-                languageHints: configuredOcrHints,
-                subscriptionStatus: subscriptionStatus,
-                mediaAnnotationConfig: mediaAnnotationConfig,
-                llmProfiles: llmProfiles,
-                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-                cloudIdToken: idToken?.trim() ?? '',
-                cloudModelName: gatewayConfig.modelName,
-              );
-            },
+            runMultimodalPdfOcr: shouldTryMultimodalOcr
+                ? (bytes, {required pageCount}) {
+                    return tryConfiguredMultimodalPdfOcr(
+                      backend: backend,
+                      sessionKey: Uint8List.fromList(sessionKey),
+                      pdfBytes: bytes,
+                      pageCountHint: pageCount,
+                      languageHints: configuredOcrHints,
+                      subscriptionStatus: subscriptionStatus,
+                      mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+                      llmProfiles: llmProfiles,
+                      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+                      cloudIdToken: idToken?.trim() ?? '',
+                      cloudModelName: gatewayConfig.modelName,
+                    );
+                  }
+                : (bytes, {required pageCount}) async => null,
             onAutoPdfOcrStatusChanged: () {
               syncEngine?.notifyExternalChange();
             },
@@ -820,22 +867,24 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
-            runDocxOcr: (bytes,
-                {required pageCount, required languageHints}) async {
-              return tryConfiguredDocxOcr(
-                backend: backend,
-                sessionKey: Uint8List.fromList(sessionKey),
-                docxBytes: bytes,
-                pageCountHint: pageCount,
-                languageHints: languageHints,
-                subscriptionStatus: subscriptionStatus,
-                mediaAnnotationConfig: mediaAnnotationConfig,
-                llmProfiles: llmProfiles,
-                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-                cloudIdToken: idToken?.trim() ?? '',
-                cloudModelName: gatewayConfig.modelName,
-              );
-            },
+            runDocxOcr: shouldTryMultimodalOcr
+                ? (bytes, {required pageCount, required languageHints}) async {
+                    return tryConfiguredDocxOcr(
+                      backend: backend,
+                      sessionKey: Uint8List.fromList(sessionKey),
+                      docxBytes: bytes,
+                      pageCountHint: pageCount,
+                      languageHints: languageHints,
+                      subscriptionStatus: subscriptionStatus,
+                      mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+                      llmProfiles: llmProfiles,
+                      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+                      cloudIdToken: idToken?.trim() ?? '',
+                      cloudModelName: gatewayConfig.modelName,
+                    );
+                  }
+                : (bytes, {required pageCount, required languageHints}) async =>
+                    null,
           );
         } catch (_) {
           processedAutoDocxOcr = 0;

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1276 (638 per locale)
+/// Strings: 1328 (664 per locale)
 ///
-/// Built on 2026-02-11 at 06:00 UTC
+/// Built on 2026-02-11 at 06:43 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1860,8 +1860,12 @@ class _StringsSettingsAiSelectionEmbeddingsEn {
   String get title => 'Semantic search & embeddings';
   String get description =>
       'Used for recall, todo linking, and Ask AI retrieval quality.';
-  String get status =>
-      'Configure cloud or API key profiles for semantic capabilities.';
+  String get preferenceUnavailableHint =>
+      'Selected embeddings source is unavailable. Running on fallback route.';
+  late final _StringsSettingsAiSelectionEmbeddingsStatusEn status =
+      _StringsSettingsAiSelectionEmbeddingsStatusEn._(_root);
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceEn preference =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceEn._(_root);
   late final _StringsSettingsAiSelectionEmbeddingsActionsEn actions =
       _StringsSettingsAiSelectionEmbeddingsActionsEn._(_root);
 }
@@ -1876,7 +1880,13 @@ class _StringsSettingsAiSelectionMediaUnderstandingEn {
   String get title => 'Media understanding';
   String get description =>
       'OCR, captions, and audio transcription source selection.';
-  String get status => 'Manage runtime/local/cloud strategy in media settings.';
+  String get preferenceUnavailableHint =>
+      'Selected media source is unavailable. Running on fallback route.';
+  late final _StringsSettingsAiSelectionMediaUnderstandingStatusEn status =
+      _StringsSettingsAiSelectionMediaUnderstandingStatusEn._(_root);
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceEn
+      preference =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceEn._(_root);
   late final _StringsSettingsAiSelectionMediaUnderstandingActionsEn actions =
       _StringsSettingsAiSelectionMediaUnderstandingActionsEn._(_root);
 }
@@ -2571,6 +2581,36 @@ class _StringsSettingsAiSelectionAskAiActionsEn {
   String get openByok => 'Open API keys';
 }
 
+// Path: settings.aiSelection.embeddings.status
+class _StringsSettingsAiSelectionEmbeddingsStatusEn {
+  _StringsSettingsAiSelectionEmbeddingsStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get loading => 'Checking current route...';
+  String get cloud => 'Current route: SecondLoop Cloud';
+  String get byok => 'Current route: Embedding API key (BYOK)';
+  String get local => 'Current route: Local embeddings runtime';
+}
+
+// Path: settings.aiSelection.embeddings.preference
+class _StringsSettingsAiSelectionEmbeddingsPreferenceEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceAutoEn auto =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceAutoEn._(_root);
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceCloudEn cloud =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceCloudEn._(_root);
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceByokEn byok =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceByokEn._(_root);
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceLocalEn local =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceLocalEn._(_root);
+}
+
 // Path: settings.aiSelection.embeddings.actions
 class _StringsSettingsAiSelectionEmbeddingsActionsEn {
   _StringsSettingsAiSelectionEmbeddingsActionsEn._(this._root);
@@ -2582,6 +2622,40 @@ class _StringsSettingsAiSelectionEmbeddingsActionsEn {
   String get openCloudAccount => 'Open Cloud account';
 }
 
+// Path: settings.aiSelection.mediaUnderstanding.status
+class _StringsSettingsAiSelectionMediaUnderstandingStatusEn {
+  _StringsSettingsAiSelectionMediaUnderstandingStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get loading => 'Checking current route...';
+  String get cloud => 'Current route: SecondLoop Cloud';
+  String get byok => 'Current route: API key profile (BYOK)';
+  String get local => 'Current route: Local runtime/native capabilities';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoEn
+      auto =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoEn._(_root);
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudEn
+      cloud =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudEn._(_root);
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokEn
+      byok =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokEn._(_root);
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalEn
+      local =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalEn._(_root);
+}
+
 // Path: settings.aiSelection.mediaUnderstanding.actions
 class _StringsSettingsAiSelectionMediaUnderstandingActionsEn {
   _StringsSettingsAiSelectionMediaUnderstandingActionsEn._(this._root);
@@ -2590,6 +2664,8 @@ class _StringsSettingsAiSelectionMediaUnderstandingActionsEn {
 
   // Translations
   String get openSettings => 'Open media understanding settings';
+  String get openCloudAccount => 'Open Cloud account';
+  String get openByok => 'Open API keys';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.enabled
@@ -2864,6 +2940,100 @@ class _StringsSettingsAiSelectionAskAiPreferenceByokEn {
   String get title => 'API key (BYOK)';
   String get description =>
       'Use BYOK only. Ask AI stays unavailable until an active profile exists.';
+}
+
+// Path: settings.aiSelection.embeddings.preference.auto
+class _StringsSettingsAiSelectionEmbeddingsPreferenceAutoEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceAutoEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Auto';
+  String get description => 'Prefer Cloud, then BYOK, then local runtime.';
+}
+
+// Path: settings.aiSelection.embeddings.preference.cloud
+class _StringsSettingsAiSelectionEmbeddingsPreferenceCloudEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceCloudEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'SecondLoop Cloud';
+  String get description =>
+      'Prefer Cloud. If unavailable, fallback to BYOK or local runtime.';
+}
+
+// Path: settings.aiSelection.embeddings.preference.byok
+class _StringsSettingsAiSelectionEmbeddingsPreferenceByokEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceByokEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'API key (BYOK)';
+  String get description =>
+      'Prefer BYOK. Automatically fallback to local runtime on failure.';
+}
+
+// Path: settings.aiSelection.embeddings.preference.local
+class _StringsSettingsAiSelectionEmbeddingsPreferenceLocalEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceLocalEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Local runtime';
+  String get description =>
+      'Run embeddings only on local runtime when available.';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.auto
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Auto';
+  String get description => 'Prefer Cloud, then BYOK, then local capabilities.';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.cloud
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'SecondLoop Cloud';
+  String get description =>
+      'Prefer Cloud. If unavailable, fallback to BYOK or local capabilities.';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.byok
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'API key (BYOK)';
+  String get description =>
+      'Prefer BYOK. Automatically fallback to local capabilities on failure.';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.local
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Local capabilities';
+  String get description =>
+      'Prefer local runtime/native media understanding only.';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.languageHints.labels
@@ -5577,7 +5747,13 @@ class _StringsSettingsAiSelectionEmbeddingsZhCn
   @override
   String get description => '用于记忆召回、待办关联和问 AI 检索质量。';
   @override
-  String get status => '可配置 Cloud 或 API 密钥来源以启用语义能力。';
+  String get preferenceUnavailableHint => '你选择的向量来源当前不可用，已自动使用回落路线。';
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsStatusZhCn status =
+      _StringsSettingsAiSelectionEmbeddingsStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceZhCn preference =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceZhCn._(_root);
   @override
   late final _StringsSettingsAiSelectionEmbeddingsActionsZhCn actions =
       _StringsSettingsAiSelectionEmbeddingsActionsZhCn._(_root);
@@ -5599,7 +5775,14 @@ class _StringsSettingsAiSelectionMediaUnderstandingZhCn
   @override
   String get description => 'OCR、图片描述和音频转写的来源选择。';
   @override
-  String get status => '在媒体设置中管理 runtime / 本地 / Cloud 策略。';
+  String get preferenceUnavailableHint => '你选择的媒体来源当前不可用，已自动使用回落路线。';
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn status =
+      _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceZhCn
+      preference =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceZhCn._(_root);
   @override
   late final _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn actions =
       _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn._(_root);
@@ -6633,6 +6816,52 @@ class _StringsSettingsAiSelectionAskAiActionsZhCn
   String get openByok => '打开 API 密钥';
 }
 
+// Path: settings.aiSelection.embeddings.status
+class _StringsSettingsAiSelectionEmbeddingsStatusZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsStatusEn {
+  _StringsSettingsAiSelectionEmbeddingsStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get loading => '正在检查当前路由...';
+  @override
+  String get cloud => '当前路由：SecondLoop Cloud';
+  @override
+  String get byok => '当前路由：向量 API 密钥（BYOK）';
+  @override
+  String get local => '当前路由：本地向量能力';
+}
+
+// Path: settings.aiSelection.embeddings.preference
+class _StringsSettingsAiSelectionEmbeddingsPreferenceZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsPreferenceEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceAutoZhCn auto =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceAutoZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceCloudZhCn cloud =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceCloudZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceByokZhCn byok =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceByokZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionEmbeddingsPreferenceLocalZhCn local =
+      _StringsSettingsAiSelectionEmbeddingsPreferenceLocalZhCn._(_root);
+}
+
 // Path: settings.aiSelection.embeddings.actions
 class _StringsSettingsAiSelectionEmbeddingsActionsZhCn
     extends _StringsSettingsAiSelectionEmbeddingsActionsEn {
@@ -6650,6 +6879,57 @@ class _StringsSettingsAiSelectionEmbeddingsActionsZhCn
   String get openCloudAccount => '打开 Cloud 账户';
 }
 
+// Path: settings.aiSelection.mediaUnderstanding.status
+class _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingStatusEn {
+  _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get loading => '正在检查当前路由...';
+  @override
+  String get cloud => '当前路由：SecondLoop Cloud';
+  @override
+  String get byok => '当前路由：API 密钥配置（BYOK）';
+  @override
+  String get local => '当前路由：本地 runtime / 系统原生能力';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingPreferenceEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoZhCn
+      auto =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudZhCn
+      cloud =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokZhCn
+      byok =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokZhCn._(_root);
+  @override
+  late final _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalZhCn
+      local =
+      _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalZhCn._(_root);
+}
+
 // Path: settings.aiSelection.mediaUnderstanding.actions
 class _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn
     extends _StringsSettingsAiSelectionMediaUnderstandingActionsEn {
@@ -6663,6 +6943,10 @@ class _StringsSettingsAiSelectionMediaUnderstandingActionsZhCn
   // Translations
   @override
   String get openSettings => '打开媒体理解设置';
+  @override
+  String get openCloudAccount => '打开 Cloud 账户';
+  @override
+  String get openByok => '打开 API 密钥';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.enabled
@@ -7069,6 +7353,146 @@ class _StringsSettingsAiSelectionAskAiPreferenceByokZhCn
   String get title => 'API 密钥（BYOK）';
   @override
   String get description => '仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。';
+}
+
+// Path: settings.aiSelection.embeddings.preference.auto
+class _StringsSettingsAiSelectionEmbeddingsPreferenceAutoZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsPreferenceAutoEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceAutoZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '自动';
+  @override
+  String get description => '优先 Cloud，其次 BYOK，最后本地能力。';
+}
+
+// Path: settings.aiSelection.embeddings.preference.cloud
+class _StringsSettingsAiSelectionEmbeddingsPreferenceCloudZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsPreferenceCloudEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceCloudZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'SecondLoop Cloud';
+  @override
+  String get description => '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+}
+
+// Path: settings.aiSelection.embeddings.preference.byok
+class _StringsSettingsAiSelectionEmbeddingsPreferenceByokZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsPreferenceByokEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceByokZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'API 密钥（BYOK）';
+  @override
+  String get description => '优先使用 BYOK。失败时自动回落到本地能力。';
+}
+
+// Path: settings.aiSelection.embeddings.preference.local
+class _StringsSettingsAiSelectionEmbeddingsPreferenceLocalZhCn
+    extends _StringsSettingsAiSelectionEmbeddingsPreferenceLocalEn {
+  _StringsSettingsAiSelectionEmbeddingsPreferenceLocalZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '本地能力';
+  @override
+  String get description => '尽量只使用本地向量能力。';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.auto
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '自动';
+  @override
+  String get description => '优先 Cloud，其次 BYOK，最后本地能力。';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.cloud
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'SecondLoop Cloud';
+  @override
+  String get description => '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.byok
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'API 密钥（BYOK）';
+  @override
+  String get description => '优先使用 BYOK。失败时自动回落到本地能力。';
+}
+
+// Path: settings.aiSelection.mediaUnderstanding.preference.local
+class _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalZhCn
+    extends _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalEn {
+  _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '本地能力';
+  @override
+  String get description => '优先使用本地 runtime / 系统原生媒体理解能力。';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.languageHints.labels
@@ -7657,8 +8081,32 @@ extension on Translations {
         return 'Semantic search & embeddings';
       case 'settings.aiSelection.embeddings.description':
         return 'Used for recall, todo linking, and Ask AI retrieval quality.';
-      case 'settings.aiSelection.embeddings.status':
-        return 'Configure cloud or API key profiles for semantic capabilities.';
+      case 'settings.aiSelection.embeddings.preferenceUnavailableHint':
+        return 'Selected embeddings source is unavailable. Running on fallback route.';
+      case 'settings.aiSelection.embeddings.status.loading':
+        return 'Checking current route...';
+      case 'settings.aiSelection.embeddings.status.cloud':
+        return 'Current route: SecondLoop Cloud';
+      case 'settings.aiSelection.embeddings.status.byok':
+        return 'Current route: Embedding API key (BYOK)';
+      case 'settings.aiSelection.embeddings.status.local':
+        return 'Current route: Local embeddings runtime';
+      case 'settings.aiSelection.embeddings.preference.auto.title':
+        return 'Auto';
+      case 'settings.aiSelection.embeddings.preference.auto.description':
+        return 'Prefer Cloud, then BYOK, then local runtime.';
+      case 'settings.aiSelection.embeddings.preference.cloud.title':
+        return 'SecondLoop Cloud';
+      case 'settings.aiSelection.embeddings.preference.cloud.description':
+        return 'Prefer Cloud. If unavailable, fallback to BYOK or local runtime.';
+      case 'settings.aiSelection.embeddings.preference.byok.title':
+        return 'API key (BYOK)';
+      case 'settings.aiSelection.embeddings.preference.byok.description':
+        return 'Prefer BYOK. Automatically fallback to local runtime on failure.';
+      case 'settings.aiSelection.embeddings.preference.local.title':
+        return 'Local runtime';
+      case 'settings.aiSelection.embeddings.preference.local.description':
+        return 'Run embeddings only on local runtime when available.';
       case 'settings.aiSelection.embeddings.actions.openEmbeddingProfiles':
         return 'Open embedding API keys';
       case 'settings.aiSelection.embeddings.actions.openCloudAccount':
@@ -7667,10 +8115,38 @@ extension on Translations {
         return 'Media understanding';
       case 'settings.aiSelection.mediaUnderstanding.description':
         return 'OCR, captions, and audio transcription source selection.';
-      case 'settings.aiSelection.mediaUnderstanding.status':
-        return 'Manage runtime/local/cloud strategy in media settings.';
+      case 'settings.aiSelection.mediaUnderstanding.preferenceUnavailableHint':
+        return 'Selected media source is unavailable. Running on fallback route.';
+      case 'settings.aiSelection.mediaUnderstanding.status.loading':
+        return 'Checking current route...';
+      case 'settings.aiSelection.mediaUnderstanding.status.cloud':
+        return 'Current route: SecondLoop Cloud';
+      case 'settings.aiSelection.mediaUnderstanding.status.byok':
+        return 'Current route: API key profile (BYOK)';
+      case 'settings.aiSelection.mediaUnderstanding.status.local':
+        return 'Current route: Local runtime/native capabilities';
+      case 'settings.aiSelection.mediaUnderstanding.preference.auto.title':
+        return 'Auto';
+      case 'settings.aiSelection.mediaUnderstanding.preference.auto.description':
+        return 'Prefer Cloud, then BYOK, then local capabilities.';
+      case 'settings.aiSelection.mediaUnderstanding.preference.cloud.title':
+        return 'SecondLoop Cloud';
+      case 'settings.aiSelection.mediaUnderstanding.preference.cloud.description':
+        return 'Prefer Cloud. If unavailable, fallback to BYOK or local capabilities.';
+      case 'settings.aiSelection.mediaUnderstanding.preference.byok.title':
+        return 'API key (BYOK)';
+      case 'settings.aiSelection.mediaUnderstanding.preference.byok.description':
+        return 'Prefer BYOK. Automatically fallback to local capabilities on failure.';
+      case 'settings.aiSelection.mediaUnderstanding.preference.local.title':
+        return 'Local capabilities';
+      case 'settings.aiSelection.mediaUnderstanding.preference.local.description':
+        return 'Prefer local runtime/native media understanding only.';
       case 'settings.aiSelection.mediaUnderstanding.actions.openSettings':
         return 'Open media understanding settings';
+      case 'settings.aiSelection.mediaUnderstanding.actions.openCloudAccount':
+        return 'Open Cloud account';
+      case 'settings.aiSelection.mediaUnderstanding.actions.openByok':
+        return 'Open API keys';
       case 'settings.semanticParseAutoActions.title':
         return 'AI semantic actions';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
@@ -8967,8 +9443,32 @@ extension on _StringsZhCn {
         return '语义搜索与向量';
       case 'settings.aiSelection.embeddings.description':
         return '用于记忆召回、待办关联和问 AI 检索质量。';
-      case 'settings.aiSelection.embeddings.status':
-        return '可配置 Cloud 或 API 密钥来源以启用语义能力。';
+      case 'settings.aiSelection.embeddings.preferenceUnavailableHint':
+        return '你选择的向量来源当前不可用，已自动使用回落路线。';
+      case 'settings.aiSelection.embeddings.status.loading':
+        return '正在检查当前路由...';
+      case 'settings.aiSelection.embeddings.status.cloud':
+        return '当前路由：SecondLoop Cloud';
+      case 'settings.aiSelection.embeddings.status.byok':
+        return '当前路由：向量 API 密钥（BYOK）';
+      case 'settings.aiSelection.embeddings.status.local':
+        return '当前路由：本地向量能力';
+      case 'settings.aiSelection.embeddings.preference.auto.title':
+        return '自动';
+      case 'settings.aiSelection.embeddings.preference.auto.description':
+        return '优先 Cloud，其次 BYOK，最后本地能力。';
+      case 'settings.aiSelection.embeddings.preference.cloud.title':
+        return 'SecondLoop Cloud';
+      case 'settings.aiSelection.embeddings.preference.cloud.description':
+        return '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+      case 'settings.aiSelection.embeddings.preference.byok.title':
+        return 'API 密钥（BYOK）';
+      case 'settings.aiSelection.embeddings.preference.byok.description':
+        return '优先使用 BYOK。失败时自动回落到本地能力。';
+      case 'settings.aiSelection.embeddings.preference.local.title':
+        return '本地能力';
+      case 'settings.aiSelection.embeddings.preference.local.description':
+        return '尽量只使用本地向量能力。';
       case 'settings.aiSelection.embeddings.actions.openEmbeddingProfiles':
         return '打开向量 API 密钥';
       case 'settings.aiSelection.embeddings.actions.openCloudAccount':
@@ -8977,10 +9477,38 @@ extension on _StringsZhCn {
         return '媒体理解';
       case 'settings.aiSelection.mediaUnderstanding.description':
         return 'OCR、图片描述和音频转写的来源选择。';
-      case 'settings.aiSelection.mediaUnderstanding.status':
-        return '在媒体设置中管理 runtime / 本地 / Cloud 策略。';
+      case 'settings.aiSelection.mediaUnderstanding.preferenceUnavailableHint':
+        return '你选择的媒体来源当前不可用，已自动使用回落路线。';
+      case 'settings.aiSelection.mediaUnderstanding.status.loading':
+        return '正在检查当前路由...';
+      case 'settings.aiSelection.mediaUnderstanding.status.cloud':
+        return '当前路由：SecondLoop Cloud';
+      case 'settings.aiSelection.mediaUnderstanding.status.byok':
+        return '当前路由：API 密钥配置（BYOK）';
+      case 'settings.aiSelection.mediaUnderstanding.status.local':
+        return '当前路由：本地 runtime / 系统原生能力';
+      case 'settings.aiSelection.mediaUnderstanding.preference.auto.title':
+        return '自动';
+      case 'settings.aiSelection.mediaUnderstanding.preference.auto.description':
+        return '优先 Cloud，其次 BYOK，最后本地能力。';
+      case 'settings.aiSelection.mediaUnderstanding.preference.cloud.title':
+        return 'SecondLoop Cloud';
+      case 'settings.aiSelection.mediaUnderstanding.preference.cloud.description':
+        return '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+      case 'settings.aiSelection.mediaUnderstanding.preference.byok.title':
+        return 'API 密钥（BYOK）';
+      case 'settings.aiSelection.mediaUnderstanding.preference.byok.description':
+        return '优先使用 BYOK。失败时自动回落到本地能力。';
+      case 'settings.aiSelection.mediaUnderstanding.preference.local.title':
+        return '本地能力';
+      case 'settings.aiSelection.mediaUnderstanding.preference.local.description':
+        return '优先使用本地 runtime / 系统原生媒体理解能力。';
       case 'settings.aiSelection.mediaUnderstanding.actions.openSettings':
         return '打开媒体理解设置';
+      case 'settings.aiSelection.mediaUnderstanding.actions.openCloudAccount':
+        return '打开 Cloud 账户';
+      case 'settings.aiSelection.mediaUnderstanding.actions.openByok':
+        return '打开 API 密钥';
       case 'settings.semanticParseAutoActions.title':
         return 'AI 语义动作';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
