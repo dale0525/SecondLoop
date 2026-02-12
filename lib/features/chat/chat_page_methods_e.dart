@@ -528,9 +528,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       cloudGatewayBaseUrl: route == AskAiRouteKind.cloudGateway
           ? cloudGatewayConfig.baseUrl
           : null,
-      cloudIdTokenForStream: route == AskAiRouteKind.cloudGateway
-          ? cloudIdToken
-          : null,
+      cloudIdTokenForStream:
+          route == AskAiRouteKind.cloudGateway ? cloudIdToken : null,
     );
   }
 
@@ -769,7 +768,17 @@ extension _ChatPageStateMethodsE on _ChatPageState {
   }
 
   Future<void> _recoverDetachedAskAiIfNeeded() async {
+    if (!mounted) return;
     if (_detachedAskRecoveryChecked) return;
+
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    if (cloudAuthScope == null) {
+      _detachedAskRecoveryChecked = false;
+      return;
+    }
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
     _detachedAskRecoveryChecked = true;
 
     _detachedAskRecoveryTimer?.cancel();
@@ -825,12 +834,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       return;
     }
 
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    if (cloudAuthScope == null) {
-      _detachedAskRecoveryChecked = false;
-      return;
-    }
-
     String? idToken;
     try {
       idToken = await cloudAuthScope.controller.getIdToken();
@@ -863,15 +866,14 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
     final state = (status['status'] as String?)?.trim().toLowerCase() ?? '';
 
-    const pollMaxAgeMs = 20 * 60 * 1000;
     if (state == 'running' || state == 'cancel_requested') {
-      if (createdAtMs != null && nowMs - createdAtMs > pollMaxAgeMs) {
-        await prefs.remove(_kAskAiDetachedJobPrefsKey);
-        return;
-      }
+      final pollDelay = detachedAskRecoveryPollDelay(
+        nowMs: nowMs,
+        createdAtMs: createdAtMs,
+      );
 
       _detachedAskRecoveryChecked = false;
-      _detachedAskRecoveryTimer = Timer(const Duration(seconds: 3), () {
+      _detachedAskRecoveryTimer = Timer(pollDelay, () {
         if (!mounted) return;
         unawaited(_recoverDetachedAskAiIfNeeded());
       });
@@ -885,8 +887,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
         return;
       }
 
-      final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
       await backend.insertMessage(
         sessionKey,
         widget.conversation.id,
@@ -917,7 +917,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     await prefs.remove(_kAskAiDetachedJobPrefsKey);
   }
 
-
   Future<Map<String, dynamic>?> _fetchDetachedAskJobStatus({
     required String gatewayBaseUrl,
     required String idToken,
@@ -931,16 +930,13 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final client = HttpClient();
     try {
       final uri = Uri.parse(base).resolve('/v1/chat/jobs/$rid');
-      final req = await client
-          .getUrl(uri)
-          .timeout(const Duration(seconds: 12));
+      final req = await client.getUrl(uri).timeout(const Duration(seconds: 12));
       req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       req.headers.set(HttpHeaders.acceptHeader, 'application/json');
 
       final resp = await req.close().timeout(const Duration(seconds: 45));
-      final text = await utf8
-          .decodeStream(resp)
-          .timeout(const Duration(seconds: 45));
+      final text =
+          await utf8.decodeStream(resp).timeout(const Duration(seconds: 45));
       if (resp.statusCode == 404) {
         return <String, dynamic>{'status': 'not_found'};
       }
@@ -969,9 +965,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final client = HttpClient();
     try {
       final uri = Uri.parse(base).resolve('/v1/chat/jobs/$rid/cancel');
-      final req = await client
-          .postUrl(uri)
-          .timeout(const Duration(seconds: 12));
+      final req =
+          await client.postUrl(uri).timeout(const Duration(seconds: 12));
       req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
       req.add(utf8.encode('{}'));

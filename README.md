@@ -27,6 +27,8 @@ The core mental model is **One Timeline** (a single “Main Stream”), plus a l
 
 - 🧠 **Long‑term memory, local‑first**: store your timeline in an encrypted local database.
 - 🧲 **Ask AI with RAG**: answers come with context retrieved locally (Top‑K snippets), with streaming + cancel.
+- ⏱️ **Adaptive remote timeout policy**: Cloud + BYOK request timeouts scale with prompt/media size to better fit longer multimodal outputs.
+- ♻️ **Cloud detach + recover**: Cloud Ask AI can continue server-side after app disconnect and recover completed answers after reconnect (BYOK stays direct).
 - 🗂️ **Focus instead of “new chats”**: narrow context by time/tags without managing sessions.
 - 📥 **Capture from anywhere**: mobile share sheet, desktop global hotkey, quick “send to vault”.
 - 🔐 **Encrypted vault & data sovereignty**: choose where your data lives; sync is designed around E2EE.
