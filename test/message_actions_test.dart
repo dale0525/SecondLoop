@@ -6,11 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/src/rust/db.dart';
 
-import 'test_i18n.dart';
+import 'message_actions_test_helpers.dart';
+import 'noop_sync_runner.dart';
 
 void main() {
   setUp(() {
@@ -31,7 +31,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     expect(find.text('hello'), findsOneWidget);
@@ -42,7 +42,7 @@ void main() {
     expect(find.byKey(const ValueKey('message_actions_sheet')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
-    await _confirmChatMessageDelete(tester);
+    await confirmChatMessageDelete(tester);
 
     expect(find.text('hello'), findsNothing);
     expect(backend.deletedMessageIds, contains('m1'));
@@ -73,7 +73,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     expect(find.text('hello'), findsOneWidget);
@@ -83,7 +83,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
-    await _confirmChatTodoDelete(tester);
+    await confirmChatTodoDelete(tester);
 
     expect(find.text('hello'), findsNothing);
     expect(backend.deletedTodoIds, contains('t1'));
@@ -103,7 +103,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     expect(find.text('hello'), findsOneWidget);
@@ -146,7 +146,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('message_edit_m1')), findsNothing);
@@ -163,7 +163,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('message_delete_m1')));
     await tester.pumpAndSettle();
-    await _confirmChatMessageDelete(tester);
+    await confirmChatMessageDelete(tester);
 
     expect(find.text('hello'), findsNothing);
     expect(backend.deletedMessageIds, contains('m1'));
@@ -190,7 +190,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -235,7 +235,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     final pos = tester.getCenter(find.text('hello'));
@@ -273,7 +273,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     final pos = tester.getCenter(find.text('hello'));
@@ -323,7 +323,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('hello'));
@@ -349,6 +349,51 @@ void main() {
     expect(created.dueAtMs, isNotNull);
   });
 
+  testWidgets('Converting message to todo notifies sync engine',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'hello',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    var changes = 0;
+    engine.changes.addListener(() => changes += 1);
+
+    await tester
+        .pumpWidget(wrapChatForTests(backend: backend, syncEngine: engine));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('hello'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_convert_todo')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('message_convert_todo_due_picker_m1')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(backend.upsertedTodos.map((t) => t.id), contains('todo:m1'));
+    expect(changes, 1);
+  });
+
   testWidgets('Photo placeholder message hides convert-to-todo action',
       (tester) async {
     final backend = MessageActionsBackend(
@@ -364,7 +409,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.longPress(find.byKey(const ValueKey('message_bubble_m1')));
@@ -395,7 +440,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     final pos =
@@ -440,7 +485,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('hello'));
@@ -485,7 +530,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('hello'));
@@ -546,7 +591,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('note'));
@@ -575,7 +620,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('ai'));
@@ -587,48 +632,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('message_action_delete')));
     await tester.pumpAndSettle();
-    await _confirmChatMessageDelete(tester);
+    await confirmChatMessageDelete(tester);
     expect(find.text('ai'), findsNothing);
     expect(backend.deletedMessageIds, contains('m2'));
   });
-}
-
-Future<void> _confirmChatMessageDelete(WidgetTester tester) async {
-  expect(find.byType(AlertDialog), findsOneWidget);
-  await tester.tap(find.byKey(const ValueKey('chat_delete_message_confirm')));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _confirmChatTodoDelete(WidgetTester tester) async {
-  expect(find.byType(AlertDialog), findsOneWidget);
-  await tester.tap(find.byKey(const ValueKey('chat_delete_todo_confirm')));
-  await tester.pumpAndSettle();
-}
-
-Widget _wrapChat({required AppBackend backend}) {
-  return wrapWithI18n(
-    MaterialApp(
-      theme: ThemeData(
-        useMaterial3: true,
-        splashFactory: InkRipple.splashFactory,
-      ),
-      home: AppBackendScope(
-        backend: backend,
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: const ChatPage(
-            conversation: Conversation(
-              id: 'main_stream',
-              title: 'Main Stream',
-              createdAtMs: 0,
-              updatedAtMs: 0,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class MessageActionsBackend extends AppBackend {

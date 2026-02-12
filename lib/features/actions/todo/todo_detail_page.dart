@@ -179,6 +179,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     );
     if (!mounted) return;
     setState(() => _todo = updated);
+    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
   }
 
   Future<void> _setStatus(String newStatus) async {
@@ -191,6 +192,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     );
     if (!mounted) return;
     setState(() => _todo = updated);
+    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refreshActivities();
   }
 

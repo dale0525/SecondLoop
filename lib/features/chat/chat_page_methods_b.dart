@@ -198,6 +198,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<int> _loadReviewQueueCount() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
     final settings = await ActionsSettingsStore.load();
 
     final nowLocal = DateTime.now();
@@ -209,6 +210,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
 
     var pendingCount = 0;
+    var didMutate = false;
     for (final todo in todos) {
       final nextMs = todo.nextReviewAtMs;
       final stage = todo.reviewStage;
@@ -236,6 +238,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                 rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch,
             lastReviewAtMs: todo.lastReviewAtMs,
           );
+          didMutate = true;
         } catch (_) {
           return 0;
         }
@@ -244,6 +247,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       if (todo.dueAtMs != null) continue;
       if (todo.status == 'done' || todo.status == 'dismissed') continue;
       pendingCount += 1;
+    }
+
+    if (didMutate) {
+      syncEngine?.notifyLocalMutation();
     }
 
     return pendingCount;

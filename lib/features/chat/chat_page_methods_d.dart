@@ -348,6 +348,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     if (!mounted) return;
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
     final locale = Localizations.localeOf(context);
 
     if (suggestion.type == 'event') {
@@ -400,6 +401,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
       }
 
       if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
       _refresh();
       return;
     }
@@ -471,6 +473,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     }
 
     if (!mounted) return;
+    syncEngine?.notifyLocalMutation();
     _refresh();
   }
 

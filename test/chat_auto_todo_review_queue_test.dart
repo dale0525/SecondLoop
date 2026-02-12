@@ -6,10 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
+import 'noop_sync_runner.dart';
 import 'test_i18n.dart';
 
 void main() {
@@ -54,10 +57,74 @@ void main() {
     expect(created.reviewStage, 0);
     expect(created.nextReviewAtMs, isNotNull);
   });
+
+  testWidgets('Rolling forward stale review todos notifies sync engine',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final staleNextReviewAtMs =
+        nowUtcMs - const Duration(days: 3).inMilliseconds;
+    final backend = _Backend(
+      todos: <Todo>[
+        Todo(
+          id: 'todo:stale',
+          title: 'stale review',
+          status: 'inbox',
+          createdAtMs: nowUtcMs - 1000,
+          updatedAtMs: nowUtcMs - 1000,
+          reviewStage: 0,
+          nextReviewAtMs: staleNextReviewAtMs,
+        ),
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    var changes = 0;
+    engine.changes.addListener(() => changes += 1);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: SyncEngineScope(
+            engine: engine,
+            child: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(backend.upserted, isNotEmpty);
+    final rolled = backend.upserted.lastWhere((t) => t.id == 'todo:stale');
+    expect(rolled.nextReviewAtMs, isNotNull);
+    expect(rolled.nextReviewAtMs, greaterThan(staleNextReviewAtMs));
+    expect(changes, 1);
+  });
 }
 
 final class _Backend extends TestAppBackend {
-  final List<Todo> _todos = <Todo>[];
+  _Backend({List<Todo>? todos})
+      : _todos = List<Todo>.from(todos ?? const <Todo>[]);
+
+  final List<Todo> _todos;
   final List<Todo> upserted = <Todo>[];
 
   @override
