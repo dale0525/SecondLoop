@@ -492,7 +492,8 @@ def _command_decide_bump(args: argparse.Namespace) -> None:
         - evidence_change_ids: array of change IDs that justify the decision
 
         Rules:
-        - breaking changes => major
+        - prioritize real user-facing compatibility impact over label names
+        - breaking-labeled infra/internal changes may still be minor or patch
         - new user-facing feature(s) => at least minor
         - only fixes/chore => patch
         - no releasable change => none
@@ -511,8 +512,6 @@ def _command_decide_bump(args: argparse.Namespace) -> None:
     if bump not in {"major", "minor", "patch", "none"}:
         raise RuntimeError(f"invalid bump from LLM: {bump!r}")
 
-    if has_breaking and bump != "major":
-        raise RuntimeError("rule violation: breaking change requires major bump")
     if not changes and bump != "none":
         raise RuntimeError("rule violation: no changes requires bump=none")
     if changes and bump == "none":

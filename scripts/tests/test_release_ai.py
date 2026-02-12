@@ -9,6 +9,7 @@ from unittest import mock
 from scripts.release_ai import (
     _build_notes_for_locale,
     _command_collect_facts,
+    _command_decide_bump,
     _command_generate_notes,
     _command_render_markdown,
     _command_validate_notes,
@@ -78,6 +79,58 @@ class ClassificationTests(unittest.TestCase):
             "fix",
         )
 
+
+class DecideBumpTests(unittest.TestCase):
+    @mock.patch("scripts.release_ai._llm_config", return_value={"model": "gpt-test"})
+    @mock.patch(
+        "scripts.release_ai._openai_chat_json",
+        return_value={
+            "bump": "minor",
+            "reason": "Internal pipeline breaking label should not force major.",
+            "confidence": 0.95,
+            "evidence_change_ids": ["pr#24"],
+        },
+    )
+    def test_decide_bump_allows_llm_minor_when_breaking_label_exists(
+        self,
+        _mock_openai_chat_json: mock.Mock,
+        _mock_llm_config: mock.Mock,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            facts_path = Path(tmp_dir) / "facts.json"
+            output_path = Path(tmp_dir) / "decision.json"
+            facts_path.write_text(
+                json.dumps(
+                    {
+                        "base_tag": "v0.1.0",
+                        "head": "HEAD",
+                        "stats": {"change_count": 1},
+                        "changes": [
+                            {
+                                "id": "pr#24",
+                                "type": "breaking",
+                                "title": "fix(release): internal pipeline cleanup",
+                                "description": "Non-user-facing release infra change",
+                                "labels": ["breaking"],
+                                "source": "pull_request",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            _command_decide_bump(
+                argparse.Namespace(
+                    facts=str(facts_path),
+                    output=str(output_path),
+                )
+            )
+
+            decision = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(decision["bump"], "minor")
+        self.assertTrue(decision["has_breaking_change"])
 
 class ValidationTests(unittest.TestCase):
     def test_validate_locale_notes_requires_full_coverage(self) -> None:
