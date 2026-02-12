@@ -543,7 +543,7 @@ if [[ -z "${locked_url_launcher_linux_version}" ]]; then
   die "cannot find url_launcher_linux version in pubspec.lock"
 fi
 if [[ "${locked_url_launcher_linux_version}" != "3.1.1" ]]; then
-  die "url_launcher_linux must stay pinned to 3.1.1 for Flutter 3.19 Linux compatibility (current lock: ${locked_url_launcher_linux_version})"
+  die "url_launcher_linux must stay pinned to 3.1.1 for current Linux compatibility baseline (current lock: ${locked_url_launcher_linux_version})"
 fi
 echo "release-preflight: url_launcher_linux lock pin OK (${locked_url_launcher_linux_version})"
 echo "release-preflight: all checks passed"
