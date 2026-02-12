@@ -218,6 +218,18 @@ extension _SettingsPageBuild on _SettingsPageState {
         ),
         const SizedBox(height: 8),
         sectionCard([
+          SwitchListTile(
+            key: const ValueKey(
+                'settings_review_reminder_in_app_fallback_switch'),
+            title: Text(context.t.settings.actionsReview.inAppFallback.title),
+            subtitle:
+                Text(context.t.settings.actionsReview.inAppFallback.subtitle),
+            value: _reviewReminderInAppFallbackEnabled ??
+                ReviewReminderInAppFallbackPrefs.defaultValue,
+            onChanged: (_busy || _reviewReminderInAppFallbackEnabled == null)
+                ? null
+                : _setReviewReminderInAppFallback,
+          ),
           if (supportsDesktopHotkey)
             ListTile(
               key: const ValueKey('settings_quick_capture_hotkey'),

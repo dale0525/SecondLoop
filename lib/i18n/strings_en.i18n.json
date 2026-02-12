@@ -66,6 +66,11 @@
       "title": "Needs confirmation",
       "banner": "$count items need confirmation",
       "empty": "No items to confirm",
+      "inAppFallback": {
+        "message": "$count items are waiting in your review queue",
+        "open": "Open review queue",
+        "dismiss": "Dismiss"
+      },
       "actions": {
         "schedule": "Schedule",
         "snooze": "Snooze",
@@ -173,6 +178,10 @@
       "weeklyTime": {
         "title": "Weekly review time",
         "subtitle": "Weekly reminder time (Sunday)"
+      },
+      "inAppFallback": {
+        "title": "In-app reminder fallback",
+        "subtitle": "Show prominent in-app alerts when system reminders are unavailable"
       }
     },
     "quickCaptureHotkey": {

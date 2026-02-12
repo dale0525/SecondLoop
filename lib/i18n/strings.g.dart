@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1328 (664 per locale)
+/// Strings: 1338 (669 per locale)
 ///
-/// Built on 2026-02-12 at 02:03 UTC
+/// Built on 2026-02-12 at 13:04 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -671,6 +671,8 @@ class _StringsActionsReviewQueueEn {
   String get title => 'Needs confirmation';
   String banner({required Object count}) => '${count} items need confirmation';
   String get empty => 'No items to confirm';
+  late final _StringsActionsReviewQueueInAppFallbackEn inAppFallback =
+      _StringsActionsReviewQueueInAppFallbackEn._(_root);
   late final _StringsActionsReviewQueueActionsEn actions =
       _StringsActionsReviewQueueActionsEn._(_root);
 }
@@ -831,6 +833,8 @@ class _StringsSettingsActionsReviewEn {
       _StringsSettingsActionsReviewDayEndTimeEn._(_root);
   late final _StringsSettingsActionsReviewWeeklyTimeEn weeklyTime =
       _StringsSettingsActionsReviewWeeklyTimeEn._(_root);
+  late final _StringsSettingsActionsReviewInAppFallbackEn inAppFallback =
+      _StringsSettingsActionsReviewInAppFallbackEn._(_root);
 }
 
 // Path: settings.quickCaptureHotkey
@@ -1658,6 +1662,19 @@ class _StringsEmbeddingProfilesActionsEn {
   String get delete => 'Delete';
 }
 
+// Path: actions.reviewQueue.inAppFallback
+class _StringsActionsReviewQueueInAppFallbackEn {
+  _StringsActionsReviewQueueInAppFallbackEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String message({required Object count}) =>
+      '${count} items are waiting in your review queue';
+  String get open => 'Open review queue';
+  String get dismiss => 'Dismiss';
+}
+
 // Path: actions.reviewQueue.actions
 class _StringsActionsReviewQueueActionsEn {
   _StringsActionsReviewQueueActionsEn._(this._root);
@@ -1753,6 +1770,18 @@ class _StringsSettingsActionsReviewWeeklyTimeEn {
   // Translations
   String get title => 'Weekly review time';
   String get subtitle => 'Weekly reminder time (Sunday)';
+}
+
+// Path: settings.actionsReview.inAppFallback
+class _StringsSettingsActionsReviewInAppFallbackEn {
+  _StringsSettingsActionsReviewInAppFallbackEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'In-app reminder fallback';
+  String get subtitle =>
+      'Show prominent in-app alerts when system reminders are unavailable';
 }
 
 // Path: settings.quickCaptureHotkey.actions
@@ -3967,6 +3996,9 @@ class _StringsActionsReviewQueueZhCn extends _StringsActionsReviewQueueEn {
   @override
   String get empty => '没有需要确认的事项';
   @override
+  late final _StringsActionsReviewQueueInAppFallbackZhCn inAppFallback =
+      _StringsActionsReviewQueueInAppFallbackZhCn._(_root);
+  @override
   late final _StringsActionsReviewQueueActionsZhCn actions =
       _StringsActionsReviewQueueActionsZhCn._(_root);
 }
@@ -4211,6 +4243,9 @@ class _StringsSettingsActionsReviewZhCn
   @override
   late final _StringsSettingsActionsReviewWeeklyTimeZhCn weeklyTime =
       _StringsSettingsActionsReviewWeeklyTimeZhCn._(_root);
+  @override
+  late final _StringsSettingsActionsReviewInAppFallbackZhCn inAppFallback =
+      _StringsSettingsActionsReviewInAppFallbackZhCn._(_root);
 }
 
 // Path: settings.quickCaptureHotkey
@@ -5430,6 +5465,25 @@ class _StringsEmbeddingProfilesActionsZhCn
   String get delete => '删除';
 }
 
+// Path: actions.reviewQueue.inAppFallback
+class _StringsActionsReviewQueueInAppFallbackZhCn
+    extends _StringsActionsReviewQueueInAppFallbackEn {
+  _StringsActionsReviewQueueInAppFallbackZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String message({required Object count}) => '有 ${count} 条事项正在等待你确认';
+  @override
+  String get open => '打开待确认队列';
+  @override
+  String get dismiss => '稍后再说';
+}
+
 // Path: actions.reviewQueue.actions
 class _StringsActionsReviewQueueActionsZhCn
     extends _StringsActionsReviewQueueActionsEn {
@@ -5580,6 +5634,23 @@ class _StringsSettingsActionsReviewWeeklyTimeZhCn
   String get title => '每周提醒时间';
   @override
   String get subtitle => '每周提醒时间（周日）';
+}
+
+// Path: settings.actionsReview.inAppFallback
+class _StringsSettingsActionsReviewInAppFallbackZhCn
+    extends _StringsSettingsActionsReviewInAppFallbackEn {
+  _StringsSettingsActionsReviewInAppFallbackZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '应用内提醒兜底';
+  @override
+  String get subtitle => '当前平台不支持系统提醒时，在应用内显示醒目提醒';
 }
 
 // Path: settings.quickCaptureHotkey.actions
@@ -7802,6 +7873,13 @@ extension on Translations {
         return ({required Object count}) => '${count} items need confirmation';
       case 'actions.reviewQueue.empty':
         return 'No items to confirm';
+      case 'actions.reviewQueue.inAppFallback.message':
+        return ({required Object count}) =>
+            '${count} items are waiting in your review queue';
+      case 'actions.reviewQueue.inAppFallback.open':
+        return 'Open review queue';
+      case 'actions.reviewQueue.inAppFallback.dismiss':
+        return 'Dismiss';
       case 'actions.reviewQueue.actions.schedule':
         return 'Schedule';
       case 'actions.reviewQueue.actions.snooze':
@@ -7940,6 +8018,10 @@ extension on Translations {
         return 'Weekly review time';
       case 'settings.actionsReview.weeklyTime.subtitle':
         return 'Weekly reminder time (Sunday)';
+      case 'settings.actionsReview.inAppFallback.title':
+        return 'In-app reminder fallback';
+      case 'settings.actionsReview.inAppFallback.subtitle':
+        return 'Show prominent in-app alerts when system reminders are unavailable';
       case 'settings.quickCaptureHotkey.title':
         return 'Quick capture shortcut';
       case 'settings.quickCaptureHotkey.subtitle':
@@ -9165,6 +9247,12 @@ extension on _StringsZhCn {
         return ({required Object count}) => '有 ${count} 条待确认事项';
       case 'actions.reviewQueue.empty':
         return '没有需要确认的事项';
+      case 'actions.reviewQueue.inAppFallback.message':
+        return ({required Object count}) => '有 ${count} 条事项正在等待你确认';
+      case 'actions.reviewQueue.inAppFallback.open':
+        return '打开待确认队列';
+      case 'actions.reviewQueue.inAppFallback.dismiss':
+        return '稍后再说';
       case 'actions.reviewQueue.actions.schedule':
         return '安排时间';
       case 'actions.reviewQueue.actions.snooze':
@@ -9303,6 +9391,10 @@ extension on _StringsZhCn {
         return '每周提醒时间';
       case 'settings.actionsReview.weeklyTime.subtitle':
         return '每周提醒时间（周日）';
+      case 'settings.actionsReview.inAppFallback.title':
+        return '应用内提醒兜底';
+      case 'settings.actionsReview.inAppFallback.subtitle':
+        return '当前平台不支持系统提醒时，在应用内显示醒目提醒';
       case 'settings.quickCaptureHotkey.title':
         return '快速记录快捷键';
       case 'settings.quickCaptureHotkey.subtitle':

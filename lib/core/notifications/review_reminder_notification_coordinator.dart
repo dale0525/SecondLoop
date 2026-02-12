@@ -18,6 +18,8 @@ final class ReviewReminderNotificationCoordinator {
   final ReviewTodosReader _readTodos;
   final int Function() _nowUtcMs;
 
+  ReviewReminderPlan? get currentPlan => _lastPlan;
+
   bool _initialized = false;
   ReviewReminderPlan? _lastPlan;
   final Map<String, int> _overdueScheduleBySourceKey = <String, int>{};

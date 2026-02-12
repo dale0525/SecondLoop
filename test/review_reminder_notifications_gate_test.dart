@@ -2,9 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/notifications/review_notification_plan.dart';
+import 'package:secondloop/core/notifications/review_reminder_in_app_fallback_prefs.dart';
 import 'package:secondloop/core/notifications/review_reminder_notification_scheduler.dart';
 import 'package:secondloop/core/notifications/review_reminder_notifications_gate.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -15,6 +17,12 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    ReviewReminderInAppFallbackPrefs.value.value =
+        ReviewReminderInAppFallbackPrefs.defaultValue;
+  });
+
   testWidgets('tap notification payload opens review queue page',
       (tester) async {
     final harness = await _pumpGateHarness(tester);
@@ -56,10 +64,75 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+      'shows in-app fallback banner and opens review queue when system notifications are unavailable',
+      (tester) async {
+    final harness = await _pumpGateHarness(
+      tester,
+      schedulerSupportsSystemNotifications: false,
+    );
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_open')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReviewQueuePage), findsOneWidget);
+    expect(harness.scheduler.scheduleCalls, 1);
+  });
+
+  testWidgets(
+      'does not show in-app fallback banner when fallback setting is disabled',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      ReviewReminderInAppFallbackPrefs.prefsKey: false,
+    });
+
+    await _pumpGateHarness(
+      tester,
+      schedulerSupportsSystemNotifications: false,
+    );
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+      'does not show in-app fallback banner when system notifications are available',
+      (tester) async {
+    await _pumpGateHarness(tester);
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsNothing,
+    );
+  });
 }
 
-Future<_GateHarness> _pumpGateHarness(WidgetTester tester) async {
-  final scheduler = _FakeScheduler();
+Future<_GateHarness> _pumpGateHarness(
+  WidgetTester tester, {
+  bool schedulerSupportsSystemNotifications = true,
+}) async {
+  final scheduler = _FakeScheduler(
+    supportsSystemNotifications: schedulerSupportsSystemNotifications,
+  );
   final navigatorKey = GlobalKey<NavigatorState>();
 
   await tester.pumpWidget(
@@ -100,6 +173,11 @@ final class _GateHarness {
 }
 
 final class _FakeScheduler implements ReviewReminderNotificationScheduler {
+  _FakeScheduler({required this.supportsSystemNotifications});
+
+  @override
+  final bool supportsSystemNotifications;
+
   int ensureInitializedCalls = 0;
   int scheduleCalls = 0;
   int cancelCalls = 0;
