@@ -440,8 +440,10 @@ fn push_internal(
 
     // Rare recovery path: if the remote has seqs this device doesn't agree with (e.g. device-id reuse),
     // we can rebase our local seqs forward based on the server's expected_next_seq and retry.
+    const PUSH_LIMIT: i64 = 200;
     const MAX_REPAIR_ATTEMPTS: usize = 10;
     let mut repair_attempt = 0usize;
+    let mut pushed_total = 0u64;
     loop {
         let last_pushed_seq = super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
 
@@ -449,9 +451,10 @@ fn push_internal(
             r#"SELECT op_id, seq, op_json
                FROM oplog
                WHERE device_id = ?1 AND seq > ?2
-               ORDER BY seq ASC"#,
+               ORDER BY seq ASC
+               LIMIT ?3"#,
         )?;
-        let mut rows = stmt.query(params![device_id.as_str(), last_pushed_seq])?;
+        let mut rows = stmt.query(params![device_id.as_str(), last_pushed_seq, PUSH_LIMIT])?;
 
         let mut ops: Vec<PushOp> = Vec::new();
         let mut max_seq = last_pushed_seq;
@@ -515,7 +518,7 @@ fn push_internal(
         }
 
         if ops.is_empty() {
-            return Ok(0);
+            return Ok(pushed_total);
         }
 
         let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
@@ -537,8 +540,10 @@ fn push_internal(
                 super::kv_set_i64(conn, &last_pushed_key, parsed.max_seq)?;
             }
 
-            let pushed = max_seq.saturating_sub(last_pushed_seq);
-            return Ok(pushed as u64);
+            let pushed = max_seq.saturating_sub(last_pushed_seq) as u64;
+            pushed_total += pushed;
+            repair_attempt = 0;
+            continue;
         }
 
         if status.as_u16() != 409 || repair_attempt >= MAX_REPAIR_ATTEMPTS {
