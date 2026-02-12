@@ -356,6 +356,47 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentViewerPage shows retry action when annotation has no text',
+      (tester) async {
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': null},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode(<String, Object?>{}),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('attachment_text_full_regenerate')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
       'AttachmentViewerPage allows editing full text and saves unified payload',
       (tester) async {
     final backend = _Backend(
