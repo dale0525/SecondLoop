@@ -140,7 +140,7 @@ struct OpenAiUsage {
 
 fn annotation_prompt(lang: &str) -> String {
     format!(
-        "Describe the image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). summary should be concise. full_text should contain readable text from the image when available, otherwise use an empty string. Language: {lang}."
+        "Describe the image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). summary should be concise. full_text should contain readable text from the image when available, otherwise use an empty string. If text with visual layout is present, full_text should use Markdown and preserve layout (headings, lists, tables, line breaks) as much as possible. Language: {lang}."
     )
 }
 

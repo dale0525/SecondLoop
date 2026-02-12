@@ -96,6 +96,7 @@ fn byok_media_annotation_records_usage() {
     assert!(req_lower.contains("summary (string)"));
     assert!(req_lower.contains("full_text (string)"));
     assert!(req_lower.contains("tag (array of strings)"));
+    assert!(req_lower.contains("full_text should use markdown"));
     assert!(req_lower.contains("\"stream\":true"));
 
     let conn = db::open(std::path::Path::new(&app_dir_str)).expect("open db");

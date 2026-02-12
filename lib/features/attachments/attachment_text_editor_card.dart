@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import 'attachment_markdown_normalizer.dart';
 
 class AttachmentTextEditorCard extends StatefulWidget {
   const AttachmentTextEditorCard({
@@ -135,8 +136,9 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
             else if (widget.markdown)
               MarkdownBody(
                 key: ValueKey('${widget.fieldKeyPrefix}_markdown_display'),
-                data: text,
+                data: normalizeAttachmentMarkdown(text),
                 selectable: true,
+                softLineBreak: true,
                 styleSheet:
                     MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
                   p: Theme.of(context).textTheme.bodySmall,
