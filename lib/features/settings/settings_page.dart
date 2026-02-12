@@ -30,6 +30,7 @@ import 'ai_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
 import 'diagnostics_page.dart';
+import 'about_page.dart';
 
 part 'settings_page_build.dart';
 
