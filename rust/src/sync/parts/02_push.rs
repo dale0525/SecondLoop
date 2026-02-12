@@ -212,12 +212,28 @@ fn push_internal(
                ORDER BY seq ASC"#,
         )?;
 
+        const OP_UPLOAD_BATCH_SIZE: usize = 64;
+        const OP_UPLOAD_CONCURRENCY: usize = 8;
+
         let mut rows = stmt.query(params![ctx.device_id, after_seq])?;
         let mut pushed: u64 = 0;
         let mut max_seq = after_seq;
         let mut uploaded_attachments: BTreeSet<String> = BTreeSet::new();
         let mut deleted_attachments: BTreeSet<String> = BTreeSet::new();
         let mut touched_pack_chunks: BTreeSet<i64> = BTreeSet::new();
+        let mut pending_op_uploads: Vec<(String, Vec<u8>)> =
+            Vec::with_capacity(OP_UPLOAD_BATCH_SIZE);
+
+        let mut flush_pending_op_uploads = |pending: &mut Vec<(String, Vec<u8>)>| -> Result<()> {
+            let uploaded = upload_ops_files_batch(ctx.remote, pending, OP_UPLOAD_CONCURRENCY)?;
+            if uploaded > 0 && progress.is_some() {
+                done_ops = (done_ops + uploaded as u64).min(total_ops);
+                if let Some(cb) = progress.as_deref_mut() {
+                    cb(done_ops, total_ops);
+                }
+            }
+            Ok(())
+        };
 
         while let Some(row) = rows.next()? {
             let op_id: String = row.get(0)?;
@@ -270,7 +286,7 @@ fn push_internal(
             )?;
 
             let file_path = format!("{}op_{seq}.json", ctx.ops_dir);
-            ctx.remote.put(&file_path, file_blob)?;
+            pending_op_uploads.push((file_path, file_blob));
             touched_pack_chunks.insert(ops_pack_chunk_start(seq));
 
             pushed += 1;
@@ -278,13 +294,12 @@ fn push_internal(
                 max_seq = seq;
             }
 
-            if progress.is_some() {
-                done_ops = (done_ops + 1).min(total_ops);
-                if let Some(cb) = progress.as_deref_mut() {
-                    cb(done_ops, total_ops);
-                }
+            if pending_op_uploads.len() >= OP_UPLOAD_BATCH_SIZE {
+                flush_pending_op_uploads(&mut pending_op_uploads)?;
             }
         }
+
+        flush_pending_op_uploads(&mut pending_op_uploads)?;
 
         for chunk_start in touched_pack_chunks {
             upload_ops_pack_chunk(
@@ -347,6 +362,47 @@ fn push_internal(
     let _ = write_cursor_json(remote, &remote_root_dir, &device_id, final_max_seq);
 
     Ok(pushed_out)
+}
+
+fn upload_ops_files_batch(
+    remote: &impl RemoteStore,
+    pending: &mut Vec<(String, Vec<u8>)>,
+    concurrency: usize,
+) -> Result<usize> {
+    let upload_count = pending.len();
+    if upload_count == 0 {
+        return Ok(0);
+    }
+
+    let uploads = std::mem::take(pending);
+    let concurrency = concurrency.max(1).min(upload_count);
+    let mut buckets: Vec<Vec<(String, Vec<u8>)>> =
+        (0..concurrency).map(|_| Vec::new()).collect();
+    for (idx, item) in uploads.into_iter().enumerate() {
+        buckets[idx % concurrency].push(item);
+    }
+
+    thread::scope(|scope| -> Result<()> {
+        let mut handles = Vec::with_capacity(concurrency);
+        for bucket in buckets {
+            handles.push(scope.spawn(move || -> Result<()> {
+                for (path, bytes) in bucket {
+                    remote.put(&path, bytes)?;
+                }
+                Ok(())
+            }));
+        }
+
+        for handle in handles {
+            handle
+                .join()
+                .map_err(|_| anyhow!("push op upload thread panicked"))??;
+        }
+
+        Ok(())
+    })?;
+
+    Ok(upload_count)
 }
 
 fn ensure_ops_packs_backfilled(
@@ -729,5 +785,111 @@ mod push_progress_tests {
         assert!(!seen.is_empty());
         assert_eq!(seen[0].1, 2);
         assert_eq!(*seen.last().unwrap(), (2, 2));
+    }
+}
+
+#[cfg(test)]
+mod push_parallel_upload_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+    use tempfile::tempdir;
+
+    struct TrackingRemoteStore {
+        inner: InMemoryRemoteStore,
+        op_put_delay: Duration,
+        active_op_puts: AtomicUsize,
+        max_parallel_op_puts: AtomicUsize,
+    }
+
+    impl TrackingRemoteStore {
+        fn new(op_put_delay: Duration) -> Self {
+            Self {
+                inner: InMemoryRemoteStore::new(),
+                op_put_delay,
+                active_op_puts: AtomicUsize::new(0),
+                max_parallel_op_puts: AtomicUsize::new(0),
+            }
+        }
+
+        fn max_parallel_op_puts(&self) -> usize {
+            self.max_parallel_op_puts.load(Ordering::Relaxed)
+        }
+
+        fn record_parallel_put_start(&self) {
+            let active = self.active_op_puts.fetch_add(1, Ordering::Relaxed) + 1;
+            let mut seen = self.max_parallel_op_puts.load(Ordering::Relaxed);
+            while active > seen {
+                match self.max_parallel_op_puts.compare_exchange(
+                    seen,
+                    active,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(cur) => seen = cur,
+                }
+            }
+        }
+
+        fn record_parallel_put_end(&self) {
+            self.active_op_puts.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    impl RemoteStore for TrackingRemoteStore {
+        fn target_id(&self) -> &str {
+            self.inner.target_id()
+        }
+
+        fn mkdir_all(&self, path: &str) -> Result<()> {
+            self.inner.mkdir_all(path)
+        }
+
+        fn list(&self, dir: &str) -> Result<Vec<String>> {
+            self.inner.list(dir)
+        }
+
+        fn get(&self, path: &str) -> Result<Vec<u8>> {
+            self.inner.get(path)
+        }
+
+        fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()> {
+            if path.contains("/ops/op_") {
+                self.record_parallel_put_start();
+                std::thread::sleep(self.op_put_delay);
+                let result = self.inner.put(path, bytes);
+                self.record_parallel_put_end();
+                return result;
+            }
+            self.inner.put(path, bytes)
+        }
+
+        fn delete(&self, path: &str) -> Result<()> {
+            self.inner.delete(path)
+        }
+    }
+
+    #[test]
+    fn push_ops_only_uploads_op_files_with_parallelism() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        for idx in 0..24 {
+            let title = format!("Conversation {idx}");
+            let _ = crate::db::create_conversation(&conn, &db_key, &title).expect("create");
+        }
+
+        let remote = TrackingRemoteStore::new(Duration::from_millis(20));
+        let pushed =
+            push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop").expect("push");
+        assert_eq!(pushed, 24);
+
+        assert!(
+            remote.max_parallel_op_puts() > 1,
+            "expected parallel PUT uploads for op files"
+        );
     }
 }
