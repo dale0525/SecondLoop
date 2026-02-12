@@ -27,6 +27,8 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   static const int notificationIdBase = 2026021100;
   static const String reviewQueuePayloadPrefix = 'review_queue:';
 
+  static const String androidNotificationIcon = 'ic_stat_notify';
+
   static const String _androidChannelId = 'review_reminders_v1';
   static const String _androidChannelName = 'Review reminders';
   static const String _androidChannelDescription =
@@ -45,7 +47,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     if (_initialized) return;
 
     const initializationSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings(androidNotificationIcon),
       iOS: DarwinInitializationSettings(),
       macOS: DarwinInitializationSettings(),
     );
@@ -132,6 +134,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         channelDescription: _androidChannelDescription,
         importance: Importance.max,
         priority: Priority.high,
+        icon: androidNotificationIcon,
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,
