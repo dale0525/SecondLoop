@@ -88,6 +88,48 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     };
   }
 
+  bool _isProviderTypeAllowed(String providerType) {
+    return _allowedProviderTypes.contains(providerType);
+  }
+
+  List<LlmProfile> _visibleProfiles(List<LlmProfile> profiles) {
+    if (widget.providerFilter == LlmProfilesProviderFilter.all) {
+      return profiles;
+    }
+    return profiles
+        .where((profile) => _isProviderTypeAllowed(profile.providerType))
+        .toList(growable: false);
+  }
+
+  bool _isZhLocale(BuildContext context) {
+    return Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+  }
+
+  String _activeProfileHelpText(BuildContext context) {
+    if (widget.providerFilter !=
+        LlmProfilesProviderFilter.openAiCompatibleOnly) {
+      return context.t.llmProfiles.activeProfileHelp;
+    }
+
+    return _isZhLocale(context)
+        ? '媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。'
+        : 'Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.';
+  }
+
+  String _noVisibleProfilesText(BuildContext context) {
+    if (widget.providerFilter !=
+        LlmProfilesProviderFilter.openAiCompatibleOnly) {
+      return context.t.llmProfiles.noProfilesYet;
+    }
+
+    return _isZhLocale(context)
+        ? '没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。'
+        : 'No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.';
+  }
+
   List<DropdownMenuItem<String>> _providerTypeItems(BuildContext context) {
     final providers = context.t.llmProfiles.providers;
     return _allowedProviderTypes.map((providerType) {
@@ -449,7 +491,8 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final profiles = _profiles;
+    final allProfiles = _profiles;
+    final profiles = allProfiles == null ? null : _visibleProfiles(allProfiles);
     final providerTypeItems = _providerTypeItems(context);
     final canChangeProviderType = providerTypeItems.length > 1;
 
@@ -481,7 +524,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            context.t.llmProfiles.activeProfileHelp,
+            _activeProfileHelpText(context),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -499,7 +542,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
               child: profiles == null
                   ? const Center(child: CircularProgressIndicator())
                   : profiles.isEmpty
-                      ? Text(context.t.llmProfiles.noProfilesYet)
+                      ? Text(_noVisibleProfilesText(context))
                       : Column(
                           children: [
                             for (var i = 0; i < profiles.length; i++) ...[
