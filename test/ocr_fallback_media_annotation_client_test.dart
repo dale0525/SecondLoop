@@ -40,7 +40,7 @@ final class _PrimaryClient implements MediaEnrichmentClient {
 void main() {
   test('returns primary payload when it is usable', () async {
     final primary = _PrimaryClient()
-      ..annotateResponse = '{"caption_long":"a cat"}';
+      ..annotateResponse = '{"summary":"a cat","tag":["cat"],"full_text":""}';
     var ocrCalls = 0;
 
     final client = OcrFallbackMediaAnnotationClient(
@@ -100,8 +100,9 @@ void main() {
 
     expect(primary.annotateCalls, 1);
     expect(ocrCalls, 1);
-    expect(payload, contains('ocr_text'));
-    expect(payload, contains('caption_long'));
+    expect(payload, contains('full_text'));
+    expect(payload, contains('summary'));
+    expect(payload, contains('tag'));
   });
 
   test('supports OCR-only mode when no primary model is configured', () async {
@@ -127,7 +128,9 @@ void main() {
     );
 
     expect(client.annotationModelName, 'ocr_fallback');
-    expect(payload, contains('fallback caption'));
+    expect(payload, contains('OCR fallback summary'));
+    expect(payload, contains('full_text'));
+    expect(payload, contains('tag'));
   });
 
   test('returns no-text payload when OCR fallback text signal is too weak',
@@ -154,8 +157,43 @@ void main() {
     );
 
     final payload = jsonDecode(payloadJson) as Map<String, Object?>;
-    expect(payload['caption_long'], '');
-    expect(payload['ocr_text'], '');
-    expect(payload['tags'], const <String>['ocr_fallback_no_text']);
+    expect(payload['summary'], '');
+    expect(payload['full_text'], '');
+    expect(payload['tag'], const <String>['ocr_fallback_no_text']);
+  });
+
+  test(
+      'treats structured primary payload as usable when summary is empty but full_text exists',
+      () async {
+    final primary = _PrimaryClient()
+      ..annotateResponse =
+          '{"summary":"","tag":[],"full_text":"# Report\\n\\nTotal: 42"}';
+    var ocrCalls = 0;
+
+    final client = OcrFallbackMediaAnnotationClient(
+      primaryClient: primary,
+      languageHints: 'device_plus_en',
+      tryOcrImage: (bytes, {required languageHints}) async {
+        ocrCalls += 1;
+        return const PlatformPdfOcrResult(
+          fullText: 'fallback text',
+          excerpt: 'fallback text',
+          engine: 'desktop_rust_image_onnx',
+          isTruncated: false,
+          pageCount: 1,
+          processedPages: 1,
+        );
+      },
+    );
+
+    final payload = await client.annotateImage(
+      lang: 'en',
+      mimeType: 'application/pdf',
+      imageBytes: Uint8List.fromList(<int>[1, 2, 3]),
+    );
+
+    expect(payload, contains('Total: 42'));
+    expect(primary.annotateCalls, 1);
+    expect(ocrCalls, 0);
   });
 }

@@ -83,7 +83,10 @@ final class OcrFallbackMediaAnnotationClient implements MediaEnrichmentClient {
     }
 
     return jsonEncode(<String, Object?>{
-      'caption_long': _buildFallbackCaption(full),
+      'tag': const <String>['ocr_fallback'],
+      'summary': _buildFallbackSummary(full),
+      'full_text': full,
+      'caption_long': _buildFallbackSummary(full),
       'tags': const <String>['ocr_fallback'],
       'ocr_text': full,
     });
@@ -95,6 +98,11 @@ bool _isUsablePrimaryAnnotationPayload(String payloadJson) {
     final decoded = jsonDecode(payloadJson);
     if (decoded is! Map) return false;
     final payload = Map<String, Object?>.from(decoded);
+    final summary = (payload['summary'] ?? '').toString().trim();
+    final fullText = (payload['full_text'] ?? '').toString().trim();
+    if (summary.isNotEmpty || fullText.isNotEmpty) {
+      return true;
+    }
     final caption = (payload['caption_long'] ?? '').toString().trim();
     final ocrText = (payload['ocr_text'] ?? '').toString().trim();
     return caption.isNotEmpty || ocrText.isNotEmpty;
@@ -103,19 +111,22 @@ bool _isUsablePrimaryAnnotationPayload(String payloadJson) {
   }
 }
 
-String _buildFallbackCaption(String ocrText) {
+String _buildFallbackSummary(String ocrText) {
   final singleLine = ocrText.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (singleLine.isEmpty) {
-    return 'OCR fallback caption';
+    return 'OCR fallback summary';
   }
   if (singleLine.length <= 160) {
-    return 'OCR fallback caption: $singleLine';
+    return 'OCR fallback summary: $singleLine';
   }
-  return 'OCR fallback caption: ${singleLine.substring(0, 160).trimRight()}...';
+  return 'OCR fallback summary: ${singleLine.substring(0, 160).trimRight()}...';
 }
 
 String _buildNoTextFallbackPayload() {
   return jsonEncode(const <String, Object?>{
+    'tag': <String>['ocr_fallback_no_text'],
+    'summary': '',
+    'full_text': '',
     'caption_long': '',
     'tags': <String>['ocr_fallback_no_text'],
     'ocr_text': '',

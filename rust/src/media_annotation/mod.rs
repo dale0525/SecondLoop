@@ -3,6 +3,7 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::blocking::Client;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
+use serde_json::Map;
 use serde_json::Value;
 use std::io::{BufRead, BufReader};
 
@@ -139,14 +140,96 @@ struct OpenAiUsage {
 
 fn annotation_prompt(lang: &str) -> String {
     format!(
-        "Describe the image and respond ONLY as JSON with keys: caption_long (string), tags (array of strings), ocr_text (string|null). If ocr_text is present, it must be Markdown that preserves layout as much as possible. Language: {lang}."
+        "Describe the image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). summary should be concise. full_text should contain readable text from the image when available, otherwise use an empty string. If text with visual layout is present, full_text should use Markdown and preserve layout (headings, lists, tables, line breaks) as much as possible. Language: {lang}."
     )
 }
 
 fn ocr_markdown_prompt(lang: &str) -> String {
     format!(
-        "Perform OCR on the provided file/image and respond ONLY as JSON with keys: caption_long (string), tags (array of strings), ocr_text (string|null). Put recognized text in ocr_text using Markdown and preserve original layout as much as possible (headings, lists, tables, line breaks). If no readable text exists, set ocr_text to null. Language: {lang}. Do not wrap JSON in markdown fences."
+        "Perform OCR on the provided file/image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). Put recognized text in full_text using Markdown and preserve original layout as much as possible (headings, lists, tables, line breaks). If no readable text exists, set full_text to an empty string. summary must be a short overview. Language: {lang}. Do not wrap JSON in markdown fences."
     )
+}
+
+fn extract_first_non_empty_string(map: &Map<String, Value>, keys: &[&str]) -> String {
+    for key in keys {
+        let Some(value) = map.get(*key) else {
+            continue;
+        };
+        let Some(text) = value.as_str() else {
+            continue;
+        };
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    String::new()
+}
+
+fn push_unique_tag(out: &mut Vec<String>, candidate: &str) {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    if out
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(trimmed))
+    {
+        return;
+    }
+    out.push(trimmed.to_string());
+}
+
+fn collect_tag_values(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                if let Some(tag) = item.as_str() {
+                    push_unique_tag(out, tag);
+                }
+            }
+        }
+        Value::String(tag) => push_unique_tag(out, tag),
+        _ => {}
+    }
+}
+
+fn normalized_tags(map: &Map<String, Value>) -> Vec<String> {
+    let mut tags = Vec::<String>::new();
+    if let Some(value) = map.get("tag") {
+        collect_tag_values(value, &mut tags);
+    }
+    if let Some(value) = map.get("tags") {
+        collect_tag_values(value, &mut tags);
+    }
+    tags
+}
+
+fn normalize_annotation_payload(payload: Value) -> Result<Value> {
+    let mut map = match payload {
+        Value::Object(map) => map,
+        _ => return Err(anyhow!("annotation content json must be an object")),
+    };
+
+    let tags = normalized_tags(&map);
+    let summary = extract_first_non_empty_string(&map, &["summary", "caption_long"]);
+    let full_text = extract_first_non_empty_string(&map, &["full_text", "ocr_text"]);
+
+    let tags_json = Value::Array(tags.iter().map(|tag| Value::String(tag.clone())).collect());
+
+    map.insert("tag".to_string(), tags_json.clone());
+    map.insert("summary".to_string(), Value::String(summary.clone()));
+    map.insert("full_text".to_string(), Value::String(full_text.clone()));
+
+    map.insert("tags".to_string(), tags_json);
+    map.insert("caption_long".to_string(), Value::String(summary));
+    if full_text.is_empty() {
+        map.insert("ocr_text".to_string(), Value::Null);
+    } else {
+        map.insert("ocr_text".to_string(), Value::String(full_text));
+    }
+
+    Ok(Value::Object(map))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -355,6 +438,7 @@ fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     let normalized = normalize_annotation_content(content);
     let payload: Value = serde_json::from_str(&normalized)
         .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
+    let payload = normalize_annotation_payload(payload)?;
 
     let usage = parsed.usage.map(usage_from_openai_usage);
 
@@ -436,6 +520,7 @@ fn parse_response_sse_reader<R: BufRead>(reader: &mut R) -> Result<(Value, Media
     }
     let payload: Value = serde_json::from_str(&normalized)
         .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
+    let payload = normalize_annotation_payload(payload)?;
 
     Ok((payload, usage.unwrap_or_else(default_usage)))
 }
