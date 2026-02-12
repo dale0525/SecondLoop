@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../features/actions/agenda/todo_agenda_page.dart';
 import '../../features/actions/review/review_queue_page.dart';
@@ -17,18 +17,21 @@ import 'review_reminder_notification_scheduler.dart';
 
 typedef ReviewReminderSchedulerFactory = ReviewReminderNotificationScheduler
     Function(NotificationTapHandler onTap);
+typedef InAppFallbackAlertSoundCallback = Future<void> Function();
 
 final class ReviewReminderNotificationsGate extends StatefulWidget {
   const ReviewReminderNotificationsGate({
     required this.child,
     required this.navigatorKey,
     this.schedulerFactory,
+    this.inAppFallbackAlertSound,
     super.key,
   });
 
   final Widget child;
   final GlobalKey<NavigatorState> navigatorKey;
   final ReviewReminderSchedulerFactory? schedulerFactory;
+  final InAppFallbackAlertSoundCallback? inAppFallbackAlertSound;
 
   @override
   State<ReviewReminderNotificationsGate> createState() =>
@@ -333,45 +336,204 @@ final class _ReviewReminderNotificationsGateState
     final reminderTitle = item.kind == ReviewReminderItemKind.reviewQueue
         ? context.t.actions.reviewQueue.title
         : context.t.actions.agenda.title;
-    final reminderSummary = item.todoTitle.trim().isEmpty
-        ? reminderTitle
-        : '$reminderTitle · ${item.todoTitle}';
+    final reminderSummary =
+        item.todoTitle.trim().isEmpty ? reminderTitle : item.todoTitle.trim();
 
     messenger.hideCurrentMaterialBanner();
     messenger.showMaterialBanner(
       MaterialBanner(
         key: const ValueKey('review_reminder_in_app_fallback_banner'),
-        leading: const Icon(Icons.notifications_active_rounded),
-        backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-        content: Text(reminderSummary),
-        actions: [
-          TextButton(
-            key: const ValueKey('review_reminder_in_app_fallback_open'),
-            onPressed: () {
-              _hideInAppFallbackBanner();
-              unawaited(_openReminderTarget(item.kind));
-            },
-            child: Text(
-              item.kind == ReviewReminderItemKind.reviewQueue
-                  ? inAppFallbackT.open
-                  : context.t.actions.agenda.viewAll,
-            ),
-          ),
-          TextButton(
-            key: const ValueKey('review_reminder_in_app_fallback_dismiss'),
-            onPressed: () {
-              _dismissedInAppFallbackSourceKey = sourceKey;
-              _hideInAppFallbackBanner();
-              _syncInAppFallbackFromCurrentPlan();
-            },
-            child: Text(inAppFallbackT.dismiss),
-          ),
-        ],
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        dividerColor: Colors.transparent,
+        elevation: 0,
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: EdgeInsets.zero,
+        content: _buildInAppFallbackCard(
+          item: item,
+          title: reminderTitle,
+          summary: reminderSummary,
+          openLabel: item.kind == ReviewReminderItemKind.reviewQueue
+              ? inAppFallbackT.open
+              : context.t.actions.agenda.viewAll,
+          dismissLabel: inAppFallbackT.dismiss,
+          onOpen: () {
+            _hideInAppFallbackBanner();
+            unawaited(_openReminderTarget(item.kind));
+          },
+          onDismiss: () {
+            _dismissedInAppFallbackSourceKey = sourceKey;
+            _hideInAppFallbackBanner();
+            _syncInAppFallbackFromCurrentPlan();
+          },
+        ),
+        actions: const <Widget>[SizedBox.shrink()],
       ),
     );
 
     _inAppFallbackVisible = true;
     _activeInAppFallbackSourceKey = sourceKey;
+    unawaited(_playInAppFallbackAlertSound());
+  }
+
+  Widget _buildInAppFallbackCard({
+    required ReviewReminderItem item,
+    required String title,
+    required String summary,
+    required String openLabel,
+    required String dismissLabel,
+    required VoidCallback onOpen,
+    required VoidCallback onDismiss,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final icon = item.kind == ReviewReminderItemKind.reviewQueue
+        ? Icons.rate_review_rounded
+        : Icons.event_note_rounded;
+    final iconBackground = item.kind == ReviewReminderItemKind.reviewQueue
+        ? colorScheme.primaryContainer
+        : colorScheme.secondaryContainer;
+    final iconColor = item.kind == ReviewReminderItemKind.reviewQueue
+        ? colorScheme.onPrimaryContainer
+        : colorScheme.onSecondaryContainer;
+
+    return TweenAnimationBuilder<double>(
+      key: const ValueKey('review_reminder_in_app_fallback_card_animation'),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, child) {
+        final translateY = (1 - value) * -14;
+        final scale = 0.96 + (0.04 * value);
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              scale: scale,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: DecoratedBox(
+        key: const ValueKey('review_reminder_in_app_fallback_card'),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withOpacity(0.7),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withOpacity(0.18),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: iconBackground,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(icon, size: 20, color: iconColor),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          summary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonal(
+                    key: const ValueKey('review_reminder_in_app_fallback_open'),
+                    onPressed: onOpen,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(88, 40),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text(openLabel),
+                  ),
+                  TextButton(
+                    key: const ValueKey(
+                        'review_reminder_in_app_fallback_dismiss'),
+                    onPressed: onDismiss,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(72, 40),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text(dismissLabel),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _playInAppFallbackAlertSound() async {
+    final callback = widget.inAppFallbackAlertSound;
+    if (callback != null) {
+      try {
+        await callback();
+      } catch (_) {
+        // Best-effort notifications should never break app flow.
+      }
+      return;
+    }
+
+    try {
+      await SystemSound.play(SystemSoundType.alert);
+      return;
+    } catch (_) {
+      // Ignore and fallback to click tone.
+    }
+
+    try {
+      await SystemSound.play(SystemSoundType.click);
+    } catch (_) {
+      // Best-effort notifications should never break app flow.
+    }
   }
 
   void _hideInAppFallbackBanner() {

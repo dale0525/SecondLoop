@@ -115,6 +115,32 @@ void main() {
     expect(find.byType(TodoAgendaPage), findsOneWidget);
   });
 
+  testWidgets('plays alert sound when in-app reminder appears', (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    var played = 0;
+
+    await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _reviewTodo(
+            nextReviewAtMs:
+                nowUtcMs + const Duration(seconds: 6).inMilliseconds),
+      ],
+      inAppFallbackAlertSound: () async {
+        played += 1;
+      },
+    );
+
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsOneWidget,
+    );
+    expect(played, 1);
+  });
+
   testWidgets('does not show review-queue reminder for overdue item on launch',
       (tester) async {
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -185,6 +211,7 @@ Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
   List<Todo>? todos,
+  InAppFallbackAlertSoundCallback? inAppFallbackAlertSound,
 }) async {
   final scheduler = _FakeScheduler(
     supportsSystemNotifications: schedulerSupportsSystemNotifications,
@@ -207,6 +234,7 @@ Future<_GateHarness> _pumpGateHarness(
                 scheduler.onTap = onTap;
                 return scheduler;
               },
+              inAppFallbackAlertSound: inAppFallbackAlertSound,
               child: const Scaffold(body: Text('home')),
             ),
           ),
