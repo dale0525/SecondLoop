@@ -65,8 +65,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
         annotationPayload,
         annotationCaption: annotationCaption,
       );
-      final canRetryRecognition =
-          _canRetryAttachmentRecognition && textContent.hasAny;
+      final canRetryRecognition = _canRetryAttachmentRecognition;
       final trailing = canRetryRecognition
           ? IconButton(
               key: const ValueKey('attachment_text_full_regenerate'),
