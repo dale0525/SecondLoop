@@ -137,6 +137,19 @@ Future<Todo> dbSetTodoStatus(
         newStatus: newStatus,
         sourceMessageId: sourceMessageId);
 
+Future<void> dbUpsertTodoRecurrence(
+        {required String appDir,
+        required String todoId,
+        required String seriesId,
+        required String ruleJson}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertTodoRecurrence(
+        appDir: appDir, todoId: todoId, seriesId: seriesId, ruleJson: ruleJson);
+
+Future<String?> dbGetTodoRecurrenceRuleJson(
+        {required String appDir, required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbGetTodoRecurrenceRuleJson(
+        appDir: appDir, todoId: todoId);
+
 Future<BigInt> dbDeleteTodoAndAssociatedMessages(
         {required String appDir,
         required List<int> key,

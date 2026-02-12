@@ -238,6 +238,26 @@ pub fn db_set_todo_status(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_upsert_todo_recurrence(
+    app_dir: String,
+    todo_id: String,
+    series_id: String,
+    rule_json: String,
+) -> Result<()> {
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_todo_recurrence(&conn, &todo_id, &series_id, &rule_json)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_todo_recurrence_rule_json(
+    app_dir: String,
+    todo_id: String,
+) -> Result<Option<String>> {
+    let conn = db::open(Path::new(&app_dir))?;
+    db::get_todo_recurrence_rule_json(&conn, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_delete_todo_and_associated_messages(
     app_dir: String,
     key: Vec<u8>,

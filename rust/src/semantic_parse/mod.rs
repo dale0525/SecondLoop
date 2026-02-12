@@ -91,7 +91,11 @@ fn build_message_action_prompt(
     );
     out.push_str("  \"title\": string, // only when kind=create\n");
     out.push_str("  \"status\": \"open\" | \"inbox\", // only when kind=create\n");
-    out.push_str("  \"due_local_iso\": string | null // only when kind=create\n");
+    out.push_str("  \"due_local_iso\": string | null, // only when kind=create\n");
+    out.push_str("  \"recurrence\": { // only when kind=create\n");
+    out.push_str("    \"freq\": \"daily\" | \"weekly\" | \"monthly\" | \"yearly\",\n");
+    out.push_str("    \"interval\": number // >=1\n");
+    out.push_str("  } | null\n");
     out.push_str("}\n\n");
 
     out.push_str("Constraints:\n");
@@ -106,7 +110,9 @@ fn build_message_action_prompt(
     out.push_str(
         "- due_local_iso must be local ISO 8601 without timezone, like 2026-02-04T15:00:00.\n",
     );
-    out.push_str("- If the user provides a date but no time, use day_end_minutes.\n\n");
+    out.push_str("- If the user provides a date but no time, use day_end_minutes.\n");
+    out.push_str("- recurrence is optional. If absent, set recurrence to null.\n");
+    out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n\n");
 
     out.push_str(&format!("now_local_iso: {now_local_iso}\n"));
     out.push_str(&format!("locale: {locale}\n"));
@@ -274,6 +280,7 @@ mod tests {
         assert!(prompt.contains("todo:1"));
         assert!(prompt.contains("taxes"));
         assert!(prompt.contains("day_end_minutes"));
+        assert!(prompt.contains("\"recurrence\""));
     }
 
     #[test]

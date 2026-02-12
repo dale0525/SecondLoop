@@ -761,6 +761,34 @@ class NativeAppBackend
   }
 
   @override
+  Future<void> upsertTodoRecurrence(
+    Uint8List key, {
+    required String todoId,
+    required String seriesId,
+    required String ruleJson,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpsertTodoRecurrence(
+      appDir: appDir,
+      todoId: todoId,
+      seriesId: seriesId,
+      ruleJson: ruleJson,
+    );
+  }
+
+  @override
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetTodoRecurrenceRuleJson(
+      appDir: appDir,
+      todoId: todoId,
+    );
+  }
+
+  @override
   Future<void> deleteTodo(
     Uint8List key, {
     required String todoId,

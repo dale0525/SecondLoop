@@ -745,6 +745,8 @@ VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
             Some(now),
         )?;
 
+        maybe_spawn_next_recurring_todo(conn, key, &updated, new_status)?;
+
         Ok(updated)
     })();
 
@@ -941,4 +943,3 @@ ON CONFLICT(todo_id) DO UPDATE SET
         }
     }
 }
-

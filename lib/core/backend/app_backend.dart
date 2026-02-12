@@ -116,6 +116,22 @@ abstract class AppBackend {
     throw UnimplementedError('setTodoStatus');
   }
 
+  Future<void> upsertTodoRecurrence(
+    Uint8List key, {
+    required String todoId,
+    required String seriesId,
+    required String ruleJson,
+  }) {
+    throw UnimplementedError('upsertTodoRecurrence');
+  }
+
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) {
+    throw UnimplementedError('getTodoRecurrenceRuleJson');
+  }
+
   Future<void> deleteTodo(
     Uint8List key, {
     required String todoId,

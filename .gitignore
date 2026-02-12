@@ -1,7 +1,5 @@
 # Docs
-docs/*
-!docs/plans/
-!docs/plans/*.md
+docs/plans/
 
 # Agents
 .codex/

@@ -110,6 +110,7 @@ abstract class SemanticParseAutoActionsStore {
     required String title,
     required String status,
     int? dueAtMs,
+    String? recurrenceRuleJson,
   });
 
   /// Returns the previous status when available (for Undo).
@@ -258,12 +259,14 @@ final class SemanticParseAutoActionsRunner {
               :final title,
               :final status,
               :final dueAtLocal,
+              :final recurrenceRule,
             ):
             await store.upsertTodoFromMessage(
               messageId: job.messageId,
               title: title,
               status: status,
               dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
+              recurrenceRuleJson: recurrenceRule?.toJsonString(),
             );
             await store.markJobSucceeded(
               SemanticParseJobSucceededArgs(
@@ -516,6 +519,7 @@ final class BackendSemanticParseAutoActionsStore
     required String title,
     required String status,
     int? dueAtMs,
+    String? recurrenceRuleJson,
   }) async {
     var normalizedStatus = status.trim();
     if (normalizedStatus.isEmpty) {
@@ -542,9 +546,10 @@ final class BackendSemanticParseAutoActionsStore
       nextReviewAtMs = nextLocal.toUtc().millisecondsSinceEpoch;
     }
 
+    final todoId = 'todo:$messageId';
     await _backend.upsertTodo(
       _sessionKey,
-      id: 'todo:$messageId',
+      id: todoId,
       title: title,
       dueAtMs: dueAtMs,
       status: normalizedStatus,
@@ -553,6 +558,16 @@ final class BackendSemanticParseAutoActionsStore
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
     );
+
+    final normalizedRule = recurrenceRuleJson?.trim();
+    if (normalizedRule != null && normalizedRule.isNotEmpty) {
+      await _backend.upsertTodoRecurrence(
+        _sessionKey,
+        todoId: todoId,
+        seriesId: 'series:$messageId',
+        ruleJson: normalizedRule,
+      );
+    }
   }
 
   @override

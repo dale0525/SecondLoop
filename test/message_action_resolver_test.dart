@@ -97,4 +97,54 @@ void main() {
       );
     }
   });
+
+  test('creates recurring todo for zh daily phrase', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      '每天 9:00 记账',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'daily');
+    expect(create.status, 'open');
+  });
+
+  test('creates recurring todo for es yearly phrase with accents', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      'cada año revisar seguro',
+      locale: const Locale('es'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'yearly');
+    expect(create.title, 'revisar seguro');
+  });
+  test('creates recurring todo for en weekly phrase', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      'every week send project update',
+      locale: const Locale('en'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'weekly');
+    expect(create.dueAtLocal, isNotNull);
+  });
 }

@@ -222,6 +222,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
           :final title,
           :final status,
           :final dueAtLocal,
+          :final recurrenceRule,
         ):
         final todoId = 'todo:${message.id}';
         int? reviewStage;
@@ -246,6 +247,15 @@ extension _ChatPageStateMethodsC on _ChatPageState {
             nextReviewAtMs: nextReviewAtMs,
             lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
           );
+          final recurrenceRuleJson = recurrenceRule?.toJsonString();
+          if (recurrenceRuleJson != null && recurrenceRuleJson.isNotEmpty) {
+            await backend.upsertTodoRecurrence(
+              sessionKey,
+              todoId: todoId,
+              seriesId: 'series:${message.id}',
+              ruleJson: recurrenceRuleJson,
+            );
+          }
           syncEngine?.notifyLocalMutation();
         } catch (_) {
           return;

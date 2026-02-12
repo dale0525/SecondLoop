@@ -78,6 +78,44 @@ class AiSemanticParse {
     return null;
   }
 
+  static int? _intField(Map<String, Object?> json, String key) {
+    final value = json[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  static MessageActionRecurrenceRule? _parseRecurrenceRule(Object? raw) {
+    if (raw is! Map) return null;
+    final map = Map<String, Object?>.from(raw);
+    final freq = _stringField(map, 'freq');
+    if (freq == null) return null;
+    const allowed = {'daily', 'weekly', 'monthly', 'yearly'};
+    if (!allowed.contains(freq)) return null;
+    final interval = (_intField(map, 'interval') ?? 1).clamp(1, 10000);
+    return MessageActionRecurrenceRule(freq: freq, interval: interval);
+  }
+
+  static DateTime _fallbackDueAtForRecurring(
+    DateTime nowLocal,
+    int dayEndMinutes,
+  ) {
+    final hour = dayEndMinutes ~/ 60;
+    final minute = dayEndMinutes % 60;
+    var due = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+      hour,
+      minute,
+    );
+    if (!due.isAfter(nowLocal)) {
+      due = due.add(const Duration(days: 1));
+    }
+    return due;
+  }
+
   static AiSemanticDecision? tryParseMessageAction(
     String raw, {
     required DateTime nowLocal,
@@ -132,11 +170,19 @@ class AiSemanticParse {
           }
         }
 
+        final recurrenceRule = _parseRecurrenceRule(map['recurrence']);
+        if (recurrenceRule != null && dueAtLocal == null) {
+          dueAtLocal = _fallbackDueAtForRecurring(nowLocal, dayEndMinutes);
+        }
+        final normalizedStatus =
+            dueAtLocal == null ? status : (status == 'inbox' ? 'open' : status);
+
         return AiSemanticDecision(
           decision: MessageActionCreateDecision(
             title: title,
-            status: status,
+            status: normalizedStatus,
             dueAtLocal: dueAtLocal,
+            recurrenceRule: recurrenceRule,
           ),
           confidence: confidence,
         );

@@ -620,6 +620,33 @@ PRAGMA user_version = 21;
         )?;
     }
 
+    if user_version < 22 {
+        // v22: recurring todo series + todo occurrence links.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS todo_series (
+  id TEXT PRIMARY KEY,
+  rule_json TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS todo_recurrences (
+  todo_id TEXT PRIMARY KEY,
+  series_id TEXT NOT NULL,
+  occurrence_index INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+  FOREIGN KEY(series_id) REFERENCES todo_series(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_todo_recurrences_series_occurrence
+  ON todo_recurrences(series_id, occurrence_index);
+PRAGMA user_version = 22;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -682,6 +709,8 @@ DELETE FROM todo_deletions;
 DELETE FROM todos;
 DELETE FROM todo_activity_attachments;
 DELETE FROM todo_activities;
+DELETE FROM todo_recurrences;
+DELETE FROM todo_series;
 DELETE FROM events;
 DELETE FROM oplog;
 DELETE FROM kv WHERE key != 'embedding.active_model_name';
