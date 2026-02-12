@@ -10,6 +10,7 @@ import 'package:secondloop/core/notifications/review_reminder_in_app_fallback_pr
 import 'package:secondloop/core/notifications/review_reminder_notification_scheduler.dart';
 import 'package:secondloop/core/notifications/review_reminder_notifications_gate.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/actions/agenda/todo_agenda_page.dart';
 import 'package:secondloop/features/actions/review/review_queue_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -66,14 +67,39 @@ void main() {
   });
 
   testWidgets(
-      'shows in-app fallback banner and opens review queue when system notifications are unavailable',
+      'shows in-app reminder when review queue reminder crosses while foreground',
       (tester) async {
-    final harness = await _pumpGateHarness(
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await _pumpGateHarness(
       tester,
-      schedulerSupportsSystemNotifications: false,
+      todos: <Todo>[
+        _reviewTodo(
+            nextReviewAtMs:
+                nowUtcMs + const Duration(seconds: 6).inMilliseconds),
+      ],
     );
 
-    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'shows in-app reminder when due todo reminder crosses while foreground',
+      (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _dueTodo(dueAtMs: nowUtcMs + const Duration(seconds: 6).inMilliseconds),
+      ],
+    );
+
+    await tester.pump(const Duration(seconds: 7));
     await tester.pumpAndSettle();
 
     expect(
@@ -86,70 +112,71 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(ReviewQueuePage), findsOneWidget);
-    expect(harness.scheduler.scheduleCalls, 1);
+    expect(find.byType(TodoAgendaPage), findsOneWidget);
   });
 
-  testWidgets(
-      'does not show in-app fallback banner when fallback setting is disabled',
+  testWidgets('does not show review-queue reminder for overdue item on launch',
+      (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _reviewTodo(
+            nextReviewAtMs:
+                nowUtcMs - const Duration(minutes: 1).inMilliseconds),
+      ],
+    );
+
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('does not show due reminder for overdue item on launch',
+      (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _dueTodo(dueAtMs: nowUtcMs - const Duration(minutes: 1).inMilliseconds),
+      ],
+    );
+
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('does not show in-app reminder when fallback setting is disabled',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       ReviewReminderInAppFallbackPrefs.prefsKey: false,
     });
 
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     await _pumpGateHarness(
       tester,
-      schedulerSupportsSystemNotifications: false,
-    );
-
-    await tester.pump(const Duration(seconds: 6));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsNothing,
-    );
-  });
-
-  testWidgets(
-      'does not show review-queue banner when only due todos are pending',
-      (tester) async {
-    await _pumpGateHarness(
-      tester,
-      todos: const <Todo>[
-        Todo(
-          id: 'todo:due',
-          title: 'due soon',
-          status: 'open',
-          dueAtMs: 1,
-          createdAtMs: 1,
-          updatedAtMs: 1,
-          reviewStage: null,
-          nextReviewAtMs: null,
-        ),
+      todos: <Todo>[
+        _reviewTodo(
+            nextReviewAtMs:
+                nowUtcMs + const Duration(seconds: 6).inMilliseconds),
       ],
     );
 
-    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(seconds: 7));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
       findsNothing,
-    );
-  });
-
-  testWidgets(
-      'shows in-app fallback banner when system notifications are available',
-      (tester) async {
-    await _pumpGateHarness(tester);
-
-    await tester.pump(const Duration(seconds: 6));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsOneWidget,
     );
   });
 }
@@ -157,11 +184,12 @@ void main() {
 Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
-  List<Todo> todos = _defaultTodos,
+  List<Todo>? todos,
 }) async {
   final scheduler = _FakeScheduler(
     supportsSystemNotifications: schedulerSupportsSystemNotifications,
   );
+  final effectiveTodos = todos ?? _defaultTodos;
   final navigatorKey = GlobalKey<NavigatorState>();
 
   await tester.pumpWidget(
@@ -169,7 +197,7 @@ Future<_GateHarness> _pumpGateHarness(
       MaterialApp(
         navigatorKey: navigatorKey,
         home: AppBackendScope(
-          backend: _Backend(todos: todos),
+          backend: _Backend(todos: effectiveTodos),
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
@@ -193,6 +221,31 @@ Future<_GateHarness> _pumpGateHarness(
   expect(scheduler.ensureInitializedCalls, greaterThan(0));
 
   return _GateHarness(scheduler: scheduler);
+}
+
+Todo _reviewTodo({required int nextReviewAtMs}) {
+  return Todo(
+    id: 'todo:review',
+    title: 'review this',
+    status: 'inbox',
+    createdAtMs: 1,
+    updatedAtMs: 1,
+    reviewStage: 0,
+    nextReviewAtMs: nextReviewAtMs,
+  );
+}
+
+Todo _dueTodo({required int dueAtMs}) {
+  return Todo(
+    id: 'todo:due',
+    title: 'due soon',
+    status: 'open',
+    dueAtMs: dueAtMs,
+    createdAtMs: 1,
+    updatedAtMs: 1,
+    reviewStage: null,
+    nextReviewAtMs: null,
+  );
 }
 
 final class _GateHarness {
@@ -228,16 +281,8 @@ final class _FakeScheduler implements ReviewReminderNotificationScheduler {
   }
 }
 
-const _defaultTodos = <Todo>[
-  Todo(
-    id: 'todo:1',
-    title: 'review this',
-    status: 'inbox',
-    createdAtMs: 1,
-    updatedAtMs: 1,
-    reviewStage: 0,
-    nextReviewAtMs: 60 * 60 * 1000,
-  ),
+final _defaultTodos = <Todo>[
+  _reviewTodo(nextReviewAtMs: 60 * 60 * 1000),
 ];
 
 final class _Backend extends TestAppBackend {

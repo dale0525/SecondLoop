@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../features/actions/agenda/todo_agenda_page.dart';
 import '../../features/actions/review/review_queue_page.dart';
 import '../../i18n/strings.g.dart';
 import '../backend/app_backend.dart';
@@ -51,7 +52,7 @@ final class _ReviewReminderNotificationsGateState
   Timer? _inAppFallbackTimer;
   bool _refreshInFlight = false;
   bool _refreshQueued = false;
-  bool _openingReviewQueueFromNotification = false;
+  bool _openingPageFromReminder = false;
 
   Object? _backendIdentity;
   Uint8List? _sessionKey;
@@ -60,12 +61,15 @@ final class _ReviewReminderNotificationsGateState
   bool _inAppFallbackVisible = false;
   String? _activeInAppFallbackSourceKey;
   String? _dismissedInAppFallbackSourceKey;
-  int? _activeInAppFallbackPendingCount;
+
+  bool _isAppInForeground = true;
+  int _foregroundSessionStartedAtUtcMs = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _startForegroundSession();
     _inAppFallbackEnabled = ReviewReminderInAppFallbackPrefs.value.value;
     ReviewReminderInAppFallbackPrefs.value
         .addListener(_handleInAppFallbackPrefChanged);
@@ -86,8 +90,13 @@ final class _ReviewReminderNotificationsGateState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _startForegroundSession();
+      _syncInAppFallbackFromCurrentPlan();
       _scheduleRefresh();
+      return;
     }
+
+    _setAppInBackground();
   }
 
   @override
@@ -112,6 +121,19 @@ final class _ReviewReminderNotificationsGateState
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
     _syncInAppFallbackFromCurrentPlan();
     _scheduleRefresh();
+  }
+
+  void _startForegroundSession() {
+    _isAppInForeground = true;
+    _foregroundSessionStartedAtUtcMs =
+        DateTime.now().toUtc().millisecondsSinceEpoch;
+  }
+
+  void _setAppInBackground() {
+    _isAppInForeground = false;
+    _inAppFallbackTimer?.cancel();
+    _inAppFallbackTimer = null;
+    _hideInAppFallbackBanner();
   }
 
   void _attachSyncEngine(SyncEngine? engine) {
@@ -185,7 +207,7 @@ final class _ReviewReminderNotificationsGateState
       return;
     }
 
-    unawaited(_openReviewQueueFromNotification());
+    unawaited(_openReminderTarget(ReviewReminderItemKind.reviewQueue));
   }
 
   void _handleInAppFallbackPrefChanged() {
@@ -202,7 +224,7 @@ final class _ReviewReminderNotificationsGateState
     _inAppFallbackTimer?.cancel();
     _inAppFallbackTimer = null;
 
-    if (!_inAppFallbackEnabled) {
+    if (!_inAppFallbackEnabled || !_isAppInForeground) {
       _hideInAppFallbackBanner();
       return;
     }
@@ -214,18 +236,10 @@ final class _ReviewReminderNotificationsGateState
       return;
     }
 
-    final reviewQueueItems = plan.items
-        .where((item) => item.kind == ReviewReminderItemKind.reviewQueue)
-        .toList(growable: false);
-    if (reviewQueueItems.isEmpty) {
-      _dismissedInAppFallbackSourceKey = null;
-      _hideInAppFallbackBanner();
-      return;
-    }
-
-    final reviewQueuePendingCount = reviewQueueItems.length;
-    final activeSourceKeys =
-        reviewQueueItems.map(_inAppFallbackSourceKeyForItem).toSet();
+    final activeSourceKeys = plan.items
+        .where((item) => item.sourceAtUtcMs >= _foregroundSessionStartedAtUtcMs)
+        .map(_inAppFallbackSourceKeyForItem)
+        .toSet();
     if (_dismissedInAppFallbackSourceKey != null &&
         !activeSourceKeys.contains(_dismissedInAppFallbackSourceKey)) {
       _dismissedInAppFallbackSourceKey = null;
@@ -235,7 +249,11 @@ final class _ReviewReminderNotificationsGateState
     ReviewReminderItem? dueItem;
     ReviewReminderItem? nextItem;
 
-    for (final item in reviewQueueItems) {
+    for (final item in plan.items) {
+      if (item.sourceAtUtcMs < _foregroundSessionStartedAtUtcMs) {
+        continue;
+      }
+
       final sourceKey = _inAppFallbackSourceKeyForItem(item);
       if (item.scheduleAtUtcMs <= nowUtcMs) {
         if (_dismissedInAppFallbackSourceKey == sourceKey) {
@@ -253,7 +271,7 @@ final class _ReviewReminderNotificationsGateState
 
     if (dueItem != null) {
       _showInAppFallbackBanner(
-        pendingCount: reviewQueuePendingCount,
+        item: dueItem,
         sourceKey: _inAppFallbackSourceKeyForItem(dueItem),
       );
       return;
@@ -270,29 +288,26 @@ final class _ReviewReminderNotificationsGateState
       final latestPlan = _coordinator?.currentPlan;
       if (latestPlan == null ||
           !_inAppFallbackEnabled ||
+          !_isAppInForeground ||
           _dismissedInAppFallbackSourceKey == targetSourceKey) {
         _syncInAppFallbackFromCurrentPlan();
         return;
       }
 
-      final latestReviewQueueItems = latestPlan.items
-          .where((item) => item.kind == ReviewReminderItemKind.reviewQueue)
-          .toList(growable: false);
-      if (latestReviewQueueItems.isEmpty) {
-        _syncInAppFallbackFromCurrentPlan();
-        return;
+      ReviewReminderItem? matchedItem;
+      for (final item in latestPlan.items) {
+        if (item.sourceAtUtcMs < _foregroundSessionStartedAtUtcMs) continue;
+        if (_inAppFallbackSourceKeyForItem(item) != targetSourceKey) continue;
+        matchedItem = item;
+        break;
       }
-
-      final matches = latestReviewQueueItems.any(
-        (item) => _inAppFallbackSourceKeyForItem(item) == targetSourceKey,
-      );
-      if (!matches) {
+      if (matchedItem == null) {
         _syncInAppFallbackFromCurrentPlan();
         return;
       }
 
       _showInAppFallbackBanner(
-        pendingCount: latestReviewQueueItems.length,
+        item: matchedItem,
         sourceKey: targetSourceKey,
       );
     });
@@ -303,13 +318,11 @@ final class _ReviewReminderNotificationsGateState
   }
 
   void _showInAppFallbackBanner({
-    required int pendingCount,
+    required ReviewReminderItem item,
     required String sourceKey,
   }) {
     if (!mounted) return;
-    if (_inAppFallbackVisible &&
-        _activeInAppFallbackSourceKey == sourceKey &&
-        _activeInAppFallbackPendingCount == pendingCount) {
+    if (_inAppFallbackVisible && _activeInAppFallbackSourceKey == sourceKey) {
       return;
     }
 
@@ -317,23 +330,32 @@ final class _ReviewReminderNotificationsGateState
     if (messenger == null) return;
 
     final inAppFallbackT = context.t.actions.reviewQueue.inAppFallback;
+    final reminderTitle = item.kind == ReviewReminderItemKind.reviewQueue
+        ? context.t.actions.reviewQueue.title
+        : context.t.actions.agenda.title;
+    final reminderSummary = item.todoTitle.trim().isEmpty
+        ? reminderTitle
+        : '$reminderTitle · ${item.todoTitle}';
+
     messenger.hideCurrentMaterialBanner();
     messenger.showMaterialBanner(
       MaterialBanner(
         key: const ValueKey('review_reminder_in_app_fallback_banner'),
         leading: const Icon(Icons.notifications_active_rounded),
         backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-        content: Text(
-          inAppFallbackT.message(count: pendingCount),
-        ),
+        content: Text(reminderSummary),
         actions: [
           TextButton(
             key: const ValueKey('review_reminder_in_app_fallback_open'),
             onPressed: () {
               _hideInAppFallbackBanner();
-              unawaited(_openReviewQueueFromNotification());
+              unawaited(_openReminderTarget(item.kind));
             },
-            child: Text(inAppFallbackT.open),
+            child: Text(
+              item.kind == ReviewReminderItemKind.reviewQueue
+                  ? inAppFallbackT.open
+                  : context.t.actions.agenda.viewAll,
+            ),
           ),
           TextButton(
             key: const ValueKey('review_reminder_in_app_fallback_dismiss'),
@@ -350,36 +372,36 @@ final class _ReviewReminderNotificationsGateState
 
     _inAppFallbackVisible = true;
     _activeInAppFallbackSourceKey = sourceKey;
-    _activeInAppFallbackPendingCount = pendingCount;
   }
 
   void _hideInAppFallbackBanner() {
     if (!mounted) {
       _inAppFallbackVisible = false;
       _activeInAppFallbackSourceKey = null;
-      _activeInAppFallbackPendingCount = null;
       return;
     }
 
     ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
     _inAppFallbackVisible = false;
     _activeInAppFallbackSourceKey = null;
-    _activeInAppFallbackPendingCount = null;
   }
 
-  Future<void> _openReviewQueueFromNotification() async {
-    if (!mounted || _openingReviewQueueFromNotification) return;
+  Future<void> _openReminderTarget(ReviewReminderItemKind kind) async {
+    if (!mounted || _openingPageFromReminder) return;
 
     final navigator = widget.navigatorKey.currentState;
     if (navigator == null || !navigator.mounted) return;
 
-    _openingReviewQueueFromNotification = true;
+    _openingPageFromReminder = true;
     try {
+      final page = kind == ReviewReminderItemKind.reviewQueue
+          ? const ReviewQueuePage()
+          : const TodoAgendaPage();
       await navigator.push(
-        MaterialPageRoute(builder: (_) => const ReviewQueuePage()),
+        MaterialPageRoute(builder: (_) => page),
       );
     } finally {
-      _openingReviewQueueFromNotification = false;
+      _openingPageFromReminder = false;
     }
   }
 
