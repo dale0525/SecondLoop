@@ -62,7 +62,7 @@ void main() {
     expect(plan!.pendingCount, 3);
     expect(plan.items.length, 3);
     expect(plan.items[0].todoId, 'todo:3');
-    expect(plan.items[0].scheduleAtUtcMs, 70000);
+    expect(plan.items[0].scheduleAtUtcMs, 15000);
     expect(plan.items[0].kind, ReviewReminderItemKind.dueTodo);
     expect(plan.items[1].todoId, 'todo:1');
     expect(plan.items[1].todoTitle, 'first');
@@ -97,6 +97,30 @@ void main() {
     expect(plan.items.single.todoId, 'todo:due');
     expect(plan.items.single.scheduleAtUtcMs, 60000);
     expect(plan.items.single.kind, ReviewReminderItemKind.dueTodo);
+  });
+
+  test('keeps near-future due time close to the original deadline', () {
+    const nowUtcMs = 10000;
+    const dueAtUtcMs = nowUtcMs + 10000;
+
+    final plan = buildReviewReminderPlan(
+      const <Todo>[
+        Todo(
+          id: 'todo:near-future',
+          title: 'near future',
+          status: 'open',
+          dueAtMs: dueAtUtcMs,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+      nowUtcMs: nowUtcMs,
+    );
+
+    expect(plan, isNotNull);
+    expect(plan!.items.single.scheduleAtUtcMs, dueAtUtcMs);
   });
 
   test('bumps past schedule time to a near-future safety window', () {

@@ -1,6 +1,6 @@
 import '../../src/rust/db.dart';
 
-const kReviewReminderMinimumLeadTimeMs = 60 * 1000;
+const kReviewReminderMinimumLeadTimeMs = 5 * 1000;
 const kReviewReminderMaxItems = 32;
 
 enum ReviewReminderItemKind {

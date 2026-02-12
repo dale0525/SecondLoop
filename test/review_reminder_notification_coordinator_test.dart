@@ -107,7 +107,7 @@ void main() {
 
     await coordinator.refresh();
 
-    nowUtcMs = 20000;
+    nowUtcMs = 14000;
     await coordinator.refresh();
 
     expect(scheduler.scheduledPlans.length, 1);
