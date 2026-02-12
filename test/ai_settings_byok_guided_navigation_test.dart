@@ -47,6 +47,43 @@ void main() {
   });
 
   testWidgets(
+      'Selecting Media BYOK routes user to OpenAI-compatible profile setup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _NoLlmProfileBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MediaQuery(
+                data: MediaQueryData(disableAnimations: true),
+                child: AiSettingsPage(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = find.byType(ListView).first;
+    final byokTile = find.byKey(const ValueKey('ai_settings_media_mode_byok'));
+    await tester.dragUntilVisible(byokTile, listView, const Offset(0, -220));
+    await tester.pumpAndSettle();
+
+    await tester.tap(byokTile);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+
+    final page = tester.widget<LlmProfilesPage>(find.byType(LlmProfilesPage));
+    expect(page.providerFilter, LlmProfilesProviderFilter.openAiCompatibleOnly);
+  });
+
+  testWidgets(
       'Selecting Embeddings BYOK routes user directly to embedding profiles setup',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

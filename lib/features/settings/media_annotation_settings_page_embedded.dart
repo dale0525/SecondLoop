@@ -71,7 +71,10 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
           : () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const LlmProfilesPage(),
+                  builder: (_) => const LlmProfilesPage(
+                    providerFilter:
+                        LlmProfilesProviderFilter.openAiCompatibleOnly,
+                  ),
                 ),
               );
             },

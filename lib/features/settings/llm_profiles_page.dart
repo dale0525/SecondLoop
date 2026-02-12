@@ -14,15 +14,22 @@ enum LlmProfilesFocusTarget {
   addProfileForm,
 }
 
+enum LlmProfilesProviderFilter {
+  all,
+  openAiCompatibleOnly,
+}
+
 class LlmProfilesPage extends StatefulWidget {
   const LlmProfilesPage({
     this.focusTarget,
     this.highlightFocus = false,
+    this.providerFilter = LlmProfilesProviderFilter.all,
     super.key,
   });
 
   final LlmProfilesFocusTarget? focusTarget;
   final bool highlightFocus;
+  final LlmProfilesProviderFilter providerFilter;
 
   @override
   State<LlmProfilesPage> createState() => _LlmProfilesPageState();
@@ -65,6 +72,123 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     'gemini-compatible': 'https://generativelanguage.googleapis.com/v1beta',
     'anthropic-compatible': 'https://api.anthropic.com/v1',
   };
+
+  static const _allProviderTypes = <String>[
+    'openai-compatible',
+    'gemini-compatible',
+    'anthropic-compatible',
+  ];
+
+  List<String> get _allowedProviderTypes {
+    return switch (widget.providerFilter) {
+      LlmProfilesProviderFilter.all => _allProviderTypes,
+      LlmProfilesProviderFilter.openAiCompatibleOnly => const <String>[
+          'openai-compatible',
+        ],
+    };
+  }
+
+  bool _isProviderTypeAllowed(String providerType) {
+    return _allowedProviderTypes.contains(providerType);
+  }
+
+  List<LlmProfile> _visibleProfiles(List<LlmProfile> profiles) {
+    if (widget.providerFilter == LlmProfilesProviderFilter.all) {
+      return profiles;
+    }
+    return profiles
+        .where((profile) => _isProviderTypeAllowed(profile.providerType))
+        .toList(growable: false);
+  }
+
+  bool _isZhLocale(BuildContext context) {
+    return Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+  }
+
+  String _activeProfileHelpText(BuildContext context) {
+    if (widget.providerFilter !=
+        LlmProfilesProviderFilter.openAiCompatibleOnly) {
+      return context.t.llmProfiles.activeProfileHelp;
+    }
+
+    return _isZhLocale(context)
+        ? '媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。'
+        : 'Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.';
+  }
+
+  String _noVisibleProfilesText(BuildContext context) {
+    if (widget.providerFilter !=
+        LlmProfilesProviderFilter.openAiCompatibleOnly) {
+      return context.t.llmProfiles.noProfilesYet;
+    }
+
+    return _isZhLocale(context)
+        ? '没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。'
+        : 'No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.';
+  }
+
+  List<DropdownMenuItem<String>> _providerTypeItems(BuildContext context) {
+    final providers = context.t.llmProfiles.providers;
+    return _allowedProviderTypes.map((providerType) {
+      final label = switch (providerType) {
+        'openai-compatible' => providers.openaiCompatible,
+        'gemini-compatible' => providers.geminiCompatible,
+        'anthropic-compatible' => providers.anthropicCompatible,
+        _ => providerType,
+      };
+      return DropdownMenuItem(
+        value: providerType,
+        child: Text(label),
+      );
+    }).toList(growable: false);
+  }
+
+  bool _ensureAllowedProviderType() {
+    if (_allowedProviderTypes.contains(_providerType)) return false;
+    final oldProviderType = _providerType;
+    _providerType = _allowedProviderTypes.first;
+    _applyProviderDefaults(oldProviderType);
+    return true;
+  }
+
+  void _applyProviderDefaults(String oldProviderType) {
+    final oldDefaultModel = _defaultModelByProvider[oldProviderType];
+    final newDefaultModel = _defaultModelByProvider[_providerType];
+    if (newDefaultModel != null) {
+      final modelText = _modelController.text.trim();
+      if (modelText.isEmpty || modelText == oldDefaultModel) {
+        _modelController.text = newDefaultModel;
+      }
+    }
+
+    final oldDefaultName = _defaultNameByProvider[oldProviderType];
+    final newDefaultName = _defaultNameByProvider[_providerType];
+    if (newDefaultName != null) {
+      final nameText = _nameController.text.trim();
+      if (nameText.isEmpty || nameText == oldDefaultName) {
+        _nameController.text = newDefaultName;
+      }
+    }
+
+    final oldDefaultBaseUrl = _defaultBaseUrlByProvider[oldProviderType];
+    final newDefaultBaseUrl = _defaultBaseUrlByProvider[_providerType];
+    if (newDefaultBaseUrl != null) {
+      final baseUrlText = _baseUrlController.text.trim();
+      if (baseUrlText.isEmpty || baseUrlText == oldDefaultBaseUrl) {
+        _baseUrlController.text = newDefaultBaseUrl;
+      }
+    }
+  }
+
+  void _onProviderTypeChanged(String nextProviderType) {
+    if (_providerType == nextProviderType) return;
+    final oldProviderType = _providerType;
+    _providerType = nextProviderType;
+    _applyProviderDefaults(oldProviderType);
+  }
 
   GlobalKey _anchorKeyOf(LlmProfilesFocusTarget target) {
     return switch (target) {
@@ -184,8 +308,17 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
   @override
   void initState() {
     super.initState();
+    _ensureAllowedProviderType();
     if (widget.highlightFocus && widget.focusTarget != null) {
       _highlightedFocusTarget = widget.focusTarget;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant LlmProfilesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.providerFilter != widget.providerFilter) {
+      _ensureAllowedProviderType();
     }
   }
 
@@ -305,7 +438,10 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     final apiKey = _apiKeyController.text.trim();
     final modelName = _modelController.text.trim();
 
-    if (name.isEmpty || modelName.isEmpty || apiKey.isEmpty) {
+    if (!_allowedProviderTypes.contains(_providerType) ||
+        name.isEmpty ||
+        modelName.isEmpty ||
+        apiKey.isEmpty) {
       setState(() => _error = context.t.llmProfiles.validationError);
       return;
     }
@@ -346,6 +482,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _ensureAllowedProviderType();
     if (_profiles == null) {
       _reload();
     }
@@ -354,7 +491,11 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final profiles = _profiles;
+    final allProfiles = _profiles;
+    final profiles = allProfiles == null ? null : _visibleProfiles(allProfiles);
+    final providerTypeItems = _providerTypeItems(context);
+    final canChangeProviderType = providerTypeItems.length > 1;
+
     String? activeId;
     LlmProfile? activeProfile;
     if (profiles != null) {
@@ -383,7 +524,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            context.t.llmProfiles.activeProfileHelp,
+            _activeProfileHelpText(context),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -401,7 +542,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
               child: profiles == null
                   ? const Center(child: CircularProgressIndicator())
                   : profiles.isEmpty
-                      ? Text(context.t.llmProfiles.noProfilesYet)
+                      ? Text(_noVisibleProfilesText(context))
                       : Column(
                           children: [
                             for (var i = 0; i < profiles.length; i++) ...[
@@ -483,69 +624,13 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
                     decoration: InputDecoration(
                       labelText: context.t.llmProfiles.fields.provider,
                     ),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'openai-compatible',
-                        child: Text(
-                          context.t.llmProfiles.providers.openaiCompatible,
-                        ),
-                      ),
-                      DropdownMenuItem(
-                        value: 'gemini-compatible',
-                        child: Text(
-                            context.t.llmProfiles.providers.geminiCompatible),
-                      ),
-                      DropdownMenuItem(
-                        value: 'anthropic-compatible',
-                        child: Text(
-                          context.t.llmProfiles.providers.anthropicCompatible,
-                        ),
-                      ),
-                    ],
-                    onChanged: _busy
+                    items: providerTypeItems,
+                    onChanged: _busy || !canChangeProviderType
                         ? null
                         : (v) {
                             if (v == null) return;
                             setState(() {
-                              final oldProviderType = _providerType;
-                              _providerType = v;
-
-                              final oldDefaultModel =
-                                  _defaultModelByProvider[oldProviderType];
-                              final newDefaultModel =
-                                  _defaultModelByProvider[_providerType];
-                              if (newDefaultModel != null) {
-                                final modelText = _modelController.text.trim();
-                                if (modelText.isEmpty ||
-                                    modelText == oldDefaultModel) {
-                                  _modelController.text = newDefaultModel;
-                                }
-                              }
-
-                              final oldDefaultName =
-                                  _defaultNameByProvider[oldProviderType];
-                              final newDefaultName =
-                                  _defaultNameByProvider[_providerType];
-                              if (newDefaultName != null) {
-                                final nameText = _nameController.text.trim();
-                                if (nameText.isEmpty ||
-                                    nameText == oldDefaultName) {
-                                  _nameController.text = newDefaultName;
-                                }
-                              }
-
-                              final oldDefaultBaseUrl =
-                                  _defaultBaseUrlByProvider[oldProviderType];
-                              final newDefaultBaseUrl =
-                                  _defaultBaseUrlByProvider[_providerType];
-                              if (newDefaultBaseUrl != null) {
-                                final baseUrlText =
-                                    _baseUrlController.text.trim();
-                                if (baseUrlText.isEmpty ||
-                                    baseUrlText == oldDefaultBaseUrl) {
-                                  _baseUrlController.text = newDefaultBaseUrl;
-                                }
-                              }
+                              _onProviderTypeChanged(v);
                             });
                           },
                   ),

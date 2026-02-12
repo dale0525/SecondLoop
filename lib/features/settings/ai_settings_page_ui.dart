@@ -268,7 +268,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     final mediaWarning = mediaUnavailable
         ? _buildWarningBanner(
             context,
-            t.mediaUnderstanding.preferenceUnavailableHint,
+            _mediaUnavailableHint(context),
             key: const ValueKey('ai_settings_media_unavailable_hint'),
           )
         : null;
@@ -491,7 +491,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const LlmProfilesPage(),
+                      builder: (_) => const LlmProfilesPage(
+                        providerFilter:
+                            LlmProfilesProviderFilter.openAiCompatibleOnly,
+                      ),
                     ),
                   );
                 },

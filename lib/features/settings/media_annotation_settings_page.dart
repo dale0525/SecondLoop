@@ -181,7 +181,11 @@ class _MediaAnnotationSettingsPageState
             .byokOpenAiCompatible,
         onOpen: () async {
           await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
+            MaterialPageRoute(
+              builder: (_) => const LlmProfilesPage(
+                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
+              ),
+            ),
           );
         },
       );
@@ -408,7 +412,11 @@ class _MediaAnnotationSettingsPageState
           context.t.settings.mediaAnnotation.setupRequired.reasons.followAskAi,
       onOpen: () async {
         await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const LlmProfilesPage()),
+          MaterialPageRoute(
+            builder: (_) => const LlmProfilesPage(
+              providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
+            ),
+          ),
         );
       },
     );

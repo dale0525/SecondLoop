@@ -89,9 +89,106 @@ void main() {
     expect(
         anthropicBaseUrlField.controller?.text, 'https://api.anthropic.com/v1');
   });
+
+  testWidgets('OpenAI-only filter hides incompatible active profiles',
+      (tester) async {
+    final backend = _EmptyLlmProfilesBackend(
+      initialProfiles: const <LlmProfile>[
+        LlmProfile(
+          id: 'openai-1',
+          name: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4o-mini',
+          isActive: false,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        LlmProfile(
+          id: 'gemini-1',
+          name: 'Gemini',
+          providerType: 'gemini-compatible',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+          modelName: 'gemini-1.5-flash',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const LlmProfilesPage(
+                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('openai-compatible'), findsOneWidget);
+    expect(find.textContaining('gemini-compatible'), findsNothing);
+  });
+
+  testWidgets('Media BYOK mode limits provider selector to OpenAI-compatible',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _EmptyLlmProfilesBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const LlmProfilesPage(
+                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final selector = tester.widget<DropdownButtonFormField<String>>(
+      find.byKey(const ValueKey('llm_provider_type')),
+    );
+
+    final dropdownButton = tester.widget<DropdownButton<String>>(
+      find.descendant(
+        of: find.byKey(const ValueKey('llm_provider_type')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<String>,
+        ),
+      ),
+    );
+
+    expect(
+      dropdownButton.items?.map((item) => item.value).toList(growable: false),
+      const <String>['openai-compatible'],
+    );
+    expect(selector.onChanged, isNull);
+  });
 }
 
 final class _EmptyLlmProfilesBackend extends AppBackend {
+  _EmptyLlmProfilesBackend({
+    this.initialProfiles = const <LlmProfile>[],
+  });
+
+  final List<LlmProfile> initialProfiles;
+
   @override
   Future<void> init() async {}
 
@@ -196,7 +293,7 @@ final class _EmptyLlmProfilesBackend extends AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      initialProfiles;
 
   @override
   Future<LlmProfile> createLlmProfile(
