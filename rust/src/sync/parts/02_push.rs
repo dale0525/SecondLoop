@@ -213,7 +213,7 @@ fn push_internal(
         )?;
 
         const OP_UPLOAD_BATCH_SIZE: usize = 64;
-        const OP_UPLOAD_CONCURRENCY: usize = 8;
+        const OP_UPLOAD_MAX_CONCURRENCY: usize = 8;
 
         let mut rows = stmt.query(params![ctx.device_id, after_seq])?;
         let mut pushed: u64 = 0;
@@ -223,9 +223,11 @@ fn push_internal(
         let mut touched_pack_chunks: BTreeSet<i64> = BTreeSet::new();
         let mut pending_op_uploads: Vec<(String, Vec<u8>)> =
             Vec::with_capacity(OP_UPLOAD_BATCH_SIZE);
+        let mut op_upload_concurrency = OP_UPLOAD_MAX_CONCURRENCY;
 
         let mut flush_pending_op_uploads = |pending: &mut Vec<(String, Vec<u8>)>| -> Result<()> {
-            let uploaded = upload_ops_files_batch(ctx.remote, pending, OP_UPLOAD_CONCURRENCY)?;
+            let uploaded =
+                upload_ops_files_batch(ctx.remote, pending, &mut op_upload_concurrency)?;
             if uploaded > 0 && progress.is_some() {
                 done_ops = (done_ops + uploaded as u64).min(total_ops);
                 if let Some(cb) = progress.as_deref_mut() {
@@ -367,7 +369,7 @@ fn push_internal(
 fn upload_ops_files_batch(
     remote: &impl RemoteStore,
     pending: &mut Vec<(String, Vec<u8>)>,
-    concurrency: usize,
+    concurrency: &mut usize,
 ) -> Result<usize> {
     let upload_count = pending.len();
     if upload_count == 0 {
@@ -375,19 +377,40 @@ fn upload_ops_files_batch(
     }
 
     let uploads = std::mem::take(pending);
-    let concurrency = concurrency.max(1).min(upload_count);
-    let mut buckets: Vec<Vec<(String, Vec<u8>)>> =
-        (0..concurrency).map(|_| Vec::new()).collect();
-    for (idx, item) in uploads.into_iter().enumerate() {
-        buckets[idx % concurrency].push(item);
+    let mut attempt_concurrency = (*concurrency).max(1).min(upload_count);
+
+    loop {
+        match upload_ops_files_batch_once(remote, &uploads, attempt_concurrency) {
+            Ok(()) => {
+                *concurrency = attempt_concurrency;
+                return Ok(upload_count);
+            }
+            Err(_) if attempt_concurrency > 1 => {
+                attempt_concurrency = (attempt_concurrency / 2).max(1);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn upload_ops_files_batch_once(
+    remote: &impl RemoteStore,
+    uploads: &[(String, Vec<u8>)],
+    concurrency: usize,
+) -> Result<()> {
+    let concurrency = concurrency.max(1).min(uploads.len());
+    let mut buckets: Vec<Vec<usize>> = (0..concurrency).map(|_| Vec::new()).collect();
+    for (idx, _) in uploads.iter().enumerate() {
+        buckets[idx % concurrency].push(idx);
     }
 
     thread::scope(|scope| -> Result<()> {
         let mut handles = Vec::with_capacity(concurrency);
         for bucket in buckets {
             handles.push(scope.spawn(move || -> Result<()> {
-                for (path, bytes) in bucket {
-                    remote.put(&path, bytes)?;
+                for idx in bucket {
+                    let (path, bytes) = &uploads[idx];
+                    remote.put(path, bytes.clone())?;
                 }
                 Ok(())
             }));
@@ -400,9 +423,7 @@ fn upload_ops_files_batch(
         }
 
         Ok(())
-    })?;
-
-    Ok(upload_count)
+    })
 }
 
 fn ensure_ops_packs_backfilled(
