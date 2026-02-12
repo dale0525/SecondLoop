@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/bootstrap_shared_worktree_env.sh [--dry-run] [--skip-pixi-envs] [--skip-env-local-link]
+Usage: bash scripts/bootstrap_shared_worktree_env.sh [--dry-run] [--skip-pixi-envs] [--skip-env-local-link] [--skip-android-key-link]
 
 Bootstrap shared caches for a git worktree checkout.
 
@@ -11,11 +11,14 @@ By default this links these paths for worktree reuse:
 - .tool (to git-common-dir shared storage)
 - .pixi/envs (bucketed by pixi.lock hash, under git-common-dir shared storage)
 - .env.local (to primary worktree when available)
+- android/key.properties (to primary worktree when available)
+- android/app/upload-keystore.jks (to primary worktree when available)
 
 Options:
   --dry-run         Print actions without changing files.
   --skip-pixi-envs      Keep .pixi/envs untouched.
   --skip-env-local-link Keep .env.local untouched.
+  --skip-android-key-link Keep Android signing files untouched.
   -h, --help        Show this help message.
 EOF
 }
@@ -23,6 +26,7 @@ EOF
 dry_run=0
 skip_pixi_envs=0
 skip_env_local_link=0
+skip_android_key_link=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +43,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-env-local-link)
       skip_env_local_link=1
+      shift
+      ;;
+    --skip-android-key-link)
+      skip_android_key_link=1
       shift
       ;;
     -h|--help)
@@ -94,37 +102,52 @@ resolve_primary_worktree_root() {
   printf '%s\n' "${primary_root}"
 }
 
-link_env_local_from_primary() {
+link_file_from_primary() {
   local primary_root="$1"
-  local primary_env="${primary_root}/.env.local"
-  local local_env="${repo_root}/.env.local"
+  local relative_path="$2"
+  local label="$3"
+  local primary_file="${primary_root}/${relative_path}"
+  local local_file="${repo_root}/${relative_path}"
 
-  if [[ ! -f "${primary_env}" ]]; then
-    echo "Skipping .env.local link: primary worktree has no .env.local (${primary_env})"
+  if [[ ! -f "${primary_file}" ]]; then
+    echo "Skipping ${label} link: primary worktree has no ${relative_path} (${primary_file})"
     return 0
   fi
 
-  if [[ -L "${local_env}" ]]; then
+  run_cmd mkdir -p "$(dirname "${local_file}")"
+
+  if [[ -L "${local_file}" ]]; then
     local current_link
-    current_link="$(readlink "${local_env}")"
-    if [[ "${current_link}" == "${primary_env}" ]]; then
-      echo "Already linked: .env.local -> ${primary_env}"
+    current_link="$(readlink "${local_file}")"
+    if [[ "${current_link}" == "${primary_file}" ]]; then
+      echo "Already linked: ${label} -> ${primary_file}"
       return 0
     fi
 
-    echo "Updating link for .env.local"
-    run_cmd rm "${local_env}"
-    run_cmd ln -s "${primary_env}" "${local_env}"
+    echo "Updating link for ${label}"
+    run_cmd rm "${local_file}"
+    run_cmd ln -s "${primary_file}" "${local_file}"
     return 0
   fi
 
-  if [[ -e "${local_env}" ]]; then
-    echo "Keeping existing .env.local (not symlink): ${local_env}"
+  if [[ -e "${local_file}" ]]; then
+    echo "Keeping existing ${label} (not symlink): ${local_file}"
     return 0
   fi
 
-  echo "Linking .env.local -> ${primary_env}"
-  run_cmd ln -s "${primary_env}" "${local_env}"
+  echo "Linking ${label} -> ${primary_file}"
+  run_cmd ln -s "${primary_file}" "${local_file}"
+}
+
+link_env_local_from_primary() {
+  local primary_root="$1"
+  link_file_from_primary "${primary_root}" ".env.local" ".env.local"
+}
+
+link_android_key_files_from_primary() {
+  local primary_root="$1"
+  link_file_from_primary "${primary_root}" "android/key.properties" "android/key.properties"
+  link_file_from_primary "${primary_root}" "android/app/upload-keystore.jks" "android/app/upload-keystore.jks"
 }
 
 link_to_shared() {
@@ -230,8 +253,9 @@ else
   echo "Skipping .pixi/envs linking (--skip-pixi-envs)."
 fi
 
+primary_root="$(resolve_primary_worktree_root || true)"
+
 if [[ "$skip_env_local_link" -eq 0 ]]; then
-  primary_root="$(resolve_primary_worktree_root || true)"
   if [[ -n "${primary_root}" ]]; then
     link_env_local_from_primary "${primary_root}"
   else
@@ -239,6 +263,16 @@ if [[ "$skip_env_local_link" -eq 0 ]]; then
   fi
 else
   echo "Skipping .env.local linking (--skip-env-local-link)."
+fi
+
+if [[ "$skip_android_key_link" -eq 0 ]]; then
+  if [[ -n "${primary_root}" ]]; then
+    link_android_key_files_from_primary "${primary_root}"
+  else
+    echo "Skipping Android key linking: current checkout is primary worktree."
+  fi
+else
+  echo "Skipping Android key linking (--skip-android-key-link)."
 fi
 
 echo "Done. Shared worktree cache is ready."

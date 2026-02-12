@@ -115,7 +115,7 @@ Notes:
 - `run-linux` is only available on Linux.
 - `run-windows` is only available on Windows and auto-runs its preflight setup (downloads `nuget.exe` into `.tool/nuget/` and static `ffmpeg.exe` into `.tool/ffmpeg/windows`).
 - Android tasks install SDK/NDK and Rust targets into `.tool/` (no system-wide Android SDK required).
-- `bootstrap-shared-worktree-env` symlinks `.tool` and `.pixi/envs` to a shared directory under `git rev-parse --git-common-dir`, and links `.env.local` to the primary worktree when available, which avoids re-preparing dependencies in each worktree.
+- `bootstrap-shared-worktree-env` symlinks `.tool` and `.pixi/envs` to a shared directory under `git rev-parse --git-common-dir`, and links `.env.local`, `android/key.properties`, and `android/app/upload-keystore.jks` to the primary worktree when available, which avoids re-preparing dependencies and Android signing setup in each worktree.
 - All `run-xxx` tasks now auto-run `bootstrap-shared-worktree-env`, `setup-flutter`, and `init-env` on first execution, so a fresh clone can run `pixi run run-xxx` directly.
 - `build-android-apk` / `build-android-apk-cn` also auto-run `bootstrap-shared-worktree-env` before build preflight.
 - Desktop run tasks (`run-macos` / `run-linux` / `run-windows`) prepare bundled `ffmpeg` before launching; macOS auto-downloads a static binary into `.tool/ffmpeg/macos`, and you can always override via `.tool` or `--source-bin` (no system-wide install required).
