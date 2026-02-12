@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -67,12 +68,15 @@ final class _ReviewReminderNotificationsGateState
 
   bool _isAppInForeground = true;
   int _foregroundSessionStartedAtUtcMs = 0;
+  int _appLaunchedAtUtcMs = 0;
+  AppLifecycleState? _lastLifecycleState;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startForegroundSession();
+    _appLaunchedAtUtcMs = _foregroundSessionStartedAtUtcMs;
     _inAppFallbackEnabled = ReviewReminderInAppFallbackPrefs.value.value;
     ReviewReminderInAppFallbackPrefs.value
         .addListener(_handleInAppFallbackPrefChanged);
@@ -92,19 +96,59 @@ final class _ReviewReminderNotificationsGateState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed ||
-        state == AppLifecycleState.inactive) {
-      if (!_isAppInForeground) {
+    final previousState = _lastLifecycleState;
+    _lastLifecycleState = state;
+
+    if (_shouldKeepInAppFallbackActive(state)) {
+      final resumedFromBackground = !_isAppInForeground;
+      if (previousState != state) {
+        _inAppFallbackVisible = false;
+        _activeInAppFallbackSourceKey = null;
+      }
+      if (resumedFromBackground) {
         _startForegroundSession();
       } else {
         _isAppInForeground = true;
       }
       _syncInAppFallbackFromCurrentPlan();
-      _scheduleRefresh();
+      if (resumedFromBackground) {
+        _scheduleRefresh();
+      }
       return;
     }
 
     _setAppInBackground();
+  }
+
+  bool _shouldKeepInAppFallbackActive(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive) {
+      return true;
+    }
+
+    if (state == AppLifecycleState.hidden) {
+      return _isDesktopLifecycleTarget();
+    }
+
+    return false;
+  }
+
+  bool _isDesktopLifecycleTarget() {
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.macOS ||
+      TargetPlatform.windows ||
+      TargetPlatform.linux =>
+        true,
+      _ => false,
+    };
+  }
+
+  bool _isItemEligibleForInAppFallback(ReviewReminderItem item) {
+    if (_isDesktopLifecycleTarget()) {
+      return item.sourceAtUtcMs >= _appLaunchedAtUtcMs;
+    }
+    return item.sourceAtUtcMs >= _foregroundSessionStartedAtUtcMs;
   }
 
   @override
@@ -245,7 +289,7 @@ final class _ReviewReminderNotificationsGateState
     }
 
     final activeSourceKeys = plan.items
-        .where((item) => item.sourceAtUtcMs >= _foregroundSessionStartedAtUtcMs)
+        .where((item) => _isItemEligibleForInAppFallback(item))
         .map(_inAppFallbackSourceKeyForItem)
         .toSet();
     if (_dismissedInAppFallbackSourceKey != null &&
@@ -258,7 +302,7 @@ final class _ReviewReminderNotificationsGateState
     ReviewReminderItem? nextItem;
 
     for (final item in plan.items) {
-      if (item.sourceAtUtcMs < _foregroundSessionStartedAtUtcMs) {
+      if (!_isItemEligibleForInAppFallback(item)) {
         continue;
       }
 
@@ -304,7 +348,7 @@ final class _ReviewReminderNotificationsGateState
 
       ReviewReminderItem? matchedItem;
       for (final item in latestPlan.items) {
-        if (item.sourceAtUtcMs < _foregroundSessionStartedAtUtcMs) continue;
+        if (!_isItemEligibleForInAppFallback(item)) continue;
         if (_inAppFallbackSourceKeyForItem(item) != targetSourceKey) continue;
         matchedItem = item;
         break;

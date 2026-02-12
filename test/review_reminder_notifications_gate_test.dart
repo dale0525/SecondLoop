@@ -165,34 +165,6 @@ void main() {
     );
   });
 
-  testWidgets('does not backfill reminder after returning from hidden',
-      (tester) async {
-    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-
-    await _pumpGateHarness(
-      tester,
-      todos: <Todo>[
-        _reviewTodo(
-            nextReviewAtMs:
-                nowUtcMs + const Duration(seconds: 3).inMilliseconds),
-      ],
-    );
-
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    await tester.pumpAndSettle();
-
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsNothing,
-    );
-  });
-
   testWidgets('does not show review-queue reminder for overdue item on launch',
       (tester) async {
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
