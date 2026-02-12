@@ -330,12 +330,8 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
 
   Widget _buildView(
     BuildContext context, {
-    required AttachmentMetadata? metadata,
     required Map<String, Object?>? payload,
   }) {
-    final title = (metadata?.title ?? payload?['title'])?.toString().trim();
-    final displayTitle = (title ?? '').isEmpty ? widget.displayTitle : title!;
-
     Widget buildSection(
       Widget child, {
       required double maxWidth,
@@ -360,21 +356,6 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               buildSection(
-                SlSurface(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: Text(
-                    displayTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                maxWidth: 760,
-                alignment: Alignment.centerLeft,
-              ),
-              const SizedBox(height: 14),
-              buildSection(
                 _buildPlayerCard(context),
                 maxWidth: 760,
                 alignment: Alignment.center,
@@ -394,12 +375,11 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   @override
   Widget build(BuildContext context) {
     Widget buildWith(
-      AttachmentMetadata? meta,
+      AttachmentMetadata? _,
       Map<String, Object?>? payload,
     ) {
       return _buildView(
         context,
-        metadata: meta,
         payload: payload,
       );
     }

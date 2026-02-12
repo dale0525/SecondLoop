@@ -96,7 +96,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Example Title'), findsOneWidget);
+    expect(find.text('Example Title'), findsNothing);
     expect(find.text('Original URL'), findsNothing);
     expect(find.text('https://example.com/p'), findsNothing);
     expect(find.text('Canonical URL'), findsNothing);

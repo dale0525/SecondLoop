@@ -56,7 +56,7 @@ void main() {
       find.byKey(const ValueKey('attachment_viewer_download')),
       findsOneWidget,
     );
-    expect(find.text('abc.bin'), findsWidgets);
+    expect(find.text('abc.png'), findsOneWidget);
     expect(find.text('Image attachment'), findsNothing);
   });
 
@@ -103,7 +103,7 @@ void main() {
     );
     final previewSize = tester
         .getSize(find.byKey(const ValueKey('attachment_image_preview_box')));
-    expect(previewSize.height, lessThanOrEqualTo(300));
+    expect(previewSize.height, lessThanOrEqualTo(220));
   });
 
   testWidgets('Attachment viewer hides metadata cards even when EXIF exists',

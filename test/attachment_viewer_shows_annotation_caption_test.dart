@@ -235,6 +235,77 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentViewerPage clears retry pending status when polling times out',
+      (tester) async {
+    final longOcr =
+        List<String>.generate(40, (i) => 'stable_token_$i').join(' ');
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: {'abc': 'OCR fallback caption'},
+      annotationPayloadJsonBySha: {
+        'abc': jsonEncode({
+          'caption_long': 'OCR fallback caption',
+          'ocr_text': longOcr,
+          'ocr_lang_hints': 'device_plus_en',
+        }),
+      },
+      clearPayloadOnRetry: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final regenerateFinder =
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
+    await tester.ensureVisible(regenerateFinder);
+    await tester.tap(regenerateFinder);
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_ocr_regenerate_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+      find.byKey(const ValueKey('attachment_image_recognition_status')),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 18));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('attachment_image_recognition_status')),
+      findsNothing,
+    );
+    final markdown = tester.widget<MarkdownBody>(
+      find.byKey(const ValueKey('attachment_text_full_markdown_display')),
+    );
+    expect(markdown.data, contains('stable_token_39'));
+  });
+
+  testWidgets(
       'AttachmentViewerPage shows retry action for recognized image annotation',
       (tester) async {
     final backend = _NativeImageBackend(

@@ -122,7 +122,11 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           : payload.filename.trim();
       final inferredMimeType = _inferMimeTypeFromFilename(safeName);
       if (inferredMimeType.startsWith('image/')) {
-        await _sendImageAttachment(payload.bytes, inferredMimeType);
+        await _sendImageAttachment(
+          payload.bytes,
+          inferredMimeType,
+          filename: safeName,
+        );
       } else {
         await _sendFileAttachment(
           payload.bytes,

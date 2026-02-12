@@ -73,15 +73,19 @@ final class ShareIngest {
   static Future<void> enqueueImage({
     required String tempPath,
     required String mimeType,
+    String? filename,
   }) async {
     final trimmedPath = tempPath.trim();
     final trimmedMime = mimeType.trim();
+    final trimmedFilename = filename?.trim();
     if (trimmedPath.isEmpty) return;
     if (trimmedMime.isEmpty) return;
     await _enqueuePayload({
       'type': 'image',
       'path': trimmedPath,
       'mimeType': trimmedMime,
+      if (trimmedFilename != null && trimmedFilename.isNotEmpty)
+        'filename': trimmedFilename,
     });
   }
 
@@ -115,7 +119,8 @@ final class ShareIngest {
     AppBackend backend,
     Uint8List sessionKey, {
     void Function()? onMutation,
-    Future<String> Function(String path, String mimeType)? onImage,
+    Future<String> Function(String path, String mimeType, String? filename)?
+        onImage,
     Future<String> Function(String path, String mimeType, String? filename)?
         onFile,
     Future<String> Function(String url)? onUrlManifest,
@@ -230,14 +235,20 @@ final class ShareIngest {
         case 'image':
           final path = payload['path'];
           final mimeType = payload['mimeType'];
+          final filename = payload['filename'];
           if (path is! String || path.trim().isEmpty) continue;
           if (mimeType is! String || mimeType.trim().isEmpty) continue;
+          final safeFilename =
+              (filename is String && filename.trim().isNotEmpty)
+                  ? filename.trim()
+                  : null;
           if (onImage == null) {
             remaining.addAll(current.skip(i));
             break outer;
           }
           try {
-            final sha256 = await onImage(path, mimeType);
+            final sha256 =
+                await onImage(path.trim(), mimeType.trim(), safeFilename);
             final dedupKey = 'image:$sha256';
             if (dedup.containsKey(dedupKey)) {
               processed += 1;
@@ -261,6 +272,12 @@ final class ShareIngest {
                 message.id,
                 attachmentSha256: sha256,
               );
+              if (onUpsertAttachmentMetadata != null && safeFilename != null) {
+                await onUpsertAttachmentMetadata(
+                  sha256,
+                  ShareIngestAttachmentMetadata(filenames: [safeFilename]),
+                );
+              }
             }
             dedup[dedupKey] = now;
             processed += 1;

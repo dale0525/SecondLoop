@@ -42,10 +42,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
     );
   }
 
-  Widget _buildImageAttachmentDetail(
-    Uint8List bytes, {
-    required String title,
-  }) {
+  Widget _buildImageAttachmentDetail(Uint8List bytes) {
     Widget buildSection(
       Widget child, {
       required double maxWidth,
@@ -113,21 +110,6 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
               children: [
                 buildSection(
                   SlSurface(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  maxWidth: 820,
-                  alignment: Alignment.centerLeft,
-                ),
-                const SizedBox(height: 14),
-                buildSection(
-                  SlSurface(
                     key: const ValueKey('attachment_image_preview_surface'),
                     padding: const EdgeInsets.all(12),
                     child: ClipRRect(
@@ -143,8 +125,8 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final previewHeight =
-                                  (constraints.maxWidth * 0.42)
-                                      .clamp(160.0, 300.0);
+                                  (constraints.maxWidth * 0.30)
+                                      .clamp(120.0, 220.0);
                               return SizedBox(
                                 key: const ValueKey(
                                     'attachment_image_preview_box'),
@@ -170,7 +152,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                       ),
                     ),
                   ),
-                  maxWidth: 860,
+                  maxWidth: 760,
                 ),
                 if (showRecognitionStatus) ...[
                   const SizedBox(height: 14),

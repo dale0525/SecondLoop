@@ -39,6 +39,7 @@ import 'video_keyframe_ocr_worker.dart';
 
 part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
+part 'attachment_viewer_page_title.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -67,6 +68,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _loadingAnnotationPayload = false;
   bool _retryingAttachmentRecognition = false;
   bool _awaitingAttachmentRecognitionResult = false;
+  bool _preserveRetryFallbackText = false;
   String? _placeDisplayName;
   String? _annotationCaption;
   AttachmentMetadata? _metadata;
@@ -78,6 +80,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _attemptedSyncDownload = false;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  Timer? _annotationRetryPollTimer;
+  int _annotationRetryPollAttempts = 0;
+
+  static const Duration _annotationRetryPollInterval = Duration(seconds: 2);
+  static const int _annotationRetryPollMaxAttempts = 8;
 
   String _fileExtensionForDownload() {
     final extension =
@@ -198,6 +205,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
   @override
   void dispose() {
+    _stopAnnotationRetryPolling(clearState: false);
     _detachSyncEngine();
     super.dispose();
   }
@@ -275,6 +283,53 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     _syncListener = null;
   }
 
+  void _startAnnotationRetryPollingIfNeeded() {
+    _stopAnnotationRetryPolling(clearState: false);
+    _annotationRetryPollAttempts = 0;
+
+    _annotationRetryPollTimer =
+        Timer.periodic(_annotationRetryPollInterval, (timer) {
+      if (!mounted) {
+        _stopAnnotationRetryPolling(clearState: false);
+        return;
+      }
+
+      _annotationRetryPollAttempts += 1;
+
+      if (!_loadingAnnotation) {
+        _startAnnotationCaptionLoad();
+      }
+      if (!_loadingAnnotationPayload) {
+        _startAnnotationPayloadLoad();
+      }
+      setState(() {});
+
+      if (!_awaitingAttachmentRecognitionResult) {
+        _stopAnnotationRetryPolling(clearState: false);
+        return;
+      }
+
+      if (_annotationRetryPollAttempts >= _annotationRetryPollMaxAttempts) {
+        _stopAnnotationRetryPolling(clearState: true);
+      }
+    });
+  }
+
+  void _stopAnnotationRetryPolling({
+    required bool clearState,
+  }) {
+    _annotationRetryPollTimer?.cancel();
+    _annotationRetryPollTimer = null;
+    _annotationRetryPollAttempts = 0;
+
+    if (clearState && mounted) {
+      setState(() {
+        _awaitingAttachmentRecognitionResult = false;
+        _documentOcrStatusText = null;
+      });
+    }
+  }
+
   void _updateViewerState(VoidCallback updater) {
     if (!mounted) return;
     setState(updater);
@@ -322,6 +377,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final nextTextContent = _resolveIntrinsicTextContentForPayload(nextPayload);
     if (nextTextContent.hasAny) {
       _awaitingAttachmentRecognitionResult = false;
+      _preserveRetryFallbackText = false;
       _documentOcrStatusText = null;
       _lastNonEmptyAnnotationPayload = nextPayload;
       return nextPayload;
@@ -340,8 +396,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         _lastNonEmptyAnnotationPayload ?? _annotationPayload;
     final fallbackTextContent =
         _resolveIntrinsicTextContentForPayload(fallbackPayload);
-    final shouldPreserveCurrentText = (_awaitingAttachmentRecognitionResult ||
-            _retryingAttachmentRecognition) &&
+    final shouldPreserveCurrentText = _preserveRetryFallbackText &&
         !nextTextContent.hasAny &&
         fallbackTextContent.hasAny;
 
@@ -378,6 +433,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
       final displayPayload = _resolveDisplayAnnotationPayload(value);
       _annotationPayload = displayPayload;
+      if (!_awaitingAttachmentRecognitionResult) {
+        _stopAnnotationRetryPolling(clearState: false);
+      }
       return displayPayload;
     }).whenComplete(() {
       _loadingAnnotationPayload = false;
@@ -615,9 +673,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final lang = Localizations.localeOf(context).toLanguageTag();
 
+    _stopAnnotationRetryPolling(clearState: false);
     setState(() {
       _retryingAttachmentRecognition = true;
       _awaitingAttachmentRecognitionResult = true;
+      _preserveRetryFallbackText = true;
       _documentOcrStatusText = context.t.attachments.content.ocrRunning;
     });
     try {
@@ -644,12 +704,15 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       if (!mounted) return;
       _startAnnotationCaptionLoad();
       _startAnnotationPayloadLoad();
+      _startAnnotationRetryPollingIfNeeded();
       SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
       setState(() {});
     } catch (e) {
+      _stopAnnotationRetryPolling(clearState: false);
       if (!mounted) return;
       setState(() {
         _awaitingAttachmentRecognitionResult = false;
+        _preserveRetryFallbackText = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -746,42 +809,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     return _saveAttachmentText(full: value);
   }
 
-  String _filenameFromAttachmentPath(Attachment attachment) {
-    final raw = attachment.path.trim();
-    if (raw.isEmpty) return '';
-    final normalized = raw.replaceAll('\\', '/');
-    final filename = normalized.split('/').last.trim();
-    return filename;
-  }
-
-  String _resolveAppBarTitle(
-    Attachment attachment, {
-    required AttachmentMetadata? metadata,
-  }) {
-    final filename = metadata?.filenames.isNotEmpty == true
-        ? metadata!.filenames.first.trim()
-        : '';
-    if (filename.isNotEmpty) return filename;
-
-    final title = (metadata?.title ?? '').trim();
-    if (title.isNotEmpty) return title;
-
-    final firstUrl = metadata?.sourceUrls.isNotEmpty == true
-        ? metadata!.sourceUrls.first.trim()
-        : '';
-    if (firstUrl.isNotEmpty) return firstUrl;
-
-    final pathFilename = _filenameFromAttachmentPath(attachment);
-    if (pathFilename.isNotEmpty) return pathFilename;
-
-    final fallbackStem = attachment.sha256.trim();
-    if (fallbackStem.isNotEmpty) {
-      return '$fallbackStem${fileExtensionForSystemOpenMimeType(attachment.mimeType)}';
-    }
-
-    return 'Attachment';
-  }
-
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
@@ -799,7 +826,12 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(appBarTitle),
+            title: Text(
+              appBarTitle,
+              style: Theme.of(context).textTheme.titleMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             actions: [
               if (bytesFuture != null)
                 FutureBuilder<Uint8List>(
@@ -945,10 +977,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                       );
                     }
 
-                    return _buildImageAttachmentDetail(
-                      bytes,
-                      title: appBarTitle,
-                    );
+                    return _buildImageAttachmentDetail(bytes);
                   },
                 ),
         );

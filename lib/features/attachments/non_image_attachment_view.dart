@@ -279,7 +279,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   Widget _buildView(
     BuildContext context, {
     required Attachment attachment,
-    required AttachmentMetadata? meta,
     required Map<String, Object?>? payload,
     required Future<void> Function()? onRunOcr,
     required bool ocrRunning,
@@ -287,9 +286,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     required String ocrLanguageHints,
     required ValueChanged<String>? onOcrLanguageHintsChanged,
   }) {
-    final title = (meta?.title ?? payload?['title'])?.toString().trim();
-    final displayTitle = (title ?? '').isEmpty ? widget.displayTitle : title!;
-
     final selectedTextContent = selectAttachmentDisplayText(payload);
     final textContent = resolveAttachmentDetailTextContent(payload);
     final fullText = textContent.full;
@@ -399,22 +395,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              buildSection(
-                SlSurface(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: Text(
-                    displayTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                maxWidth: 820,
-                alignment: Alignment.centerLeft,
-              ),
               if (hasPreviewSignal || debugMarker != null) ...[
-                const SizedBox(height: 14),
                 buildSection(
                   SlSurface(
                     key: const ValueKey('attachment_non_image_preview_surface'),
@@ -494,8 +475,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                   ),
                   maxWidth: 860,
                 ),
+                const SizedBox(height: 14),
               ],
-              const SizedBox(height: 14),
               buildSection(
                 AttachmentTextEditorCard(
                   fieldKeyPrefix: 'attachment_text_full',
@@ -518,11 +499,10 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
 
   @override
   Widget build(BuildContext context) {
-    Widget buildWith(AttachmentMetadata? meta, Map<String, Object?>? payload) {
+    Widget buildWith(AttachmentMetadata? _, Map<String, Object?>? payload) {
       return _buildView(
         context,
         attachment: widget.attachment,
-        meta: meta,
         payload: payload,
         onRunOcr: widget.onRunOcr,
         ocrRunning: widget.ocrRunning,

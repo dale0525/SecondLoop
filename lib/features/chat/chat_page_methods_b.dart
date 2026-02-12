@@ -764,6 +764,13 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
       final rawBytes = await picked.readAsBytes();
       final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
+      final pickedFilename = (() {
+        final byName = picked.name.trim();
+        if (byName.isNotEmpty) return byName;
+        final normalizedPath = picked.path.trim().replaceAll('\\', '/');
+        if (normalizedPath.isEmpty) return '';
+        return normalizedPath.split('/').last.trim();
+      })();
       int? fallbackCapturedAtMs;
       try {
         fallbackCapturedAtMs =
@@ -772,6 +779,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       final sent = await _sendImageAttachment(
         rawBytes,
         inferredMimeType,
+        filename: pickedFilename,
         fallbackCapturedAtMs: fallbackCapturedAtMs,
         platformExif: platformExifToSend,
       );
@@ -868,6 +876,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<({String sha256, int? capturedAtMs})?> _sendImageAttachment(
     Uint8List rawBytes,
     String inferredMimeType, {
+    String? filename,
     int? fallbackCapturedAtMs,
     PlatformExifMetadata? platformExif,
   }) async {
@@ -942,6 +951,16 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       message.id,
       attachmentSha256: attachment.sha256,
     );
+    final safeFilename = (filename ?? '').trim();
+    if (safeFilename.isNotEmpty) {
+      unawaited(
+        const RustAttachmentMetadataStore().upsert(
+          sessionKey,
+          attachmentSha256: attachment.sha256,
+          filenames: [safeFilename],
+        ).catchError((_) {}),
+      );
+    }
     unawaited(
       _maybeEnqueueAttachmentAnnotationEnrichment(
         backend,
