@@ -401,6 +401,7 @@ class _StringsChatEn {
   late final _StringsChatCloudGatewayEn cloudGateway =
       _StringsChatCloudGatewayEn._(_root);
   String get askAiFailedTemporary => 'Ask AI failed. Please try again.';
+  String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
   late final _StringsChatAskAiConsentEn askAiConsent =
       _StringsChatAskAiConsentEn._(_root);
   late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
@@ -3468,6 +3469,8 @@ class _StringsLockZhCn extends _StringsLockEn {
 
 // Path: chat
 class _StringsChatZhCn extends _StringsChatEn {
+  @override
+  String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
   _StringsChatZhCn._(_StringsZhCn root)
       : this._root = root,
         super._(root);

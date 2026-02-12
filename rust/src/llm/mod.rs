@@ -2,6 +2,7 @@ pub mod anthropic;
 pub mod gateway;
 pub mod gemini;
 pub mod openai;
+pub mod timeouts;
 
 use anyhow::{anyhow, Result};
 

@@ -563,6 +563,10 @@ impl CloudGatewayMediaAnnotationClient {
 
     pub fn annotate_image(&self, lang: &str, mime_type: &str, image_bytes: &[u8]) -> Result<Value> {
         let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
+            image_bytes.len(),
+            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown,
+        );
         let purpose = match prompt_mode {
             MediaAnnotationPromptMode::Annotation => "media_annotation",
             MediaAnnotationPromptMode::OcrMarkdown => "ask_ai",
@@ -576,6 +580,7 @@ impl CloudGatewayMediaAnnotationClient {
             .header("x-secondloop-purpose", purpose)
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
+            .timeout(request_timeout)
             .send()?;
 
         if !resp.status().is_success() {
@@ -614,7 +619,11 @@ impl OpenAiCompatibleMediaAnnotationClient {
         mime_type: &str,
         image_bytes: &[u8],
     ) -> Result<(Value, MediaAnnotationUsage)> {
-        let (req, _prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
+            image_bytes.len(),
+            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown,
+        );
 
         let url = openai_compatible_chat_completions_url(&self.base_url);
         let resp = self
@@ -623,6 +632,7 @@ impl OpenAiCompatibleMediaAnnotationClient {
             .bearer_auth(&self.api_key)
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
+            .timeout(request_timeout)
             .send()?;
 
         if !resp.status().is_success() {

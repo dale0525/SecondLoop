@@ -2,8 +2,11 @@ use anyhow::{anyhow, Result};
 use reqwest::blocking::Client;
 use reqwest::header;
 use serde::Serialize;
+use uuid::Uuid;
 
 use super::ChatDelta;
+
+const REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 
 pub fn gateway_chat_completions_url(gateway_base_url: &str) -> String {
     format!(
@@ -34,6 +37,10 @@ pub struct CloudGatewayProvider {
     model_name: String,
     temperature: Option<f32>,
     purpose_header: String,
+}
+
+fn build_request_id() -> String {
+    format!("req_{}", Uuid::new_v4().simple())
 }
 
 impl CloudGatewayProvider {
@@ -87,13 +94,26 @@ impl crate::rag::AnswerProvider for CloudGatewayProvider {
             stream: true,
         };
 
+        let request_timeout =
+            crate::llm::timeouts::ask_ai_timeout_for_prompt_chars(prompt.chars().count());
+        let request_id = build_request_id();
+
+        on_event(ChatDelta {
+            role: Some(format!("{REQUEST_ID_ROLE_PREFIX}{request_id}")),
+            text_delta: String::new(),
+            done: false,
+        })?;
+
         let mut resp = self
             .client
             .post(url)
             .bearer_auth(&self.id_token)
             .header("x-secondloop-purpose", &self.purpose_header)
+            .header("x-secondloop-request-id", &request_id)
+            .header("x-secondloop-detach-policy", "continue_on_disconnect")
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
+            .timeout(request_timeout)
             .send()?;
 
         if !resp.status().is_success() {

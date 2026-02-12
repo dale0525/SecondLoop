@@ -421,6 +421,7 @@ pub fn audio_transcribe_byok_profile(
     if audio_bytes.is_empty() {
         return Err(anyhow!("audio_bytes is empty"));
     }
+    let audio_bytes_len = audio_bytes.len();
     let mime_type = mime_type.trim();
     if mime_type.is_empty() {
         return Err(anyhow!("mime_type is required"));
@@ -467,6 +468,9 @@ pub fn audio_transcribe_byok_profile(
         form = form.text("language", lang.trim().to_string());
     }
 
+    let request_timeout =
+        crate::llm::timeouts::audio_transcribe_timeout_for_audio_bytes(audio_bytes_len, false);
+
     let client = Client::new();
     let response = client
         .post(url)
@@ -474,6 +478,7 @@ pub fn audio_transcribe_byok_profile(
         .header("x-secondloop-purpose", "audio_transcribe")
         .header(header::ACCEPT, "text/event-stream")
         .multipart(form)
+        .timeout(request_timeout)
         .send()?;
 
     if !response.status().is_success() {
@@ -548,6 +553,7 @@ pub fn audio_transcribe_byok_profile_multimodal(
     if audio_bytes.is_empty() {
         return Err(anyhow!("audio_bytes is empty"));
     }
+    let audio_bytes_len = audio_bytes.len();
     let mime_type = mime_type.trim();
     if mime_type.is_empty() {
         return Err(anyhow!("mime_type is required"));
@@ -605,6 +611,9 @@ pub fn audio_transcribe_byok_profile_multimodal(
         },
     });
 
+    let request_timeout =
+        crate::llm::timeouts::audio_transcribe_timeout_for_audio_bytes(audio_bytes_len, true);
+
     let client = Client::new();
     let response = client
         .post(openai_chat_completions_url(&base_url))
@@ -612,6 +621,7 @@ pub fn audio_transcribe_byok_profile_multimodal(
         .header("x-secondloop-purpose", "audio_transcribe")
         .header(header::ACCEPT, "text/event-stream")
         .json(&payload)
+        .timeout(request_timeout)
         .send()?;
 
     if !response.status().is_success() {
