@@ -33,6 +33,33 @@ void main() {
     expect(scheduler.cancelCount, 0);
   });
 
+  test('schedules reminder for due todos', () async {
+    final scheduler = _FakeScheduler();
+    final coordinator = ReviewReminderNotificationCoordinator(
+      scheduler: scheduler,
+      nowUtcMs: () => 10000,
+      readTodos: () async => const <Todo>[
+        Todo(
+          id: 'todo:due',
+          title: 'pay rent',
+          status: 'open',
+          dueAtMs: 12000,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await coordinator.refresh();
+
+    expect(scheduler.initializedCount, 1);
+    expect(scheduler.scheduledPlans.length, 1);
+    expect(scheduler.scheduledPlans.single.pendingCount, 1);
+    expect(scheduler.scheduledPlans.single.items.single.todoId, 'todo:due');
+  });
+
   test('does not reschedule when plan is unchanged', () async {
     final scheduler = _FakeScheduler();
     final coordinator = ReviewReminderNotificationCoordinator(

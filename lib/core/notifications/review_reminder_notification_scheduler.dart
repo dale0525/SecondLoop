@@ -145,7 +145,6 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       ),
     );
 
-    final title = t.actions.reviewQueue.title;
     for (var i = 0; i < plan.items.length; i++) {
       final item = plan.items[i];
       final notificationId = notificationIdBase + i;
@@ -154,7 +153,12 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         isUtc: true,
       );
       final scheduleAt = tz.TZDateTime.from(scheduledAtUtc, tz.local);
-      final payload = '$reviewQueuePayloadPrefix${item.todoId}';
+      final payload = item.kind == ReviewReminderItemKind.reviewQueue
+          ? '$reviewQueuePayloadPrefix${item.todoId}'
+          : null;
+      final title = item.kind == ReviewReminderItemKind.reviewQueue
+          ? t.actions.reviewQueue.title
+          : t.actions.agenda.title;
 
       await _scheduleSingleNotification(
         notificationId: notificationId,
@@ -173,7 +177,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     required String body,
     required tz.TZDateTime scheduleAt,
     required NotificationDetails details,
-    required String payload,
+    required String? payload,
   }) async {
     Future<void> scheduleWithMode(AndroidScheduleMode mode) {
       return _plugin.zonedSchedule(

@@ -4,7 +4,7 @@ import 'package:secondloop/core/notifications/review_notification_plan.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  test('returns null when there are no review-queue todos', () {
+  test('returns null when there are no reminder todos', () {
     final plan = buildReviewReminderPlan(
       const <Todo>[
         Todo(
@@ -46,7 +46,7 @@ void main() {
         ),
         Todo(
           id: 'todo:3',
-          title: 'scheduled todo should be ignored',
+          title: 'scheduled todo',
           status: 'open',
           dueAtMs: 15000,
           createdAtMs: 1,
@@ -59,13 +59,44 @@ void main() {
     );
 
     expect(plan, isNotNull);
-    expect(plan!.pendingCount, 2);
-    expect(plan.items.length, 2);
-    expect(plan.items[0].todoId, 'todo:1');
-    expect(plan.items[0].todoTitle, 'first');
-    expect(plan.items[0].scheduleAtUtcMs, 71000);
-    expect(plan.items[1].todoId, 'todo:2');
-    expect(plan.items[1].scheduleAtUtcMs, 72000);
+    expect(plan!.pendingCount, 3);
+    expect(plan.items.length, 3);
+    expect(plan.items[0].todoId, 'todo:3');
+    expect(plan.items[0].scheduleAtUtcMs, 70000);
+    expect(plan.items[0].kind, ReviewReminderItemKind.dueTodo);
+    expect(plan.items[1].todoId, 'todo:1');
+    expect(plan.items[1].todoTitle, 'first');
+    expect(plan.items[1].scheduleAtUtcMs, 71000);
+    expect(plan.items[1].kind, ReviewReminderItemKind.reviewQueue);
+    expect(plan.items[2].todoId, 'todo:2');
+    expect(plan.items[2].scheduleAtUtcMs, 72000);
+    expect(plan.items[2].kind, ReviewReminderItemKind.reviewQueue);
+  });
+
+  test('includes due todos in reminder schedule', () {
+    final plan = buildReviewReminderPlan(
+      const <Todo>[
+        Todo(
+          id: 'todo:due',
+          title: 'pay rent',
+          status: 'open',
+          dueAtMs: 60000,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+      nowUtcMs: 1000,
+      minimumLeadTimeMs: 0,
+    );
+
+    expect(plan, isNotNull);
+    expect(plan!.pendingCount, 1);
+    expect(plan.items.length, 1);
+    expect(plan.items.single.todoId, 'todo:due');
+    expect(plan.items.single.scheduleAtUtcMs, 60000);
+    expect(plan.items.single.kind, ReviewReminderItemKind.dueTodo);
   });
 
   test('bumps past schedule time to a near-future safety window', () {

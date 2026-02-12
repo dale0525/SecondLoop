@@ -3,20 +3,30 @@ import '../../src/rust/db.dart';
 const kReviewReminderMinimumLeadTimeMs = 60 * 1000;
 const kReviewReminderMaxItems = 32;
 
+enum ReviewReminderItemKind {
+  reviewQueue,
+  dueTodo,
+}
+
 final class ReviewReminderItem {
   const ReviewReminderItem({
     required this.todoId,
     required this.todoTitle,
     required this.scheduleAtUtcMs,
+    required this.kind,
   });
 
   final String todoId;
   final String todoTitle;
   final int scheduleAtUtcMs;
+  final ReviewReminderItemKind kind;
 
   @override
   int get hashCode =>
-      todoId.hashCode ^ todoTitle.hashCode ^ scheduleAtUtcMs.hashCode;
+      todoId.hashCode ^
+      todoTitle.hashCode ^
+      scheduleAtUtcMs.hashCode ^
+      kind.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -24,7 +34,8 @@ final class ReviewReminderItem {
         other is ReviewReminderItem &&
             todoId == other.todoId &&
             todoTitle == other.todoTitle &&
-            scheduleAtUtcMs == other.scheduleAtUtcMs;
+            scheduleAtUtcMs == other.scheduleAtUtcMs &&
+            kind == other.kind;
   }
 }
 
@@ -69,9 +80,28 @@ ReviewReminderPlan? buildReviewReminderPlan(
   var pendingCount = 0;
   final items = <ReviewReminderItem>[];
 
+  final minScheduleAt = nowUtcMs + minimumLeadTimeMs;
+
   for (final todo in todos) {
     if (todo.status == 'done' || todo.status == 'dismissed') continue;
-    if (todo.dueAtMs != null) continue;
+
+    final title = todo.title.trim();
+    final todoTitle = title.isEmpty ? todo.id : title;
+    final dueAtMs = todo.dueAtMs;
+
+    if (dueAtMs != null) {
+      pendingCount += 1;
+      final scheduleAtUtcMs = dueAtMs < minScheduleAt ? minScheduleAt : dueAtMs;
+      items.add(
+        ReviewReminderItem(
+          todoId: todo.id,
+          todoTitle: todoTitle,
+          scheduleAtUtcMs: scheduleAtUtcMs,
+          kind: ReviewReminderItemKind.dueTodo,
+        ),
+      );
+      continue;
+    }
 
     final stage = todo.reviewStage;
     final nextReviewAtMs = todo.nextReviewAtMs;
@@ -79,16 +109,14 @@ ReviewReminderPlan? buildReviewReminderPlan(
 
     pendingCount += 1;
 
-    final minScheduleAt = nowUtcMs + minimumLeadTimeMs;
     final scheduleAtUtcMs =
         nextReviewAtMs < minScheduleAt ? minScheduleAt : nextReviewAtMs;
-    final title = todo.title.trim();
-
     items.add(
       ReviewReminderItem(
         todoId: todo.id,
-        todoTitle: title.isEmpty ? todo.id : title,
+        todoTitle: todoTitle,
         scheduleAtUtcMs: scheduleAtUtcMs,
+        kind: ReviewReminderItemKind.reviewQueue,
       ),
     );
   }
