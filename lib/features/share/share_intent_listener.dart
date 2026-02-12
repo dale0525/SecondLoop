@@ -91,10 +91,12 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
             break;
           case 'image':
             final mimeType = map['mimeType'];
+            final filename = map['filename'];
             if (mimeType is! String || mimeType.trim().isEmpty) continue;
             await ShareIngest.enqueueImage(
               tempPath: content,
               mimeType: mimeType,
+              filename: filename is String ? filename : null,
             );
             enqueuedAny = true;
             break;

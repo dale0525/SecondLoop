@@ -35,6 +35,7 @@ class AudioAttachmentPlayerView extends StatefulWidget {
   const AudioAttachmentPlayerView({
     required this.attachment,
     required this.bytes,
+    required this.displayTitle,
     this.metadataFuture,
     this.initialMetadata,
     this.annotationPayloadFuture,
@@ -46,6 +47,7 @@ class AudioAttachmentPlayerView extends StatefulWidget {
 
   final Attachment attachment;
   final Uint8List bytes;
+  final String displayTitle;
   final Future<AttachmentMetadata?>? metadataFuture;
   final AttachmentMetadata? initialMetadata;
   final Future<Map<String, Object?>?>? annotationPayloadFuture;
@@ -287,17 +289,13 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   }) {
     final textContent = resolveAttachmentDetailTextContent(payload);
     final fullText = textContent.full;
-    final durationMsValue = payload?['duration_ms'];
-    final durationMs = durationMsValue is num ? durationMsValue.toInt() : null;
-    final showPreparing = fullText.isEmpty && payload == null;
-
     final retryButton = widget.onRetryRecognition == null
         ? null
         : IconButton(
-            key: const ValueKey('attachment_transcript_retry'),
-            tooltip: context.t.common.actions.retry,
+            key: const ValueKey('attachment_text_full_regenerate'),
+            tooltip: context.t.attachments.content.rerunOcr,
             onPressed: () => unawaited(widget.onRetryRecognition!()),
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.auto_awesome_rounded),
           );
 
     Widget buildSection(
@@ -314,72 +312,26 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (durationMs != null) ...[
-          buildSection(
-            SlSurface(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                _formatDuration(Duration(milliseconds: durationMs)),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            maxWidth: 560,
-            alignment: Alignment.centerLeft,
-          ),
-          const SizedBox(height: 14),
-        ],
-        if (showPreparing) ...[
-          buildSection(
-            SlSurface(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    context.t.sync.progressDialog.preparing,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            maxWidth: 720,
-            alignment: Alignment.centerRight,
-          ),
-          const SizedBox(height: 14),
-        ],
-        buildSection(
-          AttachmentTextEditorCard(
-            fieldKeyPrefix: 'attachment_text_full',
-            label: context.t.attachments.content.fullText,
-            showLabel: false,
-            text: fullText,
-            markdown: true,
-            emptyText: attachmentDetailEmptyTextLabel(context),
-            trailing: retryButton,
-            onSave: widget.onSaveFull,
-          ),
-          maxWidth: 780,
-          alignment: Alignment.centerRight,
-        ),
-      ],
+    return buildSection(
+      AttachmentTextEditorCard(
+        fieldKeyPrefix: 'attachment_text_full',
+        label: context.t.attachments.content.fullText,
+        showLabel: false,
+        text: fullText,
+        markdown: true,
+        emptyText: attachmentDetailEmptyTextLabel(context),
+        trailing: retryButton,
+        onSave: widget.onSaveFull,
+      ),
+      maxWidth: 820,
+      alignment: Alignment.centerRight,
     );
   }
 
   Widget _buildView(
     BuildContext context, {
-    required AttachmentMetadata? metadata,
     required Map<String, Object?>? payload,
   }) {
-    final title = (metadata?.title ?? payload?['title'])?.toString().trim();
-
     Widget buildSection(
       Widget child, {
       required double maxWidth,
@@ -403,20 +355,6 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if ((title ?? '').isNotEmpty) ...[
-                buildSection(
-                  SlSurface(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      title!,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  maxWidth: 700,
-                  alignment: Alignment.centerLeft,
-                ),
-                const SizedBox(height: 14),
-              ],
               buildSection(
                 _buildPlayerCard(context),
                 maxWidth: 760,
@@ -437,12 +375,11 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   @override
   Widget build(BuildContext context) {
     Widget buildWith(
-      AttachmentMetadata? meta,
+      AttachmentMetadata? _,
       Map<String, Object?>? payload,
     ) {
       return _buildView(
         context,
-        metadata: meta,
         payload: payload,
       );
     }

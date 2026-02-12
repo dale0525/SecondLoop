@@ -35,33 +35,49 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('secondloop_share_');
     addTearDown(() async => dir.delete(recursive: true));
 
-    final file = File('${dir.path}/img.bin');
+    final file = File('${dir.path}/camera.jpg');
     await file.writeAsBytes([1, 2, 3]);
 
     await ShareIngest.enqueueImage(
       tempPath: file.path,
-      mimeType: 'image/png',
+      mimeType: 'image/jpeg',
+      filename: 'camera.jpg',
     );
 
     String? drainedPath;
     String? drainedMimeType;
+    String? drainedFilename;
+    final upsertCalls =
+        <({String sha256, ShareIngestAttachmentMetadata meta})>[];
+
     final processed = await ShareIngest.drainQueue(
       backend,
       sessionKey,
-      onImage: (path, mimeType) async {
+      onImage: (path, mimeType, filename) async {
         drainedPath = path;
         drainedMimeType = mimeType;
+        drainedFilename = filename;
         await File(path).delete();
         return 'sha256_test';
+      },
+      onUpsertAttachmentMetadata: (sha256, meta) async {
+        upsertCalls.add((sha256: sha256, meta: meta));
       },
     );
 
     expect(processed, 1);
     expect(drainedPath, file.path);
-    expect(drainedMimeType, 'image/png');
+    expect(drainedMimeType, 'image/jpeg');
+    expect(drainedFilename, 'camera.jpg');
     expect(await file.exists(), false);
     expect(backend.insertedContents, ['']);
     expect(backend.linkCalls, ['m1:sha256_test']);
+    expect(upsertCalls, [
+      (
+        sha256: 'sha256_test',
+        meta: const ShareIngestAttachmentMetadata(filenames: ['camera.jpg']),
+      ),
+    ]);
   });
 
   test('ShareIngest drains queued audio file via handler', () async {

@@ -14,12 +14,12 @@ import '../../core/backend/native_backend.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/docx_ocr.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/content_enrichment/ocr_result_preference.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
-import '../../core/media_enrichment/media_enrichment_availability.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
@@ -32,13 +32,14 @@ import 'audio_attachment_player.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_payload_refresh_policy.dart';
-import 'image_exif_metadata.dart';
+import 'attachment_text_source_policy.dart';
 import 'non_image_attachment_view.dart';
 import 'platform_pdf_ocr.dart';
 import 'video_keyframe_ocr_worker.dart';
 
 part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
+part 'attachment_viewer_page_title.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -66,18 +67,24 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   bool _loadingMetadata = false;
   bool _loadingAnnotationPayload = false;
   bool _retryingAttachmentRecognition = false;
+  bool _awaitingAttachmentRecognitionResult = false;
+  bool _preserveRetryFallbackText = false;
   String? _placeDisplayName;
   String? _annotationCaption;
   AttachmentMetadata? _metadata;
   Map<String, Object?>? _annotationPayload;
+  Map<String, Object?>? _lastNonEmptyAnnotationPayload;
   bool _runningDocumentOcr = false;
   String? _documentOcrStatusText;
   String _documentOcrLanguageHints = 'device_plus_en';
-  Timer? _inlinePlaceResolveTimer;
-  bool _inlinePlaceResolveScheduled = false;
   bool _attemptedSyncDownload = false;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  Timer? _annotationRetryPollTimer;
+  int _annotationRetryPollAttempts = 0;
+
+  static const Duration _annotationRetryPollInterval = Duration(seconds: 2);
+  static const int _annotationRetryPollMaxAttempts = 8;
 
   String _fileExtensionForDownload() {
     final extension =
@@ -105,6 +112,33 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       await Share.shareXFiles(
         [XFile(file.path, mimeType: widget.attachment.mimeType)],
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openAttachmentWithSystem(Uint8List bytes) async {
+    try {
+      final file = await _materializeTempDownloadFile(bytes);
+      final launched = await launchUrl(
+        Uri.file(file.path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t.errors
+                .loadFailed(error: 'could not open externally')),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -147,6 +181,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     super.didChangeDependencies();
     _bytesFuture ??= _loadBytes();
     final isImage = widget.attachment.mimeType.startsWith('image/');
+    if (_metadataFuture == null) {
+      _startMetadataLoad();
+    }
     if (isImage) {
       _exifFuture ??= _loadPersistedExif();
       if (_placeFuture == null) {
@@ -159,9 +196,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         _startAnnotationPayloadLoad();
       }
     } else {
-      if (_metadataFuture == null) {
-        _startMetadataLoad();
-      }
       if (_annotationPayloadFuture == null) {
         _startAnnotationPayloadLoad();
       }
@@ -171,7 +205,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
   @override
   void dispose() {
-    _inlinePlaceResolveTimer?.cancel();
+    _stopAnnotationRetryPolling(clearState: false);
     _detachSyncEngine();
     super.dispose();
   }
@@ -249,6 +283,53 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     _syncListener = null;
   }
 
+  void _startAnnotationRetryPollingIfNeeded() {
+    _stopAnnotationRetryPolling(clearState: false);
+    _annotationRetryPollAttempts = 0;
+
+    _annotationRetryPollTimer =
+        Timer.periodic(_annotationRetryPollInterval, (timer) {
+      if (!mounted) {
+        _stopAnnotationRetryPolling(clearState: false);
+        return;
+      }
+
+      _annotationRetryPollAttempts += 1;
+
+      if (!_loadingAnnotation) {
+        _startAnnotationCaptionLoad();
+      }
+      if (!_loadingAnnotationPayload) {
+        _startAnnotationPayloadLoad();
+      }
+      setState(() {});
+
+      if (!_awaitingAttachmentRecognitionResult) {
+        _stopAnnotationRetryPolling(clearState: false);
+        return;
+      }
+
+      if (_annotationRetryPollAttempts >= _annotationRetryPollMaxAttempts) {
+        _stopAnnotationRetryPolling(clearState: true);
+      }
+    });
+  }
+
+  void _stopAnnotationRetryPolling({
+    required bool clearState,
+  }) {
+    _annotationRetryPollTimer?.cancel();
+    _annotationRetryPollTimer = null;
+    _annotationRetryPollAttempts = 0;
+
+    if (clearState && mounted) {
+      setState(() {
+        _awaitingAttachmentRecognitionResult = false;
+        _documentOcrStatusText = null;
+      });
+    }
+  }
+
   void _updateViewerState(VoidCallback updater) {
     if (!mounted) return;
     setState(updater);
@@ -264,11 +345,74 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     });
   }
 
+  AttachmentDetailTextContent _resolveIntrinsicTextContentForPayload(
+    Map<String, Object?>? payload,
+  ) {
+    return resolveAttachmentDetailTextContent(
+      payload,
+      annotationCaption: null,
+    );
+  }
+
+  String _payloadOcrAutoStatus(Map<String, Object?>? payload) {
+    return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
+  }
+
+  bool _payloadOcrTerminalWithoutText(Map<String, Object?>? payload) {
+    final status = _payloadOcrAutoStatus(payload);
+    return status == 'ok' || status == 'failed';
+  }
+
+  String? _preserveAnnotationCaptionWhileRecognition(String? nextCaption) {
+    final normalized = (nextCaption ?? '').trim();
+    if (normalized.isNotEmpty) return normalized;
+    if (!_awaitingAttachmentRecognitionResult) return null;
+    final existing = (_annotationCaption ?? '').trim();
+    return existing.isEmpty ? null : existing;
+  }
+
+  Map<String, Object?>? _resolveDisplayAnnotationPayload(
+    Map<String, Object?>? nextPayload,
+  ) {
+    final nextTextContent = _resolveIntrinsicTextContentForPayload(nextPayload);
+    if (nextTextContent.hasAny) {
+      _awaitingAttachmentRecognitionResult = false;
+      _preserveRetryFallbackText = false;
+      _documentOcrStatusText = null;
+      _lastNonEmptyAnnotationPayload = nextPayload;
+      return nextPayload;
+    }
+
+    if (_awaitingAttachmentRecognitionResult &&
+        _payloadOcrTerminalWithoutText(nextPayload)) {
+      _awaitingAttachmentRecognitionResult = false;
+      final status = _payloadOcrAutoStatus(nextPayload);
+      if (status == 'failed') {
+        _documentOcrStatusText = context.t.attachments.content.ocrFailed;
+      }
+    }
+
+    final fallbackPayload =
+        _lastNonEmptyAnnotationPayload ?? _annotationPayload;
+    final fallbackTextContent =
+        _resolveIntrinsicTextContentForPayload(fallbackPayload);
+    final shouldPreserveCurrentText = _preserveRetryFallbackText &&
+        !nextTextContent.hasAny &&
+        fallbackTextContent.hasAny;
+
+    if (shouldPreserveCurrentText) {
+      return fallbackPayload;
+    }
+
+    return nextPayload;
+  }
+
   void _startAnnotationCaptionLoad() {
     _loadingAnnotation = true;
     _annotationCaptionFuture = _loadAnnotationCaptionLong().then((value) {
-      _annotationCaption = value?.trim();
-      return value;
+      final nextCaption = _preserveAnnotationCaptionWhileRecognition(value);
+      _annotationCaption = nextCaption;
+      return nextCaption;
     }).whenComplete(() {
       _loadingAnnotation = false;
     });
@@ -287,96 +431,15 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   void _startAnnotationPayloadLoad() {
     _loadingAnnotationPayload = true;
     _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
-      _annotationPayload = value;
-      final ocrText =
-          ((value?['ocr_text_excerpt'] ?? value?['ocr_text_full']) ?? '')
-              .toString()
-              .trim();
-      if (ocrText.isNotEmpty) {
-        _documentOcrStatusText = null;
+      final displayPayload = _resolveDisplayAnnotationPayload(value);
+      _annotationPayload = displayPayload;
+      if (!_awaitingAttachmentRecognitionResult) {
+        _stopAnnotationRetryPolling(clearState: false);
       }
-      return value;
+      return displayPayload;
     }).whenComplete(() {
       _loadingAnnotationPayload = false;
     });
-  }
-
-  void _maybeScheduleInlinePlaceResolve({
-    required double? latitude,
-    required double? longitude,
-  }) {
-    if (_inlinePlaceResolveScheduled) return;
-    if (latitude == null || longitude == null) return;
-    if (latitude == 0.0 && longitude == 0.0) return;
-    final existing = _placeDisplayName?.trim();
-    if (existing != null && existing.isNotEmpty) return;
-    if (_loadingPlace) return;
-
-    _inlinePlaceResolveScheduled = true;
-    _inlinePlaceResolveTimer?.cancel();
-    _inlinePlaceResolveTimer = Timer(const Duration(seconds: 12), () {
-      if (!mounted) return;
-      final current = _placeDisplayName?.trim();
-      if (current != null && current.isNotEmpty) return;
-      if (_loadingPlace) return;
-      unawaited(_resolvePlaceInline(latitude: latitude, longitude: longitude));
-    });
-  }
-
-  Future<void> _resolvePlaceInline({
-    required double latitude,
-    required double longitude,
-  }) async {
-    try {
-      final backendAny = AppBackendScope.of(context);
-      if (backendAny is! NativeAppBackend) return;
-      final backend = backendAny;
-      final sessionKey = SessionScope.of(context).sessionKey;
-      final syncEngine = SyncEngineScope.maybeOf(context);
-      final lang = Localizations.localeOf(context).toLanguageTag();
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final gatewayConfig =
-          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-
-      String? idToken;
-      try {
-        idToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        idToken = null;
-      }
-      if (!mounted) return;
-
-      final availability = resolveMediaEnrichmentAvailability(
-        subscriptionStatus: subscriptionStatus,
-        cloudIdToken: idToken?.trim(),
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-      );
-      if (!availability.geoReverseAvailable) return;
-
-      final payloadJson = await backend.geoReverseCloudGateway(
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-        idToken: idToken!.trim(),
-        lat: latitude,
-        lon: longitude,
-        lang: lang,
-      );
-      await backend.markAttachmentPlaceOkJson(
-        Uint8List.fromList(sessionKey),
-        attachmentSha256: widget.attachment.sha256,
-        lang: lang,
-        payloadJson: payloadJson,
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-      );
-
-      if (!mounted) return;
-      syncEngine?.notifyExternalChange();
-      setState(() => _startPlaceLoad());
-    } catch (_) {
-      // Best-effort fallback; background runner will keep retrying.
-      return;
-    }
   }
 
   Future<Uint8List> _loadBytes() async {
@@ -512,7 +575,95 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     });
   }
 
-  Future<void> _retryAttachmentRecognition() async {
+  Future<void> _persistContentOcrLanguageHint(
+    Uint8List sessionKey,
+    String languageHint,
+  ) async {
+    final normalized = normalizeAttachmentOcrLanguageHint(languageHint);
+    try {
+      const store = RustContentEnrichmentConfigStore();
+      final current = await store.readContentEnrichment(sessionKey);
+      if (normalizeAttachmentOcrLanguageHint(current.ocrLanguageHints) ==
+          normalized) {
+        return;
+      }
+      final next = ContentEnrichmentConfig(
+        urlFetchEnabled: current.urlFetchEnabled,
+        documentExtractEnabled: current.documentExtractEnabled,
+        documentKeepOriginalMaxBytes: current.documentKeepOriginalMaxBytes,
+        audioTranscribeEnabled: current.audioTranscribeEnabled,
+        audioTranscribeEngine: current.audioTranscribeEngine,
+        videoExtractEnabled: current.videoExtractEnabled,
+        videoProxyEnabled: current.videoProxyEnabled,
+        videoProxyMaxDurationMs: current.videoProxyMaxDurationMs,
+        videoProxyMaxBytes: current.videoProxyMaxBytes,
+        ocrEnabled: current.ocrEnabled,
+        ocrEngineMode: current.ocrEngineMode,
+        ocrLanguageHints: normalized,
+        ocrPdfDpi: current.ocrPdfDpi,
+        ocrPdfAutoMaxPages: current.ocrPdfAutoMaxPages,
+        ocrPdfMaxPages: current.ocrPdfMaxPages,
+        mobileBackgroundEnabled: current.mobileBackgroundEnabled,
+        mobileBackgroundRequiresWifi: current.mobileBackgroundRequiresWifi,
+        mobileBackgroundRequiresCharging:
+            current.mobileBackgroundRequiresCharging,
+      );
+      await store.writeContentEnrichment(sessionKey, next);
+    } catch (_) {
+      // Best-effort preference update.
+    }
+  }
+
+  bool _imageRetryNeedsOcrOptions(Map<String, Object?>? payload) {
+    if (payload == null) return false;
+    final selectedText = selectAttachmentDisplayText(payload);
+    if (selectedText.source == AttachmentTextSource.ocr) {
+      return true;
+    }
+
+    final hasOcrText = ((payload['ocr_text'] ??
+                payload['ocr_text_full'] ??
+                payload['ocr_text_excerpt']) ??
+            '')
+        .toString()
+        .trim()
+        .isNotEmpty;
+    final hasOcrEngine =
+        (payload['ocr_engine'] ?? '').toString().trim().isNotEmpty;
+    return hasOcrText || hasOcrEngine;
+  }
+
+  String _resolveImageRetryOcrLanguageHint(Map<String, Object?>? payload) {
+    final fromPayload = (payload?['ocr_lang_hints'] ?? '').toString().trim();
+    if (fromPayload.isNotEmpty) {
+      return normalizeAttachmentOcrLanguageHint(fromPayload);
+    }
+    return _effectiveDocumentOcrLanguageHints;
+  }
+
+  Future<void> _retryImageRecognitionWithOptionalOcrDialog(
+    Map<String, Object?>? payload,
+  ) async {
+    if (!_imageRetryNeedsOcrOptions(payload)) {
+      await _retryAttachmentRecognition();
+      return;
+    }
+
+    final selectedHint = await showAttachmentOcrLanguageHintDialog(
+      context,
+      initialHint: _resolveImageRetryOcrLanguageHint(payload),
+      title: context.t.attachments.content.rerunOcr,
+      confirmLabel: context.t.attachments.content.rerunOcr,
+    );
+    if (selectedHint == null) return;
+
+    _updateDocumentOcrLanguageHints(selectedHint);
+    await _retryAttachmentRecognition(ocrLanguageHints: selectedHint);
+  }
+
+  Future<void> _retryAttachmentRecognition({
+    String? ocrLanguageHints,
+  }) async {
     if (_retryingAttachmentRecognition) return;
     final backendAny = AppBackendScope.of(context);
     if (backendAny is! NativeAppBackend) return;
@@ -522,8 +673,19 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final lang = Localizations.localeOf(context).toLanguageTag();
 
-    setState(() => _retryingAttachmentRecognition = true);
+    _stopAnnotationRetryPolling(clearState: false);
+    setState(() {
+      _retryingAttachmentRecognition = true;
+      _awaitingAttachmentRecognitionResult = true;
+      _preserveRetryFallbackText = true;
+      _documentOcrStatusText = context.t.attachments.content.ocrRunning;
+    });
     try {
+      final hint = (ocrLanguageHints ?? '').trim();
+      if (hint.isNotEmpty) {
+        unawaited(_persistContentOcrLanguageHint(sessionKey, hint));
+      }
+
       await backend.markAttachmentAnnotationFailed(
         sessionKey,
         attachmentSha256: widget.attachment.sha256,
@@ -542,10 +704,16 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       if (!mounted) return;
       _startAnnotationCaptionLoad();
       _startAnnotationPayloadLoad();
+      _startAnnotationRetryPollingIfNeeded();
       SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
       setState(() {});
     } catch (e) {
+      _stopAnnotationRetryPolling(clearState: false);
       if (!mounted) return;
+      setState(() {
+        _awaitingAttachmentRecognitionResult = false;
+        _preserveRetryFallbackText = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.t.errors.loadFailed(error: '$e')),
@@ -557,67 +725,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         setState(() => _retryingAttachmentRecognition = false);
       }
     }
-  }
-
-  Widget _buildMetadataCard(
-    BuildContext context, {
-    required DateTime? capturedAt,
-    required double? latitude,
-    required double? longitude,
-    required String? placeDisplayName,
-  }) {
-    final placeName = placeDisplayName?.trim();
-    final hasPlaceName = placeName != null && placeName.isNotEmpty;
-    final hasLocation = latitude != null &&
-        longitude != null &&
-        !(latitude == 0.0 && longitude == 0.0);
-    final hasCapturedAt = capturedAt != null;
-
-    if (!hasCapturedAt && !hasLocation && !hasPlaceName) {
-      return const SizedBox.shrink();
-    }
-
-    return SlSurface(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (capturedAt != null) ...[
-            Text(
-              context.t.attachments.metadata.capturedAt,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formatCapturedAt(capturedAt),
-              key: const ValueKey('attachment_metadata_captured_at'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          if (hasLocation || hasPlaceName) ...[
-            if (capturedAt != null) const SizedBox(height: 10),
-            Text(
-              context.t.attachments.metadata.location,
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 4),
-            if (hasPlaceName)
-              Text(
-                placeName,
-                key: const ValueKey('attachment_metadata_location_name'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (hasPlaceName && hasLocation) const SizedBox(height: 2),
-            if (hasLocation)
-              Text(
-                formatLatLon(latitude, longitude),
-                key: const ValueKey('attachment_metadata_location'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-          ],
-        ],
-      ),
-    );
   }
 
   bool get _canEditAttachmentText =>
@@ -668,6 +775,12 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       setState(() {
         _annotationPayload = nextPayload;
         _annotationPayloadFuture = Future.value(nextPayload);
+        final nextTextContent = _resolveIntrinsicTextContentForPayload(
+          nextPayload,
+        );
+        if (nextTextContent.hasAny) {
+          _lastNonEmptyAnnotationPayload = nextPayload;
+        }
         if (widget.attachment.mimeType.startsWith('image/')) {
           final nextCaption =
               (nextPayload['caption_long'] ?? '').toString().trim();
@@ -696,167 +809,179 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     return _saveAttachmentText(full: value);
   }
 
-  String _resolveAppBarTitle(
-    Attachment attachment, {
-    required AttachmentMetadata? metadata,
-  }) {
-    final filename = metadata?.filenames.isNotEmpty == true
-        ? metadata!.filenames.first.trim()
-        : '';
-    if (filename.isNotEmpty) return filename;
-
-    final title = (metadata?.title ?? '').trim();
-    if (title.isNotEmpty) return title;
-
-    final firstUrl = metadata?.sourceUrls.isNotEmpty == true
-        ? metadata!.sourceUrls.first.trim()
-        : '';
-    if (firstUrl.isNotEmpty) return firstUrl;
-
-    final mime = attachment.mimeType.trim().toLowerCase();
-    if (mime.startsWith('image/')) return 'Image attachment';
-    if (mime.startsWith('video/')) return 'Video attachment';
-    if (mime.startsWith('audio/')) return 'Audio attachment';
-    if (mime == 'application/pdf') return 'PDF attachment';
-    return 'Attachment';
-  }
-
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
-    final appBarTitle = _resolveAppBarTitle(
-      widget.attachment,
-      metadata: _metadata,
-    );
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(appBarTitle),
-        actions: [
-          if (bytesFuture != null)
-            FutureBuilder<Uint8List>(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                final bytes = snapshot.data;
-                final disabled = bytes == null;
-                return IconButton(
-                  key: const ValueKey('attachment_viewer_share'),
-                  tooltip: context.t.common.actions.share,
-                  onPressed: disabled
-                      ? null
-                      : () => unawaited(_shareAttachment(bytes)),
-                  icon: const Icon(Icons.share_rounded),
-                );
-              },
+    final metadataFuture = _metadataFuture;
+
+    return FutureBuilder<AttachmentMetadata?>(
+      future: metadataFuture,
+      initialData: _metadata,
+      builder: (context, metadataSnapshot) {
+        final metadata = metadataSnapshot.data ?? _metadata;
+        final appBarTitle = _resolveAppBarTitle(
+          widget.attachment,
+          metadata: metadata,
+        );
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              appBarTitle,
+              style: Theme.of(context).textTheme.titleMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          if (bytesFuture != null)
-            FutureBuilder<Uint8List>(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                final bytes = snapshot.data;
-                final disabled = bytes == null;
-                return IconButton(
-                  key: const ValueKey('attachment_viewer_download'),
-                  tooltip: context.t.common.actions.pull,
-                  onPressed: disabled
-                      ? null
-                      : () => unawaited(_downloadAttachment(bytes)),
-                  icon: const Icon(Icons.download_rounded),
-                );
-              },
-            ),
-        ],
-      ),
-      body: bytesFuture == null
-          ? const Center(child: CircularProgressIndicator())
-          : FutureBuilder(
-              future: bytesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  final err = snapshot.error;
-                  final isWifiConsentError = err is StateError &&
-                      err.message == 'media_download_requires_wifi';
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.broken_image_outlined, size: 48),
-                          const SizedBox(height: 12),
-                          Text(
-                            isWifiConsentError
-                                ? context.t.sync.mediaPreview
-                                    .chatThumbnailsWifiOnlySubtitle
-                                : context.t.errors.loadFailed(error: '$err'),
-                            textAlign: TextAlign.center,
+            actions: [
+              if (bytesFuture != null)
+                FutureBuilder<Uint8List>(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    final bytes = snapshot.data;
+                    final disabled = bytes == null;
+                    return IconButton(
+                      key: const ValueKey('attachment_viewer_share'),
+                      tooltip: context.t.common.actions.share,
+                      onPressed: disabled
+                          ? null
+                          : () => unawaited(_shareAttachment(bytes)),
+                      icon: const Icon(Icons.share_rounded),
+                    );
+                  },
+                ),
+              if (bytesFuture != null)
+                FutureBuilder<Uint8List>(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    final bytes = snapshot.data;
+                    final disabled = bytes == null;
+                    return IconButton(
+                      key: const ValueKey('attachment_viewer_open_with_system'),
+                      tooltip: context.t.attachments.content.openWithSystem,
+                      onPressed: disabled
+                          ? null
+                          : () => unawaited(_openAttachmentWithSystem(bytes)),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                    );
+                  },
+                ),
+              if (bytesFuture != null)
+                FutureBuilder<Uint8List>(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    final bytes = snapshot.data;
+                    final disabled = bytes == null;
+                    return IconButton(
+                      key: const ValueKey('attachment_viewer_download'),
+                      tooltip: context.t.common.actions.pull,
+                      onPressed: disabled
+                          ? null
+                          : () => unawaited(_downloadAttachment(bytes)),
+                      icon: const Icon(Icons.download_rounded),
+                    );
+                  },
+                ),
+            ],
+          ),
+          body: bytesFuture == null
+              ? const Center(child: CircularProgressIndicator())
+              : FutureBuilder(
+                  future: bytesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      final err = snapshot.error;
+                      final isWifiConsentError = err is StateError &&
+                          err.message == 'media_download_requires_wifi';
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.broken_image_outlined, size: 48),
+                              const SizedBox(height: 12),
+                              Text(
+                                isWifiConsentError
+                                    ? context.t.sync.mediaPreview
+                                        .chatThumbnailsWifiOnlySubtitle
+                                    : context.t.errors
+                                        .loadFailed(error: '$err'),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _bytesFuture = _loadBytes();
+                                  });
+                                },
+                                icon: const Icon(Icons.refresh),
+                                label: Text(context.t.common.actions.refresh),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _bytesFuture = _loadBytes();
-                              });
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: Text(context.t.common.actions.refresh),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
+                        ),
+                      );
+                    }
 
-                final bytes = snapshot.data;
-                if (bytes == null) return const SizedBox.shrink();
+                    final bytes = snapshot.data;
+                    if (bytes == null) return const SizedBox.shrink();
 
-                final isImage = widget.attachment.mimeType.startsWith('image/');
-                final isAudio = widget.attachment.mimeType.startsWith('audio/');
-                if (isAudio) {
-                  return AudioAttachmentPlayerView(
-                    attachment: widget.attachment,
-                    bytes: bytes,
-                    metadataFuture: _metadataFuture,
-                    initialMetadata: _metadata,
-                    annotationPayloadFuture: _annotationPayloadFuture,
-                    initialAnnotationPayload: _annotationPayload,
-                    onRetryRecognition: _canRetryAttachmentRecognition
-                        ? _retryAttachmentRecognition
-                        : null,
-                    onSaveFull:
-                        _canEditAttachmentText ? _saveAttachmentFull : null,
-                  );
-                }
-                if (!isImage) {
-                  Future<void> Function()? runOcr;
-                  if (_supportsDocumentOcrAttachment()) {
-                    runOcr = _runDocumentOcr;
-                  } else if (_isVideoManifestAttachment()) {
-                    runOcr = _runVideoManifestOcr;
-                  }
+                    final isImage =
+                        widget.attachment.mimeType.startsWith('image/');
+                    final isAudio =
+                        widget.attachment.mimeType.startsWith('audio/');
+                    if (isAudio) {
+                      return AudioAttachmentPlayerView(
+                        attachment: widget.attachment,
+                        bytes: bytes,
+                        displayTitle: appBarTitle,
+                        metadataFuture: _metadataFuture,
+                        initialMetadata: metadata,
+                        annotationPayloadFuture: _annotationPayloadFuture,
+                        initialAnnotationPayload: _annotationPayload,
+                        onRetryRecognition: _canRetryAttachmentRecognition
+                            ? _retryAttachmentRecognition
+                            : null,
+                        onSaveFull:
+                            _canEditAttachmentText ? _saveAttachmentFull : null,
+                      );
+                    }
+                    if (!isImage) {
+                      Future<void> Function()? runOcr;
+                      if (_supportsDocumentOcrAttachment()) {
+                        runOcr = _runDocumentOcr;
+                      } else if (_isVideoManifestAttachment()) {
+                        runOcr = _runVideoManifestOcr;
+                      }
 
-                  return NonImageAttachmentView(
-                    attachment: widget.attachment,
-                    bytes: bytes,
-                    metadataFuture: _metadataFuture,
-                    initialMetadata: _metadata,
-                    annotationPayloadFuture: _annotationPayloadFuture,
-                    initialAnnotationPayload: _annotationPayload,
-                    onRunOcr: runOcr,
-                    ocrRunning: _runningDocumentOcr,
-                    ocrStatusText: _documentOcrStatusText,
-                    ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
-                    onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
-                    onSaveFull:
-                        _canEditAttachmentText ? _saveAttachmentFull : null,
-                  );
-                }
+                      return NonImageAttachmentView(
+                        attachment: widget.attachment,
+                        bytes: bytes,
+                        displayTitle: appBarTitle,
+                        metadataFuture: _metadataFuture,
+                        initialMetadata: metadata,
+                        annotationPayloadFuture: _annotationPayloadFuture,
+                        initialAnnotationPayload: _annotationPayload,
+                        onRunOcr: runOcr,
+                        ocrRunning: _runningDocumentOcr,
+                        ocrStatusText: _documentOcrStatusText,
+                        ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
+                        onOcrLanguageHintsChanged:
+                            _updateDocumentOcrLanguageHints,
+                        onSaveFull:
+                            _canEditAttachmentText ? _saveAttachmentFull : null,
+                      );
+                    }
 
-                return _buildImageAttachmentDetail(bytes);
-              },
-            ),
+                    return _buildImageAttachmentDetail(bytes);
+                  },
+                ),
+        );
+      },
     );
   }
 }

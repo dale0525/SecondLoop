@@ -103,4 +103,49 @@ void main() {
     expect(first['mimeType'], 'application/octet-stream');
     expect(first['filename'], 'shared-no-mime.bin');
   });
+
+  testWidgets('ShareIntentListener keeps filename for image shares',
+      (tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    const channel = MethodChannel('secondloop/share_intent');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'consumePendingShares') {
+        return <Map<String, Object?>>[
+          {
+            'type': 'image',
+            'content': '/tmp/shared-image.bin',
+            'mimeType': 'image/jpeg',
+            'filename': 'camera-roll.jpg',
+          },
+        ];
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: ShareIntentListener(child: SizedBox.shrink()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    final queue = prefs.getStringList('share_ingest_queue_v1');
+    expect(queue, isNotNull);
+    expect(queue!.length, 1);
+
+    final first = jsonDecode(queue[0]) as Map;
+    expect(first['type'], 'image');
+    expect(first['path'], '/tmp/shared-image.bin');
+    expect(first['mimeType'], 'image/jpeg');
+    expect(first['filename'], 'camera-roll.jpg');
+  });
 }

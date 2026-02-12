@@ -175,7 +175,8 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         subscriptionStatus: subscriptionStatus,
       );
 
-      Future<String> Function(String path, String mimeType)? onImage;
+      Future<String> Function(String path, String mimeType, String? filename)?
+          onImage;
       Future<String> Function(String path, String mimeType, String? filename)?
           onFile;
       Future<String> Function(String url)? onUrlManifest;
@@ -343,7 +344,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           return attachment.sha256;
         };
 
-        onImage = (path, mimeType) async {
+        onImage = (path, mimeType, _) async {
           final bytes = await compute(_readFileBytes, path);
           final compressed =
               await compressImageForStorage(bytes, mimeType: mimeType);
