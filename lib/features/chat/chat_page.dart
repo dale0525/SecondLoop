@@ -87,6 +87,7 @@ part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
 part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
+part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
