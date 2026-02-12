@@ -52,6 +52,14 @@ class ClassificationTests(unittest.TestCase):
         )
         self.assertEqual(classification, "breaking")
 
+    def test_classify_change_ignores_negative_breaking_checklist(self) -> None:
+        classification = classify_change(
+            title="chore(release): refresh release checklist",
+            body="Breaking changes: no\nQA complete: yes",
+            labels=[],
+        )
+        self.assertEqual(classification, "chore")
+
     def test_classify_change_feature_and_fix(self) -> None:
         self.assertEqual(
             classify_change(
