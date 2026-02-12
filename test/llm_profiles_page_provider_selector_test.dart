@@ -89,6 +89,47 @@ void main() {
     expect(
         anthropicBaseUrlField.controller?.text, 'https://api.anthropic.com/v1');
   });
+
+  testWidgets('Media BYOK mode limits provider selector to OpenAI-compatible',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _EmptyLlmProfilesBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const LlmProfilesPage(
+                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final selector = tester.widget<DropdownButtonFormField<String>>(
+      find.byKey(const ValueKey('llm_provider_type')),
+    );
+
+    final dropdownButton = tester.widget<DropdownButton<String>>(
+      find.descendant(
+        of: find.byKey(const ValueKey('llm_provider_type')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<String>,
+        ),
+      ),
+    );
+
+    expect(
+      dropdownButton.items?.map((item) => item.value).toList(growable: false),
+      const <String>['openai-compatible'],
+    );
+    expect(selector.onChanged, isNull);
+  });
 }
 
 final class _EmptyLlmProfilesBackend extends AppBackend {
