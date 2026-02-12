@@ -77,6 +77,8 @@ android {
 
     buildTypes {
         release {
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
             // Use real release signing if available (CI / maintainers).
             // Fall back to debug signing for local dev convenience.
             signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug

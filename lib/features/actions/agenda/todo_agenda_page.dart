@@ -174,6 +174,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       newStatus: newStatus,
     );
     if (!mounted) return;
+    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refresh();
   }
 
@@ -238,6 +239,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       lastReviewAtMs: todo.lastReviewAtMs,
     );
     if (!mounted) return;
+    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refresh();
   }
 

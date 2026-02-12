@@ -224,6 +224,16 @@ extension _ChatPageStateMethodsC on _ChatPageState {
           :final dueAtLocal,
         ):
         final todoId = 'todo:${message.id}';
+        int? reviewStage;
+        int? nextReviewAtMs;
+        if (dueAtLocal == null && status != 'done' && status != 'dismissed') {
+          final nextLocal = ReviewBackoff.initialNextReviewAt(
+            DateTime.now(),
+            settings,
+          );
+          reviewStage = 0;
+          nextReviewAtMs = nextLocal.toUtc().millisecondsSinceEpoch;
+        }
         try {
           await backend.upsertTodo(
             sessionKey,
@@ -232,8 +242,8 @@ extension _ChatPageStateMethodsC on _ChatPageState {
             dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
             status: status,
             sourceEntryId: message.id,
-            reviewStage: null,
-            nextReviewAtMs: null,
+            reviewStage: reviewStage,
+            nextReviewAtMs: nextReviewAtMs,
             lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
           );
           syncEngine?.notifyLocalMutation();

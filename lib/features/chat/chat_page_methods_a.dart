@@ -505,6 +505,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
     final todoId = 'todo:${message.id}';
 
     final locale = Localizations.localeOf(context);
@@ -560,6 +561,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     }
 
     if (!mounted) return;
+    syncEngine?.notifyLocalMutation();
     _refresh();
   }
 
@@ -595,6 +597,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
     try {
       await backend.upsertTodo(
         sessionKey,
@@ -612,6 +615,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     }
 
     if (!mounted) return;
+    syncEngine?.notifyLocalMutation();
     _refresh();
   }
 
