@@ -112,6 +112,34 @@ void main() {
   });
 
   testWidgets(
+      'does not show review-queue banner when only due todos are pending',
+      (tester) async {
+    await _pumpGateHarness(
+      tester,
+      todos: const <Todo>[
+        Todo(
+          id: 'todo:due',
+          title: 'due soon',
+          status: 'open',
+          dueAtMs: 1,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
       'shows in-app fallback banner when system notifications are available',
       (tester) async {
     await _pumpGateHarness(tester);
@@ -129,6 +157,7 @@ void main() {
 Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
+  List<Todo> todos = _defaultTodos,
 }) async {
   final scheduler = _FakeScheduler(
     supportsSystemNotifications: schedulerSupportsSystemNotifications,
@@ -140,7 +169,7 @@ Future<_GateHarness> _pumpGateHarness(
       MaterialApp(
         navigatorKey: navigatorKey,
         home: AppBackendScope(
-          backend: _Backend(),
+          backend: _Backend(todos: todos),
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
@@ -199,19 +228,25 @@ final class _FakeScheduler implements ReviewReminderNotificationScheduler {
   }
 }
 
+const _defaultTodos = <Todo>[
+  Todo(
+    id: 'todo:1',
+    title: 'review this',
+    status: 'inbox',
+    createdAtMs: 1,
+    updatedAtMs: 1,
+    reviewStage: 0,
+    nextReviewAtMs: 60 * 60 * 1000,
+  ),
+];
+
 final class _Backend extends TestAppBackend {
+  _Backend({required this.todos});
+
+  final List<Todo> todos;
+
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
-    return const <Todo>[
-      Todo(
-        id: 'todo:1',
-        title: 'review this',
-        status: 'inbox',
-        createdAtMs: 1,
-        updatedAtMs: 1,
-        reviewStage: 0,
-        nextReviewAtMs: 60 * 60 * 1000,
-      ),
-    ];
+    return todos;
   }
 }

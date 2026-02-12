@@ -214,8 +214,18 @@ final class _ReviewReminderNotificationsGateState
       return;
     }
 
+    final reviewQueueItems = plan.items
+        .where((item) => item.kind == ReviewReminderItemKind.reviewQueue)
+        .toList(growable: false);
+    if (reviewQueueItems.isEmpty) {
+      _dismissedInAppFallbackSourceKey = null;
+      _hideInAppFallbackBanner();
+      return;
+    }
+
+    final reviewQueuePendingCount = reviewQueueItems.length;
     final activeSourceKeys =
-        plan.items.map(_inAppFallbackSourceKeyForItem).toSet();
+        reviewQueueItems.map(_inAppFallbackSourceKeyForItem).toSet();
     if (_dismissedInAppFallbackSourceKey != null &&
         !activeSourceKeys.contains(_dismissedInAppFallbackSourceKey)) {
       _dismissedInAppFallbackSourceKey = null;
@@ -225,7 +235,7 @@ final class _ReviewReminderNotificationsGateState
     ReviewReminderItem? dueItem;
     ReviewReminderItem? nextItem;
 
-    for (final item in plan.items) {
+    for (final item in reviewQueueItems) {
       final sourceKey = _inAppFallbackSourceKeyForItem(item);
       if (item.scheduleAtUtcMs <= nowUtcMs) {
         if (_dismissedInAppFallbackSourceKey == sourceKey) {
@@ -243,7 +253,7 @@ final class _ReviewReminderNotificationsGateState
 
     if (dueItem != null) {
       _showInAppFallbackBanner(
-        pendingCount: plan.pendingCount,
+        pendingCount: reviewQueuePendingCount,
         sourceKey: _inAppFallbackSourceKeyForItem(dueItem),
       );
       return;
@@ -265,7 +275,15 @@ final class _ReviewReminderNotificationsGateState
         return;
       }
 
-      final matches = latestPlan.items.any(
+      final latestReviewQueueItems = latestPlan.items
+          .where((item) => item.kind == ReviewReminderItemKind.reviewQueue)
+          .toList(growable: false);
+      if (latestReviewQueueItems.isEmpty) {
+        _syncInAppFallbackFromCurrentPlan();
+        return;
+      }
+
+      final matches = latestReviewQueueItems.any(
         (item) => _inAppFallbackSourceKeyForItem(item) == targetSourceKey,
       );
       if (!matches) {
@@ -274,7 +292,7 @@ final class _ReviewReminderNotificationsGateState
       }
 
       _showInAppFallbackBanner(
-        pendingCount: latestPlan.pendingCount,
+        pendingCount: latestReviewQueueItems.length,
         sourceKey: targetSourceKey,
       );
     });
