@@ -287,7 +287,7 @@
       },
       "embeddings": {
         "title": "智能检索（Embedding）",
-        "description": "给消息和待办生成检索索引，让搜索、回忆和 AI 对话找内容更准确。",
+        "description": "给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。",
         "preferenceUnavailableHint": "你选择的智能检索来源暂时不可用，已自动切换到可用方案。",
         "status": {
           "loading": "正在检查当前使用来源...",
@@ -524,13 +524,13 @@
       }
     },
     "cloudEmbeddings": {
-      "title": "更准确的智能检索（Embedding）",
-      "subtitleEnabled": "已开启。搜索和回忆更准确，会消耗 Cloud 额度。",
-      "subtitleDisabled": "已关闭。搜索只使用本机检索数据。",
-      "subtitleUnset": "尚未设置，首次需要时会询问你是否开启。",
+      "title": "云端增强检索（Embedding）",
+      "subtitleEnabled": "已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。",
+      "subtitleDisabled": "已关闭。你仍可使用智能检索，但仅使用本机索引。",
+      "subtitleUnset": "尚未设置，首次需要云端增强时会询问你是否开启。",
       "subtitleRequiresPro": "需要 SecondLoop Pro。",
-      "dialogTitle": "开启更准确的智能检索？",
-      "dialogBody": "为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成检索索引（Embedding）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。",
+      "dialogTitle": "开启云端增强检索？",
+      "dialogBody": "“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。",
       "dialogActions": {
         "enable": "开启"
       }

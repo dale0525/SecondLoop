@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1328 (664 per locale)
 ///
-/// Built on 2026-02-11 at 18:30 UTC
+/// Built on 2026-02-12 at 02:03 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -4509,20 +4509,20 @@ class _StringsSettingsCloudEmbeddingsZhCn
 
   // Translations
   @override
-  String get title => '更准确的智能检索（Embedding）';
+  String get title => '云端增强检索（Embedding）';
   @override
-  String get subtitleEnabled => '已开启。搜索和回忆更准确，会消耗 Cloud 额度。';
+  String get subtitleEnabled => '已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。';
   @override
-  String get subtitleDisabled => '已关闭。搜索只使用本机检索数据。';
+  String get subtitleDisabled => '已关闭。你仍可使用智能检索，但仅使用本机索引。';
   @override
-  String get subtitleUnset => '尚未设置，首次需要时会询问你是否开启。';
+  String get subtitleUnset => '尚未设置，首次需要云端增强时会询问你是否开启。';
   @override
   String get subtitleRequiresPro => '需要 SecondLoop Pro。';
   @override
-  String get dialogTitle => '开启更准确的智能检索？';
+  String get dialogTitle => '开启云端增强检索？';
   @override
   String get dialogBody =>
-      '为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成检索索引（Embedding）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
+      '“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
   @override
   late final _StringsSettingsCloudEmbeddingsDialogActionsZhCn dialogActions =
       _StringsSettingsCloudEmbeddingsDialogActionsZhCn._(_root);
@@ -5747,7 +5747,7 @@ class _StringsSettingsAiSelectionEmbeddingsZhCn
   @override
   String get title => '智能检索（Embedding）';
   @override
-  String get description => '给消息和待办生成检索索引，让搜索、回忆和 AI 对话找内容更准确。';
+  String get description => '给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。';
   @override
   String get preferenceUnavailableHint => '你选择的智能检索来源暂时不可用，已自动切换到可用方案。';
   @override
@@ -9444,7 +9444,7 @@ extension on _StringsZhCn {
       case 'settings.aiSelection.embeddings.title':
         return '智能检索（Embedding）';
       case 'settings.aiSelection.embeddings.description':
-        return '给消息和待办生成检索索引，让搜索、回忆和 AI 对话找内容更准确。';
+        return '给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。';
       case 'settings.aiSelection.embeddings.preferenceUnavailableHint':
         return '你选择的智能检索来源暂时不可用，已自动切换到可用方案。';
       case 'settings.aiSelection.embeddings.status.loading':
@@ -9713,19 +9713,19 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
       case 'settings.cloudEmbeddings.title':
-        return '更准确的智能检索（Embedding）';
+        return '云端增强检索（Embedding）';
       case 'settings.cloudEmbeddings.subtitleEnabled':
-        return '已开启。搜索和回忆更准确，会消耗 Cloud 额度。';
+        return '已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。';
       case 'settings.cloudEmbeddings.subtitleDisabled':
-        return '已关闭。搜索只使用本机检索数据。';
+        return '已关闭。你仍可使用智能检索，但仅使用本机索引。';
       case 'settings.cloudEmbeddings.subtitleUnset':
-        return '尚未设置，首次需要时会询问你是否开启。';
+        return '尚未设置，首次需要云端增强时会询问你是否开启。';
       case 'settings.cloudEmbeddings.subtitleRequiresPro':
         return '需要 SecondLoop Pro。';
       case 'settings.cloudEmbeddings.dialogTitle':
-        return '开启更准确的智能检索？';
+        return '开启云端增强检索？';
       case 'settings.cloudEmbeddings.dialogBody':
-        return '为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成检索索引（Embedding）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
+        return '“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
       case 'settings.cloudEmbeddings.dialogActions.enable':
         return '开启';
       case 'settings.cloudAccount.title':
