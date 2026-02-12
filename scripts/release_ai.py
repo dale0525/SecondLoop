@@ -55,7 +55,8 @@ except ModuleNotFoundError:
 
 SEMVER_TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 PR_NUMBER_RE = re.compile(r"(?:#|pull request\s+#)(\d+)", re.IGNORECASE)
-BREAKING_RE = re.compile(r"\bbreaking(?:\s+change)?\b|!:", re.IGNORECASE)
+BREAKING_RE = re.compile(r"\bbreaking(?:\s+change(?:s)?)?\b|!:", re.IGNORECASE)
+BREAKING_NEGATION_RE = re.compile(r"\b(?:no|without)\s+breaking(?:\s+change(?:s)?)?\b|\bnon[-\s]?breaking(?:\s+change(?:s)?)?\b|\bbreaking(?:\s+change(?:s)?)?\s*:\s*(?:no|none|n/?a|false)\b", re.IGNORECASE)
 FEATURE_RE = re.compile(r"\bfeat(?:ure)?\b", re.IGNORECASE)
 FIX_RE = re.compile(r"\bfix(?:es|ed)?\b|\bbug\b|\bhotfix\b", re.IGNORECASE)
 
@@ -102,10 +103,9 @@ def classify_change(title: str, body: str, labels: list[str]) -> str:
     text = f"{title}\n{body}".strip().lower()
     lowered_labels = {label.lower() for label in labels}
 
-    if (
-        any("breaking" in label or "major" in label for label in lowered_labels)
-        or BREAKING_RE.search(text)
-    ):
+    if any("breaking" in label or "major" in label for label in lowered_labels):
+        return "breaking"
+    if BREAKING_RE.search(text) is not None and BREAKING_NEGATION_RE.search(text) is None:
         return "breaking"
     if any(
         marker in label
@@ -492,7 +492,8 @@ def _command_decide_bump(args: argparse.Namespace) -> None:
         - evidence_change_ids: array of change IDs that justify the decision
 
         Rules:
-        - breaking changes => major
+        - prioritize real user-facing compatibility impact over label names
+        - breaking-labeled infra/internal changes may still be minor or patch
         - new user-facing feature(s) => at least minor
         - only fixes/chore => patch
         - no releasable change => none
@@ -511,8 +512,6 @@ def _command_decide_bump(args: argparse.Namespace) -> None:
     if bump not in {"major", "minor", "patch", "none"}:
         raise RuntimeError(f"invalid bump from LLM: {bump!r}")
 
-    if has_breaking and bump != "major":
-        raise RuntimeError("rule violation: breaking change requires major bump")
     if not changes and bump != "none":
         raise RuntimeError("rule violation: no changes requires bump=none")
     if changes and bump == "none":
