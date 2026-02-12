@@ -25,7 +25,7 @@ cargo = { cmd = "cargo {{ command }} --manifest-path rust/Cargo.toml {{ command_
 # Local developer helpers.
 # - init-env: creates .env.local (idempotent, no-op when file exists)
 # - install-git-hooks: installs local pre-commit hooks
-# - bootstrap-shared-worktree-env: link .tool/.pixi/envs to git-common-dir shared storage and link .env.local from primary worktree
+# - bootstrap-shared-worktree-env: link .tool/.pixi/envs to git-common-dir shared storage and link .env.local + Android signing files from primary worktree
 init-env = "bash scripts/init_env.sh"
 install-git-hooks = "bash scripts/install_git_hooks.sh"
 bootstrap-shared-worktree-env = "bash scripts/bootstrap_shared_worktree_env.sh"
