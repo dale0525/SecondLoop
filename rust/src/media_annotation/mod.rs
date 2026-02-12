@@ -6,8 +6,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use serde_json::Value;
 use std::io::{BufRead, BufReader};
+use std::time::Duration;
+use uuid::Uuid;
 
 const OCR_MARKDOWN_LANG_PREFIX: &str = "ocr_markdown:";
+const DETACHED_JOB_STATUS_TIMEOUT_SECONDS: u64 = 12;
+
+fn build_request_id() -> String {
+    format!("req_{}", Uuid::new_v4().simple())
+}
 
 pub fn cloud_gateway_chat_completions_url(gateway_base_url: &str) -> String {
     format!(
@@ -18,6 +25,13 @@ pub fn cloud_gateway_chat_completions_url(gateway_base_url: &str) -> String {
 
 fn openai_compatible_chat_completions_url(base_url: &str) -> String {
     format!("{}/chat/completions", base_url.trim_end_matches('/'))
+}
+
+fn cloud_gateway_chat_job_status_url(gateway_base_url: &str, request_id: &str) -> String {
+    format!(
+        "{}/v1/chat/jobs/{request_id}",
+        gateway_base_url.trim_end_matches('/')
+    )
 }
 
 #[derive(Debug, Serialize)]
@@ -420,6 +434,42 @@ fn default_usage() -> MediaAnnotationUsage {
     }
 }
 
+fn parse_annotation_payload_text(raw: &str) -> Result<Value> {
+    let normalized = normalize_annotation_content(raw.to_string());
+    if normalized.trim().is_empty() {
+        return Err(anyhow!("annotation stream returned empty content"));
+    }
+
+    let payload: Value = serde_json::from_str(&normalized)
+        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
+    normalize_annotation_payload(payload)
+}
+
+fn maybe_extract_detached_job_result_text(status_payload: &Value) -> Option<String> {
+    let status = status_payload
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+
+    if status != "completed" {
+        return None;
+    }
+
+    let result_text = status_payload
+        .get("result_text")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+
+    if result_text.is_empty() {
+        return None;
+    }
+
+    Some(result_text.to_string())
+}
+
 fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     let parsed: MediaAnnotationChatCompletionsResponse =
         serde_json::from_str(body).map_err(|e| anyhow!("invalid chat completions json: {e}"))?;
@@ -435,10 +485,7 @@ fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
         .content
         .map(OpenAiChatMessageContent::into_text)
         .unwrap_or_default();
-    let normalized = normalize_annotation_content(content);
-    let payload: Value = serde_json::from_str(&normalized)
-        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
-    let payload = normalize_annotation_payload(payload)?;
+    let payload = parse_annotation_payload_text(&content)?;
 
     let usage = parsed.usage.map(usage_from_openai_usage);
 
@@ -514,13 +561,7 @@ fn parse_response_sse_reader<R: BufRead>(reader: &mut R) -> Result<(Value, Media
         }
     }
 
-    let normalized = normalize_annotation_content(all_text);
-    if normalized.trim().is_empty() {
-        return Err(anyhow!("annotation stream returned empty content"));
-    }
-    let payload: Value = serde_json::from_str(&normalized)
-        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
-    let payload = normalize_annotation_payload(payload)?;
+    let payload = parse_annotation_payload_text(&all_text)?;
 
     Ok((payload, usage.unwrap_or_else(default_usage)))
 }
@@ -561,6 +602,28 @@ impl CloudGatewayMediaAnnotationClient {
         }
     }
 
+    fn try_recover_detached_payload(&self, request_id: &str) -> Option<Value> {
+        let status_url = cloud_gateway_chat_job_status_url(&self.gateway_base_url, request_id);
+
+        let resp = self
+            .client
+            .get(status_url)
+            .bearer_auth(&self.id_token)
+            .header(header::ACCEPT, "application/json")
+            .timeout(Duration::from_secs(DETACHED_JOB_STATUS_TIMEOUT_SECONDS))
+            .send()
+            .ok()?;
+
+        if !resp.status().is_success() {
+            return None;
+        }
+
+        let body = resp.text().ok()?;
+        let status_payload: Value = serde_json::from_str(&body).ok()?;
+        let result_text = maybe_extract_detached_job_result_text(&status_payload)?;
+        parse_annotation_payload_text(&result_text).ok()
+    }
+
     pub fn annotate_image(&self, lang: &str, mime_type: &str, image_bytes: &[u8]) -> Result<Value> {
         let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
         let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
@@ -571,17 +634,29 @@ impl CloudGatewayMediaAnnotationClient {
             MediaAnnotationPromptMode::Annotation => "media_annotation",
             MediaAnnotationPromptMode::OcrMarkdown => "ask_ai",
         };
+        let request_id = build_request_id();
 
         let url = cloud_gateway_chat_completions_url(&self.gateway_base_url);
-        let resp = self
+        let resp = match self
             .client
             .post(url)
             .bearer_auth(&self.id_token)
             .header("x-secondloop-purpose", purpose)
+            .header("x-secondloop-request-id", &request_id)
+            .header("x-secondloop-detach-policy", "continue_on_disconnect")
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
             .timeout(request_timeout)
-            .send()?;
+            .send()
+        {
+            Ok(resp) => resp,
+            Err(err) => {
+                if let Some(payload) = self.try_recover_detached_payload(&request_id) {
+                    return Ok(payload);
+                }
+                return Err(err.into());
+            }
+        };
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -591,8 +666,15 @@ impl CloudGatewayMediaAnnotationClient {
             ));
         }
 
-        let (payload, _usage) = parse_response_from_http_response(resp)?;
-        Ok(payload)
+        match parse_response_from_http_response(resp) {
+            Ok((payload, _usage)) => Ok(payload),
+            Err(err) => {
+                if let Some(payload) = self.try_recover_detached_payload(&request_id) {
+                    return Ok(payload);
+                }
+                Err(err)
+            }
+        }
     }
 }
 

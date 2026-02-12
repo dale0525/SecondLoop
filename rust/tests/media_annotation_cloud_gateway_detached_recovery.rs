@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc;
+
+use serde_json::json;
 
 #[derive(Debug)]
 struct CapturedRequest {
+    method: String,
+    path: String,
     headers: HashMap<String, String>,
-    body: String,
 }
 
 fn read_http_request(stream: &mut TcpStream) -> CapturedRequest {
@@ -35,7 +37,10 @@ fn read_http_request(stream: &mut TcpStream) -> CapturedRequest {
     let head = String::from_utf8_lossy(head);
 
     let mut lines = head.split("\r\n");
-    let _request_line = lines.next().expect("request line");
+    let request_line = lines.next().expect("request line");
+    let mut request_parts = request_line.split_whitespace();
+    let method = request_parts.next().unwrap_or_default().to_string();
+    let path = request_parts.next().unwrap_or_default().to_string();
 
     let mut headers = HashMap::<String, String>::new();
     for line in lines {
@@ -60,38 +65,68 @@ fn read_http_request(stream: &mut TcpStream) -> CapturedRequest {
         }
         body_bytes.extend_from_slice(&tmp[..n]);
     }
-    body_bytes.truncate(content_length);
 
     CapturedRequest {
+        method,
+        path,
         headers,
-        body: String::from_utf8_lossy(&body_bytes).to_string(),
     }
 }
 
-fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
+fn start_mock_server_for_detached_recovery() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let addr = listener.local_addr().expect("addr");
-    let (tx, rx) = mpsc::channel::<CapturedRequest>();
 
     std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("accept");
-        let req = read_http_request(&mut stream);
-        tx.send(req).expect("send req");
+        let (mut stream1, _) = listener.accept().expect("accept first");
+        let req1 = read_http_request(&mut stream1);
+        assert_eq!(req1.method, "POST");
+        assert_eq!(req1.path, "/v1/chat/completions");
 
-        let body = r##"{"choices":[{"message":{"role":"assistant","content":"{\"caption_long\":\"\",\"tags\":[],\"ocr_text\":\"# Report\\n\\nTotal: 42\"}"}}]}"##;
-        let resp = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
+        let request_id = req1
+            .headers
+            .get("x-secondloop-request-id")
+            .cloned()
+            .expect("request id header");
+
+        let body1 = "data: {\"choices\":[{\"delta\":{\"content\":\"not-json\"}}]}\n\n";
+        let resp1 = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body1}",
+            body1.len(),
         );
-        let _ = stream.write_all(resp.as_bytes());
+        stream1.write_all(resp1.as_bytes()).expect("write first");
+
+        let (mut stream2, _) = listener.accept().expect("accept second");
+        let req2 = read_http_request(&mut stream2);
+        assert_eq!(req2.method, "GET");
+        assert_eq!(req2.path, format!("/v1/chat/jobs/{request_id}"));
+
+        let detached_result_text =
+            "{\"caption_long\":\"detached cat\",\"tag\":[],\"summary\":\"detached cat\",\"full_text\":\"detached cat\"}";
+
+        let body2 = json!({
+            "ok": true,
+            "request_id": request_id,
+            "status": "completed",
+            "result_text": detached_result_text,
+            "result_truncated": false,
+        })
+        .to_string();
+
+        let resp2 = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body2}",
+            body2.len(),
+        );
+        stream2.write_all(resp2.as_bytes()).expect("write second");
     });
 
-    (format!("http://{addr}"), rx)
+    format!("http://{addr}")
 }
 
 #[test]
-fn cloud_gateway_multimodal_ocr_uses_ask_ai_purpose() {
-    let (base_url, rx) = start_mock_server();
+fn cloud_gateway_media_annotation_recovers_from_detached_job_when_stream_parse_fails() {
+    let base_url = start_mock_server_for_detached_recovery();
+
     let client = secondloop_rust::media_annotation::CloudGatewayMediaAnnotationClient::new(
         base_url,
         "testtoken".to_string(),
@@ -99,57 +134,21 @@ fn cloud_gateway_multimodal_ocr_uses_ask_ai_purpose() {
     );
 
     let payload = client
-        .annotate_image("ocr_markdown:en", "application/pdf", b"%PDF-1.4")
+        .annotate_image("en", "image/jpeg", b"img")
         .expect("annotate");
-    assert_eq!(
-        payload
-            .get("ocr_text")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default(),
-        "# Report\n\nTotal: 42"
-    );
+
     assert_eq!(
         payload
             .get("summary")
             .and_then(|v| v.as_str())
             .unwrap_or_default(),
-        ""
+        "detached cat"
     );
     assert_eq!(
         payload
             .get("full_text")
             .and_then(|v| v.as_str())
             .unwrap_or_default(),
-        "# Report\n\nTotal: 42"
+        "detached cat"
     );
-    assert_eq!(
-        payload
-            .get("tag")
-            .and_then(|v| v.as_array())
-            .map(|v| v.len())
-            .unwrap_or(usize::MAX),
-        0
-    );
-
-    let req = rx.recv().expect("request");
-    assert_eq!(
-        req.headers.get("x-secondloop-purpose").map(String::as_str),
-        Some("ask_ai")
-    );
-    let request_id = req
-        .headers
-        .get("x-secondloop-request-id")
-        .expect("request id header");
-    assert!(request_id.starts_with("req_"));
-    assert_eq!(
-        req.headers
-            .get("x-secondloop-detach-policy")
-            .map(String::as_str),
-        Some("continue_on_disconnect")
-    );
-    assert!(req.body.contains("data:application/pdf;base64,"));
-    assert!(req.body.contains("full_text"));
-    assert!(req.body.contains("summary"));
-    assert!(req.body.contains("tag"));
-    assert!(req.body.contains("\"stream\":true"));
 }
