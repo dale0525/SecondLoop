@@ -155,6 +155,18 @@ pub(super) fn upload_attachment_bytes_if_present(
     mime_type: &str,
     created_at_ms: i64,
 ) -> Result<bool> {
+    let exists: Option<i64> = ctx
+        .conn
+        .query_row(
+            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
+            params![sha256],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if exists.is_none() {
+        return Ok(false);
+    }
+
     let plaintext =
         match crate::db::read_attachment_bytes(ctx.conn, ctx.db_key, ctx.app_dir, sha256) {
             Ok(bytes) => bytes,

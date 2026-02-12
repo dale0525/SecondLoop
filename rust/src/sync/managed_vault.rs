@@ -10,9 +10,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
+mod admin;
 mod attachments;
 mod progress;
 
+pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 
@@ -39,6 +41,14 @@ struct PushOp {
     seq: i64,
     op_id: String,
     ciphertext_b64: String,
+}
+
+enum PendingAttachmentAction {
+    Upload {
+        mime_type: String,
+        created_at_ms: i64,
+    },
+    Delete,
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,11 +96,6 @@ struct PullOpBin {
     seq: i64,
     op_id: String,
     ciphertext: Vec<u8>,
-}
-
-#[derive(Debug, Serialize)]
-struct ClearDeviceRequest<'a> {
-    device_id: &'a str,
 }
 
 fn scope_id(base_url: &str, vault_id: &str) -> String {
@@ -404,11 +409,9 @@ fn push_internal(
 ) -> Result<u64> {
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
 
-    let http = client()?;
     let device_id = super::get_or_create_device_id(conn)?;
     let app_dir = super::app_dir_from_conn(conn)?;
     let app_dir_path = app_dir.as_path();
-    let _ = ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
 
     let scope_id = scope_id(base_url, vault_id);
     let last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
@@ -417,6 +420,23 @@ fn push_internal(
         let legacy = super::kv_get_i64(conn, &legacy_last_pushed_key)?.unwrap_or(0);
         super::kv_set_i64(conn, &last_pushed_key, legacy)?;
     }
+
+    let local_pending_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![
+                device_id.as_str(),
+                super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0)
+            ],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+    if !upload_attachment_bytes && local_pending_ops == 0 {
+        return Ok(0);
+    }
+
+    let http = client()?;
+    let _ = ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
 
     let upload_ctx = attachments::AttachmentUploadContext {
         conn,
@@ -440,8 +460,10 @@ fn push_internal(
 
     // Rare recovery path: if the remote has seqs this device doesn't agree with (e.g. device-id reuse),
     // we can rebase our local seqs forward based on the server's expected_next_seq and retry.
+    const PUSH_LIMIT: i64 = 200;
     const MAX_REPAIR_ATTEMPTS: usize = 10;
     let mut repair_attempt = 0usize;
+    let mut pushed_total = 0u64;
     loop {
         let last_pushed_seq = super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
 
@@ -449,14 +471,14 @@ fn push_internal(
             r#"SELECT op_id, seq, op_json
                FROM oplog
                WHERE device_id = ?1 AND seq > ?2
-               ORDER BY seq ASC"#,
+               ORDER BY seq ASC
+               LIMIT ?3"#,
         )?;
-        let mut rows = stmt.query(params![device_id.as_str(), last_pushed_seq])?;
+        let mut rows = stmt.query(params![device_id.as_str(), last_pushed_seq, PUSH_LIMIT])?;
 
         let mut ops: Vec<PushOp> = Vec::new();
         let mut max_seq = last_pushed_seq;
-        let mut uploaded_attachments: BTreeSet<String> = BTreeSet::new();
-        let mut deleted_attachments: BTreeSet<String> = BTreeSet::new();
+        let mut attachment_actions: BTreeMap<String, PendingAttachmentAction> = BTreeMap::new();
 
         while let Some(row) = rows.next()? {
             let op_id: String = row.get(0)?;
@@ -474,27 +496,25 @@ fn push_internal(
                     && op_json["type"].as_str() == Some("attachment.upsert.v1")
                 {
                     if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
-                        if uploaded_attachments.insert(sha256.to_string()) {
-                            let mime_type = op_json["payload"]["mime_type"]
-                                .as_str()
-                                .unwrap_or("application/octet-stream");
-                            let created_at_ms =
-                                op_json["payload"]["created_at_ms"].as_i64().unwrap_or(0);
-                            let _ = attachments::upload_attachment_bytes_if_present(
-                                &upload_ctx,
-                                sha256,
-                                mime_type,
+                        let mime_type = op_json["payload"]["mime_type"]
+                            .as_str()
+                            .unwrap_or("application/octet-stream");
+                        let created_at_ms =
+                            op_json["payload"]["created_at_ms"].as_i64().unwrap_or(0);
+                        attachment_actions.insert(
+                            sha256.to_string(),
+                            PendingAttachmentAction::Upload {
+                                mime_type: mime_type.to_string(),
                                 created_at_ms,
-                            )?;
-                        }
+                            },
+                        );
                     }
                 }
 
                 if op_json["type"].as_str() == Some("attachment.delete.v1") {
                     if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
-                        if deleted_attachments.insert(sha256.to_string()) {
-                            attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)?;
-                        }
+                        attachment_actions
+                            .insert(sha256.to_string(), PendingAttachmentAction::Delete);
                     }
                 }
             }
@@ -515,7 +535,26 @@ fn push_internal(
         }
 
         if ops.is_empty() {
-            return Ok(0);
+            return Ok(pushed_total);
+        }
+
+        for (sha256, action) in attachment_actions {
+            match action {
+                PendingAttachmentAction::Upload {
+                    mime_type,
+                    created_at_ms,
+                } => {
+                    let _ = attachments::upload_attachment_bytes_if_present(
+                        &upload_ctx,
+                        &sha256,
+                        &mime_type,
+                        created_at_ms,
+                    )?;
+                }
+                PendingAttachmentAction::Delete => {
+                    attachments::delete_remote_attachment_bytes(&upload_ctx, &sha256)?;
+                }
+            }
         }
 
         let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
@@ -537,8 +576,10 @@ fn push_internal(
                 super::kv_set_i64(conn, &last_pushed_key, parsed.max_seq)?;
             }
 
-            let pushed = max_seq.saturating_sub(last_pushed_seq);
-            return Ok(pushed as u64);
+            let pushed = max_seq.saturating_sub(last_pushed_seq) as u64;
+            pushed_total += pushed;
+            repair_attempt = 0;
+            continue;
         }
 
         if status.as_u16() != 409 || repair_attempt >= MAX_REPAIR_ATTEMPTS {
@@ -946,36 +987,4 @@ pub fn pull(
     }
 
     Ok(applied)
-}
-
-pub fn clear_vault(base_url: &str, vault_id: &str, id_token: &str) -> Result<()> {
-    let http = client()?;
-    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:clear"))?;
-    let resp = http.post(endpoint).bearer_auth(id_token).send()?;
-
-    let status = resp.status();
-    let text = resp.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(anyhow!("managed-vault clear failed: HTTP {status} {text}"));
-    }
-    Ok(())
-}
-
-pub fn clear_device(base_url: &str, vault_id: &str, id_token: &str, device_id: &str) -> Result<()> {
-    let http = client()?;
-    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:clear_device"))?;
-    let resp = http
-        .post(endpoint)
-        .bearer_auth(id_token)
-        .json(&ClearDeviceRequest { device_id })
-        .send()?;
-
-    let status = resp.status();
-    let text = resp.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(anyhow!(
-            "managed-vault clear-device failed: HTTP {status} {text}"
-        ));
-    }
-    Ok(())
 }
