@@ -92,8 +92,13 @@ final class _ReviewReminderNotificationsGateState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _startForegroundSession();
+    if (state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive) {
+      if (!_isAppInForeground) {
+        _startForegroundSession();
+      } else {
+        _isAppInForeground = true;
+      }
       _syncInAppFallbackFromCurrentPlan();
       _scheduleRefresh();
       return;
