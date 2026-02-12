@@ -144,6 +144,76 @@ class RustBuilder {
   Future<String> build() async {
     final extraArgs = _buildOptions?.flags ?? [];
     final manifestPath = path.join(environment.manifestDir, 'Cargo.toml');
+    final buildEnvironment = await _buildEnvironment();
+    final buildArgs = <String>[
+      'build',
+      ...extraArgs,
+      '--manifest-path',
+      manifestPath,
+      '-p',
+      environment.crateInfo.packageName,
+      if (!environment.configuration.isDebug) '--release',
+      '--target',
+      target.rust,
+      '--target-dir',
+      environment.targetTempDir,
+    ];
+
+    try {
+      _runCargoCommand(buildArgs, environment: buildEnvironment);
+    } on CommandFailedException catch (error) {
+      if (!_isMissingLibsqliteBindgen(error)) {
+        rethrow;
+      }
+      _log.warning(
+        'Detected missing libsqlite3-sys bindgen output; cleaning stale '
+        'artifacts and retrying once.',
+      );
+      _cleanLibsqliteBuildArtifacts(
+        manifestPath,
+        environment: buildEnvironment,
+      );
+      _runCargoCommand(buildArgs, environment: buildEnvironment);
+    }
+
+    return path.join(
+      environment.targetTempDir,
+      target.rust,
+      environment.configuration.rustName,
+    );
+  }
+
+  bool _isMissingLibsqliteBindgen(CommandFailedException error) {
+    final stderr = error.result.stderr.toString();
+    return stderr.contains('libsqlite3-sys') &&
+        stderr.contains('out/bindgen.rs') &&
+        stderr.contains('No such file or directory');
+  }
+
+  void _cleanLibsqliteBuildArtifacts(
+    String manifestPath, {
+    required Map<String, String> environment,
+  }) {
+    _runCargoCommand(
+      [
+        'clean',
+        '--manifest-path',
+        manifestPath,
+        '-p',
+        'libsqlite3-sys',
+        '--target',
+        target.rust,
+        '--target-dir',
+        this.environment.targetTempDir,
+      ],
+      environment: environment,
+    );
+  }
+
+  void _runCargoCommand(
+    List<String> arguments, {
+    required Map<String, String> environment,
+  }) {
     if (Rustup.executablePath() == null) {
       if (_toolchain != 'stable') {
         throw BuildException(
@@ -153,47 +223,21 @@ class RustBuilder {
       }
       runCommand(
         'cargo',
-        [
-          'build',
-          ...extraArgs,
-          '--manifest-path',
-          manifestPath,
-          '-p',
-          environment.crateInfo.packageName,
-          if (!environment.configuration.isDebug) '--release',
-          '--target',
-          target.rust,
-          '--target-dir',
-          environment.targetTempDir,
-        ],
-        environment: await _buildEnvironment(),
+        arguments,
+        environment: environment,
       );
-    } else {
-      runCommand(
-        'rustup',
-        [
-          'run',
-          _toolchain,
-          'cargo',
-          'build',
-          ...extraArgs,
-          '--manifest-path',
-          manifestPath,
-          '-p',
-          environment.crateInfo.packageName,
-          if (!environment.configuration.isDebug) '--release',
-          '--target',
-          target.rust,
-          '--target-dir',
-          environment.targetTempDir,
-        ],
-        environment: await _buildEnvironment(),
-      );
+      return;
     }
-    return path.join(
-      environment.targetTempDir,
-      target.rust,
-      environment.configuration.rustName,
+
+    runCommand(
+      'rustup',
+      [
+        'run',
+        _toolchain,
+        'cargo',
+        ...arguments,
+      ],
+      environment: environment,
     );
   }
 
