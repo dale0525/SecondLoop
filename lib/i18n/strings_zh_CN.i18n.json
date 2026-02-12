@@ -16,7 +16,7 @@
       "reset": "重置",
       "continueLabel": "继续",
       "send": "发送",
-      "askAi": "问 AI",
+      "askAi": "AI 对话",
       "configureAi": "配置 AI",
       "stop": "停止",
       "stopping": "正在停止…",
@@ -245,7 +245,7 @@
       "subtitle": "返回解锁页面"
     },
     "llmProfiles": {
-      "title": "API Key（问 AI）",
+      "title": "API Key（AI 对话）",
       "subtitle": "高级：使用你自己的服务商与 Key"
     },
     "embeddingProfiles": {
@@ -254,30 +254,30 @@
     },
     "aiSelection": {
       "title": "智能化",
-      "subtitle": "统一管理问答、向量、OCR、语音识别与图片理解能力。",
+      "subtitle": "统一设置 AI 问答、智能检索（Embedding）、图片读字（OCR）和语音转文字。",
       "askAi": {
-        "title": "问 AI",
-        "description": "用于聊天提问与记忆检索的模型来源。",
-        "setupHint": "当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。",
-        "preferenceUnavailableHint": "你选择的问 AI 来源当前不可用。请先完善 Cloud 或 API 密钥配置。",
+        "title": "AI 对话",
+        "description": "决定“AI 对话”使用哪种服务来源（Cloud 或 API 密钥）。",
+        "setupHint": "还没完成“AI 对话”设置，请先登录 Cloud 或添加 API 密钥。",
+        "preferenceUnavailableHint": "你选择的“AI 对话”来源暂时不可用，请先完成 Cloud 或 API 密钥设置。",
         "status": {
-          "loading": "正在检查当前路由...",
-          "cloud": "当前路由：SecondLoop Cloud",
-          "byok": "当前路由：API 密钥配置（BYOK）",
-          "notConfigured": "当前路由：需要先配置"
+          "loading": "正在检查当前使用来源...",
+          "cloud": "当前使用：SecondLoop Cloud",
+          "byok": "当前使用：API 密钥（BYOK）",
+          "notConfigured": "当前使用：未完成设置"
         },
         "preference": {
           "auto": {
             "title": "自动",
-            "description": "优先使用 Cloud，不可用时自动使用 BYOK。"
+            "description": "自动选择可用服务：优先 Cloud，不可用时改用 API 密钥（BYOK）。"
           },
           "cloud": {
             "title": "SecondLoop Cloud",
-            "description": "仅使用 Cloud。Cloud 不可用时问 AI 会保持不可用。"
+            "description": "固定使用 Cloud。Cloud 不可用时，“AI 对话”会暂时不可用。"
           },
           "byok": {
             "title": "API 密钥（BYOK）",
-            "description": "仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。"
+            "description": "固定使用你自己的 API 密钥（BYOK）。没有可用配置时，“AI 对话”会暂时不可用。"
           }
         },
         "actions": {
@@ -286,31 +286,31 @@
         }
       },
       "embeddings": {
-        "title": "语义搜索与向量",
-        "description": "用于记忆召回、待办关联和问 AI 检索质量。",
-        "preferenceUnavailableHint": "你选择的向量来源当前不可用，已自动使用回落路线。",
+        "title": "智能检索（Embedding）",
+        "description": "给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。",
+        "preferenceUnavailableHint": "你选择的智能检索来源暂时不可用，已自动切换到可用方案。",
         "status": {
-          "loading": "正在检查当前路由...",
-          "cloud": "当前路由：SecondLoop Cloud",
-          "byok": "当前路由：向量 API 密钥（BYOK）",
-          "local": "当前路由：本地向量能力"
+          "loading": "正在检查当前使用来源...",
+          "cloud": "当前使用：SecondLoop Cloud",
+          "byok": "当前使用：API 密钥（Embedding/BYOK）",
+          "local": "当前使用：本机智能检索"
         },
         "preference": {
           "auto": {
             "title": "自动",
-            "description": "优先 Cloud，其次 BYOK，最后本地能力。"
+            "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。"
           },
           "cloud": {
             "title": "SecondLoop Cloud",
-            "description": "优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。"
+            "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。"
           },
           "byok": {
             "title": "API 密钥（BYOK）",
-            "description": "优先使用 BYOK。失败时自动回落到本地能力。"
+            "description": "优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。"
           },
           "local": {
             "title": "本地能力",
-            "description": "尽量只使用本地向量能力。"
+            "description": "尽量只在本机生成检索索引（Embedding）。"
           }
         },
         "actions": {
@@ -319,31 +319,31 @@
         }
       },
       "mediaUnderstanding": {
-        "title": "媒体理解",
-        "description": "OCR、图片描述和音频转写的来源选择。",
-        "preferenceUnavailableHint": "你选择的媒体来源当前不可用，已自动使用回落路线。",
+        "title": "图片与音频理解",
+        "description": "决定图片读字（OCR）、图片说明和语音转文字由谁处理。",
+        "preferenceUnavailableHint": "你选择的图片/音频处理来源暂时不可用，已自动切换到可用方案。",
         "status": {
-          "loading": "正在检查当前路由...",
-          "cloud": "当前路由：SecondLoop Cloud",
-          "byok": "当前路由：API 密钥配置（BYOK）",
-          "local": "当前路由：本地 runtime / 系统原生能力"
+          "loading": "正在检查当前使用来源...",
+          "cloud": "当前使用：SecondLoop Cloud",
+          "byok": "当前使用：API 密钥（BYOK）",
+          "local": "当前使用：本机能力（系统自带）"
         },
         "preference": {
           "auto": {
             "title": "自动",
-            "description": "优先 Cloud，其次 BYOK，最后本地能力。"
+            "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。"
           },
           "cloud": {
             "title": "SecondLoop Cloud",
-            "description": "优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。"
+            "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。"
           },
           "byok": {
             "title": "API 密钥（BYOK）",
-            "description": "优先使用 BYOK。失败时自动回落到本地能力。"
+            "description": "优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。"
           },
           "local": {
             "title": "本地能力",
-            "description": "优先使用本地 runtime / 系统原生媒体理解能力。"
+            "description": "优先使用本机能力（系统自带）。"
           }
         },
         "actions": {
@@ -354,13 +354,13 @@
       }
     },
     "semanticParseAutoActions": {
-      "title": "AI 语义动作",
-      "subtitleEnabled": "已开启。消息可能会发送给 AI 来自动创建或更新待办。",
-      "subtitleDisabled": "已关闭。消息不会用于自动动作。",
+      "title": "自动整理待办（语义解析）",
+      "subtitleEnabled": "已开启。系统会理解消息内容，自动创建或更新待办。",
+      "subtitleDisabled": "已关闭。消息不会触发自动整理待办。",
       "subtitleUnset": "尚未设置，默认关闭。",
-      "subtitleRequiresSetup": "需要 SecondLoop Pro 或 API Key（BYOK）。",
-      "dialogTitle": "开启 AI 语义动作？",
-      "dialogBody": "为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。",
+      "subtitleRequiresSetup": "需要 SecondLoop Pro，或先配置 API 密钥（BYOK）。",
+      "dialogTitle": "开启自动整理待办？",
+      "dialogBody": "为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 做语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。",
       "dialogActions": {
         "enable": "开启"
       }
@@ -371,7 +371,7 @@
       "routingGuide": {
         "title": "先选择 AI 来源",
         "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
-        "byok": "免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。"
+        "byok": "免费/BYOK：请先在「AI 对话」里添加 OpenAI-compatible 配置档，并设为当前使用。"
       },
       "documentOcr": {
         "title": "文档 OCR",
@@ -448,8 +448,8 @@
         },
         "configureApi": {
           "title": "配置转写 API",
-          "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。",
-          "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。",
+          "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「AI 对话」中的 OpenAI-compatible API Key 配置档。",
+          "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“AI 对话”里的 OpenAI-compatible API Key 配置档。",
           "openCloud": "打开 Cloud 账号",
           "openApiKeys": "打开 API Key"
         }
@@ -468,7 +468,7 @@
           "cloudRequiresPro": "SecondLoop Cloud 需要 Pro。",
           "cloudSignIn": "请先登录 SecondLoop Cloud。",
           "byokOpenAiCompatible": "请先添加 OpenAI-compatible 的 API Key 配置档。",
-          "followAskAi": "“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。"
+          "followAskAi": "“AI 对话”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。"
         }
       },
       "annotateEnabled": {
@@ -489,14 +489,14 @@
       },
       "providerMode": {
         "title": "多模态模型",
-        "subtitle": "为图片注释选择独立于“问 AI”的服务商/模型。",
+        "subtitle": "为图片注释选择独立于“AI 对话”的服务商/模型。",
         "labels": {
-          "followAskAi": "跟随问 AI",
+          "followAskAi": "跟随 AI 对话",
           "cloudGateway": "SecondLoop Cloud",
           "byokProfile": "API Key（配置档）"
         },
         "descriptions": {
-          "followAskAi": "使用与“问 AI”相同的设置（推荐）。",
+          "followAskAi": "使用与“AI 对话”相同的设置（推荐）。",
           "cloudGateway": "优先使用 SecondLoop Cloud（需要 Pro，且需可用）。",
           "byokProfile": "使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。"
         }
@@ -505,14 +505,14 @@
         "title": "Cloud 模型名",
         "subtitle": "可选：覆盖云端多模态模型名。",
         "hint": "例如 gpt-4o-mini",
-        "followAskAi": "跟随问 AI"
+        "followAskAi": "跟随 AI 对话"
       },
       "byokProfile": {
         "title": "API Key 配置档",
         "subtitle": "选择图片注释使用哪个配置档。",
         "unset": "未设置",
         "missingBackend": "当前构建不可用。",
-        "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置档，请先在“API Key（问 AI）”里添加。"
+        "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置档，请先在“API Key（AI 对话）”里添加。"
       },
       "allowCellular": {
         "title": "允许蜂窝网络",
@@ -524,13 +524,13 @@
       }
     },
     "cloudEmbeddings": {
-      "title": "更智能的搜索",
-      "subtitleEnabled": "已开启。搜索更准，会消耗 Cloud 额度。",
-      "subtitleDisabled": "已关闭。搜索只使用本地数据。",
-      "subtitleUnset": "尚未设置，首次需要时会询问。",
+      "title": "云端增强检索（Embedding）",
+      "subtitleEnabled": "已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。",
+      "subtitleDisabled": "已关闭。你仍可使用智能检索，但仅使用本机索引。",
+      "subtitleUnset": "尚未设置，首次需要云端增强时会询问你是否开启。",
       "subtitleRequiresPro": "需要 SecondLoop Pro。",
-      "dialogTitle": "开启更智能的搜索？",
-      "dialogBody": "为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成搜索数据。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。",
+      "dialogTitle": "开启云端增强检索？",
+      "dialogBody": "“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。",
       "dialogActions": {
         "enable": "开启"
       }
@@ -569,7 +569,7 @@
         },
         "labels": {
           "status": "状态：",
-          "help": "验证邮箱后才能使用 SecondLoop Cloud Ask AI。",
+          "help": "验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
           "loadFailed": "加载失败：$error"
         },
         "actions": {
@@ -591,7 +591,7 @@
         "gatewayNotConfigured": "当前版本暂不支持查看云端用量。",
         "signInRequired": "登录后才能查看用量。",
         "usage": "用量：",
-        "askAiUsage": "Ask AI：",
+        "askAiUsage": "AI 对话：",
         "embeddingsUsage": "智能搜索：",
         "inputTokensUsed30d": "输入 Tokens（30 天）：",
         "outputTokensUsed30d": "输出 Tokens（30 天）：",
@@ -657,7 +657,7 @@
         "items": {
           "noSetup": {
             "title": "免配置直接用 AI",
-            "body": "不用做任何配置，订阅后就能直接问 AI。"
+            "body": "不用做任何配置，订阅后就能直接使用 AI 对话。"
           },
           "cloudSync": {
             "title": "云存储 + 多设备同步",
@@ -765,15 +765,15 @@
       "thisThread": "聚焦：当前对话"
     },
     "askAiSetup": {
-      "title": "问 AI 需要先配置",
-      "body": "要使用「问 AI」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。",
+      "title": "AI 对话需要先配置",
+      "body": "要使用「AI 对话」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。",
       "actions": {
         "subscribe": "订阅",
         "configureByok": "添加 API Key"
       }
     },
     "cloudGateway": {
-      "emailNotVerified": "邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud Ask AI。",
+      "emailNotVerified": "邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
       "fallback": {
         "auth": "Cloud 登录已失效。本次将使用你的 API Key。",
         "entitlement": "需要订阅 SecondLoop Cloud。本次将使用你的 API Key。",
@@ -787,7 +787,7 @@
         "generic": "Cloud 请求失败。"
       }
     },
-    "askAiFailedTemporary": "问 AI 失败了，请重试。",
+    "askAiFailedTemporary": "AI 对话失败了，请重试。",
     "askAiConsent": {
       "title": "使用 AI 前确认",
       "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。",

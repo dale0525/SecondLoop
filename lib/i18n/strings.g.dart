@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1328 (664 per locale)
 ///
-/// Built on 2026-02-11 at 10:47 UTC
+/// Built on 2026-02-12 at 02:03 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -3540,7 +3540,7 @@ class _StringsChatZhCn extends _StringsChatEn {
   late final _StringsChatCloudGatewayZhCn cloudGateway =
       _StringsChatCloudGatewayZhCn._(_root);
   @override
-  String get askAiFailedTemporary => '问 AI 失败了，请重试。';
+  String get askAiFailedTemporary => 'AI 对话失败了，请重试。';
   @override
   late final _StringsChatAskAiConsentZhCn askAiConsent =
       _StringsChatAskAiConsentZhCn._(_root);
@@ -3853,7 +3853,7 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   @override
   String get send => '发送';
   @override
-  String get askAi => '问 AI';
+  String get askAi => 'AI 对话';
   @override
   String get configureAi => '配置 AI';
   @override
@@ -4350,7 +4350,7 @@ class _StringsSettingsLlmProfilesZhCn extends _StringsSettingsLlmProfilesEn {
 
   // Translations
   @override
-  String get title => 'API Key（问 AI）';
+  String get title => 'API Key（AI 对话）';
   @override
   String get subtitle => '高级：使用你自己的服务商与 Key';
 }
@@ -4385,7 +4385,7 @@ class _StringsSettingsAiSelectionZhCn extends _StringsSettingsAiSelectionEn {
   @override
   String get title => '智能化';
   @override
-  String get subtitle => '统一管理问答、向量、OCR、语音识别与图片理解能力。';
+  String get subtitle => '统一设置 AI 问答、智能检索（Embedding）、图片读字（OCR）和语音转文字。';
   @override
   late final _StringsSettingsAiSelectionAskAiZhCn askAi =
       _StringsSettingsAiSelectionAskAiZhCn._(_root);
@@ -4410,20 +4410,20 @@ class _StringsSettingsSemanticParseAutoActionsZhCn
 
   // Translations
   @override
-  String get title => 'AI 语义动作';
+  String get title => '自动整理待办（语义解析）';
   @override
-  String get subtitleEnabled => '已开启。消息可能会发送给 AI 来自动创建或更新待办。';
+  String get subtitleEnabled => '已开启。系统会理解消息内容，自动创建或更新待办。';
   @override
-  String get subtitleDisabled => '已关闭。消息不会用于自动动作。';
+  String get subtitleDisabled => '已关闭。消息不会触发自动整理待办。';
   @override
   String get subtitleUnset => '尚未设置，默认关闭。';
   @override
-  String get subtitleRequiresSetup => '需要 SecondLoop Pro 或 API Key（BYOK）。';
+  String get subtitleRequiresSetup => '需要 SecondLoop Pro，或先配置 API 密钥（BYOK）。';
   @override
-  String get dialogTitle => '开启 AI 语义动作？';
+  String get dialogTitle => '开启自动整理待办？';
   @override
   String get dialogBody =>
-      '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。';
+      '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 做语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。';
   @override
   late final _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
       dialogActions =
@@ -4509,20 +4509,20 @@ class _StringsSettingsCloudEmbeddingsZhCn
 
   // Translations
   @override
-  String get title => '更智能的搜索';
+  String get title => '云端增强检索（Embedding）';
   @override
-  String get subtitleEnabled => '已开启。搜索更准，会消耗 Cloud 额度。';
+  String get subtitleEnabled => '已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。';
   @override
-  String get subtitleDisabled => '已关闭。搜索只使用本地数据。';
+  String get subtitleDisabled => '已关闭。你仍可使用智能检索，但仅使用本机索引。';
   @override
-  String get subtitleUnset => '尚未设置，首次需要时会询问。';
+  String get subtitleUnset => '尚未设置，首次需要云端增强时会询问你是否开启。';
   @override
   String get subtitleRequiresPro => '需要 SecondLoop Pro。';
   @override
-  String get dialogTitle => '开启更智能的搜索？';
+  String get dialogTitle => '开启云端增强检索？';
   @override
   String get dialogBody =>
-      '为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成搜索数据。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
+      '“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
   @override
   late final _StringsSettingsCloudEmbeddingsDialogActionsZhCn dialogActions =
       _StringsSettingsCloudEmbeddingsDialogActionsZhCn._(_root);
@@ -4880,9 +4880,9 @@ class _StringsChatAskAiSetupZhCn extends _StringsChatAskAiSetupEn {
 
   // Translations
   @override
-  String get title => '问 AI 需要先配置';
+  String get title => 'AI 对话需要先配置';
   @override
-  String get body => '要使用「问 AI」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。';
+  String get body => '要使用「AI 对话」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。';
   @override
   late final _StringsChatAskAiSetupActionsZhCn actions =
       _StringsChatAskAiSetupActionsZhCn._(_root);
@@ -4899,7 +4899,7 @@ class _StringsChatCloudGatewayZhCn extends _StringsChatCloudGatewayEn {
 
   // Translations
   @override
-  String get emailNotVerified => '邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud Ask AI。';
+  String get emailNotVerified => '邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
   @override
   late final _StringsChatCloudGatewayFallbackZhCn fallback =
       _StringsChatCloudGatewayFallbackZhCn._(_root);
@@ -5714,14 +5714,14 @@ class _StringsSettingsAiSelectionAskAiZhCn
 
   // Translations
   @override
-  String get title => '问 AI';
+  String get title => 'AI 对话';
   @override
-  String get description => '用于聊天提问与记忆检索的模型来源。';
+  String get description => '决定“AI 对话”使用哪种服务来源（Cloud 或 API 密钥）。';
   @override
-  String get setupHint => '当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。';
+  String get setupHint => '还没完成“AI 对话”设置，请先登录 Cloud 或添加 API 密钥。';
   @override
   String get preferenceUnavailableHint =>
-      '你选择的问 AI 来源当前不可用。请先完善 Cloud 或 API 密钥配置。';
+      '你选择的“AI 对话”来源暂时不可用，请先完成 Cloud 或 API 密钥设置。';
   @override
   late final _StringsSettingsAiSelectionAskAiStatusZhCn status =
       _StringsSettingsAiSelectionAskAiStatusZhCn._(_root);
@@ -5745,11 +5745,11 @@ class _StringsSettingsAiSelectionEmbeddingsZhCn
 
   // Translations
   @override
-  String get title => '语义搜索与向量';
+  String get title => '智能检索（Embedding）';
   @override
-  String get description => '用于记忆召回、待办关联和问 AI 检索质量。';
+  String get description => '给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。';
   @override
-  String get preferenceUnavailableHint => '你选择的向量来源当前不可用，已自动使用回落路线。';
+  String get preferenceUnavailableHint => '你选择的智能检索来源暂时不可用，已自动切换到可用方案。';
   @override
   late final _StringsSettingsAiSelectionEmbeddingsStatusZhCn status =
       _StringsSettingsAiSelectionEmbeddingsStatusZhCn._(_root);
@@ -5773,11 +5773,11 @@ class _StringsSettingsAiSelectionMediaUnderstandingZhCn
 
   // Translations
   @override
-  String get title => '媒体理解';
+  String get title => '图片与音频理解';
   @override
-  String get description => 'OCR、图片描述和音频转写的来源选择。';
+  String get description => '决定图片读字（OCR）、图片说明和语音转文字由谁处理。';
   @override
-  String get preferenceUnavailableHint => '你选择的媒体来源当前不可用，已自动使用回落路线。';
+  String get preferenceUnavailableHint => '你选择的图片/音频处理来源暂时不可用，已自动切换到可用方案。';
   @override
   late final _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn status =
       _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn._(_root);
@@ -5821,7 +5821,7 @@ class _StringsSettingsMediaAnnotationRoutingGuideZhCn
   @override
   String get pro => 'Pro 且已登录：默认使用 SecondLoop Cloud。';
   @override
-  String get byok => '免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。';
+  String get byok => '免费/BYOK：请先在「AI 对话」里添加 OpenAI-compatible 配置档，并设为当前使用。';
 }
 
 // Path: settings.mediaAnnotation.documentOcr
@@ -6014,7 +6014,7 @@ class _StringsSettingsMediaAnnotationProviderModeZhCn
   @override
   String get title => '多模态模型';
   @override
-  String get subtitle => '为图片注释选择独立于“问 AI”的服务商/模型。';
+  String get subtitle => '为图片注释选择独立于“AI 对话”的服务商/模型。';
   @override
   late final _StringsSettingsMediaAnnotationProviderModeLabelsZhCn labels =
       _StringsSettingsMediaAnnotationProviderModeLabelsZhCn._(_root);
@@ -6042,7 +6042,7 @@ class _StringsSettingsMediaAnnotationCloudModelNameZhCn
   @override
   String get hint => '例如 gpt-4o-mini';
   @override
-  String get followAskAi => '跟随问 AI';
+  String get followAskAi => '跟随 AI 对话';
 }
 
 // Path: settings.mediaAnnotation.byokProfile
@@ -6066,7 +6066,7 @@ class _StringsSettingsMediaAnnotationByokProfileZhCn
   String get missingBackend => '当前构建不可用。';
   @override
   String get noOpenAiCompatibleProfiles =>
-      '没有可用的 OpenAI-compatible 配置档，请先在“API Key（问 AI）”里添加。';
+      '没有可用的 OpenAI-compatible 配置档，请先在“API Key（AI 对话）”里添加。';
 }
 
 // Path: settings.mediaAnnotation.allowCellular
@@ -6249,7 +6249,7 @@ class _StringsSettingsCloudUsageLabelsZhCn
   @override
   String get usage => '用量：';
   @override
-  String get askAiUsage => 'Ask AI：';
+  String get askAiUsage => 'AI 对话：';
   @override
   String get embeddingsUsage => '智能搜索：';
   @override
@@ -6770,13 +6770,13 @@ class _StringsSettingsAiSelectionAskAiStatusZhCn
 
   // Translations
   @override
-  String get loading => '正在检查当前路由...';
+  String get loading => '正在检查当前使用来源...';
   @override
-  String get cloud => '当前路由：SecondLoop Cloud';
+  String get cloud => '当前使用：SecondLoop Cloud';
   @override
-  String get byok => '当前路由：API 密钥配置（BYOK）';
+  String get byok => '当前使用：API 密钥（BYOK）';
   @override
-  String get notConfigured => '当前路由：需要先配置';
+  String get notConfigured => '当前使用：未完成设置';
 }
 
 // Path: settings.aiSelection.askAi.preference
@@ -6830,13 +6830,13 @@ class _StringsSettingsAiSelectionEmbeddingsStatusZhCn
 
   // Translations
   @override
-  String get loading => '正在检查当前路由...';
+  String get loading => '正在检查当前使用来源...';
   @override
-  String get cloud => '当前路由：SecondLoop Cloud';
+  String get cloud => '当前使用：SecondLoop Cloud';
   @override
-  String get byok => '当前路由：向量 API 密钥（BYOK）';
+  String get byok => '当前使用：API 密钥（Embedding/BYOK）';
   @override
-  String get local => '当前路由：本地向量能力';
+  String get local => '当前使用：本机智能检索';
 }
 
 // Path: settings.aiSelection.embeddings.preference
@@ -6893,13 +6893,13 @@ class _StringsSettingsAiSelectionMediaUnderstandingStatusZhCn
 
   // Translations
   @override
-  String get loading => '正在检查当前路由...';
+  String get loading => '正在检查当前使用来源...';
   @override
-  String get cloud => '当前路由：SecondLoop Cloud';
+  String get cloud => '当前使用：SecondLoop Cloud';
   @override
-  String get byok => '当前路由：API 密钥配置（BYOK）';
+  String get byok => '当前使用：API 密钥（BYOK）';
   @override
-  String get local => '当前路由：本地 runtime / 系统原生能力';
+  String get local => '当前使用：本机能力（系统自带）';
 }
 
 // Path: settings.aiSelection.mediaUnderstanding.preference
@@ -7123,10 +7123,10 @@ class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
   String get title => '配置转写 API';
   @override
   String get subtitle =>
-      'Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。';
+      'Pro 用户可用 SecondLoop Cloud；免费用户可用「AI 对话」中的 OpenAI-compatible API Key 配置档。';
   @override
   String get body =>
-      '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。';
+      '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“AI 对话”里的 OpenAI-compatible API Key 配置档。';
   @override
   String get openCloud => '打开 Cloud 账号';
   @override
@@ -7154,7 +7154,7 @@ class _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn
   String get byokOpenAiCompatible => '请先添加 OpenAI-compatible 的 API Key 配置档。';
   @override
   String get followAskAi =>
-      '“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
+      '“AI 对话”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
 }
 
 // Path: settings.mediaAnnotation.providerMode.labels
@@ -7169,7 +7169,7 @@ class _StringsSettingsMediaAnnotationProviderModeLabelsZhCn
 
   // Translations
   @override
-  String get followAskAi => '跟随问 AI';
+  String get followAskAi => '跟随 AI 对话';
   @override
   String get cloudGateway => 'SecondLoop Cloud';
   @override
@@ -7189,7 +7189,7 @@ class _StringsSettingsMediaAnnotationProviderModeDescriptionsZhCn
 
   // Translations
   @override
-  String get followAskAi => '使用与“问 AI”相同的设置（推荐）。';
+  String get followAskAi => '使用与“AI 对话”相同的设置（推荐）。';
   @override
   String get cloudGateway => '优先使用 SecondLoop Cloud（需要 Pro，且需可用）。';
   @override
@@ -7245,7 +7245,7 @@ class _StringsSettingsCloudAccountEmailVerificationLabelsZhCn
   @override
   String get status => '状态：';
   @override
-  String get help => '验证邮箱后才能使用 SecondLoop Cloud Ask AI。';
+  String get help => '验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
   @override
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
@@ -7320,7 +7320,7 @@ class _StringsSettingsAiSelectionAskAiPreferenceAutoZhCn
   @override
   String get title => '自动';
   @override
-  String get description => '优先使用 Cloud，不可用时自动使用 BYOK。';
+  String get description => '自动选择可用服务：优先 Cloud，不可用时改用 API 密钥（BYOK）。';
 }
 
 // Path: settings.aiSelection.askAi.preference.cloud
@@ -7337,7 +7337,7 @@ class _StringsSettingsAiSelectionAskAiPreferenceCloudZhCn
   @override
   String get title => 'SecondLoop Cloud';
   @override
-  String get description => '仅使用 Cloud。Cloud 不可用时问 AI 会保持不可用。';
+  String get description => '固定使用 Cloud。Cloud 不可用时，“AI 对话”会暂时不可用。';
 }
 
 // Path: settings.aiSelection.askAi.preference.byok
@@ -7354,7 +7354,7 @@ class _StringsSettingsAiSelectionAskAiPreferenceByokZhCn
   @override
   String get title => 'API 密钥（BYOK）';
   @override
-  String get description => '仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。';
+  String get description => '固定使用你自己的 API 密钥（BYOK）。没有可用配置时，“AI 对话”会暂时不可用。';
 }
 
 // Path: settings.aiSelection.embeddings.preference.auto
@@ -7371,7 +7371,7 @@ class _StringsSettingsAiSelectionEmbeddingsPreferenceAutoZhCn
   @override
   String get title => '自动';
   @override
-  String get description => '优先 Cloud，其次 BYOK，最后本地能力。';
+  String get description => '自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。';
 }
 
 // Path: settings.aiSelection.embeddings.preference.cloud
@@ -7388,7 +7388,7 @@ class _StringsSettingsAiSelectionEmbeddingsPreferenceCloudZhCn
   @override
   String get title => 'SecondLoop Cloud';
   @override
-  String get description => '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+  String get description => '优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。';
 }
 
 // Path: settings.aiSelection.embeddings.preference.byok
@@ -7405,7 +7405,7 @@ class _StringsSettingsAiSelectionEmbeddingsPreferenceByokZhCn
   @override
   String get title => 'API 密钥（BYOK）';
   @override
-  String get description => '优先使用 BYOK。失败时自动回落到本地能力。';
+  String get description => '优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。';
 }
 
 // Path: settings.aiSelection.embeddings.preference.local
@@ -7422,7 +7422,7 @@ class _StringsSettingsAiSelectionEmbeddingsPreferenceLocalZhCn
   @override
   String get title => '本地能力';
   @override
-  String get description => '尽量只使用本地向量能力。';
+  String get description => '尽量只在本机生成检索索引（Embedding）。';
 }
 
 // Path: settings.aiSelection.mediaUnderstanding.preference.auto
@@ -7440,7 +7440,7 @@ class _StringsSettingsAiSelectionMediaUnderstandingPreferenceAutoZhCn
   @override
   String get title => '自动';
   @override
-  String get description => '优先 Cloud，其次 BYOK，最后本地能力。';
+  String get description => '自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。';
 }
 
 // Path: settings.aiSelection.mediaUnderstanding.preference.cloud
@@ -7458,7 +7458,7 @@ class _StringsSettingsAiSelectionMediaUnderstandingPreferenceCloudZhCn
   @override
   String get title => 'SecondLoop Cloud';
   @override
-  String get description => '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+  String get description => '优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。';
 }
 
 // Path: settings.aiSelection.mediaUnderstanding.preference.byok
@@ -7476,7 +7476,7 @@ class _StringsSettingsAiSelectionMediaUnderstandingPreferenceByokZhCn
   @override
   String get title => 'API 密钥（BYOK）';
   @override
-  String get description => '优先使用 BYOK。失败时自动回落到本地能力。';
+  String get description => '优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。';
 }
 
 // Path: settings.aiSelection.mediaUnderstanding.preference.local
@@ -7494,7 +7494,7 @@ class _StringsSettingsAiSelectionMediaUnderstandingPreferenceLocalZhCn
   @override
   String get title => '本地能力';
   @override
-  String get description => '优先使用本地 runtime / 系统原生媒体理解能力。';
+  String get description => '优先使用本机能力（系统自带）。';
 }
 
 // Path: settings.mediaAnnotation.documentOcr.languageHints.labels
@@ -7661,7 +7661,7 @@ class _StringsSettingsSubscriptionBenefitsItemsNoSetupZhCn
   @override
   String get title => '免配置直接用 AI';
   @override
-  String get body => '不用做任何配置，订阅后就能直接问 AI。';
+  String get body => '不用做任何配置，订阅后就能直接使用 AI 对话。';
 }
 
 // Path: settings.subscription.benefits.items.cloudSync
@@ -9090,7 +9090,7 @@ extension on _StringsZhCn {
       case 'common.actions.send':
         return '发送';
       case 'common.actions.askAi':
-        return '问 AI';
+        return 'AI 对话';
       case 'common.actions.configureAi':
         return '配置 AI';
       case 'common.actions.stop':
@@ -9398,7 +9398,7 @@ extension on _StringsZhCn {
       case 'settings.lockNow.subtitle':
         return '返回解锁页面';
       case 'settings.llmProfiles.title':
-        return 'API Key（问 AI）';
+        return 'API Key（AI 对话）';
       case 'settings.llmProfiles.subtitle':
         return '高级：使用你自己的服务商与 Key';
       case 'settings.embeddingProfiles.title':
@@ -9408,103 +9408,103 @@ extension on _StringsZhCn {
       case 'settings.aiSelection.title':
         return '智能化';
       case 'settings.aiSelection.subtitle':
-        return '统一管理问答、向量、OCR、语音识别与图片理解能力。';
+        return '统一设置 AI 问答、智能检索（Embedding）、图片读字（OCR）和语音转文字。';
       case 'settings.aiSelection.askAi.title':
-        return '问 AI';
+        return 'AI 对话';
       case 'settings.aiSelection.askAi.description':
-        return '用于聊天提问与记忆检索的模型来源。';
+        return '决定“AI 对话”使用哪种服务来源（Cloud 或 API 密钥）。';
       case 'settings.aiSelection.askAi.setupHint':
-        return '当前尚未完成问 AI 配置。请先登录 Cloud 或添加 API 密钥配置。';
+        return '还没完成“AI 对话”设置，请先登录 Cloud 或添加 API 密钥。';
       case 'settings.aiSelection.askAi.preferenceUnavailableHint':
-        return '你选择的问 AI 来源当前不可用。请先完善 Cloud 或 API 密钥配置。';
+        return '你选择的“AI 对话”来源暂时不可用，请先完成 Cloud 或 API 密钥设置。';
       case 'settings.aiSelection.askAi.status.loading':
-        return '正在检查当前路由...';
+        return '正在检查当前使用来源...';
       case 'settings.aiSelection.askAi.status.cloud':
-        return '当前路由：SecondLoop Cloud';
+        return '当前使用：SecondLoop Cloud';
       case 'settings.aiSelection.askAi.status.byok':
-        return '当前路由：API 密钥配置（BYOK）';
+        return '当前使用：API 密钥（BYOK）';
       case 'settings.aiSelection.askAi.status.notConfigured':
-        return '当前路由：需要先配置';
+        return '当前使用：未完成设置';
       case 'settings.aiSelection.askAi.preference.auto.title':
         return '自动';
       case 'settings.aiSelection.askAi.preference.auto.description':
-        return '优先使用 Cloud，不可用时自动使用 BYOK。';
+        return '自动选择可用服务：优先 Cloud，不可用时改用 API 密钥（BYOK）。';
       case 'settings.aiSelection.askAi.preference.cloud.title':
         return 'SecondLoop Cloud';
       case 'settings.aiSelection.askAi.preference.cloud.description':
-        return '仅使用 Cloud。Cloud 不可用时问 AI 会保持不可用。';
+        return '固定使用 Cloud。Cloud 不可用时，“AI 对话”会暂时不可用。';
       case 'settings.aiSelection.askAi.preference.byok.title':
         return 'API 密钥（BYOK）';
       case 'settings.aiSelection.askAi.preference.byok.description':
-        return '仅使用 BYOK。未配置激活档案时问 AI 会保持不可用。';
+        return '固定使用你自己的 API 密钥（BYOK）。没有可用配置时，“AI 对话”会暂时不可用。';
       case 'settings.aiSelection.askAi.actions.openCloud':
         return '打开 Cloud 账户';
       case 'settings.aiSelection.askAi.actions.openByok':
         return '打开 API 密钥';
       case 'settings.aiSelection.embeddings.title':
-        return '语义搜索与向量';
+        return '智能检索（Embedding）';
       case 'settings.aiSelection.embeddings.description':
-        return '用于记忆召回、待办关联和问 AI 检索质量。';
+        return '给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。';
       case 'settings.aiSelection.embeddings.preferenceUnavailableHint':
-        return '你选择的向量来源当前不可用，已自动使用回落路线。';
+        return '你选择的智能检索来源暂时不可用，已自动切换到可用方案。';
       case 'settings.aiSelection.embeddings.status.loading':
-        return '正在检查当前路由...';
+        return '正在检查当前使用来源...';
       case 'settings.aiSelection.embeddings.status.cloud':
-        return '当前路由：SecondLoop Cloud';
+        return '当前使用：SecondLoop Cloud';
       case 'settings.aiSelection.embeddings.status.byok':
-        return '当前路由：向量 API 密钥（BYOK）';
+        return '当前使用：API 密钥（Embedding/BYOK）';
       case 'settings.aiSelection.embeddings.status.local':
-        return '当前路由：本地向量能力';
+        return '当前使用：本机智能检索';
       case 'settings.aiSelection.embeddings.preference.auto.title':
         return '自动';
       case 'settings.aiSelection.embeddings.preference.auto.description':
-        return '优先 Cloud，其次 BYOK，最后本地能力。';
+        return '自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。';
       case 'settings.aiSelection.embeddings.preference.cloud.title':
         return 'SecondLoop Cloud';
       case 'settings.aiSelection.embeddings.preference.cloud.description':
-        return '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+        return '优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。';
       case 'settings.aiSelection.embeddings.preference.byok.title':
         return 'API 密钥（BYOK）';
       case 'settings.aiSelection.embeddings.preference.byok.description':
-        return '优先使用 BYOK。失败时自动回落到本地能力。';
+        return '优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。';
       case 'settings.aiSelection.embeddings.preference.local.title':
         return '本地能力';
       case 'settings.aiSelection.embeddings.preference.local.description':
-        return '尽量只使用本地向量能力。';
+        return '尽量只在本机生成检索索引（Embedding）。';
       case 'settings.aiSelection.embeddings.actions.openEmbeddingProfiles':
         return '打开向量 API 密钥';
       case 'settings.aiSelection.embeddings.actions.openCloudAccount':
         return '打开 Cloud 账户';
       case 'settings.aiSelection.mediaUnderstanding.title':
-        return '媒体理解';
+        return '图片与音频理解';
       case 'settings.aiSelection.mediaUnderstanding.description':
-        return 'OCR、图片描述和音频转写的来源选择。';
+        return '决定图片读字（OCR）、图片说明和语音转文字由谁处理。';
       case 'settings.aiSelection.mediaUnderstanding.preferenceUnavailableHint':
-        return '你选择的媒体来源当前不可用，已自动使用回落路线。';
+        return '你选择的图片/音频处理来源暂时不可用，已自动切换到可用方案。';
       case 'settings.aiSelection.mediaUnderstanding.status.loading':
-        return '正在检查当前路由...';
+        return '正在检查当前使用来源...';
       case 'settings.aiSelection.mediaUnderstanding.status.cloud':
-        return '当前路由：SecondLoop Cloud';
+        return '当前使用：SecondLoop Cloud';
       case 'settings.aiSelection.mediaUnderstanding.status.byok':
-        return '当前路由：API 密钥配置（BYOK）';
+        return '当前使用：API 密钥（BYOK）';
       case 'settings.aiSelection.mediaUnderstanding.status.local':
-        return '当前路由：本地 runtime / 系统原生能力';
+        return '当前使用：本机能力（系统自带）';
       case 'settings.aiSelection.mediaUnderstanding.preference.auto.title':
         return '自动';
       case 'settings.aiSelection.mediaUnderstanding.preference.auto.description':
-        return '优先 Cloud，其次 BYOK，最后本地能力。';
+        return '自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。';
       case 'settings.aiSelection.mediaUnderstanding.preference.cloud.title':
         return 'SecondLoop Cloud';
       case 'settings.aiSelection.mediaUnderstanding.preference.cloud.description':
-        return '优先使用 Cloud。不可用时自动回落到 BYOK 或本地能力。';
+        return '优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。';
       case 'settings.aiSelection.mediaUnderstanding.preference.byok.title':
         return 'API 密钥（BYOK）';
       case 'settings.aiSelection.mediaUnderstanding.preference.byok.description':
-        return '优先使用 BYOK。失败时自动回落到本地能力。';
+        return '优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。';
       case 'settings.aiSelection.mediaUnderstanding.preference.local.title':
         return '本地能力';
       case 'settings.aiSelection.mediaUnderstanding.preference.local.description':
-        return '优先使用本地 runtime / 系统原生媒体理解能力。';
+        return '优先使用本机能力（系统自带）。';
       case 'settings.aiSelection.mediaUnderstanding.actions.openSettings':
         return '打开媒体理解设置';
       case 'settings.aiSelection.mediaUnderstanding.actions.openCloudAccount':
@@ -9512,19 +9512,19 @@ extension on _StringsZhCn {
       case 'settings.aiSelection.mediaUnderstanding.actions.openByok':
         return '打开 API 密钥';
       case 'settings.semanticParseAutoActions.title':
-        return 'AI 语义动作';
+        return '自动整理待办（语义解析）';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
-        return '已开启。消息可能会发送给 AI 来自动创建或更新待办。';
+        return '已开启。系统会理解消息内容，自动创建或更新待办。';
       case 'settings.semanticParseAutoActions.subtitleDisabled':
-        return '已关闭。消息不会用于自动动作。';
+        return '已关闭。消息不会触发自动整理待办。';
       case 'settings.semanticParseAutoActions.subtitleUnset':
         return '尚未设置，默认关闭。';
       case 'settings.semanticParseAutoActions.subtitleRequiresSetup':
-        return '需要 SecondLoop Pro 或 API Key（BYOK）。';
+        return '需要 SecondLoop Pro，或先配置 API 密钥（BYOK）。';
       case 'settings.semanticParseAutoActions.dialogTitle':
-        return '开启 AI 语义动作？';
+        return '开启自动整理待办？';
       case 'settings.semanticParseAutoActions.dialogBody':
-        return '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 模型。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这可能会消耗 Cloud 额度或你自己的服务商额度。';
+        return '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 做语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。';
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return '开启';
       case 'settings.mediaAnnotation.title':
@@ -9536,7 +9536,7 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.routingGuide.pro':
         return 'Pro 且已登录：默认使用 SecondLoop Cloud。';
       case 'settings.mediaAnnotation.routingGuide.byok':
-        return '免费/BYOK：请先在「问 AI」里添加 OpenAI-compatible 配置档，并设为当前使用。';
+        return '免费/BYOK：请先在「AI 对话」里添加 OpenAI-compatible 配置档，并设为当前使用。';
       case 'settings.mediaAnnotation.documentOcr.title':
         return '文档 OCR';
       case 'settings.mediaAnnotation.documentOcr.enabled.title':
@@ -9629,9 +9629,9 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
         return '配置转写 API';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
-        return 'Pro 用户可用 SecondLoop Cloud；免费用户可用「问 AI」中的 OpenAI-compatible API Key 配置档。';
+        return 'Pro 用户可用 SecondLoop Cloud；免费用户可用「AI 对话」中的 OpenAI-compatible API Key 配置档。';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.body':
-        return '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“问 AI”里的 OpenAI-compatible API Key 配置档。';
+        return '音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“AI 对话”里的 OpenAI-compatible API Key 配置档。';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.openCloud':
         return '打开 Cloud 账号';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
@@ -9653,7 +9653,7 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.setupRequired.reasons.byokOpenAiCompatible':
         return '请先添加 OpenAI-compatible 的 API Key 配置档。';
       case 'settings.mediaAnnotation.setupRequired.reasons.followAskAi':
-        return '“问 AI”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
+        return '“AI 对话”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。';
       case 'settings.mediaAnnotation.annotateEnabled.title':
         return '注释图片';
       case 'settings.mediaAnnotation.annotateEnabled.subtitle':
@@ -9673,15 +9673,15 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.providerMode.title':
         return '多模态模型';
       case 'settings.mediaAnnotation.providerMode.subtitle':
-        return '为图片注释选择独立于“问 AI”的服务商/模型。';
+        return '为图片注释选择独立于“AI 对话”的服务商/模型。';
       case 'settings.mediaAnnotation.providerMode.labels.followAskAi':
-        return '跟随问 AI';
+        return '跟随 AI 对话';
       case 'settings.mediaAnnotation.providerMode.labels.cloudGateway':
         return 'SecondLoop Cloud';
       case 'settings.mediaAnnotation.providerMode.labels.byokProfile':
         return 'API Key（配置档）';
       case 'settings.mediaAnnotation.providerMode.descriptions.followAskAi':
-        return '使用与“问 AI”相同的设置（推荐）。';
+        return '使用与“AI 对话”相同的设置（推荐）。';
       case 'settings.mediaAnnotation.providerMode.descriptions.cloudGateway':
         return '优先使用 SecondLoop Cloud（需要 Pro，且需可用）。';
       case 'settings.mediaAnnotation.providerMode.descriptions.byokProfile':
@@ -9693,7 +9693,7 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.cloudModelName.hint':
         return '例如 gpt-4o-mini';
       case 'settings.mediaAnnotation.cloudModelName.followAskAi':
-        return '跟随问 AI';
+        return '跟随 AI 对话';
       case 'settings.mediaAnnotation.byokProfile.title':
         return 'API Key 配置档';
       case 'settings.mediaAnnotation.byokProfile.subtitle':
@@ -9703,7 +9703,7 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.byokProfile.missingBackend':
         return '当前构建不可用。';
       case 'settings.mediaAnnotation.byokProfile.noOpenAiCompatibleProfiles':
-        return '没有可用的 OpenAI-compatible 配置档，请先在“API Key（问 AI）”里添加。';
+        return '没有可用的 OpenAI-compatible 配置档，请先在“API Key（AI 对话）”里添加。';
       case 'settings.mediaAnnotation.allowCellular.title':
         return '允许蜂窝网络';
       case 'settings.mediaAnnotation.allowCellular.subtitle':
@@ -9713,19 +9713,19 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
       case 'settings.cloudEmbeddings.title':
-        return '更智能的搜索';
+        return '云端增强检索（Embedding）';
       case 'settings.cloudEmbeddings.subtitleEnabled':
-        return '已开启。搜索更准，会消耗 Cloud 额度。';
+        return '已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。';
       case 'settings.cloudEmbeddings.subtitleDisabled':
-        return '已关闭。搜索只使用本地数据。';
+        return '已关闭。你仍可使用智能检索，但仅使用本机索引。';
       case 'settings.cloudEmbeddings.subtitleUnset':
-        return '尚未设置，首次需要时会询问。';
+        return '尚未设置，首次需要云端增强时会询问你是否开启。';
       case 'settings.cloudEmbeddings.subtitleRequiresPro':
         return '需要 SecondLoop Pro。';
       case 'settings.cloudEmbeddings.dialogTitle':
-        return '开启更智能的搜索？';
+        return '开启云端增强检索？';
       case 'settings.cloudEmbeddings.dialogBody':
-        return '为了让搜索和回忆更准确，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成搜索数据。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
+        return '“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。';
       case 'settings.cloudEmbeddings.dialogActions.enable':
         return '开启';
       case 'settings.cloudAccount.title':
@@ -9763,7 +9763,7 @@ extension on _StringsZhCn {
       case 'settings.cloudAccount.emailVerification.labels.status':
         return '状态：';
       case 'settings.cloudAccount.emailVerification.labels.help':
-        return '验证邮箱后才能使用 SecondLoop Cloud Ask AI。';
+        return '验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
       case 'settings.cloudAccount.emailVerification.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
       case 'settings.cloudAccount.emailVerification.actions.resend':
@@ -9785,7 +9785,7 @@ extension on _StringsZhCn {
       case 'settings.cloudUsage.labels.usage':
         return '用量：';
       case 'settings.cloudUsage.labels.askAiUsage':
-        return 'Ask AI：';
+        return 'AI 对话：';
       case 'settings.cloudUsage.labels.embeddingsUsage':
         return '智能搜索：';
       case 'settings.cloudUsage.labels.inputTokensUsed30d':
@@ -9866,7 +9866,7 @@ extension on _StringsZhCn {
       case 'settings.subscription.benefits.items.noSetup.title':
         return '免配置直接用 AI';
       case 'settings.subscription.benefits.items.noSetup.body':
-        return '不用做任何配置，订阅后就能直接问 AI。';
+        return '不用做任何配置，订阅后就能直接使用 AI 对话。';
       case 'settings.subscription.benefits.items.cloudSync.title':
         return '云存储 + 多设备同步';
       case 'settings.subscription.benefits.items.cloudSync.body':
@@ -10004,15 +10004,15 @@ extension on _StringsZhCn {
       case 'chat.focus.thisThread':
         return '聚焦：当前对话';
       case 'chat.askAiSetup.title':
-        return '问 AI 需要先配置';
+        return 'AI 对话需要先配置';
       case 'chat.askAiSetup.body':
-        return '要使用「问 AI」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。';
+        return '要使用「AI 对话」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。';
       case 'chat.askAiSetup.actions.subscribe':
         return '订阅';
       case 'chat.askAiSetup.actions.configureByok':
         return '添加 API Key';
       case 'chat.cloudGateway.emailNotVerified':
-        return '邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud Ask AI。';
+        return '邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
       case 'chat.cloudGateway.fallback.auth':
         return 'Cloud 登录已失效。本次将使用你的 API Key。';
       case 'chat.cloudGateway.fallback.entitlement':
@@ -10030,7 +10030,7 @@ extension on _StringsZhCn {
       case 'chat.cloudGateway.errors.generic':
         return 'Cloud 请求失败。';
       case 'chat.askAiFailedTemporary':
-        return '问 AI 失败了，请重试。';
+        return 'AI 对话失败了，请重试。';
       case 'chat.askAiConsent.title':
         return '使用 AI 前确认';
       case 'chat.askAiConsent.body':
