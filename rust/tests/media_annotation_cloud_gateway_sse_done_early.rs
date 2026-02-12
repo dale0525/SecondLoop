@@ -65,4 +65,18 @@ fn cloud_gateway_media_annotation_succeeds_when_sse_stream_ends_after_done() {
             .unwrap_or_default(),
         "a cat"
     );
+    assert_eq!(
+        payload
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        "a cat"
+    );
+    assert_eq!(
+        payload
+            .get("full_text")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        ""
+    );
 }

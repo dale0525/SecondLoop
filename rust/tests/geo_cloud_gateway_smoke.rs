@@ -99,7 +99,7 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
                 (
                     200,
                     "OK",
-                    r#"{"choices":[{"message":{"role":"assistant","content":"{\"caption_long\":\"a cat\",\"tags\":[\"cat\"],\"ocr_text\":null}"}}]}"#,
+                    r#"{"choices":[{"message":{"role":"assistant","content":"{\"summary\":\"a cat\",\"tag\":[\"cat\"],\"full_text\":\"\"}"}}]}"#,
                 )
             } else {
                 (404, "Not Found", r#"{"error":"not found"}"#)
@@ -146,6 +146,26 @@ fn geo_cloud_gateway_smoke() {
             .unwrap_or_default(),
         "a cat"
     );
+    assert_eq!(
+        ann_payload
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        "a cat"
+    );
+    assert_eq!(
+        ann_payload
+            .get("full_text")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        ""
+    );
+    let tags = ann_payload
+        .get("tag")
+        .and_then(|v| v.as_array())
+        .expect("tag array");
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].as_str().unwrap_or_default(), "cat");
 
     let req1 = rx.recv().expect("req1");
     let req2 = rx.recv().expect("req2");

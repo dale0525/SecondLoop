@@ -84,6 +84,26 @@ fn cloud_gateway_media_annotation_parses_content_parts() {
             .unwrap_or_default(),
         "a cat"
     );
+    assert_eq!(
+        ann_payload
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        "a cat"
+    );
+    assert_eq!(
+        ann_payload
+            .get("full_text")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        ""
+    );
+    let tag_values = ann_payload
+        .get("tag")
+        .and_then(|v| v.as_array())
+        .expect("tag array");
+    assert_eq!(tag_values.len(), 1);
+    assert_eq!(tag_values[0].as_str().unwrap_or_default(), "cat");
 
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "POST");

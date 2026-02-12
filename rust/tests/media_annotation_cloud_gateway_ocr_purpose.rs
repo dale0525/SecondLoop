@@ -108,6 +108,28 @@ fn cloud_gateway_multimodal_ocr_uses_ask_ai_purpose() {
             .unwrap_or_default(),
         "# Report\n\nTotal: 42"
     );
+    assert_eq!(
+        payload
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        ""
+    );
+    assert_eq!(
+        payload
+            .get("full_text")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        "# Report\n\nTotal: 42"
+    );
+    assert_eq!(
+        payload
+            .get("tag")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len())
+            .unwrap_or(usize::MAX),
+        0
+    );
 
     let req = rx.recv().expect("request");
     assert_eq!(
@@ -115,6 +137,8 @@ fn cloud_gateway_multimodal_ocr_uses_ask_ai_purpose() {
         Some("ask_ai")
     );
     assert!(req.body.contains("data:application/pdf;base64,"));
-    assert!(req.body.contains("ocr_text"));
+    assert!(req.body.contains("full_text"));
+    assert!(req.body.contains("summary"));
+    assert!(req.body.contains("tag"));
     assert!(req.body.contains("\"stream\":true"));
 }
