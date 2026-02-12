@@ -13,6 +13,10 @@ void main() {
     );
     expect(
       manifest,
+      contains('android.permission.SCHEDULE_EXACT_ALARM'),
+    );
+    expect(
+      manifest,
       contains(
         'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
       ),

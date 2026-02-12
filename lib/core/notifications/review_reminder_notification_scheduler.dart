@@ -81,6 +81,12 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       final dynamic androidImpl = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await androidImpl?.requestNotificationsPermission();
+
+      final dynamic canScheduleExactNotifications =
+          await androidImpl?.canScheduleExactNotifications();
+      if (canScheduleExactNotifications == false) {
+        await androidImpl?.requestExactAlarmsPermission();
+      }
     } catch (_) {
       // ignore
     }
