@@ -9,6 +9,8 @@ import 'review_notification_plan.dart';
 typedef NotificationTapHandler = void Function(String? payload);
 
 abstract interface class ReviewReminderNotificationScheduler {
+  bool get supportsSystemNotifications;
+
   Future<void> ensureInitialized();
 
   Future<void> schedule(ReviewReminderPlan plan);
@@ -40,6 +42,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   bool _initialized = false;
   bool _available = true;
   bool _timeZoneInitialized = false;
+
+  @override
+  bool get supportsSystemNotifications => _available;
   final Set<int> _managedNotificationIds = <int>{};
 
   @override
@@ -207,6 +212,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       _managedNotificationIds.add(notificationId);
       return;
     } on MissingPluginException {
+      _available = false;
       return;
     } on PlatformException {
       // Exact alarms can be blocked on newer Android versions.
@@ -218,7 +224,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       await scheduleWithMode(AndroidScheduleMode.inexactAllowWhileIdle);
       _managedNotificationIds.add(notificationId);
     } on MissingPluginException {
-      // ignore
+      _available = false;
     } on PlatformException {
       // ignore
     } catch (_) {
@@ -252,7 +258,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     try {
       await _plugin.cancel(notificationId);
     } on MissingPluginException {
-      // ignore
+      _available = false;
     } on PlatformException {
       // ignore
     } catch (_) {

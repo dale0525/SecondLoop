@@ -179,6 +179,9 @@ void main() {
 }
 
 final class _FakeScheduler implements ReviewReminderNotificationScheduler {
+  @override
+  bool supportsSystemNotifications = true;
+
   int initializedCount = 0;
   int cancelCount = 0;
   final List<ReviewReminderPlan> scheduledPlans = <ReviewReminderPlan>[];

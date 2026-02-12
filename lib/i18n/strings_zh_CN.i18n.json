@@ -66,6 +66,11 @@
       "title": "待确认",
       "banner": "有 $count 条待确认事项",
       "empty": "没有需要确认的事项",
+      "inAppFallback": {
+        "message": "有 $count 条事项正在等待你确认",
+        "open": "打开待确认队列",
+        "dismiss": "稍后再说"
+      },
       "actions": {
         "schedule": "安排时间",
         "snooze": "稍后提醒",
@@ -173,6 +178,10 @@
       "weeklyTime": {
         "title": "每周提醒时间",
         "subtitle": "每周提醒时间（周日）"
+      },
+      "inAppFallback": {
+        "title": "应用内提醒",
+        "subtitle": "在应用内显示待办事项通知"
       }
     },
     "quickCaptureHotkey": {

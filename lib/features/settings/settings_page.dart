@@ -11,6 +11,7 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
+import '../../core/notifications/review_reminder_in_app_fallback_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/session/session_scope.dart';
@@ -46,6 +47,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool? _biometricUnlockEnabled;
   AppLocale? _localeOverride;
   ActionsSettings? _actionsSettings;
+  bool? _reviewReminderInAppFallbackEnabled;
   bool _busy = false;
 
   SubscriptionStatusController? _subscriptionController;
@@ -291,6 +293,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
     final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
         _defaultSystemUnlockEnabled();
+    await ReviewReminderInAppFallbackPrefs.load();
+    final reviewReminderInAppFallbackEnabled =
+        ReviewReminderInAppFallbackPrefs.value.value;
     final rawLocaleOverride = prefs.getString(kAppLocaleOverridePrefsKey);
     AppLocale? localeOverride;
     if (rawLocaleOverride != null && rawLocaleOverride.trim().isNotEmpty) {
@@ -306,6 +311,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _appLockEnabled = enabled;
       _biometricUnlockEnabled = biometricEnabled;
+      _reviewReminderInAppFallbackEnabled = reviewReminderInAppFallbackEnabled;
       _localeOverride = localeOverride;
       _actionsSettings = actionsSettings;
     });
@@ -521,6 +527,27 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) setState(() => _biometricUnlockEnabled = enabled);
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setReviewReminderInAppFallback(bool enabled) async {
+    if (_busy) return;
+
+    final previous = _reviewReminderInAppFallbackEnabled ??
+        ReviewReminderInAppFallbackPrefs.defaultValue;
+    setState(() => _reviewReminderInAppFallbackEnabled = enabled);
+
+    try {
+      await ReviewReminderInAppFallbackPrefs.setEnabled(enabled);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _reviewReminderInAppFallbackEnabled = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 

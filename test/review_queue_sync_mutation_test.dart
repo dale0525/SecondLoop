@@ -15,7 +15,9 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets('marking review todo done notifies sync engine', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': (23 * 60) + 59,
+    });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final backend = _ReviewQueueBackend(
@@ -65,7 +67,9 @@ void main() {
   });
 
   testWidgets('snoozing review todo notifies sync engine', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': (23 * 60) + 59,
+    });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final backend = _ReviewQueueBackend(
