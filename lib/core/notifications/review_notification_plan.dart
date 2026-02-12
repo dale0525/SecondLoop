@@ -12,12 +12,14 @@ final class ReviewReminderItem {
   const ReviewReminderItem({
     required this.todoId,
     required this.todoTitle,
+    required this.sourceAtUtcMs,
     required this.scheduleAtUtcMs,
     required this.kind,
   });
 
   final String todoId;
   final String todoTitle;
+  final int sourceAtUtcMs;
   final int scheduleAtUtcMs;
   final ReviewReminderItemKind kind;
 
@@ -25,6 +27,7 @@ final class ReviewReminderItem {
   int get hashCode =>
       todoId.hashCode ^
       todoTitle.hashCode ^
+      sourceAtUtcMs.hashCode ^
       scheduleAtUtcMs.hashCode ^
       kind.hashCode;
 
@@ -34,6 +37,7 @@ final class ReviewReminderItem {
         other is ReviewReminderItem &&
             todoId == other.todoId &&
             todoTitle == other.todoTitle &&
+            sourceAtUtcMs == other.sourceAtUtcMs &&
             scheduleAtUtcMs == other.scheduleAtUtcMs &&
             kind == other.kind;
   }
@@ -96,6 +100,7 @@ ReviewReminderPlan? buildReviewReminderPlan(
         ReviewReminderItem(
           todoId: todo.id,
           todoTitle: todoTitle,
+          sourceAtUtcMs: dueAtMs,
           scheduleAtUtcMs: scheduleAtUtcMs,
           kind: ReviewReminderItemKind.dueTodo,
         ),
@@ -115,6 +120,7 @@ ReviewReminderPlan? buildReviewReminderPlan(
       ReviewReminderItem(
         todoId: todo.id,
         todoTitle: todoTitle,
+        sourceAtUtcMs: nextReviewAtMs,
         scheduleAtUtcMs: scheduleAtUtcMs,
         kind: ReviewReminderItemKind.reviewQueue,
       ),

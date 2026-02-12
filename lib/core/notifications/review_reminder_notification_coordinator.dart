@@ -20,6 +20,7 @@ final class ReviewReminderNotificationCoordinator {
 
   bool _initialized = false;
   ReviewReminderPlan? _lastPlan;
+  final Map<String, int> _overdueScheduleBySourceKey = <String, int>{};
 
   Future<void> refresh() async {
     if (!_initialized) {
@@ -27,19 +28,78 @@ final class ReviewReminderNotificationCoordinator {
       _initialized = true;
     }
 
+    final nowUtcMs = _nowUtcMs();
     final todos = await _readTodos();
-    final plan = buildReviewReminderPlan(todos, nowUtcMs: _nowUtcMs());
+    final builtPlan = buildReviewReminderPlan(todos, nowUtcMs: nowUtcMs);
 
-    if (plan == null) {
+    if (builtPlan == null) {
+      _overdueScheduleBySourceKey.clear();
       if (_lastPlan == null) return;
       _lastPlan = null;
       await _scheduler.cancel();
       return;
     }
 
+    final plan = _stabilizePlanForOverdueCatchUp(
+      builtPlan,
+      nowUtcMs: nowUtcMs,
+    );
+
     if (_lastPlan == plan) return;
 
     _lastPlan = plan;
     await _scheduler.schedule(plan);
+  }
+
+  ReviewReminderPlan _stabilizePlanForOverdueCatchUp(
+    ReviewReminderPlan plan, {
+    required int nowUtcMs,
+  }) {
+    final normalizedItems = <ReviewReminderItem>[];
+    final activeOverdueKeys = <String>{};
+
+    for (final item in plan.items) {
+      if (item.sourceAtUtcMs >= nowUtcMs) {
+        normalizedItems.add(item);
+        continue;
+      }
+
+      final key = _overdueSourceKey(item);
+      activeOverdueKeys.add(key);
+      final scheduledAtUtcMs = _overdueScheduleBySourceKey[key];
+
+      if (scheduledAtUtcMs == null) {
+        _overdueScheduleBySourceKey[key] = item.scheduleAtUtcMs;
+        normalizedItems.add(item);
+        continue;
+      }
+
+      if (scheduledAtUtcMs > nowUtcMs) {
+        normalizedItems.add(
+          scheduledAtUtcMs == item.scheduleAtUtcMs
+              ? item
+              : ReviewReminderItem(
+                  todoId: item.todoId,
+                  todoTitle: item.todoTitle,
+                  sourceAtUtcMs: item.sourceAtUtcMs,
+                  scheduleAtUtcMs: scheduledAtUtcMs,
+                  kind: item.kind,
+                ),
+        );
+      }
+    }
+
+    _overdueScheduleBySourceKey.removeWhere(
+      (key, _) => !activeOverdueKeys.contains(key),
+    );
+
+    return ReviewReminderPlan(
+      pendingCount: plan.pendingCount,
+      items: normalizedItems,
+    );
+  }
+
+  String _overdueSourceKey(ReviewReminderItem item) {
+    return '${item.kind.name}:${item.todoId}:${item.sourceAtUtcMs}';
   }
 }

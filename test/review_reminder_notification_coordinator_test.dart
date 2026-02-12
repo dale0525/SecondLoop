@@ -84,6 +84,68 @@ void main() {
     expect(scheduler.scheduledPlans.length, 1);
   });
 
+  test('keeps overdue catch-up schedule stable before it fires', () async {
+    final scheduler = _FakeScheduler();
+    var nowUtcMs = 10000;
+
+    final coordinator = ReviewReminderNotificationCoordinator(
+      scheduler: scheduler,
+      nowUtcMs: () => nowUtcMs,
+      readTodos: () async => const <Todo>[
+        Todo(
+          id: 'todo:overdue',
+          title: 'catch up',
+          status: 'open',
+          dueAtMs: 9000,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await coordinator.refresh();
+
+    nowUtcMs = 20000;
+    await coordinator.refresh();
+
+    expect(scheduler.scheduledPlans.length, 1);
+  });
+
+  test('suppresses overdue reminders after catch-up delivery window', () async {
+    final scheduler = _FakeScheduler();
+    var nowUtcMs = 10000;
+
+    final coordinator = ReviewReminderNotificationCoordinator(
+      scheduler: scheduler,
+      nowUtcMs: () => nowUtcMs,
+      readTodos: () async => const <Todo>[
+        Todo(
+          id: 'todo:overdue',
+          title: 'catch up',
+          status: 'open',
+          dueAtMs: 9000,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await coordinator.refresh();
+
+    nowUtcMs = 80000;
+    await coordinator.refresh();
+
+    nowUtcMs = 81000;
+    await coordinator.refresh();
+
+    expect(scheduler.scheduledPlans.length, 2);
+    expect(scheduler.scheduledPlans.last.items, isEmpty);
+  });
+
   test('cancels reminder after queue becomes empty', () async {
     final scheduler = _FakeScheduler();
     var includeTodo = true;
