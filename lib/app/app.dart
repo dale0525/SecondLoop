@@ -19,6 +19,7 @@ import '../core/subscription/subscription_scope.dart';
 import '../core/desktop/desktop_quick_capture_service.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
+import '../core/update/auto_upgrade_gate.dart';
 import '../core/update/release_notes_first_launch_gate.dart';
 import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
@@ -119,8 +120,10 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                         darkTheme: AppTheme.dark(locale: locale),
                         themeMode: themeMode,
                         navigatorKey: _navigatorKey,
-                        home: const ReleaseNotesFirstLaunchGate(
-                          child: AppShell(),
+                        home: const AutoUpgradeGate(
+                          child: ReleaseNotesFirstLaunchGate(
+                            child: AppShell(),
+                          ),
                         ),
                         builder: (context, child) {
                           // NOTE: On some platforms (notably macOS), modifier keys

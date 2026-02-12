@@ -179,6 +179,21 @@ extension _SettingsPageBuild on _SettingsPageState {
         const SizedBox(height: 8),
         sectionCard([
           ListTile(
+            key: const ValueKey('settings_about'),
+            title: Text(isZh ? '关于' : 'About'),
+            subtitle:
+                Text(isZh ? '项目主页、版本号与更新' : 'Homepage, version, and updates'),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AboutPage(),
+                      ),
+                    );
+                  },
+          ),
+          ListTile(
             key: const ValueKey('settings_diagnostics'),
             title: Text(context.t.settings.diagnostics.title),
             subtitle: Text(context.t.settings.diagnostics.subtitle),
