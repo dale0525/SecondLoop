@@ -180,8 +180,8 @@
         "subtitle": "每周提醒时间（周日）"
       },
       "inAppFallback": {
-        "title": "应用内提醒兜底",
-        "subtitle": "当前平台不支持系统提醒时，在应用内显示醒目提醒"
+        "title": "应用内提醒",
+        "subtitle": "在应用内显示待办事项通知"
       }
     },
     "quickCaptureHotkey": {

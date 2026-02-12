@@ -112,7 +112,7 @@ void main() {
   });
 
   testWidgets(
-      'does not show in-app fallback banner when system notifications are available',
+      'shows in-app fallback banner when system notifications are available',
       (tester) async {
     await _pumpGateHarness(tester);
 
@@ -121,7 +121,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsNothing,
+      findsOneWidget,
     );
   });
 }

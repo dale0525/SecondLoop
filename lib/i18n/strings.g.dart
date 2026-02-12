@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1338 (669 per locale)
 ///
-/// Built on 2026-02-12 at 13:04 UTC
+/// Built on 2026-02-12 at 16:26 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1779,9 +1779,8 @@ class _StringsSettingsActionsReviewInAppFallbackEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'In-app reminder fallback';
-  String get subtitle =>
-      'Show prominent in-app alerts when system reminders are unavailable';
+  String get title => 'In-app reminders';
+  String get subtitle => 'Show todo notifications in app';
 }
 
 // Path: settings.quickCaptureHotkey.actions
@@ -5648,9 +5647,9 @@ class _StringsSettingsActionsReviewInAppFallbackZhCn
 
   // Translations
   @override
-  String get title => '应用内提醒兜底';
+  String get title => '应用内提醒';
   @override
-  String get subtitle => '当前平台不支持系统提醒时，在应用内显示醒目提醒';
+  String get subtitle => '在应用内显示待办事项通知';
 }
 
 // Path: settings.quickCaptureHotkey.actions
@@ -8019,9 +8018,9 @@ extension on Translations {
       case 'settings.actionsReview.weeklyTime.subtitle':
         return 'Weekly reminder time (Sunday)';
       case 'settings.actionsReview.inAppFallback.title':
-        return 'In-app reminder fallback';
+        return 'In-app reminders';
       case 'settings.actionsReview.inAppFallback.subtitle':
-        return 'Show prominent in-app alerts when system reminders are unavailable';
+        return 'Show todo notifications in app';
       case 'settings.quickCaptureHotkey.title':
         return 'Quick capture shortcut';
       case 'settings.quickCaptureHotkey.subtitle':
@@ -9392,9 +9391,9 @@ extension on _StringsZhCn {
       case 'settings.actionsReview.weeklyTime.subtitle':
         return '每周提醒时间（周日）';
       case 'settings.actionsReview.inAppFallback.title':
-        return '应用内提醒兜底';
+        return '应用内提醒';
       case 'settings.actionsReview.inAppFallback.subtitle':
-        return '当前平台不支持系统提醒时，在应用内显示醒目提醒';
+        return '在应用内显示待办事项通知';
       case 'settings.quickCaptureHotkey.title':
         return '快速记录快捷键';
       case 'settings.quickCaptureHotkey.subtitle':

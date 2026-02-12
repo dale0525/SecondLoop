@@ -180,8 +180,8 @@
         "subtitle": "Weekly reminder time (Sunday)"
       },
       "inAppFallback": {
-        "title": "In-app reminder fallback",
-        "subtitle": "Show prominent in-app alerts when system reminders are unavailable"
+        "title": "In-app reminders",
+        "subtitle": "Show todo notifications in app"
       }
     },
     "quickCaptureHotkey": {

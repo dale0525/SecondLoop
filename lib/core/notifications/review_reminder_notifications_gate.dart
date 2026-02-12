@@ -202,7 +202,7 @@ final class _ReviewReminderNotificationsGateState
     _inAppFallbackTimer?.cancel();
     _inAppFallbackTimer = null;
 
-    if (!_inAppFallbackEnabled || _scheduler.supportsSystemNotifications) {
+    if (!_inAppFallbackEnabled) {
       _hideInAppFallbackBanner();
       return;
     }
@@ -260,7 +260,6 @@ final class _ReviewReminderNotificationsGateState
       final latestPlan = _coordinator?.currentPlan;
       if (latestPlan == null ||
           !_inAppFallbackEnabled ||
-          _scheduler.supportsSystemNotifications ||
           _dismissedInAppFallbackSourceKey == targetSourceKey) {
         _syncInAppFallbackFromCurrentPlan();
         return;
