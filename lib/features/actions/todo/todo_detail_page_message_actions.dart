@@ -208,8 +208,9 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     final markdown = MarkdownBody(
       data: normalized,
       selectable: false,
-      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-        p: Theme.of(context).textTheme.bodyLarge,
+      styleSheet: slMarkdownStyleSheet(
+        context,
+        bodyStyle: Theme.of(context).textTheme.bodyLarge,
       ),
     );
     if (!isDesktopPlatform) return markdown;

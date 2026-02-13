@@ -461,96 +461,155 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: dotColor,
-                                        borderRadius: BorderRadius.circular(99),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        todo.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    _TodoStatusSelector(
-                                      statuses: _kSelectableStatuses,
-                                      selectedStatus: todo.status,
-                                      statusLabelBuilder: (status) =>
-                                          _statusLabel(context, status),
-                                      buttonKeyBuilder: (status) => ValueKey(
-                                        'todo_agenda_set_status_${todo.id}_$status',
-                                      ),
-                                      onSelected: (status) =>
-                                          _setStatus(todo, status),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    SlIconButton(
-                                      key: ValueKey(
-                                        'todo_agenda_delete_${todo.id}',
-                                      ),
-                                      tooltip: context.t.common.actions.delete,
-                                      icon: Icons.delete_outline_rounded,
-                                      size: 38,
-                                      iconSize: 18,
-                                      color: colorScheme.error,
-                                      overlayBaseColor: colorScheme.error,
-                                      borderColor:
-                                          colorScheme.error.withOpacity(
-                                        Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? 0.32
-                                            : 0.22,
-                                      ),
-                                      onPressed: () => _deleteTodo(todo),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Icon(
-                                      Icons.chevron_right_rounded,
-                                      size: 24,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ],
-                                ),
-                                if (dueText != null) ...[
-                                  const SizedBox(height: 8),
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 20),
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 520,
-                                      ),
-                                      child: _TodoDueChip(
-                                        chipKey: ValueKey(
-                                          'todo_agenda_due_${todo.id}',
-                                        ),
-                                        icon: overdue
-                                            ? Icons.warning_rounded
-                                            : Icons.schedule_rounded,
-                                        label: dueText,
-                                        highlight: overdue
-                                            ? _DueChipHighlight.danger
-                                            : _DueChipHighlight.neutral,
-                                        onPressed: () => _editDue(todo),
-                                      ),
-                                    ),
+                            child: Builder(
+                              builder: (context) {
+                                final isCompactLayout =
+                                    MediaQuery.sizeOf(context).width < 680;
+                                final statusSelector = _TodoStatusSelector(
+                                  statuses: _kSelectableStatuses,
+                                  selectedStatus: todo.status,
+                                  statusLabelBuilder: (status) =>
+                                      _statusLabel(context, status),
+                                  buttonKeyBuilder: (status) => ValueKey(
+                                    'todo_agenda_set_status_${todo.id}_$status',
                                   ),
-                                ],
-                              ],
+                                  onSelected: (status) =>
+                                      _setStatus(todo, status),
+                                );
+                                final deleteButton = SlIconButton(
+                                  key: ValueKey(
+                                    'todo_agenda_delete_${todo.id}',
+                                  ),
+                                  tooltip: context.t.common.actions.delete,
+                                  icon: Icons.delete_outline_rounded,
+                                  size: isCompactLayout ? 36 : 38,
+                                  iconSize: 18,
+                                  color: colorScheme.error,
+                                  overlayBaseColor: colorScheme.error,
+                                  borderColor: colorScheme.error.withOpacity(
+                                    Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? 0.32
+                                        : 0.22,
+                                  ),
+                                  onPressed: () => _deleteTodo(todo),
+                                );
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (isCompactLayout) ...[
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: BoxDecoration(
+                                              color: dotColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(99),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              todo.title,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            Icons.chevron_right_rounded,
+                                            size: 22,
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(left: 20),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(child: statusSelector),
+                                            const SizedBox(width: 8),
+                                            deleteButton,
+                                          ],
+                                        ),
+                                      ),
+                                    ] else
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            width: 10,
+                                            height: 10,
+                                            decoration: BoxDecoration(
+                                              color: dotColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(99),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              todo.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          statusSelector,
+                                          const SizedBox(width: 8),
+                                          deleteButton,
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            Icons.chevron_right_rounded,
+                                            size: 24,
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ],
+                                      ),
+                                    if (dueText != null) ...[
+                                      const SizedBox(height: 8),
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(left: 20),
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 520,
+                                          ),
+                                          child: _TodoDueChip(
+                                            chipKey: ValueKey(
+                                              'todo_agenda_due_${todo.id}',
+                                            ),
+                                            icon: overdue
+                                                ? Icons.warning_rounded
+                                                : Icons.schedule_rounded,
+                                            label: dueText,
+                                            highlight: overdue
+                                                ? _DueChipHighlight.danger
+                                                : _DueChipHighlight.neutral,
+                                            onPressed: () => _editDue(todo),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ),

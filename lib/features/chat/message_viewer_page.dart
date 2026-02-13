@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_markdown_style.dart';
 import 'chat_markdown_sanitizer.dart';
 
 class MessageViewerPage extends StatelessWidget {
@@ -42,6 +43,7 @@ class MessageViewerPage extends StatelessWidget {
       body: Markdown(
         data: normalized,
         selectable: true,
+        styleSheet: slMarkdownStyleSheet(context),
       ),
     );
   }
