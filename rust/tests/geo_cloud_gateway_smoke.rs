@@ -82,7 +82,7 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
     let (tx, rx) = mpsc::channel::<CapturedRequest>();
 
     std::thread::spawn(move || {
-        for stream in listener.incoming().take(2) {
+        for stream in listener.incoming().take(3) {
             let mut stream = stream.expect("accept");
             let req = read_http_request(&mut stream);
 
@@ -95,6 +95,8 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
                     "OK",
                     r#"{"country_code":"US","display_name":"Seattle"}"#,
                 )
+            } else if path.starts_with("/v1/chat/jobs/") {
+                (404, "Not Found", r#"{"error":"job_not_found"}"#)
             } else if path == "/v1/chat/completions" {
                 (
                     200,
@@ -169,7 +171,8 @@ fn geo_cloud_gateway_smoke() {
 
     let req1 = rx.recv().expect("req1");
     let req2 = rx.recv().expect("req2");
-    let requests = [req1, req2];
+    let req3 = rx.recv().expect("req3");
+    let requests = [req1, req2, req3];
 
     let geo_req = requests
         .iter()
@@ -191,6 +194,19 @@ fn geo_cloud_gateway_smoke() {
     assert!(geo_req.path.contains("lon=2"));
     assert!(geo_req.path.contains("lang=en"));
 
+    let preflight_req = requests
+        .iter()
+        .find(|r| r.path.starts_with("/v1/chat/jobs/"))
+        .expect("detached preflight request");
+    assert_eq!(preflight_req.method, "GET");
+    assert_eq!(
+        preflight_req
+            .headers
+            .get("authorization")
+            .map(String::as_str),
+        Some("Bearer testtoken")
+    );
+
     let ann_req = requests
         .iter()
         .find(|r| r.path == "/v1/chat/completions")
@@ -207,6 +223,12 @@ fn geo_cloud_gateway_smoke() {
             .map(String::as_str),
         Some("media_annotation")
     );
+    let request_id = ann_req
+        .headers
+        .get("x-secondloop-request-id")
+        .expect("request id");
+    assert!(request_id.starts_with("req_ma_"));
+    assert!(preflight_req.path.ends_with(request_id));
     assert!(ann_req.body.contains("\"model\":\"test-model\""));
     assert!(ann_req.body.contains("data:image/jpeg;base64,"));
 }

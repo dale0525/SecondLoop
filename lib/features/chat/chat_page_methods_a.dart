@@ -1,5 +1,10 @@
 part of 'chat_page.dart';
 
+const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
+final RegExp _kCloudDetachedRequestIdPattern = RegExp(
+  r'^[A-Za-z0-9][A-Za-z0-9:_-]{5,127}$',
+);
+
 extension _ChatPageStateMethodsA on _ChatPageState {
   bool _isTransientPendingMessage(Message message) =>
       message.id.startsWith('pending_') && message.id != _kFailedAskMessageId;
@@ -700,6 +705,128 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     }
   }
 
+  String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {
+    final raw = payloadJson?.trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final requestId =
+          (decoded[_kCloudDetachedRequestIdPayloadKey] ?? '').toString().trim();
+      if (!_kCloudDetachedRequestIdPattern.hasMatch(requestId)) {
+        return null;
+      }
+      return requestId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Uri? _buildCloudDetachedCancelUri(String gatewayBaseUrl, String requestId) {
+    final base = gatewayBaseUrl.trim();
+    final normalizedRequestId = requestId.trim();
+    if (base.isEmpty || normalizedRequestId.isEmpty) return null;
+
+    final normalizedBase = base.replaceFirst(RegExp(r'/+$'), '');
+    try {
+      return Uri.parse(
+        '$normalizedBase/v1/chat/jobs/$normalizedRequestId/cancel',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _cancelCloudDetachedChatJob({
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String requestId,
+  }) async {
+    if (!_kCloudDetachedRequestIdPattern.hasMatch(requestId.trim())) {
+      return;
+    }
+    final uri = _buildCloudDetachedCancelUri(gatewayBaseUrl, requestId);
+    if (uri == null) return;
+
+    final token = idToken.trim();
+    if (token.isEmpty) return;
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 5);
+    try {
+      final req = await client.postUrl(uri).timeout(const Duration(seconds: 6));
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      await resp.drain<void>();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> _bestEffortCancelCloudMediaJobsForMessage({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required String messageId,
+  }) async {
+    final cloudScope = CloudAuthScope.maybeOf(context);
+    final gatewayBaseUrl = (cloudScope?.gatewayConfig.baseUrl ?? '').trim();
+    if (gatewayBaseUrl.isEmpty) return;
+
+    String? idToken;
+    try {
+      idToken = await cloudScope?.controller.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+    if ((idToken ?? '').trim().isEmpty) return;
+
+    if (backend is! NativeAppBackend) return;
+
+    List<Attachment> attachments;
+    try {
+      attachments = await backend.listMessageAttachments(
+        sessionKey,
+        messageId,
+      );
+    } catch (_) {
+      return;
+    }
+
+    if (attachments.isEmpty) return;
+
+    final requestIds = <String>{};
+    for (final attachment in attachments) {
+      try {
+        final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+          sessionKey,
+          sha256: attachment.sha256,
+        );
+        final requestId =
+            _extractCloudDetachedRequestIdFromPayloadJson(payloadJson);
+        if (requestId == null) continue;
+        requestIds.add(requestId);
+      } catch (_) {
+        // ignore per-attachment parse failures
+      }
+    }
+
+    if (requestIds.isEmpty) return;
+
+    for (final requestId in requestIds) {
+      try {
+        await _cancelCloudDetachedChatJob(
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken!,
+          requestId: requestId,
+        );
+      } catch (_) {
+        // best-effort only
+      }
+    }
+  }
+
   Future<void> _deleteMessage(
     Message message, {
     ({Todo todo, bool isSourceEntry})? linkedTodoInfo,
@@ -777,6 +904,11 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       if (!mounted) return;
       if (!confirmed) return;
 
+      await _bestEffortCancelCloudMediaJobsForMessage(
+        backend: backend,
+        sessionKey: sessionKey,
+        messageId: message.id,
+      );
       await backend.purgeMessageAttachments(sessionKey, message.id);
       try {
         await backend.markSemanticParseJobCanceled(

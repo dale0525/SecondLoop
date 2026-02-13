@@ -48,18 +48,28 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
     let (tx, rx) = mpsc::channel::<CapturedRequest>();
 
     std::thread::spawn(move || {
-        for stream in listener.incoming().take(1) {
-            let mut stream = stream.expect("accept");
-            let req = read_http_request(&mut stream);
-            tx.send(req).expect("send req");
+        let (mut stream1, _) = listener.accept().expect("accept first");
+        let status_req = read_http_request(&mut stream1);
+        assert_eq!(status_req.method, "GET");
+        assert!(status_req.path.starts_with("/v1/chat/jobs/"));
 
-            let body = r#"{"choices":[{"message":{"role":"assistant","content":[{"type":"text","text":"{\"caption_long\":\"a cat\",\"tags\":[\"cat\"],\"ocr_text\":null}"}]}}]}"#;
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-                body.len()
-            );
-            let _ = stream.write_all(resp.as_bytes());
-        }
+        let not_found_body = r##"{"error":"job_not_found"}"##;
+        let not_found_resp = format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{not_found_body}",
+            not_found_body.len(),
+        );
+        let _ = stream1.write_all(not_found_resp.as_bytes());
+
+        let (mut stream2, _) = listener.accept().expect("accept second");
+        let req = read_http_request(&mut stream2);
+        tx.send(req).expect("send req");
+
+        let body = r#"{"choices":[{"message":{"role":"assistant","content":[{"type":"text","text":"{\"caption_long\":\"a cat\",\"tags\":[\"cat\"],\"ocr_text\":null}"}]}}]}"#;
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = stream2.write_all(resp.as_bytes());
     });
 
     (format!("http://{addr}"), rx)

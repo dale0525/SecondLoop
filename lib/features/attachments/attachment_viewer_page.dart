@@ -432,7 +432,14 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     _loadingAnnotationPayload = true;
     _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
       final displayPayload = _resolveDisplayAnnotationPayload(value);
-      _annotationPayload = displayPayload;
+      if (!mounted) {
+        _annotationPayload = displayPayload;
+        return displayPayload;
+      }
+
+      _updateViewerState(() {
+        _annotationPayload = displayPayload;
+      });
       if (!_awaitingAttachmentRecognitionResult) {
         _stopAnnotationRetryPolling(clearState: false);
       }
