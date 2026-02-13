@@ -218,6 +218,20 @@
         "windowsAppSwitcher": "App switcher"
       }
     },
+    "desktopBoot": {
+      "startWithSystem": {
+        "title": "Start with system",
+        "subtitle": "Launch SecondLoop automatically after sign-in"
+      },
+      "silentStartup": {
+        "title": "Silent startup",
+        "subtitle": "When auto-starting, run in background without showing a window"
+      },
+      "keepRunningInBackground": {
+        "title": "Keep running in background",
+        "subtitle": "When closing the window, minimize to tray instead of quitting"
+      }
+    },
     "language": {
       "title": "Language",
       "subtitle": "Follow system or choose a language",

@@ -19,6 +19,7 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/desktop/desktop_boot_prefs.dart';
 import '../../core/desktop/desktop_quick_capture_hotkey_prefs.dart';
 import '../../core/desktop/system_hotkey_conflicts.dart';
 import '../../core/desktop/system_hotkey_recorder.dart';
@@ -48,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
   AppLocale? _localeOverride;
   ActionsSettings? _actionsSettings;
   bool? _reviewReminderInAppFallbackEnabled;
+  DesktopBootConfig _desktopBootConfig = DesktopBootConfig.defaults;
   bool _busy = false;
 
   SubscriptionStatusController? _subscriptionController;
@@ -157,6 +159,13 @@ class _SettingsPageState extends State<SettingsPage> {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;
+  }
+
+  bool _isDesktopPlatform() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
   }
 
   String _joinRemotePath(String root, String child) {
@@ -308,12 +317,21 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     final actionsSettings = await ActionsSettingsStore.load();
     if (!mounted) return;
+
+    var desktopBootConfig = _desktopBootConfig;
+    if (_isDesktopPlatform()) {
+      await DesktopBootPrefs.load();
+      desktopBootConfig = DesktopBootPrefs.value.value;
+    }
+
+    if (!mounted) return;
     setState(() {
       _appLockEnabled = enabled;
       _biometricUnlockEnabled = biometricEnabled;
       _reviewReminderInAppFallbackEnabled = reviewReminderInAppFallbackEnabled;
       _localeOverride = localeOverride;
       _actionsSettings = actionsSettings;
+      _desktopBootConfig = desktopBootConfig;
     });
   }
 
@@ -542,6 +560,74 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _reviewReminderInAppFallbackEnabled = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setDesktopStartWithSystem(bool enabled) async {
+    if (_busy || !_isDesktopPlatform()) return;
+
+    final previous = _desktopBootConfig;
+    setState(() {
+      _desktopBootConfig =
+          _desktopBootConfig.copyWith(startWithSystem: enabled);
+    });
+
+    try {
+      await DesktopBootPrefs.setStartWithSystem(enabled);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _desktopBootConfig = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setDesktopSilentStartup(bool enabled) async {
+    if (_busy || !_isDesktopPlatform()) return;
+
+    final previous = _desktopBootConfig;
+    setState(() {
+      _desktopBootConfig = _desktopBootConfig.copyWith(silentStartup: enabled);
+    });
+
+    try {
+      await DesktopBootPrefs.setSilentStartup(enabled);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _desktopBootConfig = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setDesktopKeepRunningInBackground(bool enabled) async {
+    if (_busy || !_isDesktopPlatform()) return;
+
+    final previous = _desktopBootConfig;
+    setState(() {
+      _desktopBootConfig =
+          _desktopBootConfig.copyWith(keepRunningInBackground: enabled);
+    });
+
+    try {
+      await DesktopBootPrefs.setKeepRunningInBackground(enabled);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _desktopBootConfig = previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.t.errors.saveFailed(error: '$e')),
