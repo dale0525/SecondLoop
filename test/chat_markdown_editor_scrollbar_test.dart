@@ -93,8 +93,43 @@ void main() {
       expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
           findsOneWidget);
       expect(find.byTooltip('Simple input'), findsOneWidget);
-      expect(horizontalScrollables, findsNothing);
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_quick_actions')),
+        findsOneWidget,
+      );
+      expect(horizontalScrollables, findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Markdown editor exposes quick formatting toolbar and theme selector',
+    (tester) async {
+      await pumpEditor(tester, size: const Size(1024, 700));
+
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_quick_actions')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_theme_selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_action_bold')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('chat_markdown_editor_export_menu')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Export as PNG'), findsOneWidget);
+      expect(find.text('Export as PDF'), findsOneWidget);
     },
     variant: const TargetPlatformVariant(
       <TargetPlatform>{TargetPlatform.macOS},
