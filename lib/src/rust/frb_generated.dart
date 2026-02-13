@@ -709,6 +709,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiCoreDbUpsertTodoRecurrence(
       {required String appDir,
+      required List<int> key,
       required String todoId,
       required String seriesId,
       required String ruleJson});
@@ -4864,6 +4865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<void> crateApiCoreDbUpsertTodoRecurrence(
       {required String appDir,
+      required List<int> key,
       required String todoId,
       required String seriesId,
       required String ruleJson}) {
@@ -4871,6 +4873,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(todoId, serializer);
         sse_encode_String(seriesId, serializer);
         sse_encode_String(ruleJson, serializer);
@@ -4882,7 +4885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiCoreDbUpsertTodoRecurrenceConstMeta,
-      argValues: [appDir, todoId, seriesId, ruleJson],
+      argValues: [appDir, key, todoId, seriesId, ruleJson],
       apiImpl: this,
     ));
   }
@@ -4890,7 +4893,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCoreDbUpsertTodoRecurrenceConstMeta =>
       const TaskConstMeta(
         debugName: "db_upsert_todo_recurrence",
-        argNames: ["appDir", "todoId", "seriesId", "ruleJson"],
+        argNames: ["appDir", "key", "todoId", "seriesId", "ruleJson"],
       );
 
   @override

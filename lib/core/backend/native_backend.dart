@@ -770,6 +770,7 @@ class NativeAppBackend
     final appDir = await _getAppDir();
     await rust_core.dbUpsertTodoRecurrence(
       appDir: appDir,
+      key: key,
       todoId: todoId,
       seriesId: seriesId,
       ruleJson: ruleJson,

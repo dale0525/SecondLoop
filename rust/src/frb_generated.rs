@@ -4245,6 +4245,7 @@ fn wire__crate__api__core__db_upsert_todo_recurrence_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_todo_id = <String>::sse_decode(&mut deserializer);
             let api_series_id = <String>::sse_decode(&mut deserializer);
             let api_rule_json = <String>::sse_decode(&mut deserializer);
@@ -4253,6 +4254,7 @@ fn wire__crate__api__core__db_upsert_todo_recurrence_impl(
                 transform_result_sse((move || {
                     crate::api::core::db_upsert_todo_recurrence(
                         api_app_dir,
+                        api_key,
                         api_todo_id,
                         api_series_id,
                         api_rule_json,

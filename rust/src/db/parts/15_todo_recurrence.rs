@@ -12,8 +12,8 @@ struct RecurrenceRule {
 }
 
 fn parse_recurrence_rule(rule_json: &str) -> Result<RecurrenceRule> {
-    let value: serde_json::Value = serde_json::from_str(rule_json)
-        .map_err(|e| anyhow!("invalid recurrence rule json: {e}"))?;
+    let value: serde_json::Value =
+        serde_json::from_str(rule_json).map_err(|e| anyhow!("invalid recurrence rule json: {e}"))?;
     let freq = value["freq"]
         .as_str()
         .ok_or_else(|| anyhow!("recurrence rule missing freq"))?
@@ -95,13 +95,12 @@ fn next_due_at_ms(base_due_at_ms: i64, rule_json: &str) -> Result<i64> {
             .checked_add(interval_days.saturating_mul(7))
             .ok_or_else(|| anyhow!("weekly recurrence overflow")),
         "monthly" => {
-            let months = i32::try_from(rule.interval)
-                .map_err(|_| anyhow!("monthly interval overflow"))?;
+            let months = i32::try_from(rule.interval).map_err(|_| anyhow!("monthly interval overflow"))?;
             add_months_utc_ms(base_due_at_ms, months)
         }
         "yearly" => {
-            let months = i32::try_from(rule.interval.saturating_mul(12))
-                .map_err(|_| anyhow!("yearly interval overflow"))?;
+            let months =
+                i32::try_from(rule.interval.saturating_mul(12)).map_err(|_| anyhow!("yearly interval overflow"))?;
             add_months_utc_ms(base_due_at_ms, months)
         }
         _ => Err(anyhow!("unsupported recurrence freq")),
@@ -133,24 +132,29 @@ pub fn get_todo_recurrence_rule_json(conn: &Connection, todo_id: &str) -> Result
     Ok(get_todo_recurrence_meta(conn, todo_id)?.map(|meta| meta.rule_json))
 }
 
-pub fn upsert_todo_recurrence(
+fn upsert_todo_recurrence_row(
     conn: &Connection,
     todo_id: &str,
     series_id: &str,
     rule_json: &str,
-) -> Result<()> {
+    occurrence_index_override: Option<i64>,
+    timestamp_ms: i64,
+) -> Result<i64> {
     let _ = parse_recurrence_rule(rule_json)?;
-    let now = now_ms();
 
     conn.execute(
         r#"
 INSERT INTO todo_series(id, rule_json, created_at_ms, updated_at_ms)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT(id) DO UPDATE SET
-  rule_json = excluded.rule_json,
-  updated_at_ms = excluded.updated_at_ms
+  rule_json = CASE
+    WHEN excluded.updated_at_ms >= todo_series.updated_at_ms THEN excluded.rule_json
+    ELSE todo_series.rule_json
+  END,
+  created_at_ms = min(todo_series.created_at_ms, excluded.created_at_ms),
+  updated_at_ms = max(todo_series.updated_at_ms, excluded.updated_at_ms)
 "#,
-        params![series_id, rule_json, now, now],
+        params![series_id, rule_json, timestamp_ms, timestamp_ms],
     )?;
 
     let existing_occurrence: Option<i64> = conn
@@ -160,7 +164,10 @@ ON CONFLICT(id) DO UPDATE SET
             |row| row.get(0),
         )
         .optional()?;
-    let occurrence_index: i64 = if let Some(existing) = existing_occurrence {
+
+    let occurrence_index: i64 = if let Some(override_index) = occurrence_index_override {
+        override_index.max(0)
+    } else if let Some(existing) = existing_occurrence {
         existing
     } else {
         conn.query_row(
@@ -179,12 +186,109 @@ VALUES (?1, ?2, ?3, ?4, ?5)
 ON CONFLICT(todo_id) DO UPDATE SET
   series_id = excluded.series_id,
   occurrence_index = excluded.occurrence_index,
+  created_at_ms = min(todo_recurrences.created_at_ms, excluded.created_at_ms),
   updated_at_ms = excluded.updated_at_ms
+WHERE excluded.updated_at_ms >= todo_recurrences.updated_at_ms
 "#,
-        params![todo_id, series_id, occurrence_index, now, now],
+        params![todo_id, series_id, occurrence_index, timestamp_ms, timestamp_ms],
     )?;
 
+    Ok(occurrence_index)
+}
+
+fn append_todo_recurrence_upsert_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    series_id: &str,
+    occurrence_index: i64,
+    rule_json: &str,
+    timestamp_ms: i64,
+) -> Result<()> {
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": timestamp_ms,
+        "type": "todo.recurrence.upsert.v1",
+        "payload": {
+            "todo_id": todo_id,
+            "series_id": series_id,
+            "occurrence_index": occurrence_index,
+            "rule_json": rule_json,
+            "created_at_ms": timestamp_ms,
+            "updated_at_ms": timestamp_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
     Ok(())
+}
+
+fn upsert_todo_recurrence_with_sync_in_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    series_id: &str,
+    rule_json: &str,
+    occurrence_index_override: Option<i64>,
+) -> Result<i64> {
+    let now = now_ms();
+    let occurrence_index = upsert_todo_recurrence_row(
+        conn,
+        todo_id,
+        series_id,
+        rule_json,
+        occurrence_index_override,
+        now,
+    )?;
+    append_todo_recurrence_upsert_op(
+        conn,
+        key,
+        todo_id,
+        series_id,
+        occurrence_index,
+        rule_json,
+        now,
+    )?;
+    Ok(occurrence_index)
+}
+
+pub fn upsert_todo_recurrence(
+    conn: &Connection,
+    todo_id: &str,
+    series_id: &str,
+    rule_json: &str,
+) -> Result<()> {
+    let now = now_ms();
+    let _ = upsert_todo_recurrence_row(conn, todo_id, series_id, rule_json, None, now)?;
+    Ok(())
+}
+
+pub fn upsert_todo_recurrence_with_sync(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    series_id: &str,
+    rule_json: &str,
+) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        let _ = upsert_todo_recurrence_with_sync_in_txn(conn, key, todo_id, series_id, rule_json, None)?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
 }
 
 fn maybe_spawn_next_recurring_todo(
@@ -232,12 +336,13 @@ fn maybe_spawn_next_recurring_todo(
         Some(now_ms()),
     )?;
 
-    conn.execute(
-        r#"
-INSERT OR IGNORE INTO todo_recurrences(todo_id, series_id, occurrence_index, created_at_ms, updated_at_ms)
-VALUES (?1, ?2, ?3, ?4, ?5)
-"#,
-        params![next_todo_id, meta.series_id, next_index, now_ms(), now_ms()],
+    let _ = upsert_todo_recurrence_with_sync_in_txn(
+        conn,
+        key,
+        &next_todo_id,
+        &meta.series_id,
+        &meta.rule_json,
+        Some(next_index),
     )?;
 
     Ok(())

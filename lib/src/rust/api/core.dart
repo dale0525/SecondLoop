@@ -139,11 +139,16 @@ Future<Todo> dbSetTodoStatus(
 
 Future<void> dbUpsertTodoRecurrence(
         {required String appDir,
+        required List<int> key,
         required String todoId,
         required String seriesId,
         required String ruleJson}) =>
     RustLib.instance.api.crateApiCoreDbUpsertTodoRecurrence(
-        appDir: appDir, todoId: todoId, seriesId: seriesId, ruleJson: ruleJson);
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        seriesId: seriesId,
+        ruleJson: ruleJson);
 
 Future<String?> dbGetTodoRecurrenceRuleJson(
         {required String appDir, required String todoId}) =>

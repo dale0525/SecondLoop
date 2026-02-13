@@ -240,12 +240,14 @@ pub fn db_set_todo_status(
 #[flutter_rust_bridge::frb]
 pub fn db_upsert_todo_recurrence(
     app_dir: String,
+    key: Vec<u8>,
     todo_id: String,
     series_id: String,
     rule_json: String,
 ) -> Result<()> {
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::upsert_todo_recurrence(&conn, &todo_id, &series_id, &rule_json)
+    db::upsert_todo_recurrence_with_sync(&conn, &key, &todo_id, &series_id, &rule_json)
 }
 
 #[flutter_rust_bridge::frb]
