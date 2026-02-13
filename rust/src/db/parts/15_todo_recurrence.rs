@@ -352,7 +352,7 @@ pub fn update_todo_due_with_scope(
 
                 let mut stmt = conn.prepare(
                     r#"
-SELECT r.todo_id
+SELECT r.todo_id, r.occurrence_index
 FROM todo_recurrences r
 WHERE r.series_id = ?1
   AND (?2 = 1 OR r.occurrence_index >= ?3)
@@ -364,16 +364,16 @@ ORDER BY r.occurrence_index ASC
                 } else {
                     0i64
                 };
-                let todo_ids: Vec<String> = stmt
+                let scoped_todos: Vec<(String, i64)> = stmt
                     .query_map(params![meta.series_id, include_past, meta.occurrence_index], |row| {
-                        row.get(0)
+                        Ok((row.get(0)?, row.get(1)?))
                     })?
                     .collect::<std::result::Result<Vec<_>, _>>()?;
 
                 let mut updated_current: Option<Todo> = None;
-                for series_todo_id in todo_ids {
-                    let series_todo = get_todo(conn, key, &series_todo_id)?;
-                    let target_due = if series_todo_id == current.id {
+                for (series_todo_id, _) in &scoped_todos {
+                    let series_todo = get_todo(conn, key, series_todo_id)?;
+                    let target_due = if *series_todo_id == current.id {
                         Some(due_at_ms)
                     } else {
                         match series_todo.due_at_ms {
@@ -398,8 +398,25 @@ ORDER BY r.occurrence_index ASC
                         series_todo.next_review_at_ms,
                         series_todo.last_review_at_ms,
                     )?;
-                    if series_todo_id == current.id {
+                    if *series_todo_id == current.id {
                         updated_current = Some(updated);
+                    }
+                }
+
+                if apply_scope == TodoRecurrenceEditScope::ThisAndFuture {
+                    let split_series_id = format!("{}:split:{}", meta.series_id, uuid::Uuid::new_v4());
+                    for (series_todo_id, occurrence_index) in scoped_todos {
+                        let split_occurrence_index = occurrence_index
+                            .checked_sub(meta.occurrence_index)
+                            .ok_or_else(|| anyhow!("split recurrence index underflow"))?;
+                        let _ = upsert_todo_recurrence_with_sync_in_txn(
+                            conn,
+                            key,
+                            &series_todo_id,
+                            &split_series_id,
+                            &meta.rule_json,
+                            Some(split_occurrence_index),
+                        )?;
                     }
                 }
 
