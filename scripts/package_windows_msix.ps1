@@ -1,5 +1,3 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [string]$Version = '',
   [string]$OutputPath = 'dist',
@@ -9,6 +7,8 @@ param(
   [string]$Publisher = '',
   [switch]$SkipBuild
 )
+
+$ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $repoRootPath = $repoRoot.Path

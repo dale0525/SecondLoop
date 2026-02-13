@@ -1,11 +1,11 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [Parameter(Mandatory = $true)]
   [string]$MsixPath,
 
   [string]$CertificatePath = ''
 )
+
+$ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path $MsixPath)) {
   throw "MSIX package not found: $MsixPath"

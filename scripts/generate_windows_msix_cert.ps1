@@ -1,5 +1,3 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [string]$Publisher = 'CN=SecondLoop Dev',
   [string]$Password = '',
@@ -7,6 +5,8 @@ param(
   [string]$BaseName = 'secondloop-msix-signing',
   [int]$ValidYears = 3
 )
+
+$ErrorActionPreference = 'Stop'
 
 if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
   throw 'This script must run on Windows.'
