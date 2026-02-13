@@ -35,6 +35,7 @@ class BootstrapSharedWorktreeEnvTests(unittest.TestCase):
         self._run(["git", "commit", "-m", "init"], cwd=self.primary_dir)
 
         self._create_primary_signing_files()
+        self._create_primary_flutter_sdk_link()
 
         self._run(
             ["git", "worktree", "add", "-b", "test-worktree", str(self.worktree_dir), "HEAD"],
@@ -44,12 +45,19 @@ class BootstrapSharedWorktreeEnvTests(unittest.TestCase):
     def _run(self, cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
 
-    def _run_bootstrap_dry_run(self, extra_args: list[str] | None = None) -> str:
-        args = ["bash", str(SCRIPT_PATH), "--dry-run"]
+    def _run_bootstrap(self, extra_args: list[str] | None = None) -> subprocess.CompletedProcess[str]:
+        args = ["bash", str(SCRIPT_PATH)]
         if extra_args:
             args.extend(extra_args)
 
-        result = self._run(args, cwd=self.worktree_dir)
+        return self._run(args, cwd=self.worktree_dir)
+
+    def _run_bootstrap_dry_run(self, extra_args: list[str] | None = None) -> str:
+        args = ["--dry-run"]
+        if extra_args:
+            args.extend(extra_args)
+
+        result = self._run_bootstrap(args)
         return result.stdout
 
     def _create_primary_signing_files(self) -> None:
@@ -65,6 +73,16 @@ class BootstrapSharedWorktreeEnvTests(unittest.TestCase):
         )
         (app_dir / "upload-keystore.jks").write_bytes(b"fake-keystore")
 
+    def _create_primary_flutter_sdk_link(self) -> None:
+        sdk_dir = self.primary_dir / ".tool" / "fvm" / "versions" / "3.22.3"
+        sdk_dir.mkdir(parents=True, exist_ok=True)
+
+        fvm_dir = self.primary_dir / ".fvm"
+        fvm_dir.mkdir(parents=True, exist_ok=True)
+
+        flutter_sdk_link = fvm_dir / "flutter_sdk"
+        flutter_sdk_link.symlink_to(sdk_dir)
+
     def test_dry_run_links_android_signing_files_from_primary_worktree(self) -> None:
         output = self._run_bootstrap_dry_run()
 
@@ -77,6 +95,27 @@ class BootstrapSharedWorktreeEnvTests(unittest.TestCase):
         self.assertIn("Skipping Android key linking (--skip-android-key-link).", output)
         self.assertNotIn("Linking android/key.properties ->", output)
         self.assertNotIn("Linking android/app/upload-keystore.jks ->", output)
+
+    def test_dry_run_links_fvm_flutter_sdk_from_primary_worktree(self) -> None:
+        output = self._run_bootstrap_dry_run()
+
+        self.assertIn("Linking .fvm/flutter_sdk ->", output)
+
+    def test_bootstrap_links_fvm_flutter_sdk_from_primary_worktree(self) -> None:
+        self._run_bootstrap()
+
+        flutter_sdk_link = self.worktree_dir / ".fvm" / "flutter_sdk"
+        self.assertTrue(flutter_sdk_link.is_symlink())
+        self.assertEqual(
+            flutter_sdk_link.resolve(),
+            (self.primary_dir / ".tool" / "fvm" / "versions" / "3.22.3").resolve(),
+        )
+
+    def test_skip_fvm_sdk_link_flag_disables_fvm_flutter_sdk_link(self) -> None:
+        output = self._run_bootstrap_dry_run(["--skip-fvm-sdk-link"])
+
+        self.assertIn("Skipping .fvm/flutter_sdk linking (--skip-fvm-sdk-link).", output)
+        self.assertNotIn("Linking .fvm/flutter_sdk ->", output)
 
 
 if __name__ == "__main__":

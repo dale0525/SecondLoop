@@ -119,7 +119,7 @@ pixi run package-windows-msi
 - `run-windows` 仅在 Windows 可用，并会自动执行预检初始化（将 `nuget.exe` 下载到 `.tool/nuget/`，并将静态 `ffmpeg.exe` 下载到 `.tool/ffmpeg/windows`）。默认现在走 MSI 打包安装调试流（构建 + 安装 + 启动）。如需热重载/调试器流，请执行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun`。
 - `package-windows-msi` 仅在 Windows 可用，会产出 MSI 安装包。
 - Android 相关任务会把 SDK/NDK 与 Rust targets 安装到 `.tool/`（无需系统级 Android SDK）。
-- `bootstrap-shared-worktree-env` 会将 `.tool`、`.pixi/envs` 软链接到 `git rev-parse --git-common-dir` 下的共享目录，并在可用时将 `.env.local`、`android/key.properties`、`android/app/upload-keystore.jks` 链接到主 worktree，避免每个 worktree 重复准备依赖和 Android 签名配置。
+- `bootstrap-shared-worktree-env` 会将 `.tool`、`.pixi/envs` 软链接到 `git rev-parse --git-common-dir` 下的共享目录，并在可用时将 `.fvm/flutter_sdk`、`.env.local`、`android/key.properties`、`android/app/upload-keystore.jks` 链接到主 worktree，避免每个 worktree 重复准备依赖、Flutter macOS 引擎产物与 Android 签名配置。
 - 所有 `run-xxx` 任务在首次执行时都会自动触发 `bootstrap-shared-worktree-env`、`setup-flutter` 与 `init-env`，因此新 clone 后可以直接执行 `pixi run run-xxx`。
 - `build-android-apk` / `build-android-apk-cn` 也会在构建前自动触发 `bootstrap-shared-worktree-env`。
 - 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`；macOS 会自动下载静态二进制到 `.tool/ffmpeg/macos`，也可放在 `.tool` 或通过 `--source-bin` 指定（无需系统级安装）。
