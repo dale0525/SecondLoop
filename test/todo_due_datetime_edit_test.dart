@@ -41,9 +41,11 @@ void main() {
     );
 
     expect(
-      backend.lastUpsertDueAtMs,
+      backend.lastScopedDueAtMs,
       DateTime(2026, 1, 31, 10, 0).toUtc().millisecondsSinceEpoch,
     );
+    expect(backend.lastScope, TodoRecurrenceEditScope.thisOnly);
+    expect(backend.lastUpsertDueAtMs, isNull);
   });
 
   testWidgets('Todo detail can edit due date/time', (tester) async {
@@ -75,9 +77,11 @@ void main() {
     );
 
     expect(
-      backend.lastUpsertDueAtMs,
+      backend.lastScopedDueAtMs,
       DateTime(2026, 1, 31, 10, 0).toUtc().millisecondsSinceEpoch,
     );
+    expect(backend.lastScope, TodoRecurrenceEditScope.thisOnly);
+    expect(backend.lastUpsertDueAtMs, isNull);
   });
 
   testWidgets(
@@ -100,7 +104,6 @@ void main() {
       final backend = _Backend(
         todos: [todo],
         recurrenceTodoIds: const {'t1'},
-        supportsScopedDueUpdate: true,
       );
 
       await tester.pumpWidget(
@@ -148,7 +151,6 @@ void main() {
     final backend = _Backend(
       todos: [todo],
       recurrenceTodoIds: const {'t1'},
-      supportsScopedDueUpdate: true,
     );
 
     await tester.pumpWidget(
@@ -401,7 +403,6 @@ final class _Backend extends AppBackend {
   _Backend({
     required List<Todo> todos,
     this.recurrenceTodoIds = const <String>{},
-    this.supportsScopedDueUpdate = false,
     this.supportsScopedRuleUpdate = false,
   })  : _todosById = {
           for (final todo in todos) todo.id: todo,
@@ -413,7 +414,6 @@ final class _Backend extends AppBackend {
 
   final Map<String, Todo> _todosById;
   final Set<String> recurrenceTodoIds;
-  final bool supportsScopedDueUpdate;
   final bool supportsScopedRuleUpdate;
   final Map<String, String> _recurrenceRulesByTodoId;
 
@@ -557,9 +557,6 @@ final class _Backend extends AppBackend {
     required int dueAtMs,
     required TodoRecurrenceEditScope scope,
   }) async {
-    if (!supportsScopedDueUpdate) {
-      throw UnimplementedError('updateTodoDueWithScope');
-    }
     final existing = _todosById[todoId];
     if (existing == null) {
       throw StateError('todo not found: $todoId');

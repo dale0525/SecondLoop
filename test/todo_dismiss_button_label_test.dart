@@ -87,8 +87,10 @@ void main() {
     await tester.tap(statusButton);
     await tester.pumpAndSettle();
 
-    expect(backend.lastSetTodoStatusTodoId, 't1');
-    expect(backend.lastSetTodoStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusScope, TodoRecurrenceEditScope.thisOnly);
+    expect(backend.lastSetTodoStatusTodoId, isNull);
   });
 
   testWidgets('Todo detail can set status to done directly', (tester) async {
@@ -129,8 +131,10 @@ void main() {
     await tester.tap(doneButton);
     await tester.pumpAndSettle();
 
-    expect(backend.lastSetTodoStatusTodoId, 't1');
-    expect(backend.lastSetTodoStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusScope, TodoRecurrenceEditScope.thisOnly);
+    expect(backend.lastSetTodoStatusTodoId, isNull);
   });
 
   testWidgets('Todo agenda recurring non-done status supports scope selection',
@@ -151,7 +155,6 @@ void main() {
     final backend = _FakeBackend(
       todos: [todo],
       recurrenceTodoIds: const {'t1'},
-      supportsScopedStatusUpdate: true,
     );
 
     await tester.pumpWidget(
@@ -209,7 +212,6 @@ void main() {
     final backend = _FakeBackend(
       todos: [todo],
       recurrenceTodoIds: const {'t1'},
-      supportsScopedStatusUpdate: true,
     );
 
     await tester.pumpWidget(
@@ -288,12 +290,10 @@ final class _FakeBackend extends AppBackend {
   _FakeBackend({
     required this.todos,
     this.recurrenceTodoIds = const <String>{},
-    this.supportsScopedStatusUpdate = false,
   });
 
   final List<Todo> todos;
   final Set<String> recurrenceTodoIds;
-  final bool supportsScopedStatusUpdate;
   final Map<String, Todo> _todosById = {};
 
   String? lastSetTodoStatusTodoId;
@@ -416,10 +416,6 @@ final class _FakeBackend extends AppBackend {
     String? sourceMessageId,
     required TodoRecurrenceEditScope scope,
   }) async {
-    if (!supportsScopedStatusUpdate) {
-      throw UnimplementedError('updateTodoStatusWithScope');
-    }
-
     Todo? existing = _todosById[todoId];
     if (existing == null) {
       for (final todo in todos) {

@@ -210,12 +210,15 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         newStatus: newStatus,
         scope: scope,
       );
-    } catch (_) {
-      await backend.setTodoStatus(
-        sessionKey,
-        todoId: todo.id,
-        newStatus: newStatus,
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
+      return;
     }
     if (!mounted) return;
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
@@ -287,18 +290,15 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         dueAtMs: picked.toUtc().millisecondsSinceEpoch,
         scope: scope,
       );
-    } catch (_) {
-      await backend.upsertTodo(
-        sessionKey,
-        id: todo.id,
-        title: todo.title,
-        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
-        status: todo.status,
-        sourceEntryId: todo.sourceEntryId,
-        reviewStage: todo.reviewStage,
-        nextReviewAtMs: todo.nextReviewAtMs,
-        lastReviewAtMs: todo.lastReviewAtMs,
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
+      return;
     }
     if (!mounted) return;
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();

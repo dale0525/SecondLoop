@@ -32,6 +32,7 @@ import 'todo_thread_match.dart';
 
 part 'todo_detail_page_message_actions.dart';
 part 'todo_detail_page_status_widgets.dart';
+part 'todo_detail_page_due_chip.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -285,18 +286,15 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         dueAtMs: picked.toUtc().millisecondsSinceEpoch,
         scope: scope,
       );
-    } catch (_) {
-      updated = await backend.upsertTodo(
-        sessionKey,
-        id: _todo.id,
-        title: _todo.title,
-        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
-        status: _todo.status,
-        sourceEntryId: _todo.sourceEntryId,
-        reviewStage: _todo.reviewStage,
-        nextReviewAtMs: _todo.nextReviewAtMs,
-        lastReviewAtMs: _todo.lastReviewAtMs,
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
+      return;
     }
     if (!mounted) return;
     setState(() => _todo = updated);
@@ -326,12 +324,15 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         newStatus: newStatus,
         scope: scope,
       );
-    } catch (_) {
-      updated = await backend.setTodoStatus(
-        sessionKey,
-        todoId: _todo.id,
-        newStatus: newStatus,
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
       );
+      return;
     }
     if (!mounted) return;
     setState(() => _todo = updated);
@@ -990,67 +991,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-enum _MessageAction {
-  copy,
-  linkTodo,
-  edit,
-  delete,
-}
-
-final class _TodoDueChip extends StatelessWidget {
-  const _TodoDueChip({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.chipKey,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final Key? chipKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = SlTokens.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(MaterialState.pressed)) {
-        return colorScheme.primary.withOpacity(0.16);
-      }
-      if (states.contains(MaterialState.hovered) ||
-          states.contains(MaterialState.focused)) {
-        return colorScheme.primary.withOpacity(0.12);
-      }
-      return null;
-    });
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: OutlinedButton.icon(
-        key: chipKey,
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: colorScheme.onSurfaceVariant,
-          backgroundColor: tokens.surface2,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          minimumSize: const Size(0, 38),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: const StadiumBorder(),
-          side: BorderSide(color: tokens.borderSubtle),
-          textStyle: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ).copyWith(overlayColor: overlay),
-        icon: Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
-        label: Text(label, overflow: TextOverflow.ellipsis),
       ),
     );
   }
