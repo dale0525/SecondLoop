@@ -14,6 +14,9 @@ final class _DownloadBackend extends TestAppBackend {
   int webdavCalls = 0;
   int localDirCalls = 0;
   int managedVaultCalls = 0;
+  Duration webdavDelay = Duration.zero;
+
+  final List<String> webdavDownloadShas = <String>[];
 
   @override
   Future<void> syncWebdavDownloadAttachmentBytes(
@@ -26,6 +29,10 @@ final class _DownloadBackend extends TestAppBackend {
     required String sha256,
   }) async {
     webdavCalls += 1;
+    webdavDownloadShas.add(sha256);
+    if (webdavDelay > Duration.zero) {
+      await Future<void>.delayed(webdavDelay);
+    }
   }
 
   @override
@@ -140,5 +147,47 @@ void main() {
     expect(result.didDownload, isTrue);
     expect(result.needsCellularConfirmation, isFalse);
     expect(backend.localDirCalls, 1);
+  });
+
+  test('CloudMediaDownload deduplicates concurrent downloads for same sha',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 1)),
+      }),
+    });
+
+    final backend = _DownloadBackend();
+    backend.webdavDelay = const Duration(milliseconds: 80);
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    final futures = <Future<CloudMediaDownloadResult>>[
+      downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+        backend: backend,
+        sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+        sha256: 'sha-test',
+        allowCellular: false,
+      ),
+      downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+        backend: backend,
+        sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+        sha256: 'sha-test',
+        allowCellular: false,
+      ),
+    ];
+
+    final results = await Future.wait(futures);
+    expect(results.every((r) => r.didDownload), isTrue);
+    expect(
+      results.every((r) => r.needsCellularConfirmation == false),
+      isTrue,
+    );
+    expect(backend.webdavCalls, 1);
+    expect(backend.webdavDownloadShas, ['sha-test']);
   });
 }

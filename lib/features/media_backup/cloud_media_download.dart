@@ -33,6 +33,9 @@ final class CloudMediaDownload {
   final SyncConfigStore _configStore;
   final CloudMediaDownloadNetworkProvider _networkProvider;
 
+  static final Map<String, Future<CloudMediaDownloadResult>>
+      _inFlightDownloads = <String, Future<CloudMediaDownloadResult>>{};
+
   Future<bool> downloadAttachmentBytesFromConfiguredSync(
     BuildContext context, {
     required String sha256,
@@ -96,18 +99,28 @@ final class CloudMediaDownload {
             needsCellularConfirmation: false,
           );
         }
-        await backend.syncWebdavDownloadAttachmentBytes(
-          sessionKey,
-          config.syncKey,
-          baseUrl: baseUrl,
-          username: config.username,
-          password: config.password,
-          remoteRoot: config.remoteRoot,
+        final dedupeKey = _downloadRequestKey(
+          config: config,
           sha256: sha256,
+          allowCellular: allowCellular,
         );
-        return const CloudMediaDownloadResult(
-          didDownload: true,
-          needsCellularConfirmation: false,
+        return _runDedupedDownload(
+          dedupeKey: dedupeKey,
+          action: () async {
+            await backend.syncWebdavDownloadAttachmentBytes(
+              sessionKey,
+              config.syncKey,
+              baseUrl: baseUrl,
+              username: config.username,
+              password: config.password,
+              remoteRoot: config.remoteRoot,
+              sha256: sha256,
+            );
+            return const CloudMediaDownloadResult(
+              didDownload: true,
+              needsCellularConfirmation: false,
+            );
+          },
         );
       case SyncBackendType.localDir:
         final localDir = config.localDir;
@@ -117,16 +130,26 @@ final class CloudMediaDownload {
             needsCellularConfirmation: false,
           );
         }
-        await backend.syncLocaldirDownloadAttachmentBytes(
-          sessionKey,
-          config.syncKey,
-          localDir: localDir,
-          remoteRoot: config.remoteRoot,
+        final dedupeKey = _downloadRequestKey(
+          config: config,
           sha256: sha256,
+          allowCellular: allowCellular,
         );
-        return const CloudMediaDownloadResult(
-          didDownload: true,
-          needsCellularConfirmation: false,
+        return _runDedupedDownload(
+          dedupeKey: dedupeKey,
+          action: () async {
+            await backend.syncLocaldirDownloadAttachmentBytes(
+              sessionKey,
+              config.syncKey,
+              localDir: localDir,
+              remoteRoot: config.remoteRoot,
+              sha256: sha256,
+            );
+            return const CloudMediaDownloadResult(
+              didDownload: true,
+              needsCellularConfirmation: false,
+            );
+          },
         );
       case SyncBackendType.managedVault:
         final baseUrl = config.baseUrl;
@@ -150,18 +173,69 @@ final class CloudMediaDownload {
             needsCellularConfirmation: false,
           );
         }
-        await backend.syncManagedVaultDownloadAttachmentBytes(
-          sessionKey,
-          config.syncKey,
-          baseUrl: baseUrl,
-          vaultId: config.remoteRoot,
-          idToken: idToken,
+        final dedupeKey = _downloadRequestKey(
+          config: config,
           sha256: sha256,
+          allowCellular: allowCellular,
         );
-        return const CloudMediaDownloadResult(
-          didDownload: true,
-          needsCellularConfirmation: false,
+        return _runDedupedDownload(
+          dedupeKey: dedupeKey,
+          action: () async {
+            await backend.syncManagedVaultDownloadAttachmentBytes(
+              sessionKey,
+              config.syncKey,
+              baseUrl: baseUrl,
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+              sha256: sha256,
+            );
+            return const CloudMediaDownloadResult(
+              didDownload: true,
+              needsCellularConfirmation: false,
+            );
+          },
         );
+    }
+  }
+
+  String _downloadRequestKey({
+    required SyncConfig config,
+    required String sha256,
+    required bool allowCellular,
+  }) {
+    final backend = switch (config.backendType) {
+      SyncBackendType.webdav => 'webdav',
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+    };
+
+    return [
+      backend,
+      config.baseUrl?.trim() ?? '',
+      config.localDir?.trim() ?? '',
+      config.remoteRoot.trim(),
+      allowCellular ? '1' : '0',
+      sha256.trim(),
+    ].join('|');
+  }
+
+  Future<CloudMediaDownloadResult> _runDedupedDownload({
+    required String dedupeKey,
+    required Future<CloudMediaDownloadResult> Function() action,
+  }) async {
+    final existing = _inFlightDownloads[dedupeKey];
+    if (existing != null) {
+      return existing;
+    }
+
+    final future = action();
+    _inFlightDownloads[dedupeKey] = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_inFlightDownloads[dedupeKey], future)) {
+        _inFlightDownloads.remove(dedupeKey);
+      }
     }
   }
 
