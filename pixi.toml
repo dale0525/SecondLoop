@@ -5,8 +5,11 @@ name = "SecondLoop"
 platforms = ["osx-arm64", "linux-64", "win-64"]
 version = "0.1.0"
 
-[activation.env]
-PUB_CACHE = ".tool/pub-cache"
+[target.unix.activation.env]
+PUB_CACHE = "$PIXI_PROJECT_ROOT/.tool/pub-cache"
+
+[target.win.activation.env]
+PUB_CACHE = "%PIXI_PROJECT_ROOT%/.tool/pub-cache"
 
 [tasks]
 # Bootstrap task (first clone / new machine / Flutter drift).
