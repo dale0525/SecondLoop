@@ -76,6 +76,7 @@ import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'message_viewer_page.dart';
+import 'chat_markdown_editor_page.dart';
 import 'ask_ai_intent_resolver.dart';
 import 'semantic_parse_job_status_row.dart';
 import 'attachment_annotation_job_status_row.dart';

@@ -161,39 +161,73 @@ Widget _buildComposerInlineButton(
 }
 
 extension _ChatPageStateComposerUi on _ChatPageState {
-  Widget _buildCompactAttachButton(BuildContext context) {
+  Widget _buildCompactAttachButton(
+    BuildContext context, {
+    bool includeLeadingPadding = true,
+  }) {
     if (!_supportsImageUpload && !_supportsAudioRecording) {
       return const SizedBox.shrink();
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_supportsDesktopRecordAudioAction) ...[
-            SlIconButton(
-              key: const ValueKey('chat_record_audio'),
-              icon: Icons.mic_rounded,
-              size: 44,
-              iconSize: 22,
-              tooltip: context.t.chat.attachRecordAudio,
-              onPressed: _isComposerBusy
-                  ? null
-                  : () => unawaited(_recordAndSendAudioFromSheet()),
-            ),
-            const SizedBox(width: 8),
-          ],
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_supportsDesktopRecordAudioAction) ...[
           SlIconButton(
-            key: const ValueKey('chat_attach'),
-            icon: Icons.add_rounded,
+            key: const ValueKey('chat_record_audio'),
+            icon: Icons.mic_rounded,
             size: 44,
             iconSize: 22,
-            tooltip: context.t.chat.attachTooltip,
-            onPressed: _isComposerBusy ? null : _openAttachmentSheet,
+            tooltip: context.t.chat.attachRecordAudio,
+            onPressed: _isComposerBusy
+                ? null
+                : () => unawaited(_recordAndSendAudioFromSheet()),
           ),
+          const SizedBox(width: 8),
         ],
-      ),
+        SlIconButton(
+          key: const ValueKey('chat_attach'),
+          icon: Icons.add_rounded,
+          size: 44,
+          iconSize: 22,
+          tooltip: context.t.chat.attachTooltip,
+          onPressed: _isComposerBusy ? null : _openAttachmentSheet,
+        ),
+      ],
+    );
+
+    if (!includeLeadingPadding) return row;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: row,
+    );
+  }
+
+  Widget _buildComposerMarkdownEditorButton(
+    BuildContext context, {
+    required ColorScheme colorScheme,
+    required SlTokens tokens,
+  }) {
+    return _buildComposerInlineButton(
+      context,
+      key: const ValueKey('chat_open_markdown_editor'),
+      label: context.t.chat.markdownEditor.openButton,
+      icon: Icons.open_in_full_rounded,
+      onPressed: _isComposerBusy ? null : _openMarkdownEditor,
+      backgroundColor: colorScheme.tertiaryContainer,
+      foregroundColor: colorScheme.onTertiaryContainer,
+      borderColor: tokens.borderSubtle,
+    );
+  }
+
+  Widget _buildDesktopMarkdownEditorButton(BuildContext context) {
+    return SlButton(
+      buttonKey: const ValueKey('chat_open_markdown_editor'),
+      icon: const Icon(Icons.open_in_full_rounded, size: 18),
+      variant: SlButtonVariant.outline,
+      onPressed: _isComposerBusy ? null : _openMarkdownEditor,
+      child: Text(context.t.chat.markdownEditor.openButton),
     );
   }
 
@@ -206,6 +240,8 @@ extension _ChatPageStateComposerUi on _ChatPageState {
       valueListenable: _controller,
       builder: (context, value, child) {
         final hasText = value.text.trim().isNotEmpty;
+        final hasAttachActions =
+            _supportsImageUpload || _supportsAudioRecording;
 
         if (_asking) {
           return Padding(
@@ -226,7 +262,26 @@ extension _ChatPageStateComposerUi on _ChatPageState {
         }
 
         if (!hasText) {
-          return _buildCompactAttachButton(context);
+          return Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildComposerMarkdownEditorButton(
+                  context,
+                  colorScheme: colorScheme,
+                  tokens: tokens,
+                ),
+                if (hasAttachActions) ...[
+                  const SizedBox(width: 8),
+                  _buildCompactAttachButton(
+                    context,
+                    includeLeadingPadding: false,
+                  ),
+                ],
+              ],
+            ),
+          );
         }
 
         return Padding(
@@ -234,6 +289,12 @@ extension _ChatPageStateComposerUi on _ChatPageState {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              _buildComposerMarkdownEditorButton(
+                context,
+                colorScheme: colorScheme,
+                tokens: tokens,
+              ),
+              const SizedBox(width: 8),
               if (_showConfigureAiEntry) ...[
                 _buildComposerInlineButton(
                   context,

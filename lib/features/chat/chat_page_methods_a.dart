@@ -341,6 +341,26 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
   }
 
+  Future<void> _openMarkdownEditor() async {
+    if (_isComposerBusy) return;
+
+    final updatedText = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (context) => ChatMarkdownEditorPage(
+          initialText: _controller.text,
+        ),
+      ),
+    );
+    if (!mounted || updatedText == null) return;
+
+    _controller.value = _controller.value.copyWith(
+      text: updatedText,
+      selection: TextSelection.collapsed(offset: updatedText.length),
+      composing: TextRange.empty,
+    );
+    _inputFocusNode.requestFocus();
+  }
+
   Future<void> _showMessageContextMenu(
     Message message,
     Offset globalPosition,

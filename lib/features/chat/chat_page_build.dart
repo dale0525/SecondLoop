@@ -820,6 +820,8 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
+                                  _buildDesktopMarkdownEditorButton(context),
+                                  const SizedBox(width: 8),
                                   if (_supportsImageUpload ||
                                       _supportsDesktopRecordAudioAction) ...[
                                     if (_supportsDesktopRecordAudioAction) ...[

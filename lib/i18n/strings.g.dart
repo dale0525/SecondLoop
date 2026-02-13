@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1338 (669 per locale)
+/// Strings: 1356 (678 per locale)
 ///
-/// Built on 2026-02-12 at 16:26 UTC
+/// Built on 2026-02-13 at 14:09 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -395,13 +395,14 @@ class _StringsChatEn {
       _StringsChatMessageActionsEn._(_root);
   late final _StringsChatMessageViewerEn messageViewer =
       _StringsChatMessageViewerEn._(_root);
+  late final _StringsChatMarkdownEditorEn markdownEditor =
+      _StringsChatMarkdownEditorEn._(_root);
   late final _StringsChatFocusEn focus = _StringsChatFocusEn._(_root);
   late final _StringsChatAskAiSetupEn askAiSetup =
       _StringsChatAskAiSetupEn._(_root);
   late final _StringsChatCloudGatewayEn cloudGateway =
       _StringsChatCloudGatewayEn._(_root);
   String get askAiFailedTemporary => 'Ask AI failed. Please try again.';
-  String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
   late final _StringsChatAskAiConsentEn askAiConsent =
       _StringsChatAskAiConsentEn._(_root);
   late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
@@ -418,6 +419,7 @@ class _StringsChatEn {
       'Updated task: ${title}';
   String get semanticParseStatusUpdatedGeneric => 'Updated task';
   String get semanticParseStatusUndone => 'Undid auto action';
+  String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
 }
 
 // Path: attachments
@@ -1267,6 +1269,24 @@ class _StringsChatMessageViewerEn {
 
   // Translations
   String get title => 'Message';
+}
+
+// Path: chat.markdownEditor
+class _StringsChatMarkdownEditorEn {
+  _StringsChatMarkdownEditorEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get openButton => 'Markdown';
+  String get title => 'Markdown editor';
+  String get apply => 'Apply';
+  String get editorLabel => 'Editor';
+  String get previewLabel => 'Preview';
+  String get emptyPreview => 'Preview will appear as you type.';
+  String get shortcutHint => 'Tip: Cmd/Ctrl + Enter applies changes instantly.';
+  String stats({required Object lines, required Object characters}) =>
+      '${lines} lines · ${characters} chars';
 }
 
 // Path: chat.focus
@@ -3497,8 +3517,6 @@ class _StringsLockZhCn extends _StringsLockEn {
 
 // Path: chat
 class _StringsChatZhCn extends _StringsChatEn {
-  @override
-  String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
   _StringsChatZhCn._(_StringsZhCn root)
       : this._root = root,
         super._(root);
@@ -3563,6 +3581,9 @@ class _StringsChatZhCn extends _StringsChatEn {
   late final _StringsChatMessageViewerZhCn messageViewer =
       _StringsChatMessageViewerZhCn._(_root);
   @override
+  late final _StringsChatMarkdownEditorZhCn markdownEditor =
+      _StringsChatMarkdownEditorZhCn._(_root);
+  @override
   late final _StringsChatFocusZhCn focus = _StringsChatFocusZhCn._(_root);
   @override
   late final _StringsChatAskAiSetupZhCn askAiSetup =
@@ -3598,6 +3619,8 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusUpdatedGeneric => '已更新待办';
   @override
   String get semanticParseStatusUndone => '已撤销自动动作';
+  @override
+  String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
 }
 
 // Path: attachments
@@ -4886,6 +4909,35 @@ class _StringsChatMessageViewerZhCn extends _StringsChatMessageViewerEn {
   // Translations
   @override
   String get title => '全文';
+}
+
+// Path: chat.markdownEditor
+class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
+  _StringsChatMarkdownEditorZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get openButton => 'Markdown';
+  @override
+  String get title => 'Markdown 编辑器';
+  @override
+  String get apply => '应用';
+  @override
+  String get editorLabel => '编辑区';
+  @override
+  String get previewLabel => '预览区';
+  @override
+  String get emptyPreview => '输入后会在这里实时预览。';
+  @override
+  String get shortcutHint => '提示：按 Cmd/Ctrl + Enter 可快速应用内容。';
+  @override
+  String stats({required Object lines, required Object characters}) =>
+      '${lines} 行 · ${characters} 字符';
 }
 
 // Path: chat.focus
@@ -8723,6 +8775,23 @@ extension on Translations {
         return 'Link to another task';
       case 'chat.messageViewer.title':
         return 'Message';
+      case 'chat.markdownEditor.openButton':
+        return 'Markdown';
+      case 'chat.markdownEditor.title':
+        return 'Markdown editor';
+      case 'chat.markdownEditor.apply':
+        return 'Apply';
+      case 'chat.markdownEditor.editorLabel':
+        return 'Editor';
+      case 'chat.markdownEditor.previewLabel':
+        return 'Preview';
+      case 'chat.markdownEditor.emptyPreview':
+        return 'Preview will appear as you type.';
+      case 'chat.markdownEditor.shortcutHint':
+        return 'Tip: Cmd/Ctrl + Enter applies changes instantly.';
+      case 'chat.markdownEditor.stats':
+        return ({required Object lines, required Object characters}) =>
+            '${lines} lines · ${characters} chars';
       case 'chat.focus.tooltip':
         return 'Focus';
       case 'chat.focus.allMemories':
@@ -8791,6 +8860,8 @@ extension on Translations {
         return 'Updated task';
       case 'chat.semanticParseStatusUndone':
         return 'Undid auto action';
+      case 'chat.askAiRecoveredDetached':
+        return 'Recovered the completed cloud answer.';
       case 'attachments.metadata.format':
         return 'Format';
       case 'attachments.metadata.size':
@@ -10091,6 +10162,23 @@ extension on _StringsZhCn {
         return '关联到其他事项';
       case 'chat.messageViewer.title':
         return '全文';
+      case 'chat.markdownEditor.openButton':
+        return 'Markdown';
+      case 'chat.markdownEditor.title':
+        return 'Markdown 编辑器';
+      case 'chat.markdownEditor.apply':
+        return '应用';
+      case 'chat.markdownEditor.editorLabel':
+        return '编辑区';
+      case 'chat.markdownEditor.previewLabel':
+        return '预览区';
+      case 'chat.markdownEditor.emptyPreview':
+        return '输入后会在这里实时预览。';
+      case 'chat.markdownEditor.shortcutHint':
+        return '提示：按 Cmd/Ctrl + Enter 可快速应用内容。';
+      case 'chat.markdownEditor.stats':
+        return ({required Object lines, required Object characters}) =>
+            '${lines} 行 · ${characters} 字符';
       case 'chat.focus.tooltip':
         return '聚焦';
       case 'chat.focus.allMemories':
@@ -10159,6 +10247,8 @@ extension on _StringsZhCn {
         return '已更新待办';
       case 'chat.semanticParseStatusUndone':
         return '已撤销自动动作';
+      case 'chat.askAiRecoveredDetached':
+        return '已恢复已完成的云端回答。';
       case 'attachments.metadata.format':
         return '格式';
       case 'attachments.metadata.size':
