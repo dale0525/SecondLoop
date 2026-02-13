@@ -65,6 +65,11 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   bool _refreshingProUsage = false;
   DateTime? _lastProUsageRefreshAt;
 
+  Timer? _leftTrayMenuTimer;
+  DateTime? _lastLeftTrayClickAt;
+
+  static const Duration _trayDoubleClickThreshold = Duration(milliseconds: 280);
+
   bool get _isDesktop =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
@@ -146,7 +151,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
       _menuController = DesktopTrayMenuController(
         onOpenWindow: _showWindow,
-        onHideWindow: () => windowManager.hide(),
         onOpenSettings: _openSettings,
         onToggleStartWithSystem: DesktopBootPrefs.setStartWithSystem,
         onQuit: _quitApp,
@@ -155,7 +159,7 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       await _loadLaunchSetup();
       await _applyBootConfig(previous: null);
       await _setupTray();
-      await _refreshProUsage(force: true);
+      unawaited(_refreshProUsage(force: true));
       await _applySilentStartupIfRequested();
     });
   }
@@ -261,7 +265,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
     final labels = DesktopTrayMenuLabels(
       open: context.t.common.actions.open,
-      hide: context.t.settings.desktopTray.menu.hide,
       settings: context.t.settings.title,
       startWithSystem: context.t.settings.desktopBoot.startWithSystem.title,
       quit: context.t.settings.desktopTray.menu.quit,
@@ -433,15 +436,30 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
   @override
   void onTrayIconMouseDown() {
-    unawaited(_runSafely(_toggleWindowVisibility));
+    final now = DateTime.now();
+    final last = _lastLeftTrayClickAt;
+
+    if (last != null && now.difference(last) <= _trayDoubleClickThreshold) {
+      _cancelPendingLeftTrayMenu();
+      _lastLeftTrayClickAt = null;
+      unawaited(_runSafely(_showWindow));
+      return;
+    }
+
+    _lastLeftTrayClickAt = now;
+    _cancelPendingLeftTrayMenu();
+    _leftTrayMenuTimer = Timer(_trayDoubleClickThreshold, () {
+      _leftTrayMenuTimer = null;
+      _lastLeftTrayClickAt = null;
+      unawaited(_runSafely(_showTrayMenu));
+    });
   }
 
   @override
   void onTrayIconRightMouseDown() {
-    unawaited(_runSafely(() async {
-      await _refreshProUsage(force: true);
-      await trayManager.popUpContextMenu();
-    }));
+    _cancelPendingLeftTrayMenu();
+    _lastLeftTrayClickAt = null;
+    unawaited(_runSafely(_showTrayMenu));
   }
 
   @override
@@ -459,14 +477,14 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     }));
   }
 
-  Future<void> _toggleWindowVisibility() async {
-    final visible = await windowManager.isVisible();
-    if (visible) {
-      await windowManager.hide();
-      return;
-    }
+  void _cancelPendingLeftTrayMenu() {
+    _leftTrayMenuTimer?.cancel();
+    _leftTrayMenuTimer = null;
+  }
 
-    await _showWindow();
+  Future<void> _showTrayMenu() async {
+    await trayManager.popUpContextMenu();
+    unawaited(_refreshProUsage(force: true));
   }
 
   Future<void> _showWindow() async {
@@ -499,6 +517,8 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   void dispose() {
     _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
     _subscriptionController?.removeListener(_onSubscriptionChanged);
+
+    _cancelPendingLeftTrayMenu();
 
     if (_enabled) {
       windowManager.removeListener(this);

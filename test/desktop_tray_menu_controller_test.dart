@@ -6,7 +6,6 @@ import 'package:secondloop/core/desktop/desktop_tray_menu_controller.dart';
 void main() {
   const labels = DesktopTrayMenuLabels(
     open: 'Open',
-    hide: 'Hide',
     settings: 'Settings',
     startWithSystem: 'Start with system',
     quit: 'Quit',
@@ -18,7 +17,6 @@ void main() {
   test('build menu includes pro details when available', () {
     final controller = DesktopTrayMenuController(
       onOpenWindow: () async {},
-      onHideWindow: () async {},
       onOpenSettings: () async {},
       onToggleStartWithSystem: (_) async {},
       onQuit: () async {},
@@ -38,27 +36,24 @@ void main() {
 
     final items = menu.items ?? const <MenuItem>[];
     expect(
-        items.where((e) => e.label == 'Signed in: pro@example.com').length, 1);
-    expect(
-      items.where((e) => e.label?.startsWith('AI usage') ?? false).length,
+      items.where((e) => e.label == 'Signed in: pro@example.com').length,
       1,
     );
-    expect(
-      items.where((e) => e.label?.startsWith('Storage usage') ?? false).length,
-      1,
-    );
+    expect(items.where((e) => e.label == 'AI usage: 62%').length, 1);
+    expect(items.where((e) => e.label == 'Storage usage: 38%').length, 1);
 
     final startWithSystem =
         menu.getMenuItem(kDesktopTrayMenuStartWithSystemKey);
     expect(startWithSystem, isNotNull);
     expect(startWithSystem!.type, 'checkbox');
     expect(startWithSystem.checked, true);
+
+    expect(menu.getMenuItem('tray_hide'), isNull);
   });
 
   test('build menu hides pro details when not entitled', () {
     final controller = DesktopTrayMenuController(
       onOpenWindow: () async {},
-      onHideWindow: () async {},
       onOpenSettings: () async {},
       onToggleStartWithSystem: (_) async {},
       onQuit: () async {},
@@ -71,7 +66,9 @@ void main() {
 
     final items = menu.items ?? const <MenuItem>[];
     expect(
-        items.where((e) => e.label?.startsWith('Signed in') ?? false), isEmpty);
+      items.where((e) => e.label?.startsWith('Signed in') ?? false),
+      isEmpty,
+    );
     expect(
       items.where((e) => e.label?.startsWith('AI usage') ?? false),
       isEmpty,
@@ -84,7 +81,6 @@ void main() {
 
   test('menu click dispatches actions including startup toggle', () async {
     var openCalls = 0;
-    var hideCalls = 0;
     var settingsCalls = 0;
     var quitCalls = 0;
     bool? toggled;
@@ -92,9 +88,6 @@ void main() {
     final controller = DesktopTrayMenuController(
       onOpenWindow: () async {
         openCalls += 1;
-      },
-      onHideWindow: () async {
-        hideCalls += 1;
       },
       onOpenSettings: () async {
         settingsCalls += 1;
@@ -112,10 +105,6 @@ void main() {
       startWithSystemEnabled: false,
     );
     await controller.onMenuItemClick(
-      MenuItem(key: kDesktopTrayMenuHideKey),
-      startWithSystemEnabled: false,
-    );
-    await controller.onMenuItemClick(
       MenuItem(key: kDesktopTrayMenuSettingsKey),
       startWithSystemEnabled: false,
     );
@@ -129,16 +118,16 @@ void main() {
     );
 
     expect(openCalls, 1);
-    expect(hideCalls, 1);
     expect(settingsCalls, 1);
     expect(toggled, true);
     expect(quitCalls, 1);
   });
 
-  test('progress formatting includes ascii bar and percent', () {
-    expect(formatTrayUsageProgress(0), '[----------] 0%');
-    expect(formatTrayUsageProgress(62), '[######----] 62%');
-    expect(formatTrayUsageProgress(100), '[##########] 100%');
-    expect(formatTrayUsageProgress(null), '[----------] --%');
+  test('usage formatting returns percent text', () {
+    expect(formatTrayUsagePercent(0), '0%');
+    expect(formatTrayUsagePercent(62), '62%');
+    expect(formatTrayUsagePercent(100), '100%');
+    expect(formatTrayUsagePercent(999), '100%');
+    expect(formatTrayUsagePercent(null), '--%');
   });
 }
