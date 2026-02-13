@@ -136,7 +136,8 @@ void main() {
     expect(create.title, '老婆的生日提醒我买礼物');
   });
 
-  test('recurring weekly without explicit datetime uses period start morning',
+  test(
+      'recurring weekly without explicit datetime uses next period start morning',
       () {
     final now = DateTime(2026, 1, 28, 19, 30); // Wednesday
     final decision = MessageActionResolver.resolve(
@@ -151,10 +152,11 @@ void main() {
 
     expect(decision, isA<MessageActionCreateDecision>());
     final create = decision as MessageActionCreateDecision;
-    expect(create.dueAtLocal, DateTime(2026, 1, 26, 8, 30));
+    expect(create.dueAtLocal, DateTime(2026, 2, 2, 8, 30));
   });
 
-  test('recurring monthly without explicit datetime uses first day morning',
+  test(
+      'recurring monthly without explicit datetime uses next period first day morning',
       () {
     final now = DateTime(2026, 1, 28, 19, 30);
     final decision = MessageActionResolver.resolve(
@@ -169,7 +171,7 @@ void main() {
 
     expect(decision, isA<MessageActionCreateDecision>());
     final create = decision as MessageActionCreateDecision;
-    expect(create.dueAtLocal, DateTime(2026, 1, 1, 7, 0));
+    expect(create.dueAtLocal, DateTime(2026, 2, 1, 7, 0));
   });
   test('creates recurring todo for zh daily phrase', () {
     final now = DateTime(2026, 1, 24, 12, 0);

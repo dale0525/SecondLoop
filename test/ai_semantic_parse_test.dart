@@ -109,7 +109,7 @@ void main() {
     final create = parsed!.decision as MessageActionCreateDecision;
     expect(create.recurrenceRule, isNotNull);
     expect(create.status, 'open');
-    expect(create.dueAtLocal, DateTime(2026, 2, 2, 9, 0));
+    expect(create.dueAtLocal, DateTime(2026, 2, 9, 9, 0));
   });
   test('parses JSON wrapped in markdown code fences', () {
     final now = DateTime(2026, 2, 3, 12, 0);

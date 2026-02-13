@@ -392,6 +392,27 @@ class AiSemanticParse {
         .subtract(Duration(days: delta));
   }
 
+  static DateTime _nextRecurringCycleStart(
+    DateTime cycleStart,
+    MessageActionRecurrenceRule recurrenceRule,
+  ) {
+    switch (recurrenceRule.freq) {
+      case 'weekly':
+        return cycleStart.add(Duration(days: 7 * recurrenceRule.interval));
+      case 'monthly':
+        return DateTime(
+          cycleStart.year,
+          cycleStart.month + recurrenceRule.interval,
+          1,
+        );
+      case 'yearly':
+        return DateTime(cycleStart.year + recurrenceRule.interval, 1, 1);
+      case 'daily':
+      default:
+        return cycleStart.add(Duration(days: recurrenceRule.interval));
+    }
+  }
+
   static DateTime _fallbackDueAtForRecurring(
     DateTime nowLocal,
     MessageActionRecurrenceRule recurrenceRule, {
@@ -418,13 +439,26 @@ class AiSemanticParse {
         break;
     }
 
-    return DateTime(
+    var dueAtLocal = DateTime(
       cycleStart.year,
       cycleStart.month,
       cycleStart.day,
       hour,
       minute,
     );
+
+    while (!dueAtLocal.isAfter(nowLocal)) {
+      cycleStart = _nextRecurringCycleStart(cycleStart, recurrenceRule);
+      dueAtLocal = DateTime(
+        cycleStart.year,
+        cycleStart.month,
+        cycleStart.day,
+        hour,
+        minute,
+      );
+    }
+
+    return dueAtLocal;
   }
 
   static AiSemanticDecision? tryParseMessageAction(

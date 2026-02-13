@@ -33,6 +33,8 @@ import 'todo_thread_match.dart';
 part 'todo_detail_page_message_actions.dart';
 part 'todo_detail_page_status_widgets.dart';
 part 'todo_detail_page_due_chip.dart';
+part 'todo_detail_page_recurring_series.dart';
+part 'todo_detail_page_attachment_picker.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -95,10 +97,8 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     unawaited(_loadRecurrenceRuleJson());
   }
 
-  Future<List<TodoActivity>> _loadActivities() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.listTodoActivities(sessionKey, _todo.id);
+  Future<List<TodoActivity>> _loadActivities() {
+    return _loadTodoDetailActivities(this);
   }
 
   void _refreshActivities() {
@@ -301,74 +301,15 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
   }
 
-  static int _recurringCandidateBucket(Todo todo, int? pivotDueAtMs) {
-    final dueAtMs = todo.dueAtMs;
-    if (dueAtMs == null) return 2;
-    if (pivotDueAtMs == null) return 1;
-    return dueAtMs >= pivotDueAtMs ? 0 : 1;
-  }
-
   Future<Todo?> _findNextActiveRecurringOccurrence(
     Todo current,
     String recurrenceRuleJson,
-  ) async {
-    final normalizedRule = recurrenceRuleJson.trim();
-    if (normalizedRule.isEmpty) return null;
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-
-    late final List<Todo> allTodos;
-    try {
-      allTodos = await backend.listTodos(sessionKey);
-    } catch (_) {
-      return null;
-    }
-
-    final candidates = allTodos.where((todo) {
-      if (todo.id == current.id) return false;
-      if (todo.status == 'done' || todo.status == 'dismissed') return false;
-      if (todo.title != current.title) return false;
-      final sourceEntryId = current.sourceEntryId;
-      if (sourceEntryId != null && todo.sourceEntryId != sourceEntryId) {
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
-
-    if (candidates.isEmpty) return null;
-
-    final matched = <Todo>[];
-    for (final candidate in candidates) {
-      try {
-        final rule = await backend.getTodoRecurrenceRuleJson(
-          sessionKey,
-          todoId: candidate.id,
-        );
-        if (rule != null && rule.trim() == normalizedRule) {
-          matched.add(candidate);
-        }
-      } catch (_) {
-        // ignore
-      }
-    }
-
-    if (matched.isEmpty) return null;
-
-    final pivotDueAtMs = current.dueAtMs;
-    matched.sort((a, b) {
-      final bucketA = _recurringCandidateBucket(a, pivotDueAtMs);
-      final bucketB = _recurringCandidateBucket(b, pivotDueAtMs);
-      if (bucketA != bucketB) return bucketA.compareTo(bucketB);
-
-      final dueA = a.dueAtMs ?? 9223372036854775807;
-      final dueB = b.dueAtMs ?? 9223372036854775807;
-      if (dueA != dueB) return dueA.compareTo(dueB);
-
-      return b.updatedAtMs.compareTo(a.updatedAtMs);
-    });
-
-    return matched.first;
+  ) {
+    return _findNextActiveRecurringOccurrenceForDetail(
+      this,
+      current,
+      recurrenceRuleJson,
+    );
   }
 
   Future<void> _setStatus(String newStatus) async {
@@ -776,82 +717,11 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     return buildTile(contentWidget: contentForText(title));
   }
 
-  Future<void> _pickAttachment() async {
-    final backend = AppBackendScope.of(context);
-    if (backend is! AttachmentsBackend) return;
-    final attachmentsBackend = backend as AttachmentsBackend;
-    final sessionKey = SessionScope.of(context).sessionKey;
+  Future<void> _pickAttachment() {
+    return _pickTodoDetailAttachment(this);
+  }
 
-    final selected = await showModalBottomSheet<Attachment>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t.actions.todoDetail.pickAttachment,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                FutureBuilder<List<Attachment>>(
-                  future: attachmentsBackend.listRecentAttachments(
-                    sessionKey,
-                    limit: 50,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          context.t.errors
-                              .loadFailed(error: '${snapshot.error}'),
-                        ),
-                      );
-                    }
-
-                    final items = snapshot.data ?? const <Attachment>[];
-                    if (items.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(context.t.actions.todoDetail.noAttachments),
-                      );
-                    }
-
-                    return SingleChildScrollView(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final attachment in items)
-                            AttachmentCard(
-                              attachment: attachment,
-                              onTap: () =>
-                                  Navigator.of(context).pop(attachment),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (!mounted) return;
-    if (selected == null) return;
+  void _appendPendingAttachment(Attachment selected) {
     setState(() {
       final alreadySelected =
           _pendingAttachments.any((a) => a.sha256 == selected.sha256);
