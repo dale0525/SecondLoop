@@ -14,18 +14,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets('Todo agenda can edit due date/time', (tester) async {
-    final todo = Todo(
-      id: 't1',
-      title: 'Task',
-      dueAtMs: DateTime(2026, 1, 31, 9, 0).toUtc().millisecondsSinceEpoch,
-      status: 'open',
-      sourceEntryId: null,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: null,
-    );
+    final todo = _todo('t1');
     final backend = _Backend(todos: [todo]);
 
     await tester.pumpWidget(
@@ -45,26 +34,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('todo_agenda_due_t1')));
     await tester.pumpAndSettle();
 
-    final dialog = find.byKey(const ValueKey('todo_agenda_due_picker_t1'));
-    expect(dialog, findsOneWidget);
-
-    final hourField = find.descendant(
-      of: dialog,
-      matching: find.byType(DropdownButtonFormField<int>),
+    await _changeDueToTenAndConfirm(
+      tester,
+      dialogKey: 'todo_agenda_due_picker_t1',
     );
-    expect(hourField, findsNWidgets(2));
-
-    await tester.tap(hourField.first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('10').last);
-    await tester.pumpAndSettle();
-
-    final buttons =
-        find.descendant(of: dialog, matching: find.byType(SlButton));
-    expect(buttons, findsNWidgets(2));
-    await tester.ensureVisible(buttons.last);
-    await tester.tap(buttons.last);
-    await tester.pumpAndSettle();
 
     expect(
       backend.lastUpsertDueAtMs,
@@ -73,18 +46,7 @@ void main() {
   });
 
   testWidgets('Todo detail can edit due date/time', (tester) async {
-    final todo = Todo(
-      id: 't1',
-      title: 'Task',
-      dueAtMs: DateTime(2026, 1, 31, 9, 0).toUtc().millisecondsSinceEpoch,
-      status: 'open',
-      sourceEntryId: null,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: null,
-    );
+    final todo = _todo('t1');
     final backend = _Backend(todos: [todo]);
 
     await tester.pumpWidget(
@@ -106,42 +68,214 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('todo_detail_due')));
     await tester.pumpAndSettle();
 
-    final dialog = find.byKey(const ValueKey('todo_detail_due_picker'));
-    expect(dialog, findsOneWidget);
-
-    final hourField = find.descendant(
-      of: dialog,
-      matching: find.byType(DropdownButtonFormField<int>),
+    await _changeDueToTenAndConfirm(
+      tester,
+      dialogKey: 'todo_detail_due_picker',
     );
-    expect(hourField, findsNWidgets(2));
-
-    await tester.tap(hourField.first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('10').last);
-    await tester.pumpAndSettle();
-
-    final buttons =
-        find.descendant(of: dialog, matching: find.byType(SlButton));
-    expect(buttons, findsNWidgets(2));
-    await tester.ensureVisible(buttons.last);
-    await tester.tap(buttons.last);
-    await tester.pumpAndSettle();
 
     expect(
       backend.lastUpsertDueAtMs,
       DateTime(2026, 1, 31, 10, 0).toUtc().millisecondsSinceEpoch,
     );
   });
+
+  testWidgets(
+      'Todo agenda recurring due edit supports this-only and this-and-future scopes',
+      (tester) async {
+    for (final testCase in <({
+      String buttonKey,
+      TodoRecurrenceEditScope expectedScope,
+    })>[
+      (
+        buttonKey: 'todo_recurrence_scope_this_only',
+        expectedScope: TodoRecurrenceEditScope.thisOnly,
+      ),
+      (
+        buttonKey: 'todo_recurrence_scope_this_and_future',
+        expectedScope: TodoRecurrenceEditScope.thisAndFuture,
+      ),
+    ]) {
+      final todo = _todo('t1');
+      final backend = _Backend(
+        todos: [todo],
+        recurrenceTodoIds: const {'t1'},
+        supportsScopedDueUpdate: true,
+      );
+
+      await tester.pumpWidget(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: TodoAgendaPage()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('todo_agenda_due_t1')));
+      await tester.pumpAndSettle();
+
+      await _changeDueToTenAndConfirm(
+        tester,
+        dialogKey: 'todo_agenda_due_picker_t1',
+      );
+
+      expect(find.byKey(const ValueKey('todo_recurrence_scope_this_only')),
+          findsOneWidget);
+      await tester.tap(find.byKey(ValueKey(testCase.buttonKey)));
+      await tester.pumpAndSettle();
+
+      expect(backend.lastScope, testCase.expectedScope);
+      expect(
+        backend.lastScopedDueAtMs,
+        DateTime(2026, 1, 31, 10, 0).toUtc().millisecondsSinceEpoch,
+      );
+      expect(backend.lastUpsertDueAtMs, isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('Todo detail recurring due edit supports whole-series scope',
+      (tester) async {
+    final todo = _todo('t1');
+    final backend = _Backend(
+      todos: [todo],
+      recurrenceTodoIds: const {'t1'},
+      supportsScopedDueUpdate: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: TodoDetailPage(initialTodo: todo),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('todo_detail_due')));
+    await tester.pumpAndSettle();
+
+    await _changeDueToTenAndConfirm(
+      tester,
+      dialogKey: 'todo_detail_due_picker',
+    );
+
+    expect(
+      find.byKey(const ValueKey('todo_recurrence_scope_whole_series')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('todo_recurrence_scope_whole_series')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.lastScope, TodoRecurrenceEditScope.wholeSeries);
+    expect(
+      backend.lastScopedDueAtMs,
+      DateTime(2026, 1, 31, 10, 0).toUtc().millisecondsSinceEpoch,
+    );
+    expect(backend.lastUpsertDueAtMs, isNull);
+  });
+}
+
+Todo _todo(String id) {
+  return Todo(
+    id: id,
+    title: 'Task',
+    dueAtMs: DateTime(2026, 1, 31, 9, 0).toUtc().millisecondsSinceEpoch,
+    status: 'open',
+    sourceEntryId: null,
+    createdAtMs: 0,
+    updatedAtMs: 0,
+    reviewStage: null,
+    nextReviewAtMs: null,
+    lastReviewAtMs: null,
+  );
+}
+
+Future<void> _changeDueToTenAndConfirm(
+  WidgetTester tester, {
+  required String dialogKey,
+}) async {
+  final dialog = find.byKey(ValueKey(dialogKey));
+  expect(dialog, findsOneWidget);
+
+  final hourField = find.descendant(
+    of: dialog,
+    matching: find.byType(DropdownButtonFormField<int>),
+  );
+  expect(hourField, findsNWidgets(2));
+
+  await tester.tap(hourField.first);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('10').last);
+  await tester.pumpAndSettle();
+
+  final buttons = find.descendant(of: dialog, matching: find.byType(SlButton));
+  expect(buttons, findsNWidgets(2));
+  await tester.ensureVisible(buttons.last);
+  await tester.tap(buttons.last);
+  await tester.pumpAndSettle();
 }
 
 final class _Backend extends AppBackend {
-  _Backend({required List<Todo> todos})
-      : _todosById = {
+  _Backend({
+    required List<Todo> todos,
+    this.recurrenceTodoIds = const <String>{},
+    this.supportsScopedDueUpdate = false,
+  }) : _todosById = {
           for (final todo in todos) todo.id: todo,
         };
 
   final Map<String, Todo> _todosById;
+  final Set<String> recurrenceTodoIds;
+  final bool supportsScopedDueUpdate;
+
   int? lastUpsertDueAtMs;
+  String? lastScopedTodoId;
+  int? lastScopedDueAtMs;
+  TodoRecurrenceEditScope? lastScope;
+
+  Todo _mergeTodo({
+    required String id,
+    required String title,
+    required int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+  }) {
+    final existing = _todosById[id];
+    final updated = Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: existing?.createdAtMs ?? 0,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+    _todosById[id] = updated;
+    return updated;
+  }
 
   @override
   Future<void> init() async {}
@@ -229,21 +363,58 @@ final class _Backend extends AppBackend {
     int? lastReviewAtMs,
   }) async {
     lastUpsertDueAtMs = dueAtMs;
-    final existing = _todosById[id];
-    final updated = Todo(
+    return _mergeTodo(
       id: id,
       title: title,
       dueAtMs: dueAtMs,
       status: status,
       sourceEntryId: sourceEntryId,
-      createdAtMs: existing?.createdAtMs ?? 0,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
     );
-    _todosById[id] = updated;
-    return updated;
+  }
+
+  @override
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    if (!supportsScopedDueUpdate) {
+      throw UnimplementedError('updateTodoDueWithScope');
+    }
+    final existing = _todosById[todoId];
+    if (existing == null) {
+      throw StateError('todo not found: $todoId');
+    }
+
+    lastScopedTodoId = todoId;
+    lastScopedDueAtMs = dueAtMs;
+    lastScope = scope;
+
+    return _mergeTodo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: dueAtMs,
+      status: existing.status,
+      sourceEntryId: existing.sourceEntryId,
+      reviewStage: existing.reviewStage,
+      nextReviewAtMs: existing.nextReviewAtMs,
+      lastReviewAtMs: existing.lastReviewAtMs,
+    );
+  }
+
+  @override
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    if (recurrenceTodoIds.contains(todoId)) {
+      return '{"freq":"daily","interval":1}';
+    }
+    return null;
   }
 
   @override
