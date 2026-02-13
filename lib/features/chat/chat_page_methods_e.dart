@@ -495,6 +495,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             return;
           }
           final completedRequestId = _activeCloudRequestId;
+          final completedGatewayBaseUrl = _activeCloudGatewayBaseUrl;
+          final completedIdToken = _activeCloudIdToken;
           _setState(() {
             _askSub = null;
             _asking = false;
@@ -507,8 +509,10 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             _activeCloudIdToken = null;
           });
           unawaited(
-            _clearDetachedAskSnapshot(
-              expectedRequestId: completedRequestId,
+            _finalizeDetachedAskSnapshot(
+              requestId: completedRequestId,
+              gatewayBaseUrl: completedGatewayBaseUrl,
+              idToken: completedIdToken,
             ),
           );
           _refresh();
@@ -899,7 +903,11 @@ extension _ChatPageStateMethodsE on _ChatPageState {
         role: 'assistant',
         content: resultText,
       );
-      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      await _finalizeDetachedAskSnapshot(
+        requestId: requestId,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+      );
 
       if (!mounted) return;
       _refresh();

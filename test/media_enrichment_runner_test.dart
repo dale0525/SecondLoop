@@ -402,6 +402,51 @@ void main() {
     expect(client.lastAnnotateMimeType, 'image/unknown');
   });
 
+  test('invokes annotation persisted callback after markAnnotationOk',
+      () async {
+    final store = _MemStore(
+      places: const [],
+      annotations: const [
+        MediaEnrichmentAnnotationItem(
+          attachmentSha256: 'a',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      exifBySha: const {},
+      bytesBySha: {
+        'a': Uint8List.fromList([0xFF, 0xD8, 0xFF]),
+      },
+    );
+    final client = _MemClient();
+
+    var callbackCalls = 0;
+    String? callbackPayloadJson;
+
+    final runner = MediaEnrichmentRunner(
+      store: store,
+      client: client,
+      settings: const MediaEnrichmentRunnerSettings(
+        annotationEnabled: true,
+        annotationWifiOnly: true,
+      ),
+      getNetwork: () async => MediaEnrichmentNetwork.wifi,
+      nowMs: () => 1000,
+      onAnnotationPersisted: (payloadJson) async {
+        callbackCalls += 1;
+        callbackPayloadJson = payloadJson;
+      },
+    );
+
+    final result = await runner.runOnce();
+
+    expect(result.processedAnnotations, 1);
+    expect(callbackCalls, 1);
+    expect(callbackPayloadJson, store.annotationOkPayloadBySha['a']);
+  });
+
   test('failure => marks failed and schedules retry', () async {
     final store = _MemStore(
       places: const [

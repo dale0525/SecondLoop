@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -140,6 +143,14 @@ final class MediaEnrichmentRunResult {
 typedef MediaEnrichmentNowMs = int Function();
 typedef MediaEnrichmentNetworkProvider = Future<MediaEnrichmentNetwork>
     Function();
+typedef MediaEnrichmentAnnotationPersistedCallback = Future<void> Function(
+  String payloadJson,
+);
+
+const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
+final RegExp _kCloudDetachedRequestIdPattern = RegExp(
+  r'^[A-Za-z0-9][A-Za-z0-9:_-]{5,127}$',
+);
 
 final class MediaEnrichmentRunner {
   MediaEnrichmentRunner({
@@ -148,13 +159,16 @@ final class MediaEnrichmentRunner {
     required this.settings,
     required this.getNetwork,
     MediaEnrichmentNowMs? nowMs,
-  }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
+    MediaEnrichmentAnnotationPersistedCallback? onAnnotationPersisted,
+  })  : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
+        _onAnnotationPersisted = onAnnotationPersisted;
 
   final MediaEnrichmentStore store;
   final MediaEnrichmentClient client;
   final MediaEnrichmentRunnerSettings settings;
   final MediaEnrichmentNetworkProvider getNetwork;
   final MediaEnrichmentNowMs _nowMs;
+  final MediaEnrichmentAnnotationPersistedCallback? _onAnnotationPersisted;
 
   Future<MediaEnrichmentRunResult> runOnce({
     bool allowAnnotationCellular = false,
@@ -251,6 +265,16 @@ final class MediaEnrichmentRunner {
             payloadJson: payloadJson,
             nowMs: nowMs,
           );
+
+          final onAnnotationPersisted = _onAnnotationPersisted;
+          if (onAnnotationPersisted != null) {
+            try {
+              await onAnnotationPersisted(payloadJson);
+            } catch (_) {
+              // Best-effort callback should not fail enrichment persistence.
+            }
+          }
+
           processedAnnotations += 1;
         } catch (e) {
           final attempts = item.attempts + 1;
@@ -548,13 +572,90 @@ final class CloudGatewayMediaEnrichmentClient implements MediaEnrichmentClient {
     );
   }
 
+  String? _extractCloudDetachedRequestId(String payloadJson) {
+    final raw = payloadJson.trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final requestId =
+          (decoded[_kCloudDetachedRequestIdPayloadKey] ?? '').toString().trim();
+      if (!_kCloudDetachedRequestIdPattern.hasMatch(requestId)) {
+        return null;
+      }
+      return requestId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Uri? _buildCloudDetachedAckUri(String requestId) {
+    final base = gatewayBaseUrl.trim();
+    final normalizedRequestId = requestId.trim();
+    if (base.isEmpty || normalizedRequestId.isEmpty) return null;
+
+    final normalizedBase = base.replaceFirst(RegExp(r'/+$'), '');
+    try {
+      return Uri.parse('$normalizedBase/v1/chat/jobs/$normalizedRequestId/ack');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _ackCloudDetachedJob(String requestId) async {
+    if (!_kCloudDetachedRequestIdPattern.hasMatch(requestId.trim())) return;
+
+    final uri = _buildCloudDetachedAckUri(requestId);
+    if (uri == null) return;
+
+    final token = idToken.trim();
+    if (token.isEmpty) return;
+
+    const retryDelays = <Duration>[
+      Duration.zero,
+      Duration(milliseconds: 250),
+      Duration(milliseconds: 500),
+    ];
+
+    for (final delay in retryDelays) {
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
+
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 5);
+
+      try {
+        final req =
+            await client.postUrl(uri).timeout(const Duration(seconds: 6));
+        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+        final resp = await req.close().timeout(const Duration(seconds: 6));
+        await resp.drain<void>().timeout(const Duration(seconds: 6));
+
+        if ((resp.statusCode >= 200 && resp.statusCode < 300) ||
+            resp.statusCode == 404) {
+          return;
+        }
+        if (resp.statusCode != 409) {
+          return;
+        }
+      } catch (_) {
+        // Best-effort only.
+      } finally {
+        client.close(force: true);
+      }
+    }
+  }
+
   @override
   Future<String> annotateImage({
     required String lang,
     required String mimeType,
     required Uint8List imageBytes,
   }) async {
-    return backend.mediaAnnotationCloudGateway(
+    final payloadJson = await backend.mediaAnnotationCloudGateway(
       gatewayBaseUrl: gatewayBaseUrl,
       idToken: idToken,
       modelName: annotationModelName,
@@ -562,6 +663,13 @@ final class CloudGatewayMediaEnrichmentClient implements MediaEnrichmentClient {
       mimeType: mimeType,
       imageBytes: imageBytes,
     );
+
+    final requestId = _extractCloudDetachedRequestId(payloadJson);
+    if (requestId != null) {
+      unawaited(_ackCloudDetachedJob(requestId));
+    }
+
+    return payloadJson;
   }
 }
 

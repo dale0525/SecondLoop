@@ -86,6 +86,7 @@ part 'chat_page_methods_b_attachments.dart';
 part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
+part 'chat_page_methods_i_detached_jobs.dart';
 part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
