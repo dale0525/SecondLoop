@@ -18,6 +18,7 @@ import '../subscription/subscription_scope.dart';
 import '../sync/sync_config_store.dart';
 import 'desktop_boot_prefs.dart';
 import 'desktop_launch_args.dart';
+import 'desktop_tray_icon_config.dart';
 import 'desktop_tray_menu_controller.dart';
 
 class DesktopBackgroundService extends StatefulWidget {
@@ -242,13 +243,11 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   }
 
   Future<void> _setupTray() async {
-    final iconAsset = defaultTargetPlatform == TargetPlatform.windows
-        ? 'assets/icon/tray_icon.ico'
-        : 'assets/icon/tray_icon.png';
+    final iconConfig = trayIconConfigForPlatform(defaultTargetPlatform);
 
     await trayManager.setIcon(
-      iconAsset,
-      isTemplate: defaultTargetPlatform == TargetPlatform.macOS,
+      iconConfig.assetPath,
+      isTemplate: iconConfig.isTemplate,
     );
     await trayManager.setToolTip('SecondLoop');
     await _refreshTrayMenu();
@@ -482,9 +481,9 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
     _quitting = true;
     await _runSafely(() async {
-      await trayManager.destroy();
       await windowManager.setPreventClose(false);
-      await windowManager.close();
+      await trayManager.destroy();
+      await windowManager.destroy();
     });
   }
 
