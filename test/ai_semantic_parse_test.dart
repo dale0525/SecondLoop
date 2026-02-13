@@ -8,7 +8,7 @@ void main() {
   test('parses followup decision JSON', () {
     final now = DateTime(2026, 2, 3, 12, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(
-      '{"kind":"followup","confidence":0.92,"todo_id":"todo:1","new_status":"done"}',
+      '{"kind":"followup","confidence":0.92,"todo_id":"todo:1","new_status":"已完成"}',
       nowLocal: now,
       locale: const Locale('zh', 'CN'),
       dayEndMinutes: 21 * 60,
@@ -80,10 +80,24 @@ void main() {
     }
   });
 
+  test('normalizes localized create status aliases', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"create","confidence":0.91,"title":"整理收据","status":"待办","due_local_iso":null}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(parsed, isNotNull);
+    final create = parsed!.decision as MessageActionCreateDecision;
+    expect(create.status, 'open');
+  });
+
   test('fills fallback due and open status for recurrence without due', () {
     final now = DateTime(2026, 2, 3, 22, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(
-      '{"kind":"create","confidence":0.93,"title":"提交周报","status":"inbox","due_local_iso":null,"recurrence":{"freq":"weekly","interval":1}}',
+      '{"kind":"create","confidence":0.93,"title":"提交周报","status":"收件箱","due_local_iso":null,"recurrence":{"freq":"weekly","interval":1}}',
       nowLocal: now,
       locale: const Locale('zh', 'CN'),
       dayEndMinutes: 21 * 60,

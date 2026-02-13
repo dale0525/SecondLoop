@@ -141,7 +141,7 @@ class AiSemanticParse {
     return text.replaceAll(RegExp(r'[\s_\-.]+'), '');
   }
 
-  static bool _matchesRecurrenceAlias(
+  static bool _matchesNormalizedAlias(
     String raw,
     String normalized,
     String compact,
@@ -175,7 +175,7 @@ class AiSemanticParse {
     final normalized = _normalizeRecurrenceText(raw);
     final compact = _compactRecurrenceText(normalized);
 
-    if (_matchesRecurrenceAlias(
+    if (_matchesNormalizedAlias(
       raw,
       normalized,
       compact,
@@ -194,7 +194,7 @@ class AiSemanticParse {
       return 'daily';
     }
 
-    if (_matchesRecurrenceAlias(
+    if (_matchesNormalizedAlias(
       raw,
       normalized,
       compact,
@@ -212,7 +212,7 @@ class AiSemanticParse {
       return 'weekly';
     }
 
-    if (_matchesRecurrenceAlias(
+    if (_matchesNormalizedAlias(
       raw,
       normalized,
       compact,
@@ -230,7 +230,7 @@ class AiSemanticParse {
       return 'monthly';
     }
 
-    if (_matchesRecurrenceAlias(
+    if (_matchesNormalizedAlias(
       raw,
       normalized,
       compact,
@@ -249,6 +249,120 @@ class AiSemanticParse {
       const {'每年', '毎年', '매년'},
     )) {
       return 'yearly';
+    }
+
+    return null;
+  }
+
+  static String? _canonicalFollowupStatus(String rawStatus) {
+    final raw = rawStatus.trim();
+    if (raw.isEmpty) return null;
+
+    final normalized = _normalizeRecurrenceText(raw);
+    final compact = _compactRecurrenceText(normalized);
+
+    if (_matchesNormalizedAlias(
+      raw,
+      normalized,
+      compact,
+      const {
+        'in_progress',
+        'in progress',
+        'progress',
+        'ongoing',
+        'doing',
+        'active',
+        'en progreso',
+        'en cours',
+        'in bearbeitung',
+      },
+      const {'进行中', '處理中', '处理中', '進行中', '進行', '진행중', '진행 중'},
+    )) {
+      return 'in_progress';
+    }
+
+    if (_matchesNormalizedAlias(
+      raw,
+      normalized,
+      compact,
+      const {
+        'done',
+        'complete',
+        'completed',
+        'finished',
+        'resolved',
+        'cerrado',
+        'termine',
+        'erledigt',
+      },
+      const {'完成', '已完成', '已办结', '已辦結', '完成済み', '完了', '완료'},
+    )) {
+      return 'done';
+    }
+
+    if (_matchesNormalizedAlias(
+      raw,
+      normalized,
+      compact,
+      const {
+        'dismissed',
+        'dismiss',
+        'ignored',
+        'ignore',
+        'canceled',
+        'cancelled',
+        'cancel',
+        'discarded',
+        'annule',
+        'abgebrochen',
+      },
+      const {'忽略', '已忽略', '取消', '已取消', '作废', '作廢', 'キャンセル', '취소', '무시'},
+    )) {
+      return 'dismissed';
+    }
+
+    return null;
+  }
+
+  static String? _canonicalCreateStatus(String rawStatus) {
+    final raw = rawStatus.trim();
+    if (raw.isEmpty) return null;
+
+    final normalized = _normalizeRecurrenceText(raw);
+    final compact = _compactRecurrenceText(normalized);
+
+    if (_matchesNormalizedAlias(
+      raw,
+      normalized,
+      compact,
+      const {
+        'open',
+        'todo',
+        'to do',
+        'pending',
+        'active',
+        'abierto',
+        'ouvert',
+        'offen',
+      },
+      const {'待办', '待辦', '待处理', '待處理', '未完成', '할 일', '未着手'},
+    )) {
+      return 'open';
+    }
+
+    if (_matchesNormalizedAlias(
+      raw,
+      normalized,
+      compact,
+      const {
+        'inbox',
+        'capture',
+        'captured',
+        'draft',
+      },
+      const {'收件箱', '收件匣', '草稿', '收件箱待处理'},
+    )) {
+      return 'inbox';
     }
 
     return null;
@@ -313,10 +427,12 @@ class AiSemanticParse {
     switch (kind) {
       case 'followup':
         final todoId = _stringField(map, 'todo_id');
-        final newStatus = _stringField(map, 'new_status');
-        const allowed = {'in_progress', 'done', 'dismissed'};
+        final newStatusRaw = _stringField(map, 'new_status');
+        final newStatus = newStatusRaw == null
+            ? null
+            : _canonicalFollowupStatus(newStatusRaw);
         if (todoId == null || todoId.isEmpty) return null;
-        if (newStatus == null || !allowed.contains(newStatus)) return null;
+        if (newStatus == null) return null;
         return AiSemanticDecision(
           decision: MessageActionFollowUpDecision(
               todoId: todoId, newStatus: newStatus),
@@ -324,10 +440,11 @@ class AiSemanticParse {
         );
       case 'create':
         final title = _stringField(map, 'title');
-        final status = _stringField(map, 'status');
+        final statusRaw = _stringField(map, 'status');
+        final status =
+            statusRaw == null ? null : _canonicalCreateStatus(statusRaw);
         if (title == null || title.isEmpty) return null;
         if (status == null) return null;
-        if (status != 'open' && status != 'inbox') return null;
 
         DateTime? dueAtLocal;
         final dueIso = _stringField(map, 'due_local_iso');
