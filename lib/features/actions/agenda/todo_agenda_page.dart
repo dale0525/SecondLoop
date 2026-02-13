@@ -14,6 +14,8 @@ import '../../../ui/sl_tokens.dart';
 import '../time/date_time_picker_dialog.dart';
 import '../todo/todo_detail_page.dart';
 import '../todo/todo_recurrence_edit_scope_dialog.dart';
+import '../todo/todo_recurrence_rule.dart';
+import '../todo/todo_recurrence_rule_dialog.dart';
 import '../todo/todo_history_page.dart';
 
 class TodoAgendaPage extends StatefulWidget {
@@ -48,6 +50,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
   List<Todo> _inProgress = const <Todo>[];
   List<Todo> _open = const <Todo>[];
   List<Todo> _done = const <Todo>[];
+  Map<String, String> _recurrenceRuleByTodoId = const <String, String>{};
   var _doneVisible = 0;
   var _initialized = false;
 
@@ -110,6 +113,23 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       final scheduled = todos
           .where((t) => t.dueAtMs != null && t.status != 'dismissed')
           .toList(growable: false);
+      final recurrenceRuleByTodoId = <String, String>{};
+
+      await Future.wait(
+        scheduled.map((todo) async {
+          try {
+            final ruleJson = await backend.getTodoRecurrenceRuleJson(
+              sessionKey,
+              todoId: todo.id,
+            );
+            if (ruleJson != null && ruleJson.trim().isNotEmpty) {
+              recurrenceRuleByTodoId[todo.id] = ruleJson.trim();
+            }
+          } catch (_) {
+            // Best effort only.
+          }
+        }),
+      );
 
       final inProgress = <Todo>[];
       final open = <Todo>[];
@@ -138,6 +158,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         _inProgress = inProgress;
         _open = open;
         _done = done;
+        _recurrenceRuleByTodoId = recurrenceRuleByTodoId;
         _doneVisible = math.min(_kDonePageSize, done.length);
       });
     } catch (e) {
@@ -148,6 +169,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         _inProgress = const <Todo>[];
         _open = const <Todo>[];
         _done = const <Todo>[];
+        _recurrenceRuleByTodoId = const <String, String>{};
         _doneVisible = 0;
       });
     }
@@ -172,15 +194,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
 
     var scope = TodoRecurrenceEditScope.thisOnly;
     if (newStatus != 'done') {
-      String? ruleJson;
-      try {
-        ruleJson = await backend.getTodoRecurrenceRuleJson(
-          sessionKey,
-          todoId: todo.id,
-        );
-      } catch (_) {
-        ruleJson = null;
-      }
+      final ruleJson = _recurrenceRuleByTodoId[todo.id];
       if (ruleJson != null && ruleJson.trim().isNotEmpty) {
         if (!mounted) return;
         final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
@@ -258,15 +272,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     var scope = TodoRecurrenceEditScope.thisOnly;
-    String? ruleJson;
-    try {
-      ruleJson = await backend.getTodoRecurrenceRuleJson(
-        sessionKey,
-        todoId: todo.id,
-      );
-    } catch (_) {
-      ruleJson = null;
-    }
+    final ruleJson = _recurrenceRuleByTodoId[todo.id];
     if (ruleJson != null && ruleJson.trim().isNotEmpty) {
       if (!mounted) return;
       final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
@@ -309,6 +315,69 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
     final time =
         localizations.formatTimeOfDay(TimeOfDay.fromDateTime(dueAtLocal));
     return '$date $time';
+  }
+
+  String _recurrenceFrequencyLabel(
+    BuildContext context,
+    TodoRecurrenceFrequency frequency,
+  ) =>
+      switch (frequency) {
+        TodoRecurrenceFrequency.daily =>
+          context.t.actions.todoRecurrenceRule.daily,
+        TodoRecurrenceFrequency.weekly =>
+          context.t.actions.todoRecurrenceRule.weekly,
+        TodoRecurrenceFrequency.monthly =>
+          context.t.actions.todoRecurrenceRule.monthly,
+        TodoRecurrenceFrequency.yearly =>
+          context.t.actions.todoRecurrenceRule.yearly,
+      };
+
+  String _formatRecurrenceRule(
+    BuildContext context,
+    TodoRecurrenceRule rule,
+  ) {
+    final frequencyLabel = _recurrenceFrequencyLabel(context, rule.frequency);
+    if (rule.interval <= 1) {
+      return frequencyLabel;
+    }
+    return '$frequencyLabel x${rule.interval}';
+  }
+
+  Future<void> _editRecurrenceRule(Todo todo) async {
+    final existingRuleJson = _recurrenceRuleByTodoId[todo.id];
+    final existingRule = TodoRecurrenceRule.tryParseJson(existingRuleJson);
+    if (existingRule == null) return;
+
+    final nextRule = await showTodoRecurrenceRuleDialog(
+      context,
+      initialRule: existingRule,
+    );
+    if (nextRule == null || !mounted) return;
+
+    final scope = await showTodoRecurrenceEditScopeDialog(context);
+    if (scope == null || !mounted) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    try {
+      await backend.updateTodoRecurrenceRuleWithScope(
+        sessionKey,
+        todoId: todo.id,
+        ruleJson: nextRule.toJsonString(),
+        scope: scope,
+      );
+      if (!mounted) return;
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -465,6 +534,12 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                   final todo = entry as Todo;
                   final isDone = todo.status == 'done';
                   final dueText = _formatDue(context, todo);
+                  final recurrenceRule = TodoRecurrenceRule.tryParseJson(
+                    _recurrenceRuleByTodoId[todo.id],
+                  );
+                  final recurrenceText = recurrenceRule == null
+                      ? null
+                      : _formatRecurrenceRule(context, recurrenceRule);
                   final dueAtMs = todo.dueAtMs;
                   final dueAtLocal = dueAtMs == null
                       ? null
@@ -582,7 +657,8 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                     ),
                                   ],
                                 ),
-                                if (dueText != null) ...[
+                                if (dueText != null ||
+                                    recurrenceText != null) ...[
                                   const SizedBox(height: 8),
                                   Padding(
                                     padding: const EdgeInsets.only(left: 20),
@@ -590,18 +666,37 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                       constraints: const BoxConstraints(
                                         maxWidth: 520,
                                       ),
-                                      child: _TodoDueChip(
-                                        chipKey: ValueKey(
-                                          'todo_agenda_due_${todo.id}',
-                                        ),
-                                        icon: overdue
-                                            ? Icons.warning_rounded
-                                            : Icons.schedule_rounded,
-                                        label: dueText,
-                                        highlight: overdue
-                                            ? _DueChipHighlight.danger
-                                            : _DueChipHighlight.neutral,
-                                        onPressed: () => _editDue(todo),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          if (dueText != null)
+                                            _TodoDueChip(
+                                              chipKey: ValueKey(
+                                                'todo_agenda_due_${todo.id}',
+                                              ),
+                                              icon: overdue
+                                                  ? Icons.warning_rounded
+                                                  : Icons.schedule_rounded,
+                                              label: dueText,
+                                              highlight: overdue
+                                                  ? _DueChipHighlight.danger
+                                                  : _DueChipHighlight.neutral,
+                                              onPressed: () => _editDue(todo),
+                                            ),
+                                          if (recurrenceText != null)
+                                            _TodoDueChip(
+                                              chipKey: ValueKey(
+                                                'todo_agenda_recurrence_${todo.id}',
+                                              ),
+                                              icon: Icons.repeat_rounded,
+                                              label: recurrenceText,
+                                              highlight:
+                                                  _DueChipHighlight.neutral,
+                                              onPressed: () =>
+                                                  _editRecurrenceRule(todo),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ),

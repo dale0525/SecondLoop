@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1348 (674 per locale)
+/// Strings: 1364 (682 per locale)
 ///
-/// Built on 2026-02-13 at 02:01 UTC
+/// Built on 2026-02-13 at 04:07 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -269,6 +269,8 @@ class _StringsActionsEn {
       _StringsActionsTodoDeleteEn._(_root);
   late final _StringsActionsTodoRecurrenceEditScopeEn todoRecurrenceEditScope =
       _StringsActionsTodoRecurrenceEditScopeEn._(_root);
+  late final _StringsActionsTodoRecurrenceRuleEn todoRecurrenceRule =
+      _StringsActionsTodoRecurrenceRuleEn._(_root);
   late final _StringsActionsHistoryEn history =
       _StringsActionsHistoryEn._(_root);
   late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
@@ -768,10 +770,27 @@ class _StringsActionsTodoRecurrenceEditScopeEn {
 
   // Translations
   String get title => 'Apply changes to recurring task';
-  String get message => 'How should this due date change be applied?';
+  String get message => 'How should this change be applied?';
   String get thisOnly => 'This occurrence only';
   String get thisAndFuture => 'This and future';
   String get wholeSeries => 'Whole series';
+}
+
+// Path: actions.todoRecurrenceRule
+class _StringsActionsTodoRecurrenceRuleEn {
+  _StringsActionsTodoRecurrenceRuleEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Edit recurrence';
+  String get edit => 'Recurrence';
+  String get frequencyLabel => 'Frequency';
+  String get intervalLabel => 'Interval';
+  String get daily => 'Daily';
+  String get weekly => 'Weekly';
+  String get monthly => 'Monthly';
+  String get yearly => 'Yearly';
 }
 
 // Path: actions.history
@@ -3380,6 +3399,9 @@ class _StringsActionsZhCn extends _StringsActionsEn {
       todoRecurrenceEditScope =
       _StringsActionsTodoRecurrenceEditScopeZhCn._(_root);
   @override
+  late final _StringsActionsTodoRecurrenceRuleZhCn todoRecurrenceRule =
+      _StringsActionsTodoRecurrenceRuleZhCn._(_root);
+  @override
   late final _StringsActionsHistoryZhCn history =
       _StringsActionsHistoryZhCn._(_root);
   @override
@@ -4160,13 +4182,42 @@ class _StringsActionsTodoRecurrenceEditScopeZhCn
   @override
   String get title => '重复任务如何应用修改';
   @override
-  String get message => '这次到期时间修改要应用到哪些任务？';
+  String get message => '这次更改要如何应用？';
   @override
   String get thisOnly => '仅本次';
   @override
   String get thisAndFuture => '本次及以后';
   @override
   String get wholeSeries => '整个系列';
+}
+
+// Path: actions.todoRecurrenceRule
+class _StringsActionsTodoRecurrenceRuleZhCn
+    extends _StringsActionsTodoRecurrenceRuleEn {
+  _StringsActionsTodoRecurrenceRuleZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '编辑重复规则';
+  @override
+  String get edit => '重复';
+  @override
+  String get frequencyLabel => '频率';
+  @override
+  String get intervalLabel => '间隔';
+  @override
+  String get daily => '每天';
+  @override
+  String get weekly => '每周';
+  @override
+  String get monthly => '每月';
+  @override
+  String get yearly => '每年';
 }
 
 // Path: actions.history
@@ -7990,13 +8041,29 @@ extension on Translations {
       case 'actions.todoRecurrenceEditScope.title':
         return 'Apply changes to recurring task';
       case 'actions.todoRecurrenceEditScope.message':
-        return 'How should this due date change be applied?';
+        return 'How should this change be applied?';
       case 'actions.todoRecurrenceEditScope.thisOnly':
         return 'This occurrence only';
       case 'actions.todoRecurrenceEditScope.thisAndFuture':
         return 'This and future';
       case 'actions.todoRecurrenceEditScope.wholeSeries':
         return 'Whole series';
+      case 'actions.todoRecurrenceRule.title':
+        return 'Edit recurrence';
+      case 'actions.todoRecurrenceRule.edit':
+        return 'Recurrence';
+      case 'actions.todoRecurrenceRule.frequencyLabel':
+        return 'Frequency';
+      case 'actions.todoRecurrenceRule.intervalLabel':
+        return 'Interval';
+      case 'actions.todoRecurrenceRule.daily':
+        return 'Daily';
+      case 'actions.todoRecurrenceRule.weekly':
+        return 'Weekly';
+      case 'actions.todoRecurrenceRule.monthly':
+        return 'Monthly';
+      case 'actions.todoRecurrenceRule.yearly':
+        return 'Yearly';
       case 'actions.history.title':
         return 'History';
       case 'actions.history.empty':
@@ -9373,13 +9440,29 @@ extension on _StringsZhCn {
       case 'actions.todoRecurrenceEditScope.title':
         return '重复任务如何应用修改';
       case 'actions.todoRecurrenceEditScope.message':
-        return '这次到期时间修改要应用到哪些任务？';
+        return '这次更改要如何应用？';
       case 'actions.todoRecurrenceEditScope.thisOnly':
         return '仅本次';
       case 'actions.todoRecurrenceEditScope.thisAndFuture':
         return '本次及以后';
       case 'actions.todoRecurrenceEditScope.wholeSeries':
         return '整个系列';
+      case 'actions.todoRecurrenceRule.title':
+        return '编辑重复规则';
+      case 'actions.todoRecurrenceRule.edit':
+        return '重复';
+      case 'actions.todoRecurrenceRule.frequencyLabel':
+        return '频率';
+      case 'actions.todoRecurrenceRule.intervalLabel':
+        return '间隔';
+      case 'actions.todoRecurrenceRule.daily':
+        return '每天';
+      case 'actions.todoRecurrenceRule.weekly':
+        return '每周';
+      case 'actions.todoRecurrenceRule.monthly':
+        return '每月';
+      case 'actions.todoRecurrenceRule.yearly':
+        return '每年';
       case 'actions.history.title':
         return '回溯';
       case 'actions.history.empty':

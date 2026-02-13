@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -190,6 +191,170 @@ void main() {
     );
     expect(backend.lastUpsertDueAtMs, isNull);
   });
+
+  testWidgets('Todo agenda recurring rule edit supports all scopes',
+      (tester) async {
+    for (final testCase in <({
+      String buttonKey,
+      TodoRecurrenceEditScope expectedScope,
+    })>[
+      (
+        buttonKey: 'todo_recurrence_scope_this_only',
+        expectedScope: TodoRecurrenceEditScope.thisOnly,
+      ),
+      (
+        buttonKey: 'todo_recurrence_scope_this_and_future',
+        expectedScope: TodoRecurrenceEditScope.thisAndFuture,
+      ),
+      (
+        buttonKey: 'todo_recurrence_scope_whole_series',
+        expectedScope: TodoRecurrenceEditScope.wholeSeries,
+      ),
+    ]) {
+      final todo = _todo('t1');
+      final backend = _Backend(
+        todos: [todo],
+        recurrenceTodoIds: const {'t1'},
+        supportsScopedRuleUpdate: true,
+      );
+
+      await tester.pumpWidget(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: TodoAgendaPage()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('todo_agenda_recurrence_t1')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('todo_recurrence_rule_frequency_field')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(const ValueKey('todo_recurrence_rule_frequency_weekly'))
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('todo_recurrence_rule_interval_field')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('todo_recurrence_rule_interval_2')).last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('todo_recurrence_rule_save')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(ValueKey(testCase.buttonKey)));
+      await tester.pumpAndSettle();
+
+      expect(backend.lastScopedRuleTodoId, 't1');
+      expect(backend.lastScopedRuleScope, testCase.expectedScope);
+      expect(
+        jsonDecode(backend.lastScopedRuleJson ?? '') as Map<String, dynamic>,
+        <String, dynamic>{'freq': 'weekly', 'interval': 2},
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('Todo detail recurring rule edit supports all scopes',
+      (tester) async {
+    for (final testCase in <({
+      String buttonKey,
+      TodoRecurrenceEditScope expectedScope,
+    })>[
+      (
+        buttonKey: 'todo_recurrence_scope_this_only',
+        expectedScope: TodoRecurrenceEditScope.thisOnly,
+      ),
+      (
+        buttonKey: 'todo_recurrence_scope_this_and_future',
+        expectedScope: TodoRecurrenceEditScope.thisAndFuture,
+      ),
+      (
+        buttonKey: 'todo_recurrence_scope_whole_series',
+        expectedScope: TodoRecurrenceEditScope.wholeSeries,
+      ),
+    ]) {
+      final todo = _todo('t1');
+      final backend = _Backend(
+        todos: [todo],
+        recurrenceTodoIds: const {'t1'},
+        supportsScopedRuleUpdate: true,
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: TodoDetailPage(initialTodo: todo),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('todo_detail_recurrence')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('todo_recurrence_rule_frequency_field')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(const ValueKey('todo_recurrence_rule_frequency_monthly'))
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('todo_recurrence_rule_interval_field')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('todo_recurrence_rule_interval_3')).last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('todo_recurrence_rule_save')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(ValueKey(testCase.buttonKey)));
+      await tester.pumpAndSettle();
+
+      expect(backend.lastScopedRuleTodoId, 't1');
+      expect(backend.lastScopedRuleScope, testCase.expectedScope);
+      expect(
+        jsonDecode(backend.lastScopedRuleJson ?? '') as Map<String, dynamic>,
+        <String, dynamic>{'freq': 'monthly', 'interval': 3},
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
 }
 
 Todo _todo(String id) {
@@ -237,18 +402,28 @@ final class _Backend extends AppBackend {
     required List<Todo> todos,
     this.recurrenceTodoIds = const <String>{},
     this.supportsScopedDueUpdate = false,
-  }) : _todosById = {
+    this.supportsScopedRuleUpdate = false,
+  })  : _todosById = {
           for (final todo in todos) todo.id: todo,
+        },
+        _recurrenceRulesByTodoId = {
+          for (final id in recurrenceTodoIds)
+            id: '{"freq":"daily","interval":1}',
         };
 
   final Map<String, Todo> _todosById;
   final Set<String> recurrenceTodoIds;
   final bool supportsScopedDueUpdate;
+  final bool supportsScopedRuleUpdate;
+  final Map<String, String> _recurrenceRulesByTodoId;
 
   int? lastUpsertDueAtMs;
   String? lastScopedTodoId;
   int? lastScopedDueAtMs;
   TodoRecurrenceEditScope? lastScope;
+  String? lastScopedRuleTodoId;
+  String? lastScopedRuleJson;
+  TodoRecurrenceEditScope? lastScopedRuleScope;
 
   Todo _mergeTodo({
     required String id,
@@ -410,11 +585,23 @@ final class _Backend extends AppBackend {
   Future<String?> getTodoRecurrenceRuleJson(
     Uint8List key, {
     required String todoId,
+  }) async =>
+      _recurrenceRulesByTodoId[todoId];
+
+  @override
+  Future<void> updateTodoRecurrenceRuleWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String ruleJson,
+    required TodoRecurrenceEditScope scope,
   }) async {
-    if (recurrenceTodoIds.contains(todoId)) {
-      return '{"freq":"daily","interval":1}';
+    if (!supportsScopedRuleUpdate) {
+      throw UnimplementedError('updateTodoRecurrenceRuleWithScope');
     }
-    return null;
+    lastScopedRuleTodoId = todoId;
+    lastScopedRuleJson = ruleJson;
+    lastScopedRuleScope = scope;
+    _recurrenceRulesByTodoId[todoId] = ruleJson;
   }
 
   @override
