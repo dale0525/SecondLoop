@@ -30,6 +30,11 @@ enum ChatMarkdownEditorAction {
   switchToSimpleInput,
 }
 
+enum ChatMarkdownCompactPane {
+  editor,
+  preview,
+}
+
 class ChatMarkdownEditorResult {
   const ChatMarkdownEditorResult._({
     required this.text,
@@ -78,6 +83,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
   late final TextEditingController _controller;
   final FocusNode _editorFocusNode = FocusNode();
   final ScrollController _previewScrollController = ScrollController();
+  ChatMarkdownCompactPane _compactPane = ChatMarkdownCompactPane.editor;
 
   @override
   void initState() {
@@ -109,6 +115,20 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
     if (!widget.allowPlainMode) return;
     Navigator.of(context)
         .pop(ChatMarkdownEditorResult.switchToSimpleInput(_controller.text));
+  }
+
+  void _showCompactEditor() {
+    if (_compactPane == ChatMarkdownCompactPane.editor) return;
+    setState(() => _compactPane = ChatMarkdownCompactPane.editor);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _editorFocusNode.requestFocus();
+    });
+  }
+
+  void _showCompactPreview() {
+    if (_compactPane == ChatMarkdownCompactPane.preview) return;
+    setState(() => _compactPane = ChatMarkdownCompactPane.preview);
   }
 
   @override
@@ -239,37 +259,123 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
 
   Widget _buildSplitEditor(BuildContext context) {
     final tokens = SlTokens.of(context);
+    final windowSize = MediaQuery.sizeOf(context);
+    final isWideLayout = windowSize.width > windowSize.height;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWideLayout = constraints.maxWidth >= 980;
-        final editorPane = _buildEditorPane(context);
-        final previewPane = _buildPreviewPane(context);
+    final editorPane = _buildEditorPane(context);
+    final previewPane = _buildPreviewPane(context);
 
-        if (isWideLayout) {
-          return Row(
-            children: [
-              Expanded(child: editorPane),
-              Container(
-                width: 1,
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                color: tokens.borderSubtle,
-              ),
-              Expanded(child: previewPane),
-            ],
-          );
-        }
-
-        return Column(
+    if (isWideLayout) {
+      return KeyedSubtree(
+        key: const ValueKey('chat_markdown_editor_layout_wide'),
+        child: Row(
           children: [
             Expanded(child: editorPane),
-            const SizedBox(height: 12),
-            Divider(height: 1, color: tokens.borderSubtle),
-            const SizedBox(height: 12),
+            Container(
+              width: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              color: tokens.borderSubtle,
+            ),
             Expanded(child: previewPane),
           ],
-        );
-      },
+        ),
+      );
+    }
+
+    final compactPane = _compactPane == ChatMarkdownCompactPane.editor
+        ? KeyedSubtree(
+            key: const ValueKey('chat_markdown_editor_compact_editor_pane'),
+            child: editorPane,
+          )
+        : KeyedSubtree(
+            key: const ValueKey('chat_markdown_editor_compact_preview_pane'),
+            child: previewPane,
+          );
+
+    return KeyedSubtree(
+      key: const ValueKey('chat_markdown_editor_layout_compact'),
+      child: Column(
+        children: [
+          _buildCompactPaneToggle(context),
+          const SizedBox(height: 12),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: compactPane,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactPaneToggle(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    return SlSurface(
+      color: tokens.surface2.withOpacity(0.86),
+      borderColor: tokens.borderSubtle,
+      borderRadius: BorderRadius.circular(tokens.radiusMd),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildCompactPaneToggleButton(
+              context,
+              key: const ValueKey('chat_markdown_editor_compact_show_editor'),
+              selected: _compactPane == ChatMarkdownCompactPane.editor,
+              icon: Icons.edit_note_rounded,
+              label: context.t.chat.markdownEditor.editorLabel,
+              onPressed: _showCompactEditor,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildCompactPaneToggleButton(
+              context,
+              key: const ValueKey('chat_markdown_editor_compact_show_preview'),
+              selected: _compactPane == ChatMarkdownCompactPane.preview,
+              icon: Icons.visibility_outlined,
+              label: context.t.chat.markdownEditor.previewLabel,
+              onPressed: _showCompactPreview,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactPaneToggleButton(
+    BuildContext context, {
+    required Key key,
+    required bool selected,
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    const buttonStyle = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size.fromHeight(38)),
+      visualDensity: VisualDensity.compact,
+      padding: WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 10),
+      ),
+    );
+
+    if (selected) {
+      return FilledButton.tonalIcon(
+        key: key,
+        onPressed: onPressed,
+        style: buttonStyle,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+      );
+    }
+
+    return OutlinedButton.icon(
+      key: key,
+      onPressed: onPressed,
+      style: buttonStyle,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
     );
   }
 
