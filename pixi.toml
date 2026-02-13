@@ -108,10 +108,10 @@ run-linux = { cmd = "dart pub global run fvm:main dart run tools/prepare_desktop
 [target.win-64.tasks]
 # Windows-specific overrides.
 # - init-env uses PowerShell (no bash dependency)
-# - run-windows triggers nuget + ffmpeg preflight automatically
+# - run-windows defaults to packaged MSI flow (use scripts/run_windows.ps1 -UseFlutterRun for hot reload path)
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"
 prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
-run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
-package-windows-msix = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_msix.ps1", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
-generate-windows-msix-cert = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate_windows_msix_cert.ps1"
+setup-wix-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_wix.ps1"
+run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows", "setup-wix-windows"] }
+package-windows-msi = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_msi.ps1", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-windows", "setup-wix-windows"] }

@@ -2,10 +2,11 @@ param(
   [string]$Version = '',
   [string]$OutputPath = 'dist',
   [string]$OutputName = '',
-  [string]$CertificatePath = '',
-  [string]$CertificatePassword = '',
-  [string]$Publisher = '',
-  [switch]$SkipBuild
+  [string]$ProductName = 'SecondLoop',
+  [string]$Manufacturer = 'SecondLoop Contributors',
+  [string]$UpgradeCode = '8B5A0942-79D3-4B5A-A4E5-3FB906DA63A1',
+  [switch]$SkipBuild,
+  [switch]$PassThru
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,7 +36,7 @@ function Import-DotEnvLocal {
       $value = $value.Trim('"')
     }
 
-    if ($name) { $env:$name = $value }
+    if ($name) { Set-Item -Path "Env:$name" -Value $value }
   }
 }
 
@@ -74,18 +75,25 @@ function Build-DartDefines {
   return $defines
 }
 
+function Resolve-DefaultMsiVersion {
+  $pubspecPath = Join-Path $repoRootPath 'pubspec.yaml'
+  if (-not (Test-Path $pubspecPath)) {
+    return '1.0.0'
+  }
+
+  $versionLine = Get-Content $pubspecPath | Where-Object { $_ -match '^\s*version\s*:\s*' } | Select-Object -First 1
+  if (-not $versionLine) {
+    return '1.0.0'
+  }
+
+  if ($versionLine -match '^\s*version\s*:\s*([0-9]+)\.([0-9]+)\.([0-9]+)(?:\+[0-9A-Za-z\.-]+)?\s*$') {
+    return "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+  }
+
+  return '1.0.0'
+}
+
 Import-DotEnvLocal
-
-if (-not $CertificatePath -and $env:SECONDLOOP_WINDOWS_MSIX_CERT_PATH) {
-  $CertificatePath = $env:SECONDLOOP_WINDOWS_MSIX_CERT_PATH
-}
-if (-not $CertificatePassword -and $env:SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD) {
-  $CertificatePassword = $env:SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD
-}
-if (-not $Publisher -and $env:SECONDLOOP_WINDOWS_MSIX_PUBLISHER) {
-  $Publisher = $env:SECONDLOOP_WINDOWS_MSIX_PUBLISHER
-}
-
 & (Join-Path $PSScriptRoot 'setup_nuget.ps1')
 
 $nugetDir = Join-Path (Join-Path $repoRootPath '.tool') 'nuget'
@@ -122,67 +130,51 @@ if (-not $SkipBuild) {
   }
 }
 
+$releaseDir = Join-Path $repoRootPath 'build/windows/x64/runner/Release'
+if (-not (Test-Path $releaseDir)) {
+  throw "Windows release output not found: $releaseDir"
+}
+
+if (-not $Version) {
+  $Version = Resolve-DefaultMsiVersion
+}
+
+if (-not $OutputName) {
+  $OutputName = 'secondloop-windows-x64'
+}
+
 New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
 
-$msixArgs = @(
-  'run',
-  'msix:create',
-  '--build-windows',
-  'false',
-  '--output-path',
-  $OutputPath,
-  '--install-certificate',
-  'false'
-)
-
-if ($Version) {
-  $msixArgs += @('--version', $Version)
-}
-if ($OutputName) {
-  $msixArgs += @('--output-name', $OutputName)
-}
-if ($Publisher) {
-  $msixArgs += @('--publisher', $Publisher)
-}
-if ($CertificatePath) {
-  $msixArgs += @('--certificate-path', $CertificatePath)
-}
-if ($CertificatePassword) {
-  $msixArgs += @('--certificate-password', $CertificatePassword)
+$createArgs = @{
+  SourceDir = $releaseDir
+  Version = $Version
+  OutputPath = $OutputPath
+  OutputName = $OutputName
+  ProductName = $ProductName
+  Manufacturer = $Manufacturer
+  UpgradeCode = $UpgradeCode
 }
 
-Write-Host ('Running: dart ' + ($msixArgs -join ' '))
-& dart pub global run fvm:main dart @msixArgs
+if ($PassThru) {
+  $createArgs.PassThru = $true
+}
+
+$msiPath = & (Join-Path $PSScriptRoot 'create_windows_msi.ps1') @createArgs
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-$latestMsix = Get-ChildItem -Path $OutputPath -Filter '*.msix' | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-if (-not $latestMsix) {
-  throw "MSIX package not found under $OutputPath"
+$expectedMsiPath = Join-Path $OutputPath ($OutputName + '.msi')
+if (-not (Test-Path $expectedMsiPath)) {
+  throw "MSI package not found: $expectedMsiPath"
 }
 
-if ($CertificatePath -and (Test-Path $CertificatePath)) {
-  try {
-    if ($CertificatePassword) {
-      $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
-        (Resolve-Path $CertificatePath).Path,
-        $CertificatePassword,
-        ([System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
-      )
-    } else {
-      $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
-        (Resolve-Path $CertificatePath).Path
-      )
-    }
-
-    $cerPath = Join-Path $latestMsix.DirectoryName ($latestMsix.BaseName + '.cer')
-    $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-    [System.IO.File]::WriteAllBytes($cerPath, $cerBytes)
-    Write-Host "Exported public certificate: $cerPath"
-  } catch {
-    Write-Warning "Failed to export .cer from $CertificatePath: $_"
+if ($PassThru) {
+  $normalized = $msiPath | Select-Object -Last 1
+  if (-not $normalized) {
+    $normalized = $expectedMsiPath
   }
+  Write-Output $normalized
+} else {
+  Write-Host "MSI package ready: $expectedMsiPath"
 }
-
-Write-Host "MSIX package ready: $($latestMsix.FullName)"

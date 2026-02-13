@@ -492,8 +492,8 @@ class _DiagnosticsUpdateStatusText {
   final bool _isZh;
 
   String get idle => _isZh
-      ? '点击检查更新；支持的平台可一键更新并自动重启。'
-      : 'Check for updates and install with one click when available.';
+      ? '点击检查更新；Linux 可自动更新重启，Windows 请下载 MSI 安装。'
+      : 'Check for updates. Linux can auto-update and restart; Windows uses MSI download/install.';
 
   String get checking => _isZh ? '正在检查更新…' : 'Checking for updates…';
 
@@ -504,8 +504,8 @@ class _DiagnosticsUpdateStatusText {
       : 'Update available ($version). Click update to restart and apply automatically.';
 
   String availableExternal({required String version}) => _isZh
-      ? '发现新版本（$version）。请打开下载页完成更新。'
-      : 'Update available ($version). Open the download page to update.';
+      ? '发现新版本（$version）。请打开下载页完成安装（Windows 为 MSI）。'
+      : 'Update available ($version). Open the download page to install (MSI on Windows).';
 
   String failed({required String error}) =>
       _isZh ? '检查更新失败：$error' : 'Update check failed: $error';

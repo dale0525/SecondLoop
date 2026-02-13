@@ -360,8 +360,8 @@ class _AboutStatusText {
   final bool _isZh;
 
   String get idle => _isZh
-      ? '点击检查更新；Windows 平台支持自动下载并重启安装。'
-      : 'Check for updates. Windows can auto-download and restart to install.';
+      ? '点击检查更新；Linux 可自动更新重启，Windows 请下载 MSI 安装。'
+      : 'Check for updates. Linux can auto-update and restart; Windows uses MSI download/install.';
 
   String get checking => _isZh ? '正在检查更新…' : 'Checking for updates…';
 

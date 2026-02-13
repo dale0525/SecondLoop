@@ -59,8 +59,8 @@ void main() {
       ),
       installMode: AppUpdateInstallMode.seamlessRestart,
       asset: AppUpdateAsset(
-        name: 'SecondLoop-windows-x64-v1.1.0.zip',
-        downloadUri: Uri.parse('https://cdn.example.com/win.zip'),
+        name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+        downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
       ),
     );
     final service = _FakeAutoUpdateService(

@@ -210,8 +210,7 @@ class AppUpdateService {
     }
 
     final platform = _platform;
-    if (platform != AppUpdatePlatform.windows &&
-        platform != AppUpdatePlatform.linux) {
+    if (platform != AppUpdatePlatform.linux) {
       throw StateError('seamless_update_not_supported_for_$platform');
     }
 
@@ -227,25 +226,6 @@ class AppUpdateService {
     final sourceDir = _resolveExtractedSourceDir(extractedDir, platform);
     final executablePath = File(Platform.resolvedExecutable).absolute.path;
     final appDirPath = File(executablePath).parent.path;
-
-    if (platform == AppUpdatePlatform.windows) {
-      final script = File('${tempRoot.path}/apply_update.cmd');
-      await script.writeAsString(
-        _buildWindowsUpdaterScript(
-          pid: pid,
-          appDirPath: appDirPath,
-          executablePath: executablePath,
-          sourceDirPath: sourceDir.path,
-          tempRootPath: tempRoot.path,
-        ),
-      );
-      await Process.start(
-        'cmd',
-        ['/c', script.path],
-        mode: ProcessStartMode.detached,
-      );
-      exit(0);
-    }
 
     final script = File('${tempRoot.path}/apply_update.sh');
     await script.writeAsString(
@@ -386,7 +366,7 @@ class AppUpdateService {
     RegExp? matcher;
     switch (_platform) {
       case AppUpdatePlatform.windows:
-        matcher = RegExp(r'^SecondLoop-windows-x64-.*\.zip$');
+        matcher = RegExp(r'^SecondLoop-windows-x64-.*\.msi$');
       case AppUpdatePlatform.macos:
         matcher = RegExp(r'^SecondLoop-macos-.*\.(dmg|zip)$');
       case AppUpdatePlatform.linux:
@@ -412,8 +392,6 @@ class AppUpdateService {
     }
 
     return switch (_platform) {
-      AppUpdatePlatform.windows when asset.name.endsWith('.zip') =>
-        AppUpdateInstallMode.seamlessRestart,
       AppUpdatePlatform.linux when asset.name.endsWith('.tar.gz') =>
         AppUpdateInstallMode.seamlessRestart,
       _ => AppUpdateInstallMode.externalDownload,
@@ -440,49 +418,6 @@ class AppUpdateService {
     }
 
     return extractedDir;
-  }
-
-  String _buildWindowsUpdaterScript({
-    required int pid,
-    required String appDirPath,
-    required String executablePath,
-    required String sourceDirPath,
-    required String tempRootPath,
-  }) {
-    final safePid = pid.toString();
-    final appDir = _escapeWindowsEnvValue(appDirPath);
-    final executable = _escapeWindowsEnvValue(executablePath);
-    final sourceDir = _escapeWindowsEnvValue(sourceDirPath);
-    final tempRoot = _escapeWindowsEnvValue(tempRootPath);
-
-    return '''@echo off
-setlocal enableextensions
-set "APP_PID=$safePid"
-set "APP_DIR=$appDir"
-set "EXE_PATH=$executable"
-set "SOURCE_DIR=$sourceDir"
-set "TEMP_ROOT=$tempRoot"
-
-:wait_loop
-tasklist /FI "PID eq %APP_PID%" | find "%APP_PID%" >nul
-if not errorlevel 1 (
-  timeout /T 1 /NOBREAK >nul
-  goto wait_loop
-)
-
-robocopy "%SOURCE_DIR%" "%APP_DIR%" /E /NFL /NDL /NJH /NJS /NC /NS /NP >nul
-set "RC=%ERRORLEVEL%"
-if %RC% GEQ 8 goto failed
-
-start "" "%EXE_PATH%"
-rmdir /S /Q "%TEMP_ROOT%" >nul 2>nul
-del "%~f0" >nul 2>nul
-exit /B 0
-
-:failed
-start "" "%EXE_PATH%"
-exit /B %RC%
-''';
   }
 
   String _buildLinuxUpdaterScript({
@@ -557,10 +492,6 @@ AppUpdatePlatform _detectPlatform() {
   if (Platform.isAndroid) return AppUpdatePlatform.android;
   if (Platform.isIOS) return AppUpdatePlatform.ios;
   return AppUpdatePlatform.unsupported;
-}
-
-String _escapeWindowsEnvValue(String value) {
-  return value.replaceAll('%', '%%').replaceAll('"', '""');
 }
 
 String _shellQuote(String value) {

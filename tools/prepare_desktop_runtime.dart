@@ -561,29 +561,48 @@ Future<String> _readExpectedSha(String shaFilePath) async {
 }
 
 Future<String?> _computeSha256(String filePath) async {
-  if (await _hasCommand('sha256sum')) {
-    final result = await Process.run('sha256sum', <String>[filePath]);
-    if (result.exitCode != 0) return null;
-    return extractSha256FromCommandOutput('${result.stdout}');
-  }
-
-  if (await _hasCommand('shasum')) {
-    final result = await Process.run('shasum', <String>['-a', '256', filePath]);
-    if (result.exitCode != 0) return null;
-    return extractSha256FromCommandOutput('${result.stdout}');
-  }
-
-  if (await _hasCommand('certutil')) {
-    final result = await Process.run('certutil', <String>[
+  if (Platform.isWindows) {
+    final certutilSha = await _computeSha256WithCommand('certutil', <String>[
       '-hashfile',
       filePath,
       'SHA256',
     ]);
-    if (result.exitCode != 0) return null;
-    return extractSha256FromCommandOutput('${result.stdout}');
+    if (certutilSha != null) return certutilSha;
+  }
+
+  final sha256sumSha =
+      await _computeSha256WithCommand('sha256sum', <String>[filePath]);
+  if (sha256sumSha != null) return sha256sumSha;
+
+  final shasumSha = await _computeSha256WithCommand(
+      'shasum', <String>['-a', '256', filePath]);
+  if (shasumSha != null) return shasumSha;
+
+  if (!Platform.isWindows) {
+    final certutilSha = await _computeSha256WithCommand('certutil', <String>[
+      '-hashfile',
+      filePath,
+      'SHA256',
+    ]);
+    if (certutilSha != null) return certutilSha;
   }
 
   return null;
+}
+
+Future<String?> _computeSha256WithCommand(
+  String command,
+  List<String> arguments,
+) async {
+  if (!await _hasCommand(command)) return null;
+  try {
+    final result = await Process.run(command, arguments);
+    if (result.exitCode != 0) return null;
+    return extractSha256FromCommandOutput('${result.stdout}');
+  } on ProcessException {
+    // Some PATH entries report a command that cannot be launched directly.
+    return null;
+  }
 }
 
 Future<void> _extractArchive(String archivePath, String outputDir) async {

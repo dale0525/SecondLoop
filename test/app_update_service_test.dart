@@ -19,7 +19,7 @@ void main() {
   });
 
   group('AppUpdateService.checkForUpdates', () {
-    test('returns seamless desktop update when matching asset exists',
+    test('returns external Windows MSI update when matching asset exists',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -32,8 +32,8 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-windows-x64-v1.1.0.zip',
-              'browser_download_url': 'https://cdn.example.com/win.zip',
+              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
+              'browser_download_url': 'https://cdn.example.com/win.msi',
             },
           ],
         },
@@ -45,8 +45,8 @@ void main() {
       expect(result.errorMessage, isNull);
       expect(update, isNotNull);
       expect(update!.latestTag, 'v1.1.0');
-      expect(update.installMode, AppUpdateInstallMode.seamlessRestart);
-      expect(update.downloadUri.toString(), 'https://cdn.example.com/win.zip');
+      expect(update.installMode, AppUpdateInstallMode.externalDownload);
+      expect(update.downloadUri.toString(), 'https://cdn.example.com/win.msi');
     });
 
     test('falls back to external release page when no platform asset exists',
@@ -62,8 +62,8 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-windows-x64-v1.1.0.zip',
-              'browser_download_url': 'https://cdn.example.com/win.zip',
+              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
+              'browser_download_url': 'https://cdn.example.com/win.msi',
             },
           ],
         },
