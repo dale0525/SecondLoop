@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/ask_ai_source_prefs.dart';
+import '../../core/ai/detached_ask_recovery_policy.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/semantic_parse.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
@@ -85,6 +86,7 @@ part 'chat_page_methods_b_attachments.dart';
 part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
 part 'chat_page_methods_e.dart';
+part 'chat_page_methods_i_detached_jobs.dart';
 part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
@@ -106,6 +108,11 @@ const _kAskAiEmailNotVerifiedSnackKey = ValueKey(
 );
 
 const _kAskAiErrorPrefix = '\u001eSL_ERROR\u001e';
+const _kAskAiMetaPrefix = '\u001eSL_META\u001e';
+const _kAskAiDetachedJobPrefsKey = 'ask_ai_detached_job_v1';
+const _kAskAiDetachedRecoveredSnackKey = ValueKey(
+  'ask_ai_detached_recovered_snack',
+);
 const _kFailedAskMessageId = 'pending_failed_user';
 const _kCollapsedMessageHeight = 280.0;
 const _kLongMessageRuneThreshold = 600;
@@ -404,6 +411,11 @@ class _ChatPageState extends State<ChatPage> {
   VoidCallback? _syncListener;
   MessageAutoActionsQueue? _messageAutoActionsQueue;
   int _todoAgendaBannerCollapseSignal = 0;
+  bool _detachedAskRecoveryChecked = false;
+  Timer? _detachedAskRecoveryTimer;
+  String? _activeCloudRequestId;
+  String? _activeCloudGatewayBaseUrl;
+  String? _activeCloudIdToken;
 
   AudioRecorder? _audioRecorderInstance;
   _PendingAudioUploadRetry? _pendingAudioUploadRetry;
@@ -459,6 +471,7 @@ class _ChatPageState extends State<ChatPage> {
     }
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
+    _detachedAskRecoveryTimer?.cancel();
     unawaited(_audioRecorderInstance?.dispose());
     _controller.dispose();
     _inputFocusNode.dispose();
@@ -474,6 +487,7 @@ class _ChatPageState extends State<ChatPage> {
     _agendaFuture ??= _loadTodoAgendaSummary();
     _attachSyncEngine();
     unawaited(_refreshComposerAskAiRoute());
+    unawaited(_recoverDetachedAskAiIfNeeded());
   }
 
   @override

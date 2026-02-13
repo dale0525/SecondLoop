@@ -6,8 +6,45 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use serde_json::Value;
 use std::io::{BufRead, BufReader};
+use std::time::Duration;
+
+use sha2::{Digest, Sha256};
 
 const OCR_MARKDOWN_LANG_PREFIX: &str = "ocr_markdown:";
+const DETACHED_JOB_STATUS_TIMEOUT_SECONDS: u64 = 12;
+const SECONDLOOP_CLOUD_REQUEST_ID_KEY: &str = "secondloop_cloud_request_id";
+
+fn build_request_id(
+    model_name: &str,
+    lang: &str,
+    mime_type: &str,
+    image_bytes: &[u8],
+    prompt_mode: MediaAnnotationPromptMode,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"secondloop_media_annotation_detached_v1");
+    hasher.update(model_name.trim().as_bytes());
+    hasher.update([0]);
+    hasher.update(lang.trim().as_bytes());
+    hasher.update([0]);
+    hasher.update(mime_type.trim().to_ascii_lowercase().as_bytes());
+    hasher.update([0]);
+    match prompt_mode {
+        MediaAnnotationPromptMode::Annotation => hasher.update(b"annotation"),
+        MediaAnnotationPromptMode::OcrMarkdown => hasher.update(b"ocr_markdown"),
+    }
+    hasher.update([0]);
+    hasher.update(image_bytes.len().to_le_bytes());
+    hasher.update(image_bytes);
+
+    let digest = hasher.finalize();
+    let mut suffix = String::with_capacity(32);
+    for b in &digest[..16] {
+        suffix.push_str(&format!("{b:02x}"));
+    }
+
+    format!("req_ma_{suffix}")
+}
 
 pub fn cloud_gateway_chat_completions_url(gateway_base_url: &str) -> String {
     format!(
@@ -18,6 +55,13 @@ pub fn cloud_gateway_chat_completions_url(gateway_base_url: &str) -> String {
 
 fn openai_compatible_chat_completions_url(base_url: &str) -> String {
     format!("{}/chat/completions", base_url.trim_end_matches('/'))
+}
+
+fn cloud_gateway_chat_job_status_url(gateway_base_url: &str, request_id: &str) -> String {
+    format!(
+        "{}/v1/chat/jobs/{request_id}",
+        gateway_base_url.trim_end_matches('/')
+    )
 }
 
 #[derive(Debug, Serialize)]
@@ -420,6 +464,52 @@ fn default_usage() -> MediaAnnotationUsage {
     }
 }
 
+fn parse_annotation_payload_text(raw: &str) -> Result<Value> {
+    let normalized = normalize_annotation_content(raw.to_string());
+    if normalized.trim().is_empty() {
+        return Err(anyhow!("annotation stream returned empty content"));
+    }
+
+    let payload: Value = serde_json::from_str(&normalized)
+        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
+    normalize_annotation_payload(payload)
+}
+
+fn maybe_extract_detached_job_result_text(status_payload: &Value) -> Option<String> {
+    let status = status_payload
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+
+    if status != "completed" {
+        return None;
+    }
+
+    let result_text = status_payload
+        .get("result_text")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+
+    if result_text.is_empty() {
+        return None;
+    }
+
+    Some(result_text.to_string())
+}
+
+fn attach_cloud_request_id(mut payload: Value, request_id: &str) -> Value {
+    if let Value::Object(map) = &mut payload {
+        map.insert(
+            SECONDLOOP_CLOUD_REQUEST_ID_KEY.to_string(),
+            Value::String(request_id.to_string()),
+        );
+    }
+    payload
+}
+
 fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
     let parsed: MediaAnnotationChatCompletionsResponse =
         serde_json::from_str(body).map_err(|e| anyhow!("invalid chat completions json: {e}"))?;
@@ -435,10 +525,7 @@ fn parse_response_json(body: &str) -> Result<(Value, MediaAnnotationUsage)> {
         .content
         .map(OpenAiChatMessageContent::into_text)
         .unwrap_or_default();
-    let normalized = normalize_annotation_content(content);
-    let payload: Value = serde_json::from_str(&normalized)
-        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
-    let payload = normalize_annotation_payload(payload)?;
+    let payload = parse_annotation_payload_text(&content)?;
 
     let usage = parsed.usage.map(usage_from_openai_usage);
 
@@ -514,13 +601,7 @@ fn parse_response_sse_reader<R: BufRead>(reader: &mut R) -> Result<(Value, Media
         }
     }
 
-    let normalized = normalize_annotation_content(all_text);
-    if normalized.trim().is_empty() {
-        return Err(anyhow!("annotation stream returned empty content"));
-    }
-    let payload: Value = serde_json::from_str(&normalized)
-        .map_err(|e| anyhow!("annotation content is not valid json: {e}"))?;
-    let payload = normalize_annotation_payload(payload)?;
+    let payload = parse_annotation_payload_text(&all_text)?;
 
     Ok((payload, usage.unwrap_or_else(default_usage)))
 }
@@ -561,22 +642,67 @@ impl CloudGatewayMediaAnnotationClient {
         }
     }
 
+    fn try_recover_detached_payload(&self, request_id: &str) -> Option<Value> {
+        let status_url = cloud_gateway_chat_job_status_url(&self.gateway_base_url, request_id);
+
+        let resp = self
+            .client
+            .get(status_url)
+            .bearer_auth(&self.id_token)
+            .header(header::ACCEPT, "application/json")
+            .timeout(Duration::from_secs(DETACHED_JOB_STATUS_TIMEOUT_SECONDS))
+            .send()
+            .ok()?;
+
+        if !resp.status().is_success() {
+            return None;
+        }
+
+        let body = resp.text().ok()?;
+        let status_payload: Value = serde_json::from_str(&body).ok()?;
+        let result_text = maybe_extract_detached_job_result_text(&status_payload)?;
+        let payload = parse_annotation_payload_text(&result_text).ok()?;
+        Some(attach_cloud_request_id(payload, request_id))
+    }
+
     pub fn annotate_image(&self, lang: &str, mime_type: &str, image_bytes: &[u8]) -> Result<Value> {
         let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
+            image_bytes.len(),
+            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown,
+        );
         let purpose = match prompt_mode {
             MediaAnnotationPromptMode::Annotation => "media_annotation",
             MediaAnnotationPromptMode::OcrMarkdown => "ask_ai",
         };
+        let request_id =
+            build_request_id(&self.model_name, lang, mime_type, image_bytes, prompt_mode);
+
+        if let Some(payload) = self.try_recover_detached_payload(&request_id) {
+            return Ok(payload);
+        }
 
         let url = cloud_gateway_chat_completions_url(&self.gateway_base_url);
-        let resp = self
+        let resp = match self
             .client
             .post(url)
             .bearer_auth(&self.id_token)
             .header("x-secondloop-purpose", purpose)
+            .header("x-secondloop-request-id", &request_id)
+            .header("x-secondloop-detach-policy", "continue_on_disconnect")
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
-            .send()?;
+            .timeout(request_timeout)
+            .send()
+        {
+            Ok(resp) => resp,
+            Err(err) => {
+                if let Some(payload) = self.try_recover_detached_payload(&request_id) {
+                    return Ok(payload);
+                }
+                return Err(err.into());
+            }
+        };
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -586,8 +712,15 @@ impl CloudGatewayMediaAnnotationClient {
             ));
         }
 
-        let (payload, _usage) = parse_response_from_http_response(resp)?;
-        Ok(payload)
+        match parse_response_from_http_response(resp) {
+            Ok((payload, _usage)) => Ok(attach_cloud_request_id(payload, &request_id)),
+            Err(err) => {
+                if let Some(payload) = self.try_recover_detached_payload(&request_id) {
+                    return Ok(payload);
+                }
+                Err(err)
+            }
+        }
     }
 }
 
@@ -614,7 +747,11 @@ impl OpenAiCompatibleMediaAnnotationClient {
         mime_type: &str,
         image_bytes: &[u8],
     ) -> Result<(Value, MediaAnnotationUsage)> {
-        let (req, _prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
+        let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
+            image_bytes.len(),
+            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown,
+        );
 
         let url = openai_compatible_chat_completions_url(&self.base_url);
         let resp = self
@@ -623,6 +760,7 @@ impl OpenAiCompatibleMediaAnnotationClient {
             .bearer_auth(&self.api_key)
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
+            .timeout(request_timeout)
             .send()?;
 
         if !resp.status().is_success() {

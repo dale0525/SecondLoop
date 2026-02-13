@@ -5,6 +5,10 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final sub = _askSub;
     if (!_asking || _stopRequested) return;
 
+    final activeRequestId = _activeCloudRequestId;
+    final activeGatewayBaseUrl = _activeCloudGatewayBaseUrl;
+    final activeIdToken = _activeCloudIdToken;
+
     _setState(() {
       _stopRequested = true;
       _askSub = null;
@@ -13,10 +17,28 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       _streamingAnswer = '';
       _askAttemptCreatedAtMs = null;
       _askAttemptAnchorMessageId = null;
+      _activeCloudRequestId = null;
+      _activeCloudGatewayBaseUrl = null;
+      _activeCloudIdToken = null;
     });
 
     if (sub != null) {
       unawaited(sub.cancel());
+    }
+
+    if (activeRequestId != null &&
+        activeGatewayBaseUrl != null &&
+        activeIdToken != null) {
+      unawaited(
+        _cancelDetachedAskJob(
+          gatewayBaseUrl: activeGatewayBaseUrl,
+          idToken: activeIdToken,
+          requestId: activeRequestId,
+        ),
+      );
+      unawaited(
+        _clearDetachedAskSnapshot(expectedRequestId: activeRequestId),
+      );
     }
 
     if (!mounted) return;
@@ -261,9 +283,21 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       Stream<String> stream, {
       required bool fromCloud,
       required bool canRetryWithoutEmbeddings,
+      String? cloudGatewayBaseUrl,
+      String? cloudIdTokenForStream,
     }) async {
       late final StreamSubscription<String> sub;
       var sawError = false;
+
+      if (fromCloud) {
+        _activeCloudRequestId = null;
+        _activeCloudGatewayBaseUrl = cloudGatewayBaseUrl?.trim();
+        _activeCloudIdToken = cloudIdTokenForStream?.trim();
+      } else {
+        _activeCloudRequestId = null;
+        _activeCloudGatewayBaseUrl = null;
+        _activeCloudIdToken = null;
+      }
 
       Future<void> handleStreamError(Object e) async {
         try {
@@ -336,6 +370,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
               fallbackStream,
               fromCloud: true,
               canRetryWithoutEmbeddings: false,
+              cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+              cloudIdTokenForStream: cloudIdToken,
             );
             return;
           }
@@ -362,6 +398,14 @@ extension _ChatPageStateMethodsE on _ChatPageState {
               _askError = null;
               _streamingAnswer = '';
             });
+
+            final staleRequestId = _activeCloudRequestId;
+            _activeCloudRequestId = null;
+            _activeCloudGatewayBaseUrl = null;
+            _activeCloudIdToken = null;
+            await _clearDetachedAskSnapshot(
+              expectedRequestId: staleRequestId,
+            );
 
             final hasBrokEmbeddings =
                 await _hasActiveEmbeddingProfile(backend, sessionKey);
@@ -411,6 +455,19 @@ extension _ChatPageStateMethodsE on _ChatPageState {
         (delta) {
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
+          if (delta.startsWith(_kAskAiMetaPrefix)) {
+            if (fromCloud) {
+              unawaited(
+                _handleCloudAskMetaDelta(
+                  delta,
+                  question: question,
+                  gatewayBaseUrl: cloudGatewayBaseUrl,
+                  idToken: cloudIdTokenForStream,
+                ),
+              );
+            }
+            return;
+          }
           if (delta.startsWith(_kAskAiErrorPrefix)) {
             sawError = true;
             final errText = delta.substring(_kAskAiErrorPrefix.length).trim();
@@ -437,6 +494,9 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             _showAskAiFailure(question);
             return;
           }
+          final completedRequestId = _activeCloudRequestId;
+          final completedGatewayBaseUrl = _activeCloudGatewayBaseUrl;
+          final completedIdToken = _activeCloudIdToken;
           _setState(() {
             _askSub = null;
             _asking = false;
@@ -444,7 +504,17 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             _streamingAnswer = '';
             _askAttemptCreatedAtMs = null;
             _askAttemptAnchorMessageId = null;
+            _activeCloudRequestId = null;
+            _activeCloudGatewayBaseUrl = null;
+            _activeCloudIdToken = null;
           });
+          unawaited(
+            _finalizeDetachedAskSnapshot(
+              requestId: completedRequestId,
+              gatewayBaseUrl: completedGatewayBaseUrl,
+              idToken: completedIdToken,
+            ),
+          );
           _refresh();
           SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
         },
@@ -459,6 +529,11 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       stream,
       fromCloud: route == AskAiRouteKind.cloudGateway,
       canRetryWithoutEmbeddings: canRetryCloudWithoutEmbeddings,
+      cloudGatewayBaseUrl: route == AskAiRouteKind.cloudGateway
+          ? cloudGatewayConfig.baseUrl
+          : null,
+      cloudIdTokenForStream:
+          route == AskAiRouteKind.cloudGateway ? cloudIdToken : null,
     );
   }
 
@@ -608,6 +683,307 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       return profiles.any((p) => p.isActive);
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<void> _handleCloudAskMetaDelta(
+    String delta, {
+    required String question,
+    String? gatewayBaseUrl,
+    String? idToken,
+  }) async {
+    if (!delta.startsWith(_kAskAiMetaPrefix)) return;
+    final rawPayload = delta.substring(_kAskAiMetaPrefix.length).trim();
+    if (rawPayload.isEmpty) return;
+
+    Map<String, dynamic> payload;
+    try {
+      final decoded = jsonDecode(rawPayload);
+      if (decoded is! Map<String, dynamic>) return;
+      payload = decoded;
+    } catch (_) {
+      return;
+    }
+
+    if ((payload['type'] as String?)?.trim() != 'cloud_request_id') {
+      return;
+    }
+
+    final requestId = (payload['request_id'] as String?)?.trim();
+    if (requestId == null || requestId.isEmpty) return;
+
+    _activeCloudRequestId = requestId;
+    if ((gatewayBaseUrl ?? '').trim().isNotEmpty) {
+      _activeCloudGatewayBaseUrl = gatewayBaseUrl!.trim();
+    }
+    if ((idToken ?? '').trim().isNotEmpty) {
+      _activeCloudIdToken = idToken!.trim();
+    }
+
+    await _persistDetachedAskSnapshot(
+      requestId: requestId,
+      question: question,
+      gatewayBaseUrl: _activeCloudGatewayBaseUrl,
+    );
+  }
+
+  Future<void> _persistDetachedAskSnapshot({
+    required String requestId,
+    required String question,
+    String? gatewayBaseUrl,
+  }) async {
+    if (requestId.trim().isEmpty) return;
+    if (question.trim().isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final payload = <String, Object?>{
+      'request_id': requestId.trim(),
+      'question': question,
+      'conversation_id': widget.conversation.id,
+      'gateway_base_url': gatewayBaseUrl?.trim(),
+      'created_at_ms': DateTime.now().millisecondsSinceEpoch,
+    };
+    await prefs.setString(_kAskAiDetachedJobPrefsKey, jsonEncode(payload));
+  }
+
+  Future<void> _clearDetachedAskSnapshot({String? expectedRequestId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (expectedRequestId == null || expectedRequestId.trim().isEmpty) {
+      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      return;
+    }
+
+    final raw = prefs.getString(_kAskAiDetachedJobPrefsKey);
+    if (raw == null) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        await prefs.remove(_kAskAiDetachedJobPrefsKey);
+        return;
+      }
+      final currentRequestId = (decoded['request_id'] as String?)?.trim();
+      if (currentRequestId == expectedRequestId.trim()) {
+        await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      }
+    } catch (_) {
+      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+    }
+  }
+
+  Future<void> _recoverDetachedAskAiIfNeeded() async {
+    if (!mounted) return;
+    if (_detachedAskRecoveryChecked) return;
+
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    if (cloudAuthScope == null) {
+      _detachedAskRecoveryChecked = false;
+      return;
+    }
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    _detachedAskRecoveryChecked = true;
+
+    _detachedAskRecoveryTimer?.cancel();
+    _detachedAskRecoveryTimer = null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kAskAiDetachedJobPrefsKey);
+    if (raw == null || raw.trim().isEmpty) return;
+
+    Map<String, dynamic> snapshot;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        await prefs.remove(_kAskAiDetachedJobPrefsKey);
+        return;
+      }
+      snapshot = decoded;
+    } catch (_) {
+      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      return;
+    }
+
+    int? parseInt(Object? value) {
+      if (value is int) return value;
+      if (value is double) return value.isFinite ? value.toInt() : null;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    final createdAtMs = parseInt(snapshot['created_at_ms']);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    const snapshotMaxAgeMs = 26 * 60 * 60 * 1000;
+    if (createdAtMs != null && nowMs - createdAtMs > snapshotMaxAgeMs) {
+      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      return;
+    }
+
+    final conversationId = (snapshot['conversation_id'] as String?)?.trim();
+    if (conversationId != widget.conversation.id) {
+      _detachedAskRecoveryChecked = false;
+      return;
+    }
+
+    final requestId = (snapshot['request_id'] as String?)?.trim();
+    if (requestId == null || requestId.isEmpty) {
+      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      return;
+    }
+
+    final question = (snapshot['question'] as String?)?.trim();
+    if (question == null || question.isEmpty) {
+      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      return;
+    }
+
+    String? idToken;
+    try {
+      idToken = await cloudAuthScope.controller.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+    if ((idToken ?? '').trim().isEmpty) {
+      _detachedAskRecoveryChecked = false;
+      return;
+    }
+
+    final snapshotBase = (snapshot['gateway_base_url'] as String?)?.trim();
+    final gatewayBaseUrl = (snapshotBase?.isNotEmpty ?? false)
+        ? snapshotBase!
+        : cloudAuthScope.gatewayConfig.baseUrl.trim();
+    if (gatewayBaseUrl.isEmpty) {
+      _detachedAskRecoveryChecked = false;
+      return;
+    }
+
+    final status = await _fetchDetachedAskJobStatus(
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken!,
+      requestId: requestId,
+    );
+    if (status == null) {
+      _detachedAskRecoveryChecked = false;
+      return;
+    }
+
+    final state = (status['status'] as String?)?.trim().toLowerCase() ?? '';
+
+    if (state == 'running' || state == 'cancel_requested') {
+      final pollDelay = detachedAskRecoveryPollDelay(
+        nowMs: nowMs,
+        createdAtMs: createdAtMs,
+      );
+
+      _detachedAskRecoveryChecked = false;
+      _detachedAskRecoveryTimer = Timer(pollDelay, () {
+        if (!mounted) return;
+        unawaited(_recoverDetachedAskAiIfNeeded());
+      });
+      return;
+    }
+
+    if (state == 'completed') {
+      final resultText = (status['result_text'] as String?)?.trim() ?? '';
+      if (resultText.isEmpty) {
+        await prefs.remove(_kAskAiDetachedJobPrefsKey);
+        return;
+      }
+
+      await backend.insertMessage(
+        sessionKey,
+        widget.conversation.id,
+        role: 'user',
+        content: question,
+      );
+      await backend.insertMessage(
+        sessionKey,
+        widget.conversation.id,
+        role: 'assistant',
+        content: resultText,
+      );
+      await _finalizeDetachedAskSnapshot(
+        requestId: requestId,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+      );
+
+      if (!mounted) return;
+      _refresh();
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          key: _kAskAiDetachedRecoveredSnackKey,
+          content: Text(context.t.chat.askAiRecoveredDetached),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    await prefs.remove(_kAskAiDetachedJobPrefsKey);
+  }
+
+  Future<Map<String, dynamic>?> _fetchDetachedAskJobStatus({
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String requestId,
+  }) async {
+    final base = gatewayBaseUrl.trim();
+    final token = idToken.trim();
+    final rid = requestId.trim();
+    if (base.isEmpty || token.isEmpty || rid.isEmpty) return null;
+
+    final client = HttpClient();
+    try {
+      final uri = Uri.parse(base).resolve('/v1/chat/jobs/$rid');
+      final req = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+
+      final resp = await req.close().timeout(const Duration(seconds: 45));
+      final text =
+          await utf8.decodeStream(resp).timeout(const Duration(seconds: 45));
+      if (resp.statusCode == 404) {
+        return <String, dynamic>{'status': 'not_found'};
+      }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) return null;
+
+      final decoded = jsonDecode(text);
+      if (decoded is! Map<String, dynamic>) return null;
+      return decoded;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> _cancelDetachedAskJob({
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String requestId,
+  }) async {
+    final base = gatewayBaseUrl.trim();
+    final token = idToken.trim();
+    final rid = requestId.trim();
+    if (base.isEmpty || token.isEmpty || rid.isEmpty) return;
+
+    final client = HttpClient();
+    try {
+      final uri = Uri.parse(base).resolve('/v1/chat/jobs/$rid/cancel');
+      final req =
+          await client.postUrl(uri).timeout(const Duration(seconds: 12));
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+      req.add(utf8.encode('{}'));
+      final resp = await req.close().timeout(const Duration(seconds: 45));
+      await utf8.decodeStream(resp).timeout(const Duration(seconds: 45));
+    } catch (_) {
+      return;
+    } finally {
+      client.close(force: true);
     }
   }
 }

@@ -12,6 +12,28 @@ use crate::{llm, rag, semantic_parse};
 use anyhow::{anyhow, Result};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
+const ASK_AI_META_PREFIX: &str = "\u{001e}SL_META\u{001e}";
+const ASK_AI_META_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
+
+fn emit_ask_ai_meta_if_any(sink: &StreamSink<String>, role: Option<&str>) -> Result<()> {
+    let Some(role) = role else {
+        return Ok(());
+    };
+    let Some(request_id) = role.strip_prefix(ASK_AI_META_REQUEST_ID_ROLE_PREFIX) else {
+        return Ok(());
+    };
+    if request_id.trim().is_empty() {
+        return Ok(());
+    }
+
+    let payload = format!(
+        "{ASK_AI_META_PREFIX}{{\"type\":\"cloud_request_id\",\"request_id\":\"{request_id}\"}}"
+    );
+    if sink.add(payload).is_err() {
+        return Err(rag::StreamCancelled.into());
+    }
+    Ok(())
+}
 
 fn finish_ask_ai_stream(sink: &StreamSink<String>, result: Result<()>) -> Result<()> {
     match result {
@@ -1903,6 +1925,7 @@ pub fn rag_ask_ai_stream(
             focus,
             provider.as_ref(),
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -1998,6 +2021,7 @@ pub fn rag_ask_ai_stream_time_window(
             time_end_ms,
             provider.as_ref(),
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -2115,6 +2139,7 @@ pub fn rag_ask_ai_stream_with_brok_embeddings(
             focus,
             provider.as_ref(),
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -2211,6 +2236,7 @@ pub fn rag_ask_ai_stream_with_brok_embeddings_time_window(
             time_end_ms,
             provider.as_ref(),
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -2314,6 +2340,7 @@ pub fn rag_ask_ai_stream_cloud_gateway(
             focus,
             &provider,
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -2393,6 +2420,7 @@ pub fn rag_ask_ai_stream_cloud_gateway_time_window(
             time_end_ms,
             &provider,
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -2477,6 +2505,7 @@ pub fn rag_ask_ai_stream_cloud_gateway_with_embeddings(
             focus,
             &provider,
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -2561,6 +2590,7 @@ pub fn rag_ask_ai_stream_cloud_gateway_with_embeddings_time_window(
             time_end_ms,
             &provider,
             &mut |ev| {
+                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());

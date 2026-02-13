@@ -100,12 +100,16 @@ impl crate::rag::AnswerProvider for OpenAiCompatibleProvider {
             stream: true,
         };
 
+        let request_timeout =
+            crate::llm::timeouts::ask_ai_timeout_for_prompt_chars(prompt.chars().count());
+
         let mut resp = self
             .client
             .post(url)
             .bearer_auth(&self.api_key)
             .header(header::ACCEPT, "text/event-stream")
             .json(&req)
+            .timeout(request_timeout)
             .send()?;
 
         if !resp.status().is_success() {

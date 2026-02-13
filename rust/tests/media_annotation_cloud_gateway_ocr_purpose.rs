@@ -5,6 +5,8 @@ use std::sync::mpsc;
 
 #[derive(Debug)]
 struct CapturedRequest {
+    method: String,
+    path: String,
     headers: HashMap<String, String>,
     body: String,
 }
@@ -35,7 +37,10 @@ fn read_http_request(stream: &mut TcpStream) -> CapturedRequest {
     let head = String::from_utf8_lossy(head);
 
     let mut lines = head.split("\r\n");
-    let _request_line = lines.next().expect("request line");
+    let request_line = lines.next().expect("request line");
+    let mut request_parts = request_line.split_whitespace();
+    let method = request_parts.next().unwrap_or_default().to_string();
+    let path = request_parts.next().unwrap_or_default().to_string();
 
     let mut headers = HashMap::<String, String>::new();
     for line in lines {
@@ -63,6 +68,8 @@ fn read_http_request(stream: &mut TcpStream) -> CapturedRequest {
     body_bytes.truncate(content_length);
 
     CapturedRequest {
+        method,
+        path,
         headers,
         body: String::from_utf8_lossy(&body_bytes).to_string(),
     }
@@ -74,8 +81,20 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
     let (tx, rx) = mpsc::channel::<CapturedRequest>();
 
     std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("accept");
-        let req = read_http_request(&mut stream);
+        let (mut stream1, _) = listener.accept().expect("accept first");
+        let status_req = read_http_request(&mut stream1);
+        assert_eq!(status_req.method, "GET");
+        assert!(status_req.path.starts_with("/v1/chat/jobs/"));
+
+        let not_found_body = r##"{"error":"job_not_found"}"##;
+        let not_found_resp = format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{not_found_body}",
+            not_found_body.len()
+        );
+        let _ = stream1.write_all(not_found_resp.as_bytes());
+
+        let (mut stream2, _) = listener.accept().expect("accept second");
+        let req = read_http_request(&mut stream2);
         tx.send(req).expect("send req");
 
         let body = r##"{"choices":[{"message":{"role":"assistant","content":"{\"caption_long\":\"\",\"tags\":[],\"ocr_text\":\"# Report\\n\\nTotal: 42\"}"}}]}"##;
@@ -83,7 +102,7 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
             body.len()
         );
-        let _ = stream.write_all(resp.as_bytes());
+        let _ = stream2.write_all(resp.as_bytes());
     });
 
     (format!("http://{addr}"), rx)
@@ -132,9 +151,29 @@ fn cloud_gateway_multimodal_ocr_uses_ask_ai_purpose() {
     );
 
     let req = rx.recv().expect("request");
+    assert_eq!(req.method, "POST");
+    assert_eq!(req.path, "/v1/chat/completions");
     assert_eq!(
         req.headers.get("x-secondloop-purpose").map(String::as_str),
         Some("ask_ai")
+    );
+    let request_id = req
+        .headers
+        .get("x-secondloop-request-id")
+        .expect("request id header");
+    assert!(request_id.starts_with("req_"));
+    assert_eq!(
+        payload
+            .get("secondloop_cloud_request_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        request_id
+    );
+    assert_eq!(
+        req.headers
+            .get("x-secondloop-detach-policy")
+            .map(String::as_str),
+        Some("continue_on_disconnect")
     );
     assert!(req.body.contains("data:application/pdf;base64,"));
     assert!(req.body.contains("full_text"));

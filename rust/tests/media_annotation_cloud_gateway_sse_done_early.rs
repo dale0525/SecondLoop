@@ -24,8 +24,17 @@ fn start_mock_server_with_truncated_sse_after_done() -> String {
     let addr = listener.local_addr().expect("addr");
 
     std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("accept");
-        read_http_request_head(&mut stream);
+        let (mut stream1, _) = listener.accept().expect("accept first");
+        read_http_request_head(&mut stream1);
+        let not_found_body = r##"{"error":"job_not_found"}"##;
+        let not_found_resp = format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{not_found_body}",
+            not_found_body.len(),
+        );
+        let _ = stream1.write_all(not_found_resp.as_bytes());
+
+        let (mut stream2, _) = listener.accept().expect("accept second");
+        read_http_request_head(&mut stream2);
 
         let body = concat!(
             "data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"caption_long\\\":\\\"a cat\\\",\\\"tags\\\":[],\\\"ocr_text\\\":null}\"}}]}\n\n",
@@ -37,8 +46,8 @@ fn start_mock_server_with_truncated_sse_after_done() -> String {
             "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {declared_len}\r\nConnection: close\r\n\r\n"
         );
 
-        let _ = stream.write_all(headers.as_bytes());
-        let _ = stream.write_all(body.as_bytes());
+        let _ = stream2.write_all(headers.as_bytes());
+        let _ = stream2.write_all(body.as_bytes());
     });
 
     format!("http://{addr}")

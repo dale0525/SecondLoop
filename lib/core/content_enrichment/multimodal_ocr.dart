@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import '../../features/attachments/platform_pdf_ocr.dart';
@@ -10,6 +12,10 @@ import '../backend/native_backend.dart';
 
 const _kOcrMarkdownLangPrefix = 'ocr_markdown:';
 const _kDefaultLanguageHints = 'device_plus_en';
+const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
+final RegExp _kCloudDetachedRequestIdPattern = RegExp(
+  r'^[A-Za-z0-9][A-Za-z0-9:_-]{5,127}$',
+);
 
 typedef TryCloudOcrForPdf = Future<PlatformPdfOcrResult?> Function({
   required String mimeType,
@@ -104,6 +110,7 @@ Future<PlatformPdfOcrResult?> tryMultimodalOcrViaByok({
   );
   final markdown = extractOcrMarkdownFromMediaAnnotationPayload(payloadJson);
   if (markdown == null || markdown.isEmpty) return null;
+
   final pages = pageCountHint < 1 ? 1 : pageCountHint;
   return PlatformPdfOcrResult(
     fullText: markdown,
@@ -136,6 +143,19 @@ Future<PlatformPdfOcrResult?> tryMultimodalOcrViaCloud({
   );
   final markdown = extractOcrMarkdownFromMediaAnnotationPayload(payloadJson);
   if (markdown == null || markdown.isEmpty) return null;
+
+  final detachedRequestId =
+      _extractCloudDetachedRequestIdFromMediaPayloadJson(payloadJson);
+  if (detachedRequestId != null) {
+    unawaited(
+      _ackCloudDetachedChatJob(
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        requestId: detachedRequestId,
+      ),
+    );
+  }
+
   final pages = pageCountHint < 1 ? 1 : pageCountHint;
   return PlatformPdfOcrResult(
     fullText: markdown,
@@ -325,6 +345,86 @@ String? extractOcrMarkdownFromMediaAnnotationPayload(String payloadJson) {
     return null;
   } catch (_) {
     return null;
+  }
+}
+
+String? _extractCloudDetachedRequestIdFromMediaPayloadJson(String payloadJson) {
+  final raw = payloadJson.trim();
+  if (raw.isEmpty) return null;
+
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final requestId =
+        (decoded[_kCloudDetachedRequestIdPayloadKey] ?? '').toString().trim();
+    if (!_kCloudDetachedRequestIdPattern.hasMatch(requestId)) {
+      return null;
+    }
+    return requestId;
+  } catch (_) {
+    return null;
+  }
+}
+
+Uri? _buildCloudDetachedAckUri(String gatewayBaseUrl, String requestId) {
+  final base = gatewayBaseUrl.trim();
+  final normalizedRequestId = requestId.trim();
+  if (base.isEmpty || normalizedRequestId.isEmpty) return null;
+
+  final normalizedBase = base.replaceFirst(RegExp(r'/+$'), '');
+  try {
+    return Uri.parse('$normalizedBase/v1/chat/jobs/$normalizedRequestId/ack');
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _ackCloudDetachedChatJob({
+  required String gatewayBaseUrl,
+  required String idToken,
+  required String requestId,
+}) async {
+  if (!_kCloudDetachedRequestIdPattern.hasMatch(requestId.trim())) return;
+
+  final uri = _buildCloudDetachedAckUri(gatewayBaseUrl, requestId);
+  if (uri == null) return;
+
+  final token = idToken.trim();
+  if (token.isEmpty) return;
+
+  const retryDelays = <Duration>[
+    Duration.zero,
+    Duration(milliseconds: 250),
+    Duration(milliseconds: 500),
+  ];
+
+  for (final delay in retryDelays) {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 5);
+
+    try {
+      final req = await client.postUrl(uri).timeout(const Duration(seconds: 6));
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      await resp.drain<void>().timeout(const Duration(seconds: 6));
+
+      if ((resp.statusCode >= 200 && resp.statusCode < 300) ||
+          resp.statusCode == 404) {
+        return;
+      }
+      if (resp.statusCode != 409) {
+        return;
+      }
+    } catch (_) {
+      // Best-effort only.
+    } finally {
+      client.close(force: true);
+    }
   }
 }
 

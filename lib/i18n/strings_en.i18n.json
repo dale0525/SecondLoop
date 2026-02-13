@@ -819,7 +819,8 @@
     "semanticParseStatusCreated": "Created task: $title",
     "semanticParseStatusUpdated": "Updated task: $title",
     "semanticParseStatusUpdatedGeneric": "Updated task",
-    "semanticParseStatusUndone": "Undid auto action"
+    "semanticParseStatusUndone": "Undid auto action",
+    "askAiRecoveredDetached": "Recovered the completed cloud answer."
   },
   "attachments": {
     "metadata": {

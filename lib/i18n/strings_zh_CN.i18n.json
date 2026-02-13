@@ -819,7 +819,8 @@
     "semanticParseStatusCreated": "已创建待办：$title",
     "semanticParseStatusUpdated": "已更新待办：$title",
     "semanticParseStatusUpdatedGeneric": "已更新待办",
-    "semanticParseStatusUndone": "已撤销自动动作"
+    "semanticParseStatusUndone": "已撤销自动动作",
+    "askAiRecoveredDetached": "已恢复已完成的云端回答。"
   },
   "attachments": {
     "metadata": {

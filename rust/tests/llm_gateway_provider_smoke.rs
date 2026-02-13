@@ -68,10 +68,25 @@ data: [DONE]
     let req_lower = req.to_ascii_lowercase();
     assert!(req_lower.contains("post /v1/chat/completions"));
     assert!(req_lower.contains("authorization: bearer test-id-token"));
+    assert!(req_lower.contains("x-secondloop-detach-policy: continue_on_disconnect"));
+    assert!(req_lower.contains("x-secondloop-request-id: req_"));
+
+    assert!(
+        events.len() >= 5,
+        "expected meta + stream events, got {}",
+        events.len()
+    );
+    let meta_event = &events[0];
+    assert!(meta_event
+        .role
+        .as_deref()
+        .is_some_and(|role| role.starts_with("secondloop_request_id:req_")));
+    assert_eq!(meta_event.text_delta, "");
+    assert!(!meta_event.done);
 
     assert_eq!(
-        events,
-        vec![
+        &events[1..],
+        &[
             ChatDelta {
                 role: Some("assistant".to_string()),
                 text_delta: "".to_string(),
@@ -138,10 +153,25 @@ fn cloud_gateway_provider_handles_plain_json_with_sse_content_type() {
     let req_lower = req.to_ascii_lowercase();
     assert!(req_lower.contains("post /v1/chat/completions"));
     assert!(req_lower.contains("authorization: bearer test-id-token"));
+    assert!(req_lower.contains("x-secondloop-detach-policy: continue_on_disconnect"));
+    assert!(req_lower.contains("x-secondloop-request-id: req_"));
+
+    assert!(
+        events.len() >= 3,
+        "expected meta + response events, got {}",
+        events.len()
+    );
+    let meta_event = &events[0];
+    assert!(meta_event
+        .role
+        .as_deref()
+        .is_some_and(|role| role.starts_with("secondloop_request_id:req_")));
+    assert_eq!(meta_event.text_delta, "");
+    assert!(!meta_event.done);
 
     assert_eq!(
-        events,
-        vec![
+        &events[1..],
+        &[
             ChatDelta {
                 role: Some("assistant".to_string()),
                 text_delta: "fallback-json-content".to_string(),
