@@ -235,6 +235,31 @@
         "windowsAppSwitcher": "应用切换器"
       }
     },
+    "desktopBoot": {
+      "startWithSystem": {
+        "title": "随系统启动",
+        "subtitle": "登录系统后自动启动 SecondLoop"
+      },
+      "silentStartup": {
+        "title": "静默启动",
+        "subtitle": "自动启动时在后台运行，不弹出主窗口"
+      },
+      "keepRunningInBackground": {
+        "title": "关闭时常驻后台",
+        "subtitle": "关闭窗口时最小化到通知栏，而不是直接退出"
+      }
+    },
+    "desktopTray": {
+      "menu": {
+        "hide": "隐藏",
+        "quit": "退出"
+      },
+      "pro": {
+        "signedIn": "已登录",
+        "aiUsage": "AI 用量",
+        "storageUsage": "存储用量"
+      }
+    },
     "language": {
       "title": "语言",
       "subtitle": "跟随系统或手动选择语言",

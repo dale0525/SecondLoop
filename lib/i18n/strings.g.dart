@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1364 (682 per locale)
+/// Strings: 1388 (694 per locale)
 ///
-/// Built on 2026-02-13 at 04:07 UTC
+/// Built on 2026-02-13 at 15:54 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -292,6 +292,10 @@ class _StringsSettingsEn {
       _StringsSettingsActionsReviewEn._(_root);
   late final _StringsSettingsQuickCaptureHotkeyEn quickCaptureHotkey =
       _StringsSettingsQuickCaptureHotkeyEn._(_root);
+  late final _StringsSettingsDesktopBootEn desktopBoot =
+      _StringsSettingsDesktopBootEn._(_root);
+  late final _StringsSettingsDesktopTrayEn desktopTray =
+      _StringsSettingsDesktopTrayEn._(_root);
   late final _StringsSettingsLanguageEn language =
       _StringsSettingsLanguageEn._(_root);
   late final _StringsSettingsThemeEn theme = _StringsSettingsThemeEn._(_root);
@@ -405,7 +409,6 @@ class _StringsChatEn {
   late final _StringsChatCloudGatewayEn cloudGateway =
       _StringsChatCloudGatewayEn._(_root);
   String get askAiFailedTemporary => 'Ask AI failed. Please try again.';
-  String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
   late final _StringsChatAskAiConsentEn askAiConsent =
       _StringsChatAskAiConsentEn._(_root);
   late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
@@ -422,6 +425,7 @@ class _StringsChatEn {
       'Updated task: ${title}';
   String get semanticParseStatusUpdatedGeneric => 'Updated task';
   String get semanticParseStatusUndone => 'Undid auto action';
+  String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
 }
 
 // Path: attachments
@@ -891,6 +895,35 @@ class _StringsSettingsQuickCaptureHotkeyEn {
       _StringsSettingsQuickCaptureHotkeyValidationEn._(_root);
   late final _StringsSettingsQuickCaptureHotkeyConflictsEn conflicts =
       _StringsSettingsQuickCaptureHotkeyConflictsEn._(_root);
+}
+
+// Path: settings.desktopBoot
+class _StringsSettingsDesktopBootEn {
+  _StringsSettingsDesktopBootEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsDesktopBootStartWithSystemEn startWithSystem =
+      _StringsSettingsDesktopBootStartWithSystemEn._(_root);
+  late final _StringsSettingsDesktopBootSilentStartupEn silentStartup =
+      _StringsSettingsDesktopBootSilentStartupEn._(_root);
+  late final _StringsSettingsDesktopBootKeepRunningInBackgroundEn
+      keepRunningInBackground =
+      _StringsSettingsDesktopBootKeepRunningInBackgroundEn._(_root);
+}
+
+// Path: settings.desktopTray
+class _StringsSettingsDesktopTrayEn {
+  _StringsSettingsDesktopTrayEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsDesktopTrayMenuEn menu =
+      _StringsSettingsDesktopTrayMenuEn._(_root);
+  late final _StringsSettingsDesktopTrayProEn pro =
+      _StringsSettingsDesktopTrayProEn._(_root);
 }
 
 // Path: settings.language
@@ -1867,6 +1900,64 @@ class _StringsSettingsQuickCaptureHotkeyConflictsEn {
   String get windowsTaskView => 'Task view';
   String get windowsLanguageSwitch => 'Switch input language';
   String get windowsAppSwitcher => 'App switcher';
+}
+
+// Path: settings.desktopBoot.startWithSystem
+class _StringsSettingsDesktopBootStartWithSystemEn {
+  _StringsSettingsDesktopBootStartWithSystemEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Start with system';
+  String get subtitle => 'Launch SecondLoop automatically after sign-in';
+}
+
+// Path: settings.desktopBoot.silentStartup
+class _StringsSettingsDesktopBootSilentStartupEn {
+  _StringsSettingsDesktopBootSilentStartupEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Silent startup';
+  String get subtitle =>
+      'When auto-starting, run in background without showing a window';
+}
+
+// Path: settings.desktopBoot.keepRunningInBackground
+class _StringsSettingsDesktopBootKeepRunningInBackgroundEn {
+  _StringsSettingsDesktopBootKeepRunningInBackgroundEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Keep running in background';
+  String get subtitle =>
+      'When closing the window, minimize to tray instead of quitting';
+}
+
+// Path: settings.desktopTray.menu
+class _StringsSettingsDesktopTrayMenuEn {
+  _StringsSettingsDesktopTrayMenuEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get hide => 'Hide';
+  String get quit => 'Quit';
+}
+
+// Path: settings.desktopTray.pro
+class _StringsSettingsDesktopTrayProEn {
+  _StringsSettingsDesktopTrayProEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get signedIn => 'Signed in';
+  String get aiUsage => 'AI usage';
+  String get storageUsage => 'Storage usage';
 }
 
 // Path: settings.language.options
@@ -3435,6 +3526,12 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsQuickCaptureHotkeyZhCn quickCaptureHotkey =
       _StringsSettingsQuickCaptureHotkeyZhCn._(_root);
   @override
+  late final _StringsSettingsDesktopBootZhCn desktopBoot =
+      _StringsSettingsDesktopBootZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopTrayZhCn desktopTray =
+      _StringsSettingsDesktopTrayZhCn._(_root);
+  @override
   late final _StringsSettingsLanguageZhCn language =
       _StringsSettingsLanguageZhCn._(_root);
   @override
@@ -3539,8 +3636,6 @@ class _StringsLockZhCn extends _StringsLockEn {
 
 // Path: chat
 class _StringsChatZhCn extends _StringsChatEn {
-  @override
-  String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
   _StringsChatZhCn._(_StringsZhCn root)
       : this._root = root,
         super._(root);
@@ -3640,6 +3735,8 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusUpdatedGeneric => '已更新待办';
   @override
   String get semanticParseStatusUndone => '已撤销自动动作';
+  @override
+  String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
 }
 
 // Path: attachments
@@ -4374,6 +4471,46 @@ class _StringsSettingsQuickCaptureHotkeyZhCn
   @override
   late final _StringsSettingsQuickCaptureHotkeyConflictsZhCn conflicts =
       _StringsSettingsQuickCaptureHotkeyConflictsZhCn._(_root);
+}
+
+// Path: settings.desktopBoot
+class _StringsSettingsDesktopBootZhCn extends _StringsSettingsDesktopBootEn {
+  _StringsSettingsDesktopBootZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsDesktopBootStartWithSystemZhCn startWithSystem =
+      _StringsSettingsDesktopBootStartWithSystemZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopBootSilentStartupZhCn silentStartup =
+      _StringsSettingsDesktopBootSilentStartupZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn
+      keepRunningInBackground =
+      _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn._(_root);
+}
+
+// Path: settings.desktopTray
+class _StringsSettingsDesktopTrayZhCn extends _StringsSettingsDesktopTrayEn {
+  _StringsSettingsDesktopTrayZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsDesktopTrayMenuZhCn menu =
+      _StringsSettingsDesktopTrayMenuZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopTrayProZhCn pro =
+      _StringsSettingsDesktopTrayProZhCn._(_root);
 }
 
 // Path: settings.language
@@ -5828,6 +5965,93 @@ class _StringsSettingsQuickCaptureHotkeyConflictsZhCn
   String get windowsLanguageSwitch => '切换输入法';
   @override
   String get windowsAppSwitcher => '应用切换器';
+}
+
+// Path: settings.desktopBoot.startWithSystem
+class _StringsSettingsDesktopBootStartWithSystemZhCn
+    extends _StringsSettingsDesktopBootStartWithSystemEn {
+  _StringsSettingsDesktopBootStartWithSystemZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '随系统启动';
+  @override
+  String get subtitle => '登录系统后自动启动 SecondLoop';
+}
+
+// Path: settings.desktopBoot.silentStartup
+class _StringsSettingsDesktopBootSilentStartupZhCn
+    extends _StringsSettingsDesktopBootSilentStartupEn {
+  _StringsSettingsDesktopBootSilentStartupZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '静默启动';
+  @override
+  String get subtitle => '自动启动时在后台运行，不弹出主窗口';
+}
+
+// Path: settings.desktopBoot.keepRunningInBackground
+class _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn
+    extends _StringsSettingsDesktopBootKeepRunningInBackgroundEn {
+  _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '关闭时常驻后台';
+  @override
+  String get subtitle => '关闭窗口时最小化到通知栏，而不是直接退出';
+}
+
+// Path: settings.desktopTray.menu
+class _StringsSettingsDesktopTrayMenuZhCn
+    extends _StringsSettingsDesktopTrayMenuEn {
+  _StringsSettingsDesktopTrayMenuZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get hide => '隐藏';
+  @override
+  String get quit => '退出';
+}
+
+// Path: settings.desktopTray.pro
+class _StringsSettingsDesktopTrayProZhCn
+    extends _StringsSettingsDesktopTrayProEn {
+  _StringsSettingsDesktopTrayProZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get signedIn => '已登录';
+  @override
+  String get aiUsage => 'AI 用量';
+  @override
+  String get storageUsage => '存储用量';
 }
 
 // Path: settings.language.options
@@ -8197,6 +8421,28 @@ extension on Translations {
         return 'Switch input language';
       case 'settings.quickCaptureHotkey.conflicts.windowsAppSwitcher':
         return 'App switcher';
+      case 'settings.desktopBoot.startWithSystem.title':
+        return 'Start with system';
+      case 'settings.desktopBoot.startWithSystem.subtitle':
+        return 'Launch SecondLoop automatically after sign-in';
+      case 'settings.desktopBoot.silentStartup.title':
+        return 'Silent startup';
+      case 'settings.desktopBoot.silentStartup.subtitle':
+        return 'When auto-starting, run in background without showing a window';
+      case 'settings.desktopBoot.keepRunningInBackground.title':
+        return 'Keep running in background';
+      case 'settings.desktopBoot.keepRunningInBackground.subtitle':
+        return 'When closing the window, minimize to tray instead of quitting';
+      case 'settings.desktopTray.menu.hide':
+        return 'Hide';
+      case 'settings.desktopTray.menu.quit':
+        return 'Quit';
+      case 'settings.desktopTray.pro.signedIn':
+        return 'Signed in';
+      case 'settings.desktopTray.pro.aiUsage':
+        return 'AI usage';
+      case 'settings.desktopTray.pro.storageUsage':
+        return 'Storage usage';
       case 'settings.language.title':
         return 'Language';
       case 'settings.language.subtitle':
@@ -8911,6 +9157,8 @@ extension on Translations {
         return 'Updated task';
       case 'chat.semanticParseStatusUndone':
         return 'Undid auto action';
+      case 'chat.askAiRecoveredDetached':
+        return 'Recovered the completed cloud answer.';
       case 'attachments.metadata.format':
         return 'Format';
       case 'attachments.metadata.size':
@@ -9595,6 +9843,28 @@ extension on _StringsZhCn {
         return '切换输入法';
       case 'settings.quickCaptureHotkey.conflicts.windowsAppSwitcher':
         return '应用切换器';
+      case 'settings.desktopBoot.startWithSystem.title':
+        return '随系统启动';
+      case 'settings.desktopBoot.startWithSystem.subtitle':
+        return '登录系统后自动启动 SecondLoop';
+      case 'settings.desktopBoot.silentStartup.title':
+        return '静默启动';
+      case 'settings.desktopBoot.silentStartup.subtitle':
+        return '自动启动时在后台运行，不弹出主窗口';
+      case 'settings.desktopBoot.keepRunningInBackground.title':
+        return '关闭时常驻后台';
+      case 'settings.desktopBoot.keepRunningInBackground.subtitle':
+        return '关闭窗口时最小化到通知栏，而不是直接退出';
+      case 'settings.desktopTray.menu.hide':
+        return '隐藏';
+      case 'settings.desktopTray.menu.quit':
+        return '退出';
+      case 'settings.desktopTray.pro.signedIn':
+        return '已登录';
+      case 'settings.desktopTray.pro.aiUsage':
+        return 'AI 用量';
+      case 'settings.desktopTray.pro.storageUsage':
+        return '存储用量';
       case 'settings.language.title':
         return '语言';
       case 'settings.language.subtitle':
@@ -10305,6 +10575,8 @@ extension on _StringsZhCn {
         return '已更新待办';
       case 'chat.semanticParseStatusUndone':
         return '已撤销自动动作';
+      case 'chat.askAiRecoveredDetached':
+        return '已恢复已完成的云端回答。';
       case 'attachments.metadata.format':
         return '格式';
       case 'attachments.metadata.size':
