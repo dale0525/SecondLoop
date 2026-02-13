@@ -310,6 +310,89 @@ pub fn upsert_todo_recurrence_with_sync(
 }
 
 
+fn list_scoped_recurrence_todos(
+    conn: &Connection,
+    series_id: &str,
+    current_occurrence_index: i64,
+    scope: TodoRecurrenceEditScope,
+) -> Result<Vec<(String, i64)>> {
+    let collect_rows = |sql: &str, params: &[&dyn rusqlite::ToSql]| -> Result<Vec<(String, i64)>> {
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt.query_map(params, |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let todos = rows.collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(todos)
+    };
+
+    match scope {
+        TodoRecurrenceEditScope::ThisOnly => collect_rows(
+            r#"
+SELECT r.todo_id, r.occurrence_index
+FROM todo_recurrences r
+WHERE r.series_id = ?1
+  AND r.occurrence_index = ?2
+ORDER BY r.occurrence_index ASC
+"#,
+            &[&series_id, &current_occurrence_index],
+        ),
+        TodoRecurrenceEditScope::ThisAndFuture => collect_rows(
+            r#"
+SELECT r.todo_id, r.occurrence_index
+FROM todo_recurrences r
+WHERE r.series_id = ?1
+  AND r.occurrence_index >= ?2
+ORDER BY r.occurrence_index ASC
+"#,
+            &[&series_id, &current_occurrence_index],
+        ),
+        TodoRecurrenceEditScope::WholeSeries => collect_rows(
+            r#"
+SELECT r.todo_id, r.occurrence_index
+FROM todo_recurrences r
+WHERE r.series_id = ?1
+ORDER BY r.occurrence_index ASC
+"#,
+            &[&series_id],
+        ),
+    }
+}
+
+fn split_scoped_recurrence_series(
+    conn: &Connection,
+    key: &[u8; 32],
+    meta: &TodoRecurrenceMeta,
+    scoped_todos: &[(String, i64)],
+    rule_json: &str,
+    scope: TodoRecurrenceEditScope,
+) -> Result<String> {
+    if scope == TodoRecurrenceEditScope::WholeSeries {
+        return Err(anyhow!("whole_series scope cannot split recurrence series"));
+    }
+
+    let split_series_id = format!("{}:split:{}", meta.series_id, uuid::Uuid::new_v4());
+    for (series_todo_id, occurrence_index) in scoped_todos {
+        let split_occurrence_index = match scope {
+            TodoRecurrenceEditScope::ThisOnly => 0,
+            TodoRecurrenceEditScope::ThisAndFuture => occurrence_index
+                .checked_sub(meta.occurrence_index)
+                .ok_or_else(|| anyhow!("split recurrence index underflow"))?,
+            TodoRecurrenceEditScope::WholeSeries => unreachable!(),
+        };
+
+        let _ = upsert_todo_recurrence_with_sync_in_txn(
+            conn,
+            key,
+            series_todo_id,
+            &split_series_id,
+            rule_json,
+            Some(split_occurrence_index),
+        )?;
+    }
+
+    Ok(split_series_id)
+}
+
+
+
 
 pub fn update_todo_due_with_scope(
     conn: &Connection,
@@ -350,25 +433,12 @@ pub fn update_todo_due_with_scope(
                     .checked_sub(current_due_at_ms)
                     .ok_or_else(|| anyhow!("due edit overflow while computing delta"))?;
 
-                let mut stmt = conn.prepare(
-                    r#"
-SELECT r.todo_id, r.occurrence_index
-FROM todo_recurrences r
-WHERE r.series_id = ?1
-  AND (?2 = 1 OR r.occurrence_index >= ?3)
-ORDER BY r.occurrence_index ASC
-"#,
+                let scoped_todos = list_scoped_recurrence_todos(
+                    conn,
+                    &meta.series_id,
+                    meta.occurrence_index,
+                    apply_scope,
                 )?;
-                let include_past = if apply_scope == TodoRecurrenceEditScope::WholeSeries {
-                    1i64
-                } else {
-                    0i64
-                };
-                let scoped_todos: Vec<(String, i64)> = stmt
-                    .query_map(params![meta.series_id, include_past, meta.occurrence_index], |row| {
-                        Ok((row.get(0)?, row.get(1)?))
-                    })?
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
 
                 let mut updated_current: Option<Todo> = None;
                 for (series_todo_id, _) in &scoped_todos {
@@ -404,20 +474,14 @@ ORDER BY r.occurrence_index ASC
                 }
 
                 if apply_scope == TodoRecurrenceEditScope::ThisAndFuture {
-                    let split_series_id = format!("{}:split:{}", meta.series_id, uuid::Uuid::new_v4());
-                    for (series_todo_id, occurrence_index) in scoped_todos {
-                        let split_occurrence_index = occurrence_index
-                            .checked_sub(meta.occurrence_index)
-                            .ok_or_else(|| anyhow!("split recurrence index underflow"))?;
-                        let _ = upsert_todo_recurrence_with_sync_in_txn(
-                            conn,
-                            key,
-                            &series_todo_id,
-                            &split_series_id,
-                            &meta.rule_json,
-                            Some(split_occurrence_index),
-                        )?;
-                    }
+                    let _ = split_scoped_recurrence_series(
+                        conn,
+                        key,
+                        &meta,
+                        &scoped_todos,
+                        &meta.rule_json,
+                        TodoRecurrenceEditScope::ThisAndFuture,
+                    )?;
                 }
 
                 updated_current.ok_or_else(|| anyhow!("current todo not found in recurrence scope"))?
@@ -466,25 +530,12 @@ pub fn update_todo_status_with_scope(
             TodoRecurrenceEditScope::ThisAndFuture | TodoRecurrenceEditScope::WholeSeries => {
                 let meta = current_meta.ok_or_else(|| anyhow!("todo recurrence metadata missing"))?;
 
-                let mut stmt = conn.prepare(
-                    r#"
-SELECT r.todo_id, r.occurrence_index
-FROM todo_recurrences r
-WHERE r.series_id = ?1
-  AND (?2 = 1 OR r.occurrence_index >= ?3)
-ORDER BY r.occurrence_index ASC
-"#,
+                let scoped_todos = list_scoped_recurrence_todos(
+                    conn,
+                    &meta.series_id,
+                    meta.occurrence_index,
+                    apply_scope,
                 )?;
-                let include_past = if apply_scope == TodoRecurrenceEditScope::WholeSeries {
-                    1i64
-                } else {
-                    0i64
-                };
-                let scoped_todos: Vec<(String, i64)> = stmt
-                    .query_map(params![meta.series_id, include_past, meta.occurrence_index], |row| {
-                        Ok((row.get(0)?, row.get(1)?))
-                    })?
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
 
                 let mut updated_current: Option<Todo> = None;
                 for (series_todo_id, _) in &scoped_todos {
@@ -501,20 +552,14 @@ ORDER BY r.occurrence_index ASC
                 }
 
                 if apply_scope == TodoRecurrenceEditScope::ThisAndFuture {
-                    let split_series_id = format!("{}:split:{}", meta.series_id, uuid::Uuid::new_v4());
-                    for (series_todo_id, occurrence_index) in scoped_todos {
-                        let split_occurrence_index = occurrence_index
-                            .checked_sub(meta.occurrence_index)
-                            .ok_or_else(|| anyhow!("split recurrence index underflow"))?;
-                        let _ = upsert_todo_recurrence_with_sync_in_txn(
-                            conn,
-                            key,
-                            &series_todo_id,
-                            &split_series_id,
-                            &meta.rule_json,
-                            Some(split_occurrence_index),
-                        )?;
-                    }
+                    let _ = split_scoped_recurrence_series(
+                        conn,
+                        key,
+                        &meta,
+                        &scoped_todos,
+                        &meta.rule_json,
+                        TodoRecurrenceEditScope::ThisAndFuture,
+                    )?;
                 }
 
                 updated_current.ok_or_else(|| anyhow!("current todo not found in recurrence scope"))?
@@ -528,6 +573,71 @@ ORDER BY r.occurrence_index ASC
         Ok(updated) => {
             conn.execute_batch("COMMIT;")?;
             Ok(updated)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+
+pub fn update_todo_recurrence_rule_with_scope(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    rule_json: &str,
+    scope: TodoRecurrenceEditScope,
+) -> Result<()> {
+    let _ = parse_recurrence_rule(rule_json)?;
+
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        let meta = get_todo_recurrence_meta(conn, todo_id)?
+            .ok_or_else(|| anyhow!("todo recurrence metadata missing"))?;
+
+        let scoped_todos = list_scoped_recurrence_todos(
+            conn,
+            &meta.series_id,
+            meta.occurrence_index,
+            scope,
+        )?;
+        if scoped_todos.is_empty() {
+            return Err(anyhow!("no recurrence todos found in requested scope"));
+        }
+
+        match scope {
+            TodoRecurrenceEditScope::WholeSeries => {
+                for (series_todo_id, occurrence_index) in scoped_todos {
+                    let _ = upsert_todo_recurrence_with_sync_in_txn(
+                        conn,
+                        key,
+                        &series_todo_id,
+                        &meta.series_id,
+                        rule_json,
+                        Some(occurrence_index),
+                    )?;
+                }
+            }
+            TodoRecurrenceEditScope::ThisOnly | TodoRecurrenceEditScope::ThisAndFuture => {
+                let _ = split_scoped_recurrence_series(
+                    conn,
+                    key,
+                    &meta,
+                    &scoped_todos,
+                    rule_json,
+                    scope,
+                )?;
+            }
+        }
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
         }
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK;");

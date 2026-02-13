@@ -165,6 +165,19 @@ Future<Todo> dbUpdateTodoStatusWithScope(
         sourceMessageId: sourceMessageId,
         scope: scope);
 
+Future<void> dbUpdateTodoRecurrenceRuleWithScope(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String ruleJson,
+        required String scope}) =>
+    RustLib.instance.api.crateApiCoreDbUpdateTodoRecurrenceRuleWithScope(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        ruleJson: ruleJson,
+        scope: scope);
+
 Future<void> dbUpsertTodoRecurrence(
         {required String appDir,
         required List<int> key,

@@ -165,6 +165,15 @@ abstract class AppBackend {
     throw UnimplementedError('getTodoRecurrenceRuleJson');
   }
 
+  Future<void> updateTodoRecurrenceRuleWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String ruleJson,
+    required TodoRecurrenceEditScope scope,
+  }) {
+    throw UnimplementedError('updateTodoRecurrenceRuleWithScope');
+  }
+
   Future<void> deleteTodo(
     Uint8List key, {
     required String todoId,

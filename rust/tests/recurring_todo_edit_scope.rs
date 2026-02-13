@@ -15,6 +15,12 @@ fn recurrence_meta(conn: &rusqlite::Connection, todo_id: &str) -> (String, i64) 
     .expect("recurrence meta")
 }
 
+fn recurrence_rule(conn: &rusqlite::Connection, todo_id: &str) -> String {
+    db::get_todo_recurrence_rule_json(conn, todo_id)
+        .expect("recurrence rule query")
+        .expect("recurrence rule missing")
+}
+
 #[test]
 fn this_and_future_shifts_current_and_following_occurrences_only() {
     let temp = tempfile::tempdir().expect("tempdir");
@@ -277,4 +283,145 @@ fn whole_series_updates_status_without_splitting_series() {
     assert_eq!(first_index, 0);
     assert_eq!(second_index, 1);
     assert_eq!(third_index, 2);
+}
+
+#[test]
+fn this_and_future_updates_recurrence_rule_and_splits_series() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:seed",
+        "Daily standup",
+        Some(due_ms(0)),
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert seed");
+
+    db::upsert_todo_recurrence_with_sync(
+        &conn,
+        &key,
+        "todo:seed",
+        "series:scope:test",
+        r#"{"freq":"daily","interval":1}"#,
+    )
+    .expect("upsert recurrence");
+
+    db::set_todo_status(&conn, &key, "todo:seed", "done", None).expect("done #0");
+    db::set_todo_status(&conn, &key, "todo:series:scope:test:1", "done", None).expect("done #1");
+
+    db::update_todo_recurrence_rule_with_scope(
+        &conn,
+        &key,
+        "todo:series:scope:test:1",
+        r#"{"freq":"weekly","interval":1}"#,
+        db::TodoRecurrenceEditScope::ThisAndFuture,
+    )
+    .expect("update recurrence rule with scope");
+
+    let seed_rule = recurrence_rule(&conn, "todo:seed");
+    let second_rule = recurrence_rule(&conn, "todo:series:scope:test:1");
+    let third_rule = recurrence_rule(&conn, "todo:series:scope:test:2");
+
+    assert!(seed_rule.contains("\"daily\""));
+    assert!(second_rule.contains("\"weekly\""));
+    assert!(third_rule.contains("\"weekly\""));
+
+    let (first_series, first_index) = recurrence_meta(&conn, "todo:seed");
+    let (second_series, second_index) = recurrence_meta(&conn, "todo:series:scope:test:1");
+    let (third_series, third_index) = recurrence_meta(&conn, "todo:series:scope:test:2");
+
+    assert_eq!(first_series, "series:scope:test");
+    assert_eq!(first_index, 0);
+    assert_ne!(second_series, first_series);
+    assert_eq!(second_index, 0);
+    assert_eq!(third_series, second_series);
+    assert_eq!(third_index, 1);
+
+    db::set_todo_status(&conn, &key, "todo:series:scope:test:2", "done", None).expect("done #2");
+
+    let spawned_id = format!("todo:{}:2", second_series);
+    let spawned = db::get_todo(&conn, &key, &spawned_id).expect("spawned");
+    assert_eq!(spawned.due_at_ms, Some(due_ms(9)));
+
+    let spawned_rule = recurrence_rule(&conn, &spawned_id);
+    assert!(spawned_rule.contains("\"weekly\""));
+}
+
+#[test]
+fn whole_series_updates_recurrence_rule_without_splitting_series() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:seed",
+        "Daily standup",
+        Some(due_ms(0)),
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert seed");
+
+    db::upsert_todo_recurrence_with_sync(
+        &conn,
+        &key,
+        "todo:seed",
+        "series:scope:test",
+        r#"{"freq":"daily","interval":1}"#,
+    )
+    .expect("upsert recurrence");
+
+    db::set_todo_status(&conn, &key, "todo:seed", "done", None).expect("done #0");
+    db::set_todo_status(&conn, &key, "todo:series:scope:test:1", "done", None).expect("done #1");
+
+    db::update_todo_recurrence_rule_with_scope(
+        &conn,
+        &key,
+        "todo:series:scope:test:2",
+        r#"{"freq":"weekly","interval":1}"#,
+        db::TodoRecurrenceEditScope::WholeSeries,
+    )
+    .expect("update recurrence rule with scope");
+
+    let seed_rule = recurrence_rule(&conn, "todo:seed");
+    let second_rule = recurrence_rule(&conn, "todo:series:scope:test:1");
+    let third_rule = recurrence_rule(&conn, "todo:series:scope:test:2");
+
+    assert!(seed_rule.contains("\"weekly\""));
+    assert!(second_rule.contains("\"weekly\""));
+    assert!(third_rule.contains("\"weekly\""));
+
+    let (first_series, first_index) = recurrence_meta(&conn, "todo:seed");
+    let (second_series, second_index) = recurrence_meta(&conn, "todo:series:scope:test:1");
+    let (third_series, third_index) = recurrence_meta(&conn, "todo:series:scope:test:2");
+
+    assert_eq!(first_series, "series:scope:test");
+    assert_eq!(second_series, "series:scope:test");
+    assert_eq!(third_series, "series:scope:test");
+    assert_eq!(first_index, 0);
+    assert_eq!(second_index, 1);
+    assert_eq!(third_index, 2);
+
+    db::set_todo_status(&conn, &key, "todo:series:scope:test:2", "done", None).expect("done #2");
+
+    let spawned = db::get_todo(&conn, &key, "todo:series:scope:test:3").expect("spawned");
+    assert_eq!(spawned.due_at_ms, Some(due_ms(9)));
+
+    let spawned_rule = recurrence_rule(&conn, "todo:series:scope:test:3");
+    assert!(spawned_rule.contains("\"weekly\""));
 }

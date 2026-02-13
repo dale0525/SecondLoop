@@ -826,6 +826,23 @@ class NativeAppBackend
   }
 
   @override
+  Future<void> updateTodoRecurrenceRuleWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String ruleJson,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpdateTodoRecurrenceRuleWithScope(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      ruleJson: ruleJson,
+      scope: scope.wireValue,
+    );
+  }
+
+  @override
   Future<void> deleteTodo(
     Uint8List key, {
     required String todoId,
