@@ -69,6 +69,7 @@ dependencies:
   tray_manager: ^0.5.2
   launch_at_startup: ^0.3.1
   universal_io: ^2.2.2
+  menu_base: ^0.1.1
 
 dev_dependencies:
   flutter_test:

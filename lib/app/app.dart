@@ -32,6 +32,7 @@ import 'theme_mode_prefs.dart';
 import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
 import '../features/share/share_ingest_gate.dart';
+import '../features/settings/settings_page.dart';
 import '../features/share/share_intent_listener.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
@@ -338,6 +339,16 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                   child: DesktopBackgroundService(
                                     silentStartupRequested: widget
                                         .launchArgs.silentStartupRequested,
+                                    onOpenSettingsRequested: () async {
+                                      final navigator =
+                                          _navigatorKey.currentState;
+                                      if (navigator == null) return;
+                                      await navigator.push(
+                                        MaterialPageRoute(
+                                          builder: (_) => const SettingsPage(),
+                                        ),
+                                      );
+                                    },
                                     child: DesktopQuickCaptureService(
                                       child: ShareIntentListener(
                                         child: LockGate(

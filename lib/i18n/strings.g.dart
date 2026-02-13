@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1352 (676 per locale)
+/// Strings: 1362 (681 per locale)
 ///
-/// Built on 2026-02-13 at 11:29 UTC
+/// Built on 2026-02-13 at 11:54 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -290,6 +290,8 @@ class _StringsSettingsEn {
       _StringsSettingsQuickCaptureHotkeyEn._(_root);
   late final _StringsSettingsDesktopBootEn desktopBoot =
       _StringsSettingsDesktopBootEn._(_root);
+  late final _StringsSettingsDesktopTrayEn desktopTray =
+      _StringsSettingsDesktopTrayEn._(_root);
   late final _StringsSettingsLanguageEn language =
       _StringsSettingsLanguageEn._(_root);
   late final _StringsSettingsThemeEn theme = _StringsSettingsThemeEn._(_root);
@@ -874,6 +876,19 @@ class _StringsSettingsDesktopBootEn {
   late final _StringsSettingsDesktopBootKeepRunningInBackgroundEn
       keepRunningInBackground =
       _StringsSettingsDesktopBootKeepRunningInBackgroundEn._(_root);
+}
+
+// Path: settings.desktopTray
+class _StringsSettingsDesktopTrayEn {
+  _StringsSettingsDesktopTrayEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsDesktopTrayMenuEn menu =
+      _StringsSettingsDesktopTrayMenuEn._(_root);
+  late final _StringsSettingsDesktopTrayProEn pro =
+      _StringsSettingsDesktopTrayProEn._(_root);
 }
 
 // Path: settings.language
@@ -1885,6 +1900,29 @@ class _StringsSettingsDesktopBootKeepRunningInBackgroundEn {
   String get title => 'Keep running in background';
   String get subtitle =>
       'When closing the window, minimize to tray instead of quitting';
+}
+
+// Path: settings.desktopTray.menu
+class _StringsSettingsDesktopTrayMenuEn {
+  _StringsSettingsDesktopTrayMenuEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get hide => 'Hide';
+  String get quit => 'Quit';
+}
+
+// Path: settings.desktopTray.pro
+class _StringsSettingsDesktopTrayProEn {
+  _StringsSettingsDesktopTrayProEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get signedIn => 'Signed in';
+  String get aiUsage => 'AI usage';
+  String get storageUsage => 'Storage usage';
 }
 
 // Path: settings.language.options
@@ -3449,6 +3487,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsDesktopBootZhCn desktopBoot =
       _StringsSettingsDesktopBootZhCn._(_root);
   @override
+  late final _StringsSettingsDesktopTrayZhCn desktopTray =
+      _StringsSettingsDesktopTrayZhCn._(_root);
+  @override
   late final _StringsSettingsLanguageZhCn language =
       _StringsSettingsLanguageZhCn._(_root);
   @override
@@ -4358,6 +4399,24 @@ class _StringsSettingsDesktopBootZhCn extends _StringsSettingsDesktopBootEn {
   late final _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn
       keepRunningInBackground =
       _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn._(_root);
+}
+
+// Path: settings.desktopTray
+class _StringsSettingsDesktopTrayZhCn extends _StringsSettingsDesktopTrayEn {
+  _StringsSettingsDesktopTrayZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsDesktopTrayMenuZhCn menu =
+      _StringsSettingsDesktopTrayMenuZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopTrayProZhCn pro =
+      _StringsSettingsDesktopTrayProZhCn._(_root);
 }
 
 // Path: settings.language
@@ -5863,6 +5922,42 @@ class _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn
   String get title => '关闭时常驻后台';
   @override
   String get subtitle => '关闭窗口时最小化到通知栏，而不是直接退出';
+}
+
+// Path: settings.desktopTray.menu
+class _StringsSettingsDesktopTrayMenuZhCn
+    extends _StringsSettingsDesktopTrayMenuEn {
+  _StringsSettingsDesktopTrayMenuZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get hide => '隐藏';
+  @override
+  String get quit => '退出';
+}
+
+// Path: settings.desktopTray.pro
+class _StringsSettingsDesktopTrayProZhCn
+    extends _StringsSettingsDesktopTrayProEn {
+  _StringsSettingsDesktopTrayProZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get signedIn => '已登录';
+  @override
+  String get aiUsage => 'AI 用量';
+  @override
+  String get storageUsage => '存储用量';
 }
 
 // Path: settings.language.options
@@ -8218,6 +8313,16 @@ extension on Translations {
         return 'Keep running in background';
       case 'settings.desktopBoot.keepRunningInBackground.subtitle':
         return 'When closing the window, minimize to tray instead of quitting';
+      case 'settings.desktopTray.menu.hide':
+        return 'Hide';
+      case 'settings.desktopTray.menu.quit':
+        return 'Quit';
+      case 'settings.desktopTray.pro.signedIn':
+        return 'Signed in';
+      case 'settings.desktopTray.pro.aiUsage':
+        return 'AI usage';
+      case 'settings.desktopTray.pro.storageUsage':
+        return 'Storage usage';
       case 'settings.language.title':
         return 'Language';
       case 'settings.language.subtitle':
@@ -9604,6 +9709,16 @@ extension on _StringsZhCn {
         return '关闭时常驻后台';
       case 'settings.desktopBoot.keepRunningInBackground.subtitle':
         return '关闭窗口时最小化到通知栏，而不是直接退出';
+      case 'settings.desktopTray.menu.hide':
+        return '隐藏';
+      case 'settings.desktopTray.menu.quit':
+        return '退出';
+      case 'settings.desktopTray.pro.signedIn':
+        return '已登录';
+      case 'settings.desktopTray.pro.aiUsage':
+        return 'AI 用量';
+      case 'settings.desktopTray.pro.storageUsage':
+        return '存储用量';
       case 'settings.language.title':
         return '语言';
       case 'settings.language.subtitle':
