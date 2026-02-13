@@ -4,7 +4,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
@@ -137,12 +139,24 @@ class _ChatImageAttachmentThumbnailState
       }
       if (!mounted) return null;
 
-      final didDownload = await CloudMediaDownload(configStore: _store)
-          .downloadAttachmentBytesFromConfiguredSync(
-        context,
+      final backend = AppBackendScope.maybeOf(context);
+      if (backend == null) return null;
+      final idTokenGetter =
+          CloudAuthScope.maybeOf(context)?.controller.getIdToken;
+
+      final result = await CloudMediaDownload(configStore: _store)
+          .downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+        backend: backend,
+        sessionKey: sessionKey,
+        idTokenGetter: idTokenGetter,
         sha256: widget.attachment.sha256,
+        allowCellular: false,
       );
-      if (!didDownload) return null;
+      if (result.needsCellularConfirmation) {
+        _blockedByWifiOnly = true;
+        return null;
+      }
+      if (!result.didDownload) return null;
 
       try {
         final bytes = await widget.attachmentsBackend.readAttachmentBytes(

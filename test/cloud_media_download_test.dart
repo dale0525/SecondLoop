@@ -15,6 +15,7 @@ final class _DownloadBackend extends TestAppBackend {
   int localDirCalls = 0;
   int managedVaultCalls = 0;
   Duration webdavDelay = Duration.zero;
+  Object? webdavError;
 
   final List<String> webdavDownloadShas = <String>[];
 
@@ -30,6 +31,10 @@ final class _DownloadBackend extends TestAppBackend {
   }) async {
     webdavCalls += 1;
     webdavDownloadShas.add(sha256);
+    final error = webdavError;
+    if (error != null) {
+      throw error;
+    }
     if (webdavDelay > Duration.zero) {
       await Future<void>.delayed(webdavDelay);
     }
@@ -87,6 +92,40 @@ void main() {
 
     expect(result.didDownload, isFalse);
     expect(result.needsCellularConfirmation, isTrue);
+    expect(result.failureReason,
+        CloudMediaDownloadFailureReason.cellularRestricted);
+    expect(backend.webdavCalls, 0);
+  });
+
+  test('CloudMediaDownload reports offline as a distinct failure reason',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 1)),
+        SyncConfigStore.kChatThumbnailsWifiOnly: '1',
+      }),
+    });
+
+    final backend = _DownloadBackend();
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.offline,
+    );
+
+    final result =
+        await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+      sha256: 'sha-test',
+      allowCellular: false,
+    );
+
+    expect(result.didDownload, isFalse);
+    expect(result.needsCellularConfirmation, isFalse);
+    expect(
+        result.failureReason, CloudMediaDownloadFailureReason.networkOffline);
     expect(backend.webdavCalls, 0);
   });
 
@@ -117,6 +156,7 @@ void main() {
 
     expect(result.didDownload, isTrue);
     expect(result.needsCellularConfirmation, isFalse);
+    expect(result.failureReason, CloudMediaDownloadFailureReason.none);
     expect(backend.webdavCalls, 1);
   });
 
@@ -146,7 +186,38 @@ void main() {
 
     expect(result.didDownload, isTrue);
     expect(result.needsCellularConfirmation, isFalse);
+    expect(result.failureReason, CloudMediaDownloadFailureReason.none);
     expect(backend.localDirCalls, 1);
+  });
+
+  test('CloudMediaDownload reports missing remote attachment', () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 1)),
+      }),
+    });
+
+    final backend = _DownloadBackend();
+    backend.webdavError = StateError('managed-vault attachment not found');
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    final result =
+        await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+      sha256: 'sha-test',
+      allowCellular: false,
+    );
+
+    expect(result.didDownload, isFalse);
+    expect(result.needsCellularConfirmation, isFalse);
+    expect(result.failureReason, CloudMediaDownloadFailureReason.remoteMissing);
+    expect(backend.webdavCalls, 1);
   });
 
   test('CloudMediaDownload deduplicates concurrent downloads for same sha',
@@ -187,7 +258,41 @@ void main() {
       results.every((r) => r.needsCellularConfirmation == false),
       isTrue,
     );
+    expect(
+      results.every(
+          (r) => r.failureReason == CloudMediaDownloadFailureReason.none),
+      isTrue,
+    );
     expect(backend.webdavCalls, 1);
     expect(backend.webdavDownloadShas, ['sha-test']);
+  });
+
+  test('CloudMediaDownload reports missing sync config', () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kChatThumbnailsWifiOnly: '1',
+      }),
+    });
+
+    final backend = _DownloadBackend();
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    final result =
+        await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+      sha256: 'sha-test',
+      allowCellular: false,
+    );
+
+    expect(result.didDownload, isFalse);
+    expect(result.needsCellularConfirmation, isFalse);
+    expect(
+      result.failureReason,
+      CloudMediaDownloadFailureReason.missingSyncConfig,
+    );
+    expect(backend.webdavCalls, 0);
   });
 }

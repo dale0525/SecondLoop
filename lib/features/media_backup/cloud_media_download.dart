@@ -9,14 +9,28 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import 'cloud_media_backup_runner.dart';
 
+enum CloudMediaDownloadFailureReason {
+  none,
+  missingSyncConfig,
+  networkOffline,
+  cellularRestricted,
+  backendMisconfigured,
+  authRequired,
+  remoteMissing,
+  downloadFailed,
+}
+
 final class CloudMediaDownloadResult {
   const CloudMediaDownloadResult({
     required this.didDownload,
-    required this.needsCellularConfirmation,
+    required this.failureReason,
   });
 
   final bool didDownload;
-  final bool needsCellularConfirmation;
+  final CloudMediaDownloadFailureReason failureReason;
+
+  bool get needsCellularConfirmation =>
+      failureReason == CloudMediaDownloadFailureReason.cellularRestricted;
 }
 
 typedef CloudMediaDownloadNetworkProvider = Future<CloudMediaBackupNetwork>
@@ -65,10 +79,7 @@ final class CloudMediaDownload {
   }) async {
     final config = await _configStore.loadConfiguredSync();
     if (config == null) {
-      return const CloudMediaDownloadResult(
-        didDownload: false,
-        needsCellularConfirmation: false,
-      );
+      return _failed(CloudMediaDownloadFailureReason.missingSyncConfig);
     }
 
     if (config.backendType != SyncBackendType.localDir) {
@@ -76,16 +87,10 @@ final class CloudMediaDownload {
       if (wifiOnly && !allowCellular) {
         final network = await _safeNetwork();
         if (network == CloudMediaBackupNetwork.offline) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: false,
-          );
+          return _failed(CloudMediaDownloadFailureReason.networkOffline);
         }
         if (network != CloudMediaBackupNetwork.wifi) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: true,
-          );
+          return _failed(CloudMediaDownloadFailureReason.cellularRestricted);
         }
       }
     }
@@ -94,10 +99,7 @@ final class CloudMediaDownload {
       case SyncBackendType.webdav:
         final baseUrl = config.baseUrl;
         if (baseUrl == null || baseUrl.trim().isEmpty) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: false,
-          );
+          return _failed(CloudMediaDownloadFailureReason.backendMisconfigured);
         }
         final dedupeKey = _downloadRequestKey(
           config: config,
@@ -106,8 +108,8 @@ final class CloudMediaDownload {
         );
         return _runDedupedDownload(
           dedupeKey: dedupeKey,
-          action: () async {
-            await backend.syncWebdavDownloadAttachmentBytes(
+          action: () => _downloadWithErrorMapping(
+            () => backend.syncWebdavDownloadAttachmentBytes(
               sessionKey,
               config.syncKey,
               baseUrl: baseUrl,
@@ -115,20 +117,13 @@ final class CloudMediaDownload {
               password: config.password,
               remoteRoot: config.remoteRoot,
               sha256: sha256,
-            );
-            return const CloudMediaDownloadResult(
-              didDownload: true,
-              needsCellularConfirmation: false,
-            );
-          },
+            ),
+          ),
         );
       case SyncBackendType.localDir:
         final localDir = config.localDir;
         if (localDir == null || localDir.trim().isEmpty) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: false,
-          );
+          return _failed(CloudMediaDownloadFailureReason.backendMisconfigured);
         }
         final dedupeKey = _downloadRequestKey(
           config: config,
@@ -137,41 +132,28 @@ final class CloudMediaDownload {
         );
         return _runDedupedDownload(
           dedupeKey: dedupeKey,
-          action: () async {
-            await backend.syncLocaldirDownloadAttachmentBytes(
+          action: () => _downloadWithErrorMapping(
+            () => backend.syncLocaldirDownloadAttachmentBytes(
               sessionKey,
               config.syncKey,
               localDir: localDir,
               remoteRoot: config.remoteRoot,
               sha256: sha256,
-            );
-            return const CloudMediaDownloadResult(
-              didDownload: true,
-              needsCellularConfirmation: false,
-            );
-          },
+            ),
+          ),
         );
       case SyncBackendType.managedVault:
         final baseUrl = config.baseUrl;
         if (baseUrl == null || baseUrl.trim().isEmpty) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: false,
-          );
+          return _failed(CloudMediaDownloadFailureReason.backendMisconfigured);
         }
         final getter = idTokenGetter;
         if (getter == null) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: false,
-          );
+          return _failed(CloudMediaDownloadFailureReason.authRequired);
         }
         final idToken = await getter();
         if (idToken == null || idToken.trim().isEmpty) {
-          return const CloudMediaDownloadResult(
-            didDownload: false,
-            needsCellularConfirmation: false,
-          );
+          return _failed(CloudMediaDownloadFailureReason.authRequired);
         }
         final dedupeKey = _downloadRequestKey(
           config: config,
@@ -180,20 +162,16 @@ final class CloudMediaDownload {
         );
         return _runDedupedDownload(
           dedupeKey: dedupeKey,
-          action: () async {
-            await backend.syncManagedVaultDownloadAttachmentBytes(
+          action: () => _downloadWithErrorMapping(
+            () => backend.syncManagedVaultDownloadAttachmentBytes(
               sessionKey,
               config.syncKey,
               baseUrl: baseUrl,
               vaultId: config.remoteRoot,
               idToken: idToken,
               sha256: sha256,
-            );
-            return const CloudMediaDownloadResult(
-              didDownload: true,
-              needsCellularConfirmation: false,
-            );
-          },
+            ),
+          ),
         );
     }
   }
@@ -237,6 +215,41 @@ final class CloudMediaDownload {
         _inFlightDownloads.remove(dedupeKey);
       }
     }
+  }
+
+  Future<CloudMediaDownloadResult> _downloadWithErrorMapping(
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+      return _downloaded();
+    } catch (e) {
+      if (_isRemoteMissingError(e)) {
+        return _failed(CloudMediaDownloadFailureReason.remoteMissing);
+      }
+      return _failed(CloudMediaDownloadFailureReason.downloadFailed);
+    }
+  }
+
+  bool _isRemoteMissingError(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('not found')) return true;
+    if (message.contains('http 404')) return true;
+    return false;
+  }
+
+  CloudMediaDownloadResult _downloaded() {
+    return const CloudMediaDownloadResult(
+      didDownload: true,
+      failureReason: CloudMediaDownloadFailureReason.none,
+    );
+  }
+
+  CloudMediaDownloadResult _failed(CloudMediaDownloadFailureReason reason) {
+    return CloudMediaDownloadResult(
+      didDownload: false,
+      failureReason: reason,
+    );
   }
 
   Future<CloudMediaBackupNetwork> _safeNetwork() async {

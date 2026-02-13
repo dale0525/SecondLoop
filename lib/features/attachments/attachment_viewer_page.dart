@@ -482,7 +482,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       if (result.needsCellularConfirmation) {
         throw StateError('media_download_requires_wifi');
       }
-      if (!result.didDownload) rethrow;
+      if (!result.didDownload) {
+        throw StateError('media_download_${result.failureReason.name}');
+      }
 
       return attachmentsBackend.readAttachmentBytes(
         sessionKey,
