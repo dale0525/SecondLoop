@@ -15,6 +15,7 @@ include!("parts/08_attachment_metadata.rs");
 include!("parts/09_attachment_jobs.rs");
 include!("parts/14_content_extract_jobs.rs");
 include!("parts/10_todos.rs");
+include!("parts/15_todo_recurrence.rs");
 include!("parts/11_events.rs");
 include!("parts/12_media_annotation_config.rs");
 

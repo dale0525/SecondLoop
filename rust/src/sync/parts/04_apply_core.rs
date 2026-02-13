@@ -18,6 +18,7 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         }
         "message.attachment.link.v1" => apply_message_attachment_link(conn, db_key, &op["payload"]),
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
+        "todo.recurrence.upsert.v1" => apply_todo_recurrence_upsert(conn, &op["payload"]),
         "todo.delete.v1" => apply_todo_delete(conn, op),
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
         "todo.activity.move.v1" => apply_todo_activity_move(conn, op),
@@ -176,6 +177,69 @@ WHERE excluded.updated_at_ms > todos.updated_at_ms
             next_review_at_ms,
             last_review_at_ms,
         ],
+    )?;
+
+    Ok(())
+}
+
+fn apply_todo_recurrence_upsert(conn: &Connection, payload: &serde_json::Value) -> Result<()> {
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo recurrence op missing todo_id"))?;
+    let series_id = payload["series_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo recurrence op missing series_id"))?;
+    let rule_json = payload["rule_json"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo recurrence op missing rule_json"))?;
+    let occurrence_index = payload["occurrence_index"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo recurrence op missing occurrence_index"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo recurrence op missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo recurrence op missing updated_at_ms"))?;
+
+    let todo_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM todos WHERE id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if todo_exists.is_none() {
+        return Ok(());
+    }
+
+    conn.execute(
+        r#"
+INSERT INTO todo_series(id, rule_json, created_at_ms, updated_at_ms)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT(id) DO UPDATE SET
+  rule_json = CASE
+    WHEN excluded.updated_at_ms >= todo_series.updated_at_ms THEN excluded.rule_json
+    ELSE todo_series.rule_json
+  END,
+  created_at_ms = min(todo_series.created_at_ms, excluded.created_at_ms),
+  updated_at_ms = max(todo_series.updated_at_ms, excluded.updated_at_ms)
+"#,
+        params![series_id, rule_json, created_at_ms, updated_at_ms],
+    )?;
+
+    conn.execute(
+        r#"
+INSERT INTO todo_recurrences(todo_id, series_id, occurrence_index, created_at_ms, updated_at_ms)
+VALUES (?1, ?2, ?3, ?4, ?5)
+ON CONFLICT(todo_id) DO UPDATE SET
+  series_id = excluded.series_id,
+  occurrence_index = excluded.occurrence_index,
+  created_at_ms = min(todo_recurrences.created_at_ms, excluded.created_at_ms),
+  updated_at_ms = excluded.updated_at_ms
+WHERE excluded.updated_at_ms >= todo_recurrences.updated_at_ms
+"#,
+        params![todo_id, series_id, occurrence_index, created_at_ms, updated_at_ms],
     )?;
 
     Ok(())

@@ -670,6 +670,82 @@ ORDER BY created_at_ms ASC, id ASC
     Ok(result)
 }
 
+fn set_todo_status_in_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    new_status: &str,
+    source_message_id: Option<&str>,
+) -> Result<Todo> {
+    let existing = get_todo_by_id(conn, key, todo_id)?;
+    if existing.status == new_status {
+        return Ok(existing);
+    }
+
+    let activity_id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms();
+    conn.execute(
+        r#"
+INSERT INTO todo_activities(
+  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms, needs_embedding
+)
+VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
+"#,
+        params![
+            activity_id,
+            todo_id,
+            existing.status,
+            new_status,
+            source_message_id,
+            now
+        ],
+    )?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.activity.append.v1",
+        "payload": {
+            "activity_id": activity_id.as_str(),
+            "todo_id": todo_id,
+            "activity_type": "status_change",
+            "from_status": existing.status.as_str(),
+            "to_status": new_status,
+            "content": null,
+            "source_message_id": source_message_id,
+            "created_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    let (review_stage, next_review_at_ms) = if existing.status == "inbox" && new_status != "inbox" {
+        (None, None)
+    } else {
+        (existing.review_stage, existing.next_review_at_ms)
+    };
+
+    let updated = upsert_todo(
+        conn,
+        key,
+        todo_id,
+        &existing.title,
+        existing.due_at_ms,
+        new_status,
+        existing.source_entry_id.as_deref(),
+        review_stage,
+        next_review_at_ms,
+        Some(now),
+    )?;
+
+    maybe_spawn_next_recurring_todo(conn, key, &updated, new_status)?;
+
+    Ok(updated)
+}
+
 pub fn set_todo_status(
     conn: &Connection,
     key: &[u8; 32],
@@ -679,74 +755,7 @@ pub fn set_todo_status(
 ) -> Result<Todo> {
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
-    let result: Result<Todo> = (|| {
-        let existing = get_todo_by_id(conn, key, todo_id)?;
-        if existing.status == new_status {
-            return Ok(existing);
-        }
-
-        let activity_id = uuid::Uuid::new_v4().to_string();
-        let now = now_ms();
-        conn.execute(
-            r#"
-INSERT INTO todo_activities(
-  id, todo_id, type, from_status, to_status, content, source_message_id, created_at_ms, needs_embedding
-)
-VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
-"#,
-            params![
-                activity_id,
-                todo_id,
-                existing.status,
-                new_status,
-                source_message_id,
-                now
-            ],
-        )?;
-
-        let device_id = get_or_create_device_id(conn)?;
-        let seq = next_device_seq(conn, &device_id)?;
-        let op = serde_json::json!({
-            "op_id": uuid::Uuid::new_v4().to_string(),
-            "device_id": device_id,
-            "seq": seq,
-            "ts_ms": now,
-            "type": "todo.activity.append.v1",
-            "payload": {
-                "activity_id": activity_id.as_str(),
-                "todo_id": todo_id,
-                "activity_type": "status_change",
-                "from_status": existing.status.as_str(),
-                "to_status": new_status,
-                "content": null,
-                "source_message_id": source_message_id,
-                "created_at_ms": now,
-            }
-        });
-        insert_oplog(conn, key, &op)?;
-
-        let (review_stage, next_review_at_ms) =
-            if existing.status == "inbox" && new_status != "inbox" {
-                (None, None)
-            } else {
-                (existing.review_stage, existing.next_review_at_ms)
-            };
-
-        let updated = upsert_todo(
-            conn,
-            key,
-            todo_id,
-            &existing.title,
-            existing.due_at_ms,
-            new_status,
-            existing.source_entry_id.as_deref(),
-            review_stage,
-            next_review_at_ms,
-            Some(now),
-        )?;
-
-        Ok(updated)
-    })();
+    let result = set_todo_status_in_txn(conn, key, todo_id, new_status, source_message_id);
 
     match result {
         Ok(todo) => {
@@ -941,4 +950,3 @@ ON CONFLICT(todo_id) DO UPDATE SET
         }
     }
 }
-

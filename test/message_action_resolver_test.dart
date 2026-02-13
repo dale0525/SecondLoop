@@ -97,4 +97,129 @@ void main() {
       );
     }
   });
+
+  test('recurring zh weekly phrase strips weekday/time from title cleanly', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      '每周三下午3点提交周报',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'weekly');
+    expect(create.title, '提交周报');
+  });
+
+  test('recurring yearly sentence keeps natural title text', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      '老婆的生日是 8 月 8 号，每年的这个时候提醒我买礼物',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'yearly');
+    expect(create.title, '老婆的生日提醒我买礼物');
+  });
+
+  test(
+      'recurring weekly without explicit datetime uses next period start morning',
+      () {
+    final now = DateTime(2026, 1, 28, 19, 30); // Wednesday
+    final decision = MessageActionResolver.resolve(
+      '每周复盘',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 8 * 60 + 30,
+      firstDayOfWeekIndex: 1,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.dueAtLocal, DateTime(2026, 2, 2, 8, 30));
+  });
+
+  test(
+      'recurring monthly without explicit datetime uses next period first day morning',
+      () {
+    final now = DateTime(2026, 1, 28, 19, 30);
+    final decision = MessageActionResolver.resolve(
+      '每月整理账单',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 7 * 60,
+      firstDayOfWeekIndex: 1,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.dueAtLocal, DateTime(2026, 2, 1, 7, 0));
+  });
+  test('creates recurring todo for zh daily phrase', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      '每天 9:00 记账',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'daily');
+    expect(create.status, 'open');
+  });
+
+  test('creates recurring todo for es yearly phrase with accents', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      'cada año revisar seguro',
+      locale: const Locale('es'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'yearly');
+    expect(create.title, 'revisar seguro');
+  });
+  test('creates recurring todo for en weekly phrase', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      'every week send project update',
+      locale: const Locale('en'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'weekly');
+    expect(create.dueAtLocal, isNotNull);
+  });
 }

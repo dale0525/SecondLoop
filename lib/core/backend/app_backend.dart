@@ -6,6 +6,20 @@ import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
 
+enum TodoRecurrenceEditScope {
+  thisOnly,
+  thisAndFuture,
+  wholeSeries,
+}
+
+extension TodoRecurrenceEditScopeWire on TodoRecurrenceEditScope {
+  String get wireValue => switch (this) {
+        TodoRecurrenceEditScope.thisOnly => 'this_only',
+        TodoRecurrenceEditScope.thisAndFuture => 'this_and_future',
+        TodoRecurrenceEditScope.wholeSeries => 'whole_series',
+      };
+}
+
 abstract class AppBackend {
   Future<void> init();
 
@@ -114,6 +128,50 @@ abstract class AppBackend {
     String? sourceMessageId,
   }) {
     throw UnimplementedError('setTodoStatus');
+  }
+
+  Future<Todo> updateTodoStatusWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+    required TodoRecurrenceEditScope scope,
+  }) {
+    throw UnimplementedError('updateTodoStatusWithScope');
+  }
+
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) {
+    throw UnimplementedError('updateTodoDueWithScope');
+  }
+
+  Future<void> upsertTodoRecurrence(
+    Uint8List key, {
+    required String todoId,
+    required String seriesId,
+    required String ruleJson,
+  }) {
+    throw UnimplementedError('upsertTodoRecurrence');
+  }
+
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) {
+    throw UnimplementedError('getTodoRecurrenceRuleJson');
+  }
+
+  Future<void> updateTodoRecurrenceRuleWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String ruleJson,
+    required TodoRecurrenceEditScope scope,
+  }) {
+    throw UnimplementedError('updateTodoRecurrenceRuleWithScope');
   }
 
   Future<void> deleteTodo(

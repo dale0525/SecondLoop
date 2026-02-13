@@ -8,7 +8,7 @@ void main() {
   test('parses followup decision JSON', () {
     final now = DateTime(2026, 2, 3, 12, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(
-      '{"kind":"followup","confidence":0.92,"todo_id":"todo:1","new_status":"done"}',
+      '{"kind":"followup","confidence":0.92,"todo_id":"todo:1","new_status":"已完成"}',
       nowLocal: now,
       locale: const Locale('zh', 'CN'),
       dayEndMinutes: 21 * 60,
@@ -40,6 +40,77 @@ void main() {
     expect(create.dueAtLocal, DateTime(2026, 2, 4, 15, 0));
   });
 
+  test('parses create recurrence decision JSON', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"create","confidence":0.93,"title":"提交周报","status":"open","due_local_iso":"2026-02-04T09:00:00","recurrence":{"freq":"weekly","interval":1}}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(parsed, isNotNull);
+    final create = parsed!.decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.recurrenceRule!.freq, 'weekly');
+    expect(create.recurrenceRule!.interval, 1);
+  });
+
+  test('normalizes multilingual recurrence freq aliases', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final samples = <({String freq, String expected})>[
+      (freq: '每周', expected: 'weekly'),
+      (freq: 'cada ano', expected: 'yearly'),
+      (freq: 'daily', expected: 'daily'),
+    ];
+
+    for (final sample in samples) {
+      final parsed = AiSemanticParse.tryParseMessageAction(
+        '{"kind":"create","confidence":0.9,"title":"任务","status":"open","due_local_iso":"2026-02-04T09:00:00","recurrence":{"freq":"${sample.freq}","interval":"２"}}',
+        nowLocal: now,
+        locale: const Locale('zh', 'CN'),
+        dayEndMinutes: 21 * 60,
+      );
+
+      expect(parsed, isNotNull);
+      final create = parsed!.decision as MessageActionCreateDecision;
+      expect(create.recurrenceRule, isNotNull);
+      expect(create.recurrenceRule!.freq, sample.expected);
+      expect(create.recurrenceRule!.interval, 2);
+    }
+  });
+
+  test('normalizes localized create status aliases', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"create","confidence":0.91,"title":"整理收据","status":"待办","due_local_iso":null}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(parsed, isNotNull);
+    final create = parsed!.decision as MessageActionCreateDecision;
+    expect(create.status, 'open');
+  });
+
+  test('fills fallback due and open status for recurrence without due', () {
+    final now = DateTime(2026, 2, 3, 22, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"create","confidence":0.93,"title":"提交周报","status":"收件箱","due_local_iso":null,"recurrence":{"freq":"weekly","interval":1}}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(parsed, isNotNull);
+    final create = parsed!.decision as MessageActionCreateDecision;
+    expect(create.recurrenceRule, isNotNull);
+    expect(create.status, 'open');
+    expect(create.dueAtLocal, DateTime(2026, 2, 9, 9, 0));
+  });
   test('parses JSON wrapped in markdown code fences', () {
     final now = DateTime(2026, 2, 3, 12, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(
