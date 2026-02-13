@@ -56,6 +56,8 @@ class ChatMarkdownEditorPage extends StatefulWidget {
 class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
   late final TextEditingController _controller;
   final FocusNode _editorFocusNode = FocusNode();
+  final ScrollController _previewScrollController = ScrollController();
+  final ScrollController _horizontalScrollController = ScrollController();
   late ChatEditorMode _mode;
 
   @override
@@ -74,6 +76,8 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
   void dispose() {
     _controller.dispose();
     _editorFocusNode.dispose();
+    _previewScrollController.dispose();
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -382,7 +386,9 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
                       }
 
                       return Scrollbar(
+                        controller: _previewScrollController,
                         child: SingleChildScrollView(
+                          controller: _previewScrollController,
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
                           child: MarkdownBody(
                             data: sanitizeChatMarkdown(value.text),
@@ -412,8 +418,10 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
         }
 
         return Scrollbar(
+          controller: _horizontalScrollController,
           thumbVisibility: true,
           child: SingleChildScrollView(
+            controller: _horizontalScrollController,
             scrollDirection: Axis.horizontal,
             child: content,
           ),
