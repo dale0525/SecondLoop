@@ -130,6 +130,16 @@ abstract class AppBackend {
     throw UnimplementedError('setTodoStatus');
   }
 
+  Future<Todo> updateTodoStatusWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+    required TodoRecurrenceEditScope scope,
+  }) {
+    throw UnimplementedError('updateTodoStatusWithScope');
+  }
+
   Future<Todo> updateTodoDueWithScope(
     Uint8List key, {
     required String todoId,

@@ -439,6 +439,103 @@ ORDER BY r.occurrence_index ASC
     }
 }
 
+
+
+pub fn update_todo_status_with_scope(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    new_status: &str,
+    source_message_id: Option<&str>,
+    scope: TodoRecurrenceEditScope,
+) -> Result<Todo> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<Todo> = (|| {
+        let current = get_todo(conn, key, todo_id)?;
+
+        let mut apply_scope = scope;
+        let current_meta = get_todo_recurrence_meta(conn, todo_id)?;
+        if current_meta.is_none() || new_status == "done" {
+            apply_scope = TodoRecurrenceEditScope::ThisOnly;
+        }
+
+        let updated_current = match apply_scope {
+            TodoRecurrenceEditScope::ThisOnly => {
+                set_todo_status_in_txn(conn, key, todo_id, new_status, source_message_id)?
+            }
+            TodoRecurrenceEditScope::ThisAndFuture | TodoRecurrenceEditScope::WholeSeries => {
+                let meta = current_meta.ok_or_else(|| anyhow!("todo recurrence metadata missing"))?;
+
+                let mut stmt = conn.prepare(
+                    r#"
+SELECT r.todo_id, r.occurrence_index
+FROM todo_recurrences r
+WHERE r.series_id = ?1
+  AND (?2 = 1 OR r.occurrence_index >= ?3)
+ORDER BY r.occurrence_index ASC
+"#,
+                )?;
+                let include_past = if apply_scope == TodoRecurrenceEditScope::WholeSeries {
+                    1i64
+                } else {
+                    0i64
+                };
+                let scoped_todos: Vec<(String, i64)> = stmt
+                    .query_map(params![meta.series_id, include_past, meta.occurrence_index], |row| {
+                        Ok((row.get(0)?, row.get(1)?))
+                    })?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+
+                let mut updated_current: Option<Todo> = None;
+                for (series_todo_id, _) in &scoped_todos {
+                    let updated = set_todo_status_in_txn(
+                        conn,
+                        key,
+                        series_todo_id,
+                        new_status,
+                        source_message_id,
+                    )?;
+                    if *series_todo_id == current.id {
+                        updated_current = Some(updated);
+                    }
+                }
+
+                if apply_scope == TodoRecurrenceEditScope::ThisAndFuture {
+                    let split_series_id = format!("{}:split:{}", meta.series_id, uuid::Uuid::new_v4());
+                    for (series_todo_id, occurrence_index) in scoped_todos {
+                        let split_occurrence_index = occurrence_index
+                            .checked_sub(meta.occurrence_index)
+                            .ok_or_else(|| anyhow!("split recurrence index underflow"))?;
+                        let _ = upsert_todo_recurrence_with_sync_in_txn(
+                            conn,
+                            key,
+                            &series_todo_id,
+                            &split_series_id,
+                            &meta.rule_json,
+                            Some(split_occurrence_index),
+                        )?;
+                    }
+                }
+
+                updated_current.ok_or_else(|| anyhow!("current todo not found in recurrence scope"))?
+            }
+        };
+
+        Ok(updated_current)
+    })();
+
+    match result {
+        Ok(updated) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(updated)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
 fn maybe_spawn_next_recurring_todo(
     conn: &Connection,
     key: &[u8; 32],

@@ -169,11 +169,40 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
   Future<void> _setStatus(Todo todo, String newStatus) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    await backend.setTodoStatus(
-      sessionKey,
-      todoId: todo.id,
-      newStatus: newStatus,
-    );
+
+    var scope = TodoRecurrenceEditScope.thisOnly;
+    if (newStatus != 'done') {
+      String? ruleJson;
+      try {
+        ruleJson = await backend.getTodoRecurrenceRuleJson(
+          sessionKey,
+          todoId: todo.id,
+        );
+      } catch (_) {
+        ruleJson = null;
+      }
+      if (ruleJson != null && ruleJson.trim().isNotEmpty) {
+        if (!mounted) return;
+        final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
+        if (selectedScope == null || !mounted) return;
+        scope = selectedScope;
+      }
+    }
+
+    try {
+      await backend.updateTodoStatusWithScope(
+        sessionKey,
+        todoId: todo.id,
+        newStatus: newStatus,
+        scope: scope,
+      );
+    } catch (_) {
+      await backend.setTodoStatus(
+        sessionKey,
+        todoId: todo.id,
+        newStatus: newStatus,
+      );
+    }
     if (!mounted) return;
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refresh();
