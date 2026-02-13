@@ -22,6 +22,7 @@ import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
 import '../../attachments/attachment_viewer_page.dart';
 import '../../chat/chat_markdown_sanitizer.dart';
+import '../../chat/chat_markdown_editor_page.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';

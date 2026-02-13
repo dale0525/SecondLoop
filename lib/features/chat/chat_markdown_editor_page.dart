@@ -12,10 +12,18 @@ import 'chat_markdown_sanitizer.dart';
 class ChatMarkdownEditorPage extends StatefulWidget {
   const ChatMarkdownEditorPage({
     required this.initialText,
+    this.title,
+    this.saveLabel,
+    this.inputFieldKey = const ValueKey('chat_markdown_editor_input'),
+    this.saveButtonKey = const ValueKey('chat_markdown_editor_save'),
     super.key,
   });
 
   final String initialText;
+  final String? title;
+  final String? saveLabel;
+  final Key inputFieldKey;
+  final Key saveButtonKey;
 
   @override
   State<ChatMarkdownEditorPage> createState() => _ChatMarkdownEditorPageState();
@@ -73,7 +81,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
         child: Scaffold(
           key: const ValueKey('chat_markdown_editor_page'),
           appBar: AppBar(
-            title: Text(context.t.chat.markdownEditor.title),
+            title: Text(widget.title ?? context.t.chat.markdownEditor.title),
             actions: [
               TextButton(
                 onPressed: _cancel,
@@ -81,10 +89,10 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
-                key: const ValueKey('chat_markdown_editor_apply'),
+                key: widget.saveButtonKey,
                 onPressed: _apply,
-                icon: const Icon(Icons.done_rounded, size: 18),
-                label: Text(context.t.chat.markdownEditor.apply),
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: Text(widget.saveLabel ?? context.t.common.actions.save),
               ),
               const SizedBox(width: 12),
             ],
@@ -200,7 +208,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
                   title: context.t.chat.markdownEditor.editorLabel,
                   icon: Icons.edit_note_rounded,
                   child: TextField(
-                    key: const ValueKey('chat_markdown_editor_input'),
+                    key: widget.inputFieldKey,
                     controller: _controller,
                     focusNode: _editorFocusNode,
                     expands: true,

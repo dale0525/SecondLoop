@@ -33,37 +33,17 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     final syncEngine = SyncEngineScope.maybeOf(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    var draft = message.content;
     try {
-      final newContent = await showDialog<String>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text(context.t.chat.editMessageTitle),
-            content: TextFormField(
-              key: const ValueKey('edit_message_content'),
-              initialValue: draft,
-              autofocus: true,
-              maxLines: null,
-              onChanged: (value) => draft = value,
-            ),
-            actions: [
-              SlButton(
-                variant: SlButtonVariant.outline,
-                icon: const Icon(Icons.close_rounded, size: 18),
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(context.t.common.actions.cancel),
-              ),
-              SlButton(
-                buttonKey: const ValueKey('edit_message_save'),
-                icon: const Icon(Icons.save_rounded, size: 18),
-                variant: SlButtonVariant.primary,
-                onPressed: () => Navigator.of(context).pop(draft),
-                child: Text(context.t.common.actions.save),
-              ),
-            ],
-          );
-        },
+      final newContent = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder: (context) => ChatMarkdownEditorPage(
+            initialText: message.content,
+            title: context.t.chat.editMessageTitle,
+            saveLabel: context.t.common.actions.save,
+            inputFieldKey: const ValueKey('edit_message_content'),
+            saveButtonKey: const ValueKey('edit_message_save'),
+          ),
+        ),
       );
 
       final trimmed = newContent?.trim();

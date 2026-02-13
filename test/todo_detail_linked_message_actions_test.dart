@@ -55,6 +55,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_edit')));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
+        findsOneWidget);
+
     await tester.enterText(
       find.byKey(const ValueKey('edit_message_content')),
       'after',

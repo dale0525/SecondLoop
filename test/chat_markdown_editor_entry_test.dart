@@ -25,7 +25,7 @@ void main() {
     const editorPageKey = ValueKey('chat_markdown_editor_page');
     const editorInputKey = ValueKey('chat_markdown_editor_input');
     const editorPreviewKey = ValueKey('chat_markdown_editor_preview');
-    const editorApplyKey = ValueKey('chat_markdown_editor_apply');
+    const editorSaveKey = ValueKey('chat_markdown_editor_save');
 
     expect(find.byKey(editorOpenKey), findsOneWidget);
 
@@ -42,7 +42,7 @@ void main() {
     await tester.enterText(find.byKey(editorInputKey), '## Updated\n\n- item');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(editorApplyKey));
+    await tester.tap(find.byKey(editorSaveKey));
     await tester.pumpAndSettle();
 
     expect(find.byKey(editorPageKey), findsNothing);
