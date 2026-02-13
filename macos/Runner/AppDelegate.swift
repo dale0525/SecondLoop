@@ -85,7 +85,7 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    return true
+    return false
   }
 
   private func handleTranscodeToM4a(call: FlutterMethodCall, result: @escaping FlutterResult) {
