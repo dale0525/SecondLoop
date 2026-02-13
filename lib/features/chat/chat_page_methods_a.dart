@@ -343,6 +343,29 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
   }
 
+  Future<void> _openMarkdownEditor() async {
+    if (_isComposerBusy) return;
+
+    final result = await Navigator.of(context).push<ChatMarkdownEditorResult>(
+      MaterialPageRoute(
+        builder: (context) => ChatMarkdownEditorPage(
+          initialText: _controller.text,
+          allowPlainMode: true,
+          initialMode: ChatEditorMode.markdown,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+
+    final updatedText = result.text;
+    _controller.value = _controller.value.copyWith(
+      text: updatedText,
+      selection: TextSelection.collapsed(offset: updatedText.length),
+      composing: TextRange.empty,
+    );
+    _inputFocusNode.requestFocus();
+  }
+
   Future<void> _showMessageContextMenu(
     Message message,
     Offset globalPosition,
@@ -661,114 +684,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         builder: (context) => TodoDetailPage(initialTodo: linkedTodo),
       ),
     );
-  }
-
-  Future<void> _editMessage(Message message) async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    final messenger = ScaffoldMessenger.of(context);
-
-    var draft = message.content;
-    try {
-      final newContent = await showDialog<String>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text(context.t.chat.editMessageTitle),
-            content: TextFormField(
-              key: const ValueKey('edit_message_content'),
-              initialValue: draft,
-              autofocus: true,
-              maxLines: null,
-              onChanged: (value) => draft = value,
-            ),
-            actions: [
-              SlButton(
-                variant: SlButtonVariant.outline,
-                icon: const Icon(Icons.close_rounded, size: 18),
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(context.t.common.actions.cancel),
-              ),
-              SlButton(
-                buttonKey: const ValueKey('edit_message_save'),
-                icon: const Icon(Icons.save_rounded, size: 18),
-                variant: SlButtonVariant.primary,
-                onPressed: () => Navigator.of(context).pop(draft),
-                child: Text(context.t.common.actions.save),
-              ),
-            ],
-          );
-        },
-      );
-
-      final trimmed = newContent?.trim();
-      if (trimmed == null) return;
-
-      await backend.editMessage(sessionKey, message.id, trimmed);
-
-      try {
-        final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
-        if (linkedTodoInfo != null && linkedTodoInfo.isSourceEntry) {
-          final recurrenceRuleJson = await backend.getTodoRecurrenceRuleJson(
-            sessionKey,
-            todoId: linkedTodoInfo.todo.id,
-          );
-          if (recurrenceRuleJson != null &&
-              recurrenceRuleJson.trim().isNotEmpty) {
-            final settings = await ActionsSettingsStore.load();
-            if (!mounted) return;
-
-            final locale = Localizations.localeOf(context);
-            final nowLocal = DateTime.now();
-            final timeResolution = LocalTimeResolver.resolve(
-              trimmed,
-              nowLocal,
-              locale: locale,
-              dayEndMinutes: settings.dayEndMinutes,
-            );
-            if (timeResolution != null &&
-                timeResolution.candidates.length == 1) {
-              final dueAtLocal = timeResolution.candidates.single.dueAtLocal;
-              await backend.updateTodoDueWithScope(
-                sessionKey,
-                todoId: linkedTodoInfo.todo.id,
-                dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
-                scope: TodoRecurrenceEditScope.thisAndFuture,
-              );
-            }
-          }
-        }
-      } catch (_) {
-        // ignore: message edit should still succeed even if todo sync fails.
-      }
-
-      try {
-        await backend.markSemanticParseJobCanceled(
-          sessionKey,
-          messageId: message.id,
-          nowMs: DateTime.now().millisecondsSinceEpoch,
-        );
-      } catch (_) {
-        // ignore
-      }
-      if (!mounted) return;
-      syncEngine?.notifyLocalMutation();
-      _refresh();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.messageUpdated),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.editFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
   }
 
   String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {

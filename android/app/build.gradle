@@ -37,7 +37,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.secondloop.secondloop"
-    compileSdk flutter.compileSdkVersion
+    compileSdkVersion 35
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -91,6 +91,7 @@ flutter {
 }
 
 dependencies {
+    implementation "androidx.multidex:multidex:2.0.1"
     implementation "androidx.exifinterface:exifinterface:1.3.7"
     implementation "com.google.mlkit:text-recognition:16.0.1"
     implementation "com.google.mlkit:text-recognition-chinese:16.0.1"

@@ -810,6 +810,17 @@
     "messageViewer": {
       "title": "Message"
     },
+    "markdownEditor": {
+      "openButton": "Markdown",
+      "title": "Markdown editor",
+      "apply": "Apply",
+      "editorLabel": "Editor",
+      "previewLabel": "Preview",
+      "emptyPreview": "Preview will appear as you type.",
+      "shortcutHint": "Tip: Cmd/Ctrl + Enter applies changes instantly.",
+      "stats": "$lines lines · $characters chars",
+      "simpleInput": "Simple input"
+    },
     "focus": {
       "tooltip": "Focus",
       "allMemories": "Focus: All memories",

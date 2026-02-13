@@ -810,6 +810,17 @@
     "messageViewer": {
       "title": "全文"
     },
+    "markdownEditor": {
+      "openButton": "Markdown",
+      "title": "Markdown 编辑器",
+      "apply": "应用",
+      "editorLabel": "编辑区",
+      "previewLabel": "预览区",
+      "emptyPreview": "输入后会在这里实时预览。",
+      "shortcutHint": "提示：按 Cmd/Ctrl + Enter 可快速应用内容。",
+      "stats": "$lines 行 · $characters 字符",
+      "simpleInput": "简易输入"
+    },
     "focus": {
       "tooltip": "聚焦",
       "allMemories": "聚焦：所有记忆",

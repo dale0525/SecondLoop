@@ -834,6 +834,25 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
+                                  ListenableBuilder(
+                                    listenable: _inputFocusNode,
+                                    builder: (context, child) {
+                                      if (!_inputFocusNode.hasFocus) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _buildDesktopMarkdownEditorButton(
+                                            context,
+                                          ),
+                                          if (_supportsImageUpload ||
+                                              _supportsDesktopRecordAudioAction)
+                                            const SizedBox(width: 8),
+                                        ],
+                                      );
+                                    },
+                                  ),
                                   if (_supportsImageUpload ||
                                       _supportsDesktopRecordAudioAction) ...[
                                     if (_supportsDesktopRecordAudioAction) ...[
