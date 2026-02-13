@@ -22,14 +22,17 @@ extension _SettingsPageBuild on _SettingsPageState {
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i != 0) const Divider(height: 1),
-              children[i],
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i != 0) const Divider(height: 1),
+                children[i],
+              ],
             ],
-          ],
+          ),
         ),
       );
     }

@@ -1,26 +1,22 @@
 import 'package:menu_base/menu_base.dart';
 
 const kDesktopTrayMenuOpenKey = 'tray_open';
-const kDesktopTrayMenuHideKey = 'tray_hide';
 const kDesktopTrayMenuSettingsKey = 'tray_settings';
 const kDesktopTrayMenuStartWithSystemKey = 'tray_start_with_system';
 const kDesktopTrayMenuQuitKey = 'tray_quit';
 
-String formatTrayUsageProgress(int? percent) {
+String formatTrayUsagePercent(int? percent) {
   if (percent == null) {
-    return '[----------] --%';
+    return '--%';
   }
 
   final clamped = percent.clamp(0, 100);
-  final filled = ((clamped / 10).round()).clamp(0, 10);
-  final bar = '${'#' * filled}${'-' * (10 - filled)}';
-  return '[$bar] $clamped%';
+  return '$clamped%';
 }
 
 final class DesktopTrayMenuLabels {
   const DesktopTrayMenuLabels({
     required this.open,
-    required this.hide,
     required this.settings,
     required this.startWithSystem,
     required this.quit,
@@ -30,7 +26,6 @@ final class DesktopTrayMenuLabels {
   });
 
   final String open;
-  final String hide;
   final String settings;
   final String startWithSystem;
   final String quit;
@@ -75,14 +70,12 @@ final class DesktopTrayMenuState {
 final class DesktopTrayMenuController {
   DesktopTrayMenuController({
     required this.onOpenWindow,
-    required this.onHideWindow,
     required this.onOpenSettings,
     required this.onToggleStartWithSystem,
     required this.onQuit,
   });
 
   final Future<void> Function() onOpenWindow;
-  final Future<void> Function() onHideWindow;
   final Future<void> Function() onOpenSettings;
   final Future<void> Function(bool enabled) onToggleStartWithSystem;
   final Future<void> Function() onQuit;
@@ -104,14 +97,14 @@ final class DesktopTrayMenuController {
       items.add(
         MenuItem(
           label:
-              '${labels.aiUsage} ${formatTrayUsageProgress(proUsage.aiUsagePercent)}',
+              '${labels.aiUsage}: ${formatTrayUsagePercent(proUsage.aiUsagePercent)}',
           disabled: true,
         ),
       );
       items.add(
         MenuItem(
           label:
-              '${labels.storageUsage} ${formatTrayUsageProgress(proUsage.storageUsagePercent)}',
+              '${labels.storageUsage}: ${formatTrayUsagePercent(proUsage.storageUsagePercent)}',
           disabled: true,
         ),
       );
@@ -119,7 +112,6 @@ final class DesktopTrayMenuController {
     }
 
     items.add(MenuItem(key: kDesktopTrayMenuOpenKey, label: labels.open));
-    items.add(MenuItem(key: kDesktopTrayMenuHideKey, label: labels.hide));
     items.add(
       MenuItem(key: kDesktopTrayMenuSettingsKey, label: labels.settings),
     );
@@ -143,9 +135,6 @@ final class DesktopTrayMenuController {
     switch (menuItem.key) {
       case kDesktopTrayMenuOpenKey:
         await onOpenWindow();
-        break;
-      case kDesktopTrayMenuHideKey:
-        await onHideWindow();
         break;
       case kDesktopTrayMenuSettingsKey:
         await onOpenSettings();
