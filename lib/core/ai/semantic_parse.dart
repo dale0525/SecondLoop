@@ -380,23 +380,51 @@ class AiSemanticParse {
     return MessageActionRecurrenceRule(freq: freq, interval: interval);
   }
 
+  static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
+    if (firstDayOfWeekIndex == 0) return DateTime.sunday;
+    return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
+  }
+
+  static DateTime _startOfWeek(DateTime nowLocal, int firstDayOfWeekIndex) {
+    final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
+    final delta = (nowLocal.weekday - firstWeekday + 7) % 7;
+    return DateTime(nowLocal.year, nowLocal.month, nowLocal.day)
+        .subtract(Duration(days: delta));
+  }
+
   static DateTime _fallbackDueAtForRecurring(
     DateTime nowLocal,
-    int dayEndMinutes,
-  ) {
-    final hour = dayEndMinutes ~/ 60;
-    final minute = dayEndMinutes % 60;
-    var due = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
+    MessageActionRecurrenceRule recurrenceRule, {
+    required int morningMinutes,
+    required int firstDayOfWeekIndex,
+  }) {
+    final hour = morningMinutes ~/ 60;
+    final minute = morningMinutes % 60;
+
+    DateTime cycleStart;
+    switch (recurrenceRule.freq) {
+      case 'weekly':
+        cycleStart = _startOfWeek(nowLocal, firstDayOfWeekIndex);
+        break;
+      case 'monthly':
+        cycleStart = DateTime(nowLocal.year, nowLocal.month, 1);
+        break;
+      case 'yearly':
+        cycleStart = DateTime(nowLocal.year, 1, 1);
+        break;
+      case 'daily':
+      default:
+        cycleStart = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+        break;
+    }
+
+    return DateTime(
+      cycleStart.year,
+      cycleStart.month,
+      cycleStart.day,
       hour,
       minute,
     );
-    if (!due.isAfter(nowLocal)) {
-      due = due.add(const Duration(days: 1));
-    }
-    return due;
   }
 
   static AiSemanticDecision? tryParseMessageAction(
@@ -404,6 +432,8 @@ class AiSemanticParse {
     required DateTime nowLocal,
     required Locale locale,
     required int dayEndMinutes,
+    int? morningMinutes,
+    int firstDayOfWeekIndex = 1,
   }) {
     final jsonText = _extractFirstJsonObject(raw);
     if (jsonText == null) return null;
@@ -423,6 +453,7 @@ class AiSemanticParse {
     final confidenceRaw = _doubleField(map, 'confidence') ?? 0.0;
     final confidence =
         confidenceRaw.isFinite ? confidenceRaw.clamp(0.0, 1.0).toDouble() : 0.0;
+    final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
 
     switch (kind) {
       case 'followup':
@@ -458,7 +489,12 @@ class AiSemanticParse {
 
         final recurrenceRule = _parseRecurrenceRule(map['recurrence']);
         if (recurrenceRule != null && dueAtLocal == null) {
-          dueAtLocal = _fallbackDueAtForRecurring(nowLocal, dayEndMinutes);
+          dueAtLocal = _fallbackDueAtForRecurring(
+            nowLocal,
+            recurrenceRule,
+            morningMinutes: resolvedMorningMinutes,
+            firstDayOfWeekIndex: firstDayOfWeekIndex,
+          );
         }
         final normalizedStatus =
             dueAtLocal == null ? status : (status == 'inbox' ? 'open' : status);

@@ -75,11 +75,65 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       }
     }
 
+    if (!mounted) return;
+    final firstDayOfWeekIndex =
+        MaterialLocalizations.of(context).firstDayOfWeekIndex;
+    final looksLikeLongFormNote =
+        trimmedText.contains('\n') || trimmedText.runes.length >= 240;
+    final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
+
+    if (!forceTodoSelectionPrompt &&
+        !looksLikeReview &&
+        !looksLikeLongFormNote &&
+        looksLikeTodoRelevant) {
+      final prefs = await SharedPreferences.getInstance();
+      final consented =
+          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      if (consented && mounted) {
+        String? cloudIdToken;
+        try {
+          cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+        } catch (_) {
+          cloudIdToken = null;
+        }
+
+        AskAiRouteKind route;
+        try {
+          route = await decideAiAutomationRoute(
+            backend,
+            sessionKey,
+            cloudIdToken: cloudIdToken,
+            cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+            subscriptionStatus: subscriptionStatus,
+          );
+        } catch (_) {
+          route = AskAiRouteKind.needsSetup;
+        }
+
+        if (route != AskAiRouteKind.needsSetup) {
+          try {
+            await backend.enqueueSemanticParseJob(
+              sessionKey,
+              messageId: message.id,
+              nowMs: DateTime.now().millisecondsSinceEpoch,
+            );
+            if (mounted) _setState(() {});
+            syncEngine?.notifyExternalChange();
+            return;
+          } catch (_) {
+            // Fall through to local resolver.
+          }
+        }
+      }
+    }
+
     var decision = MessageActionResolver.resolve(
       rawText,
       locale: locale,
       nowLocal: nowLocal,
       dayEndMinutes: settings.dayEndMinutes,
+      morningMinutes: settings.morningMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
       openTodoTargets: targets,
       semanticMatches: semanticMatches,
     );
@@ -88,58 +142,6 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       // For status-only messages like "done"/"完成", always ask which todo to
       // update instead of auto-applying a semantic match.
       decision = const MessageActionNoneDecision();
-    }
-
-    if (decision is MessageActionNoneDecision &&
-        !forceTodoSelectionPrompt &&
-        timeResolution == null &&
-        !looksLikeReview) {
-      final looksLikeLongFormNote =
-          trimmedText.contains('\n') || trimmedText.runes.length >= 240;
-      final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
-      if (!looksLikeLongFormNote && looksLikeTodoRelevant) {
-        final prefs = await SharedPreferences.getInstance();
-        final consented =
-            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
-        if (!consented || !mounted) {
-          // Avoid prompting for consent during send flow.
-          // Users can enable this in Settings.
-        } else {
-          String? cloudIdToken;
-          try {
-            cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-          } catch (_) {
-            cloudIdToken = null;
-          }
-
-          AskAiRouteKind route;
-          try {
-            route = await decideAiAutomationRoute(
-              backend,
-              sessionKey,
-              cloudIdToken: cloudIdToken,
-              cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-              subscriptionStatus: subscriptionStatus,
-            );
-          } catch (_) {
-            route = AskAiRouteKind.needsSetup;
-          }
-
-          if (route != AskAiRouteKind.needsSetup) {
-            try {
-              await backend.enqueueSemanticParseJob(
-                sessionKey,
-                messageId: message.id,
-                nowMs: DateTime.now().millisecondsSinceEpoch,
-              );
-              if (mounted) _setState(() {});
-              syncEngine?.notifyExternalChange();
-            } catch (_) {
-              // ignore
-            }
-          }
-        }
-      }
     }
 
     switch (decision) {

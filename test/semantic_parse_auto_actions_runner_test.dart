@@ -120,7 +120,7 @@ void main() {
     expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 
-  test('runner retries when client throws', () async {
+  test('runner falls back to local resolver when client throws', () async {
     final store = _FakeStore(
       jobs: [
         const SemanticParseAutoActionJob(
@@ -131,7 +131,7 @@ void main() {
           createdAtMs: 0,
         ),
       ],
-      messages: {'msg:2': '修电视机'},
+      messages: {'msg:2': '明天 3pm 提交材料'},
     );
     final client = _FakeClient(error: StateError('boom'));
 
@@ -149,12 +149,14 @@ void main() {
     final result = await runner.runOnce(
       localeTag: 'zh-CN',
       dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
     );
 
-    expect(result.processed, 0);
-    expect(store.lastFailed, isNotNull);
-    expect(store.lastFailed!.attempts, 1);
-    expect(store.lastFailed!.nextRetryAtMs, greaterThan(1000));
+    expect(result.processed, 1);
+    expect(store.createdTodoIds, contains('todo:msg:2'));
+    expect(store.lastFailed, isNull);
+    expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 }
 

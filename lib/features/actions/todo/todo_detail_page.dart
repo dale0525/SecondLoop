@@ -301,15 +301,87 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
   }
 
+  static int _recurringCandidateBucket(Todo todo, int? pivotDueAtMs) {
+    final dueAtMs = todo.dueAtMs;
+    if (dueAtMs == null) return 2;
+    if (pivotDueAtMs == null) return 1;
+    return dueAtMs >= pivotDueAtMs ? 0 : 1;
+  }
+
+  Future<Todo?> _findNextActiveRecurringOccurrence(
+    Todo current,
+    String recurrenceRuleJson,
+  ) async {
+    final normalizedRule = recurrenceRuleJson.trim();
+    if (normalizedRule.isEmpty) return null;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    late final List<Todo> allTodos;
+    try {
+      allTodos = await backend.listTodos(sessionKey);
+    } catch (_) {
+      return null;
+    }
+
+    final candidates = allTodos.where((todo) {
+      if (todo.id == current.id) return false;
+      if (todo.status == 'done' || todo.status == 'dismissed') return false;
+      if (todo.title != current.title) return false;
+      final sourceEntryId = current.sourceEntryId;
+      if (sourceEntryId != null && todo.sourceEntryId != sourceEntryId) {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
+
+    if (candidates.isEmpty) return null;
+
+    final matched = <Todo>[];
+    for (final candidate in candidates) {
+      try {
+        final rule = await backend.getTodoRecurrenceRuleJson(
+          sessionKey,
+          todoId: candidate.id,
+        );
+        if (rule != null && rule.trim() == normalizedRule) {
+          matched.add(candidate);
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    if (matched.isEmpty) return null;
+
+    final pivotDueAtMs = current.dueAtMs;
+    matched.sort((a, b) {
+      final bucketA = _recurringCandidateBucket(a, pivotDueAtMs);
+      final bucketB = _recurringCandidateBucket(b, pivotDueAtMs);
+      if (bucketA != bucketB) return bucketA.compareTo(bucketB);
+
+      final dueA = a.dueAtMs ?? 9223372036854775807;
+      final dueB = b.dueAtMs ?? 9223372036854775807;
+      if (dueA != dueB) return dueA.compareTo(dueB);
+
+      return b.updatedAtMs.compareTo(a.updatedAtMs);
+    });
+
+    return matched.first;
+  }
+
   Future<void> _setStatus(String newStatus) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
 
     var scope = TodoRecurrenceEditScope.thisOnly;
+    String? recurrenceRuleJson = _recurrenceRuleJson;
+
     if (newStatus != 'done') {
-      final ruleJson = _recurrenceRuleJson ?? await _loadRecurrenceRuleJson();
+      recurrenceRuleJson ??= await _loadRecurrenceRuleJson();
       if (!mounted) return;
-      if (ruleJson != null && ruleJson.trim().isNotEmpty) {
+      if (recurrenceRuleJson != null && recurrenceRuleJson.trim().isNotEmpty) {
         final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
         if (selectedScope == null || !mounted) return;
         scope = selectedScope;
@@ -334,8 +406,28 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       );
       return;
     }
+
+    var todoForDisplay = updated;
+    if (newStatus == 'done') {
+      recurrenceRuleJson ??= await _loadRecurrenceRuleJson();
+      if (!mounted) return;
+      if (recurrenceRuleJson != null && recurrenceRuleJson.trim().isNotEmpty) {
+        final nextTodo = await _findNextActiveRecurringOccurrence(
+          updated,
+          recurrenceRuleJson,
+        );
+        if (!mounted) return;
+        if (nextTodo != null) {
+          todoForDisplay = nextTodo;
+        }
+      }
+    }
+
     if (!mounted) return;
-    setState(() => _todo = updated);
+    setState(() => _todo = todoForDisplay);
+    if (todoForDisplay.id != updated.id) {
+      unawaited(_loadRecurrenceRuleJson());
+    }
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refreshActivities();
   }

@@ -62,6 +62,9 @@ class MessageActionResolver {
   static final RegExp _time24h = RegExp(r'\b([01]?\d|2[0-3]):([0-5]\d)\b');
   static final RegExp _timeAmPm =
       RegExp(r'\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b', caseSensitive: false);
+  static final RegExp _timeZh = RegExp(
+    r'(?:(?:上|下)午|早上|晚上|中午|凌晨)?\s*\d{1,2}\s*点(?:\s*(?:[0-5]?\d\s*分?|半))?',
+  );
 
   static const List<({String freq, String token})> _recurrenceTokens = [
     (freq: 'daily', token: 'every day'),
@@ -160,6 +163,28 @@ class MessageActionResolver {
 
     out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
     out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
+    out = out.replaceAll(
+      RegExp(r'(?<=[\u4E00-\u9FFF])\s+(?=[\u4E00-\u9FFF])'),
+      '',
+    );
+    return out;
+  }
+
+  static String _cleanupRecurringTitleArtifacts(String text) {
+    var out = text;
+    out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
+    out = out.replaceAll(RegExp(r'([是为為])\s*[，,]\s*'), '');
+    out = out.replaceAll(RegExp(r'\s*[，,]\s*'), ' ');
+    out = out.replaceAll('的这个时候', ' ');
+    out = out.replaceAll('這個時候', ' ');
+    out = out.replaceAll('这个时候', ' ');
+    out = out.replaceAll(RegExp(r'^\s*每(?:个)?\s*'), '');
+    out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
+    out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
+    out = out.replaceAll(
+      RegExp(r'(?<=[\u4E00-\u9FFF])\s+(?=[\u4E00-\u9FFF])'),
+      '',
+    );
     return out;
   }
 
@@ -276,27 +301,58 @@ class MessageActionResolver {
 
     out = out.replaceAll(_time24h, ' ');
     out = out.replaceAll(_timeAmPm, ' ');
+    out = out.replaceAll(_timeZh, ' ');
 
     out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
     out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
     return out;
   }
 
+  static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
+    if (firstDayOfWeekIndex == 0) return DateTime.sunday;
+    return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
+  }
+
+  static DateTime _startOfWeek(DateTime nowLocal, int firstDayOfWeekIndex) {
+    final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
+    final delta = (nowLocal.weekday - firstWeekday + 7) % 7;
+    return DateTime(nowLocal.year, nowLocal.month, nowLocal.day)
+        .subtract(Duration(days: delta));
+  }
+
   static DateTime _fallbackDueAtForRecurring(
-      DateTime nowLocal, int dayEndMinutes) {
-    final hour = dayEndMinutes ~/ 60;
-    final minute = dayEndMinutes % 60;
-    var due = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
+    DateTime nowLocal,
+    MessageActionRecurrenceRule recurrenceRule, {
+    required int morningMinutes,
+    required int firstDayOfWeekIndex,
+  }) {
+    final hour = morningMinutes ~/ 60;
+    final minute = morningMinutes % 60;
+
+    DateTime cycleStart;
+    switch (recurrenceRule.freq) {
+      case 'weekly':
+        cycleStart = _startOfWeek(nowLocal, firstDayOfWeekIndex);
+        break;
+      case 'monthly':
+        cycleStart = DateTime(nowLocal.year, nowLocal.month, 1);
+        break;
+      case 'yearly':
+        cycleStart = DateTime(nowLocal.year, 1, 1);
+        break;
+      case 'daily':
+      default:
+        cycleStart = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+        break;
+    }
+
+    return DateTime(
+      cycleStart.year,
+      cycleStart.month,
+      cycleStart.day,
       hour,
       minute,
     );
-    if (!due.isAfter(nowLocal)) {
-      due = due.add(const Duration(days: 1));
-    }
-    return due;
   }
 
   static MessageActionDecision resolve(
@@ -305,11 +361,14 @@ class MessageActionResolver {
     required DateTime nowLocal,
     required int dayEndMinutes,
     required List<TodoLinkTarget> openTodoTargets,
+    int? morningMinutes,
+    int firstDayOfWeekIndex = 1,
     List<TodoThreadMatch> semanticMatches = const <TodoThreadMatch>[],
   }) {
     final raw = text.trim();
     if (raw.isEmpty) return const MessageActionNoneDecision();
 
+    final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
     final updateIntent = inferTodoUpdateIntent(raw);
 
     // Follow-up (existing todo)
@@ -355,9 +414,18 @@ class MessageActionResolver {
           ? time!.candidates.single.dueAtLocal
           : recurrenceRule == null
               ? null
-              : _fallbackDueAtForRecurring(nowLocal, dayEndMinutes);
+              : _fallbackDueAtForRecurring(
+                  nowLocal,
+                  recurrenceRule,
+                  morningMinutes: resolvedMorningMinutes,
+                  firstDayOfWeekIndex: firstDayOfWeekIndex,
+                );
+      var title = _stripRecurrenceDecorations(structuredTitle);
+      if (recurrenceRule != null) {
+        title = _cleanupRecurringTitleArtifacts(title);
+      }
       return MessageActionCreateDecision(
-        title: _stripRecurrenceDecorations(structuredTitle),
+        title: title,
         status: dueAtLocal == null ? 'inbox' : 'open',
         dueAtLocal: dueAtLocal,
         recurrenceRule: recurrenceRule,
@@ -379,13 +447,21 @@ class MessageActionResolver {
         ? time.candidates.single.dueAtLocal
         : recurrenceRule == null
             ? null
-            : _fallbackDueAtForRecurring(nowLocal, dayEndMinutes);
+            : _fallbackDueAtForRecurring(
+                nowLocal,
+                recurrenceRule,
+                morningMinutes: resolvedMorningMinutes,
+                firstDayOfWeekIndex: firstDayOfWeekIndex,
+              );
     if (time != null && time.candidates.length != 1 && recurrenceRule == null) {
       return const MessageActionNoneDecision();
     }
 
     var title = _stripTimeDecorations(raw, time);
     title = _stripRecurrenceDecorations(title);
+    if (recurrenceRule != null) {
+      title = _cleanupRecurringTitleArtifacts(title);
+    }
     if (title.isEmpty) return const MessageActionNoneDecision();
 
     return MessageActionCreateDecision(

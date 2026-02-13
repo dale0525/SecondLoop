@@ -178,6 +178,8 @@ final class SemanticParseAutoActionsRunner {
   Future<SemanticParseAutoActionsRunResult> runOnce({
     required String localeTag,
     required int dayEndMinutes,
+    int? morningMinutes,
+    int firstDayOfWeekIndex = 1,
   }) async {
     final nowMs = _nowMs();
     final nowLocal = _nowLocal();
@@ -217,26 +219,44 @@ final class SemanticParseAutoActionsRunner {
           limit: 8,
         );
 
-        final json = await client
-            .parseMessageActionJson(
-              text: messageText,
-              nowLocalIso: nowLocal.toIso8601String(),
-              localeTag: localeTag,
-              dayEndMinutes: dayEndMinutes,
-              candidates: candidates,
-              timeout: settings.hardTimeout,
-            )
-            .timeout(settings.hardTimeout);
+        final locale = _localeFromTag(localeTag);
+        final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
 
-        final parsed = AiSemanticParse.tryParseMessageAction(
-          json,
-          nowLocal: nowLocal,
-          locale: _localeFromTag(localeTag),
-          dayEndMinutes: dayEndMinutes,
-        );
+        AiSemanticDecision? parsed;
+        try {
+          final json = await client
+              .parseMessageActionJson(
+                text: messageText,
+                nowLocalIso: nowLocal.toIso8601String(),
+                localeTag: localeTag,
+                dayEndMinutes: dayEndMinutes,
+                candidates: candidates,
+                timeout: settings.hardTimeout,
+              )
+              .timeout(settings.hardTimeout);
 
-        if (parsed == null) {
-          throw StateError('invalid_json');
+          parsed = AiSemanticParse.tryParseMessageAction(
+            json,
+            nowLocal: nowLocal,
+            locale: locale,
+            dayEndMinutes: dayEndMinutes,
+            morningMinutes: resolvedMorningMinutes,
+            firstDayOfWeekIndex: firstDayOfWeekIndex,
+          );
+          if (parsed == null) {
+            throw StateError('invalid_json');
+          }
+        } catch (_) {
+          final localDecision = _resolveLocallyWhenRemoteFails(
+            messageText,
+            locale: locale,
+            nowLocal: nowLocal,
+            dayEndMinutes: dayEndMinutes,
+            morningMinutes: resolvedMorningMinutes,
+            firstDayOfWeekIndex: firstDayOfWeekIndex,
+            candidates: candidates,
+          );
+          parsed = AiSemanticDecision(decision: localDecision, confidence: 1.0);
         }
 
         if (parsed.confidence < settings.minAutoConfidence) {
@@ -356,6 +376,39 @@ final class SemanticParseAutoActionsRunner {
     final language = parts.isNotEmpty ? parts[0] : 'en';
     final country = parts.length > 1 ? parts[1] : null;
     return Locale(language, country);
+  }
+
+  static MessageActionDecision _resolveLocallyWhenRemoteFails(
+    String text, {
+    required Locale locale,
+    required DateTime nowLocal,
+    required int dayEndMinutes,
+    required int morningMinutes,
+    required int firstDayOfWeekIndex,
+    required List<SemanticParseTodoCandidate> candidates,
+  }) {
+    final targets = candidates
+        .map(
+          (c) => TodoLinkTarget(
+            id: c.id,
+            title: c.title,
+            status: c.status,
+            dueLocal: c.dueLocalIso == null
+                ? null
+                : DateTime.tryParse(c.dueLocalIso!),
+          ),
+        )
+        .toList(growable: false);
+
+    return MessageActionResolver.resolve(
+      text,
+      locale: locale,
+      nowLocal: nowLocal,
+      dayEndMinutes: dayEndMinutes,
+      morningMinutes: morningMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+      openTodoTargets: targets,
+    );
   }
 
   static int _retryBackoffMs(int attempts) {

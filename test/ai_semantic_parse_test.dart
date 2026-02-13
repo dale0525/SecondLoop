@@ -101,13 +101,15 @@ void main() {
       nowLocal: now,
       locale: const Locale('zh', 'CN'),
       dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
     );
 
     expect(parsed, isNotNull);
     final create = parsed!.decision as MessageActionCreateDecision;
     expect(create.recurrenceRule, isNotNull);
     expect(create.status, 'open');
-    expect(create.dueAtLocal, DateTime(2026, 2, 4, 21, 0));
+    expect(create.dueAtLocal, DateTime(2026, 2, 2, 9, 0));
   });
   test('parses JSON wrapped in markdown code fences', () {
     final now = DateTime(2026, 2, 3, 12, 0);
