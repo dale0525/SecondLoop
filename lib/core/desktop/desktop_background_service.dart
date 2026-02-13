@@ -1,7 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:tray_manager/tray_manager.dart';
@@ -19,7 +18,8 @@ import '../sync/sync_config_store.dart';
 import 'desktop_boot_prefs.dart';
 import 'desktop_launch_args.dart';
 import 'desktop_tray_icon_config.dart';
-import 'desktop_tray_menu_controller.dart';
+import 'desktop_tray_menu_controller.dart' show DesktopTrayProUsage;
+import 'desktop_tray_popup_window.dart';
 
 class DesktopBackgroundService extends StatefulWidget {
   const DesktopBackgroundService({
@@ -47,7 +47,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   VoidCallback? _bootPrefsListener;
 
   _LaunchSetup? _launchSetup;
-  DesktopTrayMenuController? _menuController;
 
   CloudAuthController? _cloudAuthController;
   Listenable? _cloudAuthListenable;
@@ -65,10 +64,16 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   bool _refreshingProUsage = false;
   DateTime? _lastProUsageRefreshAt;
 
+  bool _trayPopupVisible = false;
+  bool _windowWasVisibleBeforeTrayPopup = false;
+  _SavedWindowState? _savedWindowState;
+
   Timer? _leftTrayMenuTimer;
   DateTime? _lastLeftTrayClickAt;
 
-  static const Duration _trayDoubleClickThreshold = Duration(milliseconds: 280);
+  static const Duration _trayDoubleClickThreshold = Duration(milliseconds: 220);
+  static const Size _trayPopupWindowSize = Size(288, 296);
+  static const double _trayPopupVerticalGap = 8;
 
   bool get _isDesktop =>
       !kIsWeb &&
@@ -101,7 +106,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     _bindSubscription(SubscriptionScope.maybeOf(context));
 
     if (_enabled) {
-      unawaited(_runSafely(_refreshTrayMenu));
       return;
     }
 
@@ -149,13 +153,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       _bootPrefsListener = _onBootPrefsChanged;
       DesktopBootPrefs.value.addListener(_onBootPrefsChanged);
 
-      _menuController = DesktopTrayMenuController(
-        onOpenWindow: _showWindow,
-        onOpenSettings: _openSettings,
-        onToggleStartWithSystem: DesktopBootPrefs.setStartWithSystem,
-        onQuit: _quitApp,
-      );
-
       await _loadLaunchSetup();
       await _applyBootConfig(previous: null);
       await _setupTray();
@@ -190,7 +187,9 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     _config = next;
     unawaited(_runSafely(() async {
       await _applyBootConfig(previous: previous);
-      await _refreshTrayMenu();
+      if (_trayPopupVisible && mounted) {
+        setState(() {});
+      }
     }));
   }
 
@@ -254,34 +253,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       isTemplate: iconConfig.isTemplate,
     );
     await trayManager.setToolTip('SecondLoop');
-    await _refreshTrayMenu();
-  }
-
-  Future<void> _refreshTrayMenu() async {
-    final controller = _menuController;
-    if (controller == null) {
-      return;
-    }
-
-    final labels = DesktopTrayMenuLabels(
-      open: context.t.common.actions.open,
-      settings: context.t.settings.title,
-      startWithSystem: context.t.settings.desktopBoot.startWithSystem.title,
-      quit: context.t.settings.desktopTray.menu.quit,
-      signedIn: context.t.settings.desktopTray.pro.signedIn,
-      aiUsage: context.t.settings.desktopTray.pro.aiUsage,
-      storageUsage: context.t.settings.desktopTray.pro.storageUsage,
-    );
-
-    final menu = controller.buildMenu(
-      labels: labels,
-      state: DesktopTrayMenuState(
-        startWithSystemEnabled: _config.startWithSystem,
-        proUsage: _trayProUsage,
-      ),
-    );
-
-    await trayManager.setContextMenu(menu);
   }
 
   Future<void> _applySilentStartupIfRequested() async {
@@ -293,11 +264,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     await windowManager.hide();
   }
 
-  Future<void> _openSettings() async {
-    await _showWindow();
-    await widget.onOpenSettingsRequested();
-  }
-
   Future<void> _refreshProUsage({bool force = false}) async {
     if (!_enabled) {
       return;
@@ -306,7 +272,9 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     if (!_isSignedInProAccount) {
       if (_trayProUsage != null) {
         _trayProUsage = null;
-        await _refreshTrayMenu();
+        if (_trayPopupVisible && mounted) {
+          setState(() {});
+        }
       }
       return;
     }
@@ -333,7 +301,9 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       }
 
       _trayProUsage = usage;
-      await _refreshTrayMenu();
+      if (_trayPopupVisible && mounted) {
+        setState(() {});
+      }
     } finally {
       _refreshingProUsage = false;
     }
@@ -426,12 +396,34 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       return;
     }
 
+    if (_trayPopupVisible) {
+      unawaited(
+        _runSafely(
+          () => _dismissTrayPopup(keepWindowVisible: false),
+        ),
+      );
+      return;
+    }
+
     if (_config.keepRunningInBackground) {
       unawaited(_runSafely(() => windowManager.hide()));
       return;
     }
 
     unawaited(_quitApp());
+  }
+
+  @override
+  void onWindowBlur() {
+    if (!_trayPopupVisible) {
+      return;
+    }
+
+    unawaited(
+      _runSafely(
+        () => _dismissTrayPopup(keepWindowVisible: false),
+      ),
+    );
   }
 
   @override
@@ -442,7 +434,7 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     if (last != null && now.difference(last) <= _trayDoubleClickThreshold) {
       _cancelPendingLeftTrayMenu();
       _lastLeftTrayClickAt = null;
-      unawaited(_runSafely(_showWindow));
+      unawaited(_runSafely(_openMainWindowFromTrayIcon));
       return;
     }
 
@@ -451,7 +443,7 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     _leftTrayMenuTimer = Timer(_trayDoubleClickThreshold, () {
       _leftTrayMenuTimer = null;
       _lastLeftTrayClickAt = null;
-      unawaited(_runSafely(_showTrayMenu));
+      unawaited(_runSafely(_showTrayPopup));
     });
   }
 
@@ -459,32 +451,159 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   void onTrayIconRightMouseDown() {
     _cancelPendingLeftTrayMenu();
     _lastLeftTrayClickAt = null;
-    unawaited(_runSafely(_showTrayMenu));
+    unawaited(_runSafely(_showTrayPopup));
   }
 
   @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
-    final controller = _menuController;
-    if (controller == null) {
-      return;
-    }
-
-    unawaited(_runSafely(() async {
-      await controller.onMenuItemClick(
-        menuItem,
-        startWithSystemEnabled: _config.startWithSystem,
-      );
-    }));
-  }
+  void onTrayMenuItemClick(MenuItem menuItem) {}
 
   void _cancelPendingLeftTrayMenu() {
     _leftTrayMenuTimer?.cancel();
     _leftTrayMenuTimer = null;
   }
 
-  Future<void> _showTrayMenu() async {
-    await trayManager.popUpContextMenu();
+  Future<void> _showTrayPopup() async {
+    if (_trayPopupVisible) {
+      await _dismissTrayPopup(keepWindowVisible: false);
+      return;
+    }
+
+    await _enterTrayPopupMode();
     unawaited(_refreshProUsage(force: true));
+  }
+
+  Future<void> _enterTrayPopupMode() async {
+    if (_trayPopupVisible) {
+      return;
+    }
+
+    _savedWindowState = await _captureWindowState();
+    _windowWasVisibleBeforeTrayPopup = await windowManager.isVisible();
+
+    await windowManager.setAlwaysOnTop(true);
+    await windowManager.setResizable(false);
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
+    await windowManager.setSize(_trayPopupWindowSize);
+    final popupPosition = await _resolveTrayPopupPosition();
+    await windowManager.setPosition(popupPosition);
+    await windowManager.show();
+    await windowManager.focus();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _trayPopupVisible = true;
+    });
+  }
+
+  Future<void> _dismissTrayPopup({required bool keepWindowVisible}) async {
+    if (!_trayPopupVisible && _savedWindowState == null) {
+      return;
+    }
+
+    final savedWindowState = _savedWindowState;
+    final wasVisible = _windowWasVisibleBeforeTrayPopup;
+
+    _savedWindowState = null;
+    _windowWasVisibleBeforeTrayPopup = false;
+
+    if (_trayPopupVisible && mounted) {
+      setState(() {
+        _trayPopupVisible = false;
+      });
+    }
+
+    if (savedWindowState != null) {
+      await _restoreWindowState(savedWindowState);
+    }
+
+    final shouldShowWindow = keepWindowVisible || wasVisible;
+    if (shouldShowWindow) {
+      await windowManager.show();
+      await windowManager.focus();
+      return;
+    }
+
+    await windowManager.hide();
+  }
+
+  Future<_SavedWindowState> _captureWindowState() async {
+    final bounds = await windowManager.getBounds();
+    final resizable = await windowManager.isResizable();
+    final alwaysOnTop = await windowManager.isAlwaysOnTop();
+    final skipTaskbar = await windowManager.isSkipTaskbar();
+
+    return _SavedWindowState(
+      bounds: bounds,
+      resizable: resizable,
+      alwaysOnTop: alwaysOnTop,
+      skipTaskbar: skipTaskbar,
+    );
+  }
+
+  Future<void> _restoreWindowState(_SavedWindowState state) async {
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.normal,
+      windowButtonVisibility: true,
+    );
+    await windowManager.setResizable(state.resizable);
+    await windowManager.setAlwaysOnTop(state.alwaysOnTop);
+    await windowManager.setSkipTaskbar(state.skipTaskbar);
+    await windowManager.setBounds(state.bounds);
+  }
+
+  Future<Offset> _resolveTrayPopupPosition() async {
+    final trayBounds = await trayManager.getBounds();
+    if (trayBounds == null) {
+      final currentBounds = await windowManager.getBounds();
+      return currentBounds.topLeft;
+    }
+
+    final x = (trayBounds.center.dx - (_trayPopupWindowSize.width / 2))
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final y = (trayBounds.bottom + _trayPopupVerticalGap)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+
+    return Offset(x, y);
+  }
+
+  Future<void> _openMainWindowFromTrayIcon() async {
+    if (_trayPopupVisible || _savedWindowState != null) {
+      await _dismissTrayPopup(keepWindowVisible: true);
+      return;
+    }
+
+    await _showWindow();
+  }
+
+  Future<void> _openSettingsFromTrayPopup() async {
+    if (_trayPopupVisible || _savedWindowState != null) {
+      await _dismissTrayPopup(keepWindowVisible: true);
+    } else {
+      await _showWindow();
+    }
+
+    await widget.onOpenSettingsRequested();
+  }
+
+  Future<void> _toggleStartWithSystemFromTrayPopup(bool enabled) async {
+    await DesktopBootPrefs.setStartWithSystem(enabled);
+  }
+
+  Future<void> _quitFromTrayPopup() async {
+    if (_trayPopupVisible || _savedWindowState != null) {
+      await _dismissTrayPopup(keepWindowVisible: false);
+    }
+
+    await _quitApp();
   }
 
   Future<void> _showWindow() async {
@@ -498,6 +617,7 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     }
 
     _quitting = true;
+    _cancelPendingLeftTrayMenu();
     await _runSafely(() async {
       await windowManager.setPreventClose(false);
       await trayManager.destroy();
@@ -538,7 +658,50 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    final labels = DesktopTrayPopupLabels(
+      title: context.t.app.title,
+      open: context.t.common.actions.open,
+      settings: context.t.settings.title,
+      startWithSystem: context.t.settings.desktopBoot.startWithSystem.title,
+      quit: context.t.settings.desktopTray.menu.quit,
+      signedIn: context.t.settings.desktopTray.pro.signedIn,
+      aiUsage: context.t.settings.desktopTray.pro.aiUsage,
+      storageUsage: context.t.settings.desktopTray.pro.storageUsage,
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Offstage(offstage: _trayPopupVisible, child: widget.child),
+        if (_trayPopupVisible)
+          DesktopTrayPopupWindow(
+            labels: labels,
+            proUsage: _trayProUsage,
+            startWithSystemEnabled: _config.startWithSystem,
+            refreshingUsage: _refreshingProUsage,
+            onOpenWindow: _openMainWindowFromTrayIcon,
+            onOpenSettings: _openSettingsFromTrayPopup,
+            onToggleStartWithSystem: _toggleStartWithSystemFromTrayPopup,
+            onQuit: _quitFromTrayPopup,
+          ),
+      ],
+    );
+  }
+}
+
+final class _SavedWindowState {
+  const _SavedWindowState({
+    required this.bounds,
+    required this.resizable,
+    required this.alwaysOnTop,
+    required this.skipTaskbar,
+  });
+
+  final Rect bounds;
+  final bool resizable;
+  final bool alwaysOnTop;
+  final bool skipTaskbar;
 }
 
 final class _LaunchSetup {
