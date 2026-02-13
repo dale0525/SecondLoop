@@ -322,6 +322,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final markdown = MarkdownBody(
       data: normalized,
       selectable: false,
+      softLineBreak: true,
     );
     if (!isDesktopPlatform) return markdown;
 
