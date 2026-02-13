@@ -36,6 +36,10 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   static const String _androidChannelDescription =
       'Reminders for pending todo reviews';
 
+  static const String _windowsAppName = 'SecondLoop';
+  static const String _windowsAppUserModelId = 'com.secondloop.secondloop';
+  static const String _windowsGuid = 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59';
+
   final FlutterLocalNotificationsPlugin _plugin;
   final NotificationTapHandler? _onTap;
 
@@ -55,6 +59,11 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       android: AndroidInitializationSettings(androidNotificationIcon),
       iOS: DarwinInitializationSettings(),
       macOS: DarwinInitializationSettings(),
+      windows: WindowsInitializationSettings(
+        appName: _windowsAppName,
+        appUserModelId: _windowsAppUserModelId,
+        guid: _windowsGuid,
+      ),
     );
 
     try {
@@ -157,6 +166,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         presentBadge: true,
         presentSound: true,
       ),
+      windows: WindowsNotificationDetails(),
     );
 
     for (var i = 0; i < plan.items.length; i++) {
@@ -200,8 +210,6 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         body,
         scheduleAt,
         details,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
         androidScheduleMode: mode,
         payload: payload,
       );

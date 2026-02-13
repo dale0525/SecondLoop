@@ -108,17 +108,23 @@ pixi run run-linux
 pixi run run-android
 pixi run build-android-apk
 pixi run run-windows
+pixi run package-windows-msix
+pixi run generate-windows-msix-cert
 ```
 
 备注：
 - `run-macos` 仅在 macOS 可用。
 - `run-linux` 仅在 Linux 可用。
 - `run-windows` 仅在 Windows 可用，并会自动执行预检初始化（将 `nuget.exe` 下载到 `.tool/nuget/`，并将静态 `ffmpeg.exe` 下载到 `.tool/ffmpeg/windows`）。
+- `package-windows-msix` 仅在 Windows 可用；当设置 `SECONDLOOP_WINDOWS_MSIX_CERT_PATH`、`SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD`、`SECONDLOOP_WINDOWS_MSIX_PUBLISHER` 后会产出签名 MSIX。
+- `generate-windows-msix-cert` 会生成本地自签名 `.pfx/.cer` 与 CI 可用的 base64 文件。
 - Android 相关任务会把 SDK/NDK 与 Rust targets 安装到 `.tool/`（无需系统级 Android SDK）。
 - `bootstrap-shared-worktree-env` 会将 `.tool`、`.pixi/envs` 软链接到 `git rev-parse --git-common-dir` 下的共享目录，并在可用时将 `.env.local`、`android/key.properties`、`android/app/upload-keystore.jks` 链接到主 worktree，避免每个 worktree 重复准备依赖和 Android 签名配置。
 - 所有 `run-xxx` 任务在首次执行时都会自动触发 `bootstrap-shared-worktree-env`、`setup-flutter` 与 `init-env`，因此新 clone 后可以直接执行 `pixi run run-xxx`。
 - `build-android-apk` / `build-android-apk-cn` 也会在构建前自动触发 `bootstrap-shared-worktree-env`。
 - 桌面运行任务（`run-macos` / `run-linux` / `run-windows`）会在启动前准备随包 `ffmpeg`；macOS 会自动下载静态二进制到 `.tool/ffmpeg/macos`，也可放在 `.tool` 或通过 `--source-bin` 指定（无需系统级安装）。
+- 本地调试 `pixi run run-windows` 不需要任何 MSIX 证书变量。
+- 若要安装导出的 `.msix` 包，可在 Windows 执行 `powershell -ExecutionPolicy Bypass -File scripts/install_windows_msix.ps1 -MsixPath <msix文件路径>`。
 
 如需执行任意 Flutter/Dart/Cargo 命令：
 
@@ -138,6 +144,10 @@ pixi run cargo clippy "--all-targets --all-features -- -D warnings"
   - `SECONDLOOP_FIREBASE_WEB_API_KEY`
   - `SECONDLOOP_CLOUD_ENV=staging|prod`
   - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING` / `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
+- Windows MSIX 发版（GitHub Actions `release.yml`）还需要：
+  - `SECONDLOOP_WINDOWS_MSIX_CERT_BASE64`（base64 编码的 `.pfx`）
+  - `SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD`
+  - `SECONDLOOP_WINDOWS_MSIX_PUBLISHER`（必须与证书 Subject 一致，例如 `CN=SecondLoop Dev`）
 
 ### 排错
 

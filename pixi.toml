@@ -11,7 +11,7 @@ PUB_CACHE = "$PIXI_PROJECT_ROOT/.tool/pub-cache"
 [tasks]
 # Bootstrap task (first clone / new machine / Flutter drift).
 # Installs and pins the required Flutter SDK via FVM, then runs flutter pub get.
-setup-flutter = "dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.19.6 && dart pub global run fvm:main use 3.19.6 --force && dart pub global run fvm:main flutter pub get"
+setup-flutter = "dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.22.3 && dart pub global run fvm:main use 3.22.3 --force && dart pub global run fvm:main flutter pub get"
 
 # Generic command entry points (keeps task count low).
 # Common usage:
@@ -110,3 +110,5 @@ frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"
 prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
 run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+package-windows-msix = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_msix.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+generate-windows-msix-cert = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate_windows_msix_cert.ps1"
