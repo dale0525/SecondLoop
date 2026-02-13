@@ -111,8 +111,15 @@ fn build_message_action_prompt(
         "- due_local_iso must be local ISO 8601 without timezone, like 2026-02-04T15:00:00.\n",
     );
     out.push_str("- If the user provides a date but no time, use day_end_minutes.\n");
+    out.push_str("- The user message may be in any language; infer intent from that language.\n");
     out.push_str("- recurrence is optional. If absent, set recurrence to null.\n");
-    out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n\n");
+    out.push_str(
+        "- recurrence.freq MUST use the canonical enum values: daily|weekly|monthly|yearly.\n",
+    );
+    out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n");
+    out.push_str(
+        "- status/new_status MUST use canonical enum values even if user text is non-English.\n\n",
+    );
 
     out.push_str(&format!("now_local_iso: {now_local_iso}\n"));
     out.push_str(&format!("locale: {locale}\n"));
@@ -281,6 +288,7 @@ mod tests {
         assert!(prompt.contains("taxes"));
         assert!(prompt.contains("day_end_minutes"));
         assert!(prompt.contains("\"recurrence\""));
+        assert!(prompt.contains("message may be in any language"));
     }
 
     #[test]

@@ -56,6 +56,30 @@ void main() {
     expect(create.recurrenceRule!.interval, 1);
   });
 
+  test('normalizes multilingual recurrence freq aliases', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final samples = <({String freq, String expected})>[
+      (freq: '每周', expected: 'weekly'),
+      (freq: 'cada ano', expected: 'yearly'),
+      (freq: 'daily', expected: 'daily'),
+    ];
+
+    for (final sample in samples) {
+      final parsed = AiSemanticParse.tryParseMessageAction(
+        '{"kind":"create","confidence":0.9,"title":"任务","status":"open","due_local_iso":"2026-02-04T09:00:00","recurrence":{"freq":"${sample.freq}","interval":"２"}}',
+        nowLocal: now,
+        locale: const Locale('zh', 'CN'),
+        dayEndMinutes: 21 * 60,
+      );
+
+      expect(parsed, isNotNull);
+      final create = parsed!.decision as MessageActionCreateDecision;
+      expect(create.recurrenceRule, isNotNull);
+      expect(create.recurrenceRule!.freq, sample.expected);
+      expect(create.recurrenceRule!.interval, 2);
+    }
+  });
+
   test('fills fallback due and open status for recurrence without due', () {
     final now = DateTime(2026, 2, 3, 22, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(
