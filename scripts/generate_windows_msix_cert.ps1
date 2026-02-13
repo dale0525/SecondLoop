@@ -41,7 +41,50 @@ function ConvertTo-ReadOnlySecureString([string]$Value) {
   return $secure
 }
 
+function Ensure-CertificateDrive {
+  if (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue) {
+    return
+  }
+
+  $modulePaths = @()
+  if ($env:PSModulePath) {
+    $modulePaths += ($env:PSModulePath -split ';' | Where-Object { $_ })
+  }
+
+  foreach ($scope in @('Machine', 'User')) {
+    $scopePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', $scope)
+    if ($scopePath) {
+      $modulePaths += ($scopePath -split ';' | Where-Object { $_ })
+    }
+  }
+
+  if ($modulePaths.Count -gt 0) {
+    $env:PSModulePath = (($modulePaths | Select-Object -Unique) -join ';')
+  }
+
+  try {
+    Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
+  } catch {
+    $fallbackModule = Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1'
+    if (Test-Path $fallbackModule) {
+      Import-Module $fallbackModule -ErrorAction Stop
+    } else {
+      throw "Failed to import Microsoft.PowerShell.Security. Original error: $($_.Exception.Message)"
+    }
+  }
+
+  if (-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) {
+    New-PSDrive -Name Cert -PSProvider Certificate -Root '\' -Scope Script | Out-Null
+  }
+
+  if (-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) {
+    throw 'Certificate drive (Cert:) is unavailable after loading Microsoft.PowerShell.Security.'
+  }
+}
+
 $securePassword = ConvertTo-ReadOnlySecureString -Value $Password
+
+Ensure-CertificateDrive
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
@@ -61,12 +104,12 @@ $cert = New-SelfSignedCertificate `
   -NotAfter (Get-Date).AddYears($ValidYears)
 
 Export-PfxCertificate `
-  -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
+  -Cert $cert `
   -FilePath $pfxPath `
   -Password $securePassword | Out-Null
 
 Export-Certificate `
-  -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
+  -Cert $cert `
   -FilePath $cerPath | Out-Null
 
 $base64 = [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes($pfxPath))
