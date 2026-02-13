@@ -108,17 +108,23 @@ pixi run run-linux
 pixi run run-android
 pixi run build-android-apk
 pixi run run-windows
+pixi run package-windows-msix
+pixi run generate-windows-msix-cert
 ```
 
 Notes:
 - `run-macos` is only available on macOS.
 - `run-linux` is only available on Linux.
 - `run-windows` is only available on Windows and auto-runs its preflight setup (downloads `nuget.exe` into `.tool/nuget/` and static `ffmpeg.exe` into `.tool/ffmpeg/windows`).
+- `package-windows-msix` is only available on Windows and produces a signed MSIX when `SECONDLOOP_WINDOWS_MSIX_CERT_PATH`, `SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD`, and `SECONDLOOP_WINDOWS_MSIX_PUBLISHER` are set.
+- `generate-windows-msix-cert` generates a local self-signed `.pfx/.cer` and a base64 export file for CI secrets.
 - Android tasks install SDK/NDK and Rust targets into `.tool/` (no system-wide Android SDK required).
 - `bootstrap-shared-worktree-env` symlinks `.tool` and `.pixi/envs` to a shared directory under `git rev-parse --git-common-dir`, and links `.env.local` to the primary worktree when available, which avoids re-preparing dependencies in each worktree.
 - All `run-xxx` tasks now auto-run `bootstrap-shared-worktree-env`, `setup-flutter`, and `init-env` on first execution, so a fresh clone can run `pixi run run-xxx` directly.
 - `build-android-apk` / `build-android-apk-cn` also auto-run `bootstrap-shared-worktree-env` before build preflight.
 - Desktop run tasks (`run-macos` / `run-linux` / `run-windows`) prepare bundled `ffmpeg` before launching; macOS auto-downloads a static binary into `.tool/ffmpeg/macos`, and you can always override via `.tool` or `--source-bin` (no system-wide install required).
+- Local debugging via `pixi run run-windows` does not require any MSIX certificate variables.
+- To install an exported `.msix` package, run `powershell -ExecutionPolicy Bypass -File scripts/install_windows_msix.ps1 -MsixPath <path-to-msix>` on Windows.
 
 To run arbitrary Flutter/Dart/Cargo commands:
 
@@ -138,6 +144,10 @@ pixi run cargo clippy "--all-targets --all-features -- -D warnings"
   - `SECONDLOOP_FIREBASE_WEB_API_KEY`
   - `SECONDLOOP_CLOUD_ENV=staging|prod`
   - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING` / `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
+- Windows MSIX release (GitHub Actions `release.yml`) also requires:
+  - `SECONDLOOP_WINDOWS_MSIX_CERT_BASE64` (base64-encoded `.pfx`)
+  - `SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD`
+  - `SECONDLOOP_WINDOWS_MSIX_PUBLISHER` (must match certificate subject, e.g. `CN=SecondLoop Dev`)
 
 ### Troubleshooting
 

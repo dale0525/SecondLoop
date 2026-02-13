@@ -156,6 +156,9 @@ jobs:
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
       SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ needs.preflight.outputs.runtime_tag }}
+      SECONDLOOP_WINDOWS_MSIX_CERT_BASE64: ${{ secrets.SECONDLOOP_WINDOWS_MSIX_CERT_BASE64 }}
+      SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD: ${{ secrets.SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD }}
+      SECONDLOOP_WINDOWS_MSIX_PUBLISHER: ${{ secrets.SECONDLOOP_WINDOWS_MSIX_PUBLISHER }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -172,6 +175,9 @@ jobs:
           if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD" }
+          if (-not $Env:SECONDLOOP_WINDOWS_MSIX_CERT_BASE64) { throw "Missing secret SECONDLOOP_WINDOWS_MSIX_CERT_BASE64" }
+          if (-not $Env:SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD) { throw "Missing secret SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD" }
+          if (-not $Env:SECONDLOOP_WINDOWS_MSIX_PUBLISHER) { throw "Missing secret SECONDLOOP_WINDOWS_MSIX_PUBLISHER" }
           if (-not $Env:SECONDLOOP_DESKTOP_RUNTIME_TAG) { throw "Missing runtime tag resolved by preflight" }
           if ($Env:SECONDLOOP_DESKTOP_RUNTIME_TAG -notmatch '^desktop-runtime-v\d+\.\d+\.\d+(\.\d+)?$') { throw "Invalid SECONDLOOP_DESKTOP_RUNTIME_TAG: $Env:SECONDLOOP_DESKTOP_RUNTIME_TAG" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD.StartsWith("https://")) { throw "Prod gateway URL must start with https://" }
@@ -223,10 +229,65 @@ jobs:
           $zip = "dist/SecondLoop-windows-x64-$safeRefName.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath $zip
+      - name: Prepare MSIX signing certificate
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/signing | Out-Null
+          $pfxPath = "dist/signing/secondloop-msix-signing.pfx"
+          [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($Env:SECONDLOOP_WINDOWS_MSIX_CERT_BASE64))
+      - name: Package MSIX (self-signed)
+        shell: pwsh
+        run: |
+          $safeRefName = $Env:GITHUB_REF_NAME -replace '[^0-9A-Za-z._-]', '-'
+          $safeRefName = $safeRefName.Trim('-')
+          if ([string]::IsNullOrWhiteSpace($safeRefName)) {
+            $safeRefName = "run-$Env:GITHUB_RUN_ID"
+          }
+
+          $outputName = "SecondLoop-windows-x64-$safeRefName"
+          $msixVersion = "1.0.0.$Env:GITHUB_RUN_NUMBER"
+          if ($Env:GITHUB_REF -like "refs/tags/v*") {
+            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
+            if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
+              $msixVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]).$Env:GITHUB_RUN_NUMBER"
+            }
+          }
+
+          dart run msix:create `
+            --build-windows false `
+            --install-certificate false `
+            --output-path dist `
+            --output-name $outputName `
+            --publisher $Env:SECONDLOOP_WINDOWS_MSIX_PUBLISHER `
+            --version $msixVersion `
+            --certificate-path dist/signing/secondloop-msix-signing.pfx `
+            --certificate-password $Env:SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD
+
+          $msixPath = Join-Path 'dist' "$outputName.msix"
+          if (-not (Test-Path $msixPath)) {
+            throw "MSIX package not found: $msixPath"
+          }
+
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+            'dist/signing/secondloop-msix-signing.pfx',
+            $Env:SECONDLOOP_WINDOWS_MSIX_CERT_PASSWORD,
+            ([System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+          )
+          $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          $cerPath = Join-Path 'dist' "$outputName.cer"
+          [System.IO.File]::WriteAllBytes($cerPath, $cerBytes)
+      - name: Bundle MSIX installer helper
+        shell: pwsh
+        run: |
+          Copy-Item scripts/install_windows_msix.ps1 dist/Install-SecondLoop-MSIX.ps1 -Force
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.msix
+            dist/*.cer
+            dist/Install-SecondLoop-MSIX.ps1
 
   macos:
     needs: preflight
