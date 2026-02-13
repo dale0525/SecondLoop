@@ -7,9 +7,11 @@ version = "0.1.0"
 
 [target.unix.activation.env]
 PUB_CACHE = "$PIXI_PROJECT_ROOT/.tool/pub-cache"
+FVM_HOME = "$PIXI_PROJECT_ROOT/.tool/fvm"
 
 [target.win.activation.env]
 PUB_CACHE = "%PIXI_PROJECT_ROOT%/.tool/pub-cache"
+FVM_HOME = "%PIXI_PROJECT_ROOT%/.tool/fvm"
 
 [tasks]
 # Bootstrap task (first clone / new machine / Flutter drift).
