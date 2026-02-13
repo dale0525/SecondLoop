@@ -194,6 +194,26 @@ fn ocr_markdown_prompt(lang: &str) -> String {
     )
 }
 
+fn prompt_language_label(raw_lang: &str) -> String {
+    let trimmed = raw_lang.trim();
+    if trimmed.is_empty() {
+        return "und".to_string();
+    }
+
+    match trimmed.to_ascii_lowercase().as_str() {
+        "device_plus_en" => "device language + English".to_string(),
+        "en" => "English".to_string(),
+        "zh_en" => "Chinese + English".to_string(),
+        "ja_en" => "Japanese + English".to_string(),
+        "ko_en" => "Korean + English".to_string(),
+        "fr_en" => "French + English".to_string(),
+        "de_en" => "German + English".to_string(),
+        "es_en" => "Spanish + English".to_string(),
+        "zh_strict" => "Chinese".to_string(),
+        _ => trimmed.to_string(),
+    }
+}
+
 fn extract_first_non_empty_string(map: &Map<String, Value>, keys: &[&str]) -> String {
     for key in keys {
         let Some(value) = map.get(*key) else {
@@ -291,7 +311,7 @@ fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, Str
         }
         return (
             MediaAnnotationPromptMode::OcrMarkdown,
-            normalized.to_string(),
+            prompt_language_label(normalized),
         );
     }
 
@@ -299,7 +319,10 @@ fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, Str
         return (MediaAnnotationPromptMode::Annotation, "und".to_string());
     }
 
-    (MediaAnnotationPromptMode::Annotation, trimmed.to_string())
+    (
+        MediaAnnotationPromptMode::Annotation,
+        prompt_language_label(trimmed),
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -772,5 +795,46 @@ impl OpenAiCompatibleMediaAnnotationClient {
         }
 
         parse_response_from_http_response(resp)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_request, MediaAnnotationChatContentPart, MediaAnnotationPromptMode};
+
+    fn prompt_text_for(req: &super::MediaAnnotationChatCompletionsRequest) -> &str {
+        let msg = req.messages.first().expect("missing first message");
+        let part = msg.content.first().expect("missing first content part");
+        match part {
+            MediaAnnotationChatContentPart::Text { text } => text.as_str(),
+            _ => panic!("first part should be text prompt"),
+        }
+    }
+
+    #[test]
+    fn ocr_prompt_rewrites_device_plus_en_hint() {
+        let (req, mode) = build_request(
+            "gpt-test",
+            "ocr_markdown:device_plus_en",
+            "application/pdf",
+            b"%PDF-1.4",
+        )
+        .expect("build request");
+
+        assert_eq!(mode, MediaAnnotationPromptMode::OcrMarkdown);
+        let prompt = prompt_text_for(&req);
+        assert!(prompt.contains("Language: device language + English."));
+        assert!(!prompt.contains("Language: device_plus_en."));
+    }
+
+    #[test]
+    fn annotation_prompt_rewrites_device_plus_en_hint() {
+        let (req, mode) = build_request("gpt-test", "device_plus_en", "image/png", b"img")
+            .expect("build request");
+
+        assert_eq!(mode, MediaAnnotationPromptMode::Annotation);
+        let prompt = prompt_text_for(&req);
+        assert!(prompt.contains("Language: device language + English."));
+        assert!(!prompt.contains("Language: device_plus_en."));
     }
 }
