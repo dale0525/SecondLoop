@@ -3,13 +3,14 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/bootstrap_shared_worktree_env.sh [--dry-run] [--skip-pixi-envs] [--skip-env-local-link] [--skip-android-key-link]
+Usage: bash scripts/bootstrap_shared_worktree_env.sh [--dry-run] [--skip-pixi-envs] [--skip-fvm-sdk-link] [--skip-env-local-link] [--skip-android-key-link]
 
 Bootstrap shared caches for a git worktree checkout.
 
 By default this links these paths for worktree reuse:
 - .tool (to git-common-dir shared storage)
 - .pixi/envs (bucketed by pixi.lock hash, under git-common-dir shared storage)
+- .fvm/flutter_sdk (to primary worktree when available)
 - .env.local (to primary worktree when available)
 - android/key.properties (to primary worktree when available)
 - android/app/upload-keystore.jks (to primary worktree when available)
@@ -17,6 +18,7 @@ By default this links these paths for worktree reuse:
 Options:
   --dry-run         Print actions without changing files.
   --skip-pixi-envs      Keep .pixi/envs untouched.
+  --skip-fvm-sdk-link   Keep .fvm/flutter_sdk untouched.
   --skip-env-local-link Keep .env.local untouched.
   --skip-android-key-link Keep Android signing files untouched.
   -h, --help        Show this help message.
@@ -25,6 +27,7 @@ EOF
 
 dry_run=0
 skip_pixi_envs=0
+skip_fvm_sdk_link=0
 skip_env_local_link=0
 skip_android_key_link=0
 
@@ -39,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-pixi-envs)
       skip_pixi_envs=1
+      shift
+      ;;
+    --skip-fvm-sdk-link)
+      skip_fvm_sdk_link=1
       shift
       ;;
     --skip-env-local-link)
@@ -102,41 +109,60 @@ resolve_primary_worktree_root() {
   printf '%s\n' "${primary_root}"
 }
 
+link_path_from_primary() {
+  local primary_root="$1"
+  local relative_path="$2"
+  local label="$3"
+  local primary_path="${primary_root}/${relative_path}"
+  local local_path="${repo_root}/${relative_path}"
+
+  if [[ ! -e "${primary_path}" && ! -L "${primary_path}" ]]; then
+    echo "Skipping ${label} link: primary worktree has no ${relative_path} (${primary_path})"
+    return 0
+  fi
+
+  run_cmd mkdir -p "$(dirname "${local_path}")"
+
+  if [[ -L "${local_path}" ]]; then
+    local current_link
+    current_link="$(readlink "${local_path}")"
+    if [[ "${current_link}" == "${primary_path}" ]]; then
+      echo "Already linked: ${label} -> ${primary_path}"
+      return 0
+    fi
+
+    echo "Updating link for ${label}"
+    run_cmd rm "${local_path}"
+    run_cmd ln -s "${primary_path}" "${local_path}"
+    return 0
+  fi
+
+  if [[ -e "${local_path}" ]]; then
+    echo "Keeping existing ${label} (not symlink): ${local_path}"
+    return 0
+  fi
+
+  echo "Linking ${label} -> ${primary_path}"
+  run_cmd ln -s "${primary_path}" "${local_path}"
+}
+
+link_fvm_sdk_from_primary() {
+  local primary_root="$1"
+  link_path_from_primary "${primary_root}" ".fvm/flutter_sdk" ".fvm/flutter_sdk"
+}
+
 link_file_from_primary() {
   local primary_root="$1"
   local relative_path="$2"
   local label="$3"
   local primary_file="${primary_root}/${relative_path}"
-  local local_file="${repo_root}/${relative_path}"
 
   if [[ ! -f "${primary_file}" ]]; then
     echo "Skipping ${label} link: primary worktree has no ${relative_path} (${primary_file})"
     return 0
   fi
 
-  run_cmd mkdir -p "$(dirname "${local_file}")"
-
-  if [[ -L "${local_file}" ]]; then
-    local current_link
-    current_link="$(readlink "${local_file}")"
-    if [[ "${current_link}" == "${primary_file}" ]]; then
-      echo "Already linked: ${label} -> ${primary_file}"
-      return 0
-    fi
-
-    echo "Updating link for ${label}"
-    run_cmd rm "${local_file}"
-    run_cmd ln -s "${primary_file}" "${local_file}"
-    return 0
-  fi
-
-  if [[ -e "${local_file}" ]]; then
-    echo "Keeping existing ${label} (not symlink): ${local_file}"
-    return 0
-  fi
-
-  echo "Linking ${label} -> ${primary_file}"
-  run_cmd ln -s "${primary_file}" "${local_file}"
+  link_path_from_primary "${primary_root}" "${relative_path}" "${label}"
 }
 
 link_env_local_from_primary() {
@@ -254,6 +280,16 @@ else
 fi
 
 primary_root="$(resolve_primary_worktree_root || true)"
+
+if [[ "$skip_fvm_sdk_link" -eq 0 ]]; then
+  if [[ -n "${primary_root}" ]]; then
+    link_fvm_sdk_from_primary "${primary_root}"
+  else
+    echo "Skipping .fvm/flutter_sdk link: current checkout is primary worktree."
+  fi
+else
+  echo "Skipping .fvm/flutter_sdk linking (--skip-fvm-sdk-link)."
+fi
 
 if [[ "$skip_env_local_link" -eq 0 ]]; then
   if [[ -n "${primary_root}" ]]; then
