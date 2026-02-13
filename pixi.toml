@@ -6,7 +6,7 @@ platforms = ["osx-arm64", "linux-64", "win-64"]
 version = "0.1.0"
 
 [activation.env]
-PUB_CACHE = "$PIXI_PROJECT_ROOT/.tool/pub-cache"
+PUB_CACHE = ".tool/pub-cache"
 
 [tasks]
 # Bootstrap task (first clone / new machine / Flutter drift).
@@ -110,5 +110,5 @@ frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"
 prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
 run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
-package-windows-msix = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_msix.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+package-windows-msix = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_msix.ps1", depends-on = ["setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
 generate-windows-msix-cert = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate_windows_msix_cert.ps1"
