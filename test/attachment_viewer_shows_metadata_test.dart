@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -207,6 +208,53 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+      'Non-image attachment renders details before bytes load completes',
+      (tester) async {
+    final pendingBytes = Completer<Uint8List>();
+    final backend = _Backend(
+      bytesBySha: {
+        'pdf': Uint8List.fromList(<int>[1, 2, 3])
+      },
+      readBytesOverride: (_) => pendingBytes.future,
+    );
+
+    const attachment = Attachment(
+      sha256: 'pdf',
+      mimeType: 'application/pdf',
+      path: 'attachments/pdf.bin',
+      byteLen: 123,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(attachment: attachment),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('attachment_non_image_preview_surface')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('attachment_text_full_empty')),
+        findsOneWidget);
+    expect(find.text('application/pdf'), findsOneWidget);
+
+    pendingBytes.complete(Uint8List.fromList(<int>[1, 2, 3]));
+    await tester.pump();
+  });
 }
 
 Uint8List _tinyPngBytes() {
@@ -259,13 +307,16 @@ final class _Backend extends TestAppBackend implements AttachmentsBackend {
     required Map<String, Uint8List> bytesBySha,
     Map<String, AttachmentExifMetadata>? exifBySha,
     Map<String, String>? placeBySha,
+    Future<Uint8List> Function(String sha256)? readBytesOverride,
   })  : _bytesBySha = Map<String, Uint8List>.from(bytesBySha),
         _exifBySha = Map<String, AttachmentExifMetadata>.from(exifBySha ?? {}),
-        _placeBySha = Map<String, String>.from(placeBySha ?? {});
+        _placeBySha = Map<String, String>.from(placeBySha ?? {}),
+        _readBytesOverride = readBytesOverride;
 
   final Map<String, Uint8List> _bytesBySha;
   final Map<String, AttachmentExifMetadata> _exifBySha;
   final Map<String, String> _placeBySha;
+  final Future<Uint8List> Function(String sha256)? _readBytesOverride;
 
   @override
   Future<List<Attachment>> listRecentAttachments(
@@ -294,6 +345,10 @@ final class _Backend extends TestAppBackend implements AttachmentsBackend {
     Uint8List key, {
     required String sha256,
   }) async {
+    final override = _readBytesOverride;
+    if (override != null) {
+      return override(sha256);
+    }
     final bytes = _bytesBySha[sha256];
     if (bytes == null) throw StateError('missing_bytes');
     return bytes;

@@ -56,6 +56,7 @@ class AttachmentViewerPage extends StatefulWidget {
 }
 
 class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
+  final Uint8List _nonImagePlaceholderBytes = Uint8List(0);
   Future<Uint8List>? _bytesFuture;
   Future<AttachmentExifMetadata?>? _exifFuture;
   Future<String?>? _placeFuture;
@@ -820,6 +821,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
     final metadataFuture = _metadataFuture;
+    final isImage = widget.attachment.mimeType.startsWith('image/');
+    final isAudio = widget.attachment.mimeType.startsWith('audio/');
 
     return FutureBuilder<AttachmentMetadata?>(
       future: metadataFuture,
@@ -890,103 +893,101 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 ),
             ],
           ),
-          body: bytesFuture == null
-              ? const Center(child: CircularProgressIndicator())
-              : FutureBuilder(
-                  future: bytesFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      final err = snapshot.error;
-                      final isWifiConsentError = err is StateError &&
-                          err.message == 'media_download_requires_wifi';
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.broken_image_outlined, size: 48),
-                              const SizedBox(height: 12),
-                              Text(
-                                isWifiConsentError
-                                    ? context.t.sync.mediaPreview
-                                        .chatThumbnailsWifiOnlySubtitle
-                                    : context.t.errors
-                                        .loadFailed(error: '$err'),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  setState(() {
-                                    _bytesFuture = _loadBytes();
-                                  });
-                                },
-                                icon: const Icon(Icons.refresh),
-                                label: Text(context.t.common.actions.refresh),
-                              ),
-                            ],
+          body: () {
+            if (!isImage && !isAudio) {
+              Future<void> Function()? runOcr;
+              if (_supportsDocumentOcrAttachment()) {
+                runOcr = _runDocumentOcr;
+              } else if (_isVideoManifestAttachment()) {
+                runOcr = _runVideoManifestOcr;
+              }
+
+              return NonImageAttachmentView(
+                attachment: widget.attachment,
+                bytes: _nonImagePlaceholderBytes,
+                displayTitle: appBarTitle,
+                metadataFuture: _metadataFuture,
+                initialMetadata: metadata,
+                annotationPayloadFuture: _annotationPayloadFuture,
+                initialAnnotationPayload: _annotationPayload,
+                onRunOcr: runOcr,
+                ocrRunning: _runningDocumentOcr,
+                ocrStatusText: _documentOcrStatusText,
+                ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
+                onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
+                onSaveFull: _canEditAttachmentText ? _saveAttachmentFull : null,
+              );
+            }
+
+            if (bytesFuture == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            return FutureBuilder(
+              future: bytesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  final err = snapshot.error;
+                  final isWifiConsentError = err is StateError &&
+                      err.message == 'media_download_requires_wifi';
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.broken_image_outlined, size: 48),
+                          const SizedBox(height: 12),
+                          Text(
+                            isWifiConsentError
+                                ? context.t.sync.mediaPreview
+                                    .chatThumbnailsWifiOnlySubtitle
+                                : context.t.errors.loadFailed(error: '$err'),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
-                      );
-                    }
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _bytesFuture = _loadBytes();
+                              });
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: Text(context.t.common.actions.refresh),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
 
-                    final bytes = snapshot.data;
-                    if (bytes == null) return const SizedBox.shrink();
+                final bytes = snapshot.data;
+                if (bytes == null) return const SizedBox.shrink();
 
-                    final isImage =
-                        widget.attachment.mimeType.startsWith('image/');
-                    final isAudio =
-                        widget.attachment.mimeType.startsWith('audio/');
-                    if (isAudio) {
-                      return AudioAttachmentPlayerView(
-                        attachment: widget.attachment,
-                        bytes: bytes,
-                        displayTitle: appBarTitle,
-                        metadataFuture: _metadataFuture,
-                        initialMetadata: metadata,
-                        annotationPayloadFuture: _annotationPayloadFuture,
-                        initialAnnotationPayload: _annotationPayload,
-                        onRetryRecognition: _canRetryAttachmentRecognition
-                            ? _retryAttachmentRecognition
-                            : null,
-                        onSaveFull:
-                            _canEditAttachmentText ? _saveAttachmentFull : null,
-                      );
-                    }
-                    if (!isImage) {
-                      Future<void> Function()? runOcr;
-                      if (_supportsDocumentOcrAttachment()) {
-                        runOcr = _runDocumentOcr;
-                      } else if (_isVideoManifestAttachment()) {
-                        runOcr = _runVideoManifestOcr;
-                      }
+                if (isAudio) {
+                  return AudioAttachmentPlayerView(
+                    attachment: widget.attachment,
+                    bytes: bytes,
+                    displayTitle: appBarTitle,
+                    metadataFuture: _metadataFuture,
+                    initialMetadata: metadata,
+                    annotationPayloadFuture: _annotationPayloadFuture,
+                    initialAnnotationPayload: _annotationPayload,
+                    onRetryRecognition: _canRetryAttachmentRecognition
+                        ? _retryAttachmentRecognition
+                        : null,
+                    onSaveFull:
+                        _canEditAttachmentText ? _saveAttachmentFull : null,
+                  );
+                }
 
-                      return NonImageAttachmentView(
-                        attachment: widget.attachment,
-                        bytes: bytes,
-                        displayTitle: appBarTitle,
-                        metadataFuture: _metadataFuture,
-                        initialMetadata: metadata,
-                        annotationPayloadFuture: _annotationPayloadFuture,
-                        initialAnnotationPayload: _annotationPayload,
-                        onRunOcr: runOcr,
-                        ocrRunning: _runningDocumentOcr,
-                        ocrStatusText: _documentOcrStatusText,
-                        ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
-                        onOcrLanguageHintsChanged:
-                            _updateDocumentOcrLanguageHints,
-                        onSaveFull:
-                            _canEditAttachmentText ? _saveAttachmentFull : null,
-                      );
-                    }
-
-                    return _buildImageAttachmentDetail(bytes);
-                  },
-                ),
+                return _buildImageAttachmentDetail(bytes);
+              },
+            );
+          }(),
         );
       },
     );
