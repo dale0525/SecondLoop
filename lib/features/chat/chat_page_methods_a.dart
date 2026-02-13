@@ -323,6 +323,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       data: normalized,
       selectable: false,
       softLineBreak: true,
+      styleSheet: slMarkdownStyleSheet(context),
     );
     if (!isDesktopPlatform) return markdown;
 

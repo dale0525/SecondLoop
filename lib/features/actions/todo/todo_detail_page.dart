@@ -17,6 +17,7 @@ import '../../../ui/sl_button.dart';
 import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_focus_ring.dart';
 import '../../../ui/sl_icon_button.dart';
+import '../../../ui/sl_markdown_style.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
@@ -525,8 +526,9 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         return MarkdownBody(
           data: text,
           selectable: true,
-          styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-            p: theme.textTheme.bodyLarge,
+          styleSheet: slMarkdownStyleSheet(
+            context,
+            bodyStyle: theme.textTheme.bodyLarge,
           ),
         );
       }

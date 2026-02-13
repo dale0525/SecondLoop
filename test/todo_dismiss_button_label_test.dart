@@ -49,6 +49,66 @@ void main() {
     expect(find.byTooltip('Deleted'), findsNothing);
   });
 
+  testWidgets(
+      'Todo agenda keeps title visible and chevron inside card on mobile',
+      (tester) async {
+    final view = tester.view;
+    view.physicalSize = const Size(375, 812);
+    view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      view.resetPhysicalSize();
+      view.resetDevicePixelRatio();
+    });
+
+    final todo = Todo(
+      id: 't1',
+      title: 'Test todo title on mobile layout',
+      dueAtMs: PlatformInt64Util.from(1),
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(1),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: _FakeBackend(todos: [todo]),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: TodoAgendaPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final itemFinder = find.byKey(const ValueKey('todo_agenda_item_t1'));
+    expect(itemFinder, findsOneWidget);
+
+    final titleFinder = find.descendant(
+      of: itemFinder,
+      matching: find.text('Test todo title on mobile layout'),
+    );
+    expect(titleFinder, findsOneWidget);
+    final titleRect = tester.getRect(titleFinder);
+    expect(titleRect.width, greaterThan(80));
+
+    final chevronFinder = find.descendant(
+      of: itemFinder,
+      matching: find.byIcon(Icons.chevron_right_rounded),
+    );
+    expect(chevronFinder, findsOneWidget);
+
+    final itemRect = tester.getRect(itemFinder);
+    final chevronRect = tester.getRect(chevronFinder);
+    expect(chevronRect.right, lessThanOrEqualTo(itemRect.right));
+  });
+
   testWidgets('Todo agenda can set status to done directly', (tester) async {
     final todo = Todo(
       id: 't1',
