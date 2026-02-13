@@ -30,7 +30,18 @@ if (-not $Password) {
   $Password = New-RandomPassword
 }
 
-$securePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+function ConvertTo-ReadOnlySecureString([string]$Value) {
+  $secure = New-Object System.Security.SecureString
+  if ($null -ne $Value) {
+    foreach ($char in $Value.ToCharArray()) {
+      $secure.AppendChar($char)
+    }
+  }
+  $secure.MakeReadOnly()
+  return $secure
+}
+
+$securePassword = ConvertTo-ReadOnlySecureString -Value $Password
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
