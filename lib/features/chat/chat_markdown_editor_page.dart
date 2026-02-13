@@ -1,11 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../i18n/strings.g.dart';
-import '../../ui/sl_focus_ring.dart';
-import '../../ui/sl_icon_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'chat_markdown_sanitizer.dart';
@@ -27,6 +23,31 @@ bool shouldUseMarkdownEditorByDefault(String text) {
 enum ChatEditorMode {
   plain,
   markdown,
+}
+
+enum ChatMarkdownEditorAction {
+  save,
+  switchToSimpleInput,
+}
+
+class ChatMarkdownEditorResult {
+  const ChatMarkdownEditorResult._({
+    required this.text,
+    required this.action,
+  });
+
+  const ChatMarkdownEditorResult.save(String text)
+      : this._(text: text, action: ChatMarkdownEditorAction.save);
+
+  const ChatMarkdownEditorResult.switchToSimpleInput(String text)
+      : this._(
+            text: text, action: ChatMarkdownEditorAction.switchToSimpleInput);
+
+  final String text;
+  final ChatMarkdownEditorAction action;
+
+  bool get shouldSwitchToSimpleInput =>
+      action == ChatMarkdownEditorAction.switchToSimpleInput;
 }
 
 class ChatMarkdownEditorPage extends StatefulWidget {
@@ -57,15 +78,11 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
   late final TextEditingController _controller;
   final FocusNode _editorFocusNode = FocusNode();
   final ScrollController _previewScrollController = ScrollController();
-  final ScrollController _horizontalScrollController = ScrollController();
-  late ChatEditorMode _mode;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText);
-    _mode =
-        widget.allowPlainMode ? widget.initialMode : ChatEditorMode.markdown;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _editorFocusNode.requestFocus();
@@ -77,7 +94,6 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
     _controller.dispose();
     _editorFocusNode.dispose();
     _previewScrollController.dispose();
-    _horizontalScrollController.dispose();
     super.dispose();
   }
 
@@ -86,25 +102,13 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
   }
 
   void _save() {
-    Navigator.of(context).pop(_controller.text);
-  }
-
-  void _switchToMarkdownMode() {
-    if (_mode == ChatEditorMode.markdown) return;
-    setState(() => _mode = ChatEditorMode.markdown);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _editorFocusNode.requestFocus();
-    });
+    Navigator.of(context).pop(ChatMarkdownEditorResult.save(_controller.text));
   }
 
   void _switchToPlainMode() {
-    if (!widget.allowPlainMode || _mode == ChatEditorMode.plain) return;
-    setState(() => _mode = ChatEditorMode.plain);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _editorFocusNode.requestFocus();
-    });
+    if (!widget.allowPlainMode) return;
+    Navigator.of(context)
+        .pop(ChatMarkdownEditorResult.switchToSimpleInput(_controller.text));
   }
 
   @override
@@ -117,12 +121,12 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
       appBar: AppBar(
         title: Text(title),
         actions: [
-          if (widget.allowPlainMode && _mode == ChatEditorMode.markdown)
+          if (widget.allowPlainMode)
             IconButton(
               key: const ValueKey('chat_markdown_editor_switch_plain'),
-              tooltip: context.t.chat.switchToKeyboardInput,
+              tooltip: context.t.chat.markdownEditor.simpleInput,
               onPressed: _switchToPlainMode,
-              icon: const Icon(Icons.keyboard_rounded),
+              icon: const Icon(Icons.notes_rounded),
             ),
           TextButton(
             onPressed: _cancel,
@@ -138,85 +142,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
           const SizedBox(width: 12),
         ],
       ),
-      body: _mode == ChatEditorMode.markdown
-          ? _buildMarkdownEditorBody(context)
-          : _buildPlainEditorBody(context),
-    );
-  }
-
-  Widget _buildPlainEditorBody(BuildContext context) {
-    final tokens = SlTokens.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.04),
-            tokens.background,
-          ],
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: SlFocusRing(
-                borderRadius: BorderRadius.circular(tokens.radiusLg),
-                child: SlSurface(
-                  color: tokens.surface2,
-                  borderColor: tokens.borderSubtle,
-                  borderRadius: BorderRadius.circular(tokens.radiusLg),
-                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: widget.inputFieldKey,
-                          controller: _controller,
-                          focusNode: _editorFocusNode,
-                          autofocus: true,
-                          decoration: InputDecoration(
-                            hintText: context.t.common.fields.message,
-                            border: InputBorder.none,
-                            filled: false,
-                            isDense: true,
-                          ),
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          minLines: 1,
-                          maxLines: 6,
-                        ),
-                      ),
-                      if (widget.allowPlainMode) ...[
-                        const SizedBox(width: 8),
-                        Semantics(
-                          button: true,
-                          label: context.t.chat.markdownEditor.openButton,
-                          child: SlIconButton(
-                            key: const ValueKey(
-                                'chat_markdown_editor_switch_markdown'),
-                            icon: Icons.open_in_full_rounded,
-                            size: 40,
-                            iconSize: 20,
-                            tooltip: context.t.chat.markdownEditor.openButton,
-                            onPressed: _switchToMarkdownMode,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+      body: _buildMarkdownEditorBody(context),
     );
   }
 
@@ -313,120 +239,115 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
 
   Widget _buildSplitEditor(BuildContext context) {
     final tokens = SlTokens.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const minCanvasWidth = 900.0;
-        final viewportWidth = constraints.maxWidth;
-        final canvasWidth = math.max(viewportWidth, minCanvasWidth);
+        final isWideLayout = constraints.maxWidth >= 980;
+        final editorPane = _buildEditorPane(context);
+        final previewPane = _buildPreviewPane(context);
 
-        final content = SizedBox(
-          width: canvasWidth,
-          child: Row(
+        if (isWideLayout) {
+          return Row(
             children: [
-              Expanded(
-                child: _buildPane(
-                  context,
-                  title: context.t.chat.markdownEditor.editorLabel,
-                  icon: Icons.edit_note_rounded,
-                  child: TextField(
-                    key: widget.inputFieldKey,
-                    controller: _controller,
-                    focusNode: _editorFocusNode,
-                    expands: true,
-                    minLines: null,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      hintText: context.t.common.fields.message,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                    ),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      height: 1.5,
-                      fontFamilyFallback: const [
-                        'Menlo',
-                        'Monaco',
-                        'Consolas',
-                        'monospace',
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              Expanded(child: editorPane),
               Container(
                 width: 1,
                 margin: const EdgeInsets.symmetric(horizontal: 12),
                 color: tokens.borderSubtle,
               ),
-              Expanded(
-                child: _buildPane(
-                  context,
-                  key: const ValueKey('chat_markdown_editor_preview'),
-                  title: context.t.chat.markdownEditor.previewLabel,
-                  icon: Icons.visibility_outlined,
-                  child: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: _controller,
-                    builder: (context, value, child) {
-                      final text = value.text.trim();
-                      if (text.isEmpty) {
-                        return Center(
-                          child: Text(
-                            context.t.chat.markdownEditor.emptyPreview,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        );
-                      }
-
-                      return Scrollbar(
-                        controller: _previewScrollController,
-                        child: SingleChildScrollView(
-                          controller: _previewScrollController,
-                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-                          child: MarkdownBody(
-                            data: sanitizeChatMarkdown(value.text),
-                            selectable: true,
-                            softLineBreak: true,
-                            styleSheet:
-                                MarkdownStyleSheet.fromTheme(Theme.of(context))
-                                    .copyWith(
-                              p: Theme.of(context).textTheme.bodyMedium,
-                              codeblockPadding: const EdgeInsets.all(10),
-                              blockquotePadding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
+              Expanded(child: previewPane),
             ],
-          ),
-        );
-
-        if (viewportWidth >= minCanvasWidth) {
-          return content;
+          );
         }
 
-        return Scrollbar(
-          controller: _horizontalScrollController,
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: content,
-          ),
+        return Column(
+          children: [
+            Expanded(child: editorPane),
+            const SizedBox(height: 12),
+            Divider(height: 1, color: tokens.borderSubtle),
+            const SizedBox(height: 12),
+            Expanded(child: previewPane),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildEditorPane(BuildContext context) {
+    return _buildPane(
+      context,
+      title: context.t.chat.markdownEditor.editorLabel,
+      icon: Icons.edit_note_rounded,
+      child: TextField(
+        key: widget.inputFieldKey,
+        controller: _controller,
+        focusNode: _editorFocusNode,
+        expands: true,
+        minLines: null,
+        maxLines: null,
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
+        decoration: InputDecoration(
+          hintText: context.t.common.fields.message,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        ),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          height: 1.5,
+          fontFamilyFallback: const [
+            'Menlo',
+            'Monaco',
+            'Consolas',
+            'monospace',
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewPane(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return _buildPane(
+      context,
+      key: const ValueKey('chat_markdown_editor_preview'),
+      title: context.t.chat.markdownEditor.previewLabel,
+      icon: Icons.visibility_outlined,
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _controller,
+        builder: (context, value, child) {
+          final text = value.text.trim();
+          if (text.isEmpty) {
+            return Center(
+              child: Text(
+                context.t.chat.markdownEditor.emptyPreview,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            );
+          }
+
+          return Scrollbar(
+            controller: _previewScrollController,
+            child: SingleChildScrollView(
+              controller: _previewScrollController,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+              child: MarkdownBody(
+                data: sanitizeChatMarkdown(value.text),
+                selectable: true,
+                softLineBreak: true,
+                styleSheet:
+                    MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                  p: Theme.of(context).textTheme.bodyMedium,
+                  codeblockPadding: const EdgeInsets.all(10),
+                  blockquotePadding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 

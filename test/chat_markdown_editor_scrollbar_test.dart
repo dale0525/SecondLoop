@@ -35,8 +35,16 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
 
+      final horizontalScrollables = find.byWidgetPredicate((widget) {
+        if (widget is! Scrollable) return false;
+        return widget.axisDirection == AxisDirection.left ||
+            widget.axisDirection == AxisDirection.right;
+      });
+
       expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
           findsOneWidget);
+      expect(find.byTooltip('Simple input'), findsOneWidget);
+      expect(horizontalScrollables, findsNothing);
       expect(tester.takeException(), isNull);
     },
     variant: const TargetPlatformVariant(

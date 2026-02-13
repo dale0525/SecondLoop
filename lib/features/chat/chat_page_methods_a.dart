@@ -344,7 +344,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<void> _openMarkdownEditor() async {
     if (_isComposerBusy) return;
 
-    final updatedText = await Navigator.of(context).push<String>(
+    final result = await Navigator.of(context).push<ChatMarkdownEditorResult>(
       MaterialPageRoute(
         builder: (context) => ChatMarkdownEditorPage(
           initialText: _controller.text,
@@ -353,8 +353,9 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         ),
       ),
     );
-    if (!mounted || updatedText == null) return;
+    if (!mounted || result == null) return;
 
+    final updatedText = result.text;
     _controller.value = _controller.value.copyWith(
       text: updatedText,
       selection: TextSelection.collapsed(offset: updatedText.length),
@@ -654,62 +655,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         builder: (context) => TodoDetailPage(initialTodo: linkedTodo),
       ),
     );
-  }
-
-  Future<void> _editMessage(Message message) async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      final initialMode = shouldUseMarkdownEditorByDefault(message.content)
-          ? ChatEditorMode.markdown
-          : ChatEditorMode.plain;
-      final newContent = await Navigator.of(context).push<String>(
-        MaterialPageRoute(
-          builder: (context) => ChatMarkdownEditorPage(
-            initialText: message.content,
-            title: context.t.chat.editMessageTitle,
-            saveLabel: context.t.common.actions.save,
-            inputFieldKey: const ValueKey('edit_message_content'),
-            saveButtonKey: const ValueKey('edit_message_save'),
-            allowPlainMode: true,
-            initialMode: initialMode,
-          ),
-        ),
-      );
-
-      final trimmed = newContent?.trim();
-      if (trimmed == null) return;
-
-      await backend.editMessage(sessionKey, message.id, trimmed);
-      try {
-        await backend.markSemanticParseJobCanceled(
-          sessionKey,
-          messageId: message.id,
-          nowMs: DateTime.now().millisecondsSinceEpoch,
-        );
-      } catch (_) {
-        // ignore
-      }
-      if (!mounted) return;
-      syncEngine?.notifyLocalMutation();
-      _refresh();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.messageUpdated),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.editFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
   }
 
   String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {

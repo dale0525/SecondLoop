@@ -33,37 +33,116 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     final syncEngine = SyncEngineScope.maybeOf(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    try {
-      final initialMode = shouldUseMarkdownEditorByDefault(message.content)
-          ? ChatEditorMode.markdown
-          : ChatEditorMode.plain;
-      final newContent = await Navigator.of(context).push<String>(
+    Future<({String content, bool openMarkdown})?> showSimpleEditor(
+      String initialText,
+    ) {
+      var draft = initialText;
+      return showDialog<({String content, bool openMarkdown})>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(context.t.chat.editMessageTitle),
+          content: SizedBox(
+            width: 560,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    key: const ValueKey('edit_message_content'),
+                    initialValue: initialText,
+                    autofocus: true,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 1,
+                    maxLines: 6,
+                    onChanged: (value) => draft = value,
+                    decoration: InputDecoration(
+                      hintText: context.t.common.fields.message,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  key: const ValueKey('chat_markdown_editor_switch_markdown'),
+                  tooltip: context.t.chat.markdownEditor.openButton,
+                  onPressed: () => Navigator.of(dialogContext).pop(
+                    (content: draft, openMarkdown: true),
+                  ),
+                  icon: const Icon(Icons.open_in_full_rounded),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(context.t.common.actions.cancel),
+            ),
+            FilledButton.icon(
+              key: const ValueKey('edit_message_save'),
+              onPressed: () => Navigator.of(dialogContext).pop(
+                (content: draft, openMarkdown: false),
+              ),
+              icon: const Icon(Icons.save_rounded, size: 18),
+              label: Text(context.t.common.actions.save),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Future<ChatMarkdownEditorResult?> showMarkdownEditor(String initialText) {
+      return Navigator.of(context).push<ChatMarkdownEditorResult>(
         MaterialPageRoute(
           builder: (context) => ChatMarkdownEditorPage(
-            initialText: message.content,
+            initialText: initialText,
             title: context.t.chat.editMessageTitle,
             saveLabel: context.t.common.actions.save,
             inputFieldKey: const ValueKey('edit_message_content'),
             saveButtonKey: const ValueKey('edit_message_save'),
             allowPlainMode: true,
-            initialMode: initialMode,
+            initialMode: ChatEditorMode.markdown,
           ),
         ),
       );
+    }
 
-      final trimmed = newContent?.trim();
-      if (trimmed == null) return;
+    try {
+      var draft = message.content;
+      var useMarkdown = shouldUseMarkdownEditorByDefault(draft);
 
-      await backend.editMessage(sessionKey, message.id, trimmed);
-      if (!mounted) return;
-      syncEngine?.notifyLocalMutation();
-      _refreshActivities();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(context.t.chat.messageUpdated),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      while (true) {
+        if (useMarkdown) {
+          final markdownResult = await showMarkdownEditor(draft);
+          if (markdownResult == null) return;
+          draft = markdownResult.text;
+          if (markdownResult.shouldSwitchToSimpleInput) {
+            useMarkdown = false;
+            continue;
+          }
+        } else {
+          final plainResult = await showSimpleEditor(draft);
+          if (plainResult == null) return;
+          draft = plainResult.content;
+          if (plainResult.openMarkdown) {
+            useMarkdown = true;
+            continue;
+          }
+        }
+
+        final trimmed = draft.trim();
+        await backend.editMessage(sessionKey, message.id, trimmed);
+        if (!mounted) return;
+        syncEngine?.notifyLocalMutation();
+        _refreshActivities();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.t.chat.messageUpdated),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(

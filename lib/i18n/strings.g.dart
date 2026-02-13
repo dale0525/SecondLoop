@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1356 (678 per locale)
+/// Strings: 1358 (679 per locale)
 ///
-/// Built on 2026-02-13 at 14:09 UTC
+/// Built on 2026-02-13 at 15:50 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1287,6 +1287,7 @@ class _StringsChatMarkdownEditorEn {
   String get shortcutHint => 'Tip: Cmd/Ctrl + Enter applies changes instantly.';
   String stats({required Object lines, required Object characters}) =>
       '${lines} lines · ${characters} chars';
+  String get simpleInput => 'Simple input';
 }
 
 // Path: chat.focus
@@ -4938,6 +4939,8 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   @override
   String stats({required Object lines, required Object characters}) =>
       '${lines} 行 · ${characters} 字符';
+  @override
+  String get simpleInput => '简易输入';
 }
 
 // Path: chat.focus
@@ -8792,6 +8795,8 @@ extension on Translations {
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} lines · ${characters} chars';
+      case 'chat.markdownEditor.simpleInput':
+        return 'Simple input';
       case 'chat.focus.tooltip':
         return 'Focus';
       case 'chat.focus.allMemories':
@@ -10179,6 +10184,8 @@ extension on _StringsZhCn {
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} 行 · ${characters} 字符';
+      case 'chat.markdownEditor.simpleInput':
+        return '简易输入';
       case 'chat.focus.tooltip':
         return '聚焦';
       case 'chat.focus.allMemories':

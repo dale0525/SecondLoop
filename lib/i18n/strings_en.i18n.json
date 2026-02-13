@@ -776,7 +776,8 @@
       "previewLabel": "Preview",
       "emptyPreview": "Preview will appear as you type.",
       "shortcutHint": "Tip: Cmd/Ctrl + Enter applies changes instantly.",
-      "stats": "$lines lines · $characters chars"
+      "stats": "$lines lines · $characters chars",
+      "simpleInput": "Simple input"
     },
     "focus": {
       "tooltip": "Focus",
