@@ -120,6 +120,23 @@
         "confirm": "Delete"
       }
     },
+    "todoRecurrenceEditScope": {
+      "title": "Apply changes to recurring task",
+      "message": "How should this change be applied?",
+      "thisOnly": "This occurrence only",
+      "thisAndFuture": "This and future",
+      "wholeSeries": "Whole series"
+    },
+    "todoRecurrenceRule": {
+      "title": "Edit recurrence",
+      "edit": "Recurrence",
+      "frequencyLabel": "Frequency",
+      "intervalLabel": "Interval",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "yearly": "Yearly"
+    },
     "history": {
       "title": "History",
       "empty": "No activity in this range",

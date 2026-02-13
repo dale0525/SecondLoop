@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/actions/settings/actions_settings_store.dart';
@@ -207,9 +207,13 @@ class _SemanticParseAutoActionsGateState
       );
 
       final localeTag = Localizations.localeOf(context).toLanguageTag();
+      final firstDayOfWeekIndex =
+          MaterialLocalizations.of(context).firstDayOfWeekIndex;
       final result = await runner.runOnce(
         localeTag: localeTag,
         dayEndMinutes: settings.dayEndMinutes,
+        morningMinutes: settings.morningMinutes,
+        firstDayOfWeekIndex: firstDayOfWeekIndex,
       );
       if (!mounted) return;
 

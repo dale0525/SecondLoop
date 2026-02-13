@@ -43,6 +43,44 @@ void main() {
     expect(store.lastSucceeded?.appliedTodoTitle, '修电视机');
   });
 
+  test('runner passes recurrence rule json to store for create decision',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:recurring',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:recurring': '每周提交周报'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"提交周报","status":"open","due_local_iso":"2026-02-04T09:00:00","recurrence":{"freq":"weekly","interval":1}}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(store.lastRecurrenceRuleJson, '{"freq":"weekly","interval":1}');
+  });
   test('runner processes running jobs (crash recovery)', () async {
     final store = _FakeStore(
       jobs: [
@@ -82,7 +120,7 @@ void main() {
     expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 
-  test('runner retries when client throws', () async {
+  test('runner falls back to local resolver when client throws', () async {
     final store = _FakeStore(
       jobs: [
         const SemanticParseAutoActionJob(
@@ -93,7 +131,7 @@ void main() {
           createdAtMs: 0,
         ),
       ],
-      messages: {'msg:2': '修电视机'},
+      messages: {'msg:2': '明天 3pm 提交材料'},
     );
     final client = _FakeClient(error: StateError('boom'));
 
@@ -111,12 +149,14 @@ void main() {
     final result = await runner.runOnce(
       localeTag: 'zh-CN',
       dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
     );
 
-    expect(result.processed, 0);
-    expect(store.lastFailed, isNotNull);
-    expect(store.lastFailed!.attempts, 1);
-    expect(store.lastFailed!.nextRetryAtMs, greaterThan(1000));
+    expect(result.processed, 1);
+    expect(store.createdTodoIds, contains('todo:msg:2'));
+    expect(store.lastFailed, isNull);
+    expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 }
 
@@ -133,6 +173,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   final List<String> createdTodoIds = <String>[];
   SemanticParseJobSucceededArgs? lastSucceeded;
   SemanticParseJobFailedArgs? lastFailed;
+  String? lastRecurrenceRuleJson;
 
   @override
   Future<List<SemanticParseAutoActionJob>> listDueJobs({
@@ -184,8 +225,10 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String title,
     required String status,
     int? dueAtMs,
+    String? recurrenceRuleJson,
   }) async {
     createdTodoIds.add('todo:$messageId');
+    lastRecurrenceRuleJson = recurrenceRuleJson;
   }
 
   @override

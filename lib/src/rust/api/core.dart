@@ -137,6 +137,65 @@ Future<Todo> dbSetTodoStatus(
         newStatus: newStatus,
         sourceMessageId: sourceMessageId);
 
+Future<Todo> dbUpdateTodoDueWithScope(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 dueAtMs,
+        required String scope}) =>
+    RustLib.instance.api.crateApiCoreDbUpdateTodoDueWithScope(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        dueAtMs: dueAtMs,
+        scope: scope);
+
+Future<Todo> dbUpdateTodoStatusWithScope(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String newStatus,
+        String? sourceMessageId,
+        required String scope}) =>
+    RustLib.instance.api.crateApiCoreDbUpdateTodoStatusWithScope(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        newStatus: newStatus,
+        sourceMessageId: sourceMessageId,
+        scope: scope);
+
+Future<void> dbUpdateTodoRecurrenceRuleWithScope(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String ruleJson,
+        required String scope}) =>
+    RustLib.instance.api.crateApiCoreDbUpdateTodoRecurrenceRuleWithScope(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        ruleJson: ruleJson,
+        scope: scope);
+
+Future<void> dbUpsertTodoRecurrence(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String seriesId,
+        required String ruleJson}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertTodoRecurrence(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        seriesId: seriesId,
+        ruleJson: ruleJson);
+
+Future<String?> dbGetTodoRecurrenceRuleJson(
+        {required String appDir, required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbGetTodoRecurrenceRuleJson(
+        appDir: appDir, todoId: todoId);
+
 Future<BigInt> dbDeleteTodoAndAssociatedMessages(
         {required String appDir,
         required List<int> key,

@@ -322,6 +322,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final markdown = MarkdownBody(
       data: normalized,
       selectable: false,
+      softLineBreak: true,
       styleSheet: slMarkdownStyleSheet(context),
     );
     if (!isDesktopPlatform) return markdown;
@@ -477,11 +478,38 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     }
 
     final todosById = <String, Todo>{};
+    final sourceTodos = <Todo>[];
     for (final todo in todos) {
       todosById[todo.id] = todo;
       if (todo.sourceEntryId == message.id) {
-        return (todo: todo, isSourceEntry: true);
+        sourceTodos.add(todo);
       }
+    }
+
+    if (sourceTodos.isNotEmpty) {
+      final active = sourceTodos
+          .where((todo) => todo.status != 'done' && todo.status != 'dismissed')
+          .toList(growable: false);
+
+      if (active.isNotEmpty) {
+        final sorted = active.toList(growable: false)
+          ..sort((a, b) {
+            final dueA = a.dueAtMs ?? 9223372036854775807;
+            final dueB = b.dueAtMs ?? 9223372036854775807;
+            if (dueA != dueB) return dueA.compareTo(dueB);
+            return b.updatedAtMs.compareTo(a.updatedAtMs);
+          });
+        return (todo: sorted.first, isSourceEntry: true);
+      }
+
+      final sorted = sourceTodos.toList(growable: false)
+        ..sort((a, b) {
+          final dueA = a.dueAtMs ?? -9223372036854775808;
+          final dueB = b.dueAtMs ?? -9223372036854775808;
+          if (dueA != dueB) return dueB.compareTo(dueA);
+          return b.updatedAtMs.compareTo(a.updatedAtMs);
+        });
+      return (todo: sorted.first, isSourceEntry: true);
     }
 
     try {
@@ -678,6 +706,43 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       if (trimmed == null) return;
 
       await backend.editMessage(sessionKey, message.id, trimmed);
+
+      try {
+        final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
+        if (linkedTodoInfo != null && linkedTodoInfo.isSourceEntry) {
+          final recurrenceRuleJson = await backend.getTodoRecurrenceRuleJson(
+            sessionKey,
+            todoId: linkedTodoInfo.todo.id,
+          );
+          if (recurrenceRuleJson != null &&
+              recurrenceRuleJson.trim().isNotEmpty) {
+            final settings = await ActionsSettingsStore.load();
+            if (!mounted) return;
+
+            final locale = Localizations.localeOf(context);
+            final nowLocal = DateTime.now();
+            final timeResolution = LocalTimeResolver.resolve(
+              trimmed,
+              nowLocal,
+              locale: locale,
+              dayEndMinutes: settings.dayEndMinutes,
+            );
+            if (timeResolution != null &&
+                timeResolution.candidates.length == 1) {
+              final dueAtLocal = timeResolution.candidates.single.dueAtLocal;
+              await backend.updateTodoDueWithScope(
+                sessionKey,
+                todoId: linkedTodoInfo.todo.id,
+                dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+                scope: TodoRecurrenceEditScope.thisAndFuture,
+              );
+            }
+          }
+        }
+      } catch (_) {
+        // ignore: message edit should still succeed even if todo sync fails.
+      }
+
       try {
         await backend.markSemanticParseJobCanceled(
           sessionKey,
@@ -883,7 +948,18 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         if (!mounted) return;
         if (!confirmed) return;
 
-        await backend.deleteTodo(sessionKey, todoId: targetTodo.id);
+        final linkedTodos = await backend.listTodos(sessionKey);
+        final todoIds = linkedTodos
+            .where((todo) => todo.sourceEntryId == message.id)
+            .map((todo) => todo.id)
+            .toSet();
+        if (todoIds.isEmpty) {
+          todoIds.add(targetTodo.id);
+        }
+
+        for (final todoId in todoIds) {
+          await backend.deleteTodo(sessionKey, todoId: todoId);
+        }
         if (!mounted) return;
         syncEngine?.notifyLocalMutation();
         _refresh();

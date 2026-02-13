@@ -761,6 +761,88 @@ class NativeAppBackend
   }
 
   @override
+  Future<Todo> updateTodoStatusWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpdateTodoStatusWithScope(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      newStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+      scope: scope.wireValue,
+    );
+  }
+
+  @override
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpdateTodoDueWithScope(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      dueAtMs: dueAtMs,
+      scope: scope.wireValue,
+    );
+  }
+
+  @override
+  Future<void> upsertTodoRecurrence(
+    Uint8List key, {
+    required String todoId,
+    required String seriesId,
+    required String ruleJson,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpsertTodoRecurrence(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      seriesId: seriesId,
+      ruleJson: ruleJson,
+    );
+  }
+
+  @override
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetTodoRecurrenceRuleJson(
+      appDir: appDir,
+      todoId: todoId,
+    );
+  }
+
+  @override
+  Future<void> updateTodoRecurrenceRuleWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String ruleJson,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpdateTodoRecurrenceRuleWithScope(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      ruleJson: ruleJson,
+      scope: scope.wireValue,
+    );
+  }
+
+  @override
   Future<void> deleteTodo(
     Uint8List key, {
     required String todoId,

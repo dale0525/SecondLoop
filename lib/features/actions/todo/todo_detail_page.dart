@@ -26,10 +26,16 @@ import '../../chat/chat_markdown_sanitizer.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';
+import 'todo_recurrence_edit_scope_dialog.dart';
+import 'todo_recurrence_rule.dart';
+import 'todo_recurrence_rule_dialog.dart';
 import 'todo_thread_match.dart';
 
 part 'todo_detail_page_message_actions.dart';
 part 'todo_detail_page_status_widgets.dart';
+part 'todo_detail_page_due_chip.dart';
+part 'todo_detail_page_recurring_series.dart';
+part 'todo_detail_page_attachment_picker.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -62,6 +68,8 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   final List<Attachment> _pendingAttachments = <Attachment>[];
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  String? _recurrenceRuleJson;
+  var _recurrenceLoaded = false;
 
   bool get _isDesktopPlatform =>
       !kIsWeb &&
@@ -85,12 +93,13 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     super.didChangeDependencies();
     _activitiesFuture ??= _loadActivities();
     _attachSyncEngine();
+    if (_recurrenceLoaded) return;
+    _recurrenceLoaded = true;
+    unawaited(_loadRecurrenceRuleJson());
   }
 
-  Future<List<TodoActivity>> _loadActivities() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.listTodoActivities(sessionKey, _todo.id);
+  Future<List<TodoActivity>> _loadActivities() {
+    return _loadTodoDetailActivities(this);
   }
 
   void _refreshActivities() {
@@ -148,6 +157,100 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     return '$date $time';
   }
 
+  String _recurrenceFrequencyLabel(
+    BuildContext context,
+    TodoRecurrenceFrequency frequency,
+  ) =>
+      switch (frequency) {
+        TodoRecurrenceFrequency.daily =>
+          context.t.actions.todoRecurrenceRule.daily,
+        TodoRecurrenceFrequency.weekly =>
+          context.t.actions.todoRecurrenceRule.weekly,
+        TodoRecurrenceFrequency.monthly =>
+          context.t.actions.todoRecurrenceRule.monthly,
+        TodoRecurrenceFrequency.yearly =>
+          context.t.actions.todoRecurrenceRule.yearly,
+      };
+
+  String _formatRecurrenceRule(
+    BuildContext context,
+    TodoRecurrenceRule rule,
+  ) {
+    final frequencyLabel = _recurrenceFrequencyLabel(context, rule.frequency);
+    if (rule.interval <= 1) {
+      return frequencyLabel;
+    }
+    return '$frequencyLabel x${rule.interval}';
+  }
+
+  Future<String?> _loadRecurrenceRuleJson() async {
+    final backend = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backend == null || session == null) {
+      return null;
+    }
+
+    final sessionKey = session.sessionKey;
+    String? nextRuleJson;
+    try {
+      final fetched = await backend.getTodoRecurrenceRuleJson(
+        sessionKey,
+        todoId: _todo.id,
+      );
+      if (fetched != null && fetched.trim().isNotEmpty) {
+        nextRuleJson = fetched.trim();
+      }
+    } catch (_) {
+      nextRuleJson = null;
+    }
+
+    if (!mounted) return nextRuleJson;
+    if (_recurrenceRuleJson != nextRuleJson) {
+      setState(() => _recurrenceRuleJson = nextRuleJson);
+    }
+    return nextRuleJson;
+  }
+
+  Future<void> _editRecurrenceRule() async {
+    final existingRuleJson =
+        _recurrenceRuleJson ?? await _loadRecurrenceRuleJson();
+    if (!mounted) return;
+
+    final existingRule = TodoRecurrenceRule.tryParseJson(existingRuleJson);
+    if (existingRule == null) return;
+
+    final nextRule = await showTodoRecurrenceRuleDialog(
+      context,
+      initialRule: existingRule,
+    );
+    if (nextRule == null || !mounted) return;
+
+    final scope = await showTodoRecurrenceEditScopeDialog(context);
+    if (scope == null || !mounted) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    try {
+      await backend.updateTodoRecurrenceRuleWithScope(
+        sessionKey,
+        todoId: _todo.id,
+        ruleJson: nextRule.toJsonString(),
+        scope: scope,
+      );
+      if (!mounted) return;
+      setState(() => _recurrenceRuleJson = nextRule.toJsonString());
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   Future<void> _editDue() async {
     final dueAtMs = _todo.dueAtMs;
     final nowLocal = DateTime.now();
@@ -167,32 +270,106 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    final updated = await backend.upsertTodo(
-      sessionKey,
-      id: _todo.id,
-      title: _todo.title,
-      dueAtMs: picked.toUtc().millisecondsSinceEpoch,
-      status: _todo.status,
-      sourceEntryId: _todo.sourceEntryId,
-      reviewStage: _todo.reviewStage,
-      nextReviewAtMs: _todo.nextReviewAtMs,
-      lastReviewAtMs: _todo.lastReviewAtMs,
-    );
+    var scope = TodoRecurrenceEditScope.thisOnly;
+    final ruleJson = _recurrenceRuleJson ?? await _loadRecurrenceRuleJson();
+    if (!mounted) return;
+    if (ruleJson != null && ruleJson.trim().isNotEmpty) {
+      final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
+      if (selectedScope == null || !mounted) return;
+      scope = selectedScope;
+    }
+
+    late final Todo updated;
+    try {
+      updated = await backend.updateTodoDueWithScope(
+        sessionKey,
+        todoId: _todo.id,
+        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
+        scope: scope,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() => _todo = updated);
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
   }
 
+  Future<Todo?> _findNextActiveRecurringOccurrence(
+    Todo current,
+    String recurrenceRuleJson,
+  ) {
+    return _findNextActiveRecurringOccurrenceForDetail(
+      this,
+      current,
+      recurrenceRuleJson,
+    );
+  }
+
   Future<void> _setStatus(String newStatus) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    final updated = await backend.setTodoStatus(
-      sessionKey,
-      todoId: _todo.id,
-      newStatus: newStatus,
-    );
+
+    var scope = TodoRecurrenceEditScope.thisOnly;
+    String? recurrenceRuleJson = _recurrenceRuleJson;
+
+    if (newStatus != 'done') {
+      recurrenceRuleJson ??= await _loadRecurrenceRuleJson();
+      if (!mounted) return;
+      if (recurrenceRuleJson != null && recurrenceRuleJson.trim().isNotEmpty) {
+        final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
+        if (selectedScope == null || !mounted) return;
+        scope = selectedScope;
+      }
+    }
+
+    late final Todo updated;
+    try {
+      updated = await backend.updateTodoStatusWithScope(
+        sessionKey,
+        todoId: _todo.id,
+        newStatus: newStatus,
+        scope: scope,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    var todoForDisplay = updated;
+    if (newStatus == 'done') {
+      recurrenceRuleJson ??= await _loadRecurrenceRuleJson();
+      if (!mounted) return;
+      if (recurrenceRuleJson != null && recurrenceRuleJson.trim().isNotEmpty) {
+        final nextTodo = await _findNextActiveRecurringOccurrence(
+          updated,
+          recurrenceRuleJson,
+        );
+        if (!mounted) return;
+        if (nextTodo != null) {
+          todoForDisplay = nextTodo;
+        }
+      }
+    }
+
     if (!mounted) return;
-    setState(() => _todo = updated);
+    setState(() => _todo = todoForDisplay);
+    if (todoForDisplay.id != updated.id) {
+      unawaited(_loadRecurrenceRuleJson());
+    }
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refreshActivities();
   }
@@ -542,82 +719,11 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     return buildTile(contentWidget: contentForText(title));
   }
 
-  Future<void> _pickAttachment() async {
-    final backend = AppBackendScope.of(context);
-    if (backend is! AttachmentsBackend) return;
-    final attachmentsBackend = backend as AttachmentsBackend;
-    final sessionKey = SessionScope.of(context).sessionKey;
+  Future<void> _pickAttachment() {
+    return _pickTodoDetailAttachment(this);
+  }
 
-    final selected = await showModalBottomSheet<Attachment>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t.actions.todoDetail.pickAttachment,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                FutureBuilder<List<Attachment>>(
-                  future: attachmentsBackend.listRecentAttachments(
-                    sessionKey,
-                    limit: 50,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          context.t.errors
-                              .loadFailed(error: '${snapshot.error}'),
-                        ),
-                      );
-                    }
-
-                    final items = snapshot.data ?? const <Attachment>[];
-                    if (items.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(context.t.actions.todoDetail.noAttachments),
-                      );
-                    }
-
-                    return SingleChildScrollView(
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final attachment in items)
-                            AttachmentCard(
-                              attachment: attachment,
-                              onTap: () =>
-                                  Navigator.of(context).pop(attachment),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (!mounted) return;
-    if (selected == null) return;
+  void _appendPendingAttachment(Attachment selected) {
     setState(() {
       final alreadySelected =
           _pendingAttachments.any((a) => a.sha256 == selected.sha256);
@@ -631,6 +737,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final dueText = _formatDue(context);
+    final recurrenceRule = TodoRecurrenceRule.tryParseJson(_recurrenceRuleJson);
+    final recurrenceText = recurrenceRule == null
+        ? null
+        : _formatRecurrenceRule(context, recurrenceRule);
     return Scaffold(
       appBar: AppBar(title: Text(context.t.actions.todoDetail.title)),
       body: Center(
@@ -691,12 +801,27 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                       const SizedBox(height: 10),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 520),
-                        child: _TodoDueChip(
-                          chipKey: const ValueKey('todo_detail_due'),
-                          icon: Icons.event_rounded,
-                          label:
-                              dueText ?? context.t.actions.calendar.pickCustom,
-                          onPressed: () => unawaited(_editDue()),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _TodoDueChip(
+                              chipKey: const ValueKey('todo_detail_due'),
+                              icon: Icons.event_rounded,
+                              label: dueText ??
+                                  context.t.actions.calendar.pickCustom,
+                              onPressed: () => unawaited(_editDue()),
+                            ),
+                            if (recurrenceText != null)
+                              _TodoDueChip(
+                                chipKey:
+                                    const ValueKey('todo_detail_recurrence'),
+                                icon: Icons.repeat_rounded,
+                                label: recurrenceText,
+                                onPressed: () =>
+                                    unawaited(_editRecurrenceRule()),
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -830,67 +955,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-enum _MessageAction {
-  copy,
-  linkTodo,
-  edit,
-  delete,
-}
-
-final class _TodoDueChip extends StatelessWidget {
-  const _TodoDueChip({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.chipKey,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final Key? chipKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = SlTokens.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(MaterialState.pressed)) {
-        return colorScheme.primary.withOpacity(0.16);
-      }
-      if (states.contains(MaterialState.hovered) ||
-          states.contains(MaterialState.focused)) {
-        return colorScheme.primary.withOpacity(0.12);
-      }
-      return null;
-    });
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: OutlinedButton.icon(
-        key: chipKey,
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: colorScheme.onSurfaceVariant,
-          backgroundColor: tokens.surface2,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          minimumSize: const Size(0, 38),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: const StadiumBorder(),
-          side: BorderSide(color: tokens.borderSubtle),
-          textStyle: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ).copyWith(overlayColor: overlay),
-        icon: Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
-        label: Text(label, overflow: TextOverflow.ellipsis),
       ),
     );
   }
