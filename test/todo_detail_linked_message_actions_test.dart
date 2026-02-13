@@ -57,6 +57,21 @@ void main() {
 
     expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_preview')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')),
+        findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_markdown_editor_preview')),
+        findsOneWidget);
+    await tester
+        .tap(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')));
+    await tester.pumpAndSettle();
 
     await tester.enterText(
       find.byKey(const ValueKey('edit_message_content')),
@@ -68,6 +83,60 @@ void main() {
     expect(find.text('after'), findsOneWidget);
     expect(find.text('before', findRichText: true), findsNothing);
     expect(backend.editedMessageIds, contains('m1'));
+  });
+
+  testWidgets('TodoDetailPage long message edit defaults to markdown mode',
+      (tester) async {
+    final longContent = List<String>.filled(
+      8,
+      'TODO_LONG_MARKER content that should default to markdown editor mode.',
+    ).join('\n');
+    final backend = _Backend(messageContent: longContent);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: ThemeData(
+            useMaterial3: true,
+            splashFactory: InkRipple.splashFactory,
+          ),
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(
+      find.textContaining('TODO_LONG_MARKER', findRichText: true).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_edit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_preview')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')),
+        findsNothing);
   });
 
   testWidgets('TodoDetailPage can relink linked message to another todo',
@@ -361,14 +430,14 @@ void main() {
 }
 
 final class _Backend extends TestAppBackend {
-  _Backend()
+  _Backend({String messageContent = 'before'})
       : super(
-          initialMessages: const [
+          initialMessages: [
             Message(
               id: 'm1',
               conversationId: 'main_stream',
               role: 'user',
-              content: 'before',
+              content: messageContent,
               createdAtMs: 0,
               isMemory: true,
             ),

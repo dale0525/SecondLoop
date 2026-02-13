@@ -34,6 +34,9 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
+      final initialMode = shouldUseMarkdownEditorByDefault(message.content)
+          ? ChatEditorMode.markdown
+          : ChatEditorMode.plain;
       final newContent = await Navigator.of(context).push<String>(
         MaterialPageRoute(
           builder: (context) => ChatMarkdownEditorPage(
@@ -42,6 +45,8 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
             saveLabel: context.t.common.actions.save,
             inputFieldKey: const ValueKey('edit_message_content'),
             saveButtonKey: const ValueKey('edit_message_save'),
+            allowPlainMode: true,
+            initialMode: initialMode,
           ),
         ),
       );

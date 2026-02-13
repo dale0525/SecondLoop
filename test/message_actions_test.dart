@@ -116,6 +116,26 @@ void main() {
 
     expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_preview')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')),
+        findsOneWidget);
+
+    await tester.tap(
+        find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_markdown_editor_preview')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')),
+        findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')),
+        findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('edit_message_save')),

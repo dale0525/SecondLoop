@@ -7,6 +7,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/ui/sl_icon_button.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -27,7 +28,13 @@ void main() {
     const editorPreviewKey = ValueKey('chat_markdown_editor_preview');
     const editorSaveKey = ValueKey('chat_markdown_editor_save');
 
+    expect(find.byKey(editorOpenKey), findsNothing);
+
+    await tester.tap(find.byKey(inputKey));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(editorOpenKey), findsOneWidget);
+    expect(tester.widget<SlIconButton>(find.byKey(editorOpenKey)), isNotNull);
 
     await tester.enterText(find.byKey(inputKey), '# Draft');
     await tester.pumpAndSettle();
@@ -57,6 +64,13 @@ void main() {
 
     try {
       await tester.pumpWidget(_wrapChat(backend: TestAppBackend()));
+      await tester.pumpAndSettle();
+
+      final inputKey = find.byKey(const ValueKey('chat_input'));
+      expect(find.byKey(const ValueKey('chat_open_markdown_editor')),
+          findsNothing);
+
+      await tester.tap(inputKey);
       await tester.pumpAndSettle();
 
       expect(

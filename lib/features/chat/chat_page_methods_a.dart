@@ -348,6 +348,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       MaterialPageRoute(
         builder: (context) => ChatMarkdownEditorPage(
           initialText: _controller.text,
+          allowPlainMode: true,
+          initialMode: ChatEditorMode.markdown,
         ),
       ),
     );
@@ -661,6 +663,9 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
+      final initialMode = shouldUseMarkdownEditorByDefault(message.content)
+          ? ChatEditorMode.markdown
+          : ChatEditorMode.plain;
       final newContent = await Navigator.of(context).push<String>(
         MaterialPageRoute(
           builder: (context) => ChatMarkdownEditorPage(
@@ -669,6 +674,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
             saveLabel: context.t.common.actions.save,
             inputFieldKey: const ValueKey('edit_message_content'),
             saveButtonKey: const ValueKey('edit_message_save'),
+            allowPlainMode: true,
+            initialMode: initialMode,
           ),
         ),
       );
