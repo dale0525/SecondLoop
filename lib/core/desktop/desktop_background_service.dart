@@ -8,21 +8,28 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:universal_io/io.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../i18n/strings.g.dart';
+import '../ai/ai_routing.dart';
+import '../cloud/cloud_auth_controller.dart';
+import '../cloud/cloud_auth_scope.dart';
+import '../cloud/cloud_usage_client.dart';
+import '../cloud/vault_usage_client.dart';
+import '../subscription/subscription_scope.dart';
+import '../sync/sync_config_store.dart';
 import 'desktop_boot_prefs.dart';
 import 'desktop_launch_args.dart';
-
-const _kTrayMenuShowKey = 'show';
-const _kTrayMenuHideKey = 'hide';
-const _kTrayMenuQuitKey = 'quit';
+import 'desktop_tray_menu_controller.dart';
 
 class DesktopBackgroundService extends StatefulWidget {
   const DesktopBackgroundService({
     required this.child,
+    required this.onOpenSettingsRequested,
     this.silentStartupRequested = false,
     super.key,
   });
 
   final Widget child;
+  final Future<void> Function() onOpenSettingsRequested;
   final bool silentStartupRequested;
 
   @override
@@ -34,10 +41,28 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     with WindowListener, TrayListener {
   bool _enabled = false;
   bool _quitting = false;
+
   DesktopBootConfig _config = DesktopBootConfig.defaults;
-  VoidCallback? _prefsListener;
+  VoidCallback? _bootPrefsListener;
 
   _LaunchSetup? _launchSetup;
+  DesktopTrayMenuController? _menuController;
+
+  CloudAuthController? _cloudAuthController;
+  Listenable? _cloudAuthListenable;
+
+  SubscriptionStatusController? _subscriptionController;
+  SubscriptionStatus _subscriptionStatus = SubscriptionStatus.unknown;
+
+  String _gatewayBaseUrl = '';
+
+  final CloudUsageClient _cloudUsageClient = CloudUsageClient();
+  final VaultUsageClient _vaultUsageClient = VaultUsageClient();
+  final SyncConfigStore _syncConfigStore = SyncConfigStore();
+
+  DesktopTrayProUsage? _trayProUsage;
+  bool _refreshingProUsage = false;
+  DateTime? _lastProUsageRefreshAt;
 
   bool get _isDesktop =>
       !kIsWeb &&
@@ -50,16 +75,61 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     return Platform.environment.containsKey('FLUTTER_TEST');
   }
 
+  bool get _isSignedInProAccount {
+    final uid = _cloudAuthController?.uid?.trim() ?? '';
+    if (uid.isEmpty) return false;
+    return _subscriptionStatus == SubscriptionStatus.entitled;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    if (_enabled || !_isDesktop || _isWidgetTestEnvironment) {
+    if (!_isDesktop || _isWidgetTestEnvironment) {
+      return;
+    }
+
+    final cloudScope = CloudAuthScope.maybeOf(context);
+    _gatewayBaseUrl = cloudScope?.gatewayConfig.baseUrl.trim() ?? '';
+    _bindCloudAuth(cloudScope?.controller);
+    _bindSubscription(SubscriptionScope.maybeOf(context));
+
+    if (_enabled) {
+      unawaited(_runSafely(_refreshTrayMenu));
       return;
     }
 
     _enabled = true;
     unawaited(_initDesktopServices());
+  }
+
+  void _bindCloudAuth(CloudAuthController? controller) {
+    if (identical(_cloudAuthController, controller)) {
+      return;
+    }
+
+    _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
+    _cloudAuthController = controller;
+
+    final listenable =
+        controller is Listenable ? controller as Listenable : null;
+    _cloudAuthListenable = listenable;
+    listenable?.addListener(_onCloudAuthChanged);
+
+    unawaited(_refreshProUsage(force: true));
+  }
+
+  void _bindSubscription(SubscriptionStatusController? controller) {
+    if (identical(_subscriptionController, controller)) {
+      return;
+    }
+
+    _subscriptionController?.removeListener(_onSubscriptionChanged);
+    _subscriptionController = controller;
+    _subscriptionStatus = controller?.status ?? SubscriptionStatus.unknown;
+    controller?.addListener(_onSubscriptionChanged);
+
+    unawaited(_refreshProUsage(force: true));
   }
 
   Future<void> _initDesktopServices() async {
@@ -70,12 +140,21 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
       await DesktopBootPrefs.load();
       _config = DesktopBootPrefs.value.value;
-      _prefsListener = _onBootPrefsChanged;
+      _bootPrefsListener = _onBootPrefsChanged;
       DesktopBootPrefs.value.addListener(_onBootPrefsChanged);
+
+      _menuController = DesktopTrayMenuController(
+        onOpenWindow: _showWindow,
+        onHideWindow: () => windowManager.hide(),
+        onOpenSettings: _openSettings,
+        onToggleStartWithSystem: DesktopBootPrefs.setStartWithSystem,
+        onQuit: _quitApp,
+      );
 
       await _loadLaunchSetup();
       await _applyBootConfig(previous: null);
       await _setupTray();
+      await _refreshProUsage(force: true);
       await _applySilentStartupIfRequested();
     });
   }
@@ -106,7 +185,23 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     _config = next;
     unawaited(_runSafely(() async {
       await _applyBootConfig(previous: previous);
+      await _refreshTrayMenu();
     }));
+  }
+
+  void _onCloudAuthChanged() {
+    unawaited(_refreshProUsage(force: true));
+  }
+
+  void _onSubscriptionChanged() {
+    final controller = _subscriptionController;
+    final next = controller?.status ?? SubscriptionStatus.unknown;
+    if (next == _subscriptionStatus) {
+      return;
+    }
+
+    _subscriptionStatus = next;
+    unawaited(_refreshProUsage(force: true));
   }
 
   Future<void> _applyBootConfig({DesktopBootConfig? previous}) async {
@@ -156,16 +251,35 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       isTemplate: defaultTargetPlatform == TargetPlatform.macOS,
     );
     await trayManager.setToolTip('SecondLoop');
-    await trayManager.setContextMenu(
-      Menu(
-        items: [
-          MenuItem(key: _kTrayMenuShowKey, label: 'Open'),
-          MenuItem(key: _kTrayMenuHideKey, label: 'Hide'),
-          MenuItem.separator(),
-          MenuItem(key: _kTrayMenuQuitKey, label: 'Quit'),
-        ],
+    await _refreshTrayMenu();
+  }
+
+  Future<void> _refreshTrayMenu() async {
+    final controller = _menuController;
+    if (controller == null) {
+      return;
+    }
+
+    final labels = DesktopTrayMenuLabels(
+      open: context.t.common.actions.open,
+      hide: context.t.settings.desktopTray.menu.hide,
+      settings: context.t.settings.title,
+      startWithSystem: context.t.settings.desktopBoot.startWithSystem.title,
+      quit: context.t.settings.desktopTray.menu.quit,
+      signedIn: context.t.settings.desktopTray.pro.signedIn,
+      aiUsage: context.t.settings.desktopTray.pro.aiUsage,
+      storageUsage: context.t.settings.desktopTray.pro.storageUsage,
+    );
+
+    final menu = controller.buildMenu(
+      labels: labels,
+      state: DesktopTrayMenuState(
+        startWithSystemEnabled: _config.startWithSystem,
+        proUsage: _trayProUsage,
       ),
     );
+
+    await trayManager.setContextMenu(menu);
   }
 
   Future<void> _applySilentStartupIfRequested() async {
@@ -175,6 +289,133 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
     await Future<void>.delayed(Duration.zero);
     await windowManager.hide();
+  }
+
+  Future<void> _openSettings() async {
+    await _showWindow();
+    await widget.onOpenSettingsRequested();
+  }
+
+  Future<void> _refreshProUsage({bool force = false}) async {
+    if (!_enabled) {
+      return;
+    }
+
+    if (!_isSignedInProAccount) {
+      if (_trayProUsage != null) {
+        _trayProUsage = null;
+        await _refreshTrayMenu();
+      }
+      return;
+    }
+
+    if (_refreshingProUsage) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final last = _lastProUsageRefreshAt;
+    if (!force &&
+        last != null &&
+        now.difference(last) < const Duration(minutes: 2)) {
+      return;
+    }
+
+    _refreshingProUsage = true;
+    _lastProUsageRefreshAt = now;
+
+    try {
+      final usage = await _fetchProUsage();
+      if (usage == _trayProUsage) {
+        return;
+      }
+
+      _trayProUsage = usage;
+      await _refreshTrayMenu();
+    } finally {
+      _refreshingProUsage = false;
+    }
+  }
+
+  Future<DesktopTrayProUsage?> _fetchProUsage() async {
+    final controller = _cloudAuthController;
+    if (controller == null) {
+      return null;
+    }
+
+    final uid = controller.uid?.trim() ?? '';
+    if (uid.isEmpty) {
+      return null;
+    }
+
+    String email = controller.email?.trim() ?? '';
+    if (email.isEmpty) {
+      try {
+        await controller.refreshUserInfo();
+        email = controller.email?.trim() ?? '';
+      } catch (_) {
+        email = '';
+      }
+    }
+    if (email.isEmpty) {
+      email = uid;
+    }
+
+    String? idToken;
+    try {
+      idToken = await controller.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+
+    final trimmedToken = idToken?.trim() ?? '';
+    if (trimmedToken.isEmpty) {
+      return DesktopTrayProUsage(
+        email: email,
+        aiUsagePercent: null,
+        storageUsagePercent: null,
+      );
+    }
+
+    int? aiUsagePercent;
+    if (_gatewayBaseUrl.isNotEmpty) {
+      try {
+        final summary = await _cloudUsageClient.fetchUsageSummary(
+          cloudGatewayBaseUrl: _gatewayBaseUrl,
+          idToken: trimmedToken,
+        );
+        aiUsagePercent = summary.askAiUsagePercent;
+      } catch (_) {
+        aiUsagePercent = null;
+      }
+    }
+
+    int? storageUsagePercent;
+    final managedVaultBaseUrl =
+        (await _syncConfigStore.resolveManagedVaultBaseUrl())?.trim() ?? '';
+    if (managedVaultBaseUrl.isNotEmpty) {
+      try {
+        final summary = await _vaultUsageClient.fetchVaultUsageSummary(
+          managedVaultBaseUrl: managedVaultBaseUrl,
+          vaultId: uid,
+          idToken: trimmedToken,
+        );
+
+        final limitBytes = summary.limitBytes;
+        if (limitBytes != null && limitBytes > 0) {
+          final ratio = summary.totalBytesUsed / limitBytes;
+          storageUsagePercent = (ratio * 100).round().clamp(0, 100);
+        }
+      } catch (_) {
+        storageUsagePercent = null;
+      }
+    }
+
+    return DesktopTrayProUsage(
+      email: email,
+      aiUsagePercent: aiUsagePercent,
+      storageUsagePercent: storageUsagePercent,
+    );
   }
 
   @override
@@ -198,22 +439,25 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
   @override
   void onTrayIconRightMouseDown() {
-    unawaited(_runSafely(() => trayManager.popUpContextMenu()));
+    unawaited(_runSafely(() async {
+      await _refreshProUsage(force: true);
+      await trayManager.popUpContextMenu();
+    }));
   }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
-    switch (menuItem.key) {
-      case _kTrayMenuShowKey:
-        unawaited(_runSafely(_showWindow));
-        break;
-      case _kTrayMenuHideKey:
-        unawaited(_runSafely(() => windowManager.hide()));
-        break;
-      case _kTrayMenuQuitKey:
-        unawaited(_quitApp());
-        break;
+    final controller = _menuController;
+    if (controller == null) {
+      return;
     }
+
+    unawaited(_runSafely(() async {
+      await controller.onMenuItemClick(
+        menuItem,
+        startWithSystemEnabled: _config.startWithSystem,
+      );
+    }));
   }
 
   Future<void> _toggleWindowVisibility() async {
@@ -254,17 +498,23 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
   @override
   void dispose() {
+    _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
+    _subscriptionController?.removeListener(_onSubscriptionChanged);
+
     if (_enabled) {
       windowManager.removeListener(this);
       trayManager.removeListener(this);
 
-      final listener = _prefsListener;
+      final listener = _bootPrefsListener;
       if (listener != null) {
         DesktopBootPrefs.value.removeListener(listener);
       }
 
       unawaited(_runSafely(() => trayManager.destroy()));
     }
+
+    _cloudUsageClient.dispose();
+    _vaultUsageClient.dispose();
     super.dispose();
   }
 

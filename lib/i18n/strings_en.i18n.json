@@ -249,6 +249,17 @@
         "subtitle": "When closing the window, minimize to tray instead of quitting"
       }
     },
+    "desktopTray": {
+      "menu": {
+        "hide": "Hide",
+        "quit": "Quit"
+      },
+      "pro": {
+        "signedIn": "Signed in",
+        "aiUsage": "AI usage",
+        "storageUsage": "Storage usage"
+      }
+    },
     "language": {
       "title": "Language",
       "subtitle": "Follow system or choose a language",
