@@ -3,6 +3,7 @@ import FlutterMacOS
 import AVFoundation
 import PDFKit
 import Vision
+import ServiceManagement
 
 @NSApplicationMain
 class AppDelegate: FlutterAppDelegate {
@@ -82,10 +83,66 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+
+    let launchAtStartupChannel = FlutterMethodChannel(
+      name: "launch_at_startup",
+      binaryMessenger: controller.engine.binaryMessenger
+    )
+    launchAtStartupChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "launchAtStartupIsEnabled":
+        if #available(macOS 13.0, *) {
+          result(SMAppService.mainApp.status == .enabled)
+        } else {
+          result(false)
+        }
+      case "launchAtStartupSetEnabled":
+        guard let arguments = call.arguments as? [String: Any],
+              let enabled = arguments["setEnabledValue"] as? Bool else {
+          result(
+            FlutterError(
+              code: "launch_at_startup_invalid_args",
+              message: "Missing setEnabledValue argument",
+              details: nil
+            )
+          )
+          return
+        }
+
+        if #available(macOS 13.0, *) {
+          do {
+            if enabled {
+              try SMAppService.mainApp.register()
+            } else {
+              try SMAppService.mainApp.unregister()
+            }
+            result(nil)
+          } catch {
+            result(
+              FlutterError(
+                code: "launch_at_startup_set_failed",
+                message: error.localizedDescription,
+                details: nil
+              )
+            )
+          }
+        } else {
+          result(
+            FlutterError(
+              code: "launch_at_startup_unsupported",
+              message: "macOS 13.0 or later is required",
+              details: nil
+            )
+          )
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    return true
+    return false
   }
 
   private func handleTranscodeToM4a(call: FlutterMethodCall, result: @escaping FlutterResult) {

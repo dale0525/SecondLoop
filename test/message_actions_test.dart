@@ -89,6 +89,53 @@ void main() {
     expect(backend.deletedTodoIds, contains('t1'));
   });
 
+  testWidgets('Deleting recurring source message deletes all linked todos',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'weekly report',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Weekly report',
+          status: 'done',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        Todo(
+          id: 't2',
+          title: 'Weekly report',
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('weekly report'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_delete')));
+    await tester.pumpAndSettle();
+    await confirmChatTodoDelete(tester);
+
+    expect(find.text('weekly report'), findsNothing);
+    expect(backend.deletedTodoIds, containsAll(<String>['t1', 't2']));
+  });
+
   testWidgets('Long press message -> edit updates content', (tester) async {
     final backend = MessageActionsBackend(
       messages: [
@@ -157,6 +204,55 @@ void main() {
     expect(find.text('hello'), findsNothing);
     expect(find.text('updated'), findsOneWidget);
     expect(backend.editedMessageIds, contains('m1'));
+  });
+
+  testWidgets(
+      'Editing recurring source message updates due for this and future',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm1',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'tomorrow 3pm submit report',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'submit report',
+          dueAtMs: 0,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      recurrenceRuleByTodoId: const {'t1': '{"freq":"weekly","interval":1}'},
+    );
+
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('tomorrow 3pm submit report'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_edit')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('edit_message_content')),
+      'tomorrow 5pm submit report',
+    );
+    await tester.tap(find.byKey(const ValueKey('edit_message_save')));
+    await tester.pumpAndSettle();
+
+    expect(backend.lastUpdatedDueTodoId, 't1');
+    expect(backend.lastUpdatedDueScope, TodoRecurrenceEditScope.thisAndFuture);
+    expect(backend.lastUpdatedDueAtMs, isNotNull);
   });
 
   testWidgets('Hover message shows menu button and opens actions',
@@ -671,19 +767,26 @@ class MessageActionsBackend extends AppBackend {
     required List<Message> messages,
     List<Todo>? todos,
     List<TodoActivity>? activities,
+    Map<String, String> recurrenceRuleByTodoId = const <String, String>{},
   })  : _messages = List<Message>.from(messages),
         _todos = List<Todo>.from(todos ?? const <Todo>[]),
         _activities =
-            List<TodoActivity>.from(activities ?? const <TodoActivity>[]);
+            List<TodoActivity>.from(activities ?? const <TodoActivity>[]),
+        _recurrenceRuleByTodoId =
+            Map<String, String>.from(recurrenceRuleByTodoId);
 
   final List<Message> _messages;
   final List<Todo> _todos;
   final List<TodoActivity> _activities;
+  final Map<String, String> _recurrenceRuleByTodoId;
 
   final List<String> editedMessageIds = [];
   final List<String> deletedMessageIds = [];
   final List<String> deletedTodoIds = [];
   final List<Todo> upsertedTodos = [];
+  String? lastUpdatedDueTodoId;
+  int? lastUpdatedDueAtMs;
+  TodoRecurrenceEditScope? lastUpdatedDueScope;
 
   @override
   Future<void> init() async {}
@@ -788,6 +891,47 @@ class MessageActionsBackend extends AppBackend {
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+
+  @override
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) async =>
+      _recurrenceRuleByTodoId[todoId];
+
+  @override
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    lastUpdatedDueTodoId = todoId;
+    lastUpdatedDueAtMs = dueAtMs;
+    lastUpdatedDueScope = scope;
+
+    final index = _todos.indexWhere((todo) => todo.id == todoId);
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final existing = index >= 0 ? _todos[index] : null;
+    final updated = Todo(
+      id: todoId,
+      title: existing?.title ?? 'Task',
+      dueAtMs: dueAtMs,
+      status: existing?.status ?? 'open',
+      sourceEntryId: existing?.sourceEntryId,
+      createdAtMs: existing?.createdAtMs ?? 0,
+      updatedAtMs: nowMs,
+      reviewStage: existing?.reviewStage,
+      nextReviewAtMs: existing?.nextReviewAtMs,
+      lastReviewAtMs: existing?.lastReviewAtMs,
+    );
+    if (index >= 0) {
+      _todos[index] = updated;
+    } else {
+      _todos.add(updated);
+    }
+    return updated;
+  }
 
   @override
   Future<Todo> upsertTodo(

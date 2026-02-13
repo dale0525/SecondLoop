@@ -398,12 +398,19 @@ extension _ChatPageStateBuild on _ChatPageState {
 
                                       final hardware =
                                           HardwareKeyboard.instance;
+                                      final modifierData = event.data;
                                       final metaPressed =
-                                          hardware.isMetaPressed;
+                                          hardware.isMetaPressed ||
+                                              modifierData.isModifierPressed(
+                                                  ModifierKey.metaModifier);
                                       final controlPressed =
-                                          hardware.isControlPressed;
+                                          hardware.isControlPressed ||
+                                              modifierData.isModifierPressed(
+                                                  ModifierKey.controlModifier);
                                       final shiftPressed =
-                                          hardware.isShiftPressed;
+                                          hardware.isShiftPressed ||
+                                              modifierData.isModifierPressed(
+                                                  ModifierKey.shiftModifier);
                                       final hasModifier =
                                           metaPressed || controlPressed;
 
@@ -639,12 +646,19 @@ extension _ChatPageStateBuild on _ChatPageState {
 
                                         final hardware =
                                             HardwareKeyboard.instance;
+                                        final modifierData = event.data;
                                         final metaPressed =
-                                            hardware.isMetaPressed;
-                                        final controlPressed =
-                                            hardware.isControlPressed;
+                                            hardware.isMetaPressed ||
+                                                modifierData.isModifierPressed(
+                                                    ModifierKey.metaModifier);
+                                        final controlPressed = hardware
+                                                .isControlPressed ||
+                                            modifierData.isModifierPressed(
+                                                ModifierKey.controlModifier);
                                         final shiftPressed =
-                                            hardware.isShiftPressed;
+                                            hardware.isShiftPressed ||
+                                                modifierData.isModifierPressed(
+                                                    ModifierKey.shiftModifier);
                                         final hasModifier =
                                             metaPressed || controlPressed;
 

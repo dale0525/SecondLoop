@@ -49,6 +49,66 @@ void main() {
     expect(find.byTooltip('Deleted'), findsNothing);
   });
 
+  testWidgets(
+      'Todo agenda keeps title visible and chevron inside card on mobile',
+      (tester) async {
+    final view = tester.view;
+    view.physicalSize = const Size(375, 812);
+    view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      view.resetPhysicalSize();
+      view.resetDevicePixelRatio();
+    });
+
+    final todo = Todo(
+      id: 't1',
+      title: 'Test todo title on mobile layout',
+      dueAtMs: PlatformInt64Util.from(1),
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(1),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: _FakeBackend(todos: [todo]),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: TodoAgendaPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final itemFinder = find.byKey(const ValueKey('todo_agenda_item_t1'));
+    expect(itemFinder, findsOneWidget);
+
+    final titleFinder = find.descendant(
+      of: itemFinder,
+      matching: find.text('Test todo title on mobile layout'),
+    );
+    expect(titleFinder, findsOneWidget);
+    final titleRect = tester.getRect(titleFinder);
+    expect(titleRect.width, greaterThan(80));
+
+    final chevronFinder = find.descendant(
+      of: itemFinder,
+      matching: find.byIcon(Icons.chevron_right_rounded),
+    );
+    expect(chevronFinder, findsOneWidget);
+
+    final itemRect = tester.getRect(itemFinder);
+    final chevronRect = tester.getRect(chevronFinder);
+    expect(chevronRect.right, lessThanOrEqualTo(itemRect.right));
+  });
+
   testWidgets('Todo agenda can set status to done directly', (tester) async {
     final todo = Todo(
       id: 't1',
@@ -87,8 +147,10 @@ void main() {
     await tester.tap(statusButton);
     await tester.pumpAndSettle();
 
-    expect(backend.lastSetTodoStatusTodoId, 't1');
-    expect(backend.lastSetTodoStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusScope, TodoRecurrenceEditScope.thisOnly);
+    expect(backend.lastSetTodoStatusTodoId, isNull);
   });
 
   testWidgets('Todo detail can set status to done directly', (tester) async {
@@ -129,8 +191,267 @@ void main() {
     await tester.tap(doneButton);
     await tester.pumpAndSettle();
 
-    expect(backend.lastSetTodoStatusTodoId, 't1');
-    expect(backend.lastSetTodoStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusScope, TodoRecurrenceEditScope.thisOnly);
+    expect(backend.lastSetTodoStatusTodoId, isNull);
+  });
+
+  testWidgets('Todo detail recurring done switches to next active occurrence',
+      (tester) async {
+    final currentTodo = Todo(
+      id: 't1',
+      title: 'Weekly report',
+      dueAtMs: PlatformInt64Util.from(1),
+      status: 'open',
+      sourceEntryId: 'm1',
+      createdAtMs: PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(1),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final nextTodo = Todo(
+      id: 't2',
+      title: 'Weekly report',
+      dueAtMs: PlatformInt64Util.from(2),
+      status: 'open',
+      sourceEntryId: 'm1',
+      createdAtMs: PlatformInt64Util.from(2),
+      updatedAtMs: PlatformInt64Util.from(2),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+
+    final backend = _FakeBackend(
+      todos: [currentTodo, nextTodo],
+      recurrenceTodoIds: const {'t1', 't2'},
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            MaterialApp(home: TodoDetailPage(initialTodo: currentTodo)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('todo_detail_set_status_done')));
+    await tester.pumpAndSettle();
+
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'done');
+    expect(backend.lastScopedStatusScope, TodoRecurrenceEditScope.thisOnly);
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('todo_detail_set_status_open')),
+        matching: find.byIcon(Icons.check_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('todo_detail_set_status_done')),
+        matching: find.byIcon(Icons.circle_outlined),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'Todo detail recurring done keeps previous cycle timeline visible',
+      (tester) async {
+    final currentTodo = Todo(
+      id: 't1',
+      title: 'Weekly report',
+      dueAtMs: PlatformInt64Util.from(1),
+      status: 'open',
+      sourceEntryId: 'm1',
+      createdAtMs: PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(1),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final nextTodo = Todo(
+      id: 't2',
+      title: 'Weekly report',
+      dueAtMs: PlatformInt64Util.from(2),
+      status: 'open',
+      sourceEntryId: 'm1',
+      createdAtMs: PlatformInt64Util.from(2),
+      updatedAtMs: PlatformInt64Util.from(2),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+
+    final backend = _FakeBackend(
+      todos: [currentTodo, nextTodo],
+      recurrenceTodoIds: const {'t1', 't2'},
+      activitiesByTodoId: const <String, List<TodoActivity>>{
+        't1': <TodoActivity>[
+          TodoActivity(
+            id: 'a-previous',
+            todoId: 't1',
+            activityType: 'note',
+            content: 'previous-cycle-note',
+            createdAtMs: 100,
+          ),
+        ],
+        't2': <TodoActivity>[
+          TodoActivity(
+            id: 'a-next',
+            todoId: 't2',
+            activityType: 'note',
+            content: 'next-cycle-note',
+            createdAtMs: 200,
+          ),
+        ],
+      },
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            MaterialApp(home: TodoDetailPage(initialTodo: currentTodo)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('todo_detail_set_status_done')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('next-cycle-note'), findsOneWidget);
+    expect(find.text('previous-cycle-note'), findsOneWidget);
+  });
+
+  testWidgets('Todo agenda recurring non-done status supports scope selection',
+      (tester) async {
+    final todo = Todo(
+      id: 't1',
+      title: 'Test todo',
+      dueAtMs: PlatformInt64Util.from(1),
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(1),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+
+    final backend = _FakeBackend(
+      todos: [todo],
+      recurrenceTodoIds: const {'t1'},
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: TodoAgendaPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final inProgressButton =
+        find.byKey(const ValueKey('todo_agenda_set_status_t1_in_progress'));
+    expect(inProgressButton, findsOneWidget);
+
+    await tester.tap(inProgressButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_recurrence_scope_this_only')),
+        findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('todo_recurrence_scope_this_and_future')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'in_progress');
+    expect(
+      backend.lastScopedStatusScope,
+      TodoRecurrenceEditScope.thisAndFuture,
+    );
+    expect(backend.lastSetTodoStatusTodoId, isNull);
+  });
+
+  testWidgets('Todo detail recurring non-done status supports scope selection',
+      (tester) async {
+    final todo = Todo(
+      id: 't1',
+      title: 'Test todo',
+      dueAtMs: PlatformInt64Util.from(1),
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(1),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+
+    final backend = _FakeBackend(
+      todos: [todo],
+      recurrenceTodoIds: const {'t1'},
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            MaterialApp(home: TodoDetailPage(initialTodo: todo)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final inProgressButton =
+        find.byKey(const ValueKey('todo_detail_set_status_in_progress'));
+    expect(inProgressButton, findsOneWidget);
+
+    await tester.tap(inProgressButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_recurrence_scope_whole_series')),
+        findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('todo_recurrence_scope_whole_series')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.lastScopedStatusTodoId, 't1');
+    expect(backend.lastScopedStatusNewStatus, 'in_progress');
+    expect(
+      backend.lastScopedStatusScope,
+      TodoRecurrenceEditScope.wholeSeries,
+    );
+    expect(backend.lastSetTodoStatusTodoId, isNull);
   });
 
   testWidgets('Todo detail uses Delete (not Deleted) tooltip', (tester) async {
@@ -169,13 +490,22 @@ void main() {
 }
 
 final class _FakeBackend extends AppBackend {
-  _FakeBackend({required this.todos});
+  _FakeBackend({
+    required this.todos,
+    this.recurrenceTodoIds = const <String>{},
+    this.activitiesByTodoId = const <String, List<TodoActivity>>{},
+  });
 
   final List<Todo> todos;
+  final Set<String> recurrenceTodoIds;
+  final Map<String, List<TodoActivity>> activitiesByTodoId;
   final Map<String, Todo> _todosById = {};
 
   String? lastSetTodoStatusTodoId;
   String? lastSetTodoStatusNewStatus;
+  String? lastScopedStatusTodoId;
+  String? lastScopedStatusNewStatus;
+  TodoRecurrenceEditScope? lastScopedStatusScope;
 
   @override
   Future<void> init() async {}
@@ -248,8 +578,8 @@ final class _FakeBackend extends AppBackend {
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
-    if (_todosById.isEmpty && todos.isNotEmpty) {
-      _todosById.addAll({for (final todo in todos) todo.id: todo});
+    for (final todo in todos) {
+      _todosById.putIfAbsent(todo.id, () => todo);
     }
     return _todosById.values.toList(growable: false);
   }
@@ -284,11 +614,64 @@ final class _FakeBackend extends AppBackend {
   }
 
   @override
+  Future<Todo> updateTodoStatusWithScope(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    Todo? existing = _todosById[todoId];
+    if (existing == null) {
+      for (final todo in todos) {
+        if (todo.id == todoId) {
+          existing = todo;
+          break;
+        }
+      }
+    }
+
+    lastScopedStatusTodoId = todoId;
+    lastScopedStatusNewStatus = newStatus;
+    lastScopedStatusScope = scope;
+
+    final updated = Todo(
+      id: todoId,
+      title: existing?.title ?? 'Test todo',
+      dueAtMs: existing?.dueAtMs,
+      status: newStatus,
+      sourceEntryId: existing?.sourceEntryId,
+      createdAtMs: existing?.createdAtMs ?? PlatformInt64Util.from(1),
+      updatedAtMs: PlatformInt64Util.from(
+        DateTime.now().toUtc().millisecondsSinceEpoch,
+      ),
+      reviewStage: existing?.reviewStage,
+      nextReviewAtMs: existing?.nextReviewAtMs,
+      lastReviewAtMs: existing?.lastReviewAtMs,
+    );
+    _todosById[todoId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<String?> getTodoRecurrenceRuleJson(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    if (recurrenceTodoIds.contains(todoId)) {
+      return '{"freq":"daily","interval":1}';
+    }
+    return null;
+  }
+
+  @override
   Future<List<TodoActivity>> listTodoActivities(
     Uint8List key,
     String todoId,
   ) async =>
-      const <TodoActivity>[];
+      List<TodoActivity>.from(
+        activitiesByTodoId[todoId] ?? const <TodoActivity>[],
+      );
 
   @override
   Future<int> processPendingMessageEmbeddings(Uint8List key,

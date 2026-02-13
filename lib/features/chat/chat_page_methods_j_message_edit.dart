@@ -106,6 +106,43 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
 
         final trimmed = draft.trim();
         await backend.editMessage(sessionKey, message.id, trimmed);
+
+        try {
+          final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
+          if (linkedTodoInfo != null && linkedTodoInfo.isSourceEntry) {
+            final recurrenceRuleJson = await backend.getTodoRecurrenceRuleJson(
+              sessionKey,
+              todoId: linkedTodoInfo.todo.id,
+            );
+            if (recurrenceRuleJson != null &&
+                recurrenceRuleJson.trim().isNotEmpty) {
+              final settings = await ActionsSettingsStore.load();
+              if (!mounted) return;
+
+              final locale = Localizations.localeOf(context);
+              final nowLocal = DateTime.now();
+              final timeResolution = LocalTimeResolver.resolve(
+                trimmed,
+                nowLocal,
+                locale: locale,
+                dayEndMinutes: settings.dayEndMinutes,
+              );
+              if (timeResolution != null &&
+                  timeResolution.candidates.length == 1) {
+                final dueAtLocal = timeResolution.candidates.single.dueAtLocal;
+                await backend.updateTodoDueWithScope(
+                  sessionKey,
+                  todoId: linkedTodoInfo.todo.id,
+                  dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+                  scope: TodoRecurrenceEditScope.thisAndFuture,
+                );
+              }
+            }
+          }
+        } catch (_) {
+          // ignore: message edit should still succeed even if todo sync fails.
+        }
+
         try {
           await backend.markSemanticParseJobCanceled(
             sessionKey,

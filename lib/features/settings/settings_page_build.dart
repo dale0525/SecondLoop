@@ -22,14 +22,17 @@ extension _SettingsPageBuild on _SettingsPageState {
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i != 0) const Divider(height: 1),
-              children[i],
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i != 0) const Divider(height: 1),
+                children[i],
+              ],
             ],
-          ],
+          ),
         ),
       );
     }
@@ -167,6 +170,34 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
+          if (supportsDesktopHotkey)
+            SwitchListTile(
+              key: const ValueKey('settings_start_with_system_switch'),
+              title: Text(context.t.settings.desktopBoot.startWithSystem.title),
+              subtitle:
+                  Text(context.t.settings.desktopBoot.startWithSystem.subtitle),
+              value: _desktopBootConfig.startWithSystem,
+              onChanged: _busy ? null : _setDesktopStartWithSystem,
+            ),
+          if (supportsDesktopHotkey)
+            SwitchListTile(
+              key: const ValueKey('settings_silent_startup_switch'),
+              title: Text(context.t.settings.desktopBoot.silentStartup.title),
+              subtitle:
+                  Text(context.t.settings.desktopBoot.silentStartup.subtitle),
+              value: _desktopBootConfig.silentStartup,
+              onChanged: _busy ? null : _setDesktopSilentStartup,
+            ),
+          if (supportsDesktopHotkey)
+            SwitchListTile(
+              key: const ValueKey('settings_keep_running_in_background_switch'),
+              title: Text(
+                  context.t.settings.desktopBoot.keepRunningInBackground.title),
+              subtitle: Text(context
+                  .t.settings.desktopBoot.keepRunningInBackground.subtitle),
+              value: _desktopBootConfig.keepRunningInBackground,
+              onChanged: _busy ? null : _setDesktopKeepRunningInBackground,
+            ),
         ]),
         const SizedBox(height: 16),
         Text(

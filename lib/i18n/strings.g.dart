@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1358 (679 per locale)
+/// Strings: 1406 (703 per locale)
 ///
-/// Built on 2026-02-13 at 15:50 UTC
+/// Built on 2026-02-13 at 16:40 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -267,6 +267,10 @@ class _StringsActionsEn {
       _StringsActionsTodoDetailEn._(_root);
   late final _StringsActionsTodoDeleteEn todoDelete =
       _StringsActionsTodoDeleteEn._(_root);
+  late final _StringsActionsTodoRecurrenceEditScopeEn todoRecurrenceEditScope =
+      _StringsActionsTodoRecurrenceEditScopeEn._(_root);
+  late final _StringsActionsTodoRecurrenceRuleEn todoRecurrenceRule =
+      _StringsActionsTodoRecurrenceRuleEn._(_root);
   late final _StringsActionsHistoryEn history =
       _StringsActionsHistoryEn._(_root);
   late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
@@ -288,6 +292,10 @@ class _StringsSettingsEn {
       _StringsSettingsActionsReviewEn._(_root);
   late final _StringsSettingsQuickCaptureHotkeyEn quickCaptureHotkey =
       _StringsSettingsQuickCaptureHotkeyEn._(_root);
+  late final _StringsSettingsDesktopBootEn desktopBoot =
+      _StringsSettingsDesktopBootEn._(_root);
+  late final _StringsSettingsDesktopTrayEn desktopTray =
+      _StringsSettingsDesktopTrayEn._(_root);
   late final _StringsSettingsLanguageEn language =
       _StringsSettingsLanguageEn._(_root);
   late final _StringsSettingsThemeEn theme = _StringsSettingsThemeEn._(_root);
@@ -761,6 +769,37 @@ class _StringsActionsTodoDeleteEn {
       _StringsActionsTodoDeleteDialogEn._(_root);
 }
 
+// Path: actions.todoRecurrenceEditScope
+class _StringsActionsTodoRecurrenceEditScopeEn {
+  _StringsActionsTodoRecurrenceEditScopeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Apply changes to recurring task';
+  String get message => 'How should this change be applied?';
+  String get thisOnly => 'This occurrence only';
+  String get thisAndFuture => 'This and future';
+  String get wholeSeries => 'Whole series';
+}
+
+// Path: actions.todoRecurrenceRule
+class _StringsActionsTodoRecurrenceRuleEn {
+  _StringsActionsTodoRecurrenceRuleEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Edit recurrence';
+  String get edit => 'Recurrence';
+  String get frequencyLabel => 'Frequency';
+  String get intervalLabel => 'Interval';
+  String get daily => 'Daily';
+  String get weekly => 'Weekly';
+  String get monthly => 'Monthly';
+  String get yearly => 'Yearly';
+}
+
 // Path: actions.history
 class _StringsActionsHistoryEn {
   _StringsActionsHistoryEn._(this._root);
@@ -858,6 +897,35 @@ class _StringsSettingsQuickCaptureHotkeyEn {
       _StringsSettingsQuickCaptureHotkeyValidationEn._(_root);
   late final _StringsSettingsQuickCaptureHotkeyConflictsEn conflicts =
       _StringsSettingsQuickCaptureHotkeyConflictsEn._(_root);
+}
+
+// Path: settings.desktopBoot
+class _StringsSettingsDesktopBootEn {
+  _StringsSettingsDesktopBootEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsDesktopBootStartWithSystemEn startWithSystem =
+      _StringsSettingsDesktopBootStartWithSystemEn._(_root);
+  late final _StringsSettingsDesktopBootSilentStartupEn silentStartup =
+      _StringsSettingsDesktopBootSilentStartupEn._(_root);
+  late final _StringsSettingsDesktopBootKeepRunningInBackgroundEn
+      keepRunningInBackground =
+      _StringsSettingsDesktopBootKeepRunningInBackgroundEn._(_root);
+}
+
+// Path: settings.desktopTray
+class _StringsSettingsDesktopTrayEn {
+  _StringsSettingsDesktopTrayEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsSettingsDesktopTrayMenuEn menu =
+      _StringsSettingsDesktopTrayMenuEn._(_root);
+  late final _StringsSettingsDesktopTrayProEn pro =
+      _StringsSettingsDesktopTrayProEn._(_root);
 }
 
 // Path: settings.language
@@ -1853,6 +1921,64 @@ class _StringsSettingsQuickCaptureHotkeyConflictsEn {
   String get windowsTaskView => 'Task view';
   String get windowsLanguageSwitch => 'Switch input language';
   String get windowsAppSwitcher => 'App switcher';
+}
+
+// Path: settings.desktopBoot.startWithSystem
+class _StringsSettingsDesktopBootStartWithSystemEn {
+  _StringsSettingsDesktopBootStartWithSystemEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Start with system';
+  String get subtitle => 'Launch SecondLoop automatically after sign-in';
+}
+
+// Path: settings.desktopBoot.silentStartup
+class _StringsSettingsDesktopBootSilentStartupEn {
+  _StringsSettingsDesktopBootSilentStartupEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Silent startup';
+  String get subtitle =>
+      'When auto-starting, run in background without showing a window';
+}
+
+// Path: settings.desktopBoot.keepRunningInBackground
+class _StringsSettingsDesktopBootKeepRunningInBackgroundEn {
+  _StringsSettingsDesktopBootKeepRunningInBackgroundEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Keep running in background';
+  String get subtitle =>
+      'When closing the window, minimize to tray instead of quitting';
+}
+
+// Path: settings.desktopTray.menu
+class _StringsSettingsDesktopTrayMenuEn {
+  _StringsSettingsDesktopTrayMenuEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get hide => 'Hide';
+  String get quit => 'Quit';
+}
+
+// Path: settings.desktopTray.pro
+class _StringsSettingsDesktopTrayProEn {
+  _StringsSettingsDesktopTrayProEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get signedIn => 'Signed in';
+  String get aiUsage => 'AI usage';
+  String get storageUsage => 'Storage usage';
 }
 
 // Path: settings.language.options
@@ -3382,6 +3508,13 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsTodoDeleteZhCn todoDelete =
       _StringsActionsTodoDeleteZhCn._(_root);
   @override
+  late final _StringsActionsTodoRecurrenceEditScopeZhCn
+      todoRecurrenceEditScope =
+      _StringsActionsTodoRecurrenceEditScopeZhCn._(_root);
+  @override
+  late final _StringsActionsTodoRecurrenceRuleZhCn todoRecurrenceRule =
+      _StringsActionsTodoRecurrenceRuleZhCn._(_root);
+  @override
   late final _StringsActionsHistoryZhCn history =
       _StringsActionsHistoryZhCn._(_root);
   @override
@@ -3413,6 +3546,12 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsQuickCaptureHotkeyZhCn quickCaptureHotkey =
       _StringsSettingsQuickCaptureHotkeyZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopBootZhCn desktopBoot =
+      _StringsSettingsDesktopBootZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopTrayZhCn desktopTray =
+      _StringsSettingsDesktopTrayZhCn._(_root);
   @override
   late final _StringsSettingsLanguageZhCn language =
       _StringsSettingsLanguageZhCn._(_root);
@@ -4153,6 +4292,58 @@ class _StringsActionsTodoDeleteZhCn extends _StringsActionsTodoDeleteEn {
       _StringsActionsTodoDeleteDialogZhCn._(_root);
 }
 
+// Path: actions.todoRecurrenceEditScope
+class _StringsActionsTodoRecurrenceEditScopeZhCn
+    extends _StringsActionsTodoRecurrenceEditScopeEn {
+  _StringsActionsTodoRecurrenceEditScopeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '重复任务如何应用修改';
+  @override
+  String get message => '这次更改要如何应用？';
+  @override
+  String get thisOnly => '仅本次';
+  @override
+  String get thisAndFuture => '本次及以后';
+  @override
+  String get wholeSeries => '整个系列';
+}
+
+// Path: actions.todoRecurrenceRule
+class _StringsActionsTodoRecurrenceRuleZhCn
+    extends _StringsActionsTodoRecurrenceRuleEn {
+  _StringsActionsTodoRecurrenceRuleZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '编辑重复规则';
+  @override
+  String get edit => '重复';
+  @override
+  String get frequencyLabel => '频率';
+  @override
+  String get intervalLabel => '间隔';
+  @override
+  String get daily => '每天';
+  @override
+  String get weekly => '每周';
+  @override
+  String get monthly => '每月';
+  @override
+  String get yearly => '每年';
+}
+
 // Path: actions.history
 class _StringsActionsHistoryZhCn extends _StringsActionsHistoryEn {
   _StringsActionsHistoryZhCn._(_StringsZhCn root)
@@ -4304,6 +4495,46 @@ class _StringsSettingsQuickCaptureHotkeyZhCn
   @override
   late final _StringsSettingsQuickCaptureHotkeyConflictsZhCn conflicts =
       _StringsSettingsQuickCaptureHotkeyConflictsZhCn._(_root);
+}
+
+// Path: settings.desktopBoot
+class _StringsSettingsDesktopBootZhCn extends _StringsSettingsDesktopBootEn {
+  _StringsSettingsDesktopBootZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsDesktopBootStartWithSystemZhCn startWithSystem =
+      _StringsSettingsDesktopBootStartWithSystemZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopBootSilentStartupZhCn silentStartup =
+      _StringsSettingsDesktopBootSilentStartupZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn
+      keepRunningInBackground =
+      _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn._(_root);
+}
+
+// Path: settings.desktopTray
+class _StringsSettingsDesktopTrayZhCn extends _StringsSettingsDesktopTrayEn {
+  _StringsSettingsDesktopTrayZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsSettingsDesktopTrayMenuZhCn menu =
+      _StringsSettingsDesktopTrayMenuZhCn._(_root);
+  @override
+  late final _StringsSettingsDesktopTrayProZhCn pro =
+      _StringsSettingsDesktopTrayProZhCn._(_root);
 }
 
 // Path: settings.language
@@ -5789,6 +6020,93 @@ class _StringsSettingsQuickCaptureHotkeyConflictsZhCn
   String get windowsLanguageSwitch => '切换输入法';
   @override
   String get windowsAppSwitcher => '应用切换器';
+}
+
+// Path: settings.desktopBoot.startWithSystem
+class _StringsSettingsDesktopBootStartWithSystemZhCn
+    extends _StringsSettingsDesktopBootStartWithSystemEn {
+  _StringsSettingsDesktopBootStartWithSystemZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '随系统启动';
+  @override
+  String get subtitle => '登录系统后自动启动 SecondLoop';
+}
+
+// Path: settings.desktopBoot.silentStartup
+class _StringsSettingsDesktopBootSilentStartupZhCn
+    extends _StringsSettingsDesktopBootSilentStartupEn {
+  _StringsSettingsDesktopBootSilentStartupZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '静默启动';
+  @override
+  String get subtitle => '自动启动时在后台运行，不弹出主窗口';
+}
+
+// Path: settings.desktopBoot.keepRunningInBackground
+class _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn
+    extends _StringsSettingsDesktopBootKeepRunningInBackgroundEn {
+  _StringsSettingsDesktopBootKeepRunningInBackgroundZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '关闭时常驻后台';
+  @override
+  String get subtitle => '关闭窗口时最小化到通知栏，而不是直接退出';
+}
+
+// Path: settings.desktopTray.menu
+class _StringsSettingsDesktopTrayMenuZhCn
+    extends _StringsSettingsDesktopTrayMenuEn {
+  _StringsSettingsDesktopTrayMenuZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get hide => '隐藏';
+  @override
+  String get quit => '退出';
+}
+
+// Path: settings.desktopTray.pro
+class _StringsSettingsDesktopTrayProZhCn
+    extends _StringsSettingsDesktopTrayProEn {
+  _StringsSettingsDesktopTrayProZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get signedIn => '已登录';
+  @override
+  String get aiUsage => 'AI 用量';
+  @override
+  String get storageUsage => '存储用量';
 }
 
 // Path: settings.language.options
@@ -8002,6 +8320,32 @@ extension on Translations {
         return 'This will permanently delete this task and all linked chat messages.';
       case 'actions.todoDelete.dialog.confirm':
         return 'Delete';
+      case 'actions.todoRecurrenceEditScope.title':
+        return 'Apply changes to recurring task';
+      case 'actions.todoRecurrenceEditScope.message':
+        return 'How should this change be applied?';
+      case 'actions.todoRecurrenceEditScope.thisOnly':
+        return 'This occurrence only';
+      case 'actions.todoRecurrenceEditScope.thisAndFuture':
+        return 'This and future';
+      case 'actions.todoRecurrenceEditScope.wholeSeries':
+        return 'Whole series';
+      case 'actions.todoRecurrenceRule.title':
+        return 'Edit recurrence';
+      case 'actions.todoRecurrenceRule.edit':
+        return 'Recurrence';
+      case 'actions.todoRecurrenceRule.frequencyLabel':
+        return 'Frequency';
+      case 'actions.todoRecurrenceRule.intervalLabel':
+        return 'Interval';
+      case 'actions.todoRecurrenceRule.daily':
+        return 'Daily';
+      case 'actions.todoRecurrenceRule.weekly':
+        return 'Weekly';
+      case 'actions.todoRecurrenceRule.monthly':
+        return 'Monthly';
+      case 'actions.todoRecurrenceRule.yearly':
+        return 'Yearly';
       case 'actions.history.title':
         return 'History';
       case 'actions.history.empty':
@@ -8132,6 +8476,28 @@ extension on Translations {
         return 'Switch input language';
       case 'settings.quickCaptureHotkey.conflicts.windowsAppSwitcher':
         return 'App switcher';
+      case 'settings.desktopBoot.startWithSystem.title':
+        return 'Start with system';
+      case 'settings.desktopBoot.startWithSystem.subtitle':
+        return 'Launch SecondLoop automatically after sign-in';
+      case 'settings.desktopBoot.silentStartup.title':
+        return 'Silent startup';
+      case 'settings.desktopBoot.silentStartup.subtitle':
+        return 'When auto-starting, run in background without showing a window';
+      case 'settings.desktopBoot.keepRunningInBackground.title':
+        return 'Keep running in background';
+      case 'settings.desktopBoot.keepRunningInBackground.subtitle':
+        return 'When closing the window, minimize to tray instead of quitting';
+      case 'settings.desktopTray.menu.hide':
+        return 'Hide';
+      case 'settings.desktopTray.menu.quit':
+        return 'Quit';
+      case 'settings.desktopTray.pro.signedIn':
+        return 'Signed in';
+      case 'settings.desktopTray.pro.aiUsage':
+        return 'AI usage';
+      case 'settings.desktopTray.pro.storageUsage':
+        return 'Storage usage';
       case 'settings.language.title':
         return 'Language';
       case 'settings.language.subtitle':
@@ -9396,6 +9762,32 @@ extension on _StringsZhCn {
         return '这将永久删除该待办，并删除所有关联的聊天消息。';
       case 'actions.todoDelete.dialog.confirm':
         return '删除';
+      case 'actions.todoRecurrenceEditScope.title':
+        return '重复任务如何应用修改';
+      case 'actions.todoRecurrenceEditScope.message':
+        return '这次更改要如何应用？';
+      case 'actions.todoRecurrenceEditScope.thisOnly':
+        return '仅本次';
+      case 'actions.todoRecurrenceEditScope.thisAndFuture':
+        return '本次及以后';
+      case 'actions.todoRecurrenceEditScope.wholeSeries':
+        return '整个系列';
+      case 'actions.todoRecurrenceRule.title':
+        return '编辑重复规则';
+      case 'actions.todoRecurrenceRule.edit':
+        return '重复';
+      case 'actions.todoRecurrenceRule.frequencyLabel':
+        return '频率';
+      case 'actions.todoRecurrenceRule.intervalLabel':
+        return '间隔';
+      case 'actions.todoRecurrenceRule.daily':
+        return '每天';
+      case 'actions.todoRecurrenceRule.weekly':
+        return '每周';
+      case 'actions.todoRecurrenceRule.monthly':
+        return '每月';
+      case 'actions.todoRecurrenceRule.yearly':
+        return '每年';
       case 'actions.history.title':
         return '回溯';
       case 'actions.history.empty':
@@ -9525,6 +9917,28 @@ extension on _StringsZhCn {
         return '切换输入法';
       case 'settings.quickCaptureHotkey.conflicts.windowsAppSwitcher':
         return '应用切换器';
+      case 'settings.desktopBoot.startWithSystem.title':
+        return '随系统启动';
+      case 'settings.desktopBoot.startWithSystem.subtitle':
+        return '登录系统后自动启动 SecondLoop';
+      case 'settings.desktopBoot.silentStartup.title':
+        return '静默启动';
+      case 'settings.desktopBoot.silentStartup.subtitle':
+        return '自动启动时在后台运行，不弹出主窗口';
+      case 'settings.desktopBoot.keepRunningInBackground.title':
+        return '关闭时常驻后台';
+      case 'settings.desktopBoot.keepRunningInBackground.subtitle':
+        return '关闭窗口时最小化到通知栏，而不是直接退出';
+      case 'settings.desktopTray.menu.hide':
+        return '隐藏';
+      case 'settings.desktopTray.menu.quit':
+        return '退出';
+      case 'settings.desktopTray.pro.signedIn':
+        return '已登录';
+      case 'settings.desktopTray.pro.aiUsage':
+        return 'AI 用量';
+      case 'settings.desktopTray.pro.storageUsage':
+        return '存储用量';
       case 'settings.language.title':
         return '语言';
       case 'settings.language.subtitle':

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_markdown_style.dart';
 import '../../ui/sl_surface.dart';
 import 'attachment_markdown_normalizer.dart';
 
@@ -139,12 +140,9 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
                 data: normalizeAttachmentMarkdown(text),
                 selectable: true,
                 softLineBreak: true,
-                styleSheet:
-                    MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                  p: Theme.of(context).textTheme.bodySmall,
-                  listBullet: Theme.of(context).textTheme.bodySmall,
-                  code: Theme.of(context).textTheme.bodySmall,
-                  codeblockPadding: const EdgeInsets.all(8),
+                styleSheet: slMarkdownStyleSheet(
+                  context,
+                  bodyStyle: Theme.of(context).textTheme.bodySmall,
                 ),
               )
             else

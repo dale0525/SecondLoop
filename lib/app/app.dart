@@ -16,6 +16,8 @@ import '../core/cloud/firebase_identity_toolkit.dart';
 import '../core/media_enrichment/media_enrichment_gate.dart';
 import '../core/subscription/cloud_subscription_controller.dart';
 import '../core/subscription/subscription_scope.dart';
+import '../core/desktop/desktop_background_service.dart';
+import '../core/desktop/desktop_launch_args.dart';
 import '../core/desktop/desktop_quick_capture_service.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
@@ -30,6 +32,7 @@ import 'theme_mode_prefs.dart';
 import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
 import '../features/share/share_ingest_gate.dart';
+import '../features/settings/settings_page.dart';
 import '../features/share/share_intent_listener.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
@@ -40,11 +43,13 @@ class SecondLoopApp extends StatefulWidget {
     super.key,
     AppBackend? backend,
     QuickCaptureController? quickCaptureController,
+    this.launchArgs = const DesktopLaunchArgs(),
   })  : _backend = backend ?? NativeAppBackend(),
         _quickCaptureController = quickCaptureController;
 
   final AppBackend _backend;
   final QuickCaptureController? _quickCaptureController;
+  final DesktopLaunchArgs launchArgs;
 
   @override
   State<SecondLoopApp> createState() => _SecondLoopAppState();
@@ -331,31 +336,45 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                               },
                               child: SlBackground(
                                 child: AppBootstrap(
-                                  child: DesktopQuickCaptureService(
-                                    child: ShareIntentListener(
-                                      child: LockGate(
-                                        child: SyncEngineGate(
-                                          child:
-                                              ReviewReminderNotificationsGate(
-                                            navigatorKey: _navigatorKey,
-                                            child: MediaEnrichmentGate(
-                                              child:
-                                                  SemanticParseAutoActionsGate(
+                                  child: DesktopBackgroundService(
+                                    silentStartupRequested: widget
+                                        .launchArgs.silentStartupRequested,
+                                    onOpenSettingsRequested: () async {
+                                      final navigator =
+                                          _navigatorKey.currentState;
+                                      if (navigator == null) return;
+                                      await navigator.push(
+                                        MaterialPageRoute(
+                                          builder: (_) => const SettingsPage(),
+                                        ),
+                                      );
+                                    },
+                                    child: DesktopQuickCaptureService(
+                                      child: ShareIntentListener(
+                                        child: LockGate(
+                                          child: SyncEngineGate(
+                                            child:
+                                                ReviewReminderNotificationsGate(
+                                              navigatorKey: _navigatorKey,
+                                              child: MediaEnrichmentGate(
                                                 child:
-                                                    MessageEmbeddingsIndexGate(
-                                                  child: EmbeddingsIndexGate(
-                                                    child:
-                                                        CloudSyncSwitchPromptGate(
-                                                      navigatorKey:
-                                                          _navigatorKey,
-                                                      child: ShareIngestGate(
-                                                        child:
-                                                            QuickCaptureOverlay(
-                                                          navigatorKey:
-                                                              _navigatorKey,
-                                                          child: child ??
-                                                              const SizedBox
-                                                                  .shrink(),
+                                                    SemanticParseAutoActionsGate(
+                                                  child:
+                                                      MessageEmbeddingsIndexGate(
+                                                    child: EmbeddingsIndexGate(
+                                                      child:
+                                                          CloudSyncSwitchPromptGate(
+                                                        navigatorKey:
+                                                            _navigatorKey,
+                                                        child: ShareIngestGate(
+                                                          child:
+                                                              QuickCaptureOverlay(
+                                                            navigatorKey:
+                                                                _navigatorKey,
+                                                            child: child ??
+                                                                const SizedBox
+                                                                    .shrink(),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
