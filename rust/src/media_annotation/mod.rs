@@ -183,35 +183,22 @@ struct OpenAiUsage {
 }
 
 fn annotation_prompt(lang: &str) -> String {
+    let language_instruction = {
+        let trimmed = lang.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("und") {
+            "Respond in the user's device language.".to_string()
+        } else {
+            format!("Respond in the user's device language ({trimmed}).")
+        }
+    };
+
     format!(
-        "Describe the image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). summary should be concise. full_text should contain readable text from the image when available, otherwise use an empty string. If text with visual layout is present, full_text should use Markdown and preserve layout (headings, lists, tables, line breaks) as much as possible. Language: {lang}."
+        "Describe the image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). summary should be concise. full_text should contain readable text from the image when available, otherwise use an empty string. If text with visual layout is present, full_text should use Markdown and preserve layout (headings, lists, tables, line breaks) as much as possible. {language_instruction}"
     )
 }
 
-fn ocr_markdown_prompt(lang: &str) -> String {
-    format!(
-        "Perform OCR on the provided file/image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). Put recognized text in full_text using Markdown and preserve original layout as much as possible (headings, lists, tables, line breaks). If no readable text exists, set full_text to an empty string. summary must be a short overview. Language: {lang}. Do not wrap JSON in markdown fences."
-    )
-}
-
-fn prompt_language_label(raw_lang: &str) -> String {
-    let trimmed = raw_lang.trim();
-    if trimmed.is_empty() {
-        return "und".to_string();
-    }
-
-    match trimmed.to_ascii_lowercase().as_str() {
-        "device_plus_en" => "device language + English".to_string(),
-        "en" => "English".to_string(),
-        "zh_en" => "Chinese + English".to_string(),
-        "ja_en" => "Japanese + English".to_string(),
-        "ko_en" => "Korean + English".to_string(),
-        "fr_en" => "French + English".to_string(),
-        "de_en" => "German + English".to_string(),
-        "es_en" => "Spanish + English".to_string(),
-        "zh_strict" => "Chinese".to_string(),
-        _ => trimmed.to_string(),
-    }
+fn ocr_markdown_prompt() -> String {
+    "Perform OCR on the provided file/image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). Put recognized text in full_text using Markdown and preserve original layout as much as possible (headings, lists, tables, line breaks). If no readable text exists, set full_text to an empty string. summary must be a short overview. Do not wrap JSON in markdown fences.".to_string()
 }
 
 fn extract_first_non_empty_string(map: &Map<String, Value>, keys: &[&str]) -> String {
@@ -311,7 +298,7 @@ fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, Str
         }
         return (
             MediaAnnotationPromptMode::OcrMarkdown,
-            prompt_language_label(normalized),
+            normalized.to_string(),
         );
     }
 
@@ -319,10 +306,7 @@ fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, Str
         return (MediaAnnotationPromptMode::Annotation, "und".to_string());
     }
 
-    (
-        MediaAnnotationPromptMode::Annotation,
-        prompt_language_label(trimmed),
-    )
+    (MediaAnnotationPromptMode::Annotation, trimmed.to_string())
 }
 
 #[derive(Clone, Debug)]
@@ -358,7 +342,7 @@ fn build_request(
     let data_url = format!("data:{mime_type};base64,{image_b64}");
     let prompt = match prompt_mode {
         MediaAnnotationPromptMode::Annotation => annotation_prompt(&normalized_lang),
-        MediaAnnotationPromptMode::OcrMarkdown => ocr_markdown_prompt(&normalized_lang),
+        MediaAnnotationPromptMode::OcrMarkdown => ocr_markdown_prompt(),
     };
 
     Ok((
@@ -812,7 +796,7 @@ mod tests {
     }
 
     #[test]
-    fn ocr_prompt_rewrites_device_plus_en_hint() {
+    fn ocr_prompt_does_not_include_language_hint() {
         let (req, mode) = build_request(
             "gpt-test",
             "ocr_markdown:device_plus_en",
@@ -823,18 +807,17 @@ mod tests {
 
         assert_eq!(mode, MediaAnnotationPromptMode::OcrMarkdown);
         let prompt = prompt_text_for(&req);
-        assert!(prompt.contains("Language: device language + English."));
-        assert!(!prompt.contains("Language: device_plus_en."));
+        assert!(!prompt.contains("Language:"));
+        assert!(!prompt.contains("device_plus_en"));
     }
 
     #[test]
-    fn annotation_prompt_rewrites_device_plus_en_hint() {
-        let (req, mode) = build_request("gpt-test", "device_plus_en", "image/png", b"img")
-            .expect("build request");
+    fn annotation_prompt_uses_device_language_hint() {
+        let (req, mode) =
+            build_request("gpt-test", "en-US", "image/png", b"img").expect("build request");
 
         assert_eq!(mode, MediaAnnotationPromptMode::Annotation);
         let prompt = prompt_text_for(&req);
-        assert!(prompt.contains("Language: device language + English."));
-        assert!(!prompt.contains("Language: device_plus_en."));
+        assert!(prompt.contains("user's device language (en-US)."));
     }
 }
