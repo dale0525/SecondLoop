@@ -13,6 +13,7 @@ import '../../../ui/sl_icon_button.dart';
 import '../../../ui/sl_tokens.dart';
 import '../time/date_time_picker_dialog.dart';
 import '../todo/todo_detail_page.dart';
+import '../todo/todo_recurrence_edit_scope_dialog.dart';
 import '../todo/todo_history_page.dart';
 
 class TodoAgendaPage extends StatefulWidget {
@@ -227,17 +228,43 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    await backend.upsertTodo(
-      sessionKey,
-      id: todo.id,
-      title: todo.title,
-      dueAtMs: picked.toUtc().millisecondsSinceEpoch,
-      status: todo.status,
-      sourceEntryId: todo.sourceEntryId,
-      reviewStage: todo.reviewStage,
-      nextReviewAtMs: todo.nextReviewAtMs,
-      lastReviewAtMs: todo.lastReviewAtMs,
-    );
+    var scope = TodoRecurrenceEditScope.thisOnly;
+    String? ruleJson;
+    try {
+      ruleJson = await backend.getTodoRecurrenceRuleJson(
+        sessionKey,
+        todoId: todo.id,
+      );
+    } catch (_) {
+      ruleJson = null;
+    }
+    if (ruleJson != null && ruleJson.trim().isNotEmpty) {
+      if (!mounted) return;
+      final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
+      if (selectedScope == null || !mounted) return;
+      scope = selectedScope;
+    }
+
+    try {
+      await backend.updateTodoDueWithScope(
+        sessionKey,
+        todoId: todo.id,
+        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
+        scope: scope,
+      );
+    } catch (_) {
+      await backend.upsertTodo(
+        sessionKey,
+        id: todo.id,
+        title: todo.title,
+        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
+        status: todo.status,
+        sourceEntryId: todo.sourceEntryId,
+        reviewStage: todo.reviewStage,
+        nextReviewAtMs: todo.nextReviewAtMs,
+        lastReviewAtMs: todo.lastReviewAtMs,
+      );
+    }
     if (!mounted) return;
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
     _refresh();

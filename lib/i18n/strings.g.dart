@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1338 (669 per locale)
+/// Strings: 1348 (674 per locale)
 ///
-/// Built on 2026-02-12 at 16:26 UTC
+/// Built on 2026-02-13 at 02:01 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -267,6 +267,8 @@ class _StringsActionsEn {
       _StringsActionsTodoDetailEn._(_root);
   late final _StringsActionsTodoDeleteEn todoDelete =
       _StringsActionsTodoDeleteEn._(_root);
+  late final _StringsActionsTodoRecurrenceEditScopeEn todoRecurrenceEditScope =
+      _StringsActionsTodoRecurrenceEditScopeEn._(_root);
   late final _StringsActionsHistoryEn history =
       _StringsActionsHistoryEn._(_root);
   late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
@@ -756,6 +758,20 @@ class _StringsActionsTodoDeleteEn {
   // Translations
   late final _StringsActionsTodoDeleteDialogEn dialog =
       _StringsActionsTodoDeleteDialogEn._(_root);
+}
+
+// Path: actions.todoRecurrenceEditScope
+class _StringsActionsTodoRecurrenceEditScopeEn {
+  _StringsActionsTodoRecurrenceEditScopeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Apply changes to recurring task';
+  String get message => 'How should this due date change be applied?';
+  String get thisOnly => 'This occurrence only';
+  String get thisAndFuture => 'This and future';
+  String get wholeSeries => 'Whole series';
 }
 
 // Path: actions.history
@@ -3360,6 +3376,10 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsTodoDeleteZhCn todoDelete =
       _StringsActionsTodoDeleteZhCn._(_root);
   @override
+  late final _StringsActionsTodoRecurrenceEditScopeZhCn
+      todoRecurrenceEditScope =
+      _StringsActionsTodoRecurrenceEditScopeZhCn._(_root);
+  @override
   late final _StringsActionsHistoryZhCn history =
       _StringsActionsHistoryZhCn._(_root);
   @override
@@ -4124,6 +4144,29 @@ class _StringsActionsTodoDeleteZhCn extends _StringsActionsTodoDeleteEn {
   @override
   late final _StringsActionsTodoDeleteDialogZhCn dialog =
       _StringsActionsTodoDeleteDialogZhCn._(_root);
+}
+
+// Path: actions.todoRecurrenceEditScope
+class _StringsActionsTodoRecurrenceEditScopeZhCn
+    extends _StringsActionsTodoRecurrenceEditScopeEn {
+  _StringsActionsTodoRecurrenceEditScopeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '重复任务如何应用修改';
+  @override
+  String get message => '这次到期时间修改要应用到哪些任务？';
+  @override
+  String get thisOnly => '仅本次';
+  @override
+  String get thisAndFuture => '本次及以后';
+  @override
+  String get wholeSeries => '整个系列';
 }
 
 // Path: actions.history
@@ -7944,6 +7987,16 @@ extension on Translations {
         return 'This will permanently delete this task and all linked chat messages.';
       case 'actions.todoDelete.dialog.confirm':
         return 'Delete';
+      case 'actions.todoRecurrenceEditScope.title':
+        return 'Apply changes to recurring task';
+      case 'actions.todoRecurrenceEditScope.message':
+        return 'How should this due date change be applied?';
+      case 'actions.todoRecurrenceEditScope.thisOnly':
+        return 'This occurrence only';
+      case 'actions.todoRecurrenceEditScope.thisAndFuture':
+        return 'This and future';
+      case 'actions.todoRecurrenceEditScope.wholeSeries':
+        return 'Whole series';
       case 'actions.history.title':
         return 'History';
       case 'actions.history.empty':
@@ -9317,6 +9370,16 @@ extension on _StringsZhCn {
         return '这将永久删除该待办，并删除所有关联的聊天消息。';
       case 'actions.todoDelete.dialog.confirm':
         return '删除';
+      case 'actions.todoRecurrenceEditScope.title':
+        return '重复任务如何应用修改';
+      case 'actions.todoRecurrenceEditScope.message':
+        return '这次到期时间修改要应用到哪些任务？';
+      case 'actions.todoRecurrenceEditScope.thisOnly':
+        return '仅本次';
+      case 'actions.todoRecurrenceEditScope.thisAndFuture':
+        return '本次及以后';
+      case 'actions.todoRecurrenceEditScope.wholeSeries':
+        return '整个系列';
       case 'actions.history.title':
         return '回溯';
       case 'actions.history.empty':

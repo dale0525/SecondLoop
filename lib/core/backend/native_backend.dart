@@ -761,6 +761,23 @@ class NativeAppBackend
   }
 
   @override
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpdateTodoDueWithScope(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      dueAtMs: dueAtMs,
+      scope: scope.wireValue,
+    );
+  }
+
+  @override
   Future<void> upsertTodoRecurrence(
     Uint8List key, {
     required String todoId,

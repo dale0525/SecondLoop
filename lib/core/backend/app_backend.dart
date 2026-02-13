@@ -6,6 +6,20 @@ import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
 
+enum TodoRecurrenceEditScope {
+  thisOnly,
+  thisAndFuture,
+  wholeSeries,
+}
+
+extension TodoRecurrenceEditScopeWire on TodoRecurrenceEditScope {
+  String get wireValue => switch (this) {
+        TodoRecurrenceEditScope.thisOnly => 'this_only',
+        TodoRecurrenceEditScope.thisAndFuture => 'this_and_future',
+        TodoRecurrenceEditScope.wholeSeries => 'whole_series',
+      };
+}
+
 abstract class AppBackend {
   Future<void> init();
 
@@ -114,6 +128,15 @@ abstract class AppBackend {
     String? sourceMessageId,
   }) {
     throw UnimplementedError('setTodoStatus');
+  }
+
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) {
+    throw UnimplementedError('updateTodoDueWithScope');
   }
 
   Future<void> upsertTodoRecurrence(

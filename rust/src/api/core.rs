@@ -238,6 +238,20 @@ pub fn db_set_todo_status(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_update_todo_due_with_scope(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    due_at_ms: i64,
+    scope: String,
+) -> Result<db::Todo> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let parsed_scope = db::TodoRecurrenceEditScope::from_wire(&scope)?;
+    db::update_todo_due_with_scope(&conn, &key, &todo_id, due_at_ms, parsed_scope)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_upsert_todo_recurrence(
     app_dir: String,
     key: Vec<u8>,

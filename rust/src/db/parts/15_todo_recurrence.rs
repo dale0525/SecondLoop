@@ -11,6 +11,24 @@ struct RecurrenceRule {
     interval: i64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TodoRecurrenceEditScope {
+    ThisOnly,
+    ThisAndFuture,
+    WholeSeries,
+}
+
+impl TodoRecurrenceEditScope {
+    pub fn from_wire(scope: &str) -> Result<Self> {
+        match scope.trim().to_ascii_lowercase().as_str() {
+            "this_only" => Ok(Self::ThisOnly),
+            "this_and_future" => Ok(Self::ThisAndFuture),
+            "whole_series" => Ok(Self::WholeSeries),
+            other => Err(anyhow!("unsupported recurrence edit scope: {other}")),
+        }
+    }
+}
+
 fn parse_recurrence_rule(rule_json: &str) -> Result<RecurrenceRule> {
     let value: serde_json::Value =
         serde_json::from_str(rule_json).map_err(|e| anyhow!("invalid recurrence rule json: {e}"))?;
@@ -283,6 +301,119 @@ pub fn upsert_todo_recurrence_with_sync(
         Ok(()) => {
             conn.execute_batch("COMMIT;")?;
             Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+
+
+pub fn update_todo_due_with_scope(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    due_at_ms: i64,
+    scope: TodoRecurrenceEditScope,
+) -> Result<Todo> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<Todo> = (|| {
+        let current = get_todo(conn, key, todo_id)?;
+        let current_due_at_ms = current
+            .due_at_ms
+            .ok_or_else(|| anyhow!("todo has no due_at_ms, cannot apply scoped due edit"))?;
+
+        let mut apply_scope = scope;
+        let current_meta = get_todo_recurrence_meta(conn, todo_id)?;
+        if current_meta.is_none() {
+            apply_scope = TodoRecurrenceEditScope::ThisOnly;
+        }
+
+        let updated_current = match apply_scope {
+            TodoRecurrenceEditScope::ThisOnly => upsert_todo(
+                conn,
+                key,
+                &current.id,
+                &current.title,
+                Some(due_at_ms),
+                &current.status,
+                current.source_entry_id.as_deref(),
+                current.review_stage,
+                current.next_review_at_ms,
+                current.last_review_at_ms,
+            )?,
+            TodoRecurrenceEditScope::ThisAndFuture | TodoRecurrenceEditScope::WholeSeries => {
+                let meta = current_meta.ok_or_else(|| anyhow!("todo recurrence metadata missing"))?;
+                let delta = due_at_ms
+                    .checked_sub(current_due_at_ms)
+                    .ok_or_else(|| anyhow!("due edit overflow while computing delta"))?;
+
+                let mut stmt = conn.prepare(
+                    r#"
+SELECT r.todo_id
+FROM todo_recurrences r
+WHERE r.series_id = ?1
+  AND (?2 = 1 OR r.occurrence_index >= ?3)
+ORDER BY r.occurrence_index ASC
+"#,
+                )?;
+                let include_past = if apply_scope == TodoRecurrenceEditScope::WholeSeries {
+                    1i64
+                } else {
+                    0i64
+                };
+                let todo_ids: Vec<String> = stmt
+                    .query_map(params![meta.series_id, include_past, meta.occurrence_index], |row| {
+                        row.get(0)
+                    })?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+
+                let mut updated_current: Option<Todo> = None;
+                for series_todo_id in todo_ids {
+                    let series_todo = get_todo(conn, key, &series_todo_id)?;
+                    let target_due = if series_todo_id == current.id {
+                        Some(due_at_ms)
+                    } else {
+                        match series_todo.due_at_ms {
+                            Some(existing_due) => Some(
+                                existing_due
+                                    .checked_add(delta)
+                                    .ok_or_else(|| anyhow!("due edit overflow while shifting series"))?,
+                            ),
+                            None => None,
+                        }
+                    };
+
+                    let updated = upsert_todo(
+                        conn,
+                        key,
+                        &series_todo.id,
+                        &series_todo.title,
+                        target_due,
+                        &series_todo.status,
+                        series_todo.source_entry_id.as_deref(),
+                        series_todo.review_stage,
+                        series_todo.next_review_at_ms,
+                        series_todo.last_review_at_ms,
+                    )?;
+                    if series_todo_id == current.id {
+                        updated_current = Some(updated);
+                    }
+                }
+
+                updated_current.ok_or_else(|| anyhow!("current todo not found in recurrence scope"))?
+            }
+        };
+
+        Ok(updated_current)
+    })();
+
+    match result {
+        Ok(updated) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(updated)
         }
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK;");

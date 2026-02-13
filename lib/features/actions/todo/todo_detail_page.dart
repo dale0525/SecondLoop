@@ -25,6 +25,7 @@ import '../../chat/chat_markdown_sanitizer.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';
+import 'todo_recurrence_edit_scope_dialog.dart';
 import 'todo_thread_match.dart';
 
 part 'todo_detail_page_message_actions.dart';
@@ -166,17 +167,44 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    final updated = await backend.upsertTodo(
-      sessionKey,
-      id: _todo.id,
-      title: _todo.title,
-      dueAtMs: picked.toUtc().millisecondsSinceEpoch,
-      status: _todo.status,
-      sourceEntryId: _todo.sourceEntryId,
-      reviewStage: _todo.reviewStage,
-      nextReviewAtMs: _todo.nextReviewAtMs,
-      lastReviewAtMs: _todo.lastReviewAtMs,
-    );
+    var scope = TodoRecurrenceEditScope.thisOnly;
+    String? ruleJson;
+    try {
+      ruleJson = await backend.getTodoRecurrenceRuleJson(
+        sessionKey,
+        todoId: _todo.id,
+      );
+    } catch (_) {
+      ruleJson = null;
+    }
+    if (ruleJson != null && ruleJson.trim().isNotEmpty) {
+      if (!mounted) return;
+      final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
+      if (selectedScope == null || !mounted) return;
+      scope = selectedScope;
+    }
+
+    late final Todo updated;
+    try {
+      updated = await backend.updateTodoDueWithScope(
+        sessionKey,
+        todoId: _todo.id,
+        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
+        scope: scope,
+      );
+    } catch (_) {
+      updated = await backend.upsertTodo(
+        sessionKey,
+        id: _todo.id,
+        title: _todo.title,
+        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
+        status: _todo.status,
+        sourceEntryId: _todo.sourceEntryId,
+        reviewStage: _todo.reviewStage,
+        nextReviewAtMs: _todo.nextReviewAtMs,
+        lastReviewAtMs: _todo.lastReviewAtMs,
+      );
+    }
     if (!mounted) return;
     setState(() => _todo = updated);
     SyncEngineScope.maybeOf(context)?.notifyLocalMutation();

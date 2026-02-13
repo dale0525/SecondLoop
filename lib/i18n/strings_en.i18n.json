@@ -120,6 +120,13 @@
         "confirm": "Delete"
       }
     },
+    "todoRecurrenceEditScope": {
+      "title": "Apply changes to recurring task",
+      "message": "How should this due date change be applied?",
+      "thisOnly": "This occurrence only",
+      "thisAndFuture": "This and future",
+      "wholeSeries": "Whole series"
+    },
     "history": {
       "title": "History",
       "empty": "No activity in this range",

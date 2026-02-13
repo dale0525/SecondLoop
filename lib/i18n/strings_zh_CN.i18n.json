@@ -120,6 +120,13 @@
         "confirm": "删除"
       }
     },
+    "todoRecurrenceEditScope": {
+      "title": "重复任务如何应用修改",
+      "message": "这次到期时间修改要应用到哪些任务？",
+      "thisOnly": "仅本次",
+      "thisAndFuture": "本次及以后",
+      "wholeSeries": "整个系列"
+    },
     "history": {
       "title": "回溯",
       "empty": "该时间范围内没有记录",
