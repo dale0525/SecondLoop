@@ -51,6 +51,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("RELEASE_LLM_AUTH_HEADER", env_keys)
         self.assertIn("RELEASE_LLM_AUTH_SCHEME", env_keys)
 
+    def test_release_workflow_does_not_publish_msi_helper_script(self) -> None:
+        workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("Install-SecondLoop-MSI.ps1", workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -247,16 +247,11 @@ jobs:
           if (-not (Test-Path $msiPath)) {
             throw "MSI package not found: $msiPath"
           }
-      - name: Bundle MSI installer helper
-        shell: pwsh
-        run: |
-          Copy-Item scripts/install_windows_msi.ps1 dist/Install-SecondLoop-MSI.ps1 -Force
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             dist/*.msi
-            dist/Install-SecondLoop-MSI.ps1
 
   macos:
     needs: preflight
@@ -582,6 +577,5 @@ jobs:
             dist/*.dmg
             dist/*.msi
             dist/*.tar.gz
-            dist/Install-SecondLoop-MSI.ps1
             dist/release-notes/*.json
             dist/release-notes.md

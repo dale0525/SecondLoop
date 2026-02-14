@@ -25,14 +25,12 @@ The core mental model is **One Timeline** (a single “Main Stream”), plus a l
 
 ## ⭐ Highlights
 
-- 🧠 **Long‑term memory, local‑first**: store your timeline in an encrypted local database.
-- 🧲 **Ask AI with RAG**: answers come with context retrieved locally (Top‑K snippets), with streaming + cancel.
-- ⏱️ **Adaptive remote timeout policy**: Cloud + BYOK request timeouts scale with prompt/media size to better fit longer multimodal outputs.
-- ♻️ **Cloud detach + recover**: Cloud Ask AI can continue server-side after app disconnect and recover completed answers after reconnect (BYOK stays direct).
-- 🗂️ **Focus instead of “new chats”**: narrow context by time/tags without managing sessions.
-- 📥 **Capture from anywhere**: mobile share sheet, desktop global hotkey, quick “send to vault”.
-- 🔐 **Encrypted vault & data sovereignty**: choose where your data lives; sync is designed around E2EE.
-- 🌍 **Cross‑platform**: Flutter UI + Rust core across mobile and desktop.
+- 🧠 **Long-term memory, local-first**: your timeline stays on your device with encryption by default.
+- 🧲 **Ask AI with relevant context**: get answers grounded in your own notes, with streaming output.
+- 🗂️ **Focus instead of chat clutter**: narrow context by time or tags without juggling chat threads.
+- 📥 **Capture from anywhere**: mobile share sheet + desktop global hotkey for quick capture.
+- 🔐 **Privacy by design**: encrypted vault and clear control over where your data lives.
+- 🌍 **Cross-platform**: one app experience across mobile and desktop.
 
 ## 🚀 Usage
 
@@ -40,7 +38,7 @@ The core mental model is **One Timeline** (a single “Main Stream”), plus a l
 
 - SecondLoop is **not launched yet** (no stable App Store / Play Store release).
 - Follow updates via the website: https://secondloop.app
-- If you want to try it today, build from source (see the Developer section below).
+- If you want to try it from source today, see `CONTRIBUTING.md`.
 
 ### Quick walkthrough
 
@@ -53,14 +51,14 @@ The core mental model is **One Timeline** (a single “Main Stream”), plus a l
    - Desktop: press `⌘⇧K` (macOS) / `Ctrl+Shift+K` (Windows/Linux) for quick capture
 
 3) **Ask AI (explicit)**
-   Use **Ask AI** when you want an answer; SecondLoop retrieves a small set of relevant snippets locally (RAG) and sends only what’s needed to the model.
+   Use **Ask AI** when you want an answer; SecondLoop uses your relevant memories as context and sends only what is needed to the model.
 
 4) **Use Focus to scope context**
    Switch Focus (e.g. “All Memories”, “Last 7 Days”, “Work”) to control what Ask AI searches.
 
 ### Privacy note (what gets uploaded)
 
-When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads **your question + a small set of retrieved text snippets** (Top‑K). It does **not** upload your keys, master password, or your entire vault/history.
+When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads **your question + only the relevant context needed for that answer**. It does **not** upload your keys, master password, or your entire vault/history.
 
 ## 🧩 Editions (Community vs Cloud)
 
@@ -72,86 +70,6 @@ When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads *
 - The **SecondLoop Community Edition (this repository)** is licensed under the **Apache License 2.0**. See `LICENSE`.
 - **SecondLoop Cloud** (managed hosted services and billing infrastructure) is not distributed in this repository and is offered under separate commercial terms.
 
-## 🛠️ Developer / Contributor Guide
+## 🤝 Contributing
 
-New contributors: start with `CONTRIBUTING.md`.
-
-### Stack
-
-- **Flutter** for cross‑platform UI (mobile + desktop)
-- **Rust** for core logic via `flutter_rust_bridge` (DB, crypto, sync, embeddings)
-- **SQLite** + vector search (`sqlite-vec`) for local memory retrieval
-
-### Dev setup (Pixi + FVM)
-
-1) Install Pixi: https://pixi.sh
-
-2) Optional prewarm: install the pinned Flutter SDK (via FVM) ahead of first run:
-
-```bash
-pixi run setup-flutter
-```
-
-For git-worktree users (especially when worktree paths are ephemeral), run once per worktree to share heavy caches and toolchains across all worktrees:
-
-```bash
-pixi run bootstrap-shared-worktree-env
-```
-
-3) Common commands:
-
-```bash
-pixi run flutter analyze
-pixi run flutter test
-pixi run cargo test
-pixi run frb-generate
-pixi run run-macos
-pixi run run-linux
-pixi run run-android
-pixi run build-android-apk
-pixi run run-windows
-pixi run package-windows-msi
-```
-
-Notes:
-- `run-macos` is only available on macOS.
-- `run-linux` is only available on Linux.
-- `run-windows` is only available on Windows and auto-runs its preflight setup (downloads `nuget.exe` into `.tool/nuget/` and static `ffmpeg.exe` into `.tool/ffmpeg/windows`). By default it now runs the packaged MSI flow (build + install + launch). For hot-reload/debugger flow, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun`.
-- `package-windows-msi` is only available on Windows and produces an MSI installer.
-- Android tasks install SDK/NDK and Rust targets into `.tool/` (no system-wide Android SDK required).
-- `bootstrap-shared-worktree-env` symlinks `.tool` and `.pixi/envs` to a shared directory under `git rev-parse --git-common-dir`, and links `.fvm/flutter_sdk`, `.env.local`, `android/key.properties`, and `android/app/upload-keystore.jks` to the primary worktree when available, which avoids re-preparing dependencies, Flutter macOS engine artifacts, and Android signing setup in each worktree.
-- All `run-xxx` tasks now auto-run `bootstrap-shared-worktree-env`, `setup-flutter`, and `init-env` on first execution, so a fresh clone can run `pixi run run-xxx` directly.
-- `build-android-apk` / `build-android-apk-cn` also auto-run `bootstrap-shared-worktree-env` before build preflight.
-- Desktop run tasks (`run-macos` / `run-linux` / `run-windows`) prepare bundled `ffmpeg` before launching; macOS auto-downloads a static binary into `.tool/ffmpeg/macos`, and you can always override via `.tool` or `--source-bin` (no system-wide install required).
-- Local debugging via `pixi run run-windows` does not require certificate variables.
-- To install an exported `.msi` package, run `powershell -ExecutionPolicy Bypass -File scripts/install_windows_msi.ps1 -MsiPath <path-to-msi>` on Windows.
-
-To run arbitrary Flutter/Dart/Cargo commands:
-
-```bash
-pixi run flutter <command> [command-args]
-# examples with multiple flags:
-pixi run flutter test "--coverage --reporter expanded"
-pixi run dart format "--output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
-pixi run cargo clippy "--all-targets --all-features -- -D warnings"
-```
-
-### Optional Cloud config (maintainers / your own infra)
-
-- Create local config: `pixi run init-env` (generates `.env.local` from `.env.example`)
-- No config is required for `pixi run flutter test` / `pixi run cargo test`.
-- Cloud login + Cloud Ask AI (optional) requires:
-  - `SECONDLOOP_FIREBASE_WEB_API_KEY`
-  - `SECONDLOOP_CLOUD_ENV=staging|prod`
-  - `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING` / `SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD`
-
-### Troubleshooting
-
-- If you see build errors referencing macOS paths like `/Users/.../fvm/versions/...` on Windows, delete generated Flutter artifacts (or run `dart pub global run fvm:main flutter clean`) and then run `pixi run setup-flutter` again.
-- If `flutter pub get` fails with a TLS error to `https://pub.dev`, try `export PUB_HOSTED_URL=https://pub.flutter-io.cn` and re-run.
-
-### Platform prerequisites
-
-- Android: optional Android Studio. Pixi tasks provision SDK/NDK + Rust toolchain into `.tool/` (run `pixi run flutter doctor -v` to verify).
-- Windows (dev/build): Visual Studio 2022 + Desktop development with C++ + Individual component `C++ ATL for latest v143 build tools (x86 & x64)` (for `atlstr.h`). MSI packaging also requires WiX Toolset v3 (`heat.exe`/`candle.exe`/`light.exe`; script downloads a portable WiX v3 bundle into `.tool/wix3` with SHA256 verification). End users do not need VS/ATL (they may need the VC++ runtime, which your installer should include).
-- macOS/iOS: Xcode + Command Line Tools
+If you want to contribute, please read `CONTRIBUTING.md` for development setup, commands, platform prerequisites, and release process details.
