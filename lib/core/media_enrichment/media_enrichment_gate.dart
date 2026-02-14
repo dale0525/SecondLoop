@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../features/audio_transcribe/audio_transcribe_runner.dart';
 import '../../features/attachments/platform_pdf_ocr.dart';
+import '../../features/attachments/video_keyframe_ocr_worker.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
@@ -23,6 +24,7 @@ import '../content_enrichment/docx_ocr_policy.dart';
 import '../content_enrichment/multimodal_ocr.dart';
 import '../content_enrichment/ocr_result_preference.dart';
 import '../content_enrichment/pdf_ocr_auto_policy.dart';
+import '../content_enrichment/video_ocr_auto_policy.dart';
 import '../media_annotation/media_annotation_config_store.dart';
 import '../session/session_scope.dart';
 import '../sync/sync_engine.dart';
@@ -35,30 +37,7 @@ import '../../i18n/strings.g.dart';
 
 part 'media_enrichment_gate_clients.dart';
 part 'media_enrichment_gate_audio_transcribe.dart';
-
-String _autoPdfOcrStatusFromPayload(Map<String, Object?>? payload) {
-  return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
-}
-
-bool shouldNotifyAutoPdfOcrStatusTransition({
-  required Map<String, Object?>? previousPayload,
-  required Map<String, Object?> nextPayload,
-}) {
-  final previousStatus = _autoPdfOcrStatusFromPayload(previousPayload);
-  final nextStatus = _autoPdfOcrStatusFromPayload(nextPayload);
-  if (nextStatus.isEmpty || previousStatus == nextStatus) {
-    return false;
-  }
-
-  if (nextStatus == 'running') return true;
-
-  if (previousStatus == 'running' &&
-      (nextStatus == 'ok' || nextStatus == 'failed')) {
-    return true;
-  }
-
-  return false;
-}
+part 'media_enrichment_gate_auto_ocr.dart';
 
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});
@@ -200,333 +179,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     } catch (_) {
       return null;
     }
-  }
-
-  Future<int> _runAutoPdfOcrForRecentScannedPdfs({
-    required NativeAppBackend backend,
-    required Uint8List sessionKey,
-    required ContentEnrichmentConfig? contentConfig,
-    required Future<PlatformPdfOcrResult?> Function(
-      Uint8List bytes, {
-      required int pageCount,
-    }) runMultimodalPdfOcr,
-    VoidCallback? onAutoPdfOcrStatusChanged,
-  }) async {
-    if (!(contentConfig?.ocrEnabled ?? true)) return 0;
-    // Auto OCR no longer enforces a user-facing page cap.
-    const autoMaxPages = 0;
-    const hardMaxPages = 10000;
-    const dpi = 180;
-    final configuredHints = contentConfig?.ocrLanguageHints.trim() ?? '';
-    final languageHints =
-        configuredHints.isEmpty ? 'device_plus_en' : configuredHints;
-
-    final recent = await backend.listRecentAttachments(sessionKey, limit: 80);
-    var updated = 0;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    for (final attachment in recent) {
-      final mime = attachment.mimeType.trim().toLowerCase();
-      if (mime != 'application/pdf') continue;
-      if (_autoOcrCompletedShas.contains(attachment.sha256)) continue;
-
-      final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
-        sessionKey,
-        sha256: attachment.sha256,
-      );
-      final payload = _decodePayloadObject(payloadJson);
-      if (payload == null) continue;
-      if (!shouldAutoRunPdfOcr(
-        payload,
-        autoMaxPages: autoMaxPages,
-        nowMs: now,
-      )) {
-        continue;
-      }
-
-      final pageCount = _asInt(payload['page_count']);
-      if (pageCount <= 0) continue;
-
-      const runMaxPages = hardMaxPages;
-      final attemptMs = DateTime.now().millisecondsSinceEpoch;
-      final retryCount = _asInt(payload['ocr_auto_retry_count']);
-
-      Future<void> persistPayload(Map<String, Object?> next, int ts) async {
-        await backend.markAttachmentAnnotationOkJson(
-          sessionKey,
-          attachmentSha256: attachment.sha256,
-          lang: 'und',
-          modelName: 'document_extract.v1',
-          payloadJson: jsonEncode(next),
-          nowMs: ts,
-        );
-      }
-
-      void notifyStatusTransition(
-        Map<String, Object?> previousPayload,
-        Map<String, Object?> nextPayload,
-      ) {
-        if (onAutoPdfOcrStatusChanged == null) return;
-        if (!shouldNotifyAutoPdfOcrStatusTransition(
-          previousPayload: previousPayload,
-          nextPayload: nextPayload,
-        )) {
-          return;
-        }
-        onAutoPdfOcrStatusChanged();
-      }
-
-      try {
-        final runningPayload = Map<String, Object?>.from(payload);
-        runningPayload['ocr_auto_status'] = 'running';
-        runningPayload['ocr_auto_running_ms'] = attemptMs;
-        runningPayload['ocr_auto_last_attempt_ms'] = attemptMs;
-        runningPayload['ocr_auto_attempted_ms'] = attemptMs;
-        runningPayload['ocr_auto_retry_count'] = retryCount;
-        await persistPayload(runningPayload, attemptMs);
-        notifyStatusTransition(payload, runningPayload);
-
-        final bytes = await backend.readAttachmentBytes(
-          sessionKey,
-          sha256: attachment.sha256,
-        );
-        if (bytes.isEmpty) {
-          final failedPayload = Map<String, Object?>.from(runningPayload);
-          failedPayload.remove('ocr_auto_running_ms');
-          failedPayload['ocr_auto_status'] = 'failed';
-          failedPayload['ocr_auto_last_failure_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          failedPayload['ocr_auto_retry_count'] = retryCount + 1;
-          await persistPayload(
-            failedPayload,
-            failedPayload['ocr_auto_last_failure_ms'] as int,
-          );
-          notifyStatusTransition(runningPayload, failedPayload);
-          continue;
-        }
-
-        final ocr = await runMultimodalPdfOcr(bytes, pageCount: pageCount) ??
-            await PlatformPdfOcr.tryOcrPdfBytes(
-              bytes,
-              maxPages: runMaxPages,
-              dpi: dpi,
-              languageHints: languageHints,
-            );
-
-        final updatedPayload = Map<String, Object?>.from(runningPayload);
-        updatedPayload.remove('ocr_auto_running_ms');
-        if (ocr != null) {
-          final extractedFull =
-              (payload['extracted_text_full'] ?? '').toString();
-          final extractedExcerpt =
-              (payload['extracted_text_excerpt'] ?? '').toString();
-          final preferredOcr = maybePreferExtractedTextForRuntimeOcr(
-            ocr: ocr,
-            extractedFull: extractedFull,
-            extractedExcerpt: extractedExcerpt,
-          );
-          final extractedText = (extractedExcerpt.trim().isNotEmpty
-                  ? extractedExcerpt
-                  : extractedFull)
-              .trim();
-          updatedPayload['needs_ocr'] =
-              preferredOcr.fullText.trim().isEmpty && extractedText.isEmpty;
-          updatedPayload['ocr_text_full'] = preferredOcr.fullText;
-          updatedPayload['ocr_text_excerpt'] = preferredOcr.excerpt;
-          updatedPayload['ocr_engine'] = preferredOcr.engine;
-          updatedPayload['ocr_lang_hints'] = languageHints;
-          updatedPayload['ocr_dpi'] = dpi;
-          updatedPayload['ocr_retry_attempted'] = preferredOcr.retryAttempted;
-          updatedPayload['ocr_retry_attempts'] = preferredOcr.retryAttempts;
-          updatedPayload['ocr_retry_hints'] =
-              preferredOcr.retryHintsTried.join(',');
-          updatedPayload['ocr_is_truncated'] = preferredOcr.isTruncated;
-          updatedPayload['ocr_page_count'] = preferredOcr.pageCount;
-          updatedPayload['ocr_processed_pages'] = preferredOcr.processedPages;
-          updatedPayload['ocr_auto_status'] = 'ok';
-          updatedPayload['ocr_auto_last_success_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          updatedPayload.remove('ocr_auto_last_failure_ms');
-          await persistPayload(
-            updatedPayload,
-            updatedPayload['ocr_auto_last_success_ms'] as int,
-          );
-          _autoOcrCompletedShas.add(attachment.sha256);
-          updated += 1;
-        } else {
-          updatedPayload['ocr_auto_status'] = 'failed';
-          updatedPayload['ocr_auto_last_failure_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          updatedPayload['ocr_auto_retry_count'] = retryCount + 1;
-          await persistPayload(
-            updatedPayload,
-            updatedPayload['ocr_auto_last_failure_ms'] as int,
-          );
-        }
-      } catch (_) {
-        final failedPayload = Map<String, Object?>.from(payload);
-        failedPayload.remove('ocr_auto_running_ms');
-        failedPayload['ocr_auto_status'] = 'failed';
-        failedPayload['ocr_auto_last_failure_ms'] =
-            DateTime.now().millisecondsSinceEpoch;
-        failedPayload['ocr_auto_retry_count'] = retryCount + 1;
-        try {
-          await persistPayload(
-            failedPayload,
-            failedPayload['ocr_auto_last_failure_ms'] as int,
-          );
-        } catch (_) {
-          // ignore per-attachment status persistence failures.
-        }
-      }
-    }
-
-    return updated;
-  }
-
-  Future<int> _runAutoDocxOcrForRecentOfficeDocs({
-    required NativeAppBackend backend,
-    required Uint8List sessionKey,
-    required ContentEnrichmentConfig? contentConfig,
-    required Future<PlatformPdfOcrResult?> Function(
-      Uint8List bytes, {
-      required int pageCount,
-      required String languageHints,
-    }) runDocxOcr,
-  }) async {
-    if (!(contentConfig?.ocrEnabled ?? true)) return 0;
-
-    final hints = contentConfig?.ocrLanguageHints.trim() ?? '';
-    final languageHints = hints.isEmpty ? 'device_plus_en' : hints;
-    final recent = await backend.listRecentAttachments(sessionKey, limit: 80);
-    var updated = 0;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    for (final attachment in recent) {
-      final mime = attachment.mimeType.trim().toLowerCase();
-      if (!isDocxMimeType(mime)) continue;
-      if (_autoOcrCompletedShas.contains(attachment.sha256)) continue;
-
-      final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
-        sessionKey,
-        sha256: attachment.sha256,
-      );
-      final payload = _decodePayloadObject(payloadJson);
-      if (payload == null) continue;
-      if (!shouldAttemptDocxOcr(payload, nowMs: now)) continue;
-
-      final pageCountHint =
-          _asInt(payload['page_count']) > 0 ? _asInt(payload['page_count']) : 1;
-      final attemptMs = DateTime.now().millisecondsSinceEpoch;
-      final retryCount = _asInt(payload['ocr_auto_retry_count']);
-
-      Future<void> persistPayload(Map<String, Object?> next, int ts) async {
-        await backend.markAttachmentAnnotationOkJson(
-          sessionKey,
-          attachmentSha256: attachment.sha256,
-          lang: 'und',
-          modelName: 'document_extract.v1',
-          payloadJson: jsonEncode(next),
-          nowMs: ts,
-        );
-      }
-
-      try {
-        final runningPayload = Map<String, Object?>.from(payload);
-        runningPayload['ocr_auto_status'] = 'running';
-        runningPayload['ocr_auto_running_ms'] = attemptMs;
-        runningPayload['ocr_auto_last_attempt_ms'] = attemptMs;
-        runningPayload['ocr_auto_attempted_ms'] = attemptMs;
-        runningPayload['ocr_auto_retry_count'] = retryCount;
-        await persistPayload(runningPayload, attemptMs);
-
-        final bytes = await backend.readAttachmentBytes(
-          sessionKey,
-          sha256: attachment.sha256,
-        );
-        if (bytes.isEmpty) {
-          final failedPayload = Map<String, Object?>.from(runningPayload);
-          failedPayload.remove('ocr_auto_running_ms');
-          failedPayload['ocr_auto_status'] = 'failed';
-          failedPayload['ocr_auto_last_failure_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          failedPayload['ocr_auto_retry_count'] = retryCount + 1;
-          await persistPayload(
-            failedPayload,
-            failedPayload['ocr_auto_last_failure_ms'] as int,
-          );
-          continue;
-        }
-
-        final ocr = await runDocxOcr(
-          bytes,
-          pageCount: pageCountHint,
-          languageHints: languageHints,
-        );
-
-        final updatedPayload = Map<String, Object?>.from(runningPayload);
-        updatedPayload.remove('ocr_auto_running_ms');
-        if (ocr != null) {
-          final extractedFull =
-              (payload['extracted_text_full'] ?? '').toString();
-          final extractedExcerpt =
-              (payload['extracted_text_excerpt'] ?? '').toString();
-          final extractedText = (extractedExcerpt.trim().isNotEmpty
-                  ? extractedExcerpt
-                  : extractedFull)
-              .trim();
-          updatedPayload['needs_ocr'] =
-              ocr.fullText.trim().isEmpty && extractedText.isEmpty;
-          updatedPayload['ocr_text_full'] = ocr.fullText;
-          updatedPayload['ocr_text_excerpt'] = ocr.excerpt;
-          updatedPayload['ocr_engine'] = ocr.engine;
-          updatedPayload['ocr_lang_hints'] = languageHints;
-          updatedPayload['ocr_dpi'] = 0;
-          updatedPayload['ocr_retry_attempted'] = ocr.retryAttempted;
-          updatedPayload['ocr_retry_attempts'] = ocr.retryAttempts;
-          updatedPayload['ocr_retry_hints'] = ocr.retryHintsTried.join(',');
-          updatedPayload['ocr_is_truncated'] = ocr.isTruncated;
-          updatedPayload['ocr_page_count'] = ocr.pageCount;
-          updatedPayload['ocr_processed_pages'] = ocr.processedPages;
-          updatedPayload['ocr_auto_status'] = 'ok';
-          updatedPayload['ocr_auto_last_success_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          updatedPayload.remove('ocr_auto_last_failure_ms');
-          await persistPayload(
-            updatedPayload,
-            updatedPayload['ocr_auto_last_success_ms'] as int,
-          );
-          _autoOcrCompletedShas.add(attachment.sha256);
-          updated += 1;
-        } else {
-          updatedPayload['ocr_auto_status'] = 'failed';
-          updatedPayload['ocr_auto_last_failure_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          updatedPayload['ocr_auto_retry_count'] = retryCount + 1;
-          await persistPayload(
-            updatedPayload,
-            updatedPayload['ocr_auto_last_failure_ms'] as int,
-          );
-        }
-      } catch (_) {
-        final failedPayload = Map<String, Object?>.from(payload);
-        failedPayload.remove('ocr_auto_running_ms');
-        failedPayload['ocr_auto_status'] = 'failed';
-        failedPayload['ocr_auto_last_failure_ms'] =
-            DateTime.now().millisecondsSinceEpoch;
-        failedPayload['ocr_auto_retry_count'] = retryCount + 1;
-        try {
-          await persistPayload(
-            failedPayload,
-            failedPayload['ocr_auto_last_failure_ms'] as int,
-          );
-        } catch (_) {
-          // ignore per-attachment status persistence failures.
-        }
-      }
-    }
-
-    return updated;
   }
 
   Future<bool> _promptAllowCellular() async {
@@ -935,6 +587,20 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
+      var processedAutoVideoOcr = 0;
+      if (videoExtractEnabled) {
+        try {
+          processedAutoVideoOcr =
+              await _runAutoVideoManifestOcrForRecentAttachments(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+            contentConfig: contentConfig,
+          );
+        } catch (_) {
+          processedAutoVideoOcr = 0;
+        }
+      }
+
       var processedAudioTranscripts = 0;
       if (audioTranscribeEnabled) {
         final network = await getNetwork();
@@ -1023,6 +689,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           processedDocs > 0 ||
           processedAutoPdfOcr > 0 ||
           processedAutoDocxOcr > 0 ||
+          processedAutoVideoOcr > 0 ||
           processedAudioTranscripts > 0 ||
           result.didEnrichAny;
       if (didEnrichAny) {
