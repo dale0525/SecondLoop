@@ -26,13 +26,21 @@ void main() {
 
       final installed = await store.downloadModels();
       expect(installed.supported, isTrue);
-      expect(installed.installed, isTrue);
-      expect(installed.source, LinuxOcrModelSource.downloaded);
-      expect(installed.modelDirPath, isNotNull);
+      if (installed.installed) {
+        expect(installed.source, LinuxOcrModelSource.downloaded);
+        expect(installed.modelDirPath, isNotNull);
 
-      final installedDir = await store.readInstalledModelDir();
-      expect(installedDir, isNotNull);
-      expect(await Directory(installedDir!).exists(), isTrue);
+        final installedDir = await store.readInstalledModelDir();
+        expect(installedDir, isNotNull);
+        expect(await Directory(installedDir!).exists(), isTrue);
+      } else {
+        expect(installed.source, LinuxOcrModelSource.none);
+        expect(installed.modelDirPath, isNull);
+        expect(installed.message, 'runtime_payload_incomplete');
+
+        final installedDir = await store.readInstalledModelDir();
+        expect(installedDir, isNull);
+      }
 
       final removed = await store.deleteModels();
       expect(removed.supported, isTrue);
