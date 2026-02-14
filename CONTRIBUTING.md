@@ -14,6 +14,41 @@ By contributing to this repository, you agree that your contributions are licens
   - Rust: `pixi run cargo test`
 - Run the full local CI suite: `pixi run ci`
 
+## Common development commands
+
+- Generate Rust bridge code: `pixi run frb-generate`
+- Run app locally:
+  - `pixi run run-macos` (macOS only)
+  - `pixi run run-linux` (Linux only)
+  - `pixi run run-windows` (Windows only; default flow is package + install + launch MSI)
+- Windows hot-reload/debugger flow:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun`
+- Build artifacts:
+  - `pixi run build-android-apk`
+  - `pixi run package-windows-msi`
+
+For arbitrary Flutter/Dart/Cargo commands:
+
+```bash
+pixi run flutter <command> [command-args]
+# examples with multiple flags:
+pixi run flutter test "--coverage --reporter expanded"
+pixi run dart format "--output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
+pixi run cargo clippy "--all-targets --all-features -- -D warnings"
+```
+
+## Platform prerequisites
+
+- Android: Android Studio is optional. Pixi tasks provision SDK/NDK and Rust targets into `.tool/`.
+- Windows (dev/build): Visual Studio 2022 + Desktop development with C++ + `C++ ATL for latest v143 build tools (x86 & x64)`.
+- Windows MSI packaging: WiX Toolset v3 (`heat.exe` / `candle.exe` / `light.exe`). Scripts can install a portable WiX v3 bundle into `.tool/wix3`.
+- macOS/iOS: Xcode + Command Line Tools.
+
+## Troubleshooting
+
+- If Windows builds reference macOS Flutter paths like `/Users/.../fvm/versions/...`, clean generated artifacts (or run `dart pub global run fvm:main flutter clean`) and then run `pixi run setup-flutter` again.
+- If `flutter pub get` fails with TLS errors to `https://pub.dev`, try `export PUB_HOSTED_URL=https://pub.flutter-io.cn` and retry.
+
 ## Test data privacy
 
 SecondLoop is open source. Please avoid putting real personal data (names, locations, dates tied to a real person, etc.) into test cases or fixtures. Use neutral placeholder text instead.
