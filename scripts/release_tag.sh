@@ -18,6 +18,7 @@ Notes:
   - Tag format is strict SemVer: vX.Y.Z.
   - Requires RELEASE_LLM_API_KEY and RELEASE_LLM_MODEL.
   - In --dry-run, local LLM calls skip TLS cert verification.
+  - For local TLS troubleshooting in preflight, set RELEASE_PREFLIGHT_INSECURE_SKIP_VERIFY=1.
   - Loads env from .env.local when present.
   - This command only publishes app tags.
   - Runtime release tags are managed separately via: pixi run release-runtime vX.Y.Z[.W]
