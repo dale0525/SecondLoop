@@ -21,7 +21,7 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
             script,
         )
         self.assertIn(
-            '<Custom Action="LaunchApplication" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 5</Custom>',
+            '<Custom Action="LaunchApplication" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 3</Custom>',
             script,
         )
 

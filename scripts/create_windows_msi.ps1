@@ -182,7 +182,7 @@ $mainWxsContent = @'
     <Property Id="SECONDLOOP_LAUNCH_AFTER_INSTALL" Value="1" />
     <CustomAction Id="LaunchApplication" Directory="INSTALLFOLDER" ExeCommand="secondloop.exe" Return="asyncNoWait" Impersonate="yes" />
     <InstallExecuteSequence>
-      <Custom Action="LaunchApplication" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 5</Custom>
+      <Custom Action="LaunchApplication" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 3</Custom>
     </InstallExecuteSequence>
     <Feature Id="MainFeature" Title="__PRODUCT_NAME__" Level="1">
       <ComponentGroupRef Id="AppFiles" />
