@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1454 (727 per locale)
+/// Strings: 1456 (728 per locale)
 ///
-/// Built on 2026-02-13 at 18:02 UTC
+/// Built on 2026-02-14 at 01:29 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1365,6 +1365,7 @@ class _StringsChatMarkdownEditorEn {
   String get exportPng => 'Export as PNG';
   String get exportPdf => 'Export as PDF';
   String exportDone({required Object format}) => 'Exported as ${format}';
+  String exportSavedPath({required Object path}) => 'Saved to ${path}';
   String exportFailed({required Object error}) => 'Export failed: ${error}';
   String stats({required Object lines, required Object characters}) =>
       '${lines} lines · ${characters} chars';
@@ -5225,6 +5226,8 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   String get exportPdf => '导出为 PDF';
   @override
   String exportDone({required Object format}) => '已导出为 ${format}';
+  @override
+  String exportSavedPath({required Object path}) => '已保存到：${path}';
   @override
   String exportFailed({required Object error}) => '导出失败：${error}';
   @override
@@ -9280,6 +9283,8 @@ extension on Translations {
         return 'Export as PDF';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => 'Exported as ${format}';
+      case 'chat.markdownEditor.exportSavedPath':
+        return ({required Object path}) => 'Saved to ${path}';
       case 'chat.markdownEditor.exportFailed':
         return ({required Object error}) => 'Export failed: ${error}';
       case 'chat.markdownEditor.stats':
@@ -10765,6 +10770,8 @@ extension on _StringsZhCn {
         return '导出为 PDF';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => '已导出为 ${format}';
+      case 'chat.markdownEditor.exportSavedPath':
+        return ({required Object path}) => '已保存到：${path}';
       case 'chat.markdownEditor.exportFailed':
         return ({required Object error}) => '导出失败：${error}';
       case 'chat.markdownEditor.stats':

@@ -829,6 +829,7 @@
       "exportPng": "Export as PNG",
       "exportPdf": "Export as PDF",
       "exportDone": "Exported as $format",
+      "exportSavedPath": "Saved to $path",
       "exportFailed": "Export failed: $error",
       "stats": "$lines lines · $characters chars",
       "simpleInput": "Simple input",

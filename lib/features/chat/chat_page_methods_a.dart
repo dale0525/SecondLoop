@@ -358,12 +358,22 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (!mounted || result == null) return;
 
     final updatedText = result.text;
+    if (result.shouldSwitchToSimpleInput) {
+      _controller.value = _controller.value.copyWith(
+        text: updatedText,
+        selection: TextSelection.collapsed(offset: updatedText.length),
+        composing: TextRange.empty,
+      );
+      _inputFocusNode.requestFocus();
+      return;
+    }
+
     _controller.value = _controller.value.copyWith(
       text: updatedText,
       selection: TextSelection.collapsed(offset: updatedText.length),
       composing: TextRange.empty,
     );
-    _inputFocusNode.requestFocus();
+    await _send();
   }
 
   Future<void> _showMessageContextMenu(

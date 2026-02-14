@@ -48,29 +48,55 @@ class ChatMarkdownPreviewTheme {
   final Color dividerColor;
 
   MarkdownStyleSheet buildStyleSheet(ThemeData baseTheme) {
+    return _buildStyleSheet(baseTheme, compactLayout: false);
+  }
+
+  MarkdownStyleSheet buildExportStyleSheet(ThemeData baseTheme) {
+    return _buildStyleSheet(baseTheme, compactLayout: true);
+  }
+
+  MarkdownStyleSheet _buildStyleSheet(
+    ThemeData baseTheme, {
+    required bool compactLayout,
+  }) {
     final body = (baseTheme.textTheme.bodyMedium ??
             const TextStyle(fontSize: 14, height: 1.5))
         .copyWith(
       color: textColor,
-      height: 1.58,
+      fontSize: compactLayout ? 13 : null,
+      height: compactLayout ? 1.45 : 1.58,
     );
 
     final headingLarge = (baseTheme.textTheme.headlineSmall ??
             const TextStyle(fontSize: 25, fontWeight: FontWeight.w700))
-        .copyWith(color: textColor, fontWeight: FontWeight.w700);
+        .copyWith(
+      color: textColor,
+      fontSize: compactLayout ? 21 : null,
+      fontWeight: FontWeight.w700,
+      height: compactLayout ? 1.3 : null,
+    );
 
     final headingMedium = (baseTheme.textTheme.titleLarge ??
             const TextStyle(fontSize: 21, fontWeight: FontWeight.w700))
-        .copyWith(color: textColor, fontWeight: FontWeight.w700);
+        .copyWith(
+      color: textColor,
+      fontSize: compactLayout ? 18 : null,
+      fontWeight: FontWeight.w700,
+    );
 
     final headingSmall = (baseTheme.textTheme.titleMedium ??
             const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))
-        .copyWith(color: textColor, fontWeight: FontWeight.w600);
+        .copyWith(
+      color: textColor,
+      fontSize: compactLayout ? 16 : null,
+      fontWeight: FontWeight.w600,
+    );
 
     final codeBase = (baseTheme.textTheme.bodySmall ??
             const TextStyle(fontSize: 13, height: 1.5))
         .copyWith(
       color: inlineCodeForeground,
+      fontSize: compactLayout ? 12 : null,
       fontFamilyFallback: const <String>[
         'Menlo',
         'Monaco',
@@ -92,18 +118,20 @@ class ChatMarkdownPreviewTheme {
       h4: body.copyWith(fontWeight: FontWeight.w700),
       h5: body.copyWith(fontWeight: FontWeight.w600),
       h6: body.copyWith(fontWeight: FontWeight.w600),
-      em: body.copyWith(fontStyle: FontStyle.italic),
-      strong: body.copyWith(fontWeight: FontWeight.w700),
-      del: body.copyWith(decoration: TextDecoration.lineThrough),
+      em: const TextStyle(fontStyle: FontStyle.italic),
+      strong: const TextStyle(fontWeight: FontWeight.w700),
+      del: const TextStyle(decoration: TextDecoration.lineThrough),
       listBullet: body,
       tableBody: body,
       tableHead: body.copyWith(fontWeight: FontWeight.w700),
       tableBorder: TableBorder.all(color: borderColor.withOpacity(0.78)),
       blockquote: body.copyWith(color: mutedTextColor),
-      blockquotePadding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      blockquotePadding: compactLayout
+          ? const EdgeInsets.fromLTRB(10, 8, 10, 8)
+          : const EdgeInsets.fromLTRB(12, 10, 12, 10),
       blockquoteDecoration: BoxDecoration(
         color: quoteBackground,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(compactLayout ? 10 : 11),
         border: Border(
           left: BorderSide(color: quoteBorder, width: 3),
         ),
@@ -111,10 +139,11 @@ class ChatMarkdownPreviewTheme {
       code: codeBase.copyWith(
         backgroundColor: inlineCodeBackground,
       ),
-      codeblockPadding: const EdgeInsets.all(12),
+      codeblockPadding:
+          compactLayout ? const EdgeInsets.all(10) : const EdgeInsets.all(12),
       codeblockDecoration: BoxDecoration(
         color: codeBlockBackground,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(compactLayout ? 10 : 12),
         border: Border.all(color: borderColor.withOpacity(0.9)),
       ),
       horizontalRuleDecoration: BoxDecoration(

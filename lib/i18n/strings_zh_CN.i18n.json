@@ -829,6 +829,7 @@
       "exportPng": "导出为 PNG",
       "exportPdf": "导出为 PDF",
       "exportDone": "已导出为 $format",
+      "exportSavedPath": "已保存到：$path",
       "exportFailed": "导出失败：$error",
       "stats": "$lines 行 · $characters 字符",
       "simpleInput": "简易输入",

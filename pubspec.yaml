@@ -51,6 +51,7 @@ dependencies:
   window_manager: ^0.3.8
   slang_flutter: ^3.32.0
   flutter_markdown: ^0.7.4+3
+  markdown: ^7.3.0
   url_launcher: ^6.3.1
   wakelock_plus: ^1.2.8
   url_launcher_linux: 3.1.1
@@ -70,6 +71,7 @@ dependencies:
   launch_at_startup: ^0.3.1
   universal_io: ^2.2.2
   menu_base: ^0.1.1
+  syncfusion_flutter_pdf: ^29.1.38
 
 dev_dependencies:
   flutter_test:
