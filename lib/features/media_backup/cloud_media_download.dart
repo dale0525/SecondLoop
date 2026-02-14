@@ -33,6 +33,16 @@ final class CloudMediaDownloadResult {
       failureReason == CloudMediaDownloadFailureReason.cellularRestricted;
 }
 
+final class CloudMediaDownloadFailureException implements Exception {
+  const CloudMediaDownloadFailureException(this.failureReason);
+
+  final CloudMediaDownloadFailureReason failureReason;
+
+  @override
+  String toString() =>
+      'CloudMediaDownloadFailureException(${failureReason.name})';
+}
+
 typedef CloudMediaDownloadNetworkProvider = Future<CloudMediaBackupNetwork>
     Function();
 

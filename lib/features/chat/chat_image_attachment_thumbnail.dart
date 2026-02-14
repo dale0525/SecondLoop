@@ -11,6 +11,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
 import '../media_backup/cloud_media_download.dart';
+import '../media_backup/cloud_media_download_ui.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -151,8 +152,9 @@ class _ChatImageAttachmentThumbnailState
         sha256: widget.attachment.sha256,
         allowCellular: false,
       );
-      _blockedByWifiOnly = result.failureReason ==
-          CloudMediaDownloadFailureReason.cellularRestricted;
+      final uiError =
+          cloudMediaDownloadUiErrorFromFailureReason(result.failureReason);
+      _blockedByWifiOnly = uiError == CloudMediaDownloadUiError.wifiOnlyBlocked;
       if (!result.didDownload) return null;
 
       try {

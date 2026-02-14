@@ -25,6 +25,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../media_backup/cloud_media_download.dart';
+import '../media_backup/cloud_media_download_ui.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -480,11 +481,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         sha256: widget.attachment.sha256,
         allowCellular: false,
       );
-      if (result.needsCellularConfirmation) {
-        throw StateError('media_download_requires_wifi');
-      }
       if (!result.didDownload) {
-        throw StateError('media_download_${result.failureReason.name}');
+        throw CloudMediaDownloadFailureException(result.failureReason);
       }
 
       return attachmentsBackend.readAttachmentBytes(

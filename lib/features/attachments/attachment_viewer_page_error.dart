@@ -2,23 +2,19 @@ part of 'attachment_viewer_page.dart';
 
 extension _AttachmentViewerPageErrorText on _AttachmentViewerPageState {
   String _attachmentLoadErrorText(Object? error) {
-    if (error is! StateError) {
+    final reason = cloudMediaDownloadFailureReasonFromError(error);
+    if (reason == null) {
       return context.t.errors.loadFailed(error: '$error');
     }
 
-    final code = error.message;
-    if (code == 'media_download_requires_wifi' ||
-        code ==
-            'media_download_${CloudMediaDownloadFailureReason.cellularRestricted.name}') {
-      return context.t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle;
-    }
-    if (code ==
-        'media_download_${CloudMediaDownloadFailureReason.authRequired.name}') {
-      return context.t.sync.cloudManagedVault.signInRequired;
-    }
-    if (code.startsWith('media_download_')) {
-      return context.t.attachments.content.previewUnavailable;
-    }
-    return context.t.errors.loadFailed(error: '$error');
+    return switch (cloudMediaDownloadUiErrorFromFailureReason(reason)) {
+      CloudMediaDownloadUiError.wifiOnlyBlocked =>
+        context.t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle,
+      CloudMediaDownloadUiError.signInRequired =>
+        context.t.sync.cloudManagedVault.signInRequired,
+      CloudMediaDownloadUiError.previewUnavailable ||
+      null =>
+        context.t.attachments.content.previewUnavailable,
+    };
   }
 }
