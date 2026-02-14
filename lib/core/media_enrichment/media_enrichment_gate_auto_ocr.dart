@@ -616,103 +616,26 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           ocrTextFull: ocrFullText,
           readableTextFull: readableTextFull,
         );
-        final videoContentKind = _resolvedVideoContentKindForAutoOcr(
-          multimodalContentKind: multimodalInsight?.contentKind ?? '',
+        final updatedPayload = buildAutoVideoManifestOcrPayload(
+          runningPayload: runningPayload,
+          manifest: manifest,
+          maxSegments: maxSegments,
+          processedSegments: processedSegments,
+          transcriptFull: transcriptFull,
+          transcriptExcerpt: transcriptExcerpt,
+          readableTextFull: readableTextFull,
+          readableTextExcerpt: readableTextExcerpt,
+          ocrFullText: ocrFullText,
+          ocrExcerpt: ocrExcerpt,
+          ocrEngine: ocrEngine,
+          languageHints: languageHints,
+          ocrTruncated: ocrTruncated,
+          totalFrameCount: totalFrameCount,
+          totalProcessedFrames: totalProcessedFrames,
           heuristicContentKind: heuristicContentKind,
+          multimodalInsight: multimodalInsight,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
         );
-        final fallbackSummary = buildVideoSummaryText(
-          readableTextExcerpt.isNotEmpty
-              ? readableTextExcerpt
-              : readableTextFull,
-          maxBytes: 2048,
-        );
-        final videoSummary = _firstNonEmptyForAutoOcr([
-          multimodalInsight?.summary ?? '',
-          fallbackSummary,
-        ]);
-        final knowledgeMarkdownFull = _firstNonEmptyForAutoOcr([
-          multimodalInsight?.knowledgeMarkdown ?? '',
-          readableTextFull,
-        ]);
-        final knowledgeMarkdownExcerpt = _truncateUtf8ForAutoOcr(
-          _firstNonEmptyForAutoOcr([
-            multimodalInsight?.knowledgeMarkdown ?? '',
-            readableTextExcerpt,
-            readableTextFull,
-          ]),
-          8 * 1024,
-        );
-        final videoDescriptionFull = _firstNonEmptyForAutoOcr([
-          multimodalInsight?.videoDescription ?? '',
-          readableTextFull,
-        ]);
-        final videoDescriptionExcerpt = _truncateUtf8ForAutoOcr(
-          _firstNonEmptyForAutoOcr([
-            multimodalInsight?.videoDescription ?? '',
-            readableTextExcerpt,
-            readableTextFull,
-          ]),
-          8 * 1024,
-        );
-
-        final segmentPayloads = manifest.segments
-            .map(
-              (segment) => <String, Object?>{
-                'index': segment.index,
-                'sha256': segment.sha256,
-                'mime_type': segment.mimeType,
-              },
-            )
-            .toList(growable: false);
-
-        final updatedPayload = Map<String, Object?>.from(runningPayload);
-        updatedPayload.remove('ocr_auto_running_ms');
-        updatedPayload['video_segment_count'] = manifest.segments.length;
-        updatedPayload['video_processed_segment_count'] = processedSegments;
-        updatedPayload['video_ocr_segment_limit'] = maxSegments;
-        updatedPayload['video_segments'] = segmentPayloads;
-        if (manifest.audioSha256 != null) {
-          updatedPayload['audio_sha256'] = manifest.audioSha256;
-        }
-        if (manifest.audioMimeType != null) {
-          updatedPayload['audio_mime_type'] = manifest.audioMimeType;
-        }
-        if (transcriptFull.isNotEmpty) {
-          updatedPayload['transcript_full'] = transcriptFull;
-        }
-        if (transcriptExcerpt.isNotEmpty) {
-          updatedPayload['transcript_excerpt'] = transcriptExcerpt;
-        }
-        updatedPayload['needs_ocr'] = false;
-        updatedPayload['readable_text_full'] = readableTextFull;
-        updatedPayload['readable_text_excerpt'] = readableTextExcerpt;
-        updatedPayload['ocr_text_full'] = ocrFullText;
-        updatedPayload['ocr_text_excerpt'] = ocrExcerpt;
-        updatedPayload['ocr_engine'] = ocrEngine;
-        updatedPayload['ocr_lang_hints'] = languageHints;
-        updatedPayload['ocr_is_truncated'] = ocrTruncated;
-        updatedPayload['ocr_page_count'] = totalFrameCount;
-        updatedPayload['ocr_processed_pages'] = totalProcessedFrames;
-        updatedPayload['video_content_kind'] = videoContentKind;
-        if (multimodalInsight != null && multimodalInsight.engine.isNotEmpty) {
-          updatedPayload['video_content_kind_engine'] =
-              multimodalInsight.engine;
-        }
-        if (videoSummary.isNotEmpty) {
-          updatedPayload['video_summary'] = videoSummary;
-        }
-        if (videoContentKind == 'knowledge') {
-          updatedPayload['knowledge_markdown_full'] = knowledgeMarkdownFull;
-          updatedPayload['knowledge_markdown_excerpt'] =
-              knowledgeMarkdownExcerpt;
-        } else if (videoContentKind == 'non_knowledge') {
-          updatedPayload['video_description_full'] = videoDescriptionFull;
-          updatedPayload['video_description_excerpt'] = videoDescriptionExcerpt;
-        }
-        updatedPayload['ocr_auto_status'] = 'ok';
-        updatedPayload['ocr_auto_last_success_ms'] =
-            DateTime.now().millisecondsSinceEpoch;
-        updatedPayload.remove('ocr_auto_last_failure_ms');
 
         await persistPayload(
           attachment.sha256,
@@ -738,6 +661,174 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
 
     return updated;
   }
+}
+
+@visibleForTesting
+Map<String, Object?> buildAutoVideoManifestOcrPayload({
+  required Map<String, Object?> runningPayload,
+  required ParsedVideoManifest manifest,
+  required int maxSegments,
+  required int processedSegments,
+  required String transcriptFull,
+  required String transcriptExcerpt,
+  required String readableTextFull,
+  required String readableTextExcerpt,
+  required String ocrFullText,
+  required String ocrExcerpt,
+  required String ocrEngine,
+  required String languageHints,
+  required bool ocrTruncated,
+  required int totalFrameCount,
+  required int totalProcessedFrames,
+  required String heuristicContentKind,
+  required MultimodalVideoInsight? multimodalInsight,
+  required int nowMs,
+}) {
+  final videoContentKind = _resolvedVideoContentKindForAutoOcr(
+    multimodalContentKind: multimodalInsight?.contentKind ?? '',
+    heuristicContentKind: heuristicContentKind,
+  );
+  final fallbackSummary = buildVideoSummaryText(
+    readableTextExcerpt.isNotEmpty ? readableTextExcerpt : readableTextFull,
+    maxBytes: 2048,
+  );
+  final videoSummary = _firstNonEmptyForAutoOcr([
+    multimodalInsight?.summary ?? '',
+    fallbackSummary,
+  ]);
+  final knowledgeMarkdownFull = _firstNonEmptyForAutoOcr([
+    multimodalInsight?.knowledgeMarkdown ?? '',
+    readableTextFull,
+  ]);
+  final knowledgeMarkdownExcerpt = _truncateUtf8ForAutoOcr(
+    _firstNonEmptyForAutoOcr([
+      multimodalInsight?.knowledgeMarkdown ?? '',
+      readableTextExcerpt,
+      readableTextFull,
+    ]),
+    8 * 1024,
+  );
+  final videoDescriptionFull = _firstNonEmptyForAutoOcr([
+    multimodalInsight?.videoDescription ?? '',
+    readableTextFull,
+  ]);
+  final videoDescriptionExcerpt = _truncateUtf8ForAutoOcr(
+    _firstNonEmptyForAutoOcr([
+      multimodalInsight?.videoDescription ?? '',
+      readableTextExcerpt,
+      readableTextFull,
+    ]),
+    8 * 1024,
+  );
+
+  final segmentPayloads = manifest.segments
+      .map(
+        (segment) => <String, Object?>{
+          'index': segment.index,
+          'sha256': segment.sha256,
+          'mime_type': segment.mimeType,
+        },
+      )
+      .toList(growable: false);
+
+  final updatedPayload = Map<String, Object?>.from(runningPayload);
+  updatedPayload.remove('ocr_auto_running_ms');
+  updatedPayload['video_segment_count'] = manifest.segments.length;
+  updatedPayload['video_processed_segment_count'] = processedSegments;
+  updatedPayload['video_ocr_segment_limit'] = maxSegments;
+  updatedPayload['video_segments'] = segmentPayloads;
+  if (manifest.audioSha256 != null) {
+    updatedPayload['audio_sha256'] = manifest.audioSha256;
+  } else {
+    updatedPayload.remove('audio_sha256');
+  }
+  if (manifest.audioMimeType != null) {
+    updatedPayload['audio_mime_type'] = manifest.audioMimeType;
+  } else {
+    updatedPayload.remove('audio_mime_type');
+  }
+  _setOrRemoveAutoOcrPayloadField(
+    updatedPayload,
+    'transcript_full',
+    transcriptFull,
+  );
+  _setOrRemoveAutoOcrPayloadField(
+    updatedPayload,
+    'transcript_excerpt',
+    transcriptExcerpt,
+  );
+  updatedPayload['needs_ocr'] = false;
+  updatedPayload['readable_text_full'] = readableTextFull;
+  updatedPayload['readable_text_excerpt'] = readableTextExcerpt;
+  updatedPayload['ocr_text_full'] = ocrFullText;
+  updatedPayload['ocr_text_excerpt'] = ocrExcerpt;
+  updatedPayload['ocr_engine'] = ocrEngine;
+  updatedPayload['ocr_lang_hints'] = languageHints;
+  updatedPayload['ocr_is_truncated'] = ocrTruncated;
+  updatedPayload['ocr_page_count'] = totalFrameCount;
+  updatedPayload['ocr_processed_pages'] = totalProcessedFrames;
+  updatedPayload['video_content_kind'] = videoContentKind;
+
+  final videoContentKindEngine = (multimodalInsight?.engine ?? '').trim();
+  if (videoContentKindEngine.isNotEmpty) {
+    updatedPayload['video_content_kind_engine'] = videoContentKindEngine;
+  } else {
+    updatedPayload.remove('video_content_kind_engine');
+  }
+
+  _setOrRemoveAutoOcrPayloadField(
+      updatedPayload, 'video_summary', videoSummary);
+
+  if (videoContentKind == 'knowledge') {
+    _setOrRemoveAutoOcrPayloadField(
+      updatedPayload,
+      'knowledge_markdown_full',
+      knowledgeMarkdownFull,
+    );
+    _setOrRemoveAutoOcrPayloadField(
+      updatedPayload,
+      'knowledge_markdown_excerpt',
+      knowledgeMarkdownExcerpt,
+    );
+    updatedPayload.remove('video_description_full');
+    updatedPayload.remove('video_description_excerpt');
+  } else if (videoContentKind == 'non_knowledge') {
+    _setOrRemoveAutoOcrPayloadField(
+      updatedPayload,
+      'video_description_full',
+      videoDescriptionFull,
+    );
+    _setOrRemoveAutoOcrPayloadField(
+      updatedPayload,
+      'video_description_excerpt',
+      videoDescriptionExcerpt,
+    );
+    updatedPayload.remove('knowledge_markdown_full');
+    updatedPayload.remove('knowledge_markdown_excerpt');
+  } else {
+    updatedPayload.remove('knowledge_markdown_full');
+    updatedPayload.remove('knowledge_markdown_excerpt');
+    updatedPayload.remove('video_description_full');
+    updatedPayload.remove('video_description_excerpt');
+  }
+
+  updatedPayload['ocr_auto_status'] = 'ok';
+  updatedPayload['ocr_auto_last_success_ms'] = nowMs;
+  updatedPayload.remove('ocr_auto_last_failure_ms');
+  return updatedPayload;
+}
+
+void _setOrRemoveAutoOcrPayloadField(
+  Map<String, Object?> payload,
+  String key,
+  String value,
+) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    payload.remove(key);
+    return;
+  }
+  payload[key] = normalized;
 }
 
 enum AutoVideoSegmentOcrSource {
