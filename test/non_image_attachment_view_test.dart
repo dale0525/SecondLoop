@@ -462,6 +462,77 @@ void main() {
     );
   });
 
+  testWidgets(
+      'NonImageAttachmentView keeps video preview placeholder when sync download fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'localdir',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kLocalDir: '/tmp/secondloop-test',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 7)),
+      }),
+    });
+
+    final backend = _PreviewDownloadBackend(downloadSucceeds: false);
+    const attachment = Attachment(
+      sha256: 'sha-video-preview-cloud-failed',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview-cloud-failed.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/png',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: AppBackendScope(
+            backend: backend,
+            child: MaterialApp(
+              home: NonImageAttachmentView(
+                attachment: attachment,
+                bytes: bytes,
+                displayTitle: 'Video preview cloud failed',
+                initialAnnotationPayload: const <String, Object?>{},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.downloadAttemptedShas, contains('sha-poster'));
+    final posterFinder =
+        find.byKey(const ValueKey('video_manifest_poster_preview'));
+    expect(posterFinder, findsOneWidget);
+    expect(
+      find.descendant(of: posterFinder, matching: find.byType(Image)),
+      findsNothing,
+    );
+  });
+
   testWidgets('NonImageAttachmentView shows video manifest insight fields',
       (tester) async {
     const attachment = Attachment(
@@ -768,11 +839,15 @@ void main() {
 }
 
 final class _PreviewDownloadBackend implements AppBackend, AttachmentsBackend {
+  _PreviewDownloadBackend({this.downloadSucceeds = true});
+
   static final Uint8List _png1x1 = base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6Xgm1sAAAAASUVORK5CYII=',
   );
 
+  final bool downloadSucceeds;
   final Set<String> downloadedShas = <String>{};
+  final Set<String> downloadAttemptedShas = <String>{};
 
   @override
   Future<Uint8List> readAttachmentBytes(
@@ -793,6 +868,10 @@ final class _PreviewDownloadBackend implements AppBackend, AttachmentsBackend {
     required String remoteRoot,
     required String sha256,
   }) async {
+    downloadAttemptedShas.add(sha256);
+    if (!downloadSucceeds) {
+      throw Exception('download_failed:$sha256');
+    }
     downloadedShas.add(sha256);
   }
 
@@ -806,6 +885,10 @@ final class _PreviewDownloadBackend implements AppBackend, AttachmentsBackend {
     required String remoteRoot,
     required String sha256,
   }) async {
+    downloadAttemptedShas.add(sha256);
+    if (!downloadSucceeds) {
+      throw Exception('download_failed:$sha256');
+    }
     downloadedShas.add(sha256);
   }
 

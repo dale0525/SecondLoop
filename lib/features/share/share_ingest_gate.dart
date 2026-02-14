@@ -21,6 +21,7 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
+import '../media_backup/video_kind_classifier.dart';
 import '../media_backup/video_transcode_worker.dart';
 import 'share_ingest.dart';
 
@@ -300,6 +301,13 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               primarySegment.bytes,
               sourceMimeType: primarySegment.mimeType,
             );
+            final videoKindClassification = await classifyVideoKind(
+              filename: filename,
+              sourceMimeType: primarySegment.mimeType,
+              posterBytes: preview.posterBytes,
+              keyframes: preview.keyframes,
+            );
+            final resolvedKeyframeKind = videoKindClassification.keyframeKind;
             final posterBytes = preview.posterBytes;
             if (posterBytes != null && posterBytes.isNotEmpty) {
               final posterAttachment = await backend.insertAttachment(
@@ -328,7 +336,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                   sha256: frameAttachment.sha256,
                   mimeType: frameAttachment.mimeType,
                   tMs: frame.tMs,
-                  kind: frame.kind,
+                  kind: resolvedKeyframeKind,
                 ),
               );
               unawaited(_maybeEnqueueCloudMediaBackup(
@@ -373,8 +381,8 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               ...buildVideoManifestPayload(
                 videoSha256: primaryVideo.sha256,
                 videoMimeType: primaryVideo.mimeType,
-                videoKind: 'unknown',
-                videoKindConfidence: 0.0,
+                videoKind: videoKindClassification.kind,
+                videoKindConfidence: videoKindClassification.confidence,
                 videoProxySha256: primaryVideo.sha256,
                 posterSha256: posterSha256,
                 posterMimeType: posterMimeType,

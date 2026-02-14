@@ -389,6 +389,13 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           primarySegment.bytes,
           sourceMimeType: primarySegment.mimeType,
         );
+        final videoKindClassification = await classifyVideoKind(
+          filename: filename,
+          sourceMimeType: primarySegment.mimeType,
+          posterBytes: preview.posterBytes,
+          keyframes: preview.keyframes,
+        );
+        final resolvedKeyframeKind = videoKindClassification.keyframeKind;
         final posterBytes = preview.posterBytes;
         if (posterBytes != null && posterBytes.isNotEmpty) {
           final posterAttachment = await backend.insertAttachment(
@@ -413,7 +420,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
               sha256: frameAttachment.sha256,
               mimeType: frameAttachment.mimeType,
               tMs: frame.tMs,
-              kind: frame.kind,
+              kind: resolvedKeyframeKind,
             ),
           );
           backupShas.add(frameAttachment.sha256);
@@ -442,8 +449,8 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           ...buildVideoManifestPayload(
             videoSha256: primaryVideo.sha256,
             videoMimeType: primaryVideo.mimeType,
-            videoKind: 'unknown',
-            videoKindConfidence: 0.0,
+            videoKind: videoKindClassification.kind,
+            videoKindConfidence: videoKindClassification.confidence,
             videoProxySha256: primaryVideo.sha256,
             posterSha256: posterSha256,
             posterMimeType: posterMimeType,
