@@ -107,8 +107,16 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
         final trimmed = draft.trim();
         await backend.editMessage(sessionKey, message.id, trimmed);
 
+        var shouldRequeueSemanticParse = false;
         try {
           final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
+          shouldRequeueSemanticParse =
+              shouldRequeueSemanticParseAfterMessageEdit(
+            previousText: message.content,
+            editedText: trimmed,
+            isSourceEntry: linkedTodoInfo?.isSourceEntry == true,
+          );
+
           if (linkedTodoInfo != null && linkedTodoInfo.isSourceEntry) {
             final recurrenceRuleJson = await backend.getTodoRecurrenceRuleJson(
               sessionKey,
@@ -143,15 +151,64 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
           // ignore: message edit should still succeed even if todo sync fails.
         }
 
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
         try {
           await backend.markSemanticParseJobCanceled(
             sessionKey,
             messageId: message.id,
-            nowMs: DateTime.now().millisecondsSinceEpoch,
+            nowMs: nowMs,
           );
         } catch (_) {
           // ignore
         }
+
+        if (shouldRequeueSemanticParse && mounted) {
+          final subscriptionStatus =
+              SubscriptionScope.maybeOf(context)?.status ??
+                  SubscriptionStatus.unknown;
+          final cloudAuthScope = CloudAuthScope.maybeOf(context);
+          final cloudGatewayConfig =
+              cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+
+          final prefs = await SharedPreferences.getInstance();
+          final consented =
+              prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+
+          if (consented) {
+            String? cloudIdToken;
+            try {
+              cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+            } catch (_) {
+              cloudIdToken = null;
+            }
+
+            AskAiRouteKind route;
+            try {
+              route = await decideAiAutomationRoute(
+                backend,
+                sessionKey,
+                cloudIdToken: cloudIdToken,
+                cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                subscriptionStatus: subscriptionStatus,
+              );
+            } catch (_) {
+              route = AskAiRouteKind.needsSetup;
+            }
+
+            if (route != AskAiRouteKind.needsSetup) {
+              try {
+                await backend.enqueueSemanticParseJob(
+                  sessionKey,
+                  messageId: message.id,
+                  nowMs: nowMs,
+                );
+              } catch (_) {
+                // ignore
+              }
+            }
+          }
+        }
+
         if (!mounted) return;
         syncEngine?.notifyLocalMutation();
         _refresh();
