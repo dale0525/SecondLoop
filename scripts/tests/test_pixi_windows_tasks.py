@@ -32,6 +32,15 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("bootstrap-shared-worktree-env", dependencies)
 
+    def test_run_windows_defaults_to_flutter_run_flow(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        run_windows_task = win_tasks["run-windows"]
+        command = run_windows_task.get("cmd", "")
+
+        self.assertIn("scripts/run_windows.ps1", command)
+        self.assertIn("-UseFlutterRun", command)
+
     def test_package_windows_msi_depends_on_bootstrap_shared_worktree_env(self) -> None:
         win_tasks = self._load_win_tasks()
 

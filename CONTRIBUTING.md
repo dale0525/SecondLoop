@@ -20,9 +20,11 @@ By contributing to this repository, you agree that your contributions are licens
 - Run app locally:
   - `pixi run run-macos` (macOS only)
   - `pixi run run-linux` (Linux only)
-  - `pixi run run-windows` (Windows only; default flow is package + install + launch MSI)
-- Windows hot-reload/debugger flow:
-  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun`
+  - `pixi run run-windows` (Windows only; default flow is Flutter hot-reload/debugger)
+  - `pixi run run-windows-msi` (Windows only; package + install + launch MSI)
+- Windows direct script toggles:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun` (hot-reload/debugger)
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1` (package + install + launch MSI)
 - Build artifacts:
   - `pixi run build-android-apk`
   - `pixi run package-windows-msi`
