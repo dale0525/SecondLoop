@@ -5,10 +5,16 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/ai/ai_routing.dart';
+import '../../../core/ai/semantic_parse_data_consent_prefs.dart';
+import '../../../core/ai/semantic_parse_edit_policy.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
+import '../../../core/cloud/cloud_auth_scope.dart';
 import '../../../core/session/session_scope.dart';
+import '../../../core/subscription/subscription_scope.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';

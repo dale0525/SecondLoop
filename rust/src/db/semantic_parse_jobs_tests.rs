@@ -78,3 +78,82 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
 
     mark_semantic_parse_job_canceled(&conn, "msg:2", now_ms + 201).expect("cancel missing ok");
 }
+
+#[test]
+fn semantic_parse_jobs_retry_reopens_succeeded_job() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let now_ms = 2_000i64;
+    enqueue_semantic_parse_job(&conn, "msg:2", now_ms).expect("enqueue");
+
+    let key = [9u8; 32];
+    mark_semantic_parse_job_succeeded(
+        &conn,
+        &key,
+        "msg:2",
+        "followup",
+        Some("todo:2"),
+        Some("Follow up"),
+        Some("open"),
+        now_ms + 1,
+    )
+    .expect("succeeded");
+
+    mark_semantic_parse_job_retry(&conn, "msg:2", now_ms + 2).expect("retry");
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:2".to_string()])
+        .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "pending");
+    assert_eq!(jobs[0].applied_action_kind, None);
+    assert_eq!(jobs[0].applied_todo_id, None);
+    assert_eq!(jobs[0].applied_todo_title, None);
+    assert_eq!(jobs[0].applied_prev_todo_status, None);
+    assert_eq!(jobs[0].undone_at_ms, None);
+}
+
+#[test]
+fn semantic_parse_jobs_enqueue_reopens_existing_job() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let now_ms = 3_000i64;
+    enqueue_semantic_parse_job(&conn, "msg:3", now_ms).expect("enqueue");
+
+    let key = [5u8; 32];
+    mark_semantic_parse_job_failed(&conn, "msg:3", 2, now_ms + 120, "timeout", now_ms + 1)
+        .expect("failed");
+    mark_semantic_parse_job_succeeded(
+        &conn,
+        &key,
+        "msg:3",
+        "create",
+        Some("todo:3"),
+        Some("Draft"),
+        None,
+        now_ms + 2,
+    )
+    .expect("succeeded");
+
+    enqueue_semantic_parse_job(&conn, "msg:3", now_ms + 3).expect("enqueue again");
+
+    let due = list_due_semantic_parse_jobs(&conn, now_ms + 3, 10).expect("list due");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].message_id, "msg:3");
+    assert_eq!(due[0].status, "pending");
+    assert_eq!(due[0].attempts, 0);
+    assert_eq!(due[0].next_retry_at_ms, None);
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:3".to_string()])
+        .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "pending");
+    assert_eq!(jobs[0].attempts, 0);
+    assert_eq!(jobs[0].last_error, None);
+    assert_eq!(jobs[0].applied_action_kind, None);
+    assert_eq!(jobs[0].applied_todo_id, None);
+    assert_eq!(jobs[0].applied_todo_title, None);
+    assert_eq!(jobs[0].applied_prev_todo_status, None);
+    assert_eq!(jobs[0].undone_at_ms, None);
+}

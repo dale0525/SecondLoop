@@ -6,7 +6,7 @@ pub fn enqueue_semantic_parse_job(conn: &Connection, message_id: &str, now_ms: i
 
     conn.execute(
         r#"
-INSERT OR IGNORE INTO semantic_parse_jobs(
+INSERT INTO semantic_parse_jobs(
   message_id,
   status,
   attempts,
@@ -21,6 +21,17 @@ INSERT OR IGNORE INTO semantic_parse_jobs(
   updated_at_ms
 )
 VALUES (?1, 'pending', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?2, ?2)
+ON CONFLICT(message_id) DO UPDATE SET
+  status = 'pending',
+  attempts = 0,
+  next_retry_at_ms = NULL,
+  last_error = NULL,
+  applied_action_kind = NULL,
+  applied_todo_id = NULL,
+  applied_todo_title = NULL,
+  applied_prev_todo_status = NULL,
+  undone_at_ms = NULL,
+  updated_at_ms = excluded.updated_at_ms
 "#,
         params![message_id, now_ms],
     )?;
@@ -203,9 +214,13 @@ UPDATE semantic_parse_jobs
 SET status = 'pending',
     next_retry_at_ms = NULL,
     last_error = NULL,
+    applied_action_kind = NULL,
+    applied_todo_id = NULL,
+    applied_todo_title = NULL,
+    applied_prev_todo_status = NULL,
+    undone_at_ms = NULL,
     updated_at_ms = ?2
 WHERE message_id = ?1
-  AND status != 'succeeded'
 "#,
         params![message_id, now_ms],
     )?;
