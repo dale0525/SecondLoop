@@ -25,7 +25,7 @@ final class MacOsKeyEventChannelNormalizer {
       if (keyCode != null) {
         final logical = _asInt(message['specifiedLogicalKey']);
         if (logical != null) {
-          _pressedLogicalByKeyCode[keyCode] = logical;
+          _recordKeyCodeLogical(keyCode, logical);
         } else {
           _pressedLogicalByKeyCode.remove(keyCode);
         }
@@ -58,6 +58,19 @@ final class MacOsKeyEventChannelNormalizer {
 
   int? _asInt(Object? value) => value is int ? value : null;
 
+  void _recordKeyCodeLogical(int keyCode, int logicalKeyId) {
+    final existing = _pressedLogicalByKeyCode[keyCode];
+    if (existing == null) {
+      _pressedLogicalByKeyCode[keyCode] = logicalKeyId;
+      return;
+    }
+    if (!_isPhysicalFallbackLogicalKey(existing) &&
+        _isPhysicalFallbackLogicalKey(logicalKeyId)) {
+      return;
+    }
+    _pressedLogicalByKeyCode[keyCode] = logicalKeyId;
+  }
+
   int? _logicalKeyIdFromHardwareStateForMacKeyCode(int keyCode) {
     final physicalKey = RawKeyEventDataMacOs(keyCode: keyCode).physicalKey;
     final logicalKey = HardwareKeyboard.instance.lookUpLayout(physicalKey);
@@ -72,7 +85,7 @@ final class MacOsKeyDataNormalizer {
     switch (data.type) {
       case ui.KeyEventType.down:
       case ui.KeyEventType.repeat:
-        _pressedLogicalByPhysical[data.physical] = data.logical;
+        _recordPhysicalLogical(data.physical, data.logical);
         return data;
       case ui.KeyEventType.up:
         var recordedLogical = _pressedLogicalByPhysical.remove(data.physical);
@@ -93,6 +106,19 @@ final class MacOsKeyDataNormalizer {
           deviceType: data.deviceType,
         );
     }
+  }
+
+  void _recordPhysicalLogical(int physicalKeyId, int logicalKeyId) {
+    final existing = _pressedLogicalByPhysical[physicalKeyId];
+    if (existing == null) {
+      _pressedLogicalByPhysical[physicalKeyId] = logicalKeyId;
+      return;
+    }
+    if (!_isPhysicalFallbackLogicalKey(existing) &&
+        _isPhysicalFallbackLogicalKey(logicalKeyId)) {
+      return;
+    }
+    _pressedLogicalByPhysical[physicalKeyId] = logicalKeyId;
   }
 
   int? _logicalKeyIdFromHardwareState(int physicalKeyId) {
