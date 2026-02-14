@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import '../quick_capture/quick_capture_controller.dart';
 import '../quick_capture/quick_capture_scope.dart';
 import 'desktop_quick_capture_hotkey_prefs.dart';
+import 'desktop_window_manager_bootstrap.dart';
 
 abstract class DesktopHotkeyAdapter {
   Future<void> register(
@@ -85,7 +86,7 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
   }
 
   Future<void> _initDesktop() async {
-    await windowManager.ensureInitialized();
+    await DesktopWindowManagerBootstrap.ensureInitialized();
     windowManager.addListener(this);
 
     await DesktopQuickCaptureHotkeyPrefs.load();

@@ -30,6 +30,14 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
 
         self.assertIn("if ($LaunchAfterInstall)", script)
         self.assertIn("'SECONDLOOP_LAUNCH_AFTER_INSTALL=0'", script)
+        self.assertIn("[string]$InstallDirName = 'SecondLoop'", script)
+        self.assertIn("[string]$ExecutableName = 'secondloop.exe'", script)
+        self.assertIn("[int]$LaunchProbeTimeoutSeconds = 15", script)
+        self.assertIn("Start-Sleep -Milliseconds 500", script)
+        self.assertIn(
+            "Get-ChildItem -Path $programsRoot -Filter $Executable -File -Recurse -ErrorAction SilentlyContinue",
+            script,
+        )
 
 
 if __name__ == "__main__":

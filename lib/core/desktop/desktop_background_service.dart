@@ -25,6 +25,7 @@ import 'desktop_tray_menu_controller.dart'
         DesktopTrayMenuLabels,
         DesktopTrayMenuState,
         DesktopTrayProUsage;
+import 'desktop_window_manager_bootstrap.dart';
 import 'desktop_window_display_controller.dart';
 
 class DesktopBackgroundService extends StatefulWidget {
@@ -158,7 +159,7 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
   Future<void> _initDesktopServices() async {
     await _runSafely(() async {
-      await windowManager.ensureInitialized();
+      await DesktopWindowManagerBootstrap.ensureInitialized();
       windowManager.addListener(this);
       trayManager.addListener(this);
 
