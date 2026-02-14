@@ -16,6 +16,11 @@ try {
 }
 
 $arguments = @('/i', "`"$resolvedMsiPath`"")
+if ($LaunchAfterInstall) {
+  $arguments += 'SECONDLOOP_LAUNCH_AFTER_INSTALL=1'
+} else {
+  $arguments += 'SECONDLOOP_LAUNCH_AFTER_INSTALL=0'
+}
 if ($Quiet) {
   $arguments += '/qn'
   $arguments += '/norestart'
@@ -31,6 +36,10 @@ if ($process.ExitCode -notin @(0, 1641, 3010)) {
 Write-Host "Installed package: $resolvedMsiPath"
 
 if (-not $LaunchAfterInstall) {
+  return
+}
+
+if (-not $Quiet) {
   return
 }
 
