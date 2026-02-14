@@ -237,46 +237,50 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     BuildContext context,
     LinuxOcrModelStatus status,
   ) {
+    final zh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
     if (_linuxOcrBusy) {
-      return Localizations.localeOf(context)
-              .languageCode
-              .toLowerCase()
-              .startsWith('zh')
-          ? '正在修复运行时...'
-          : 'Repairing runtime...';
+      return zh ? '正在修复运行时...' : 'Repairing runtime...';
     }
     if (!status.supported) {
-      return Localizations.localeOf(context)
-              .languageCode
-              .toLowerCase()
-              .startsWith('zh')
+      return zh
           ? '当前无法读取本地 runtime 状态。可先尝试“修复安装”。'
           : 'Runtime status unavailable right now. Try Repair Install first.';
     }
     if (!status.installed) {
       final reason = status.message?.trim();
+      final mapped = _desktopRuntimeMissingReasonLabel(
+        zh: zh,
+        reason: reason,
+      );
+      if (mapped != null) return mapped;
       if (reason != null && reason.isNotEmpty) {
-        return Localizations.localeOf(context)
-                .languageCode
-                .toLowerCase()
-                .startsWith('zh')
-            ? '运行时缺失（$reason）'
-            : 'Runtime missing ($reason)';
+        return zh ? '运行时缺失（$reason）' : 'Runtime missing ($reason)';
       }
-      return Localizations.localeOf(context)
-              .languageCode
-              .toLowerCase()
-              .startsWith('zh')
-          ? '运行时缺失'
-          : 'Runtime missing';
+      return zh ? '运行时缺失' : 'Runtime missing';
     }
     final size = _formatDataSize(status.totalBytes);
-    return Localizations.localeOf(context)
-            .languageCode
-            .toLowerCase()
-            .startsWith('zh')
+    return zh
         ? '运行时健康（${status.modelCount} 文件, $size）'
         : 'Runtime healthy (${status.modelCount} files, $size)';
+  }
+
+  String? _desktopRuntimeMissingReasonLabel({
+    required bool zh,
+    required String? reason,
+  }) {
+    if (reason == null || reason.isEmpty) return null;
+    if (reason == 'runtime_payload_incomplete') {
+      return zh
+          ? '运行时文件不完整，请点击“修复安装”重新安装。'
+          : 'Runtime files are incomplete. Please run Repair Install again.';
+    }
+    if (reason == 'runtime_missing' || reason == 'runtime_not_initialized') {
+      return zh ? '运行时缺失' : 'Runtime missing';
+    }
+    return null;
   }
 
   Future<void> _downloadLinuxOcrModels() async {

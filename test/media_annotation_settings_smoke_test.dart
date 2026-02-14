@@ -1141,4 +1141,62 @@ void main() {
       findsAtLeastNWidgets(1),
     );
   });
+
+  testWidgets('Linux OCR models map runtime payload code to user-friendly text',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: true,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+      downloadResult: const LinuxOcrModelStatus(
+        supported: true,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 1,
+        totalBytes: 114,
+        source: LinuxOcrModelSource.none,
+        message: 'runtime_payload_incomplete',
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final downloadButton =
+        find.byKey(MediaAnnotationSettingsPage.linuxOcrModelDownloadButtonKey);
+    await tester.scrollUntilVisible(
+      downloadButton,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(downloadButton);
+    await tester.pumpAndSettle();
+
+    expect(linuxModelStore.downloadCalls, 1);
+    expect(
+      find.textContaining('Runtime files are incomplete'),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('runtime_payload_incomplete'), findsNothing);
+  });
 }
