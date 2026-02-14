@@ -38,6 +38,22 @@ final class VideoManifestSegmentRef {
   final String mimeType;
 }
 
+final class VideoManifestPreviewRef {
+  const VideoManifestPreviewRef({
+    required this.index,
+    required this.sha256,
+    required this.mimeType,
+    required this.tMs,
+    required this.kind,
+  });
+
+  final int index;
+  final String sha256;
+  final String mimeType;
+  final int tMs;
+  final String kind;
+}
+
 final class ParsedVideoManifest {
   const ParsedVideoManifest({
     required this.originalSha256,
@@ -45,12 +61,28 @@ final class ParsedVideoManifest {
     required this.segments,
     this.audioSha256,
     this.audioMimeType,
+    this.videoKind = 'unknown',
+    this.videoKindConfidence = 0.0,
+    this.posterSha256,
+    this.posterMimeType,
+    this.videoProxySha256,
+    this.keyframes = const <VideoManifestPreviewRef>[],
+    this.videoProxyMaxDurationMs = 60 * 60 * 1000,
+    this.videoProxyMaxBytes = 200 * 1024 * 1024,
   });
 
   final String originalSha256;
   final String originalMimeType;
   final String? audioSha256;
   final String? audioMimeType;
+  final String videoKind;
+  final double videoKindConfidence;
+  final String? posterSha256;
+  final String? posterMimeType;
+  final String? videoProxySha256;
+  final List<VideoManifestPreviewRef> keyframes;
+  final int videoProxyMaxDurationMs;
+  final int videoProxyMaxBytes;
   final List<VideoManifestSegmentRef> segments;
 }
 
@@ -164,6 +196,77 @@ ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
     final normalizedAudioMimeType =
         (audioMimeType == null || audioMimeType.isEmpty) ? null : audioMimeType;
 
+    int readIntField(Object? raw, {int fallback = 0}) {
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+      return fallback;
+    }
+
+    double readDoubleField(Object? raw, {double fallback = 0.0}) {
+      if (raw is double) return raw;
+      if (raw is num) return raw.toDouble();
+      if (raw is String) return double.tryParse(raw.trim()) ?? fallback;
+      return fallback;
+    }
+
+    String? readOptionalNonEmptyField(String key) {
+      final value = (payload[key] ?? '').toString().trim();
+      if (value.isEmpty) return null;
+      return value;
+    }
+
+    final rawVideoKind = (payload['video_kind'] ?? '').toString().trim();
+    final normalizedVideoKind = switch (rawVideoKind.toLowerCase()) {
+      'screen_recording' => 'screen_recording',
+      'vlog' => 'vlog',
+      _ => 'unknown',
+    };
+    final normalizedVideoKindConfidence =
+        readDoubleField(payload['video_kind_confidence'], fallback: 0.0)
+            .clamp(0.0, 1.0)
+            .toDouble();
+
+    List<VideoManifestPreviewRef> readKeyframes() {
+      final raw = payload['keyframes'];
+      if (raw is! List) return const <VideoManifestPreviewRef>[];
+      final refs = <VideoManifestPreviewRef>[];
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final sha256 = (item['sha256'] ?? '').toString().trim();
+        final mimeType = (item['mime_type'] ?? '').toString().trim();
+        if (sha256.isEmpty || mimeType.isEmpty) continue;
+        refs.add(
+          VideoManifestPreviewRef(
+            index: readIntField(item['index'], fallback: refs.length),
+            sha256: sha256,
+            mimeType: mimeType,
+            tMs: readIntField(item['t_ms']),
+            kind: ((item['kind'] ?? 'scene').toString().trim().isEmpty
+                    ? 'scene'
+                    : (item['kind'] ?? 'scene').toString().trim())
+                .toLowerCase(),
+          ),
+        );
+      }
+      refs.sort((a, b) => a.index.compareTo(b.index));
+      return List<VideoManifestPreviewRef>.unmodifiable(refs);
+    }
+
+    final normalizedKeyframes = readKeyframes();
+    final normalizedPosterSha256 = readOptionalNonEmptyField('poster_sha256');
+    final normalizedPosterMimeType =
+        readOptionalNonEmptyField('poster_mime_type');
+    final normalizedVideoProxySha256 =
+        readOptionalNonEmptyField('video_proxy_sha256') ??
+            readOptionalNonEmptyField('video_sha256');
+    final normalizedVideoProxyMaxDurationMs = readIntField(
+        payload['video_proxy_max_duration_ms'],
+        fallback: 60 * 60 * 1000);
+    final normalizedVideoProxyMaxBytes = readIntField(
+        payload['video_proxy_max_bytes'],
+        fallback: 200 * 1024 * 1024);
+
     final normalizedSegments = segments.isNotEmpty
         ? segments
         : List<VideoManifestSegmentRef>.unmodifiable([
@@ -179,6 +282,14 @@ ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
       originalMimeType: originalMimeType,
       audioSha256: normalizedAudioSha256,
       audioMimeType: normalizedAudioMimeType,
+      videoKind: normalizedVideoKind,
+      videoKindConfidence: normalizedVideoKindConfidence,
+      posterSha256: normalizedPosterSha256,
+      posterMimeType: normalizedPosterMimeType,
+      videoProxySha256: normalizedVideoProxySha256,
+      keyframes: normalizedKeyframes,
+      videoProxyMaxDurationMs: normalizedVideoProxyMaxDurationMs,
+      videoProxyMaxBytes: normalizedVideoProxyMaxBytes,
       segments: normalizedSegments,
     );
   } catch (_) {

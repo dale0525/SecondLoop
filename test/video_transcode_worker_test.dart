@@ -127,4 +127,61 @@ void main() {
         result.segments[1].bytes, Uint8List.fromList(const <int>[31, 32, 33]));
     expect(result.isStrictVideoProxy, isTrue);
   });
+
+  test('VideoTranscodeWorker extracts poster and keyframes for previews',
+      () async {
+    final input = Uint8List.fromList(const <int>[1, 3, 5, 7]);
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      input,
+      sourceMimeType: 'video/mp4',
+      maxKeyframes: 3,
+      frameIntervalSeconds: 6,
+      keyframeKind: 'slide',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        final outputPath = arguments.last;
+        final outputFile = File(outputPath);
+        await outputFile.parent.create(recursive: true);
+
+        if (outputPath.endsWith('poster.jpg')) {
+          await outputFile.writeAsBytes(const <int>[9, 9, 9]);
+        } else {
+          final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+          final keyframe1 = File(outputPath.replaceAll('%03d', '001'));
+          await keyframe0.writeAsBytes(const <int>[4, 5, 6]);
+          await keyframe1.writeAsBytes(const <int>[7, 8, 9]);
+        }
+
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(result.posterBytes, Uint8List.fromList(const <int>[9, 9, 9]));
+    expect(result.posterMimeType, 'image/jpeg');
+    expect(result.keyframes.length, 2);
+    expect(result.keyframes[0].index, 0);
+    expect(result.keyframes[0].tMs, 0);
+    expect(result.keyframes[0].kind, 'slide');
+    expect(result.keyframes[0].bytes, Uint8List.fromList(const <int>[4, 5, 6]));
+    expect(result.keyframes[1].index, 1);
+    expect(result.keyframes[1].tMs, 6000);
+    expect(result.keyframes[1].kind, 'slide');
+    expect(result.keyframes[1].bytes, Uint8List.fromList(const <int>[7, 8, 9]));
+    expect(result.hasAnyPosterOrKeyframe, isTrue);
+  });
+
+  test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
+      () async {
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => null,
+    );
+
+    expect(result.posterBytes, isNull);
+    expect(result.keyframes, isEmpty);
+    expect(result.hasAnyPosterOrKeyframe, isFalse);
+  });
 }

@@ -3,24 +3,76 @@ part of 'chat_page.dart';
 const String _kSecondLoopUrlManifestMimeType =
     'application/x.secondloop.url+json';
 const String _kSecondLoopUrlManifestSchema = 'secondloop.url_manifest.v1';
+const int _kChatVideoProxySegmentDurationSeconds = 20 * 60;
+const int _kChatVideoProxySegmentDurationMs =
+    _kChatVideoProxySegmentDurationSeconds * 1000;
+const int _kChatVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
+const int _kChatVideoProxyMaxDurationMs = 60 * 60 * 1000;
+const int _kChatVideoProxyMaxBytes = 200 * 1024 * 1024;
+const int _kChatVideoProxyMaxSegments =
+    _kChatVideoProxyMaxDurationMs ~/ _kChatVideoProxySegmentDurationMs;
 
 Map<String, Object?> buildVideoManifestPayload({
   required String videoSha256,
   required String videoMimeType,
+  String videoKind = 'unknown',
+  double videoKindConfidence = 0.0,
+  String? videoProxySha256,
+  String? posterSha256,
+  String? posterMimeType,
+  List<({int index, String sha256, String mimeType, int tMs, String kind})>?
+      keyframes,
   String? audioSha256,
   String? audioMimeType,
   int? segmentCount,
   List<({int index, String sha256, String mimeType})>? videoSegments,
+  int videoProxyMaxDurationMs = _kChatVideoProxyMaxDurationMs,
+  int videoProxyMaxBytes = _kChatVideoProxyMaxBytes,
+  int? videoProxyTotalBytes,
+  bool videoProxyTruncated = false,
 }) {
+  final normalizedKind = switch (videoKind.trim().toLowerCase()) {
+    'screen_recording' => 'screen_recording',
+    'vlog' => 'vlog',
+    _ => 'unknown',
+  };
+  final normalizedKindConfidence =
+      videoKindConfidence.clamp(0.0, 1.0).toDouble();
+
   return <String, Object?>{
     'schema': 'secondloop.video_manifest.v2',
     'video_sha256': videoSha256,
     'video_mime_type': videoMimeType,
     'original_sha256': videoSha256,
     'original_mime_type': videoMimeType,
+    'video_kind': normalizedKind,
+    'video_kind_confidence': normalizedKindConfidence,
+    if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
+      'video_proxy_sha256': videoProxySha256,
+    if (posterSha256 != null && posterSha256.trim().isNotEmpty)
+      'poster_sha256': posterSha256,
+    if (posterMimeType != null && posterMimeType.trim().isNotEmpty)
+      'poster_mime_type': posterMimeType,
+    if (keyframes != null && keyframes.isNotEmpty)
+      'keyframes': keyframes
+          .map(
+            (frame) => <String, Object?>{
+              'index': frame.index,
+              'sha256': frame.sha256,
+              'mime_type': frame.mimeType,
+              't_ms': frame.tMs,
+              'kind': frame.kind,
+            },
+          )
+          .toList(growable: false),
     if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
-    'segment_max_duration_ms': 20 * 60 * 1000,
-    'segment_max_bytes': 50 * 1024 * 1024,
+    'segment_max_duration_ms': _kChatVideoProxySegmentDurationMs,
+    'segment_max_bytes': _kChatVideoProxySegmentMaxBytes,
+    'video_proxy_max_duration_ms': videoProxyMaxDurationMs,
+    'video_proxy_max_bytes': videoProxyMaxBytes,
+    if (videoProxyTotalBytes != null && videoProxyTotalBytes > 0)
+      'video_proxy_total_bytes': videoProxyTotalBytes,
+    if (videoProxyTruncated) 'video_proxy_truncated': true,
     if (videoSegments != null && videoSegments.isNotEmpty)
       'video_segments': videoSegments
           .map(
@@ -276,15 +328,36 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
             await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
           rawBytes,
           sourceMimeType: normalizedMimeType,
-          maxSegmentDurationSeconds: 20 * 60,
-          maxSegmentBytes: 50 * 1024 * 1024,
+          maxSegmentDurationSeconds: _kChatVideoProxySegmentDurationSeconds,
+          maxSegmentBytes: _kChatVideoProxySegmentMaxBytes,
         );
         if (!videoProxy.isStrictVideoProxy) {
           throw StateError('video_proxy_transcode_failed');
         }
 
-        final videoSegments = <({int index, String sha256, String mimeType})>[];
+        final boundedSegments = <VideoTranscodeSegment>[];
+        var boundedVideoProxyBytes = 0;
         for (final segment in videoProxy.segments) {
+          if (boundedSegments.length >= _kChatVideoProxyMaxSegments) {
+            break;
+          }
+          final nextTotalBytes =
+              boundedVideoProxyBytes + segment.bytes.lengthInBytes;
+          if (nextTotalBytes > _kChatVideoProxyMaxBytes) {
+            break;
+          }
+          boundedSegments.add(segment);
+          boundedVideoProxyBytes = nextTotalBytes;
+        }
+        if (boundedSegments.isEmpty) {
+          throw StateError('video_proxy_segments_empty');
+        }
+
+        final videoProxyTruncated =
+            boundedSegments.length < videoProxy.segments.length;
+
+        final videoSegments = <({int index, String sha256, String mimeType})>[];
+        for (final segment in boundedSegments) {
           final segmentAttachment = await backend.insertAttachment(
             sessionKey,
             bytes: segment.bytes,
@@ -299,11 +372,52 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           );
           backupShas.add(segmentAttachment.sha256);
         }
-        if (videoSegments.isEmpty) {
-          throw StateError('video_proxy_segments_empty');
+
+        final primarySegment = boundedSegments.first;
+        final primaryVideo = videoSegments.first;
+
+        String? posterSha256;
+        String? posterMimeType;
+        final keyframeRefs = <({
+          int index,
+          String sha256,
+          String mimeType,
+          int tMs,
+          String kind
+        })>[];
+        final preview = await VideoTranscodeWorker.extractPreviewFrames(
+          primarySegment.bytes,
+          sourceMimeType: primarySegment.mimeType,
+        );
+        final posterBytes = preview.posterBytes;
+        if (posterBytes != null && posterBytes.isNotEmpty) {
+          final posterAttachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: posterBytes,
+            mimeType: preview.posterMimeType,
+          );
+          posterSha256 = posterAttachment.sha256;
+          posterMimeType = posterAttachment.mimeType;
+          backupShas.add(posterAttachment.sha256);
         }
 
-        final primaryVideo = videoSegments.first;
+        for (final frame in preview.keyframes) {
+          final frameAttachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: frame.bytes,
+            mimeType: frame.mimeType,
+          );
+          keyframeRefs.add(
+            (
+              index: frame.index,
+              sha256: frameAttachment.sha256,
+              mimeType: frameAttachment.mimeType,
+              tMs: frame.tMs,
+              kind: frame.kind,
+            ),
+          );
+          backupShas.add(frameAttachment.sha256);
+        }
 
         String? audioSha256;
         String? audioMimeType;
@@ -328,10 +442,20 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           ...buildVideoManifestPayload(
             videoSha256: primaryVideo.sha256,
             videoMimeType: primaryVideo.mimeType,
+            videoKind: 'unknown',
+            videoKindConfidence: 0.0,
+            videoProxySha256: primaryVideo.sha256,
+            posterSha256: posterSha256,
+            posterMimeType: posterMimeType,
+            keyframes: keyframeRefs,
             audioSha256: audioSha256,
             audioMimeType: audioMimeType,
             segmentCount: videoSegments.length,
             videoSegments: videoSegments,
+            videoProxyMaxDurationMs: _kChatVideoProxyMaxDurationMs,
+            videoProxyMaxBytes: _kChatVideoProxyMaxBytes,
+            videoProxyTotalBytes: boundedVideoProxyBytes,
+            videoProxyTruncated: videoProxyTruncated,
           ),
         });
         final manifestBytes = Uint8List.fromList(utf8.encode(manifest));

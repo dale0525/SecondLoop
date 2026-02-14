@@ -52,6 +52,30 @@ void main() {
     expect(parsedV2SegmentsOnly.segments.first.sha256, 'sha-seg-0');
   });
 
+  test('parseVideoManifestPayload parses preview and proxy fields', () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-video","video_mime_type":"video/mp4","video_kind":"screen_recording","video_kind_confidence":"0.8","poster_sha256":"sha-poster","poster_mime_type":"image/jpeg","video_proxy_sha256":"sha-proxy","video_proxy_max_duration_ms":"60000","video_proxy_max_bytes":"4096","keyframes":[{"index":2,"sha256":"sha-kf-2","mime_type":"image/jpeg","t_ms":"2000","kind":"slide"},{"index":1,"sha256":"sha-kf-1","mime_type":"image/jpeg","t_ms":1000}],"video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.videoKind, 'screen_recording');
+    expect(parsed.videoKindConfidence, 0.8);
+    expect(parsed.posterSha256, 'sha-poster');
+    expect(parsed.posterMimeType, 'image/jpeg');
+    expect(parsed.videoProxySha256, 'sha-proxy');
+    expect(parsed.videoProxyMaxDurationMs, 60000);
+    expect(parsed.videoProxyMaxBytes, 4096);
+    expect(parsed.keyframes.length, 2);
+    expect(parsed.keyframes[0].index, 1);
+    expect(parsed.keyframes[0].sha256, 'sha-kf-1');
+    expect(parsed.keyframes[0].kind, 'scene');
+    expect(parsed.keyframes[1].index, 2);
+    expect(parsed.keyframes[1].kind, 'slide');
+  });
+
   test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
       () async {
     final result = await VideoKeyframeOcrWorker.runOnVideoBytes(

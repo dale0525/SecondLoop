@@ -44,6 +44,37 @@ final class VideoTranscodeResult {
   }
 }
 
+final class VideoPreviewFrame {
+  const VideoPreviewFrame({
+    required this.index,
+    required this.bytes,
+    required this.mimeType,
+    required this.tMs,
+    required this.kind,
+  });
+
+  final int index;
+  final Uint8List bytes;
+  final String mimeType;
+  final int tMs;
+  final String kind;
+}
+
+final class VideoPreviewExtractResult {
+  const VideoPreviewExtractResult({
+    required this.posterBytes,
+    required this.posterMimeType,
+    required this.keyframes,
+  });
+
+  final Uint8List? posterBytes;
+  final String posterMimeType;
+  final List<VideoPreviewFrame> keyframes;
+
+  bool get hasAnyPosterOrKeyframe =>
+      (posterBytes != null && posterBytes!.isNotEmpty) || keyframes.isNotEmpty;
+}
+
 typedef VideoTranscodeCommandRunner = Future<ProcessResult> Function(
   String executable,
   List<String> arguments,
@@ -208,6 +239,132 @@ final class VideoTranscodeWorker {
     }
   }
 
+  static Future<VideoPreviewExtractResult> extractPreviewFrames(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+    int maxKeyframes = 4,
+    int frameIntervalSeconds = 8,
+    String keyframeKind = 'scene',
+    VideoTranscodeCommandRunner? commandRunner,
+    VideoFfmpegExecutableResolver? ffmpegExecutableResolver,
+  }) async {
+    final normalizedMime = sourceMimeType.trim().toLowerCase();
+    if (videoBytes.isEmpty || !normalizedMime.startsWith('video/')) {
+      return const VideoPreviewExtractResult(
+        posterBytes: null,
+        posterMimeType: 'image/jpeg',
+        keyframes: <VideoPreviewFrame>[],
+      );
+    }
+
+    final run = commandRunner ?? Process.run;
+    final ffmpegResolver = ffmpegExecutableResolver ??
+        debugFfmpegExecutableResolver ??
+        _resolveBundledFfmpegExecutablePath;
+    final ffmpegPath = await ffmpegResolver();
+    if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
+      return const VideoPreviewExtractResult(
+        posterBytes: null,
+        posterMimeType: 'image/jpeg',
+        keyframes: <VideoPreviewFrame>[],
+      );
+    }
+
+    final safeMaxKeyframes = maxKeyframes.clamp(1, 8);
+    final safeInterval = frameIntervalSeconds.clamp(1, 30);
+    final normalizedKind = keyframeKind.trim().isEmpty
+        ? 'scene'
+        : keyframeKind.trim().toLowerCase();
+
+    Directory? tempDir;
+    try {
+      tempDir =
+          await Directory.systemTemp.createTemp('secondloop_video_preview_');
+      final sourceExt = _extensionForMimeType(normalizedMime);
+      final inputPath = '${tempDir.path}/input.$sourceExt';
+      final posterPath = '${tempDir.path}/poster.jpg';
+      final keyframePattern = '${tempDir.path}/keyframe_%03d.jpg';
+      await File(inputPath).writeAsBytes(videoBytes, flush: true);
+
+      final posterArgs = <String>[
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        inputPath,
+        '-vf',
+        'select=eq(n\\,0)',
+        '-frames:v',
+        '1',
+        posterPath,
+      ];
+      final posterResult = await run(ffmpegPath, posterArgs);
+      Uint8List? posterBytes;
+      if (posterResult.exitCode == 0) {
+        final posterFile = File(posterPath);
+        if (await posterFile.exists()) {
+          final bytes = await posterFile.readAsBytes();
+          if (bytes.isNotEmpty) {
+            posterBytes = bytes;
+          }
+        }
+      }
+
+      final keyframeArgs = <String>[
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        inputPath,
+        '-vf',
+        'fps=1/$safeInterval',
+        '-frames:v',
+        '$safeMaxKeyframes',
+        keyframePattern,
+      ];
+      final keyframeResult = await run(ffmpegPath, keyframeArgs);
+      final keyframes = <VideoPreviewFrame>[];
+      if (keyframeResult.exitCode == 0) {
+        final frameFiles = await _listPreviewFrameFiles(tempDir.path);
+        for (var i = 0; i < frameFiles.length; i++) {
+          final frameBytes = await frameFiles[i].readAsBytes();
+          if (frameBytes.isEmpty) continue;
+          keyframes.add(
+            VideoPreviewFrame(
+              index: i,
+              bytes: frameBytes,
+              mimeType: 'image/jpeg',
+              tMs: i * safeInterval * 1000,
+              kind: normalizedKind,
+            ),
+          );
+        }
+      }
+
+      return VideoPreviewExtractResult(
+        posterBytes: posterBytes,
+        posterMimeType: 'image/jpeg',
+        keyframes: List<VideoPreviewFrame>.unmodifiable(keyframes),
+      );
+    } catch (_) {
+      return const VideoPreviewExtractResult(
+        posterBytes: null,
+        posterMimeType: 'image/jpeg',
+        keyframes: <VideoPreviewFrame>[],
+      );
+    } finally {
+      if (tempDir != null) {
+        try {
+          await tempDir.delete(recursive: true);
+        } catch (_) {
+          // Ignore temp cleanup failures.
+        }
+      }
+    }
+  }
+
   static VideoTranscodeResult _fallback(Uint8List bytes, String mimeType) {
     final normalizedMime = mimeType.trim();
     final fallbackMime =
@@ -221,6 +378,20 @@ final class VideoTranscodeWorker {
         VideoTranscodeSegment(index: 0, bytes: data, mimeType: fallbackMime),
       ]),
     );
+  }
+
+  static Future<List<File>> _listPreviewFrameFiles(String dirPath) async {
+    final files = <File>[];
+    await for (final entity in Directory(dirPath).list(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = entity.uri.pathSegments.isEmpty
+          ? entity.path
+          : entity.uri.pathSegments.last;
+      if (!name.startsWith('keyframe_') || !name.endsWith('.jpg')) continue;
+      files.add(entity);
+    }
+    files.sort((a, b) => a.path.compareTo(b.path));
+    return files;
   }
 
   static Future<List<File>> _listSegmentFiles(String dirPath) async {
