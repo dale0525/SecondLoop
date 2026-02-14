@@ -180,8 +180,10 @@ $mainWxsContent = @'
     <Icon Id="AppIcon" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="SECONDLOOP_LAUNCH_AFTER_INSTALL" Value="1" />
+    <CustomAction Id="TerminateSecondLoopOnUninstall" Directory="SystemFolder" ExeCommand="taskkill.exe /F /T /IM secondloop.exe" Return="ignore" Impersonate="yes" />
     <CustomAction Id="LaunchApplication" Directory="INSTALLFOLDER" ExeCommand="secondloop.exe" Return="asyncNoWait" Impersonate="yes" />
     <InstallExecuteSequence>
+      <Custom Action="TerminateSecondLoopOnUninstall" Before="RemoveFiles">REMOVE~="ALL"</Custom>
       <Custom Action="LaunchApplication" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 3</Custom>
     </InstallExecuteSequence>
     <Feature Id="MainFeature" Title="__PRODUCT_NAME__" Level="1">

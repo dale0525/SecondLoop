@@ -25,6 +25,18 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
             script,
         )
 
+    def test_create_windows_msi_terminates_running_app_before_uninstall(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertIn(
+            '<CustomAction Id="TerminateSecondLoopOnUninstall" Directory="SystemFolder" ExeCommand="taskkill.exe /F /T /IM secondloop.exe" Return="ignore" Impersonate="yes" />',
+            script,
+        )
+        self.assertIn(
+            '<Custom Action="TerminateSecondLoopOnUninstall" Before="RemoveFiles">REMOVE~="ALL"</Custom>',
+            script,
+        )
+
     def test_install_script_can_disable_msi_auto_launch_for_manual_launch_mode(self) -> None:
         script = self._read_repo_file("scripts/install_windows_msi.ps1")
 
