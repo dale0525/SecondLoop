@@ -479,6 +479,8 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         var totalProcessedFrames = 0;
         var processedSegments = 0;
         var ocrTruncated = manifest.segments.length > segmentRefs.length;
+        Uint8List? insightSegmentBytes;
+        String? insightSegmentMimeType;
 
         for (var i = 0; i < segmentRefs.length; i++) {
           final segment = segmentRefs[i];
@@ -487,6 +489,8 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
             sha256: segment.sha256,
           );
           if (segmentBytes.isEmpty) continue;
+          insightSegmentBytes ??= segmentBytes;
+          insightSegmentMimeType ??= segment.mimeType;
 
           final ocrResult = await runAutoVideoSegmentOcrWithFallback(
             shouldTryMultimodalOcr: shouldTryMultimodalOcr,
@@ -583,16 +587,72 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           ocrExcerpt,
         ]);
 
-        final videoContentKind = inferVideoContentKind(
+        MultimodalVideoInsight? multimodalInsight;
+        if (shouldTryMultimodalOcr &&
+            canUseNetworkOcr &&
+            insightSegmentBytes != null &&
+            insightSegmentMimeType != null) {
+          try {
+            multimodalInsight = await tryConfiguredMultimodalVideoInsight(
+              backend: backend,
+              sessionKey: sessionKey,
+              mimeType: insightSegmentMimeType,
+              mediaBytes: insightSegmentBytes,
+              languageHints: languageHints,
+              subscriptionStatus: subscriptionStatus,
+              mediaAnnotationConfig: mediaAnnotationConfig,
+              llmProfiles: llmProfiles,
+              cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+              cloudIdToken: cloudIdToken,
+              cloudModelName: cloudModelName,
+            );
+          } catch (_) {
+            multimodalInsight = null;
+          }
+        }
+
+        final heuristicContentKind = inferVideoContentKind(
           transcriptFull: transcriptFull,
           ocrTextFull: ocrFullText,
           readableTextFull: readableTextFull,
         );
-        final videoSummary = buildVideoSummaryText(
+        final videoContentKind = _resolvedVideoContentKindForAutoOcr(
+          multimodalContentKind: multimodalInsight?.contentKind ?? '',
+          heuristicContentKind: heuristicContentKind,
+        );
+        final fallbackSummary = buildVideoSummaryText(
           readableTextExcerpt.isNotEmpty
               ? readableTextExcerpt
               : readableTextFull,
           maxBytes: 2048,
+        );
+        final videoSummary = _firstNonEmptyForAutoOcr([
+          multimodalInsight?.summary ?? '',
+          fallbackSummary,
+        ]);
+        final knowledgeMarkdownFull = _firstNonEmptyForAutoOcr([
+          multimodalInsight?.knowledgeMarkdown ?? '',
+          readableTextFull,
+        ]);
+        final knowledgeMarkdownExcerpt = _truncateUtf8ForAutoOcr(
+          _firstNonEmptyForAutoOcr([
+            multimodalInsight?.knowledgeMarkdown ?? '',
+            readableTextExcerpt,
+            readableTextFull,
+          ]),
+          8 * 1024,
+        );
+        final videoDescriptionFull = _firstNonEmptyForAutoOcr([
+          multimodalInsight?.videoDescription ?? '',
+          readableTextFull,
+        ]);
+        final videoDescriptionExcerpt = _truncateUtf8ForAutoOcr(
+          _firstNonEmptyForAutoOcr([
+            multimodalInsight?.videoDescription ?? '',
+            readableTextExcerpt,
+            readableTextFull,
+          ]),
+          8 * 1024,
         );
 
         final segmentPayloads = manifest.segments
@@ -634,17 +694,20 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         updatedPayload['ocr_page_count'] = totalFrameCount;
         updatedPayload['ocr_processed_pages'] = totalProcessedFrames;
         updatedPayload['video_content_kind'] = videoContentKind;
+        if (multimodalInsight != null && multimodalInsight.engine.isNotEmpty) {
+          updatedPayload['video_content_kind_engine'] =
+              multimodalInsight.engine;
+        }
         if (videoSummary.isNotEmpty) {
           updatedPayload['video_summary'] = videoSummary;
         }
         if (videoContentKind == 'knowledge') {
-          updatedPayload['knowledge_markdown_full'] = readableTextFull;
+          updatedPayload['knowledge_markdown_full'] = knowledgeMarkdownFull;
           updatedPayload['knowledge_markdown_excerpt'] =
-              _truncateUtf8ForAutoOcr(readableTextExcerpt, 8 * 1024);
+              knowledgeMarkdownExcerpt;
         } else if (videoContentKind == 'non_knowledge') {
-          updatedPayload['video_description_full'] = readableTextFull;
-          updatedPayload['video_description_excerpt'] =
-              _truncateUtf8ForAutoOcr(readableTextExcerpt, 8 * 1024);
+          updatedPayload['video_description_full'] = videoDescriptionFull;
+          updatedPayload['video_description_excerpt'] = videoDescriptionExcerpt;
         }
         updatedPayload['ocr_auto_status'] = 'ok';
         updatedPayload['ocr_auto_last_success_ms'] =
@@ -740,6 +803,32 @@ Future<AutoVideoSegmentOcrResult?> runAutoVideoSegmentOcrWithFallback({
     pageCount: pageCount,
     processedPages: processedPages,
   );
+}
+
+String _resolvedVideoContentKindForAutoOcr({
+  required String multimodalContentKind,
+  required String heuristicContentKind,
+}) {
+  final normalizedMultimodal = multimodalContentKind.trim().toLowerCase();
+  if (normalizedMultimodal == 'knowledge' ||
+      normalizedMultimodal == 'non_knowledge') {
+    return normalizedMultimodal;
+  }
+
+  final normalizedHeuristic = heuristicContentKind.trim().toLowerCase();
+  if (normalizedHeuristic == 'knowledge' ||
+      normalizedHeuristic == 'non_knowledge') {
+    return normalizedHeuristic;
+  }
+  return 'unknown';
+}
+
+String _firstNonEmptyForAutoOcr(List<String> values) {
+  for (final raw in values) {
+    final value = raw.trim();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
 }
 
 String _readTrimmedPayloadString(Map<String, Object?> payload, String key) {
