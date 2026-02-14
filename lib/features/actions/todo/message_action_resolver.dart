@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
+import '../../../core/ai/semantic_parse_edit_policy.dart';
 import '../time/time_resolver.dart';
 import 'todo_linking.dart';
 import 'todo_thread_match.dart';
@@ -431,6 +432,10 @@ class MessageActionResolver {
           );
         }
       }
+    }
+
+    if (isLongTextForTodoAutomation(raw)) {
+      return const MessageActionNoneDecision();
     }
 
     // Create (new todo)
