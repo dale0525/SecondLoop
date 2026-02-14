@@ -1,9 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/backend/app_backend.dart';
+import '../../core/backend/attachments_backend.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
+import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -321,6 +327,29 @@ class NonImageAttachmentView extends StatefulWidget {
 }
 
 class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
+  Future<ParsedVideoManifest?>? _videoManifestFuture;
+  final Map<String, Future<Uint8List?>> _attachmentBytesBySha =
+      <String, Future<Uint8List?>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _videoManifestFuture = _createVideoManifestFuture();
+  }
+
+  @override
+  void didUpdateWidget(covariant NonImageAttachmentView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final didVideoTargetChange =
+        oldWidget.attachment.sha256 != widget.attachment.sha256 ||
+            oldWidget.attachment.mimeType != widget.attachment.mimeType ||
+            oldWidget.bytes != widget.bytes;
+    if (!didVideoTargetChange) return;
+
+    _attachmentBytesBySha.clear();
+    _videoManifestFuture = _createVideoManifestFuture();
+  }
+
   static IconData _previewIconForMime(String mime) {
     if (mime.startsWith('application/pdf') || isDocxMimeType(mime)) {
       return Icons.description_outlined;
@@ -333,24 +362,96 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     return Icons.insert_drive_file_outlined;
   }
 
-  static String _sourceLabel(AttachmentTextSource source) {
-    switch (source) {
-      case AttachmentTextSource.extracted:
-        return 'extracted';
-      case AttachmentTextSource.readable:
-        return 'readable';
-      case AttachmentTextSource.ocr:
-        return 'ocr';
-      case AttachmentTextSource.none:
-        return 'none';
-    }
-  }
-
   static int _asInt(Object? raw) {
     if (raw is int) return raw;
     if (raw is num) return raw.toInt();
     if (raw is String) return int.tryParse(raw.trim()) ?? 0;
     return 0;
+  }
+
+  Future<ParsedVideoManifest?> _createVideoManifestFuture() async {
+    final mime = widget.attachment.mimeType.trim().toLowerCase();
+    if (mime != kSecondLoopVideoManifestMimeType) return null;
+
+    final inlineManifest = parseVideoManifestPayload(widget.bytes);
+    if (inlineManifest != null) return inlineManifest;
+
+    final bytes = await _readAttachmentBytesBySha(widget.attachment.sha256);
+    if (bytes == null || bytes.isEmpty) return null;
+    return parseVideoManifestPayload(bytes);
+  }
+
+  Future<Uint8List?> _readAttachmentBytesBySha(String sha256) {
+    final normalizedSha = sha256.trim();
+    if (normalizedSha.isEmpty) return Future<Uint8List?>.value(null);
+
+    return _attachmentBytesBySha.putIfAbsent(normalizedSha, () async {
+      final backend = AppBackendScope.maybeOf(context);
+      final sessionScope = SessionScope.maybeOf(context);
+      if (backend is! AttachmentsBackend || sessionScope == null) {
+        return null;
+      }
+      final attachmentsBackend = backend as AttachmentsBackend;
+
+      try {
+        final bytes = await attachmentsBackend.readAttachmentBytes(
+          sessionScope.sessionKey,
+          sha256: normalizedSha,
+        );
+        if (bytes.isEmpty) return null;
+        return bytes;
+      } catch (_) {
+        return null;
+      }
+    });
+  }
+
+  Future<void> _openAttachmentBySha(String sha256, String mimeType) async {
+    final bytes = await _readAttachmentBytesBySha(sha256);
+    if (bytes == null || bytes.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(context.t.errors.loadFailed(error: 'bytes unavailable')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final extension = fileExtensionForSystemOpenMimeType(mimeType);
+      final stem = sha256.trim().isEmpty
+          ? DateTime.now().millisecondsSinceEpoch.toString()
+          : sha256.trim();
+      final file = File('${dir.path}/$stem$extension');
+      await file.writeAsBytes(bytes, flush: true);
+
+      final launched = await launchUrl(
+        Uri.file(file.path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t.errors.loadFailed(
+              error: 'could not open externally',
+            )),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.loadFailed(error: '$error')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Future<void> _runOcrWithDialogOptions({
@@ -470,6 +571,141 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     );
   }
 
+  Widget _buildVideoManifestPreviewTile({
+    required String sha256,
+    required String mimeType,
+    required Key key,
+    double width = 240,
+    double height = 136,
+  }) {
+    return FutureBuilder<Uint8List?>(
+      future: _readAttachmentBytesBySha(sha256),
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        final hasBytes = bytes != null && bytes.isNotEmpty;
+
+        return Container(
+          key: key,
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: hasBytes
+              ? Image.memory(
+                  bytes,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                )
+              : Center(
+                  child: Icon(
+                    _previewIconForMime(mimeType),
+                    size: 28,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVideoManifestPreviewCard(
+    BuildContext context,
+    ParsedVideoManifest manifest,
+  ) {
+    final keyframes = manifest.keyframes
+        .where((item) => item.sha256.trim().isNotEmpty)
+        .toList(growable: false);
+    final previewKeyframes = keyframes.take(4).toList(growable: false);
+    final posterSha256 = (manifest.posterSha256 ?? '').trim();
+    final proxySha256 = (manifest.videoProxySha256 ?? '').trim();
+    final proxyMimeType = manifest.segments.isNotEmpty
+        ? manifest.segments.first.mimeType
+        : manifest.originalMimeType;
+    final confidencePercent =
+        (manifest.videoKindConfidence.clamp(0.0, 1.0) * 100).round();
+
+    Widget buildStatBadge(String text) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ),
+      );
+    }
+
+    return SlSurface(
+      key: const ValueKey('video_manifest_preview_surface'),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              buildStatBadge('${manifest.videoKind} ($confidencePercent%)'),
+              buildStatBadge('segments: ${manifest.segments.length}'),
+              buildStatBadge('keyframes: ${keyframes.length}'),
+            ],
+          ),
+          if (posterSha256.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildVideoManifestPreviewTile(
+              sha256: posterSha256,
+              mimeType: manifest.posterMimeType ?? 'image/jpeg',
+              key: const ValueKey('video_manifest_poster_preview'),
+              width: double.infinity,
+              height: 188,
+            ),
+          ],
+          if (previewKeyframes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < previewKeyframes.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    _buildVideoManifestPreviewTile(
+                      sha256: previewKeyframes[i].sha256,
+                      mimeType: previewKeyframes[i].mimeType,
+                      key: ValueKey('video_manifest_keyframe_preview_$i'),
+                      width: 156,
+                      height: 96,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          if (proxySha256.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                key: const ValueKey('video_manifest_open_proxy_button'),
+                onPressed: () =>
+                    unawaited(_openAttachmentBySha(proxySha256, proxyMimeType)),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: Text(context.t.attachments.content.openWithSystem),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildView(
     BuildContext context, {
     required Attachment attachment,
@@ -500,6 +736,9 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final canRunOcr = supportsOcr && onRunOcr != null;
     final videoInsights =
         isVideoManifest ? resolveVideoManifestInsightContent(payload) : null;
+    final videoManifestFuture = isVideoManifest
+        ? (_videoManifestFuture ??= _createVideoManifestFuture())
+        : null;
 
     final hasOcrEngine =
         (payload?['ocr_engine'] ?? '').toString().trim().isNotEmpty;
@@ -537,7 +776,12 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final debugMarker = buildPdfOcrDebugMarker(
       isPdf: isPdf,
       debugEnabled: kDebugMode,
-      source: _sourceLabel(selectedTextContent.source),
+      source: switch (selectedTextContent.source) {
+        AttachmentTextSource.extracted => 'extracted',
+        AttachmentTextSource.readable => 'readable',
+        AttachmentTextSource.ocr => 'ocr',
+        AttachmentTextSource.none => 'none',
+      },
       autoStatus: autoStatus,
       needsOcr: needsOcr,
       ocrEngine: ocrEngine,
@@ -670,6 +914,20 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                     ),
                   ),
                   maxWidth: 860,
+                ),
+                const SizedBox(height: 14),
+              ],
+              if (videoManifestFuture != null) ...[
+                buildSection(
+                  FutureBuilder<ParsedVideoManifest?>(
+                    future: videoManifestFuture,
+                    builder: (context, snapshot) {
+                      final manifest = snapshot.data;
+                      if (manifest == null) return const SizedBox.shrink();
+                      return _buildVideoManifestPreviewCard(context, manifest);
+                    },
+                  ),
+                  maxWidth: 820,
                 ),
                 const SizedBox(height: 14),
               ],

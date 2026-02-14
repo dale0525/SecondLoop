@@ -312,6 +312,80 @@ void main() {
     expect(runInvoked, 1);
   });
 
+  testWidgets('NonImageAttachmentView shows video manifest preview metadata',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-preview',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_kind': 'vlog',
+          'video_kind_confidence': 0.72,
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/jpeg',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'keyframes': [
+            {
+              'index': 0,
+              'sha256': 'sha-kf-0',
+              'mime_type': 'image/jpeg',
+              't_ms': 0,
+              'kind': 'scene',
+            },
+            {
+              'index': 1,
+              'sha256': 'sha-kf-1',
+              'mime_type': 'image/jpeg',
+              't_ms': 4000,
+              'kind': 'scene',
+            },
+          ],
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-0',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video preview',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('video_manifest_preview_surface')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('vlog'), findsOneWidget);
+    expect(find.textContaining('72%'), findsOneWidget);
+    expect(find.byKey(const ValueKey('video_manifest_poster_preview')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('video_manifest_keyframe_preview_0')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
+        findsOneWidget);
+  });
+
   testWidgets('NonImageAttachmentView shows video manifest insight fields',
       (tester) async {
     const attachment = Attachment(
