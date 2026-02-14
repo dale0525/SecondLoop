@@ -478,6 +478,93 @@ Future<MultimodalVideoInsight?> tryConfiguredMultimodalVideoInsight({
   }
 }
 
+MultimodalVideoInsight? mergeMultimodalVideoInsights(
+  Iterable<MultimodalVideoInsight?> insights, {
+  int maxSummaryChars = 1024,
+  int maxKnowledgeChars = 12 * 1024,
+  int maxDescriptionChars = 12 * 1024,
+}) {
+  final normalized = insights
+      .whereType<MultimodalVideoInsight>()
+      .where((insight) => insight.hasAny)
+      .toList(growable: false);
+  if (normalized.isEmpty) return null;
+
+  final summary = _mergeUniqueMultimodalInsightBlocks(
+    normalized.map((insight) => insight.summary),
+    maxChars: maxSummaryChars,
+  );
+  final knowledgeMarkdown = _mergeUniqueMultimodalInsightBlocks(
+    normalized.map((insight) => insight.knowledgeMarkdown),
+    maxChars: maxKnowledgeChars,
+  );
+  final videoDescription = _mergeUniqueMultimodalInsightBlocks(
+    normalized.map((insight) => insight.videoDescription),
+    maxChars: maxDescriptionChars,
+  );
+
+  var knowledgeVotes = 0;
+  var nonKnowledgeVotes = 0;
+  for (final insight in normalized) {
+    final contentKind = _normalizeVideoContentKind(insight.contentKind);
+    if (contentKind == 'knowledge') {
+      knowledgeVotes += 1;
+      continue;
+    }
+    if (contentKind == 'non_knowledge') {
+      nonKnowledgeVotes += 1;
+      continue;
+    }
+
+    final hasKnowledge = insight.knowledgeMarkdown.trim().isNotEmpty;
+    final hasDescription = insight.videoDescription.trim().isNotEmpty;
+    if (hasKnowledge && !hasDescription) {
+      knowledgeVotes += 1;
+    } else if (hasDescription && !hasKnowledge) {
+      nonKnowledgeVotes += 1;
+    }
+  }
+
+  var resolvedContentKind = 'unknown';
+  if (knowledgeVotes > nonKnowledgeVotes) {
+    resolvedContentKind = 'knowledge';
+  } else if (nonKnowledgeVotes > knowledgeVotes) {
+    resolvedContentKind = 'non_knowledge';
+  } else {
+    for (final insight in normalized) {
+      final normalizedKind = _normalizeVideoContentKind(insight.contentKind);
+      if (normalizedKind != 'unknown') {
+        resolvedContentKind = normalizedKind;
+        break;
+      }
+    }
+  }
+
+  if (resolvedContentKind == 'unknown') {
+    if (knowledgeMarkdown.isNotEmpty && videoDescription.isEmpty) {
+      resolvedContentKind = 'knowledge';
+    } else if (videoDescription.isNotEmpty && knowledgeMarkdown.isEmpty) {
+      resolvedContentKind = 'non_knowledge';
+    }
+  }
+
+  final fallbackSummary = _firstNonEmptyString(<String>[
+    summary,
+    _buildExcerpt(knowledgeMarkdown, maxChars: 240),
+    _buildExcerpt(videoDescription, maxChars: 240),
+  ]);
+
+  return MultimodalVideoInsight(
+    contentKind: resolvedContentKind,
+    summary: fallbackSummary,
+    knowledgeMarkdown: knowledgeMarkdown,
+    videoDescription: videoDescription,
+    engine: _dominantNonEmptyMultimodalEngine(
+      normalized.map((insight) => insight.engine),
+    ),
+  );
+}
+
 Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
   required NativeAppBackend backend,
   required Uint8List sessionKey,
@@ -659,6 +746,44 @@ String _firstNonEmptyString(List<String> values) {
     if (value.isNotEmpty) return value;
   }
   return '';
+}
+
+String _mergeUniqueMultimodalInsightBlocks(
+  Iterable<String> values, {
+  required int maxChars,
+}) {
+  final seen = <String>{};
+  final unique = <String>[];
+  for (final raw in values) {
+    final value = raw.trim();
+    if (value.isEmpty) continue;
+    if (!seen.add(value)) continue;
+    unique.add(value);
+  }
+  if (unique.isEmpty) return '';
+  final merged = unique.join('\n\n');
+  if (maxChars <= 0) return '';
+  return _buildExcerpt(merged, maxChars: maxChars);
+}
+
+String _dominantNonEmptyMultimodalEngine(Iterable<String> engines) {
+  final counts = <String, int>{};
+  for (final raw in engines) {
+    final value = raw.trim();
+    if (value.isEmpty) continue;
+    counts.update(value, (count) => count + 1, ifAbsent: () => 1);
+  }
+  if (counts.isEmpty) return '';
+
+  var bestEngine = '';
+  var bestCount = -1;
+  counts.forEach((engine, count) {
+    if (count > bestCount) {
+      bestEngine = engine;
+      bestCount = count;
+    }
+  });
+  return bestEngine;
 }
 
 String? extractOcrMarkdownFromMediaAnnotationPayload(String payloadJson) {

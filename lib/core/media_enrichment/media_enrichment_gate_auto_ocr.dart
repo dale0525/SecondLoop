@@ -515,8 +515,7 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         var totalProcessedFrames = 0;
         var processedSegments = 0;
         var ocrTruncated = manifest.segments.length > segmentRefs.length;
-        Uint8List? insightSegmentBytes;
-        String? insightSegmentMimeType;
+        final insightCandidates = <({Uint8List bytes, String mimeType})>[];
 
         for (var i = 0; i < segmentRefs.length; i++) {
           final segment = segmentRefs[i];
@@ -525,8 +524,10 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
             sha256: segment.sha256,
           );
           if (segmentBytes.isEmpty) continue;
-          insightSegmentBytes ??= segmentBytes;
-          insightSegmentMimeType ??= segment.mimeType;
+          if (insightCandidates.length < 3) {
+            insightCandidates
+                .add((bytes: segmentBytes, mimeType: segment.mimeType));
+          }
 
           final ocrResult = await runAutoVideoSegmentOcrWithFallback(
             shouldTryMultimodalOcr: shouldTryMultimodalOcr,
@@ -620,22 +621,28 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         MultimodalVideoInsight? multimodalInsight;
         if (shouldTryMultimodalOcr &&
             canUseNetworkOcr &&
-            insightSegmentBytes != null &&
-            insightSegmentMimeType != null) {
+            insightCandidates.isNotEmpty) {
           try {
-            multimodalInsight = await tryConfiguredMultimodalVideoInsight(
-              backend: backend,
-              sessionKey: sessionKey,
-              mimeType: insightSegmentMimeType,
-              mediaBytes: insightSegmentBytes,
-              languageHints: languageHints,
-              subscriptionStatus: subscriptionStatus,
-              mediaAnnotationConfig: mediaAnnotationConfig,
-              llmProfiles: llmProfiles,
-              cloudGatewayBaseUrl: cloudGatewayBaseUrl,
-              cloudIdToken: cloudIdToken,
-              cloudModelName: cloudModelName,
-            );
+            final segmentInsights = <MultimodalVideoInsight>[];
+            for (final candidate in insightCandidates) {
+              final insight = await tryConfiguredMultimodalVideoInsight(
+                backend: backend,
+                sessionKey: sessionKey,
+                mimeType: candidate.mimeType,
+                mediaBytes: candidate.bytes,
+                languageHints: languageHints,
+                subscriptionStatus: subscriptionStatus,
+                mediaAnnotationConfig: mediaAnnotationConfig,
+                llmProfiles: llmProfiles,
+                cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+                cloudIdToken: cloudIdToken,
+                cloudModelName: cloudModelName,
+              );
+              if (insight != null) {
+                segmentInsights.add(insight);
+              }
+            }
+            multimodalInsight = mergeMultimodalVideoInsights(segmentInsights);
           } catch (_) {
             multimodalInsight = null;
           }
