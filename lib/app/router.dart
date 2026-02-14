@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
+import '../core/quick_capture/quick_capture_controller.dart';
+import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/session/session_scope.dart';
 import '../features/chat/chat_page.dart';
 import '../features/settings/settings_page.dart';
@@ -34,6 +36,39 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  QuickCaptureController? _quickCaptureController;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final controller = QuickCaptureScope.maybeOf(context);
+    if (_quickCaptureController == controller) return;
+
+    _quickCaptureController?.removeListener(_onQuickCaptureChanged);
+    _quickCaptureController = controller;
+    if (controller != null) {
+      controller.addListener(_onQuickCaptureChanged);
+    }
+  }
+
+  void _onQuickCaptureChanged() {
+    final controller = _quickCaptureController;
+    if (controller == null) return;
+
+    final shouldOpenMainStream = controller.consumeOpenMainStreamRequest();
+    if (!shouldOpenMainStream || _selectedIndex == 0 || !mounted) {
+      return;
+    }
+
+    setState(() => _selectedIndex = 0);
+  }
+
+  @override
+  void dispose() {
+    _quickCaptureController?.removeListener(_onQuickCaptureChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +76,8 @@ class _AppShellState extends State<AppShell> {
     final mediaQuery = MediaQuery.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useRail = constraints.maxWidth >= 720;
+        final useCollapsedShell = constraints.maxHeight < 180;
+        final useRail = !useCollapsedShell && constraints.maxWidth >= 720;
         final content = useRail
             ? IndexedStack(
                 index: _selectedIndex,
@@ -53,60 +89,64 @@ class _AppShellState extends State<AppShell> {
             : const _MainStreamTab(isActive: true);
 
         return Scaffold(
-          body: useRail
-              ? Row(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 92,
-                        child: SlGlass(
-                          borderRadius: BorderRadius.circular(tokens.radiusLg),
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: NavigationRail(
-                            selectedIndex: _selectedIndex,
-                            onDestinationSelected: (index) =>
-                                setState(() => _selectedIndex = index),
-                            labelType: NavigationRailLabelType.all,
-                            destinations: [
-                              for (final t in AppTab.values)
-                                NavigationRailDestination(
-                                  icon: Icon(t.icon),
-                                  selectedIcon: Icon(t.selectedIcon),
-                                  label: Text(t.label(context)),
-                                ),
-                            ],
+          body: useCollapsedShell
+              ? const SizedBox.shrink()
+              : useRail
+                  ? Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 92,
+                            child: SlGlass(
+                              borderRadius:
+                                  BorderRadius.circular(tokens.radiusLg),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: NavigationRail(
+                                selectedIndex: _selectedIndex,
+                                onDestinationSelected: (index) =>
+                                    setState(() => _selectedIndex = index),
+                                labelType: NavigationRailLabelType.all,
+                                destinations: [
+                                  for (final t in AppTab.values)
+                                    NavigationRailDestination(
+                                      icon: Icon(t.icon),
+                                      selectedIcon: Icon(t.selectedIcon),
+                                      label: Text(t.label(context)),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
+                        Expanded(
+                          child: SlPageSurface(
+                            margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
+                            child: ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(tokens.radiusLg),
+                              child: content,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : SlPageSurface(
+                      margin: EdgeInsets.fromLTRB(
+                        12,
+                        12 + mediaQuery.viewPadding.top,
+                        12,
+                        0,
                       ),
-                    ),
-                    Expanded(
-                      child: SlPageSurface(
-                        margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(tokens.radiusLg),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(tokens.radiusLg),
+                        child: MediaQuery.removePadding(
+                          context: context,
+                          removeTop: true,
                           child: content,
                         ),
                       ),
                     ),
-                  ],
-                )
-              : SlPageSurface(
-                  margin: EdgeInsets.fromLTRB(
-                    12,
-                    12 + mediaQuery.viewPadding.top,
-                    12,
-                    0,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(tokens.radiusLg),
-                    child: MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      child: content,
-                    ),
-                  ),
-                ),
           bottomNavigationBar: null,
         );
       },
