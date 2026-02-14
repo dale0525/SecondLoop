@@ -52,7 +52,29 @@ function Remove-Path {
   }
 
   Invoke-Action -Description (Format-Command @('rm', '-rf', $Path)) -Action {
-    Remove-Item -LiteralPath $Path -Recurse -Force
+    $quotedPath = '"' + $Path.Replace('"', '""') + '"'
+
+    if (Test-ReparsePoint -Path $Path) {
+      if (Test-Path -LiteralPath $Path -PathType Container) {
+        cmd /c "rmdir $quotedPath" | Out-Null
+      } else {
+        cmd /c "del /f /q $quotedPath" | Out-Null
+      }
+      if (Test-Path -LiteralPath $Path) {
+        throw "Failed to remove reparse point: $Path"
+      }
+      return
+    }
+
+    if (Test-Path -LiteralPath $Path -PathType Container) {
+      cmd /c "rmdir /s /q $quotedPath" | Out-Null
+      if (Test-Path -LiteralPath $Path) {
+        throw "Failed to remove directory: $Path"
+      }
+      return
+    }
+
+    Remove-Item -LiteralPath $Path -Force
   }
 }
 
@@ -75,6 +97,33 @@ function Test-DirectoryHasContents {
   }
 
   return [bool](Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue | Select-Object -First 1)
+}
+
+function Get-FileSha256Hex {
+  param([string]$Path)
+
+  $getFileHashCmd = Get-Command Get-FileHash -ErrorAction SilentlyContinue
+  if ($getFileHashCmd) {
+    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+  }
+
+  $sha256 = $null
+  $stream = $null
+
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+    $hashBytes = $sha256.ComputeHash($stream)
+    return ([System.BitConverter]::ToString($hashBytes).Replace('-', '').ToLowerInvariant())
+  }
+  finally {
+    if ($stream -ne $null) {
+      $stream.Dispose()
+    }
+    if ($sha256 -ne $null) {
+      $sha256.Dispose()
+    }
+  }
 }
 
 function Invoke-Robocopy {
@@ -302,7 +351,7 @@ $sharedTool = Join-Path $sharedRoot '.tool'
 
 $lockFile = Join-Path $repoRoot 'pixi.lock'
 if (Test-Path -LiteralPath $lockFile) {
-  $lockHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockFile).Hash.ToLowerInvariant()
+  $lockHash = Get-FileSha256Hex -Path $lockFile
   if ($lockHash.Length -gt 16) {
     $lockHash = $lockHash.Substring(0, 16)
   }

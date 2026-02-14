@@ -47,6 +47,7 @@ pixi run cargo clippy "--all-targets --all-features -- -D warnings"
 ## Troubleshooting
 
 - If Windows builds reference macOS Flutter paths like `/Users/.../fvm/versions/...`, clean generated artifacts (or run `dart pub global run fvm:main flutter clean`) and then run `pixi run setup-flutter` again.
+- If `pixi run setup-flutter` fails on Windows with `Filename too long` while cloning Flutter, run `git config --global core.longpaths true` once, then retry `pixi run setup-flutter`.
 - If `flutter pub get` fails with TLS errors to `https://pub.dev`, try `export PUB_HOSTED_URL=https://pub.flutter-io.cn` and retry.
 
 ## Test data privacy

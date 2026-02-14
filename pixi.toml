@@ -111,10 +111,12 @@ run-linux = { cmd = "dart pub global run fvm:main dart run tools/prepare_desktop
 # Windows-specific overrides.
 # - bootstrap-shared-worktree-env uses PowerShell (no bash dependency)
 # - init-env uses PowerShell (no bash dependency)
+# - setup-flutter enables git long-path support before FVM clone/checkouts
 # - run-windows defaults to packaged MSI flow (use scripts/run_windows.ps1 -UseFlutterRun for hot reload path)
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 bootstrap-shared-worktree-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_shared_worktree_env.ps1"
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"
+setup-flutter = "git config --global core.longpaths true && dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.22.3 && dart pub global run fvm:main use 3.22.3 --force && dart pub global run fvm:main flutter pub get"
 prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
 setup-wix-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_wix.ps1"
 run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows", "setup-wix-windows"] }
