@@ -19,6 +19,7 @@ import 'desktop_boot_prefs.dart';
 import 'desktop_launch_args.dart';
 import 'desktop_tray_icon_config.dart';
 import 'desktop_tray_menu_controller.dart' show DesktopTrayProUsage;
+import 'desktop_tray_popup_layout.dart';
 import 'desktop_tray_popup_window.dart';
 
 class DesktopBackgroundService extends StatefulWidget {
@@ -72,9 +73,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   DateTime? _lastLeftTrayClickAt;
 
   static const Duration _trayDoubleClickThreshold = Duration(milliseconds: 220);
-  static const double _trayPopupWindowWidth = 288;
-  static const double _trayPopupWindowHeightWithProUsage = 296;
-  static const double _trayPopupWindowHeightCompact = 212;
   static const double _trayPopupVerticalGap = 8;
 
   bool get _isDesktop =>
@@ -97,11 +95,8 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   bool get _reserveProUsageSpaceInTrayPopup =>
       _isSignedInProAccount || _trayProUsage != null;
 
-  Size get _trayPopupWindowSize => Size(
-        _trayPopupWindowWidth,
-        _reserveProUsageSpaceInTrayPopup
-            ? _trayPopupWindowHeightWithProUsage
-            : _trayPopupWindowHeightCompact,
+  Size get _trayPopupWindowSize => resolveTrayPopupWindowSize(
+        reserveProUsageSpace: _reserveProUsageSpaceInTrayPopup,
       );
 
   @override
