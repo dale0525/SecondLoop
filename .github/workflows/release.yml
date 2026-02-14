@@ -414,11 +414,16 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
+          indicator_pkg='libayatana-appindicator3-dev'
+          if ! apt-cache show "${indicator_pkg}" >/dev/null 2>&1; then
+            indicator_pkg='libappindicator3-dev'
+          fi
           sudo apt-get install -y \
             clang \
             cmake \
             ffmpeg \
             libgtk-3-dev \
+            "${indicator_pkg}" \
             libkeybinder-3.0-dev \
             liblzma-dev \
             libsecret-1-dev \
