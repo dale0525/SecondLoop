@@ -39,6 +39,73 @@ void main() {
     expect(window.exitQuickCaptureCalls, 1);
   });
 
+  test('Esc hide does not reopen main window', () async {
+    final controller = QuickCaptureController();
+    final window = _FakeWindow();
+    final hotkey = _FakeHotkey();
+    final initialHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyK,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
+
+    final service = DesktopQuickCaptureCoordinator(
+      controller: controller,
+      window: window,
+      hotkey: hotkey,
+      hotKey: initialHotKey,
+    );
+
+    await service.init();
+
+    hotkey.trigger();
+    await pumpEventQueue();
+
+    controller.hide(reopenMainWindow: true);
+    await pumpEventQueue();
+
+    hotkey.trigger();
+    await pumpEventQueue();
+
+    controller.hide();
+    await pumpEventQueue();
+
+    expect(controller.visible, false);
+    expect(window.showAndFocusCalls, 3);
+    expect(window.hideCalls, 1);
+    expect(window.exitQuickCaptureCalls, 2);
+  });
+
+  test('Submit flow restores main window instead of hiding', () async {
+    final controller = QuickCaptureController();
+    final window = _FakeWindow();
+    final hotkey = _FakeHotkey();
+    final initialHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyK,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.shift],
+      scope: HotKeyScope.system,
+    );
+
+    final service = DesktopQuickCaptureCoordinator(
+      controller: controller,
+      window: window,
+      hotkey: hotkey,
+      hotKey: initialHotKey,
+    );
+
+    await service.init();
+    hotkey.trigger();
+    await pumpEventQueue();
+
+    controller.hide(reopenMainWindow: true);
+    await pumpEventQueue();
+
+    expect(controller.visible, false);
+    expect(window.exitQuickCaptureCalls, 1);
+    expect(window.showAndFocusCalls, 2);
+    expect(window.hideCalls, 0);
+  });
+
   test('Updating hotkey re-registers', () async {
     final controller = QuickCaptureController();
     final window = _FakeWindow();
