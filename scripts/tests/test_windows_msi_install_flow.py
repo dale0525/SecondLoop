@@ -39,6 +39,14 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
             script,
         )
 
+    def test_run_windows_msi_uses_dedicated_dev_upgrade_identity(self) -> None:
+        script = self._read_repo_file("scripts/run_windows.ps1")
+
+        self.assertIn("$devProductName = 'SecondLoop Dev'", script)
+        self.assertIn("$devUpgradeCode = 'A8A3E3A2-3C6E-4D9D-BD70-82D59F8CF0B2'", script)
+        self.assertIn("-ProductName $devProductName", script)
+        self.assertIn("-UpgradeCode $devUpgradeCode", script)
+
 
 if __name__ == "__main__":
     unittest.main()
