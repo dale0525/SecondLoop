@@ -295,4 +295,64 @@ void main() {
     );
     expect(backend.webdavCalls, 0);
   });
+
+  test(
+      'CloudMediaDownload does not treat local metadata misses as remote missing',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 1)),
+      }),
+    });
+
+    final backend = _DownloadBackend();
+    backend.webdavError = StateError('attachment not found');
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    final result =
+        await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+      sha256: 'sha-test',
+      allowCellular: false,
+    );
+
+    expect(result.didDownload, isFalse);
+    expect(
+        result.failureReason, CloudMediaDownloadFailureReason.downloadFailed);
+  });
+
+  test('CloudMediaDownload recognizes structured remote-missing marker',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 1)),
+      }),
+    });
+
+    final backend = _DownloadBackend();
+    backend.webdavError = StateError('SL_ERR_ATTACHMENT_REMOTE_MISSING');
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    final result =
+        await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+      sha256: 'sha-test',
+      allowCellular: false,
+    );
+
+    expect(result.didDownload, isFalse);
+    expect(result.failureReason, CloudMediaDownloadFailureReason.remoteMissing);
+  });
 }

@@ -37,6 +37,9 @@ typedef CloudMediaDownloadNetworkProvider = Future<CloudMediaBackupNetwork>
     Function();
 
 final class CloudMediaDownload {
+  static const String remoteMissingErrorCode =
+      'SL_ERR_ATTACHMENT_REMOTE_MISSING';
+
   CloudMediaDownload({
     SyncConfigStore? configStore,
     CloudMediaDownloadNetworkProvider? networkProvider,
@@ -233,8 +236,15 @@ final class CloudMediaDownload {
 
   bool _isRemoteMissingError(Object error) {
     final message = error.toString().toLowerCase();
-    if (message.contains('not found')) return true;
-    if (message.contains('http 404')) return true;
+    final marker = remoteMissingErrorCode.toLowerCase();
+    if (message.contains(marker)) return true;
+    if (message.contains('managed-vault attachment not found')) return true;
+    if (message.contains('not found:') && message.contains('/attachments/')) {
+      return true;
+    }
+    if (message.contains('http 404') && message.contains('attachment')) {
+      return true;
+    }
     return false;
   }
 
