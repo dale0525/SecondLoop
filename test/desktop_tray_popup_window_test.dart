@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/desktop/desktop_tray_menu_controller.dart';
+import 'package:secondloop/core/desktop/desktop_tray_popup_layout.dart';
 import 'package:secondloop/core/desktop/desktop_tray_popup_window.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 void main() {
   const labels = DesktopTrayPopupLabels(
@@ -101,5 +103,54 @@ void main() {
     );
 
     expect(find.text('--%'), findsNWidgets(2));
+  });
+
+  testWidgets('popup anchors menu card to top when no pro usage section',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DesktopTrayPopupWindow(
+          labels: labels,
+          proUsage: null,
+          startWithSystemEnabled: false,
+          refreshingUsage: false,
+          onOpenWindow: () async {},
+          onOpenSettings: () async {},
+          onToggleStartWithSystem: (_) async {},
+          onQuit: () async {},
+        ),
+      ),
+    );
+
+    final surfaceTop = tester.getTopLeft(find.byType(SlSurface)).dy;
+    expect(surfaceTop, lessThanOrEqualTo(10));
+  });
+  testWidgets('popup avoids overflow in compact tray window size',
+      (tester) async {
+    final compactSize = resolveTrayPopupWindowSize(reserveProUsageSpace: false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: compactSize.width,
+            height: compactSize.height,
+            child: DesktopTrayPopupWindow(
+              labels: labels,
+              proUsage: null,
+              startWithSystemEnabled: false,
+              refreshingUsage: false,
+              onOpenWindow: () async {},
+              onOpenSettings: () async {},
+              onToggleStartWithSystem: (_) async {},
+              onQuit: () async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    expect(tester.takeException(), isNull);
   });
 }
