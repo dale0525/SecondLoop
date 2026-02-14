@@ -105,6 +105,9 @@ flutter:
   assets:
     - assets/bin/ffmpeg/
     - assets/ocr/
+    - assets/ocr/desktop_runtime/
+    - assets/ocr/desktop_runtime/models/
+    - assets/ocr/desktop_runtime/onnxruntime/
     - assets/icon/tray_icon.png
     - assets/icon/tray_icon.ico
 
