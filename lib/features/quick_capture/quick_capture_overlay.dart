@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,7 +9,6 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_focus_ring.dart';
-import '../../ui/sl_glass.dart';
 import '../actions/review/review_backoff.dart';
 import '../actions/settings/actions_settings_store.dart';
 import '../actions/suggestions_card.dart';
@@ -86,6 +83,8 @@ class _QuickCaptureOverlayState extends State<QuickCaptureOverlay> {
     final route = DialogRoute<void>(
       context: navigatorContext,
       barrierDismissible: true,
+      barrierColor: Colors.transparent,
+      useSafeArea: false,
       builder: (_) => const _QuickCaptureDialog(),
     );
     _route = route;
@@ -127,7 +126,14 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
     super.dispose();
   }
 
-  void _dismiss() => QuickCaptureScope.of(context).hide();
+  void _dismiss({
+    bool reopenMainWindow = false,
+    bool openMainStream = false,
+  }) =>
+      QuickCaptureScope.of(context).hide(
+        reopenMainWindow: reopenMainWindow,
+        openMainStream: openMainStream,
+      );
 
   Future<void> _submit() async {
     if (_busy) return;
@@ -210,7 +216,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         }
       }
 
-      _dismiss();
+      _dismiss(reopenMainWindow: true, openMainStream: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -232,51 +238,42 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
           autofocus: true,
           child: Material(
             type: MaterialType.transparency,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                    child: ColoredBox(color: Colors.black.withOpacity(0.35)),
-                  ),
-                ),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: SlFocusRing(
-                      key: const ValueKey('quick_capture_ring'),
-                      child: SlGlass(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('quick_capture_input'),
-                                controller: _textController,
-                                autofocus: true,
-                                textInputAction: TextInputAction.done,
-                                decoration: InputDecoration(
-                                  hintText:
-                                      context.t.common.fields.quickCapture,
-                                  border: InputBorder.none,
-                                  filled: false,
-                                ),
-                                onSubmitted: (_) => _submit(),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            FilledButton(
-                              key: const ValueKey('quick_capture_submit'),
-                              onPressed: _busy ? null : _submit,
-                              child: Text(context.t.common.actions.save),
-                            ),
-                          ],
+            child: SizedBox.expand(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: SlFocusRing(
+                  key: const ValueKey('quick_capture_ring'),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextField(
+                          key: const ValueKey('quick_capture_input'),
+                          controller: _textController,
+                          autofocus: true,
+                          textInputAction: TextInputAction.done,
+                          decoration: InputDecoration(
+                            hintText: context.t.common.fields.quickCapture,
+                            border: InputBorder.none,
+                            filled: false,
+                          ),
+                          onSubmitted: (_) => _submit(),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),

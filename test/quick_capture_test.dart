@@ -1,13 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
 import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/ui/sl_glass.dart';
 
 void main() {
   testWidgets('Quick capture inserts into Main Stream and hides',
@@ -20,11 +19,19 @@ void main() {
         MyApp(backend: backend, quickCaptureController: controller));
     await tester.pumpAndSettle();
 
+    final backdropCountBeforeShow =
+        tester.widgetList(find.byType(BackdropFilter)).length;
+
     controller.show();
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('quick_capture_input')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick_capture_ring')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick_capture_submit')), findsNothing);
+    expect(
+      tester.widgetList(find.byType(BackdropFilter)).length,
+      backdropCountBeforeShow,
+    );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('quick_capture_ring')),
@@ -32,14 +39,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.ancestor(
-        of: find.byKey(const ValueKey('quick_capture_input')),
-        matching: find.byType(SlGlass),
-      ),
-      findsOneWidget,
-    );
-
     await tester.tap(find.byKey(const ValueKey('quick_capture_input')));
     await tester.pump();
     await tester.enterText(
@@ -52,6 +51,73 @@ void main() {
     expect(backend.insertedMessages.single.role, 'user');
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
+  });
+
+  testWidgets('Quick capture Esc closes without reopen behavior',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _UnlockedBackend();
+    final controller = QuickCaptureController();
+
+    await tester.pumpWidget(
+        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpAndSettle();
+
+    controller.show();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('quick_capture_input')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeOpenMainStreamRequest(), isFalse);
+  });
+
+  testWidgets(
+      'Quick capture opens Main Stream after window leaves compact size',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _UnlockedBackend();
+    final controller = QuickCaptureController();
+
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 700);
+
+    await tester.pumpWidget(
+        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(NavigationRail),
+            matching: find.byIcon(Icons.settings_outlined),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
+
+    tester.view.physicalSize = const Size(900, 120);
+    await tester.pump();
+
+    controller.hide(openMainStream: true);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
+
+    tester.view.physicalSize = const Size(900, 700);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_filter_menu')), findsOneWidget);
   });
 
   testWidgets('Quick capture shows capture sheet for time phrases',
