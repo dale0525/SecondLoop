@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,16 +6,30 @@ import 'package:video_player/video_player.dart';
 
 import '../../i18n/strings.g.dart';
 
+final class VideoAttachmentPlayerSegment {
+  const VideoAttachmentPlayerSegment({
+    required this.filePath,
+    required this.sha256,
+    required this.mimeType,
+  });
+
+  final String filePath;
+  final String sha256;
+  final String mimeType;
+}
+
 final class VideoAttachmentPlayerPage extends StatefulWidget {
   const VideoAttachmentPlayerPage({
-    required this.filePath,
     required this.displayTitle,
+    required this.segmentFiles,
+    this.initialSegmentIndex = 0,
     this.onOpenWithSystem,
     super.key,
   });
 
-  final String filePath;
   final String displayTitle;
+  final List<VideoAttachmentPlayerSegment> segmentFiles;
+  final int initialSegmentIndex;
   final Future<void> Function()? onOpenWithSystem;
 
   @override
@@ -27,11 +42,23 @@ final class _VideoAttachmentPlayerPageState
   VideoPlayerController? _controller;
   Future<void>? _initializeFuture;
   Object? _initError;
+  late int _selectedSegmentIndex;
+
+  List<VideoAttachmentPlayerSegment> get _segments => widget.segmentFiles;
 
   @override
   void initState() {
     super.initState();
+    _selectedSegmentIndex = _normalizeIndex(widget.initialSegmentIndex);
     _initializeController();
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoAttachmentPlayerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.segmentFiles, widget.segmentFiles)) return;
+    _selectedSegmentIndex = _normalizeIndex(_selectedSegmentIndex);
+    unawaited(_reinitializeSegment());
   }
 
   @override
@@ -45,10 +72,30 @@ final class _VideoAttachmentPlayerPageState
     super.dispose();
   }
 
-  void _initializeController() {
-    final file = File(widget.filePath);
+  int _normalizeIndex(int value) {
+    if (_segments.isEmpty) return 0;
+    if (value < 0) return 0;
+    if (value >= _segments.length) return _segments.length - 1;
+    return value;
+  }
+
+  void _initializeController({bool autoPlay = false}) {
+    if (_segments.isEmpty) {
+      setState(() {
+        _controller = null;
+        _initializeFuture = null;
+        _initError = StateError('video_segments_empty');
+      });
+      return;
+    }
+
+    final segment = _segments[_selectedSegmentIndex];
+    final file = File(segment.filePath);
     final controller = VideoPlayerController.file(file);
-    final future = controller.initialize().then((_) {
+    final future = controller.initialize().then((_) async {
+      if (autoPlay) {
+        await controller.play();
+      }
       if (!mounted) return;
       setState(() {
         _initError = null;
@@ -67,13 +114,33 @@ final class _VideoAttachmentPlayerPageState
     });
   }
 
-  Future<void> _retryInitialize() async {
-    final controller = _controller;
-    if (controller != null) {
-      await controller.dispose();
+  Future<void> _reinitializeSegment({bool autoPlay = false}) async {
+    final old = _controller;
+    _controller = null;
+    _initializeFuture = null;
+    if (mounted) {
+      setState(() {});
+    }
+    if (old != null) {
+      await old.dispose();
     }
     if (!mounted) return;
-    _initializeController();
+    _initializeController(autoPlay: autoPlay);
+  }
+
+  Future<void> _switchSegment(int index) async {
+    if (_segments.length <= 1) return;
+    final nextIndex = _normalizeIndex(index);
+    if (nextIndex == _selectedSegmentIndex) return;
+    final wasPlaying = _controller?.value.isPlaying ?? false;
+    setState(() {
+      _selectedSegmentIndex = nextIndex;
+    });
+    await _reinitializeSegment(autoPlay: wasPlaying);
+  }
+
+  Future<void> _retryInitialize() async {
+    await _reinitializeSegment();
   }
 
   @override
@@ -124,6 +191,7 @@ final class _VideoAttachmentPlayerPageState
 
         return Column(
           children: [
+            if (_segments.length > 1) _buildSegmentSelector(),
             Expanded(
               child: Center(
                 child: AspectRatio(
@@ -146,6 +214,27 @@ final class _VideoAttachmentPlayerPageState
           ],
         );
       },
+    );
+  }
+
+  Widget _buildSegmentSelector() {
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        key: const ValueKey('video_player_segment_selector'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemBuilder: (context, index) {
+          return ChoiceChip(
+            key: ValueKey('video_player_segment_chip_$index'),
+            selected: index == _selectedSegmentIndex,
+            onSelected: (_) => unawaited(_switchSegment(index)),
+            label: Text((index + 1).toString()),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: _segments.length,
+      ),
     );
   }
 

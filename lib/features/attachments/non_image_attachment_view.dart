@@ -445,7 +445,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     );
   }
 
-  Future<void> _openVideoProxy(String sha256, String mimeType) {
+  Future<void> _openVideoProxy(String sha256, String mimeType,
+      [List<({String sha256, String mimeType})>? segmentRefs]) {
     return openVideoProxyWithBestEffort(
       context,
       sha256: sha256,
@@ -453,6 +454,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       loadBytes: _readAttachmentBytesBySha,
       openWithSystem: () => _openAttachmentBySha(sha256, mimeType),
       onOpenVideoProxyInApp: widget.onOpenVideoProxyInApp,
+      segmentRefs: segmentRefs,
     );
   }
 
@@ -696,9 +698,15 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
                 key: const ValueKey('video_manifest_open_proxy_button'),
-                onPressed: () => unawaited(
-                  _openVideoProxy(proxySha256, proxyMimeType),
-                ),
+                onPressed: () => unawaited(_openVideoProxy(
+                    proxySha256,
+                    proxyMimeType,
+                    manifest.segments
+                        .map((segment) => (
+                              sha256: segment.sha256,
+                              mimeType: segment.mimeType
+                            ))
+                        .toList(growable: false))),
                 icon: const Icon(Icons.play_arrow_rounded),
                 label: Text(context.t.common.actions.open),
               ),
