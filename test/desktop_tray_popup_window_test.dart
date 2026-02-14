@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/desktop/desktop_tray_menu_controller.dart';
 import 'package:secondloop/core/desktop/desktop_tray_popup_window.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 void main() {
   const labels = DesktopTrayPopupLabels(
@@ -101,5 +102,26 @@ void main() {
     );
 
     expect(find.text('--%'), findsNWidgets(2));
+  });
+
+  testWidgets('popup anchors menu card to top when no pro usage section',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DesktopTrayPopupWindow(
+          labels: labels,
+          proUsage: null,
+          startWithSystemEnabled: false,
+          refreshingUsage: false,
+          onOpenWindow: () async {},
+          onOpenSettings: () async {},
+          onToggleStartWithSystem: (_) async {},
+          onQuit: () async {},
+        ),
+      ),
+    );
+
+    final surfaceTop = tester.getTopLeft(find.byType(SlSurface)).dy;
+    expect(surfaceTop, lessThanOrEqualTo(10));
   });
 }

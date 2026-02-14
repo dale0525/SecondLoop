@@ -85,7 +85,8 @@ class _DesktopTrayPopupWindowState extends State<DesktopTrayPopupWindow> {
       color: theme.colorScheme.scrim.withOpacity(0.05),
       child: SafeArea(
         minimum: const EdgeInsets.all(6),
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               minWidth: 236,

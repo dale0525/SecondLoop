@@ -72,7 +72,9 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
   DateTime? _lastLeftTrayClickAt;
 
   static const Duration _trayDoubleClickThreshold = Duration(milliseconds: 220);
-  static const Size _trayPopupWindowSize = Size(288, 296);
+  static const double _trayPopupWindowWidth = 288;
+  static const double _trayPopupWindowHeightWithProUsage = 296;
+  static const double _trayPopupWindowHeightCompact = 212;
   static const double _trayPopupVerticalGap = 8;
 
   bool get _isDesktop =>
@@ -91,6 +93,16 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     if (uid.isEmpty) return false;
     return _subscriptionStatus == SubscriptionStatus.entitled;
   }
+
+  bool get _reserveProUsageSpaceInTrayPopup =>
+      _isSignedInProAccount || _trayProUsage != null;
+
+  Size get _trayPopupWindowSize => Size(
+        _trayPopupWindowWidth,
+        _reserveProUsageSpaceInTrayPopup
+            ? _trayPopupWindowHeightWithProUsage
+            : _trayPopupWindowHeightCompact,
+      );
 
   @override
   void didChangeDependencies() {
@@ -487,7 +499,8 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       TitleBarStyle.hidden,
       windowButtonVisibility: false,
     );
-    await windowManager.setSize(_trayPopupWindowSize);
+    final popupSize = _trayPopupWindowSize;
+    await windowManager.setSize(popupSize);
     final popupPosition = await _resolveTrayPopupPosition();
     await windowManager.setPosition(popupPosition);
     await windowManager.show();
@@ -565,7 +578,8 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
       return currentBounds.topLeft;
     }
 
-    final x = (trayBounds.center.dx - (_trayPopupWindowSize.width / 2))
+    final popupSize = _trayPopupWindowSize;
+    final x = (trayBounds.center.dx - (popupSize.width / 2))
         .clamp(0.0, double.infinity)
         .toDouble();
     final y = (trayBounds.bottom + _trayPopupVerticalGap)
