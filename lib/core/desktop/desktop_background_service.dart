@@ -18,6 +18,7 @@ import '../sync/sync_config_store.dart';
 import 'desktop_boot_prefs.dart';
 import 'desktop_launch_args.dart';
 import 'desktop_tray_icon_config.dart';
+import 'desktop_tray_click_controller.dart';
 import 'desktop_tray_menu_controller.dart'
     show
         DesktopTrayMenuController,
@@ -77,15 +78,16 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     onQuit: _quitFromTrayMenu,
   );
 
+  late final DesktopTrayClickController _trayClickController =
+      DesktopTrayClickController(
+    onLeftClick: _openMainWindowFromTrayIcon,
+    onRightClick: _showTrayMenu,
+  );
+
   final DesktopWindowDisplayController _windowDisplayController =
       DesktopWindowDisplayController(
     adapter: _WindowManagerDisplayAdapter(windowManager),
   );
-
-  Timer? _leftTrayMenuTimer;
-  DateTime? _lastLeftTrayClickAt;
-
-  static const Duration _trayDoubleClickThreshold = Duration(milliseconds: 220);
 
   bool get _isDesktop =>
       !kIsWeb &&
@@ -447,30 +449,12 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
   @override
   void onTrayIconMouseDown() {
-    final now = DateTime.now();
-    final last = _lastLeftTrayClickAt;
-
-    if (last != null && now.difference(last) <= _trayDoubleClickThreshold) {
-      _cancelPendingLeftTrayMenu();
-      _lastLeftTrayClickAt = null;
-      unawaited(_runSafely(_openMainWindowFromTrayIcon));
-      return;
-    }
-
-    _lastLeftTrayClickAt = now;
-    _cancelPendingLeftTrayMenu();
-    _leftTrayMenuTimer = Timer(_trayDoubleClickThreshold, () {
-      _leftTrayMenuTimer = null;
-      _lastLeftTrayClickAt = null;
-      unawaited(_runSafely(_showTrayMenu));
-    });
+    unawaited(_runSafely(_trayClickController.handleLeftMouseDown));
   }
 
   @override
   void onTrayIconRightMouseDown() {
-    _cancelPendingLeftTrayMenu();
-    _lastLeftTrayClickAt = null;
-    unawaited(_runSafely(_showTrayMenu));
+    unawaited(_runSafely(_trayClickController.handleRightMouseDown));
   }
 
   @override
@@ -483,11 +467,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
         ),
       ),
     );
-  }
-
-  void _cancelPendingLeftTrayMenu() {
-    _leftTrayMenuTimer?.cancel();
-    _leftTrayMenuTimer = null;
   }
 
   Future<void> _openMainWindowFromTrayIcon() async {
@@ -517,7 +496,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     }
 
     _quitting = true;
-    _cancelPendingLeftTrayMenu();
     await _runSafely(() async {
       await windowManager.setPreventClose(false);
       await trayManager.destroy();
@@ -539,8 +517,6 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     _enabled = false;
     _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
     _subscriptionController?.removeListener(_onSubscriptionChanged);
-
-    _cancelPendingLeftTrayMenu();
 
     if (wasEnabled) {
       windowManager.removeListener(this);
