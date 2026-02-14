@@ -375,6 +375,7 @@ jobs:
           app="$(ls -1d build/macos/Build/Products/Release/*.app | head -n 1)"
           stage_dir="$(mktemp -d)"
           cp -R "${app}" "${stage_dir}/"
+          ln -s "/Applications" "${stage_dir}/Applications"
           safe_ref_name="$(printf "%s" "${GITHUB_REF_NAME}" | sed -E "s/[^[:alnum:]._-]+/-/g; s/^-+//; s/-+$//")"
           if [[ -z "${safe_ref_name}" ]]; then
             safe_ref_name="run-${GITHUB_RUN_ID}"

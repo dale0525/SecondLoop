@@ -57,6 +57,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertNotIn("Install-SecondLoop-MSI.ps1", workflow_text)
 
+    def test_macos_dmg_stage_contains_applications_shortcut(self) -> None:
+        workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+
+        self.assertIn('ln -s "/Applications" "${stage_dir}/Applications"', workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()
