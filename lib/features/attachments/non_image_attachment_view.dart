@@ -1,19 +1,18 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import '../media_backup/cloud_media_download.dart';
 import 'attachment_detail_text_content.dart';
+import 'attachment_external_open_helper.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_keyframe_ocr_worker.dart';
@@ -388,10 +387,14 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     return _attachmentBytesBySha.putIfAbsent(normalizedSha, () async {
       final backend = AppBackendScope.maybeOf(context);
       final sessionScope = SessionScope.maybeOf(context);
-      if (backend is! AttachmentsBackend || sessionScope == null) {
+      if (backend is! AppBackend ||
+          backend is! AttachmentsBackend ||
+          sessionScope == null) {
         return null;
       }
       final attachmentsBackend = backend as AttachmentsBackend;
+      final idTokenGetter =
+          CloudAuthScope.maybeOf(context)?.controller.getIdToken;
 
       try {
         final bytes = await attachmentsBackend.readAttachmentBytes(
@@ -401,57 +404,42 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         if (bytes.isEmpty) return null;
         return bytes;
       } catch (_) {
-        return null;
+        final downloader = CloudMediaDownload();
+        final result = await downloader
+            .downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+          backend: backend,
+          sessionKey: sessionScope.sessionKey,
+          idTokenGetter: idTokenGetter,
+          sha256: normalizedSha,
+          allowCellular: false,
+        );
+        if (!result.didDownload) return null;
+        try {
+          final downloaded = await attachmentsBackend.readAttachmentBytes(
+            sessionScope.sessionKey,
+            sha256: normalizedSha,
+          );
+          if (downloaded.isEmpty) return null;
+          return downloaded;
+        } catch (_) {
+          return null;
+        }
       }
     });
   }
 
-  Future<void> _openAttachmentBySha(String sha256, String mimeType) async {
-    final bytes = await _readAttachmentBytesBySha(sha256);
-    if (bytes == null || bytes.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text(context.t.errors.loadFailed(error: 'bytes unavailable')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
+  Future<void> _openAttachmentBySha(String sha256, String mimeType) {
+    final extension = fileExtensionForSystemOpenMimeType(mimeType);
+    final stem = sha256.trim().isEmpty
+        ? DateTime.now().millisecondsSinceEpoch.toString()
+        : sha256.trim();
 
-    try {
-      final dir = await getTemporaryDirectory();
-      final extension = fileExtensionForSystemOpenMimeType(mimeType);
-      final stem = sha256.trim().isEmpty
-          ? DateTime.now().millisecondsSinceEpoch.toString()
-          : sha256.trim();
-      final file = File('${dir.path}/$stem$extension');
-      await file.writeAsBytes(bytes, flush: true);
-
-      final launched = await launchUrl(
-        Uri.file(file.path),
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.t.errors.loadFailed(
-              error: 'could not open externally',
-            )),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.errors.loadFailed(error: '$error')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    return openAttachmentBytesWithSystem(
+      context,
+      loadBytes: () => _readAttachmentBytesBySha(sha256),
+      outputStem: stem,
+      extension: extension,
+    );
   }
 
   Future<void> _runOcrWithDialogOptions({

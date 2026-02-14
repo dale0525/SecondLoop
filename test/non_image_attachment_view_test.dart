@@ -3,7 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/attachments_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/attachments/non_image_attachment_view.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -95,7 +100,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Example Title'), findsNothing);
     expect(find.text('Original URL'), findsNothing);
@@ -384,6 +389,77 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
         findsOneWidget);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView downloads video preview assets from sync when local bytes are missing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'localdir',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kLocalDir: '/tmp/secondloop-test',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 7)),
+      }),
+    });
+
+    final backend = _PreviewDownloadBackend();
+    const attachment = Attachment(
+      sha256: 'sha-video-preview-cloud',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview-cloud.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/png',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: AppBackendScope(
+            backend: backend,
+            child: MaterialApp(
+              home: NonImageAttachmentView(
+                attachment: attachment,
+                bytes: bytes,
+                displayTitle: 'Video preview cloud',
+                initialAnnotationPayload: const <String, Object?>{},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.downloadedShas, contains('sha-poster'));
+    final posterFinder =
+        find.byKey(const ValueKey('video_manifest_poster_preview'));
+    expect(posterFinder, findsOneWidget);
+    expect(
+      find.descendant(of: posterFinder, matching: find.byType(Image)),
+      findsOneWidget,
+    );
   });
 
   testWidgets('NonImageAttachmentView shows video manifest insight fields',
@@ -689,4 +765,50 @@ void main() {
     expect(find.text('Preparing semantic search…'), findsNothing);
     expect(find.text('Preview unavailable'), findsNothing);
   });
+}
+
+final class _PreviewDownloadBackend implements AppBackend, AttachmentsBackend {
+  static final Uint8List _png1x1 = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6Xgm1sAAAAASUVORK5CYII=',
+  );
+
+  final Set<String> downloadedShas = <String>{};
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    if (!downloadedShas.contains(sha256)) {
+      throw Exception('missing_attachment_bytes:$sha256');
+    }
+    return _png1x1;
+  }
+
+  @override
+  Future<void> syncLocaldirDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    downloadedShas.add(sha256);
+  }
+
+  @override
+  Future<void> syncWebdavDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    downloadedShas.add(sha256);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
