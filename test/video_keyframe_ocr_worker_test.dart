@@ -20,15 +20,25 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.originalSha256, 'sha-x');
     expect(parsed.originalMimeType, 'video/mp4');
+    expect(parsed.audioSha256, isNull);
+    expect(parsed.audioMimeType, isNull);
+    expect(parsed.segments.length, 1);
+    expect(parsed.segments.first.sha256, 'sha-x');
+    expect(parsed.segments.first.mimeType, 'video/mp4');
 
     final validV2 = Uint8List.fromList(
-      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-v2","video_mime_type":"video/mp4"}'
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-v2","video_mime_type":"video/mp4","audio_sha256":"sha-audio","audio_mime_type":"audio/mp4","video_segments":[{"index":0,"sha256":"sha-v2-seg0","mime_type":"video/mp4"},{"index":1,"sha256":"sha-v2-seg1","mime_type":"video/mp4"}]}'
           .codeUnits,
     );
     final parsedV2 = parseVideoManifestPayload(validV2);
     expect(parsedV2, isNotNull);
     expect(parsedV2!.originalSha256, 'sha-v2');
     expect(parsedV2.originalMimeType, 'video/mp4');
+    expect(parsedV2.audioSha256, 'sha-audio');
+    expect(parsedV2.audioMimeType, 'audio/mp4');
+    expect(parsedV2.segments.length, 2);
+    expect(parsedV2.segments.first.sha256, 'sha-v2-seg0');
+    expect(parsedV2.segments[1].sha256, 'sha-v2-seg1');
 
     final v2SegmentsOnly = Uint8List.fromList(
       '{"schema":"secondloop.video_manifest.v2","video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
@@ -38,6 +48,8 @@ void main() {
     expect(parsedV2SegmentsOnly, isNotNull);
     expect(parsedV2SegmentsOnly!.originalSha256, 'sha-seg-0');
     expect(parsedV2SegmentsOnly.originalMimeType, 'video/mp4');
+    expect(parsedV2SegmentsOnly.segments.length, 1);
+    expect(parsedV2SegmentsOnly.segments.first.sha256, 'sha-seg-0');
   });
 
   test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
