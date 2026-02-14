@@ -1,10 +1,29 @@
+import 'dart:collection';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:markdown/markdown.dart' as md;
+import 'package:share_plus/share_plus.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import 'chat_markdown_editing_utils.dart';
+import 'chat_markdown_export_filename.dart';
 import 'chat_markdown_sanitizer.dart';
+import 'chat_markdown_theme_presets.dart';
+
+part 'chat_markdown_editor_page_export.dart';
+part 'chat_markdown_editor_page_export_inline.dart';
+part 'chat_markdown_editor_page_preview.dart';
 
 const _kDefaultMarkdownModeRuneThreshold = 240;
 const _kDefaultMarkdownModeLineThreshold = 6;
@@ -33,6 +52,11 @@ enum ChatMarkdownEditorAction {
 enum ChatMarkdownCompactPane {
   editor,
   preview,
+}
+
+enum _MarkdownExportFormat {
+  png,
+  pdf,
 }
 
 class ChatMarkdownEditorResult {
@@ -79,16 +103,35 @@ class ChatMarkdownEditorPage extends StatefulWidget {
   State<ChatMarkdownEditorPage> createState() => _ChatMarkdownEditorPageState();
 }
 
-class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
+class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
+    with _ChatMarkdownEditorExportMixin, _ChatMarkdownEditorPreviewMixin {
+  @override
   late final TextEditingController _controller;
+  @override
   final FocusNode _editorFocusNode = FocusNode();
+  @override
   final ScrollController _previewScrollController = ScrollController();
+  @override
+  final GlobalKey _previewRepaintBoundaryKey = GlobalKey();
+
+  @override
   ChatMarkdownCompactPane _compactPane = ChatMarkdownCompactPane.editor;
+  @override
+  ChatMarkdownThemePreset _themePreset = ChatMarkdownThemePreset.studio;
+  @override
+  bool _exporting = false;
+  @override
+  bool _exportRenderMode = false;
+
+  TextSelection? _lastValidSelection;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialText);
+    _lastValidSelection =
+        _controller.selection.isValid ? _controller.selection : null;
+    _controller.addListener(_rememberValidSelection);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _editorFocusNode.requestFocus();
@@ -97,24 +140,23 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
 
   @override
   void dispose() {
+    _controller.removeListener(_rememberValidSelection);
     _controller.dispose();
     _editorFocusNode.dispose();
     _previewScrollController.dispose();
     super.dispose();
   }
 
-  void _cancel() {
-    Navigator.of(context).pop();
-  }
+  void _cancel() => Navigator.of(context).pop();
 
-  void _save() {
-    Navigator.of(context).pop(ChatMarkdownEditorResult.save(_controller.text));
-  }
+  void _save() => Navigator.of(context)
+      .pop(ChatMarkdownEditorResult.save(_controller.text));
 
   void _switchToPlainMode() {
     if (!widget.allowPlainMode) return;
-    Navigator.of(context)
-        .pop(ChatMarkdownEditorResult.switchToSimpleInput(_controller.text));
+    Navigator.of(context).pop(
+      ChatMarkdownEditorResult.switchToSimpleInput(_controller.text),
+    );
   }
 
   void _showCompactEditor() {
@@ -131,38 +173,165 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
     setState(() => _compactPane = ChatMarkdownCompactPane.preview);
   }
 
+  void _rememberValidSelection() {
+    final selection = _controller.selection;
+    if (!selection.isValid) return;
+    _lastValidSelection = selection;
+  }
+
+  void _applyEditorChange(
+    TextEditingValue Function(TextEditingValue value) transform,
+  ) {
+    final current = _controller.value;
+    final effectiveSelection =
+        current.selection.isValid ? current.selection : _lastValidSelection;
+    final sourceValue = effectiveSelection == null
+        ? current
+        : current.copyWith(
+            selection: effectiveSelection,
+            composing: TextRange.empty,
+          );
+
+    final next = transform(sourceValue);
+    _controller.value = next;
+    _editorFocusNode.requestFocus();
+  }
+
+  void _insertHeading(int level) =>
+      _applyEditorChange((value) => applyMarkdownHeading(value, level: level));
+
+  void _toggleBold() => _applyEditorChange(
+        (value) => toggleMarkdownInlineWrap(
+          value,
+          marker: '**',
+          alternateMarkers: const <String>['__'],
+        ),
+      );
+
+  void _toggleItalic() => _applyEditorChange(
+        (value) => toggleMarkdownInlineWrap(
+          value,
+          marker: '*',
+          alternateMarkers: const <String>['_'],
+        ),
+      );
+
+  void _toggleStrike() => _applyEditorChange(
+      (value) => toggleMarkdownInlineWrap(value, marker: '~~'));
+
+  void _toggleInlineCode() => _applyEditorChange(
+      (value) => applyMarkdownInlineWrap(value, prefix: '`'));
+
+  void _insertLink() => _applyEditorChange(applyMarkdownLink);
+
+  void _toggleQuote() => _applyEditorChange(applyMarkdownBlockquote);
+
+  void _toggleBulletList() => _applyEditorChange(toggleMarkdownUnorderedList);
+
+  void _toggleOrderedList() => _applyEditorChange(toggleMarkdownOrderedList);
+
+  void _toggleTaskList() => _applyEditorChange(toggleMarkdownTaskList);
+
+  void _insertCodeBlock() => _applyEditorChange(applyMarkdownCodeBlock);
+
+  void _indentListDepth() => _applyEditorChange(indentMarkdownListDepth);
+
+  void _outdentListDepth() => _applyEditorChange(outdentMarkdownListDepth);
+
+  @override
+  bool _isWideLayout(BuildContext context) {
+    final windowSize = MediaQuery.sizeOf(context);
+    return windowSize.width > windowSize.height;
+  }
+
+  Map<ShortcutActivator, VoidCallback> _shortcutBindings() {
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.keyB, meta: true): _toggleBold,
+      const SingleActivator(LogicalKeyboardKey.keyB, control: true):
+          _toggleBold,
+      const SingleActivator(LogicalKeyboardKey.keyI, meta: true): _toggleItalic,
+      const SingleActivator(LogicalKeyboardKey.keyI, control: true):
+          _toggleItalic,
+      const SingleActivator(LogicalKeyboardKey.keyK, meta: true): _insertLink,
+      const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+          _insertLink,
+      const SingleActivator(LogicalKeyboardKey.tab): _indentListDepth,
+      const SingleActivator(LogicalKeyboardKey.tab, shift: true):
+          _outdentListDepth,
+    };
+  }
+
+  String _themeLabel(BuildContext context, ChatMarkdownThemePreset preset) {
+    switch (preset) {
+      case ChatMarkdownThemePreset.studio:
+        return context.t.chat.markdownEditor.themeStudio;
+      case ChatMarkdownThemePreset.paper:
+        return context.t.chat.markdownEditor.themePaper;
+      case ChatMarkdownThemePreset.ocean:
+        return context.t.chat.markdownEditor.themeOcean;
+      case ChatMarkdownThemePreset.night:
+        return context.t.chat.markdownEditor.themeNight;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = widget.title ?? context.t.chat.markdownEditor.title;
     final saveLabel = widget.saveLabel ?? context.t.common.actions.save;
 
-    return Scaffold(
-      key: const ValueKey('chat_markdown_editor_page'),
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          if (widget.allowPlainMode)
-            IconButton(
-              key: const ValueKey('chat_markdown_editor_switch_plain'),
-              tooltip: context.t.chat.markdownEditor.simpleInput,
-              onPressed: _switchToPlainMode,
-              icon: const Icon(Icons.notes_rounded),
+    return CallbackShortcuts(
+      bindings: _shortcutBindings(),
+      child: Scaffold(
+        key: const ValueKey('chat_markdown_editor_page'),
+        appBar: AppBar(
+          title: Text(title),
+          actions: [
+            PopupMenuButton<_MarkdownExportFormat>(
+              key: const ValueKey('chat_markdown_editor_export_menu'),
+              tooltip: context.t.chat.markdownEditor.exportMenu,
+              enabled: !_exporting,
+              onSelected: _export,
+              itemBuilder: (context) => <PopupMenuEntry<_MarkdownExportFormat>>[
+                PopupMenuItem<_MarkdownExportFormat>(
+                  value: _MarkdownExportFormat.png,
+                  child: Text(context.t.chat.markdownEditor.exportPng),
+                ),
+                PopupMenuItem<_MarkdownExportFormat>(
+                  value: _MarkdownExportFormat.pdf,
+                  child: Text(context.t.chat.markdownEditor.exportPdf),
+                ),
+              ],
+              icon: _exporting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.ios_share_rounded),
             ),
-          TextButton(
-            onPressed: _cancel,
-            child: Text(context.t.common.actions.cancel),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            key: widget.saveButtonKey,
-            onPressed: _save,
-            icon: const Icon(Icons.save_rounded, size: 18),
-            label: Text(saveLabel),
-          ),
-          const SizedBox(width: 12),
-        ],
+            if (widget.allowPlainMode)
+              IconButton(
+                key: const ValueKey('chat_markdown_editor_switch_plain'),
+                tooltip: context.t.chat.markdownEditor.simpleInput,
+                onPressed: _switchToPlainMode,
+                icon: const Icon(Icons.notes_rounded),
+              ),
+            TextButton(
+              onPressed: _cancel,
+              child: Text(context.t.common.actions.cancel),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              key: widget.saveButtonKey,
+              onPressed: _save,
+              icon: const Icon(Icons.save_rounded, size: 18),
+              label: Text(saveLabel),
+            ),
+            const SizedBox(width: 12),
+          ],
+        ),
+        body: _buildMarkdownEditorBody(context),
       ),
-      body: _buildMarkdownEditorBody(context),
     );
   }
 
@@ -197,6 +366,8 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildHeader(context),
+                    const SizedBox(height: 10),
+                    _buildQuickActions(context),
                     const SizedBox(height: 12),
                     Expanded(child: _buildSplitEditor(context)),
                   ],
@@ -224,31 +395,44 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
           final lines = text.isEmpty ? 1 : '\n'.allMatches(text).length + 1;
           final characters = text.runes.length;
 
-          return Row(
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 18,
-                color: colorScheme.onSecondaryContainer,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  context.t.chat.markdownEditor.previewLabel,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSecondaryContainer,
-                      ),
-                ),
-              ),
-              Text(
-                context.t.chat.markdownEditor.stats(
-                  lines: lines,
-                  characters: characters,
-                ),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSecondaryContainer,
-                      fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Icon(
+                    Icons.preview_rounded,
+                    size: 18,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.t.chat.markdownEditor.previewLabel,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                          ),
                     ),
+                  ),
+                  Text(
+                    _themeLabel(context, _themePreset),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    context.t.chat.markdownEditor.stats(
+                      lines: lines,
+                      characters: characters,
+                    ),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
               ),
             ],
           );
@@ -257,13 +441,287 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
     );
   }
 
+  Widget _buildQuickActions(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return SlSurface(
+      key: const ValueKey('chat_markdown_editor_quick_actions'),
+      color: tokens.surface2.withOpacity(0.9),
+      borderColor: tokens.borderSubtle,
+      borderRadius: BorderRadius.circular(tokens.radiusMd + 2),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _controller,
+        builder: (context, value, child) {
+          final boldActive = isMarkdownInlineWrapActive(
+            value,
+            marker: '**',
+            alternateMarkers: const <String>['__'],
+          );
+          final italicActive = isMarkdownInlineWrapActive(
+            value,
+            marker: '*',
+            alternateMarkers: const <String>['_'],
+          );
+          final strikeActive = isMarkdownInlineWrapActive(value, marker: '~~');
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.t.chat.markdownEditor.quickActionsLabel,
+                style: textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildThemeSelector(context),
+                    const SizedBox(width: 8),
+                    _buildHeadingSelector(context),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      key: const ValueKey('chat_markdown_editor_action_bold'),
+                      icon: Icons.format_bold_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.bold,
+                      onPressed: _toggleBold,
+                      selected: boldActive,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      key: const ValueKey('chat_markdown_editor_action_italic'),
+                      icon: Icons.format_italic_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.italic,
+                      onPressed: _toggleItalic,
+                      selected: italicActive,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      key: const ValueKey('chat_markdown_editor_action_strike'),
+                      icon: Icons.format_strikethrough_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.strike,
+                      onPressed: _toggleStrike,
+                      selected: strikeActive,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.code_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.code,
+                      onPressed: _toggleInlineCode,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.link_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.link,
+                      onPressed: _insertLink,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.format_quote_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.blockquote,
+                      onPressed: _toggleQuote,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.format_list_bulleted_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.bulletList,
+                      onPressed: _toggleBulletList,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.format_list_numbered_rounded,
+                      tooltip:
+                          context.t.chat.markdownEditor.actions.orderedList,
+                      onPressed: _toggleOrderedList,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.checklist_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.taskList,
+                      onPressed: _toggleTaskList,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildQuickActionButton(
+                      context,
+                      icon: Icons.data_object_rounded,
+                      tooltip: context.t.chat.markdownEditor.actions.codeBlock,
+                      onPressed: _insertCodeBlock,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildThemeSelector(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return PopupMenuButton<ChatMarkdownThemePreset>(
+      key: const ValueKey('chat_markdown_editor_theme_selector'),
+      tooltip: context.t.chat.markdownEditor.themeLabel,
+      initialValue: _themePreset,
+      onSelected: (preset) => setState(() => _themePreset = preset),
+      itemBuilder: (context) {
+        return kChatMarkdownThemePresets
+            .map(
+              (preset) => PopupMenuItem<ChatMarkdownThemePreset>(
+                value: preset,
+                child: Text(_themeLabel(context, preset)),
+              ),
+            )
+            .toList();
+      },
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: colorScheme.outlineVariant),
+          color: colorScheme.surface,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.palette_outlined, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              _themeLabel(context, _themePreset),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more_rounded, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeadingSelector(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return PopupMenuButton<int>(
+      tooltip: context.t.chat.markdownEditor.actions.heading,
+      onSelected: _insertHeading,
+      itemBuilder: (context) {
+        return List<PopupMenuEntry<int>>.generate(
+          6,
+          (index) {
+            final level = index + 1;
+            return PopupMenuItem<int>(
+              value: level,
+              child: Text(
+                context.t.chat.markdownEditor.actions.headingLevel(
+                  level: level,
+                ),
+              ),
+            );
+          },
+        );
+      },
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: colorScheme.outlineVariant),
+          color: colorScheme.surface,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.title_rounded, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              context.t.chat.markdownEditor.actions.heading,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more_rounded, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton(
+    BuildContext context, {
+    Key? key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+    bool selected = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final borderColor =
+        selected ? colorScheme.primary.withOpacity(0.7) : colorScheme.outline;
+
+    return Tooltip(
+      message: tooltip,
+      child: selected
+          ? FilledButton.tonal(
+              key: key,
+              onPressed: onPressed,
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                minimumSize: const Size(38, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                side: BorderSide(color: borderColor),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Icon(icon, size: 18),
+            )
+          : OutlinedButton(
+              key: key,
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                minimumSize: const Size(38, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                side: BorderSide(color: borderColor),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Icon(icon, size: 18),
+            ),
+    );
+  }
+
   Widget _buildSplitEditor(BuildContext context) {
     final tokens = SlTokens.of(context);
-    final windowSize = MediaQuery.sizeOf(context);
-    final isWideLayout = windowSize.width > windowSize.height;
+    final isWideLayout = _isWideLayout(context);
 
     final editorPane = _buildEditorPane(context);
     final previewPane = _buildPreviewPane(context);
+
+    if (_exportRenderMode) {
+      return KeyedSubtree(
+        key: const ValueKey('chat_markdown_editor_layout_export'),
+        child: previewPane,
+      );
+    }
 
     if (isWideLayout) {
       return KeyedSubtree(
@@ -393,6 +851,11 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
         maxLines: null,
         keyboardType: TextInputType.multiline,
         textInputAction: TextInputAction.newline,
+        inputFormatters: const <TextInputFormatter>[
+          MarkdownSmartContinuationFormatter(),
+        ],
+        smartDashesType: SmartDashesType.disabled,
+        smartQuotesType: SmartQuotesType.disabled,
         decoration: InputDecoration(
           hintText: context.t.common.fields.message,
           border: InputBorder.none,
@@ -411,52 +874,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage> {
     );
   }
 
-  Widget _buildPreviewPane(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return _buildPane(
-      context,
-      key: const ValueKey('chat_markdown_editor_preview'),
-      title: context.t.chat.markdownEditor.previewLabel,
-      icon: Icons.visibility_outlined,
-      child: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: _controller,
-        builder: (context, value, child) {
-          final text = value.text.trim();
-          if (text.isEmpty) {
-            return Center(
-              child: Text(
-                context.t.chat.markdownEditor.emptyPreview,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            );
-          }
-
-          return Scrollbar(
-            controller: _previewScrollController,
-            child: SingleChildScrollView(
-              controller: _previewScrollController,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-              child: MarkdownBody(
-                data: sanitizeChatMarkdown(value.text),
-                selectable: true,
-                softLineBreak: true,
-                styleSheet:
-                    MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                  p: Theme.of(context).textTheme.bodyMedium,
-                  codeblockPadding: const EdgeInsets.all(10),
-                  blockquotePadding: const EdgeInsets.symmetric(horizontal: 10),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
+  @override
   Widget _buildPane(
     BuildContext context, {
     Key? key,

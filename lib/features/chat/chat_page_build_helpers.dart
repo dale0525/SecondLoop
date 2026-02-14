@@ -214,6 +214,8 @@ extension _ChatPageStateComposerUi on _ChatPageState {
         size: 40,
         iconSize: 20,
         tooltip: context.t.chat.markdownEditor.openButton,
+        canRequestFocus: false,
+        triggerOnTapDown: true,
         onPressed: _isComposerBusy ? null : _openMarkdownEditor,
       ),
     );
@@ -230,8 +232,8 @@ extension _ChatPageStateComposerUi on _ChatPageState {
   }) {
     return ListenableBuilder(
       listenable: _inputFocusNode,
-      builder: (context, _) {
-        final showMarkdownEntry = _inputFocusNode.hasFocus;
+      builder: (context, child) {
+        final showMarkdownButton = _inputFocusNode.hasFocus;
 
         return ValueListenableBuilder<TextEditingValue>(
           valueListenable: _controller,
@@ -259,8 +261,14 @@ extension _ChatPageStateComposerUi on _ChatPageState {
             }
 
             if (!hasText) {
-              if (!showMarkdownEntry && !hasAttachActions) {
-                return const SizedBox.shrink();
+              if (!hasAttachActions) {
+                if (!showMarkdownButton) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: _buildComposerMarkdownEditorButton(context),
+                );
               }
 
               return Padding(
@@ -268,10 +276,10 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (showMarkdownEntry)
+                    if (showMarkdownButton) ...[
                       _buildComposerMarkdownEditorButton(context),
-                    if (showMarkdownEntry && hasAttachActions)
                       const SizedBox(width: 8),
+                    ],
                     if (hasAttachActions)
                       _buildCompactAttachButton(
                         context,
@@ -287,7 +295,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (showMarkdownEntry) ...[
+                  if (showMarkdownButton) ...[
                     _buildComposerMarkdownEditorButton(context),
                     const SizedBox(width: 8),
                   ],

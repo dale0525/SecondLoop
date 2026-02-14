@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/chat/chat_markdown_editor_page.dart';
@@ -93,8 +94,141 @@ void main() {
       expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
           findsOneWidget);
       expect(find.byTooltip('Simple input'), findsOneWidget);
-      expect(horizontalScrollables, findsNothing);
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_quick_actions')),
+        findsOneWidget,
+      );
+      expect(horizontalScrollables, findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Markdown editor exposes quick formatting toolbar and theme selector',
+    (tester) async {
+      await pumpEditor(tester, size: const Size(1024, 700));
+
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_quick_actions')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_theme_selector')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_action_bold')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('chat_markdown_editor_export_menu')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Export as PNG'), findsOneWidget);
+      expect(find.text('Export as PDF'), findsOneWidget);
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Bold action reflects active selection state and toggles markdown off',
+    (tester) async {
+      await pumpEditor(tester, size: const Size(1024, 700));
+
+      const editorInputKey = ValueKey('chat_markdown_editor_input');
+      final inputFinder = find.byKey(editorInputKey);
+      final input = tester.widget<TextField>(inputFinder);
+      input.controller!.value = const TextEditingValue(
+        text: 'hello **world**',
+        selection: TextSelection(baseOffset: 8, extentOffset: 13),
+      );
+      await tester.pumpAndSettle();
+
+      final boldFinder =
+          find.byKey(const ValueKey('chat_markdown_editor_action_bold'));
+      expect(tester.widget(boldFinder), isA<FilledButton>());
+
+      await tester.tap(boldFinder);
+      await tester.pumpAndSettle();
+
+      expect(input.controller!.text, 'hello world');
+      expect(tester.widget(boldFinder), isA<OutlinedButton>());
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Bold and italic actions are both active for triple wrapped selection',
+    (tester) async {
+      await pumpEditor(tester, size: const Size(1024, 700));
+
+      const editorInputKey = ValueKey('chat_markdown_editor_input');
+      final inputFinder = find.byKey(editorInputKey);
+      final input = tester.widget<TextField>(inputFinder);
+      input.controller!.value = const TextEditingValue(
+        text: 'hello ***world***',
+        selection: TextSelection(baseOffset: 9, extentOffset: 14),
+      );
+      await tester.pumpAndSettle();
+
+      final boldFinder =
+          find.byKey(const ValueKey('chat_markdown_editor_action_bold'));
+      final italicFinder =
+          find.byKey(const ValueKey('chat_markdown_editor_action_italic'));
+
+      expect(tester.widget(boldFinder), isA<FilledButton>());
+      expect(tester.widget(italicFinder), isA<FilledButton>());
+
+      await tester.tap(italicFinder);
+      await tester.pumpAndSettle();
+
+      expect(input.controller!.text, 'hello **world**');
+      expect(tester.widget(boldFinder), isA<FilledButton>());
+      expect(tester.widget(italicFinder), isA<OutlinedButton>());
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Tab and shift-tab adjust list indentation instead of changing focus',
+    (tester) async {
+      await pumpEditor(tester, size: const Size(1024, 700));
+
+      const editorInputKey = ValueKey('chat_markdown_editor_input');
+      final inputFinder = find.byKey(editorInputKey);
+      final input = tester.widget<TextField>(inputFinder);
+      input.controller!.value = const TextEditingValue(
+        text: '- item',
+        selection: TextSelection.collapsed(offset: 6),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+
+      expect(input.controller!.text, '  - item');
+      expect(input.controller!.selection,
+          const TextSelection.collapsed(offset: 8));
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+
+      expect(input.controller!.text, '- item');
+      expect(input.controller!.selection,
+          const TextSelection.collapsed(offset: 6));
     },
     variant: const TargetPlatformVariant(
       <TargetPlatform>{TargetPlatform.macOS},

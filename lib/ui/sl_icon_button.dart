@@ -13,6 +13,8 @@ class SlIconButton extends StatelessWidget {
     this.color,
     this.borderColor,
     this.overlayBaseColor,
+    this.canRequestFocus = true,
+    this.triggerOnTapDown = false,
   });
 
   final IconData icon;
@@ -23,6 +25,8 @@ class SlIconButton extends StatelessWidget {
   final Color? color;
   final Color? borderColor;
   final Color? overlayBaseColor;
+  final bool canRequestFocus;
+  final bool triggerOnTapDown;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +58,10 @@ class SlIconButton extends StatelessWidget {
         side: BorderSide(color: border),
       ),
       child: InkWell(
-        onTap: onPressed,
+        onTap: triggerOnTapDown ? null : onPressed,
+        onTapDown:
+            triggerOnTapDown && onPressed != null ? (_) => onPressed!() : null,
+        canRequestFocus: canRequestFocus,
         borderRadius: radius,
         overlayColor: overlay,
         child: SizedBox(
