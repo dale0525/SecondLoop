@@ -18,6 +18,7 @@ import 'test_i18n.dart';
 
 final class _FakeBackend implements AppBackend, AttachmentsBackend {
   bool downloaded = false;
+  Object? syncDownloadError;
   static final Uint8List _png1x1 = base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6Xgm1sAAAAASUVORK5CYII=',
   );
@@ -39,6 +40,8 @@ final class _FakeBackend implements AppBackend, AttachmentsBackend {
     required String remoteRoot,
     required String sha256,
   }) async {
+    final error = syncDownloadError;
+    if (error != null) throw error;
     downloaded = true;
   }
 
@@ -52,6 +55,8 @@ final class _FakeBackend implements AppBackend, AttachmentsBackend {
     required String remoteRoot,
     required String sha256,
   }) async {
+    final error = syncDownloadError;
+    if (error != null) throw error;
     downloaded = true;
   }
 
@@ -149,5 +154,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Use mobile data?'), findsNothing);
     expect(backend.downloaded, isFalse);
+  });
+
+  testWidgets(
+      'AttachmentViewerPage shows preview-unavailable text for missing remote attachment',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 7)),
+      }),
+    });
+
+    final backend = _FakeBackend()
+      ..syncDownloadError = StateError('managed-vault attachment not found');
+    final attachment = Attachment(
+      sha256: 'deadbeef',
+      mimeType: 'image/png',
+      path: 'attachments/deadbeef.bin',
+      byteLen: _FakeBackend._png1x1.length,
+      createdAtMs: 0,
+    );
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: AppBackendScope(
+            backend: backend,
+            child: MaterialApp(
+              home: AttachmentViewerPage(
+                attachment: attachment,
+                cloudMediaDownload: downloader,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preview unavailable'), findsOneWidget);
+    expect(find.textContaining('media_download_remoteMissing'), findsNothing);
   });
 }

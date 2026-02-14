@@ -933,8 +933,23 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 }
                 if (snapshot.hasError) {
                   final err = snapshot.error;
-                  final isWifiConsentError = err is StateError &&
-                      err.message == 'media_download_requires_wifi';
+                  var errorText = context.t.errors.loadFailed(error: '$err');
+                  if (err is StateError) {
+                    final code = err.message;
+                    if (code == 'media_download_requires_wifi' ||
+                        code ==
+                            'media_download_${CloudMediaDownloadFailureReason.cellularRestricted.name}') {
+                      errorText = context
+                          .t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle;
+                    } else if (code ==
+                        'media_download_${CloudMediaDownloadFailureReason.authRequired.name}') {
+                      errorText =
+                          context.t.sync.cloudManagedVault.signInRequired;
+                    } else if (code.startsWith('media_download_')) {
+                      errorText =
+                          context.t.attachments.content.previewUnavailable;
+                    }
+                  }
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -943,20 +958,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                         children: [
                           const Icon(Icons.broken_image_outlined, size: 48),
                           const SizedBox(height: 12),
-                          Text(
-                            isWifiConsentError
-                                ? context.t.sync.mediaPreview
-                                    .chatThumbnailsWifiOnlySubtitle
-                                : context.t.errors.loadFailed(error: '$err'),
-                            textAlign: TextAlign.center,
-                          ),
+                          Text(errorText, textAlign: TextAlign.center),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _bytesFuture = _loadBytes();
-                              });
-                            },
+                            onPressed: () =>
+                                setState(() => _bytesFuture = _loadBytes()),
                             icon: const Icon(Icons.refresh),
                             label: Text(context.t.common.actions.refresh),
                           ),

@@ -20,12 +20,14 @@ class ChatImageAttachmentThumbnail extends StatefulWidget {
     required this.attachment,
     required this.attachmentsBackend,
     required this.onTap,
+    this.cloudMediaDownload,
     super.key,
   });
 
   final Attachment attachment;
   final AttachmentsBackend attachmentsBackend;
   final VoidCallback onTap;
+  final CloudMediaDownload? cloudMediaDownload;
 
   @override
   State<ChatImageAttachmentThumbnail> createState() =>
@@ -132,30 +134,25 @@ class _ChatImageAttachmentThumbnailState
       _blockedByWifiOnly = false;
       return bytes;
     } catch (_) {
-      final allowed = await _shouldAutoDownloadNow();
-      if (!allowed) {
-        _blockedByWifiOnly = true;
-        return null;
-      }
       if (!mounted) return null;
 
       final backend = AppBackendScope.maybeOf(context);
       if (backend == null) return null;
       final idTokenGetter =
           CloudAuthScope.maybeOf(context)?.controller.getIdToken;
+      final downloader =
+          widget.cloudMediaDownload ?? CloudMediaDownload(configStore: _store);
 
-      final result = await CloudMediaDownload(configStore: _store)
-          .downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+      final result =
+          await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
         backend: backend,
         sessionKey: sessionKey,
         idTokenGetter: idTokenGetter,
         sha256: widget.attachment.sha256,
         allowCellular: false,
       );
-      if (result.needsCellularConfirmation) {
-        _blockedByWifiOnly = true;
-        return null;
-      }
+      _blockedByWifiOnly = result.failureReason ==
+          CloudMediaDownloadFailureReason.cellularRestricted;
       if (!result.didDownload) return null;
 
       try {
