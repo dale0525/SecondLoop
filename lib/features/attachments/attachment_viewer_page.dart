@@ -40,6 +40,7 @@ import 'video_keyframe_ocr_worker.dart';
 part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
 part 'attachment_viewer_page_title.dart';
+part 'attachment_viewer_page_error.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -933,23 +934,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 }
                 if (snapshot.hasError) {
                   final err = snapshot.error;
-                  var errorText = context.t.errors.loadFailed(error: '$err');
-                  if (err is StateError) {
-                    final code = err.message;
-                    if (code == 'media_download_requires_wifi' ||
-                        code ==
-                            'media_download_${CloudMediaDownloadFailureReason.cellularRestricted.name}') {
-                      errorText = context
-                          .t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle;
-                    } else if (code ==
-                        'media_download_${CloudMediaDownloadFailureReason.authRequired.name}') {
-                      errorText =
-                          context.t.sync.cloudManagedVault.signInRequired;
-                    } else if (code.startsWith('media_download_')) {
-                      errorText =
-                          context.t.attachments.content.previewUnavailable;
-                    }
-                  }
+                  final errorText = _attachmentLoadErrorText(err);
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
