@@ -61,6 +61,50 @@ String inferVideoContentKind({
   final ocrLen = ocr.length;
   final readableLen = readable.length;
   final newlineCount = '\n'.allMatches(readable).length;
+  final structuredInstructionLines = _countStructuredInstructionLines(readable);
+
+  final lower = readable.toLowerCase();
+  const knowledgeTokens = <String>[
+    'chapter',
+    'lesson',
+    'tutorial',
+    'how to',
+    'definition',
+    'example',
+    'step',
+    'workflow',
+    'summary',
+    'key point',
+    'takeaway',
+    '步骤',
+    '教程',
+    '要点',
+    '定义',
+    '总结',
+    '公式',
+    '原理',
+    '第一步',
+    '第二步',
+    '第三步',
+  ];
+  var tokenHits = 0;
+  for (final token in knowledgeTokens) {
+    if (lower.contains(token)) {
+      tokenHits += 1;
+      if (tokenHits >= 2) {
+        return 'knowledge';
+      }
+    }
+  }
+
+  final lowSignalShortText = readableLen < 24 &&
+      structuredInstructionLines == 0 &&
+      tokenHits == 0 &&
+      transcriptLen < 24 &&
+      ocrLen < 24;
+  if (lowSignalShortText) {
+    return 'unknown';
+  }
 
   if (transcriptLen >= 900 || ocrLen >= 700 || readableLen >= 1400) {
     return 'knowledge';
@@ -70,29 +114,9 @@ String inferVideoContentKind({
     return 'knowledge';
   }
 
-  final lower = readable.toLowerCase();
-  const knowledgeTokens = <String>[
-    'chapter',
-    'lesson',
-    'definition',
-    'example',
-    'step',
-    'workflow',
-    'summary',
-    '步骤',
-    '定义',
-    '总结',
-    '公式',
-    '原理',
-  ];
-  var hits = 0;
-  for (final token in knowledgeTokens) {
-    if (lower.contains(token)) {
-      hits += 1;
-      if (hits >= 2) {
-        return 'knowledge';
-      }
-    }
+  if (structuredInstructionLines >= 2 &&
+      (readableLen >= 50 || tokenHits >= 1)) {
+    return 'knowledge';
   }
 
   return 'non_knowledge';
@@ -103,6 +127,27 @@ String buildVideoSummaryText(String readableTextFull, {int maxBytes = 1024}) {
   if (normalized.isEmpty) return '';
   final safeMax = maxBytes <= 0 ? 0 : maxBytes;
   return _truncateUtf8(normalized, safeMax);
+}
+
+int _countStructuredInstructionLines(String text) {
+  final lines = text
+      .split(RegExp(r'[\n\r]+'))
+      .map((line) => line.trim().toLowerCase())
+      .where((line) => line.isNotEmpty);
+
+  var count = 0;
+  for (final line in lines) {
+    if (RegExp(r'^(step\s*\d+\b|[0-9]+[\.)]\s+|第[一二三四五六七八九十0-9]+步)')
+        .hasMatch(line)) {
+      count += 1;
+      continue;
+    }
+    if (RegExp(r'^(教程|要点|总结|结论|chapter|lesson|summary|conclusion)[:：]')
+        .hasMatch(line)) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 int _asMillis(Object? raw) {

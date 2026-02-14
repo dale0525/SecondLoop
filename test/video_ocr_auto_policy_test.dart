@@ -112,6 +112,49 @@ void main() {
     );
   });
 
+  test(
+      'inferVideoContentKind returns knowledge for short structured tutorial notes',
+      () {
+    const readable =
+        'Step 1: Install ffmpeg\nStep 2: Extract audio\nStep 3: Summarize key points\nConclusion: Keep segments under 20 minutes.';
+
+    expect(
+      inferVideoContentKind(
+        transcriptFull: '',
+        ocrTextFull: '',
+        readableTextFull: readable,
+      ),
+      'knowledge',
+    );
+  });
+
+  test(
+      'inferVideoContentKind returns knowledge for structured Chinese tutorial',
+      () {
+    const readable = '教程要点：\n第一步：导入素材\n第二步：识别字幕\n第三步：整理知识点\n总结：输出 Markdown 笔记';
+
+    expect(
+      inferVideoContentKind(
+        transcriptFull: '',
+        ocrTextFull: '',
+        readableTextFull: readable,
+      ),
+      'knowledge',
+    );
+  });
+
+  test('inferVideoContentKind returns unknown for very short ambiguous text',
+      () {
+    expect(
+      inferVideoContentKind(
+        transcriptFull: '',
+        ocrTextFull: '',
+        readableTextFull: 'Nice!',
+      ),
+      'unknown',
+    );
+  });
+
   test('inferVideoContentKind returns unknown when readable text is empty', () {
     expect(
       inferVideoContentKind(
