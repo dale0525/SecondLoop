@@ -458,6 +458,42 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           continue;
         }
 
+        Map<String, Object?>? linkedAudioPayload;
+        final audioSha256 = (manifest.audioSha256 ?? '').trim();
+        if (audioSha256.isNotEmpty) {
+          final linkedAudioPayloadJson =
+              await backend.readAttachmentAnnotationPayloadJson(
+            sessionKey,
+            sha256: audioSha256,
+          );
+          linkedAudioPayload = _MediaEnrichmentGateState._decodePayloadObject(
+            linkedAudioPayloadJson,
+          );
+        }
+
+        final transcriptSeed = resolveVideoManifestTranscriptSeed(
+          runningPayload: runningPayload,
+          audioSha256: manifest.audioSha256,
+          linkedAudioPayload: linkedAudioPayload,
+        );
+        if (transcriptSeed.shouldDeferForLinkedAudio) {
+          final queuedPayload = Map<String, Object?>.from(runningPayload);
+          queuedPayload.remove('ocr_auto_running_ms');
+          queuedPayload['ocr_auto_status'] = 'queued';
+          await persistPayload(attachment.sha256, queuedPayload, attemptMs);
+          continue;
+        }
+        _setOrRemoveAutoOcrPayloadField(
+          runningPayload,
+          'transcript_full',
+          transcriptSeed.transcriptFull,
+        );
+        _setOrRemoveAutoOcrPayloadField(
+          runningPayload,
+          'transcript_excerpt',
+          transcriptSeed.transcriptExcerpt,
+        );
+
         final segmentRefs =
             manifest.segments.take(maxSegments).toList(growable: false);
         if (segmentRefs.isEmpty) {
@@ -566,17 +602,8 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           continue;
         }
 
-        final transcriptFull = _readTrimmedPayloadString(
-          runningPayload,
-          'transcript_full',
-        );
-        final transcriptExcerptRaw = _readTrimmedPayloadString(
-          runningPayload,
-          'transcript_excerpt',
-        );
-        final transcriptExcerpt = transcriptExcerptRaw.isNotEmpty
-            ? transcriptExcerptRaw
-            : _truncateUtf8ForAutoOcr(transcriptFull, 8 * 1024);
+        final transcriptFull = transcriptSeed.transcriptFull;
+        final transcriptExcerpt = transcriptSeed.transcriptExcerpt;
 
         final readableTextFull = _joinNonEmptyBlocksForAutoOcr([
           transcriptFull,
@@ -920,14 +947,6 @@ String _firstNonEmptyForAutoOcr(List<String> values) {
     if (value.isNotEmpty) return value;
   }
   return '';
-}
-
-String _readTrimmedPayloadString(Map<String, Object?> payload, String key) {
-  final raw = payload[key];
-  if (raw == null) return '';
-  final value = raw.toString().trim();
-  if (value.toLowerCase() == 'null') return '';
-  return value;
 }
 
 String _joinNonEmptyBlocksForAutoOcr(List<String> parts) {

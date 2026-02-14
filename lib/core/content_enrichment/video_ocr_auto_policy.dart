@@ -47,6 +47,74 @@ bool shouldAutoRunVideoManifestOcr(
   return true;
 }
 
+final class VideoManifestTranscriptSeed {
+  const VideoManifestTranscriptSeed({
+    required this.transcriptFull,
+    required this.transcriptExcerpt,
+    required this.shouldDeferForLinkedAudio,
+  });
+
+  final String transcriptFull;
+  final String transcriptExcerpt;
+  final bool shouldDeferForLinkedAudio;
+}
+
+VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
+  required Map<String, Object?> runningPayload,
+  required String? audioSha256,
+  required Map<String, Object?>? linkedAudioPayload,
+}) {
+  String read(Map<String, Object?> payload, String key) {
+    final raw = payload[key];
+    if (raw == null) return '';
+    final value = raw.toString().trim();
+    if (value.toLowerCase() == 'null') return '';
+    return value;
+  }
+
+  final existingFull = read(runningPayload, 'transcript_full');
+  final existingExcerptRaw = read(runningPayload, 'transcript_excerpt');
+  final existingExcerpt = existingExcerptRaw.isNotEmpty
+      ? existingExcerptRaw
+      : _truncateUtf8(existingFull, 8 * 1024);
+  if (existingFull.isNotEmpty || existingExcerpt.isNotEmpty) {
+    return VideoManifestTranscriptSeed(
+      transcriptFull: existingFull,
+      transcriptExcerpt: existingExcerpt,
+      shouldDeferForLinkedAudio: false,
+    );
+  }
+
+  final normalizedAudioSha = (audioSha256 ?? '').trim();
+  if (normalizedAudioSha.isEmpty) {
+    return const VideoManifestTranscriptSeed(
+      transcriptFull: '',
+      transcriptExcerpt: '',
+      shouldDeferForLinkedAudio: false,
+    );
+  }
+
+  if (linkedAudioPayload == null) {
+    return const VideoManifestTranscriptSeed(
+      transcriptFull: '',
+      transcriptExcerpt: '',
+      shouldDeferForLinkedAudio: true,
+    );
+  }
+
+  final linkedFull = read(linkedAudioPayload, 'transcript_full');
+  final linkedExcerptRaw = read(linkedAudioPayload, 'transcript_excerpt');
+  final linkedExcerpt = linkedExcerptRaw.isNotEmpty
+      ? linkedExcerptRaw
+      : _truncateUtf8(linkedFull, 8 * 1024);
+
+  return VideoManifestTranscriptSeed(
+    transcriptFull: linkedFull,
+    transcriptExcerpt: linkedExcerpt,
+    shouldDeferForLinkedAudio: false,
+  );
+}
+
 String inferVideoContentKind({
   required String transcriptFull,
   required String ocrTextFull,

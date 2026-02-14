@@ -587,28 +587,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
-      var processedAutoVideoOcr = 0;
-      if (videoExtractEnabled) {
-        try {
-          processedAutoVideoOcr =
-              await _runAutoVideoManifestOcrForRecentAttachments(
-            backend: backend,
-            sessionKey: Uint8List.fromList(sessionKey),
-            contentConfig: contentConfig,
-            shouldTryMultimodalOcr: shouldTryMultimodalOcr,
-            canUseNetworkOcr: canUseNetworkOcr,
-            subscriptionStatus: subscriptionStatus,
-            mediaAnnotationConfig: effectiveMediaAnnotationConfig,
-            llmProfiles: llmProfiles,
-            cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-            cloudIdToken: idToken?.trim() ?? '',
-            cloudModelName: gatewayConfig.modelName,
-          );
-        } catch (_) {
-          processedAutoVideoOcr = 0;
-        }
-      }
-
       var processedAudioTranscripts = 0;
       if (audioTranscribeEnabled) {
         final network = await getNetwork();
@@ -630,6 +608,28 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           );
           final result = await runner.runOnce(limit: 5);
           processedAudioTranscripts = result.processed;
+        }
+      }
+
+      var processedAutoVideoOcr = 0;
+      if (videoExtractEnabled) {
+        try {
+          processedAutoVideoOcr =
+              await _runAutoVideoManifestOcrForRecentAttachments(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+            contentConfig: contentConfig,
+            shouldTryMultimodalOcr: shouldTryMultimodalOcr,
+            canUseNetworkOcr: canUseNetworkOcr,
+            subscriptionStatus: subscriptionStatus,
+            mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+            llmProfiles: llmProfiles,
+            cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+            cloudIdToken: idToken?.trim() ?? '',
+            cloudModelName: gatewayConfig.modelName,
+          );
+        } catch (_) {
+          processedAutoVideoOcr = 0;
         }
       }
 

@@ -84,6 +84,64 @@ void main() {
     );
   });
 
+  test('resolveVideoManifestTranscriptSeed keeps existing transcript first',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{
+        'transcript_full': 'Existing transcript full',
+        'transcript_excerpt': 'Existing transcript excerpt',
+      },
+      audioSha256: 'sha-audio',
+      linkedAudioPayload: null,
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, 'Existing transcript full');
+    expect(result.transcriptExcerpt, 'Existing transcript excerpt');
+  });
+
+  test(
+      'resolveVideoManifestTranscriptSeed defers when linked audio transcript is missing',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{},
+      audioSha256: 'sha-audio',
+      linkedAudioPayload: null,
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isTrue);
+    expect(result.transcriptFull, isEmpty);
+    expect(result.transcriptExcerpt, isEmpty);
+  });
+
+  test('resolveVideoManifestTranscriptSeed uses linked transcript payload', () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{},
+      audioSha256: 'sha-audio',
+      linkedAudioPayload: const <String, Object?>{
+        'transcript_full': 'Linked transcript full body',
+      },
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, 'Linked transcript full body');
+    expect(result.transcriptExcerpt, 'Linked transcript full body');
+  });
+
+  test(
+      'resolveVideoManifestTranscriptSeed allows OCR-only path without linked audio',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{},
+      audioSha256: '',
+      linkedAudioPayload: null,
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, isEmpty);
+    expect(result.transcriptExcerpt, isEmpty);
+  });
+
   test('inferVideoContentKind returns knowledge for dense transcript content',
       () {
     final transcript =
