@@ -21,6 +21,7 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
+import '../media_backup/video_transcode_worker.dart';
 import 'share_ingest.dart';
 
 final class ShareIngestGate extends StatefulWidget {
@@ -219,16 +220,41 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           final normalizedMimeType = mimeType.trim();
 
           if (normalizedMimeType.startsWith('video/')) {
-            final original = await backend.insertAttachment(
-              sessionKey,
-              bytes: bytes,
-              mimeType: normalizedMimeType,
+            final videoProxy =
+                await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
+              bytes,
+              sourceMimeType: normalizedMimeType,
+              maxSegmentDurationSeconds: 20 * 60,
+              maxSegmentBytes: 50 * 1024 * 1024,
             );
-            unawaited(_maybeEnqueueCloudMediaBackup(
-              backend,
-              sessionKey,
-              original.sha256,
-            ));
+
+            final videoSegments =
+                <({int index, String sha256, String mimeType})>[];
+            for (final segment in videoProxy.segments) {
+              final segmentAttachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: segment.bytes,
+                mimeType: segment.mimeType,
+              );
+              videoSegments.add(
+                (
+                  index: segment.index,
+                  sha256: segmentAttachment.sha256,
+                  mimeType: segmentAttachment.mimeType,
+                ),
+              );
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                segmentAttachment.sha256,
+              ));
+            }
+
+            if (videoSegments.isEmpty) {
+              throw StateError('video_proxy_segments_empty');
+            }
+
+            final primaryVideo = videoSegments.first;
 
             String? audioSha256;
             String? audioMimeType;
@@ -263,10 +289,12 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 
             final manifest = jsonEncode({
               ...buildVideoManifestPayload(
-                originalSha256: original.sha256,
-                originalMimeType: normalizedMimeType,
+                videoSha256: primaryVideo.sha256,
+                videoMimeType: primaryVideo.mimeType,
                 audioSha256: audioSha256,
                 audioMimeType: audioMimeType,
+                segmentCount: videoSegments.length,
+                videoSegments: videoSegments,
               ),
             });
             final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
@@ -396,15 +424,33 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
 
 Map<String, Object?> buildVideoManifestPayload({
-  required String originalSha256,
-  required String originalMimeType,
+  required String videoSha256,
+  required String videoMimeType,
   String? audioSha256,
   String? audioMimeType,
+  int? segmentCount,
+  List<({int index, String sha256, String mimeType})>? videoSegments,
 }) {
   return <String, Object?>{
-    'schema': 'secondloop.video_manifest.v1',
-    'original_sha256': originalSha256,
-    'original_mime_type': originalMimeType,
+    'schema': 'secondloop.video_manifest.v2',
+    'video_sha256': videoSha256,
+    'video_mime_type': videoMimeType,
+    // Backward-compatible fields for readers that still expect v1 keys.
+    'original_sha256': videoSha256,
+    'original_mime_type': videoMimeType,
+    if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
+    'segment_max_duration_ms': 20 * 60 * 1000,
+    'segment_max_bytes': 50 * 1024 * 1024,
+    if (videoSegments != null && videoSegments.isNotEmpty)
+      'video_segments': videoSegments
+          .map(
+            (segment) => <String, Object?>{
+              'index': segment.index,
+              'sha256': segment.sha256,
+              'mime_type': segment.mimeType,
+            },
+          )
+          .toList(growable: false),
     if (audioSha256 != null && audioSha256.trim().isNotEmpty)
       'audio_sha256': audioSha256,
     if (audioMimeType != null && audioMimeType.trim().isNotEmpty)

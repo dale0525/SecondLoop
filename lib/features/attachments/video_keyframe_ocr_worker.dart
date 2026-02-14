@@ -8,7 +8,8 @@ import 'platform_pdf_ocr.dart';
 
 const String kSecondLoopVideoManifestMimeType =
     'application/x.secondloop.video+json';
-const String kSecondLoopVideoManifestSchema = 'secondloop.video_manifest.v1';
+const String kSecondLoopVideoManifestSchemaV1 = 'secondloop.video_manifest.v1';
+const String kSecondLoopVideoManifestSchemaV2 = 'secondloop.video_manifest.v2';
 
 const int _kVideoOcrMaxFullBytes = 256 * 1024;
 const int _kVideoOcrMaxExcerptBytes = 8 * 1024;
@@ -61,11 +62,40 @@ ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
     if (payload is! Map) return null;
 
     final schema = payload['schema']?.toString().trim() ?? '';
-    if (schema != kSecondLoopVideoManifestSchema) return null;
+    final isSupportedSchema = schema == kSecondLoopVideoManifestSchemaV1 ||
+        schema == kSecondLoopVideoManifestSchemaV2;
+    if (!isSupportedSchema) return null;
 
-    final originalSha256 = payload['original_sha256']?.toString().trim() ?? '';
-    final originalMimeType =
-        payload['original_mime_type']?.toString().trim() ?? '';
+    String readNonEmptyField(
+      String primaryKey,
+      String fallbackKey, {
+      String fallbackValue = '',
+    }) {
+      final primary = payload[primaryKey]?.toString().trim() ?? '';
+      if (primary.isNotEmpty) return primary;
+      final fallback = payload[fallbackKey]?.toString().trim() ?? '';
+      if (fallback.isNotEmpty) return fallback;
+      return fallbackValue.trim();
+    }
+
+    String firstSegmentField(String key) {
+      final raw = payload['video_segments'];
+      if (raw is! List || raw.isEmpty) return '';
+      final first = raw.first;
+      if (first is! Map) return '';
+      return first[key]?.toString().trim() ?? '';
+    }
+
+    final originalSha256 = readNonEmptyField(
+      'video_sha256',
+      'original_sha256',
+      fallbackValue: firstSegmentField('sha256'),
+    );
+    final originalMimeType = readNonEmptyField(
+      'video_mime_type',
+      'original_mime_type',
+      fallbackValue: firstSegmentField('mime_type'),
+    );
     if (originalSha256.isEmpty || originalMimeType.isEmpty) return null;
 
     return ParsedVideoManifest(

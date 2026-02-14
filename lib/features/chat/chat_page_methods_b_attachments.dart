@@ -4,6 +4,40 @@ const String _kSecondLoopUrlManifestMimeType =
     'application/x.secondloop.url+json';
 const String _kSecondLoopUrlManifestSchema = 'secondloop.url_manifest.v1';
 
+Map<String, Object?> buildVideoManifestPayload({
+  required String videoSha256,
+  required String videoMimeType,
+  String? audioSha256,
+  String? audioMimeType,
+  int? segmentCount,
+  List<({int index, String sha256, String mimeType})>? videoSegments,
+}) {
+  return <String, Object?>{
+    'schema': 'secondloop.video_manifest.v2',
+    'video_sha256': videoSha256,
+    'video_mime_type': videoMimeType,
+    'original_sha256': videoSha256,
+    'original_mime_type': videoMimeType,
+    if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
+    'segment_max_duration_ms': 20 * 60 * 1000,
+    'segment_max_bytes': 50 * 1024 * 1024,
+    if (videoSegments != null && videoSegments.isNotEmpty)
+      'video_segments': videoSegments
+          .map(
+            (segment) => <String, Object?>{
+              'index': segment.index,
+              'sha256': segment.sha256,
+              'mime_type': segment.mimeType,
+            },
+          )
+          .toList(growable: false),
+    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
+      'audio_sha256': audioSha256,
+    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
+      'audio_mime_type': audioMimeType,
+  };
+}
+
 extension _ChatPageStateMethodsBAttachments on _ChatPageState {
   bool _looksLikeHttpUrlText(String raw) {
     final trimmed = raw.trim();
@@ -236,19 +270,66 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       }
 
       String shaToLink;
-      late final String shaToBackup;
+      final backupShas = <String>[];
       if (normalizedMimeType.startsWith('video/')) {
-        final original = await backend.insertAttachment(
-          sessionKey,
-          bytes: rawBytes,
-          mimeType: normalizedMimeType,
+        final videoProxy =
+            await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
+          rawBytes,
+          sourceMimeType: normalizedMimeType,
+          maxSegmentDurationSeconds: 20 * 60,
+          maxSegmentBytes: 50 * 1024 * 1024,
         );
-        shaToBackup = original.sha256;
+
+        final videoSegments = <({int index, String sha256, String mimeType})>[];
+        for (final segment in videoProxy.segments) {
+          final segmentAttachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: segment.bytes,
+            mimeType: segment.mimeType,
+          );
+          videoSegments.add(
+            (
+              index: segment.index,
+              sha256: segmentAttachment.sha256,
+              mimeType: segmentAttachment.mimeType,
+            ),
+          );
+          backupShas.add(segmentAttachment.sha256);
+        }
+        if (videoSegments.isEmpty) {
+          throw StateError('video_proxy_segments_empty');
+        }
+
+        final primaryVideo = videoSegments.first;
+
+        String? audioSha256;
+        String? audioMimeType;
+        final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+          rawBytes,
+          sourceMimeType: normalizedMimeType,
+        );
+        if (audioProxy.didTranscode &&
+            audioProxy.bytes.isNotEmpty &&
+            audioProxy.mimeType.trim().toLowerCase().startsWith('audio/')) {
+          final audioAttachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: audioProxy.bytes,
+            mimeType: audioProxy.mimeType,
+          );
+          audioSha256 = audioAttachment.sha256;
+          audioMimeType = audioAttachment.mimeType;
+          backupShas.add(audioAttachment.sha256);
+        }
 
         final manifest = jsonEncode({
-          'schema': 'secondloop.video_manifest.v1',
-          'original_sha256': original.sha256,
-          'original_mime_type': normalizedMimeType,
+          ...buildVideoManifestPayload(
+            videoSha256: primaryVideo.sha256,
+            videoMimeType: primaryVideo.mimeType,
+            audioSha256: audioSha256,
+            audioMimeType: audioMimeType,
+            segmentCount: videoSegments.length,
+            videoSegments: videoSegments,
+          ),
         });
         final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
         final manifestAttachment = await backend.insertAttachment(
@@ -274,7 +355,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           mimeType: proxy.mimeType,
         );
         shaToLink = attachment.sha256;
-        shaToBackup = attachment.sha256;
+        backupShas.add(attachment.sha256);
       } else {
         final attachment = await backend.insertAttachment(
           sessionKey,
@@ -282,16 +363,18 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           mimeType: normalizedMimeType,
         );
         shaToLink = attachment.sha256;
-        shaToBackup = attachment.sha256;
+        backupShas.add(attachment.sha256);
       }
 
-      unawaited(
-        _maybeEnqueueCloudMediaBackup(
-          backend,
-          sessionKey,
-          shaToBackup,
-        ),
-      );
+      for (final backupSha in backupShas.toSet()) {
+        unawaited(
+          _maybeEnqueueCloudMediaBackup(
+            backend,
+            sessionKey,
+            backupSha,
+          ),
+        );
+      }
 
       await backend.linkAttachmentToMessage(
         sessionKey,

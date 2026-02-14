@@ -20,6 +20,24 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.originalSha256, 'sha-x');
     expect(parsed.originalMimeType, 'video/mp4');
+
+    final validV2 = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-v2","video_mime_type":"video/mp4"}'
+          .codeUnits,
+    );
+    final parsedV2 = parseVideoManifestPayload(validV2);
+    expect(parsedV2, isNotNull);
+    expect(parsedV2!.originalSha256, 'sha-v2');
+    expect(parsedV2.originalMimeType, 'video/mp4');
+
+    final v2SegmentsOnly = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+    final parsedV2SegmentsOnly = parseVideoManifestPayload(v2SegmentsOnly);
+    expect(parsedV2SegmentsOnly, isNotNull);
+    expect(parsedV2SegmentsOnly!.originalSha256, 'sha-seg-0');
+    expect(parsedV2SegmentsOnly.originalMimeType, 'video/mp4');
   });
 
   test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
