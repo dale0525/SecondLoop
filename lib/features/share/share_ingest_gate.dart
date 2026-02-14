@@ -227,6 +227,9 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               maxSegmentDurationSeconds: 20 * 60,
               maxSegmentBytes: 50 * 1024 * 1024,
             );
+            if (!videoProxy.isStrictVideoProxy) {
+              throw StateError('video_proxy_transcode_failed');
+            }
 
             final videoSegments =
                 <({int index, String sha256, String mimeType})>[];

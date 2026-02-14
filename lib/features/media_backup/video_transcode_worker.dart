@@ -26,6 +26,22 @@ final class VideoTranscodeResult {
   final String mimeType;
   final bool didTranscode;
   final List<VideoTranscodeSegment> segments;
+
+  bool get isStrictVideoProxy {
+    if (!didTranscode) return false;
+    if (mimeType.trim().toLowerCase() != VideoTranscodeWorker.targetMimeType) {
+      return false;
+    }
+    if (segments.isEmpty) return false;
+    for (final segment in segments) {
+      if (segment.bytes.isEmpty) return false;
+      if (segment.mimeType.trim().toLowerCase() !=
+          VideoTranscodeWorker.targetMimeType) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 typedef VideoTranscodeCommandRunner = Future<ProcessResult> Function(

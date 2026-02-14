@@ -17,6 +17,7 @@ void main() {
     expect(result.mimeType, 'application/pdf');
     expect(result.bytes, input);
     expect(result.segments.length, 1);
+    expect(result.isStrictVideoProxy, isFalse);
     expect(result.segments.first.bytes, input);
   });
 
@@ -32,6 +33,66 @@ void main() {
     expect(result.mimeType, 'video/mp4');
     expect(result.bytes, input);
     expect(result.segments.length, 1);
+    expect(result.isStrictVideoProxy, isFalse);
+  });
+
+  test('VideoTranscodeResult strict proxy requires transcoded mp4 segments',
+      () {
+    final valid = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/mp4',
+      didTranscode: true,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1]),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(valid.isStrictVideoProxy, isTrue);
+
+    final passthrough = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/mp4',
+      didTranscode: false,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1]),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(passthrough.isStrictVideoProxy, isFalse);
+
+    final wrongMime = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/quicktime',
+      didTranscode: true,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1]),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(wrongMime.isStrictVideoProxy, isFalse);
+
+    final emptySegment = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/mp4',
+      didTranscode: true,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List(0),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(emptySegment.isStrictVideoProxy, isFalse);
   });
 
   test('VideoTranscodeWorker returns segmented mp4 output when ffmpeg succeeds',
@@ -64,5 +125,6 @@ void main() {
         result.segments[0].bytes, Uint8List.fromList(const <int>[21, 22, 23]));
     expect(
         result.segments[1].bytes, Uint8List.fromList(const <int>[31, 32, 33]));
+    expect(result.isStrictVideoProxy, isTrue);
   });
 }
