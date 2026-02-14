@@ -488,71 +488,48 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           );
           if (segmentBytes.isEmpty) continue;
 
-          PlatformPdfOcrResult? multimodalOcr;
-          if (shouldTryMultimodalOcr && canUseNetworkOcr) {
-            multimodalOcr = await tryConfiguredMultimodalMediaOcr(
-              backend: backend,
-              sessionKey: sessionKey,
-              mimeType: segment.mimeType,
-              mediaBytes: segmentBytes,
-              pageCountHint: 1,
-              languageHints: languageHints,
-              subscriptionStatus: subscriptionStatus,
-              mediaAnnotationConfig: mediaAnnotationConfig,
-              llmProfiles: llmProfiles,
-              cloudGatewayBaseUrl: cloudGatewayBaseUrl,
-              cloudIdToken: cloudIdToken,
-              cloudModelName: cloudModelName,
-            );
-          }
-
-          if (multimodalOcr != null) {
-            processedSegments += 1;
-            final pageCount =
-                multimodalOcr.pageCount > 0 ? multimodalOcr.pageCount : 1;
-            final processedPages = multimodalOcr.processedPages > 0
-                ? multimodalOcr.processedPages
-                : pageCount;
-            totalFrameCount += pageCount;
-            totalProcessedFrames += processedPages;
-            ocrTruncated = ocrTruncated || multimodalOcr.isTruncated;
-
-            final engine = multimodalOcr.engine.trim();
-            if (engine.isNotEmpty) {
-              ocrEngines.add(engine);
-            }
-
-            final full = multimodalOcr.fullText.trim();
-            if (full.isNotEmpty) {
-              if (segmentRefs.length <= 1) {
-                ocrBlocks.add(full);
-              } else {
-                ocrBlocks.add('[segment ${i + 1}]\n$full');
-              }
-            }
-            continue;
-          }
-
-          final ocr = await VideoKeyframeOcrWorker.runOnVideoBytes(
-            segmentBytes,
-            sourceMimeType: segment.mimeType,
-            maxFrames: maxFramesPerSegment,
-            frameIntervalSeconds: 5,
-            languageHints: languageHints,
+          final ocrResult = await runAutoVideoSegmentOcrWithFallback(
+            shouldTryMultimodalOcr: shouldTryMultimodalOcr,
+            canUseNetworkOcr: canUseNetworkOcr,
+            runMultimodalOcr: () {
+              return tryConfiguredMultimodalMediaOcr(
+                backend: backend,
+                sessionKey: sessionKey,
+                mimeType: segment.mimeType,
+                mediaBytes: segmentBytes,
+                pageCountHint: 1,
+                languageHints: languageHints,
+                subscriptionStatus: subscriptionStatus,
+                mediaAnnotationConfig: mediaAnnotationConfig,
+                llmProfiles: llmProfiles,
+                cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+                cloudIdToken: cloudIdToken,
+                cloudModelName: cloudModelName,
+              );
+            },
+            runKeyframeOcr: () {
+              return VideoKeyframeOcrWorker.runOnVideoBytes(
+                segmentBytes,
+                sourceMimeType: segment.mimeType,
+                maxFrames: maxFramesPerSegment,
+                frameIntervalSeconds: 5,
+                languageHints: languageHints,
+              );
+            },
           );
-          if (ocr == null) continue;
+          if (ocrResult == null) continue;
 
           processedSegments += 1;
-          totalFrameCount += ocr.frameCount;
-          totalProcessedFrames += ocr.processedFrames;
-          ocrTruncated = ocrTruncated || ocr.isTruncated;
+          totalFrameCount += ocrResult.pageCount;
+          totalProcessedFrames += ocrResult.processedPages;
+          ocrTruncated = ocrTruncated || ocrResult.isTruncated;
 
-          final engine = ocr.engine.trim();
+          final engine = ocrResult.engine.trim();
           if (engine.isNotEmpty) {
             ocrEngines.add(engine);
           }
 
-          final full = ocr.fullText.trim();
+          final full = ocrResult.fullText.trim();
           if (full.isEmpty) continue;
           if (segmentRefs.length <= 1) {
             ocrBlocks.add(full);
@@ -698,6 +675,71 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
 
     return updated;
   }
+}
+
+enum AutoVideoSegmentOcrSource {
+  multimodal,
+  keyframe,
+}
+
+final class AutoVideoSegmentOcrResult {
+  const AutoVideoSegmentOcrResult({
+    required this.source,
+    required this.fullText,
+    required this.engine,
+    required this.isTruncated,
+    required this.pageCount,
+    required this.processedPages,
+  });
+
+  final AutoVideoSegmentOcrSource source;
+  final String fullText;
+  final String engine;
+  final bool isTruncated;
+  final int pageCount;
+  final int processedPages;
+}
+
+@visibleForTesting
+Future<AutoVideoSegmentOcrResult?> runAutoVideoSegmentOcrWithFallback({
+  required bool shouldTryMultimodalOcr,
+  required bool canUseNetworkOcr,
+  required Future<PlatformPdfOcrResult?> Function() runMultimodalOcr,
+  required Future<VideoKeyframeOcrResult?> Function() runKeyframeOcr,
+}) async {
+  if (shouldTryMultimodalOcr && canUseNetworkOcr) {
+    final multimodalOcr = await runMultimodalOcr();
+    if (multimodalOcr != null) {
+      final pageCount =
+          multimodalOcr.pageCount > 0 ? multimodalOcr.pageCount : 1;
+      final processedPages = multimodalOcr.processedPages > 0
+          ? multimodalOcr.processedPages
+          : pageCount;
+      return AutoVideoSegmentOcrResult(
+        source: AutoVideoSegmentOcrSource.multimodal,
+        fullText: multimodalOcr.fullText,
+        engine: multimodalOcr.engine,
+        isTruncated: multimodalOcr.isTruncated,
+        pageCount: pageCount,
+        processedPages: processedPages,
+      );
+    }
+  }
+
+  final keyframeOcr = await runKeyframeOcr();
+  if (keyframeOcr == null) return null;
+
+  final pageCount = keyframeOcr.frameCount > 0 ? keyframeOcr.frameCount : 1;
+  final processedPages =
+      keyframeOcr.processedFrames > 0 ? keyframeOcr.processedFrames : pageCount;
+  return AutoVideoSegmentOcrResult(
+    source: AutoVideoSegmentOcrSource.keyframe,
+    fullText: keyframeOcr.fullText,
+    engine: keyframeOcr.engine,
+    isTruncated: keyframeOcr.isTruncated,
+    pageCount: pageCount,
+    processedPages: processedPages,
+  );
 }
 
 String _readTrimmedPayloadString(Map<String, Object?> payload, String key) {

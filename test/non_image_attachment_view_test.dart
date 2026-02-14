@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/non_image_attachment_view.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -309,6 +310,133 @@ void main() {
     await tester.pump();
 
     expect(runInvoked, 1);
+  });
+
+  testWidgets('NonImageAttachmentView shows video manifest insight fields',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-insights',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-insights.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-original-video',
+          'video_mime_type': 'video/mp4',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-1',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+    final payload = <String, Object?>{
+      'video_content_kind': 'knowledge',
+      'video_summary': 'This lesson explains OCR fallbacks.',
+      'knowledge_markdown_excerpt': '## Steps\n1. Try multimodal\n2. Fallback',
+      'readable_text_full': '## Steps\n1. Try multimodal\n2. Fallback',
+      'readable_text_excerpt': 'This lesson explains OCR fallbacks.',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video attachment',
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('video_manifest_insights_surface')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('video_manifest_content_kind_value')),
+      findsOneWidget,
+    );
+    expect(find.text('Knowledge video'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('video_manifest_summary_text')),
+      findsOneWidget,
+    );
+    expect(find.text('This lesson explains OCR fallbacks.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('video_manifest_detail_text')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Try multimodal'), findsWidgets);
+  });
+
+  testWidgets('NonImageAttachmentView localizes video insight labels in zh_CN',
+      (tester) async {
+    final previousLocale = LocaleSettings.currentLocale;
+    addTearDown(() {
+      LocaleSettings.setLocale(previousLocale);
+    });
+    LocaleSettings.setLocale(AppLocale.zhCn);
+
+    const attachment = Attachment(
+      sha256: 'sha-video-insights-zh',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-insights-zh.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-original-video',
+          'video_mime_type': 'video/mp4',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-1',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+    final payload = <String, Object?>{
+      'video_content_kind': 'knowledge',
+      'video_summary': '这是一个知识类视频概要。',
+      'knowledge_markdown_excerpt': '## 要点\n1. 多模态优先\n2. 本地回退',
+      'readable_text_full': '## 要点\n1. 多模态优先\n2. 本地回退',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: '视频附件',
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('知识类视频'), findsOneWidget);
+    expect(find.text('内容类型'), findsOneWidget);
+    expect(find.text('视频概要'), findsOneWidget);
+    expect(find.text('知识文稿'), findsOneWidget);
   });
 
   testWidgets('NonImageAttachmentView disables regenerate action while running',
