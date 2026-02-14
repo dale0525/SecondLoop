@@ -362,6 +362,14 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
     required NativeAppBackend backend,
     required Uint8List sessionKey,
     required ContentEnrichmentConfig? contentConfig,
+    required bool shouldTryMultimodalOcr,
+    required bool canUseNetworkOcr,
+    required SubscriptionStatus subscriptionStatus,
+    required MediaAnnotationConfig mediaAnnotationConfig,
+    required List<LlmProfile> llmProfiles,
+    required String cloudGatewayBaseUrl,
+    required String cloudIdToken,
+    required String cloudModelName,
   }) async {
     if (!(contentConfig?.ocrEnabled ?? true)) return 0;
     final configuredHints = contentConfig?.ocrLanguageHints.trim() ?? '';
@@ -480,6 +488,51 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           );
           if (segmentBytes.isEmpty) continue;
 
+          PlatformPdfOcrResult? multimodalOcr;
+          if (shouldTryMultimodalOcr && canUseNetworkOcr) {
+            multimodalOcr = await tryConfiguredMultimodalMediaOcr(
+              backend: backend,
+              sessionKey: sessionKey,
+              mimeType: segment.mimeType,
+              mediaBytes: segmentBytes,
+              pageCountHint: 1,
+              languageHints: languageHints,
+              subscriptionStatus: subscriptionStatus,
+              mediaAnnotationConfig: mediaAnnotationConfig,
+              llmProfiles: llmProfiles,
+              cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+              cloudIdToken: cloudIdToken,
+              cloudModelName: cloudModelName,
+            );
+          }
+
+          if (multimodalOcr != null) {
+            processedSegments += 1;
+            final pageCount =
+                multimodalOcr.pageCount > 0 ? multimodalOcr.pageCount : 1;
+            final processedPages = multimodalOcr.processedPages > 0
+                ? multimodalOcr.processedPages
+                : pageCount;
+            totalFrameCount += pageCount;
+            totalProcessedFrames += processedPages;
+            ocrTruncated = ocrTruncated || multimodalOcr.isTruncated;
+
+            final engine = multimodalOcr.engine.trim();
+            if (engine.isNotEmpty) {
+              ocrEngines.add(engine);
+            }
+
+            final full = multimodalOcr.fullText.trim();
+            if (full.isNotEmpty) {
+              if (segmentRefs.length <= 1) {
+                ocrBlocks.add(full);
+              } else {
+                ocrBlocks.add('[segment ${i + 1}]\n$full');
+              }
+            }
+            continue;
+          }
+
           final ocr = await VideoKeyframeOcrWorker.runOnVideoBytes(
             segmentBytes,
             sourceMimeType: segment.mimeType,
@@ -553,6 +606,18 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           ocrExcerpt,
         ]);
 
+        final videoContentKind = inferVideoContentKind(
+          transcriptFull: transcriptFull,
+          ocrTextFull: ocrFullText,
+          readableTextFull: readableTextFull,
+        );
+        final videoSummary = buildVideoSummaryText(
+          readableTextExcerpt.isNotEmpty
+              ? readableTextExcerpt
+              : readableTextFull,
+          maxBytes: 2048,
+        );
+
         final segmentPayloads = manifest.segments
             .map(
               (segment) => <String, Object?>{
@@ -591,6 +656,19 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         updatedPayload['ocr_is_truncated'] = ocrTruncated;
         updatedPayload['ocr_page_count'] = totalFrameCount;
         updatedPayload['ocr_processed_pages'] = totalProcessedFrames;
+        updatedPayload['video_content_kind'] = videoContentKind;
+        if (videoSummary.isNotEmpty) {
+          updatedPayload['video_summary'] = videoSummary;
+        }
+        if (videoContentKind == 'knowledge') {
+          updatedPayload['knowledge_markdown_full'] = readableTextFull;
+          updatedPayload['knowledge_markdown_excerpt'] =
+              _truncateUtf8ForAutoOcr(readableTextExcerpt, 8 * 1024);
+        } else if (videoContentKind == 'non_knowledge') {
+          updatedPayload['video_description_full'] = readableTextFull;
+          updatedPayload['video_description_excerpt'] =
+              _truncateUtf8ForAutoOcr(readableTextExcerpt, 8 * 1024);
+        }
         updatedPayload['ocr_auto_status'] = 'ok';
         updatedPayload['ocr_auto_last_success_ms'] =
             DateTime.now().millisecondsSinceEpoch;

@@ -595,6 +595,14 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             contentConfig: contentConfig,
+            shouldTryMultimodalOcr: shouldTryMultimodalOcr,
+            canUseNetworkOcr: canUseNetworkOcr,
+            subscriptionStatus: subscriptionStatus,
+            mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+            llmProfiles: llmProfiles,
+            cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+            cloudIdToken: idToken?.trim() ?? '',
+            cloudModelName: gatewayConfig.modelName,
           );
         } catch (_) {
           processedAutoVideoOcr = 0;

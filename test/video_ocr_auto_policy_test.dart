@@ -83,4 +83,53 @@ void main() {
       isFalse,
     );
   });
+
+  test('inferVideoContentKind returns knowledge for dense transcript content',
+      () {
+    final transcript =
+        List<String>.filled(40, 'topic insight and key takeaways').join(' ');
+
+    expect(
+      inferVideoContentKind(
+        transcriptFull: transcript,
+        ocrTextFull: '',
+        readableTextFull: transcript,
+      ),
+      'knowledge',
+    );
+  });
+
+  test('inferVideoContentKind returns non_knowledge for short narrative', () {
+    const readable = 'A short travel vlog with walking scenes and city views.';
+
+    expect(
+      inferVideoContentKind(
+        transcriptFull: '',
+        ocrTextFull: '',
+        readableTextFull: readable,
+      ),
+      'non_knowledge',
+    );
+  });
+
+  test('inferVideoContentKind returns unknown when readable text is empty', () {
+    expect(
+      inferVideoContentKind(
+        transcriptFull: '',
+        ocrTextFull: '',
+        readableTextFull: '',
+      ),
+      'unknown',
+    );
+  });
+
+  test('buildVideoSummaryText trims and utf8-truncates output', () {
+    final source = ('  这是一个视频总结。' * 300).trim();
+
+    final summary = buildVideoSummaryText(source, maxBytes: 120);
+
+    expect(summary.isNotEmpty, isTrue);
+    expect(summary.length < source.length, isTrue);
+    expect(summary.trim(), summary);
+  });
 }
