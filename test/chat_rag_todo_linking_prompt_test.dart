@@ -50,6 +50,33 @@ void main() {
     expect(find.text('Update a task?'), findsOneWidget);
     expect(find.text('下午 2 点有客户来拜访，需要接待'), findsOneWidget);
   });
+
+  testWidgets('Send long-form note does not auto-create todo', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _Backend(
+      todos: const [],
+      similarTodoThreads: const [],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    const longFormNote =
+        'tomorrow 3pm submit report\nContext: include invoice details, budget summary, and follow-up notes for audit.';
+
+    await tester.enterText(
+        find.byKey(const ValueKey('chat_input')), longFormNote);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat_send')));
+    await tester.pump();
+
+    for (var i = 0; i < 80; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    await tester.pumpAndSettle();
+
+    expect(backend.upsertedTodoIds, isEmpty);
+  });
 }
 
 Widget _wrapChat({required AppBackend backend}) {
@@ -84,6 +111,7 @@ final class _Backend extends AppBackend {
   final List<Todo> _todos;
   final List<TodoThreadMatch> _similar;
   final List<Message> _messages = [];
+  final List<String> upsertedTodoIds = <String>[];
   int searchCalls = 0;
 
   @override
@@ -160,6 +188,36 @@ final class _Backend extends AppBackend {
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+  }) async {
+    upsertedTodoIds.add(id);
+    final todo = Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+    _todos.removeWhere((item) => item.id == id);
+    _todos.add(todo);
+    return todo;
+  }
 
   @override
   Future<List<TodoThreadMatch>> searchSimilarTodoThreads(

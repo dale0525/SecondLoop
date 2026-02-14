@@ -66,6 +66,8 @@ class MessageActionResolver {
     r'(?:(?:上|下)午|早上|晚上|中午|凌晨)?\s*\d{1,2}\s*点(?:\s*(?:[0-5]?\d\s*分?|半))?',
   );
 
+  static const int _longFormRuneThreshold = 240;
+
   static const List<({String freq, String token})> _recurrenceTokens = [
     (freq: 'daily', token: 'every day'),
     (freq: 'daily', token: 'daily'),
@@ -308,6 +310,10 @@ class MessageActionResolver {
     return out;
   }
 
+  static bool _looksLikeLongFormNote(String text) {
+    return text.contains('\n') || text.runes.length >= _longFormRuneThreshold;
+  }
+
   static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
     if (firstDayOfWeekIndex == 0) return DateTime.sunday;
     return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
@@ -431,6 +437,10 @@ class MessageActionResolver {
           );
         }
       }
+    }
+
+    if (_looksLikeLongFormNote(raw)) {
+      return const MessageActionNoneDecision();
     }
 
     // Create (new todo)

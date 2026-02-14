@@ -292,7 +292,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     // Fallback: keep legacy prompts for non-auto cases.
-    if (timeResolution != null || looksLikeReview) {
+    if (!looksLikeLongFormNote && (timeResolution != null || looksLikeReview)) {
       if (!mounted) return;
       final decision = await showCaptureTodoSuggestionSheet(
         context,
