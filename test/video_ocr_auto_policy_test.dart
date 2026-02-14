@@ -142,6 +142,42 @@ void main() {
     expect(result.transcriptExcerpt, isEmpty);
   });
 
+  test(
+      'shouldAcceptVideoManifestOcrResult allows transcript-only content when engine is present',
+      () {
+    expect(
+      shouldAcceptVideoManifestOcrResult(
+        ocrEngine: 'keyframe_engine',
+        ocrFullText: '',
+        transcriptFull: 'Narrated transcript is available.',
+      ),
+      isTrue,
+    );
+  });
+
+  test('shouldAcceptVideoManifestOcrResult rejects empty transcript and OCR',
+      () {
+    expect(
+      shouldAcceptVideoManifestOcrResult(
+        ocrEngine: 'keyframe_engine',
+        ocrFullText: '',
+        transcriptFull: '',
+      ),
+      isFalse,
+    );
+  });
+
+  test('shouldAcceptVideoManifestOcrResult rejects missing OCR engine', () {
+    expect(
+      shouldAcceptVideoManifestOcrResult(
+        ocrEngine: '',
+        ocrFullText: 'Visible text',
+        transcriptFull: 'Narration',
+      ),
+      isFalse,
+    );
+  });
+
   test('inferVideoContentKind returns knowledge for dense transcript content',
       () {
     final transcript =

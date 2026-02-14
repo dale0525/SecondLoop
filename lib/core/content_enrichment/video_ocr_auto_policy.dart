@@ -115,6 +115,15 @@ VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
   );
 }
 
+bool shouldAcceptVideoManifestOcrResult({
+  required String ocrEngine,
+  required String ocrFullText,
+  required String transcriptFull,
+}) {
+  if (ocrEngine.trim().isEmpty) return false;
+  return ocrFullText.trim().isNotEmpty || transcriptFull.trim().isNotEmpty;
+}
+
 String inferVideoContentKind({
   required String transcriptFull,
   required String ocrTextFull,

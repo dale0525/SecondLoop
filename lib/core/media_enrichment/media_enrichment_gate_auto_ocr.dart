@@ -591,8 +591,14 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         final ocrFullText = ocrBlocks.join('\n\n').trim();
         final ocrExcerpt = _truncateUtf8ForAutoOcr(ocrFullText, 8 * 1024);
         final ocrEngine = _dominantStringForAutoOcr(ocrEngines);
+        final transcriptFull = transcriptSeed.transcriptFull;
+        final transcriptExcerpt = transcriptSeed.transcriptExcerpt;
 
-        if (ocrEngine.isEmpty || ocrFullText.isEmpty) {
+        if (!shouldAcceptVideoManifestOcrResult(
+          ocrEngine: ocrEngine,
+          ocrFullText: ocrFullText,
+          transcriptFull: transcriptFull,
+        )) {
           await markFailed(
             attachmentSha256: attachment.sha256,
             payload: runningPayload,
@@ -601,9 +607,6 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           );
           continue;
         }
-
-        final transcriptFull = transcriptSeed.transcriptFull;
-        final transcriptExcerpt = transcriptSeed.transcriptExcerpt;
 
         final readableTextFull = _joinNonEmptyBlocksForAutoOcr([
           transcriptFull,
