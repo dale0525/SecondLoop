@@ -123,6 +123,52 @@ void main() {
       ConnectivityPlatform.instance = oldConnectivity;
     }
   });
+
+  testWidgets('Media uploads on => auto-backfills cloud media queue once',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeWebdavUsername('u');
+    await store.writeWebdavPassword('p');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _RecordingBackend();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const SyncEngineGate(child: SizedBox.shrink()),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.cloudMediaBackfillCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.cloudMediaBackfillCalls, 1);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
 }
 
 final class _FakeConnectivityPlatform extends ConnectivityPlatform {
@@ -155,6 +201,7 @@ final class _RecordingBackend extends TestAppBackend {
   int webdavPushOpsOnlyCalls = 0;
   int webdavUploadAttachmentCalls = 0;
   int markUploadedCalls = 0;
+  int cloudMediaBackfillCalls = 0;
 
   final List<CloudMediaBackup> _dueBackups;
   final Set<String> _uploaded = <String>{};
@@ -217,6 +264,16 @@ final class _RecordingBackend extends TestAppBackend {
     required int nowMs,
   }) async {
     // ignored
+  }
+
+  @override
+  Future<int> backfillCloudMediaBackupImages(
+    Uint8List key, {
+    required String desiredVariant,
+    required int nowMs,
+  }) async {
+    cloudMediaBackfillCalls++;
+    return 0;
   }
 
   @override

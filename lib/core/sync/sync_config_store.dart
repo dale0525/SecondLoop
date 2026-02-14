@@ -48,6 +48,8 @@ final class SyncConfigStore {
   static const kCloudMediaBackupEnabled = 'cloud_media_backup_enabled'; // 1|0
   static const kCloudMediaBackupWifiOnly =
       'cloud_media_backup_wifi_only'; // 1|0
+  static const _kCloudMediaBackupBackfillDonePrefix =
+      'cloud_media_backup_backfill_done:';
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final next = _tail.then((_) => action());
@@ -201,6 +203,42 @@ final class SyncConfigStore {
 
   Future<void> writeCloudMediaBackupWifiOnly(bool enabled) async {
     await _writeConfigUpdates({kCloudMediaBackupWifiOnly: enabled ? '1' : '0'});
+  }
+
+  Future<bool> readCloudMediaBackupBackfillDone({
+    required String scopeId,
+  }) async {
+    final trimmedScope = scopeId.trim();
+    if (trimmedScope.isEmpty) return false;
+    final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
+    final v = (await _loadConfigMap())[key];
+    return v == '1';
+  }
+
+  Future<void> writeCloudMediaBackupBackfillDone({
+    required String scopeId,
+    required bool done,
+  }) async {
+    final trimmedScope = scopeId.trim();
+    if (trimmedScope.isEmpty) return;
+    final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
+    await _writeConfigUpdates({key: done ? '1' : null});
+  }
+
+  String cloudMediaBackupBackfillScopeId(SyncConfig config) {
+    final backend = switch (config.backendType) {
+      SyncBackendType.webdav => 'webdav',
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+    };
+
+    final raw = [
+      backend,
+      config.baseUrl?.trim() ?? '',
+      config.localDir?.trim() ?? '',
+      config.remoteRoot.trim(),
+    ].join('|');
+    return base64Url.encode(utf8.encode(raw));
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {

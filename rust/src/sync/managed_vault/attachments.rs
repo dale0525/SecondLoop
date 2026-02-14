@@ -102,7 +102,10 @@ pub fn download_attachment_bytes(
 
     let status = resp.status();
     if status.as_u16() == 404 {
-        return Err(anyhow!("managed-vault attachment not found"));
+        return Err(super::super::NotFound {
+            path: format!("/v1/vaults/{vault_id}/attachments/{sha256}"),
+        }
+        .into());
     }
     if !status.is_success() {
         let text = resp.text().unwrap_or_default();

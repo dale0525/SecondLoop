@@ -4,11 +4,14 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
 import '../media_backup/cloud_media_download.dart';
+import '../media_backup/cloud_media_download_ui.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -18,12 +21,14 @@ class ChatImageAttachmentThumbnail extends StatefulWidget {
     required this.attachment,
     required this.attachmentsBackend,
     required this.onTap,
+    this.cloudMediaDownload,
     super.key,
   });
 
   final Attachment attachment;
   final AttachmentsBackend attachmentsBackend;
   final VoidCallback onTap;
+  final CloudMediaDownload? cloudMediaDownload;
 
   @override
   State<ChatImageAttachmentThumbnail> createState() =>
@@ -130,19 +135,27 @@ class _ChatImageAttachmentThumbnailState
       _blockedByWifiOnly = false;
       return bytes;
     } catch (_) {
-      final allowed = await _shouldAutoDownloadNow();
-      if (!allowed) {
-        _blockedByWifiOnly = true;
-        return null;
-      }
       if (!mounted) return null;
 
-      final didDownload = await CloudMediaDownload(configStore: _store)
-          .downloadAttachmentBytesFromConfiguredSync(
-        context,
+      final backend = AppBackendScope.maybeOf(context);
+      if (backend == null) return null;
+      final idTokenGetter =
+          CloudAuthScope.maybeOf(context)?.controller.getIdToken;
+      final downloader =
+          widget.cloudMediaDownload ?? CloudMediaDownload(configStore: _store);
+
+      final result =
+          await downloader.downloadAttachmentBytesFromConfiguredSyncWithPolicy(
+        backend: backend,
+        sessionKey: sessionKey,
+        idTokenGetter: idTokenGetter,
         sha256: widget.attachment.sha256,
+        allowCellular: false,
       );
-      if (!didDownload) return null;
+      final uiError =
+          cloudMediaDownloadUiErrorFromFailureReason(result.failureReason);
+      _blockedByWifiOnly = uiError == CloudMediaDownloadUiError.wifiOnlyBlocked;
+      if (!result.didDownload) return null;
 
       try {
         final bytes = await widget.attachmentsBackend.readAttachmentBytes(

@@ -202,6 +202,28 @@ final class _AppBackendSyncRunner implements SyncRunner {
     }
   }
 
+  Future<void> _autoBackfillCloudMediaBackupIfNeeded(SyncConfig config) async {
+    if (config.backendType == SyncBackendType.localDir) return;
+
+    final scopeId = _configStore.cloudMediaBackupBackfillScopeId(config);
+    if (scopeId.isEmpty) return;
+
+    final alreadyDone = await _configStore.readCloudMediaBackupBackfillDone(
+      scopeId: scopeId,
+    );
+    if (alreadyDone) return;
+
+    await backend.backfillCloudMediaBackupImages(
+      _sessionKey,
+      desiredVariant: 'original',
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    await _configStore.writeCloudMediaBackupBackfillDone(
+      scopeId: scopeId,
+      done: true,
+    );
+  }
+
   Future<void> _runCloudMediaBackupIfEnabled(SyncConfig config) async {
     if (config.backendType == SyncBackendType.localDir) return;
 
@@ -209,6 +231,12 @@ final class _AppBackendSyncRunner implements SyncRunner {
     if (!enabled) return;
 
     final wifiOnly = await _configStore.readCloudMediaBackupWifiOnly();
+
+    try {
+      await _autoBackfillCloudMediaBackupIfNeeded(config);
+    } catch (_) {
+      // Best-effort: failed backfill should not block sync.
+    }
 
     final mediaStore = BackendCloudMediaBackupStore(
       backend: backend,

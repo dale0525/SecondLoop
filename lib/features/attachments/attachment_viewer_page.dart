@@ -25,6 +25,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../media_backup/cloud_media_download.dart';
+import '../media_backup/cloud_media_download_ui.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -40,6 +41,7 @@ import 'video_keyframe_ocr_worker.dart';
 part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
 part 'attachment_viewer_page_title.dart';
+part 'attachment_viewer_page_error.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -479,10 +481,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         sha256: widget.attachment.sha256,
         allowCellular: false,
       );
-      if (result.needsCellularConfirmation) {
-        throw StateError('media_download_requires_wifi');
+      if (!result.didDownload) {
+        throw CloudMediaDownloadFailureException(result.failureReason);
       }
-      if (!result.didDownload) rethrow;
 
       return attachmentsBackend.readAttachmentBytes(
         sessionKey,
@@ -931,8 +932,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 }
                 if (snapshot.hasError) {
                   final err = snapshot.error;
-                  final isWifiConsentError = err is StateError &&
-                      err.message == 'media_download_requires_wifi';
+                  final errorText = _attachmentLoadErrorText(err);
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -941,20 +941,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                         children: [
                           const Icon(Icons.broken_image_outlined, size: 48),
                           const SizedBox(height: 12),
-                          Text(
-                            isWifiConsentError
-                                ? context.t.sync.mediaPreview
-                                    .chatThumbnailsWifiOnlySubtitle
-                                : context.t.errors.loadFailed(error: '$err'),
-                            textAlign: TextAlign.center,
-                          ),
+                          Text(errorText, textAlign: TextAlign.center),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _bytesFuture = _loadBytes();
-                              });
-                            },
+                            onPressed: () =>
+                                setState(() => _bytesFuture = _loadBytes()),
                             icon: const Icon(Icons.refresh),
                             label: Text(context.t.common.actions.refresh),
                           ),

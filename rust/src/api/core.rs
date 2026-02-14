@@ -14,6 +14,14 @@ use anyhow::{anyhow, Result};
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
 const ASK_AI_META_PREFIX: &str = "\u{001e}SL_META\u{001e}";
 const ASK_AI_META_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
+const ATTACHMENT_REMOTE_MISSING_ERROR_CODE: &str = "SL_ERR_ATTACHMENT_REMOTE_MISSING";
+
+fn map_attachment_download_error(err: anyhow::Error) -> anyhow::Error {
+    if err.downcast_ref::<sync::NotFound>().is_some() {
+        return anyhow!(ATTACHMENT_REMOTE_MISSING_ERROR_CODE);
+    }
+    err
+}
 
 fn emit_ask_ai_meta_if_any(sink: &StreamSink<String>, role: Option<&str>) -> Result<()> {
     let Some(role) = role else {
@@ -2782,6 +2790,7 @@ pub fn sync_webdav_download_attachment_bytes(
     let conn = db::open(Path::new(&app_dir))?;
     let remote = sync::webdav::WebDavRemoteStore::new(base_url, username, password)?;
     sync::download_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
+        .map_err(map_attachment_download_error)
 }
 
 #[flutter_rust_bridge::frb]
@@ -2880,6 +2889,7 @@ pub fn sync_localdir_download_attachment_bytes(
     let conn = db::open(Path::new(&app_dir))?;
     let remote = sync::localdir::LocalDirRemoteStore::new(PathBuf::from(local_dir))?;
     sync::download_attachment_bytes(&conn, &key, &sync_key, &remote, &remote_root, &sha256)
+        .map_err(map_attachment_download_error)
 }
 
 #[flutter_rust_bridge::frb]
@@ -3016,6 +3026,7 @@ pub fn sync_managed_vault_download_attachment_bytes(
         &firebase_id_token,
         &sha256,
     )
+    .map_err(map_attachment_download_error)
 }
 
 #[flutter_rust_bridge::frb]
