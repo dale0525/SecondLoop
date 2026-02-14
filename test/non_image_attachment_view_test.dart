@@ -10,6 +10,7 @@ import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/attachments/non_image_attachment_view.dart';
+import 'package:secondloop/features/attachments/video_proxy_open_helper.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -317,6 +318,37 @@ void main() {
     expect(runInvoked, 1);
   });
 
+  test('supportsInAppVideoProxyPlayback only enables supported platforms', () {
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.macOS,
+        isWeb: false,
+      ),
+      isTrue,
+    );
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.android,
+        isWeb: false,
+      ),
+      isTrue,
+    );
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.windows,
+        isWeb: false,
+      ),
+      isFalse,
+    );
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.macOS,
+        isWeb: true,
+      ),
+      isFalse,
+    );
+  });
+
   testWidgets('NonImageAttachmentView shows video manifest preview metadata',
       (tester) async {
     const attachment = Attachment(
@@ -389,6 +421,67 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
         findsOneWidget);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView routes proxy open to in-app callback when provided',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-preview-open-in-app',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview-open-in-app.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    var called = false;
+    String? openedSha;
+    String? openedMimeType;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video preview open in app',
+            onOpenVideoProxyInApp: (sha256, mimeType) async {
+              called = true;
+              openedSha = sha256;
+              openedMimeType = mimeType;
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('video_manifest_open_proxy_button')),
+    );
+    await tester.pump();
+
+    expect(called, isTrue);
+    expect(openedSha, 'sha-video-proxy');
+    expect(openedMimeType, 'video/mp4');
   });
 
   testWidgets(

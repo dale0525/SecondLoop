@@ -16,6 +16,7 @@ import 'attachment_external_open_helper.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_keyframe_ocr_worker.dart';
+import 'video_proxy_open_helper.dart';
 
 String fileExtensionForSystemOpenMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -304,6 +305,7 @@ class NonImageAttachmentView extends StatefulWidget {
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
     this.onSaveFull,
+    this.onOpenVideoProxyInApp,
     super.key,
   });
 
@@ -320,6 +322,7 @@ class NonImageAttachmentView extends StatefulWidget {
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
   final Future<void> Function(String value)? onSaveFull;
+  final OpenVideoProxyInAppOverride? onOpenVideoProxyInApp;
 
   @override
   State<NonImageAttachmentView> createState() => _NonImageAttachmentViewState();
@@ -439,6 +442,17 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       loadBytes: () => _readAttachmentBytesBySha(sha256),
       outputStem: stem,
       extension: extension,
+    );
+  }
+
+  Future<void> _openVideoProxy(String sha256, String mimeType) {
+    return openVideoProxyWithBestEffort(
+      context,
+      sha256: sha256,
+      mimeType: mimeType,
+      loadBytes: _readAttachmentBytesBySha,
+      openWithSystem: () => _openAttachmentBySha(sha256, mimeType),
+      onOpenVideoProxyInApp: widget.onOpenVideoProxyInApp,
     );
   }
 
@@ -682,10 +696,11 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
                 key: const ValueKey('video_manifest_open_proxy_button'),
-                onPressed: () =>
-                    unawaited(_openAttachmentBySha(proxySha256, proxyMimeType)),
+                onPressed: () => unawaited(
+                  _openVideoProxy(proxySha256, proxyMimeType),
+                ),
                 icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(context.t.attachments.content.openWithSystem),
+                label: Text(context.t.common.actions.open),
               ),
             ),
           ],
