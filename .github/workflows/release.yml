@@ -373,15 +373,15 @@ jobs:
           mkdir -p dist
           # NOTE: .app is a directory; `ls` without `-d` would list its contents (e.g. "Contents").
           app="$(ls -1d build/macos/Build/Products/Release/*.app | head -n 1)"
-          stage_dir="$(mktemp -d)"
-          cp -R "${app}" "${stage_dir}/"
           safe_ref_name="$(printf "%s" "${GITHUB_REF_NAME}" | sed -E "s/[^[:alnum:]._-]+/-/g; s/^-+//; s/-+$//")"
           if [[ -z "${safe_ref_name}" ]]; then
             safe_ref_name="run-${GITHUB_RUN_ID}"
           fi
           dmg_path="dist/SecondLoop-macos-${safe_ref_name}.dmg"
-          rm -f "${dmg_path}"
-          hdiutil create -volname "SecondLoop" -srcfolder "${stage_dir}" -ov -format UDZO "${dmg_path}"
+          bash scripts/package_macos_dmg.sh \
+            --app "${app}" \
+            --output "${dmg_path}" \
+            --volume-name "SecondLoop"
       - uses: actions/upload-artifact@v4
         with:
           name: macos
