@@ -37,7 +37,8 @@ final class MacOsKeyEventChannelNormalizer {
       return message;
     }
 
-    final recordedLogical = _pressedLogicalByKeyCode.remove(keyCode);
+    var recordedLogical = _pressedLogicalByKeyCode.remove(keyCode);
+    recordedLogical ??= _logicalKeyIdFromHardwareStateForMacKeyCode(keyCode);
     if (recordedLogical == null) {
       return message;
     }
@@ -56,6 +57,12 @@ final class MacOsKeyEventChannelNormalizer {
   }
 
   int? _asInt(Object? value) => value is int ? value : null;
+
+  int? _logicalKeyIdFromHardwareStateForMacKeyCode(int keyCode) {
+    final physicalKey = RawKeyEventDataMacOs(keyCode: keyCode).physicalKey;
+    final logicalKey = HardwareKeyboard.instance.lookUpLayout(physicalKey);
+    return logicalKey?.keyId;
+  }
 }
 
 final class MacOsKeyDataNormalizer {
@@ -68,7 +75,8 @@ final class MacOsKeyDataNormalizer {
         _pressedLogicalByPhysical[data.physical] = data.logical;
         return data;
       case ui.KeyEventType.up:
-        final recordedLogical = _pressedLogicalByPhysical.remove(data.physical);
+        var recordedLogical = _pressedLogicalByPhysical.remove(data.physical);
+        recordedLogical ??= _logicalKeyIdFromHardwareState(data.physical);
         if (recordedLogical == null || recordedLogical == data.logical) {
           return data;
         }
@@ -85,6 +93,13 @@ final class MacOsKeyDataNormalizer {
           deviceType: data.deviceType,
         );
     }
+  }
+
+  int? _logicalKeyIdFromHardwareState(int physicalKeyId) {
+    final physicalKey = PhysicalKeyboardKey.findKeyByCode(physicalKeyId) ??
+        PhysicalKeyboardKey(physicalKeyId);
+    final logicalKey = HardwareKeyboard.instance.lookUpLayout(physicalKey);
+    return logicalKey?.keyId;
   }
 }
 
