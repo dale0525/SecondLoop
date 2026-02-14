@@ -845,7 +845,11 @@ impl OpenAiCompatibleMediaAnnotationClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_request, MediaAnnotationChatContentPart, MediaAnnotationPromptMode};
+    use super::{
+        build_request, normalize_annotation_payload, MediaAnnotationChatContentPart,
+        MediaAnnotationPromptMode,
+    };
+    use serde_json::{json, Value};
 
     fn prompt_text_for(req: &super::MediaAnnotationChatCompletionsRequest) -> &str {
         let msg = req.messages.first().expect("missing first message");
@@ -898,5 +902,83 @@ mod tests {
         assert!(prompt.contains("knowledge_markdown"));
         assert!(prompt.contains("video_description"));
         assert!(prompt.contains("user's device language (zh-CN)."));
+    }
+    #[test]
+    fn normalize_annotation_payload_keeps_video_extract_fields() {
+        let normalized = normalize_annotation_payload(json!({
+            "video_kind": "knowledge",
+            "video_summary": "OCR fallback walkthrough",
+            "knowledge_markdown": "## Steps\n1. Extract\n2. Fallback",
+            "tag": ["ocr", "OCR"],
+            "tags": ["tutorial", "ocr", "tutorial"],
+        }))
+        .expect("normalize payload");
+
+        let map = normalized
+            .as_object()
+            .expect("normalized payload should be object");
+
+        assert_eq!(
+            map.get("video_content_kind").and_then(Value::as_str),
+            Some("knowledge")
+        );
+        assert_eq!(
+            map.get("video_kind").and_then(Value::as_str),
+            Some("knowledge")
+        );
+        assert_eq!(
+            map.get("summary").and_then(Value::as_str),
+            Some("OCR fallback walkthrough")
+        );
+        assert_eq!(
+            map.get("video_summary").and_then(Value::as_str),
+            Some("OCR fallback walkthrough")
+        );
+        assert_eq!(
+            map.get("full_text").and_then(Value::as_str),
+            Some("## Steps\n1. Extract\n2. Fallback")
+        );
+        assert_eq!(
+            map.get("ocr_text").and_then(Value::as_str),
+            Some("## Steps\n1. Extract\n2. Fallback")
+        );
+
+        let tags = map
+            .get("tag")
+            .and_then(Value::as_array)
+            .expect("tag should be array");
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags.first().and_then(Value::as_str), Some("ocr"));
+        assert_eq!(tags.get(1).and_then(Value::as_str), Some("tutorial"));
+    }
+
+    #[test]
+    fn normalize_annotation_payload_sets_unknown_video_kind_and_null_ocr_when_empty() {
+        let normalized = normalize_annotation_payload(json!({
+            "video_content_kind": "anything",
+            "caption_long": "Fallback summary",
+            "knowledge_markdown": "",
+            "video_description": "",
+        }))
+        .expect("normalize payload");
+
+        let map = normalized
+            .as_object()
+            .expect("normalized payload should be object");
+
+        assert_eq!(
+            map.get("video_content_kind").and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(
+            map.get("video_kind").and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(
+            map.get("summary").and_then(Value::as_str),
+            Some("Fallback summary")
+        );
+        assert_eq!(map.get("full_text").and_then(Value::as_str), Some(""));
+        assert!(matches!(map.get("ocr_text"), Some(Value::Null)));
     }
 }

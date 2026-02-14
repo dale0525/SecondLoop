@@ -901,7 +901,24 @@
       "openWithSystem": "Open with system app",
       "previewUnavailable": "Preview unavailable",
       "ocrFinished": "OCR finished. Refreshing preview…",
-      "ocrFailed": "OCR failed on this device."
+      "ocrFailed": "OCR failed on this device.",
+      "videoInsights": {
+        "contentKind": {
+          "knowledge": "Knowledge video",
+          "nonKnowledge": "Non-knowledge video",
+          "unknown": "Unknown"
+        },
+        "detail": {
+          "knowledgeMarkdown": "Knowledge markdown",
+          "videoDescription": "Video description",
+          "extractedContent": "Extracted content"
+        },
+        "fields": {
+          "contentType": "Content type",
+          "segments": "Segments",
+          "summary": "Video summary"
+        }
+      }
     }
   },
   "semanticSearch": {

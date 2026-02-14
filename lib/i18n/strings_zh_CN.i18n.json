@@ -901,7 +901,24 @@
       "openWithSystem": "用系统应用打开",
       "previewUnavailable": "预览不可用",
       "ocrFinished": "OCR 已完成，正在刷新预览…",
-      "ocrFailed": "此设备上 OCR 执行失败。"
+      "ocrFailed": "此设备上 OCR 执行失败。",
+      "videoInsights": {
+        "contentKind": {
+          "knowledge": "知识类视频",
+          "nonKnowledge": "非知识类视频",
+          "unknown": "未知"
+        },
+        "detail": {
+          "knowledgeMarkdown": "知识文稿",
+          "videoDescription": "视频描述",
+          "extractedContent": "提取内容"
+        },
+        "fields": {
+          "contentType": "内容类型",
+          "segments": "分段处理",
+          "summary": "视频概要"
+        }
+      }
     }
   },
   "semanticSearch": {

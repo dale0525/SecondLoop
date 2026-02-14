@@ -394,25 +394,18 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     BuildContext context,
     VideoManifestInsightContent insights,
   ) {
-    final isZh =
-        LocaleSettings.currentLocale.languageCode.toLowerCase().startsWith(
-              'zh',
-            );
-
-    String label({required String en, required String zh}) {
-      return isZh ? zh : en;
-    }
+    final labels = context.t.attachments.content.videoInsights;
 
     final contentKindLabel = switch (insights.contentKind) {
-      'knowledge' => label(en: 'Knowledge video', zh: '知识类视频'),
-      'non_knowledge' => label(en: 'Non-knowledge video', zh: '非知识类视频'),
-      _ => label(en: 'Unknown', zh: '未知'),
+      'knowledge' => labels.contentKind.knowledge,
+      'non_knowledge' => labels.contentKind.nonKnowledge,
+      _ => labels.contentKind.unknown,
     };
 
     final detailLabel = switch (insights.contentKind) {
-      'knowledge' => label(en: 'Knowledge markdown', zh: '知识文稿'),
-      'non_knowledge' => label(en: 'Video description', zh: '视频描述'),
-      _ => label(en: 'Extracted content', zh: '提取内容'),
+      'knowledge' => labels.detail.knowledgeMarkdown,
+      'non_knowledge' => labels.detail.videoDescription,
+      _ => labels.detail.extractedContent,
     };
 
     final hasSegmentStats =
@@ -448,16 +441,16 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     }
 
     addField(
-      label(en: 'Content type', zh: '内容类型'),
+      labels.fields.contentType,
       contentKindLabel,
       valueKey: const ValueKey('video_manifest_content_kind_value'),
     );
     addField(
-      label(en: 'Segments', zh: '分段处理'),
+      labels.fields.segments,
       segmentValue,
     );
     addField(
-      label(en: 'Video summary', zh: '视频概要'),
+      labels.fields.summary,
       insights.summary,
       valueKey: const ValueKey('video_manifest_summary_text'),
     );
