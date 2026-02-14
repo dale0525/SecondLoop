@@ -77,6 +77,34 @@ void main() {
 
     expect(backend.upsertedTodoIds, isEmpty);
   });
+
+  testWidgets('Send long single-line note does not auto-create todo',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _Backend(
+      todos: const [],
+      similarTodoThreads: const [],
+    );
+
+    await tester.pumpWidget(_wrapChat(backend: backend));
+    await tester.pumpAndSettle();
+
+    const longSingleLineNote =
+        'tomorrow 3pm submit report with budget details, invoice checklist, stakeholders updates, and audit notes for weekly review';
+
+    await tester.enterText(
+        find.byKey(const ValueKey('chat_input')), longSingleLineNote);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat_send')));
+    await tester.pump();
+
+    for (var i = 0; i < 80; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    await tester.pumpAndSettle();
+
+    expect(backend.upsertedTodoIds, isEmpty);
+  });
 }
 
 Widget _wrapChat({required AppBackend backend}) {

@@ -78,8 +78,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     if (!mounted) return;
     final firstDayOfWeekIndex =
         MaterialLocalizations.of(context).firstDayOfWeekIndex;
-    final looksLikeLongFormNote =
-        trimmedText.contains('\n') || trimmedText.runes.length >= 240;
+    final looksLikeLongFormNote = isLongTextForTodoAutomation(trimmedText);
     final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
 
     if (!forceTodoSelectionPrompt &&

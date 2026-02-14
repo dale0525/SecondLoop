@@ -85,6 +85,19 @@ void main() {
     expect(decision, isA<MessageActionNoneDecision>());
   });
 
+  test('does not create todo from long single-line note over threshold', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      'tomorrow 3pm submit report with budget details, invoice checklist, stakeholders updates, and audit notes for weekly review',
+      locale: const Locale('en'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionNoneDecision>());
+  });
+
   test('long-form note can still map to followup for existing todo', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final targets = <TodoLinkTarget>[

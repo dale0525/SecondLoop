@@ -16,6 +16,15 @@ final RegExp _kSemanticParseNoiseCharsRegex = RegExp(
   r'[\s\.\,!?\u3002\uff01\uff1f\uFF0C\u3001\uFF1A\uFF1B\u2026\u2014\u2013\u2012\u2010\uFF0D\uFF5E]+',
 );
 
+const int kTodoAutomationLongTextRuneThreshold = 100;
+
+bool isLongTextForTodoAutomation(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return false;
+  return trimmed.contains('\n') ||
+      trimmed.runes.length >= kTodoAutomationLongTextRuneThreshold;
+}
+
 bool looksLikeBareTodoStatusUpdateForSemanticParse(String text) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) return false;
@@ -26,8 +35,7 @@ bool looksLikeBareTodoStatusUpdateForSemanticParse(String text) {
 bool looksLikeTodoRelevantForSemanticParse(String text) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) return false;
-  if (trimmed.contains('\n')) return false;
-  if (trimmed.runes.length >= 200) return false;
+  if (isLongTextForTodoAutomation(trimmed)) return false;
   if (trimmed.contains('?') || trimmed.contains('？')) return false;
   if (looksLikeBareTodoStatusUpdateForSemanticParse(trimmed)) return false;
 
