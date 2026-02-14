@@ -13,4 +13,16 @@ void main() {
     expect(content, contains('- assets/ocr/desktop_runtime/models/'));
     expect(content, contains('- assets/ocr/desktop_runtime/onnxruntime/'));
   });
+
+  test('desktop runtime asset skeleton placeholders exist in repo', () {
+    expect(File('assets/ocr/desktop_runtime/.gitkeep').existsSync(), isTrue);
+    expect(
+      File('assets/ocr/desktop_runtime/models/.gitkeep').existsSync(),
+      isTrue,
+    );
+    expect(
+      File('assets/ocr/desktop_runtime/onnxruntime/.gitkeep').existsSync(),
+      isTrue,
+    );
+  });
 }
