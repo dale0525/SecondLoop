@@ -152,4 +152,59 @@ void main() {
       expect(detailText.full, contains('kitchen'));
     },
   );
+
+  test(
+      'viewer insight falls back to legacy content-kind keys and transcript progress',
+      () {
+    final payload = <String, Object?>{
+      'video_kind': 'knowledge',
+      'video_segment_count': 1,
+      'video_processed_segment_count': 0,
+      'needs_ocr': false,
+      'transcript_full': 'Structured transcript content',
+      'video_summary': 'Legacy summary',
+      'readable_text_full': 'Structured transcript content',
+    };
+
+    final viewerInsight = resolveVideoManifestInsightContent(payload);
+
+    expect(viewerInsight, isNotNull);
+    expect(viewerInsight!.contentKind, 'knowledge');
+    expect(viewerInsight.segmentCount, 1);
+    expect(viewerInsight.processedSegmentCount, 1);
+  });
+
+  test('viewer insight infers non-knowledge when summary exists without kind',
+      () {
+    final payload = <String, Object?>{
+      'video_summary': 'People are walking near a harbor.',
+      'readable_text_excerpt': 'People are walking near a harbor.',
+      'video_segment_count': 1,
+      'video_processed_segment_count': 0,
+      'needs_ocr': false,
+    };
+
+    final viewerInsight = resolveVideoManifestInsightContent(payload);
+
+    expect(viewerInsight, isNotNull);
+    expect(viewerInsight!.contentKind, 'non_knowledge');
+    expect(viewerInsight.summary, contains('harbor'));
+    expect(viewerInsight.processedSegmentCount, 1);
+  });
+
+  test('viewer insight infers non-knowledge from legacy description fields',
+      () {
+    final payload = <String, Object?>{
+      'video_segment_count': 2,
+      'video_processed_segment_count': 1,
+      'video_description_excerpt': 'A family walks through a market.',
+      'readable_text_excerpt': 'A family walks through a market.',
+    };
+
+    final viewerInsight = resolveVideoManifestInsightContent(payload);
+
+    expect(viewerInsight, isNotNull);
+    expect(viewerInsight!.contentKind, 'non_knowledge');
+    expect(viewerInsight.summary, contains('family'));
+  });
 }

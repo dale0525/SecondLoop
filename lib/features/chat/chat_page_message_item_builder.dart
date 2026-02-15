@@ -601,46 +601,55 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                                     ? 0
                                                     : spacing,
                                               ),
-                                              child: items[i]
-                                                      .mimeType
-                                                      .startsWith('image/')
-                                                  ? ChatImageAttachmentThumbnail(
-                                                      key: ValueKey(
-                                                        'chat_attachment_image_${items[i].sha256}',
-                                                      ),
-                                                      attachment: items[i],
-                                                      attachmentsBackend:
-                                                          attachmentsBackend,
-                                                      onTap: () {
-                                                        Navigator.of(context)
-                                                            .push(
-                                                          MaterialPageRoute(
-                                                            builder: (context) {
-                                                              return AttachmentViewerPage(
-                                                                attachment:
-                                                                    items[i],
-                                                              );
-                                                            },
-                                                          ),
-                                                        );
-                                                      },
-                                                    )
-                                                  : AttachmentCard(
-                                                      attachment: items[i],
-                                                      onTap: () {
-                                                        Navigator.of(context)
-                                                            .push(
-                                                          MaterialPageRoute(
-                                                            builder: (context) {
-                                                              return AttachmentViewerPage(
-                                                                attachment:
-                                                                    items[i],
-                                                              );
-                                                            },
-                                                          ),
-                                                        );
-                                                      },
+                                              child: () {
+                                                final normalizedMime = items[i]
+                                                    .mimeType
+                                                    .trim()
+                                                    .toLowerCase();
+                                                final useVisualThumbnail =
+                                                    normalizedMime.startsWith(
+                                                            'image/') ||
+                                                        normalizedMime ==
+                                                            kSecondLoopVideoManifestMimeType;
+                                                if (useVisualThumbnail) {
+                                                  return ChatImageAttachmentThumbnail(
+                                                    key: ValueKey(
+                                                      'chat_attachment_image_${items[i].sha256}',
                                                     ),
+                                                    attachment: items[i],
+                                                    attachmentsBackend:
+                                                        attachmentsBackend,
+                                                    onTap: () {
+                                                      Navigator.of(context)
+                                                          .push(
+                                                        MaterialPageRoute(
+                                                          builder: (context) {
+                                                            return AttachmentViewerPage(
+                                                              attachment:
+                                                                  items[i],
+                                                            );
+                                                          },
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                }
+                                                return AttachmentCard(
+                                                  attachment: items[i],
+                                                  onTap: () {
+                                                    Navigator.of(context).push(
+                                                      MaterialPageRoute(
+                                                        builder: (context) {
+                                                          return AttachmentViewerPage(
+                                                            attachment:
+                                                                items[i],
+                                                          );
+                                                        },
+                                                      ),
+                                                    );
+                                                  },
+                                                );
+                                              }(),
                                             ),
                                         ],
                                       );

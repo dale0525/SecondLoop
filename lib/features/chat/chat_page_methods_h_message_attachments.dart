@@ -2,7 +2,10 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
   double _estimateAttachmentPreviewWidth(Attachment attachment) {
-    if (attachment.mimeType.startsWith('image/')) {
+    final normalizedMime = attachment.mimeType.trim().toLowerCase();
+    final usesThumbnail = normalizedMime.startsWith('image/') ||
+        normalizedMime == kSecondLoopVideoManifestMimeType;
+    if (usesThumbnail) {
       // 180px preview + 1px border on each side.
       return 180 + 2;
     }

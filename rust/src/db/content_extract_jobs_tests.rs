@@ -148,6 +148,133 @@ fn process_pending_document_extractions_enriches_video_manifest_from_audio_trans
 }
 
 #[test]
+fn process_pending_document_extractions_accepts_video_manifest_v3_alias_fields() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [9u8; 32];
+
+    let mut cfg = get_content_enrichment_config(&conn).expect("config");
+    cfg.document_extract_enabled = false;
+    cfg.video_extract_enabled = true;
+    cfg.audio_transcribe_enabled = false;
+    cfg.url_fetch_enabled = false;
+    set_content_enrichment_config(&conn, &cfg).expect("write config");
+
+    let audio = insert_attachment(&conn, &key, &app_dir, b"m4a", "audio/mp4").expect("audio");
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &audio.sha256,
+        "und",
+        "audio_transcript.v1",
+        &serde_json::json!({
+            "schema": "secondloop.audio_transcript.v1",
+            "transcript_full": "alias transcript full",
+            "transcript_excerpt": "alias transcript excerpt"
+        }),
+        1000,
+    )
+    .expect("mark transcript ok");
+
+    let video_segment =
+        insert_attachment(&conn, &key, &app_dir, b"mp4", "video/mp4").expect("video segment");
+    let manifest_payload = serde_json::json!({
+        "schema": "secondloop.video_manifest.v3",
+        "videoSha256": video_segment.sha256,
+        "videoMimeType": "video/mp4",
+        "audioSha256": audio.sha256,
+        "audioMimeType": "audio/mp4",
+        "videoSegments": [{
+            "index": 0,
+            "sha256": video_segment.sha256,
+            "mimeType": "video/mp4"
+        }]
+    });
+
+    let manifest = insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        manifest_payload.to_string().as_bytes(),
+        "application/x.secondloop.video+json",
+    )
+    .expect("manifest");
+    enqueue_attachment_annotation(&conn, &manifest.sha256, "und", 1200).expect("enqueue manifest");
+
+    let processed =
+        process_pending_document_extractions(&conn, &key, &app_dir, 10).expect("process pending");
+    assert_eq!(processed, 1);
+
+    let payload_json = read_attachment_annotation_payload_json(&conn, &key, &manifest.sha256)
+        .expect("read payload")
+        .expect("payload exists");
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_json).expect("valid payload json");
+
+    assert_eq!(
+        payload["audio_sha256"].as_str(),
+        Some(audio.sha256.as_str())
+    );
+    assert_eq!(
+        payload["transcript_full"].as_str(),
+        Some("alias transcript full")
+    );
+    assert_eq!(payload["video_segment_count"].as_i64(), Some(1));
+}
+
+#[test]
+fn process_pending_document_extractions_accepts_video_manifest_v4_schema() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [10u8; 32];
+
+    let mut cfg = get_content_enrichment_config(&conn).expect("config");
+    cfg.document_extract_enabled = false;
+    cfg.video_extract_enabled = true;
+    cfg.audio_transcribe_enabled = false;
+    cfg.url_fetch_enabled = false;
+    set_content_enrichment_config(&conn, &cfg).expect("write config");
+
+    let video_segment =
+        insert_attachment(&conn, &key, &app_dir, b"mp4", "video/mp4").expect("video segment");
+    let manifest_payload = serde_json::json!({
+        "schema": "secondloop.video_manifest.v4",
+        "video_sha256": video_segment.sha256,
+        "video_mime_type": "video/mp4",
+        "video_segments": [{
+            "index": 0,
+            "sha256": video_segment.sha256,
+            "mime_type": "video/mp4"
+        }]
+    });
+
+    let manifest = insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        manifest_payload.to_string().as_bytes(),
+        "application/x.secondloop.video+json",
+    )
+    .expect("manifest");
+    enqueue_attachment_annotation(&conn, &manifest.sha256, "und", 1200).expect("enqueue manifest");
+
+    let processed =
+        process_pending_document_extractions(&conn, &key, &app_dir, 10).expect("process pending");
+    assert_eq!(processed, 1);
+
+    let payload_json = read_attachment_annotation_payload_json(&conn, &key, &manifest.sha256)
+        .expect("read payload")
+        .expect("payload exists");
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_json).expect("valid payload json");
+
+    assert_eq!(payload["video_segment_count"].as_i64(), Some(1));
+    assert_eq!(payload["needs_ocr"].as_bool(), Some(true));
+}
+
+#[test]
 fn process_pending_video_manifest_enqueues_audio_transcript_when_missing_and_enabled() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

@@ -76,6 +76,55 @@ void main() {
     expect(parsed.keyframes[1].kind, 'slide');
   });
 
+  test('parseVideoManifestPayload supports manifest aliases and v3 schema', () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v3","videoSha256":"sha-video-v3","videoMimeType":"video/mp4","videoProxySha256":"sha-proxy-v3","posterSha256":"sha-poster-v3","posterMimeType":"image/png","keyframes":[{"index":"1","sha256":"sha-kf-v3","mimeType":"image/png","tMs":"1500","kind":"slide"}],"videoSegments":[{"index":"0","sha256":"sha-seg-v3","mimeType":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.originalSha256, 'sha-video-v3');
+    expect(parsed.originalMimeType, 'video/mp4');
+    expect(parsed.videoProxySha256, 'sha-proxy-v3');
+    expect(parsed.posterSha256, 'sha-poster-v3');
+    expect(parsed.posterMimeType, 'image/png');
+    expect(parsed.keyframes.length, 1);
+    expect(parsed.keyframes.first.sha256, 'sha-kf-v3');
+    expect(parsed.keyframes.first.tMs, 1500);
+    expect(parsed.segments.length, 1);
+    expect(parsed.segments.first.sha256, 'sha-seg-v3');
+  });
+
+  test('parseVideoManifestPayload accepts forward-compatible schema versions',
+      () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v4","video_sha256":"sha-v4","video_mime_type":"video/mp4","video_segments":[{"index":0,"sha256":"sha-seg-v4","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.originalSha256, 'sha-v4');
+    expect(parsed.segments.length, 1);
+    expect(parsed.segments.first.sha256, 'sha-seg-v4');
+  });
+
+  test('parseVideoManifestPayload falls back to v1 original sha as proxy sha',
+      () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v1","original_sha256":"sha-v1","original_mime_type":"video/mp4"}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.videoProxySha256, 'sha-v1');
+  });
+
   test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
       () async {
     final result = await VideoKeyframeOcrWorker.runOnVideoBytes(

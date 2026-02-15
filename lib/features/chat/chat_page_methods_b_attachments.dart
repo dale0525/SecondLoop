@@ -2,6 +2,8 @@ part of 'chat_page.dart';
 
 const String _kSecondLoopUrlManifestMimeType =
     'application/x.secondloop.url+json';
+const String kSecondLoopVideoManifestMimeType =
+    'application/x.secondloop.video+json';
 const String _kSecondLoopUrlManifestSchema = 'secondloop.url_manifest.v1';
 const int _kChatVideoProxySegmentDurationSeconds = 20 * 60;
 const int _kChatVideoProxySegmentDurationMs =
@@ -473,7 +475,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
         final manifestAttachment = await backend.insertAttachment(
           sessionKey,
           bytes: manifestBytes,
-          mimeType: 'application/x.secondloop.video+json',
+          mimeType: kSecondLoopVideoManifestMimeType,
         );
         shaToLink = manifestAttachment.sha256;
       } else if (normalizedMimeType.startsWith('audio/')) {

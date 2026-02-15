@@ -8,6 +8,7 @@ const VIDEO_EXTRACT_MODEL_NAME: &str = "video_extract.v1";
 const AUDIO_TRANSCRIPT_SCHEMA: &str = "secondloop.audio_transcript.v1";
 const VIDEO_MANIFEST_SCHEMA_V1: &str = "secondloop.video_manifest.v1";
 const VIDEO_MANIFEST_SCHEMA_V2: &str = "secondloop.video_manifest.v2";
+const VIDEO_MANIFEST_SCHEMA_V3: &str = "secondloop.video_manifest.v3";
 const VIDEO_EXTRACT_EXCERPT_MAX_BYTES: usize = 8 * 1024;
 
 fn retry_backoff_ms(attempts: i64) -> i64 {
@@ -60,6 +61,22 @@ fn truncate_utf8_for_excerpt(text: &str, max_bytes: usize) -> String {
     text[..end].to_string()
 }
 
+fn is_supported_video_manifest_schema(schema: &str) -> bool {
+    let normalized = schema.trim();
+    if normalized == VIDEO_MANIFEST_SCHEMA_V1
+        || normalized == VIDEO_MANIFEST_SCHEMA_V2
+        || normalized == VIDEO_MANIFEST_SCHEMA_V3
+    {
+        return true;
+    }
+
+    const PREFIX: &str = "secondloop.video_manifest.v";
+    let Some(version) = normalized.strip_prefix(PREFIX) else {
+        return false;
+    };
+    !version.is_empty() && version.bytes().all(|ch| ch.is_ascii_digit())
+}
+
 fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPayload> {
     let raw = std::str::from_utf8(bytes).map_err(|_| anyhow!("video manifest is not utf-8"))?;
     let value: serde_json::Value =
@@ -73,32 +90,24 @@ fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPaylo
         .and_then(|item| item.as_str())
         .map(|item| item.trim())
         .unwrap_or("");
-    if schema != VIDEO_MANIFEST_SCHEMA_V1 && schema != VIDEO_MANIFEST_SCHEMA_V2 {
+    if !is_supported_video_manifest_schema(schema) {
         return Err(anyhow!("unsupported video manifest schema"));
     }
 
     fn read_non_empty_field(
         payload: &serde_json::Map<String, serde_json::Value>,
-        primary_key: &str,
-        fallback_key: &str,
+        keys: &[&str],
         fallback_value: &str,
     ) -> String {
-        let primary = payload
-            .get(primary_key)
-            .and_then(|item| item.as_str())
-            .map(|item| item.trim())
-            .unwrap_or("");
-        if !primary.is_empty() {
-            return primary.to_string();
-        }
-
-        let fallback = payload
-            .get(fallback_key)
-            .and_then(|item| item.as_str())
-            .map(|item| item.trim())
-            .unwrap_or("");
-        if !fallback.is_empty() {
-            return fallback.to_string();
+        for key in keys {
+            let value = payload
+                .get(*key)
+                .and_then(|item| item.as_str())
+                .map(|item| item.trim())
+                .unwrap_or("");
+            if !value.is_empty() {
+                return value.to_string();
+            }
         }
 
         fallback_value.trim().to_string()
@@ -107,6 +116,7 @@ fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPaylo
     let mut segments = Vec::<VideoManifestSegmentRef>::new();
     if let Some(items) = payload
         .get("video_segments")
+        .or_else(|| payload.get("videoSegments"))
         .and_then(|item| item.as_array())
     {
         for (fallback_index, item) in items.iter().enumerate() {
@@ -121,6 +131,7 @@ fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPaylo
                 .unwrap_or("");
             let mime_type = segment
                 .get("mime_type")
+                .or_else(|| segment.get("mimeType"))
                 .and_then(|value| value.as_str())
                 .map(|value| value.trim())
                 .unwrap_or("");
@@ -165,14 +176,22 @@ fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPaylo
 
     let video_sha256 = read_non_empty_field(
         payload,
-        "video_sha256",
-        "original_sha256",
+        &[
+            "video_sha256",
+            "videoSha256",
+            "original_sha256",
+            "originalSha256",
+        ],
         first_segment_sha256,
     );
     let video_mime_type = read_non_empty_field(
         payload,
-        "video_mime_type",
-        "original_mime_type",
+        &[
+            "video_mime_type",
+            "videoMimeType",
+            "original_mime_type",
+            "originalMimeType",
+        ],
         first_segment_mime_type,
     );
     if video_sha256.is_empty() || video_mime_type.is_empty() {
@@ -189,12 +208,14 @@ fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPaylo
 
     let audio_sha256 = payload
         .get("audio_sha256")
+        .or_else(|| payload.get("audioSha256"))
         .and_then(|item| item.as_str())
         .map(|item| item.trim())
         .filter(|item| !item.is_empty())
         .map(|item| item.to_string());
     let audio_mime_type = payload
         .get("audio_mime_type")
+        .or_else(|| payload.get("audioMimeType"))
         .and_then(|item| item.as_str())
         .map(|item| item.trim())
         .filter(|item| !item.is_empty())

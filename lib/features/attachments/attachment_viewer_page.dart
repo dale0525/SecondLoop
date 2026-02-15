@@ -856,23 +856,40 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 runOcr = _runVideoManifestOcr;
               }
 
-              return _wrapWithRecognitionIssueBanner(
-                NonImageAttachmentView(
-                  attachment: widget.attachment,
-                  bytes: _nonImagePlaceholderBytes,
-                  displayTitle: appBarTitle,
-                  metadataFuture: _metadataFuture,
-                  initialMetadata: metadata,
-                  annotationPayloadFuture: _annotationPayloadFuture,
-                  initialAnnotationPayload: _annotationPayload,
-                  onRunOcr: runOcr,
-                  ocrRunning: _runningDocumentOcr,
-                  ocrStatusText: _documentOcrStatusText,
-                  ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
-                  onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
-                  onSaveFull:
-                      _canEditAttachmentText ? _saveAttachmentFull : null,
-                ),
+              Widget buildNonImageDetail(Uint8List bytes) {
+                return _wrapWithRecognitionIssueBanner(
+                  NonImageAttachmentView(
+                    attachment: widget.attachment,
+                    bytes: bytes,
+                    displayTitle: appBarTitle,
+                    metadataFuture: _metadataFuture,
+                    initialMetadata: metadata,
+                    annotationPayloadFuture: _annotationPayloadFuture,
+                    initialAnnotationPayload: _annotationPayload,
+                    onRunOcr: runOcr,
+                    ocrRunning: _runningDocumentOcr,
+                    ocrStatusText: _documentOcrStatusText,
+                    ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
+                    onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
+                    onSaveFull:
+                        _canEditAttachmentText ? _saveAttachmentFull : null,
+                  ),
+                );
+              }
+
+              if (bytesFuture == null) {
+                return buildNonImageDetail(_nonImagePlaceholderBytes);
+              }
+
+              return FutureBuilder<Uint8List>(
+                future: bytesFuture,
+                builder: (context, snapshot) {
+                  final bytes = snapshot.data;
+                  if (bytes == null || bytes.isEmpty) {
+                    return buildNonImageDetail(_nonImagePlaceholderBytes);
+                  }
+                  return buildNonImageDetail(bytes);
+                },
               );
             }
 
