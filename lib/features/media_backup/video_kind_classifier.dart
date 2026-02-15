@@ -58,6 +58,7 @@ Future<VideoKindClassification> classifyVideoKind({
   var recognizedSamples = 0;
   var totalChars = 0;
   var maxChars = 0;
+  var lowDensitySamples = 0;
 
   for (final sample in samples) {
     PlatformPdfOcrResult? ocr;
@@ -76,6 +77,9 @@ Future<VideoKindClassification> classifyVideoKind({
     totalChars += charCount;
     if (charCount > maxChars) {
       maxChars = charCount;
+    }
+    if (charCount >= 18) {
+      lowDensitySamples += 1;
     }
   }
 
@@ -96,6 +100,23 @@ Future<VideoKindClassification> classifyVideoKind({
     return const VideoKindClassification(
       kind: 'screen_recording',
       confidence: 0.74,
+    );
+  }
+
+  if (recognizedSamples >= 3 && lowDensitySamples >= 3 && totalChars >= 96) {
+    return const VideoKindClassification(
+      kind: 'screen_recording',
+      confidence: 0.7,
+    );
+  }
+
+  if (recognizedSamples >= 3 &&
+      lowDensitySamples >= 3 &&
+      totalChars >= 56 &&
+      maxChars >= 18) {
+    return const VideoKindClassification(
+      kind: 'screen_recording',
+      confidence: 0.66,
     );
   }
 

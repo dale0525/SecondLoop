@@ -60,6 +60,52 @@ void main() {
     expect(result.keyframeKind, 'slide');
   });
 
+  test('classifies screen recording for sparse slide text across samples',
+      () async {
+    var callIndex = 0;
+    final result = await classifyVideoKind(
+      filename: 'weekly_update.mp4',
+      sourceMimeType: 'video/mp4',
+      posterBytes: Uint8List.fromList(const <int>[4, 4, 4]),
+      keyframes: <VideoPreviewFrame>[
+        VideoPreviewFrame(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[5, 5, 5]),
+          mimeType: 'image/jpeg',
+          tMs: 0,
+          kind: 'scene',
+        ),
+        VideoPreviewFrame(
+          index: 1,
+          bytes: Uint8List.fromList(const <int>[6, 6, 6]),
+          mimeType: 'image/jpeg',
+          tMs: 8000,
+          kind: 'scene',
+        ),
+      ],
+      ocrImageFn: (bytes, {required languageHints}) async {
+        callIndex += 1;
+        const texts = <String>[
+          'Agenda Q1 milestones',
+          'Demo architecture flow',
+          'Summary next actions',
+        ];
+        return PlatformPdfOcrResult(
+          fullText: texts[callIndex - 1],
+          excerpt: texts[callIndex - 1],
+          engine: 'fake',
+          isTruncated: false,
+          pageCount: 1,
+          processedPages: 1,
+        );
+      },
+    );
+
+    expect(result.kind, 'screen_recording');
+    expect(result.confidence, greaterThanOrEqualTo(0.6));
+    expect(result.keyframeKind, 'slide');
+  });
+
   test('defaults to vlog when no strong signal is available', () async {
     final result = await classifyVideoKind(
       filename: 'clip.mp4',

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -314,7 +315,8 @@ final class VideoTranscodeWorker {
       final sourceExt = _extensionForMimeType(normalizedMime);
       final inputPath = '${tempDir.path}/input.$sourceExt';
       final posterPath = '${tempDir.path}/poster.jpg';
-      final keyframePattern = '${tempDir.path}/keyframe_%03d.jpg';
+      final scenePattern = '${tempDir.path}/keyframe_scene_%03d.jpg';
+      final fpsPattern = '${tempDir.path}/keyframe_fps_%03d.jpg';
       await File(inputPath).writeAsBytes(videoBytes, flush: true);
 
       final posterArgs = <String>[
@@ -342,32 +344,57 @@ final class VideoTranscodeWorker {
         }
       }
 
-      final keyframeArgs = <String>[
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-y',
-        '-i',
-        inputPath,
-        '-vf',
-        'fps=1/$safeInterval',
-        '-frames:v',
-        '$safeMaxKeyframes',
-        keyframePattern,
-      ];
-      final keyframeResult = await run(ffmpegPath, keyframeArgs);
+      final sceneResult = await _extractFramesWithFilter(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+        filter: "select='eq(n\\,0)+gt(scene\\,0.08)'",
+        maxFrames: safeMaxKeyframes,
+        outputPattern: scenePattern,
+        useVariableFrameRateSync: true,
+      );
+      final sceneFiles = sceneResult
+          ? await _listPreviewFrameFiles(tempDir.path,
+              prefix: 'keyframe_scene_')
+          : const <File>[];
+
+      final remainingFrames = (safeMaxKeyframes - sceneFiles.length).clamp(
+        0,
+        safeMaxKeyframes,
+      );
+      final fpsResult = remainingFrames > 0
+          ? await _extractFramesWithFilter(
+              ffmpegPath: ffmpegPath,
+              run: run,
+              inputPath: inputPath,
+              filter: 'fps=1/$safeInterval',
+              maxFrames: remainingFrames,
+              outputPattern: fpsPattern,
+            )
+          : true;
+
       final keyframes = <VideoPreviewFrame>[];
-      if (keyframeResult.exitCode == 0) {
-        final frameFiles = await _listPreviewFrameFiles(tempDir.path);
-        for (var i = 0; i < frameFiles.length; i++) {
-          final frameBytes = await frameFiles[i].readAsBytes();
+      if (sceneResult || fpsResult) {
+        final fpsFiles = fpsResult
+            ? await _listPreviewFrameFiles(tempDir.path,
+                prefix: 'keyframe_fps_')
+            : const <File>[];
+        final seenFrames = <String>{};
+        final frameFiles = <File>[...sceneFiles, ...fpsFiles];
+        for (final frameFile in frameFiles) {
+          final frameBytes = await frameFile.readAsBytes();
           if (frameBytes.isEmpty) continue;
+          final frameSignature = base64.encode(frameBytes);
+          if (!seenFrames.add(frameSignature)) {
+            continue;
+          }
+          final frameIndex = keyframes.length;
           keyframes.add(
             VideoPreviewFrame(
-              index: i,
+              index: frameIndex,
               bytes: frameBytes,
               mimeType: 'image/jpeg',
-              tMs: i * safeInterval * 1000,
+              tMs: frameIndex * safeInterval * 1000,
               kind: normalizedKind,
             ),
           );
@@ -411,14 +438,46 @@ final class VideoTranscodeWorker {
     );
   }
 
-  static Future<List<File>> _listPreviewFrameFiles(String dirPath) async {
+  static Future<bool> _extractFramesWithFilter({
+    required String ffmpegPath,
+    required VideoTranscodeCommandRunner run,
+    required String inputPath,
+    required String filter,
+    required int maxFrames,
+    required String outputPattern,
+    bool useVariableFrameRateSync = false,
+  }) async {
+    if (maxFrames <= 0) return true;
+    final args = <String>[
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-i',
+      inputPath,
+      '-vf',
+      filter,
+      if (useVariableFrameRateSync) '-vsync',
+      if (useVariableFrameRateSync) 'vfr',
+      '-frames:v',
+      '$maxFrames',
+      outputPattern,
+    ];
+    final result = await run(ffmpegPath, args);
+    return result.exitCode == 0;
+  }
+
+  static Future<List<File>> _listPreviewFrameFiles(
+    String dirPath, {
+    String prefix = 'keyframe_',
+  }) async {
     final files = <File>[];
     await for (final entity in Directory(dirPath).list(followLinks: false)) {
       if (entity is! File) continue;
       final name = entity.uri.pathSegments.isEmpty
           ? entity.path
           : entity.uri.pathSegments.last;
-      if (!name.startsWith('keyframe_') || !name.endsWith('.jpg')) continue;
+      if (!name.startsWith(prefix) || !name.endsWith('.jpg')) continue;
       files.add(entity);
     }
     files.sort((a, b) => a.path.compareTo(b.path));

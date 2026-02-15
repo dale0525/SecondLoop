@@ -219,6 +219,8 @@ void main() {
   test('VideoTranscodeWorker extracts poster and keyframes for previews',
       () async {
     final input = Uint8List.fromList(const <int>[1, 3, 5, 7]);
+    var sceneRunCount = 0;
+    var fpsRunCount = 0;
 
     final result = await VideoTranscodeWorker.extractPreviewFrames(
       input,
@@ -235,10 +237,15 @@ void main() {
 
         if (outputPath.endsWith('poster.jpg')) {
           await outputFile.writeAsBytes(const <int>[9, 9, 9]);
-        } else {
+        } else if (outputPath.contains('keyframe_scene_')) {
+          sceneRunCount += 1;
           final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
-          final keyframe1 = File(outputPath.replaceAll('%03d', '001'));
           await keyframe0.writeAsBytes(const <int>[4, 5, 6]);
+        } else {
+          fpsRunCount += 1;
+          final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+          await keyframe0.writeAsBytes(const <int>[4, 5, 6]);
+          final keyframe1 = File(outputPath.replaceAll('%03d', '001'));
           await keyframe1.writeAsBytes(const <int>[7, 8, 9]);
         }
 
@@ -257,7 +264,47 @@ void main() {
     expect(result.keyframes[1].tMs, 6000);
     expect(result.keyframes[1].kind, 'slide');
     expect(result.keyframes[1].bytes, Uint8List.fromList(const <int>[7, 8, 9]));
+    expect(sceneRunCount, 1);
+    expect(fpsRunCount, 1);
     expect(result.hasAnyPosterOrKeyframe, isTrue);
+  });
+
+  test(
+      'VideoTranscodeWorker falls back to interval keyframes when scene run fails',
+      () async {
+    final input = Uint8List.fromList(const <int>[2, 4, 6, 8]);
+    var sceneAttempted = false;
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      input,
+      sourceMimeType: 'video/mp4',
+      maxKeyframes: 2,
+      frameIntervalSeconds: 4,
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        final outputPath = arguments.last;
+        final outputFile = File(outputPath);
+        await outputFile.parent.create(recursive: true);
+
+        if (outputPath.endsWith('poster.jpg')) {
+          await outputFile.writeAsBytes(const <int>[1, 1, 1]);
+          return ProcessResult(0, 0, '', '');
+        }
+        if (outputPath.contains('keyframe_scene_')) {
+          sceneAttempted = true;
+          return ProcessResult(0, 1, '', 'scene failed');
+        }
+
+        final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+        await keyframe0.writeAsBytes(const <int>[8, 8, 8]);
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(sceneAttempted, isTrue);
+    expect(result.keyframes.length, 1);
+    expect(result.keyframes[0].bytes, Uint8List.fromList(const <int>[8, 8, 8]));
   });
 
   test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
