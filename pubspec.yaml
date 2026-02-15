@@ -102,7 +102,9 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/bin/ffmpeg/
+    - assets/bin/ffmpeg/macos/
+    - assets/bin/ffmpeg/linux/
+    - assets/bin/ffmpeg/windows/
     - assets/ocr/
     - assets/icon/tray_icon.png
     - assets/icon/tray_icon.ico
