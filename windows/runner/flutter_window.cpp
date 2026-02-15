@@ -4,9 +4,11 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <future>
 #include <limits>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <flutter/standard_method_codec.h>
@@ -75,6 +77,27 @@ std::string ToLowerAscii(std::string text) {
 bool StartsWith(const std::string& value, const std::string& prefix) {
   return value.size() >= prefix.size() &&
          value.compare(0, prefix.size(), prefix) == 0;
+}
+
+template <typename TCallable>
+auto RunOnMtaThread(TCallable&& callable) -> decltype(callable()) {
+  using TResult = decltype(callable());
+  std::promise<TResult> promise;
+  auto future = promise.get_future();
+  std::thread worker([callable = std::forward<TCallable>(callable),
+                      promise = std::move(promise)]() mutable {
+    try {
+      winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    } catch (...) {
+    }
+    try {
+      promise.set_value(callable());
+    } catch (...) {
+      promise.set_value(TResult{});
+    }
+  });
+  worker.join();
+  return future.get();
 }
 
 std::string ResolveProfilePrimaryLanguageLower() {
@@ -578,6 +601,42 @@ std::optional<flutter::EncodableMap> RunImageOcr(
   }
 }
 
+std::optional<flutter::EncodableMap> RunDecodeImageToJpeg(
+    const std::vector<uint8_t>& bytes) {
+  try {
+    auto stream = BytesToStream(bytes);
+    auto bitmap = DecodeBitmap(stream);
+    if (!bitmap.has_value()) {
+      return std::nullopt;
+    }
+
+    const uint32_t width = static_cast<uint32_t>(bitmap->PixelWidth());
+    const uint32_t height = static_cast<uint32_t>(bitmap->PixelHeight());
+    if (width == 0 || height == 0) {
+      return std::nullopt;
+    }
+
+    const auto pixels = CopySoftwareBitmapPixelsBgra(*bitmap);
+    if (!pixels.has_value() || pixels->empty()) {
+      return std::nullopt;
+    }
+
+    const auto jpeg_bytes = EncodeJpegFromBgra(*pixels, width, height);
+    if (!jpeg_bytes.has_value() || jpeg_bytes->empty()) {
+      return std::nullopt;
+    }
+
+    flutter::EncodableMap payload;
+    payload[flutter::EncodableValue("image_bytes")] =
+        flutter::EncodableValue(*jpeg_bytes);
+    payload[flutter::EncodableValue("image_mime_type")] =
+        flutter::EncodableValue(std::string("image/jpeg"));
+    return payload;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
 std::optional<flutter::EncodableMap> RunPdfOcr(
     const std::vector<uint8_t>& bytes, int max_pages, int dpi,
     const std::string& language_hints) {
@@ -723,7 +782,19 @@ void FlutterWindow::HandleOcrMethodCall(
   const std::string language_hints = ReadLanguageHints(args);
   const auto& method = method_call.method_name();
   if (method == "ocrImage") {
-    auto payload = RunImageOcr(*maybe_bytes, language_hints);
+    auto payload = RunOnMtaThread(
+        [&]() { return RunImageOcr(*maybe_bytes, language_hints); });
+    if (!payload.has_value()) {
+      result->Success(flutter::EncodableValue());
+      return;
+    }
+    result->Success(flutter::EncodableValue(*payload));
+    return;
+  }
+
+  if (method == "decodeImageToJpeg") {
+    auto payload =
+        RunOnMtaThread([&]() { return RunDecodeImageToJpeg(*maybe_bytes); });
     if (!payload.has_value()) {
       result->Success(flutter::EncodableValue());
       return;
@@ -735,7 +806,8 @@ void FlutterWindow::HandleOcrMethodCall(
   if (method == "ocrPdf") {
     const int max_pages = ClampPositiveInt(args, "max_pages", 200, 10000);
     const int dpi = ClampPositiveInt(args, "dpi", 180, 600);
-    auto payload = RunPdfOcr(*maybe_bytes, max_pages, dpi, language_hints);
+    auto payload = RunOnMtaThread(
+        [&]() { return RunPdfOcr(*maybe_bytes, max_pages, dpi, language_hints); });
     if (!payload.has_value()) {
       result->Success(flutter::EncodableValue());
       return;
@@ -746,8 +818,9 @@ void FlutterWindow::HandleOcrMethodCall(
 
   if (method == "renderPdfToLongImage") {
     const auto preset = ResolvePdfRenderPreset(args);
-    auto payload =
-        RunPdfRenderToLongImage(*maybe_bytes, preset.max_pages, preset.dpi);
+    auto payload = RunOnMtaThread([&]() {
+      return RunPdfRenderToLongImage(*maybe_bytes, preset.max_pages, preset.dpi);
+    });
     if (!payload.has_value()) {
       result->Success(flutter::EncodableValue());
       return;
