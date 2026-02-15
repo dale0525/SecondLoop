@@ -1,5 +1,10 @@
 part of 'media_enrichment_gate.dart';
 
+const bool _kEnableMacosNativeSttFallback = bool.fromEnvironment(
+  'SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK',
+  defaultValue: false,
+);
+
 final class _AudioTranscribeClientSelection {
   const _AudioTranscribeClientSelection({
     required this.networkClient,
@@ -66,6 +71,9 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
   List<AudioTranscribeClient>
       _buildOptionalNativeSttAudioTranscribeFallbacks() {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
+      return const <AudioTranscribeClient>[];
+    }
+    if (!_kEnableMacosNativeSttFallback) {
       return const <AudioTranscribeClient>[];
     }
     return <AudioTranscribeClient>[
