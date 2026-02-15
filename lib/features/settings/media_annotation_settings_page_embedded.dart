@@ -43,11 +43,14 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
   }
 
   MediaSourceRouteKind _resolveCapabilityRoute(
-      MediaSourcePreference preference) {
+    MediaSourcePreference preference, {
+    bool hasLocalCapability = true,
+  }) {
     return resolveMediaSourceRoute(
       preference,
       cloudAvailable: _isCloudAvailableForCapability(context),
       hasByokProfile: _hasOpenAiByokProfile(),
+      hasLocalCapability: hasLocalCapability,
     );
   }
 
@@ -265,7 +268,10 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               _MediaAnnotationSettingsPageState._kProviderCloudGateway;
           final sourceLabels =
               context.t.settings.aiSelection.mediaUnderstanding.preference;
-          final audioRoute = _resolveCapabilityRoute(_audioSourcePreference);
+          final audioRoute = _resolveCapabilityRoute(
+            _audioSourcePreference,
+            hasLocalCapability: supportsPlatformLocalRuntimeAudioTranscribe(),
+          );
 
           return <Widget>[
             if (!embedded) ...[
@@ -367,16 +373,17 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       title: sourceLabels.byok.title,
                       subtitle: sourceLabels.byok.description,
                     ),
-                    _buildSourcePreferenceTile(
-                      value: MediaSourcePreference.local,
-                      groupValue: _audioSourcePreference,
-                      onChanged: _setAudioSourcePreference,
-                      tileKey: const ValueKey(
-                        'media_annotation_settings_audio_mode_local',
+                    if (supportsPlatformLocalRuntimeAudioTranscribe())
+                      _buildSourcePreferenceTile(
+                        value: MediaSourcePreference.local,
+                        groupValue: _audioSourcePreference,
+                        onChanged: _setAudioSourcePreference,
+                        tileKey: const ValueKey(
+                          'media_annotation_settings_audio_mode_local',
+                        ),
+                        title: sourceLabels.local.title,
+                        subtitle: sourceLabels.local.description,
                       ),
-                      title: sourceLabels.local.title,
-                      subtitle: sourceLabels.local.description,
-                    ),
                     _buildScopedWifiOnlyTile(
                       tileKey:
                           MediaAnnotationSettingsPage.audioWifiOnlySwitchKey,
@@ -432,7 +439,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       _audioTranscribeApiProfileSubtitle(
                         context,
                         localRuntime: contentConfig != null &&
-                            _isLocalRuntimeAudioTranscribeEngine(
+                            _isEffectiveLocalRuntimeAudioTranscribeEngine(
                               contentConfig.audioTranscribeEngine,
                             ),
                       ),
@@ -442,7 +449,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       children: [
                         Text(
                           contentConfig != null &&
-                                  _isLocalRuntimeAudioTranscribeEngine(
+                                  _isEffectiveLocalRuntimeAudioTranscribeEngine(
                                     contentConfig.audioTranscribeEngine,
                                   )
                               ? (_isZhOcrLocale(context)
@@ -451,7 +458,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                               : _apiProfileLabel(context, config.byokProfileId),
                         ),
                         if (!(contentConfig != null &&
-                            _isLocalRuntimeAudioTranscribeEngine(
+                            _isEffectiveLocalRuntimeAudioTranscribeEngine(
                               contentConfig.audioTranscribeEngine,
                             ))) ...[
                           const SizedBox(width: 4),
@@ -461,7 +468,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                     ),
                     onTap: _busy ||
                             (contentConfig != null &&
-                                _isLocalRuntimeAudioTranscribeEngine(
+                                _isEffectiveLocalRuntimeAudioTranscribeEngine(
                                   contentConfig.audioTranscribeEngine,
                                 ))
                         ? null

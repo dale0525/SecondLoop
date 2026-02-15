@@ -3,6 +3,8 @@ import 'dart:io';
 
 const String _kDefaultRuntimeSourceDir = 'assets/ocr/desktop_runtime';
 const String _kDefaultBundleId = 'com.secondloop.secondloop';
+const String _kDefaultWindowsCompanyName = 'com.secondloop';
+const String _kDefaultWindowsProductName = 'SecondLoop';
 const String _kReleaseMarker = '_secondloop_desktop_runtime_release.json';
 const String _kRuntimeManifest = '_secondloop_desktop_runtime_manifest.json';
 
@@ -225,8 +227,37 @@ String _resolveAppSupportDir({
     case _DesktopPlatform.windows:
       final appData = Platform.environment['APPDATA']?.trim() ?? '';
       if (appData.isEmpty) throw StateError('APPDATA is not set');
-      return _joinPath(appData, bundleId);
+      return _resolveWindowsAppSupportDir(
+        appData: appData,
+        bundleId: bundleId,
+      );
   }
+}
+
+String _resolveWindowsAppSupportDir({
+  required String appData,
+  required String bundleId,
+}) {
+  final normalizedBundleId = bundleId.trim();
+  if (normalizedBundleId.isNotEmpty &&
+      normalizedBundleId != _kDefaultBundleId) {
+    return _joinPath(appData, normalizedBundleId);
+  }
+
+  return _joinPath(
+    _joinPath(appData, _kDefaultWindowsCompanyName),
+    _kDefaultWindowsProductName,
+  );
+}
+
+String resolveWindowsAppSupportDirForTest({
+  required String appData,
+  required String bundleId,
+}) {
+  return _resolveWindowsAppSupportDir(
+    appData: appData,
+    bundleId: bundleId,
+  );
 }
 
 String _joinPath(String base, String relative) {

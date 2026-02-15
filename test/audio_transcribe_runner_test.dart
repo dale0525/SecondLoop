@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/audio_transcribe/audio_transcribe_runner.dart';
@@ -77,6 +77,7 @@ final class _MemClient implements AudioTranscribeClient {
   final String modelName;
 
   bool shouldFail = false;
+  Object failError = StateError('transcribe_failed');
   int calls = 0;
   String? lastMimeType;
 
@@ -88,7 +89,7 @@ final class _MemClient implements AudioTranscribeClient {
   }) async {
     calls += 1;
     lastMimeType = mimeType;
-    if (shouldFail) throw StateError('transcribe_failed');
+    if (shouldFail) throw failError;
     return const AudioTranscribeResponse(
       durationMs: 12345,
       transcriptFull: 'hello world from audio',
@@ -101,6 +102,46 @@ final class _MemClient implements AudioTranscribeClient {
 }
 
 void main() {
+  test('supports platform local runtime audio transcribe on macOS and Windows',
+      () {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
+  });
+
+  test('local runtime fallback is disabled when platform support is missing',
+      () {
+    final enabled = shouldEnableLocalRuntimeAudioFallback(
+      supportsLocalRuntime: false,
+      cloudEnabled: true,
+      hasByokProfile: true,
+      effectiveEngine: 'local_runtime',
+    );
+
+    expect(enabled, isFalse);
+  });
+
+  test('local runtime fallback is enabled on supported platform', () {
+    final enabled = shouldEnableLocalRuntimeAudioFallback(
+      supportsLocalRuntime: true,
+      cloudEnabled: false,
+      hasByokProfile: false,
+      effectiveEngine: 'local_runtime',
+    );
+
+    expect(enabled, isTrue);
+  });
+
   test('normalizeAudioTranscribeEngine allows local runtime and byok modes',
       () {
     expect(normalizeAudioTranscribeEngine('whisper'), 'whisper');
@@ -236,6 +277,87 @@ void main() {
     expect(response.segments.length, 2);
   });
 
+  test('windows native stt client parses payload response', () async {
+    final client = WindowsNativeSttAudioTranscribeClient(
+      modelName: 'windows_native_stt',
+      requestWindowsNativeSttTranscribe: ({
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        expect(lang, 'en');
+        expect(mimeType, 'audio/wav');
+        expect(audioBytes, isNotEmpty);
+        return jsonEncode({
+          'text': 'hello from windows native stt',
+          'duration': 2.3,
+          'segments': [
+            {'t_ms': 0, 'text': 'hello'},
+            {'t_ms': 900, 'text': 'from windows native stt'},
+          ],
+        });
+      },
+    );
+
+    final result = await client.transcribe(
+      lang: 'en',
+      mimeType: 'audio/wav',
+      audioBytes: Uint8List.fromList(const <int>[0x52, 0x49, 0x46, 0x46]),
+    );
+
+    expect(client.engineName, 'native_stt');
+    expect(client.modelName, 'windows_native_stt');
+    expect(result.transcriptFull, 'hello from windows native stt');
+    expect(result.durationMs, 2300);
+    expect(result.segments.length, 2);
+  });
+
+  test('windows native stt temp paths keep source/output distinct for wav', () {
+    final paths = buildWindowsNativeSttTempPaths(
+      tempDirPath: '/tmp/secondloop-native-stt',
+      mimeType: 'audio/wav',
+    );
+    expect(paths.sourcePath, isNot(paths.wavPath));
+    expect(paths.sourcePath, endsWith('/source.wav'));
+    expect(paths.wavPath, endsWith('/output.wav'));
+  });
+
+  test('detects windows native stt missing speech pack errors', () {
+    expect(
+      isWindowsNativeSttSpeechPackMissingError(
+        'audio_transcribe_native_stt_missing_speech_pack',
+      ),
+      isTrue,
+    );
+    expect(
+      isWindowsNativeSttSpeechPackMissingError(
+        'audio_transcribe_native_stt_failed:speech_recognizer_unavailable',
+      ),
+      isTrue,
+    );
+    expect(
+      isWindowsNativeSttSpeechPackMissingError(
+        'audio_transcribe_native_stt_failed:speech_recognizer_lang_missing:zh-cn',
+      ),
+      isTrue,
+    );
+    expect(
+      isWindowsNativeSttSpeechPackMissingError(
+        'audio_transcribe_native_stt_failed:ffmpeg_exit_1',
+      ),
+      isFalse,
+    );
+  });
+
+  test('normalizes windows speech recognizer language tags', () {
+    expect(normalizeWindowsSpeechRecognizerLang('zh-Hans-CN'), 'zh-cn');
+    expect(normalizeWindowsSpeechRecognizerLang('zh_Hans_CN'), 'zh-cn');
+    expect(normalizeWindowsSpeechRecognizerLang('en-US'), 'en-us');
+    expect(normalizeWindowsSpeechRecognizerLang('zh-Hant'), 'zh');
+    expect(normalizeWindowsSpeechRecognizerLang('auto'), '');
+    expect(normalizeWindowsSpeechRecognizerLang(''), '');
+  });
+
   test('runner transcribes pending audio and writes transcript payload',
       () async {
     final store = _MemStore(
@@ -336,6 +458,44 @@ void main() {
     expect(store.failedBySha['c1'], contains('transcribe_failed'));
     expect(store.failedAttemptsBySha['c1'], 2);
     expect(store.failedNextRetryBySha['c1'], greaterThan(5000));
+  });
+
+  test('runner uses longer retry delay for missing speech pack errors',
+      () async {
+    final store = _MemStore(
+      jobs: const [
+        AudioTranscribeJob(
+          attachmentSha256: 'd1',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'd1': Uint8List.fromList(const <int>[0x49, 0x44, 0x33, 0x03]),
+      },
+    );
+    final client = _MemClient(engineName: 'native_stt', modelName: 'windows')
+      ..shouldFail = true
+      ..failError =
+          StateError('audio_transcribe_native_stt_missing_speech_pack');
+    const nowMs = 5000;
+    final runner = AudioTranscribeRunner(
+      store: store,
+      client: client,
+      nowMs: () => nowMs,
+    );
+
+    final result = await runner.runOnce(limit: 5);
+    expect(result.processed, 0);
+    expect(client.calls, 1);
+    expect(
+      store.failedNextRetryBySha['d1'],
+      greaterThanOrEqualTo(
+        nowMs + const Duration(hours: 12).inMilliseconds,
+      ),
+    );
   });
 
   test('byok whisper client parses verbose json response', () async {

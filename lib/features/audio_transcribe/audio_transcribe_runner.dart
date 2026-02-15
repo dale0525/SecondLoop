@@ -11,6 +11,7 @@ import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
 
 part 'audio_transcribe_runner_clients.dart';
 part 'audio_transcribe_runner_protocol.dart';
+part 'audio_transcribe_runner_windows_stt.dart';
 
 const String kAudioTranscriptSchema = 'secondloop.audio_transcript.v1';
 
@@ -137,12 +138,37 @@ typedef AudioTranscribeNativeSttRequest = Future<String> Function({
   required String mimeType,
   required Uint8List audioBytes,
 });
+typedef AudioTranscribeWindowsNativeSttRequest = Future<String> Function({
+  required String lang,
+  required String mimeType,
+  required Uint8List audioBytes,
+});
 
 String normalizeAudioTranscribeEngine(String engine) {
   final normalized = engine.trim();
   if (normalized == 'multimodal_llm') return 'multimodal_llm';
   if (normalized == 'local_runtime') return 'local_runtime';
   return 'whisper';
+}
+
+bool supportsPlatformLocalRuntimeAudioTranscribe() {
+  if (kIsWeb) return false;
+  return defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.windows;
+}
+
+bool shouldEnableLocalRuntimeAudioFallback({
+  required bool supportsLocalRuntime,
+  required bool cloudEnabled,
+  required bool hasByokProfile,
+  required String effectiveEngine,
+}) {
+  if (!supportsLocalRuntime) return false;
+  final normalizedEngine = normalizeAudioTranscribeEngine(effectiveEngine);
+  return normalizedEngine == 'local_runtime' ||
+      isByokAudioTranscribeEngine(normalizedEngine) ||
+      hasByokProfile ||
+      cloudEnabled;
 }
 
 bool isAutoAudioTranscribeLang(String lang) {
@@ -270,7 +296,11 @@ final class AudioTranscribeRunner {
         processed += 1;
       } catch (e) {
         final attempts = job.attempts + 1;
-        final nextRetryAtMs = nowMs + _backoffMs(attempts);
+        final nextRetryAtMs = _nextRetryAtMsForError(
+          nowMs: nowMs,
+          attempts: attempts,
+          error: e,
+        );
         await store.markAnnotationFailed(
           attachmentSha256: job.attachmentSha256,
           error: e.toString(),
@@ -288,6 +318,24 @@ final class AudioTranscribeRunner {
     final clamped = attempts.clamp(1, 10);
     final seconds = 5 * (1 << (clamped - 1));
     return Duration(seconds: seconds).inMilliseconds;
+  }
+
+  static int _nextRetryAtMsForError({
+    required int nowMs,
+    required int attempts,
+    required Object error,
+  }) {
+    if (_isLongBackoffError(error)) {
+      return nowMs + const Duration(hours: 12).inMilliseconds;
+    }
+    return nowMs + _backoffMs(attempts);
+  }
+
+  static bool _isLongBackoffError(Object error) {
+    final detail = error.toString().trim().toLowerCase();
+    if (detail.isEmpty) return false;
+    return detail.contains('audio_transcribe_native_stt_missing_speech_pack') ||
+        detail.contains('speech_recognizer_unavailable');
   }
 
   static Map<String, Object?> _buildPayload({

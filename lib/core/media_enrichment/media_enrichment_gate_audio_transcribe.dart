@@ -22,13 +22,17 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     required String cloudIdToken,
     required Uint8List sessionKey,
   }) {
-    final shouldEnableLocalFallback = effectiveEngine == 'local_runtime' ||
-        isByokAudioTranscribeEngine(effectiveEngine) ||
-        byokProfile != null ||
-        cloudEnabled;
+    final shouldEnableLocalFallback = shouldEnableLocalRuntimeAudioFallback(
+      supportsLocalRuntime: supportsPlatformLocalRuntimeAudioTranscribe(),
+      cloudEnabled: cloudEnabled,
+      hasByokProfile: byokProfile != null,
+      effectiveEngine: effectiveEngine,
+    );
+    final supportsMethodChannelLocalRuntime =
+        _supportsMethodChannelLocalRuntimeAudioTranscribe();
 
     final offlineChain = <AudioTranscribeClient>[
-      if (shouldEnableLocalFallback)
+      if (shouldEnableLocalFallback && supportsMethodChannelLocalRuntime)
         LocalRuntimeAudioTranscribeClient(
           modelName: 'local_runtime',
         ),
@@ -65,14 +69,28 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
 
   List<AudioTranscribeClient>
       _buildOptionalNativeSttAudioTranscribeFallbacks() {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
+    if (kIsWeb) {
       return const <AudioTranscribeClient>[];
     }
-    return <AudioTranscribeClient>[
-      NativeSttAudioTranscribeClient(
-        modelName: 'macos_native_stt',
-      ),
-    ];
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.macOS:
+        return <AudioTranscribeClient>[
+          NativeSttAudioTranscribeClient(
+            modelName: 'macos_native_stt',
+          ),
+        ];
+      case TargetPlatform.windows:
+        return <AudioTranscribeClient>[
+          WindowsNativeSttAudioTranscribeClient(
+            modelName: 'windows_native_stt',
+          ),
+        ];
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.linux:
+      case TargetPlatform.fuchsia:
+        return const <AudioTranscribeClient>[];
+    }
   }
 
   AudioTranscribeClient? _buildFallbackAudioTranscribeClient(
@@ -81,5 +99,10 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     if (chain.isEmpty) return null;
     if (chain.length == 1) return chain.first;
     return FallbackAudioTranscribeClient(chain: chain);
+  }
+
+  bool _supportsMethodChannelLocalRuntimeAudioTranscribe() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS;
   }
 }

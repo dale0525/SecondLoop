@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'media_source_prefs.dart';
@@ -13,7 +14,12 @@ final class MediaCapabilitySourcePrefs {
 
   static Future<MediaSourcePreference> readAudio() async {
     final prefs = await SharedPreferences.getInstance();
-    return _decode(prefs.getString(_audioSourceKey));
+    final value = _decode(prefs.getString(_audioSourceKey));
+    if (value == MediaSourcePreference.local &&
+        !supportsPlatformLocalRuntimeAudioTranscribe()) {
+      return MediaSourcePreference.auto;
+    }
+    return value;
   }
 
   static Future<MediaSourcePreference> readDocumentOcr() async {
@@ -57,5 +63,11 @@ final class MediaCapabilitySourcePrefs {
       MediaSourcePreference.byok => 'byok',
       MediaSourcePreference.local => 'local',
     };
+  }
+
+  static bool supportsPlatformLocalRuntimeAudioTranscribe() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
   }
 }

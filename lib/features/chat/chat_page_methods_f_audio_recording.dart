@@ -613,6 +613,33 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     );
   }
 
+  Future<void> _openWindowsSpeechLanguagePackSettings() async {
+    for (final uri in _windowsSpeechLanguagePackSettingsUris()) {
+      try {
+        final opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (opened) return;
+      } catch (_) {
+        // Try next candidate.
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _localizedByLanguage(
+            zh: '无法自动打开系统设置。请前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。',
+            en: 'Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech.',
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   List<Uri> _microphoneSettingsUris() {
     if (kIsWeb) return const <Uri>[];
 
@@ -637,6 +664,16 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       case TargetPlatform.fuchsia:
         return const <Uri>[];
     }
+  }
+
+  List<Uri> _windowsSpeechLanguagePackSettingsUris() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) {
+      return const <Uri>[];
+    }
+    return <Uri>[
+      Uri.parse('ms-settings:regionlanguage'),
+      Uri.parse('ms-settings:speech'),
+    ];
   }
 
   String _describeAudioError(Object error) {

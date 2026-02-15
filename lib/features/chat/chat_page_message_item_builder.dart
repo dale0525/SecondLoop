@@ -627,6 +627,9 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                                     )
                                                   : AttachmentCard(
                                                       attachment: items[i],
+                                                      annotationJob:
+                                                          annotationJobsBySha256[
+                                                              items[i].sha256],
                                                       onTap: () {
                                                         Navigator.of(context)
                                                             .push(
@@ -906,18 +909,21 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                   final items = snapshot.data ?? const <Attachment>[];
                   if (items.isEmpty) return const SizedBox.shrink();
 
-                  String? firstImageSha256;
+                  Attachment? targetAttachment;
+                  AttachmentAnnotationJob? targetJob;
                   for (final a in items) {
-                    if (a.mimeType.startsWith('image/')) {
-                      firstImageSha256 = a.sha256;
+                    final job = annotationJobsBySha256[a.sha256];
+                    if (job != null) {
+                      targetAttachment = a;
+                      targetJob = job;
                       break;
                     }
                   }
-                  final sha256 = firstImageSha256;
-                  if (sha256 == null) return const SizedBox.shrink();
-
-                  final job = annotationJobsBySha256[sha256];
-                  if (job == null) return const SizedBox.shrink();
+                  final attachment = targetAttachment;
+                  final job = targetJob;
+                  if (attachment == null || job == null) {
+                    return const SizedBox.shrink();
+                  }
 
                   Future<void> retry() async {
                     final backendAny = AppBackendScope.of(context);
@@ -931,7 +937,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                     try {
                       await backendAny.enqueueAttachmentAnnotation(
                         sessionKey,
-                        attachmentSha256: sha256,
+                        attachmentSha256: attachment.sha256,
                         lang: lang,
                         nowMs: DateTime.now().millisecondsSinceEpoch,
                       );
@@ -961,6 +967,11 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                         );
                       },
                       onRetry: job.status == 'failed' ? retry : null,
+                      onInstallSpeechPack: job.status == 'failed'
+                          ? () async {
+                              await _openWindowsSpeechLanguagePackSettings();
+                            }
+                          : null,
                     ),
                   );
                 },

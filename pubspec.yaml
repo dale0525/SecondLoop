@@ -72,6 +72,7 @@ dependencies:
   universal_io: ^2.2.2
   menu_base: ^0.1.1
   syncfusion_flutter_pdf: ^29.1.38
+  just_audio_windows: ^0.2.2
 
 dev_dependencies:
   flutter_test:
@@ -104,6 +105,9 @@ flutter:
 
   assets:
     - assets/bin/ffmpeg/
+    - assets/bin/ffmpeg/windows/
+    - assets/bin/ffmpeg/macos/
+    - assets/bin/ffmpeg/linux/
     - assets/ocr/
     - assets/ocr/desktop_runtime/
     - assets/ocr/desktop_runtime/models/

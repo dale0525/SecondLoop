@@ -16,11 +16,13 @@ import 'attachment_text_source_policy.dart';
 class AttachmentCard extends StatelessWidget {
   const AttachmentCard({
     required this.attachment,
+    this.annotationJob,
     this.onTap,
     super.key,
   });
 
   final Attachment attachment;
+  final AttachmentAnnotationJob? annotationJob;
   final VoidCallback? onTap;
 
   @override
@@ -44,17 +46,25 @@ class AttachmentCard extends StatelessWidget {
         final meta = cardData?.metadata;
         final displayTitle = _resolveDisplayTitle(attachment, meta);
         final isOcrRunning = cardData?.ocrRunning ?? false;
+        final annotationStatus =
+            annotationJob?.status.trim().toLowerCase() ?? '';
         final preparingText = context.t.sync.progressDialog.preparing;
+        final fallbackSubtitle = resolveAttachmentCardFallbackSubtitle(
+          ocrRunning: isOcrRunning,
+          jobStatus: annotationStatus,
+          preparingText: preparingText,
+          ocrRunningText: context.t.attachments.content.ocrRunning,
+          failedText: context.t.chat.semanticParseStatusFailed,
+        );
         final subtitle = _resolveDisplaySummary(
           meta,
           extractedSummary: cardData?.extractedSummary,
           displayTitle: displayTitle,
-          fallback: isOcrRunning
-              ? context.t.attachments.content.ocrRunning
-              : preparingText,
+          fallback: fallbackSubtitle,
         );
-        final showProcessingIndicator =
-            isOcrRunning || subtitle == preparingText;
+        final showProcessingIndicator = annotationStatus == 'pending' ||
+            isOcrRunning ||
+            subtitle == preparingText;
         final icon = _resolveIcon(attachment.mimeType);
 
         return ConstrainedBox(
@@ -181,6 +191,26 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
     extractedSummary: (values[1] as _AttachmentCardPayloadSummary).summary,
     ocrRunning: (values[1] as _AttachmentCardPayloadSummary).ocrRunning,
   );
+}
+
+String resolveAttachmentCardFallbackSubtitle({
+  required bool ocrRunning,
+  required String? jobStatus,
+  required String preparingText,
+  required String ocrRunningText,
+  required String failedText,
+}) {
+  final normalizedStatus = (jobStatus ?? '').trim().toLowerCase();
+  if (normalizedStatus == 'failed') {
+    return failedText;
+  }
+  if (normalizedStatus == 'pending') {
+    return preparingText;
+  }
+  if (ocrRunning) {
+    return ocrRunningText;
+  }
+  return preparingText;
 }
 
 bool _isAttachmentOcrRunning(Map<String, Object?> payload) {

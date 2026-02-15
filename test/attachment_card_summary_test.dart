@@ -3,6 +3,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/attachments/attachment_card.dart';
 
 void main() {
+  test('attachment card fallback shows failed label for failed annotation job',
+      () {
+    final subtitle = resolveAttachmentCardFallbackSubtitle(
+      ocrRunning: false,
+      jobStatus: 'failed',
+      preparingText: 'Preparing...',
+      ocrRunningText: 'OCR running...',
+      failedText: 'Failed',
+    );
+
+    expect(subtitle, 'Failed');
+  });
+
+  test('attachment card fallback keeps preparing for pending annotation job',
+      () {
+    final subtitle = resolveAttachmentCardFallbackSubtitle(
+      ocrRunning: false,
+      jobStatus: 'pending',
+      preparingText: 'Preparing...',
+      ocrRunningText: 'OCR running...',
+      failedText: 'Failed',
+    );
+
+    expect(subtitle, 'Preparing...');
+  });
+
+  test('attachment card fallback keeps OCR running text when OCR is active',
+      () {
+    final subtitle = resolveAttachmentCardFallbackSubtitle(
+      ocrRunning: true,
+      jobStatus: null,
+      preparingText: 'Preparing...',
+      ocrRunningText: 'OCR running...',
+      failedText: 'Failed',
+    );
+
+    expect(subtitle, 'OCR running...');
+  });
+
   test('attachment card summary uses transcript excerpt when present', () {
     final summary = extractAttachmentCardSummaryFromPayload(
       const <String, Object?>{
