@@ -274,7 +274,7 @@ final class VideoTranscodeWorker {
   static Future<VideoPreviewExtractResult> extractPreviewFrames(
     Uint8List videoBytes, {
     required String sourceMimeType,
-    int maxKeyframes = 12,
+    int? maxKeyframes,
     int frameIntervalSeconds = 8,
     String keyframeKind = 'scene',
     VideoTranscodeCommandRunner? commandRunner,
@@ -302,7 +302,8 @@ final class VideoTranscodeWorker {
       );
     }
 
-    final safeMaxKeyframes = maxKeyframes.clamp(1, 24);
+    final hasCustomMaxKeyframes = maxKeyframes != null;
+    final safeMaxKeyframes = (maxKeyframes ?? 12).clamp(1, 24);
     final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final normalizedKind = keyframeKind.trim().isEmpty
         ? 'scene'
@@ -324,9 +325,15 @@ final class VideoTranscodeWorker {
         run: run,
         inputPath: inputPath,
       );
+      final effectiveMaxKeyframes = hasCustomMaxKeyframes
+          ? safeMaxKeyframes
+          : _resolveAutoPreviewMaxKeyframes(
+              baseMaxFrames: safeMaxKeyframes,
+              durationSeconds: videoDurationSeconds,
+            );
       final effectiveInterval = _resolveAdaptiveFrameIntervalSeconds(
         baseIntervalSeconds: safeInterval,
-        maxFrames: safeMaxKeyframes,
+        maxFrames: effectiveMaxKeyframes,
         durationSeconds: videoDurationSeconds,
       );
 
@@ -361,7 +368,7 @@ final class VideoTranscodeWorker {
         inputPath: inputPath,
         filter:
             "select='eq(n\\,0)+gte(t-prev_selected_t\\,$effectiveInterval)*gt(scene\\,0.08)'",
-        maxFrames: safeMaxKeyframes,
+        maxFrames: effectiveMaxKeyframes,
         outputPattern: scenePattern,
         useVariableFrameRateSync: true,
       );
@@ -370,9 +377,9 @@ final class VideoTranscodeWorker {
               prefix: 'keyframe_scene_')
           : const <File>[];
 
-      final remainingFrames = (safeMaxKeyframes - sceneFiles.length).clamp(
+      final remainingFrames = (effectiveMaxKeyframes - sceneFiles.length).clamp(
         0,
-        safeMaxKeyframes,
+        effectiveMaxKeyframes,
       );
       final fpsResult = remainingFrames > 0
           ? await _extractFramesWithFilter(
@@ -520,6 +527,28 @@ final class VideoTranscodeWorker {
     return targetInterval > baseIntervalSeconds
         ? targetInterval
         : baseIntervalSeconds;
+  }
+
+  static int _resolveAutoPreviewMaxKeyframes({
+    required int baseMaxFrames,
+    required double durationSeconds,
+  }) {
+    final safeBase = baseMaxFrames.clamp(1, 24);
+    if (durationSeconds <= 0) return safeBase;
+
+    int recommended = safeBase;
+    if (durationSeconds >= 20 * 60) {
+      recommended = 24;
+    } else if (durationSeconds >= 10 * 60) {
+      recommended = 20;
+    } else if (durationSeconds >= 5 * 60) {
+      recommended = 16;
+    } else if (durationSeconds >= 3 * 60) {
+      recommended = 14;
+    }
+
+    final effective = recommended > safeBase ? recommended : safeBase;
+    return effective.clamp(1, 24);
   }
 
   static Future<List<File>> _listPreviewFrameFiles(

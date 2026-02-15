@@ -317,6 +317,46 @@ void main() {
     expect(result.keyframes[0].bytes, Uint8List.fromList(const <int>[8, 8, 8]));
   });
 
+  test('VideoTranscodeWorker uses a larger auto frame budget for long videos',
+      () async {
+    final input = Uint8List.fromList(const <int>[3, 6, 9, 12]);
+    var sawFpsPass = false;
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      input,
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+
+        final outputPath = arguments.last;
+        final outputFile = File(outputPath);
+        await outputFile.parent.create(recursive: true);
+        if (outputPath.endsWith('poster.jpg')) {
+          await outputFile.writeAsBytes(const <int>[1, 2, 3]);
+          return ProcessResult(0, 0, '', '');
+        }
+        if (outputPath.contains('keyframe_scene_')) {
+          return ProcessResult(0, 1, '', 'scene failed');
+        }
+
+        final filterIndex = arguments.indexOf('-vf');
+        expect(filterIndex, greaterThanOrEqualTo(0));
+        expect(arguments[filterIndex + 1], 'fps=1/30');
+        sawFpsPass = true;
+        final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+        await keyframe0.writeAsBytes(const <int>[6, 6, 6]);
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(sawFpsPass, isTrue);
+    expect(result.keyframes.length, 1);
+  });
+
   test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
       () async {
     final result = await VideoTranscodeWorker.extractPreviewFrames(
