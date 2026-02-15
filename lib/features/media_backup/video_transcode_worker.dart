@@ -414,19 +414,20 @@ final class VideoTranscodeWorker {
 
           final visualSignature = _buildFrameVisualSignature(frameBytes);
           if (acceptedFrameBytes.isNotEmpty && visualSignature != null) {
-            final previousSignature = acceptedFrameSignatures.last;
-            if (previousSignature != null &&
-                _areFramesNearDuplicate(
-                  previousSignature,
-                  visualSignature,
-                )) {
-              if (_shouldPreferRicherFrame(
-                previousSignature,
-                visualSignature,
-              )) {
-                acceptedFrameBytes[acceptedFrameBytes.length - 1] = frameBytes;
-                acceptedFrameSignatures[acceptedFrameSignatures.length - 1] =
-                    visualSignature;
+            final duplicateIndex = _findNearDuplicateFrameIndex(
+              acceptedFrameSignatures,
+              visualSignature,
+            );
+            if (duplicateIndex != null) {
+              final duplicateSignature =
+                  acceptedFrameSignatures[duplicateIndex];
+              if (duplicateSignature != null &&
+                  _shouldPreferRicherFrame(
+                    duplicateSignature,
+                    visualSignature,
+                  )) {
+                acceptedFrameBytes[duplicateIndex] = frameBytes;
+                acceptedFrameSignatures[duplicateIndex] = visualSignature;
               }
               continue;
             }
@@ -635,6 +636,20 @@ final class VideoTranscodeWorker {
     final hashDistance = _hammingDistance64(previous.hash, current.hash);
     final darkRatioDelta = (previous.darkRatio - current.darkRatio).abs();
     return hashDistance <= 8 && darkRatioDelta <= 0.2;
+  }
+
+  static int? _findNearDuplicateFrameIndex(
+    List<({int hash, double darkRatio})?> acceptedSignatures,
+    ({int hash, double darkRatio}) current,
+  ) {
+    for (var i = 0; i < acceptedSignatures.length; i++) {
+      final acceptedSignature = acceptedSignatures[i];
+      if (acceptedSignature == null) continue;
+      if (_areFramesNearDuplicate(acceptedSignature, current)) {
+        return i;
+      }
+    }
+    return null;
   }
 
   static bool _shouldPreferRicherFrame(

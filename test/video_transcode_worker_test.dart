@@ -397,6 +397,49 @@ void main() {
     expect(result.keyframes.first.bytes, lateFrameBytes);
   });
 
+  test('VideoTranscodeWorker deduplicates non-contiguous repeated slides',
+      () async {
+    final input = Uint8List.fromList(const <int>[21, 22, 23]);
+    final earlyFrame = _buildSlideFrameBytes(hasExtraBullet: false);
+    final frameB = _buildSlideVariantFrame(1);
+    final richerRepeatFrame = _buildSlideFrameBytes(hasExtraBullet: true);
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      input,
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+
+        final outputPath = arguments.last;
+        final outputFile = File(outputPath);
+        await outputFile.parent.create(recursive: true);
+        if (outputPath.endsWith('poster.jpg')) {
+          await outputFile.writeAsBytes(const <int>[1, 2, 3]);
+          return ProcessResult(0, 0, '', '');
+        }
+        if (outputPath.contains('keyframe_scene_')) {
+          return ProcessResult(0, 1, '', 'scene failed');
+        }
+
+        final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+        final keyframe1 = File(outputPath.replaceAll('%03d', '001'));
+        final keyframe2 = File(outputPath.replaceAll('%03d', '002'));
+        await keyframe0.writeAsBytes(earlyFrame);
+        await keyframe1.writeAsBytes(frameB);
+        await keyframe2.writeAsBytes(richerRepeatFrame);
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(result.keyframes.length, 2);
+    expect(result.keyframes[0].bytes, richerRepeatFrame);
+    expect(result.keyframes[1].bytes, frameB);
+  });
+
   test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
       () async {
     final result = await VideoTranscodeWorker.extractPreviewFrames(
@@ -439,6 +482,52 @@ Uint8List _buildSlideFrameBytes({required bool hasExtraBullet}) {
       y2: 100,
       color: img.ColorRgb8(30, 30, 30),
     );
+  }
+  return Uint8List.fromList(img.encodeJpg(image, quality: 90));
+}
+
+Uint8List _buildSlideVariantFrame(int variant) {
+  final image = img.Image(width: 320, height: 180);
+  img.fill(image, color: img.ColorRgb8(255, 255, 255));
+  switch (variant) {
+    case 0:
+      img.fillRect(
+        image,
+        x1: 20,
+        y1: 20,
+        x2: 300,
+        y2: 36,
+        color: img.ColorRgb8(20, 20, 20),
+      );
+      img.fillRect(
+        image,
+        x1: 36,
+        y1: 70,
+        x2: 280,
+        y2: 82,
+        color: img.ColorRgb8(30, 30, 30),
+      );
+      break;
+    case 1:
+      img.fillRect(
+        image,
+        x1: 24,
+        y1: 24,
+        x2: 160,
+        y2: 150,
+        color: img.ColorRgb8(10, 10, 10),
+      );
+      img.fillRect(
+        image,
+        x1: 190,
+        y1: 44,
+        x2: 300,
+        y2: 58,
+        color: img.ColorRgb8(30, 30, 30),
+      );
+      break;
+    default:
+      throw ArgumentError('Unsupported variant: $variant');
   }
   return Uint8List.fromList(img.encodeJpg(image, quality: 90));
 }
