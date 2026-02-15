@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('macos native stt fallback is opt-in via dart-define', () {
+  test('macos speech fallback is opt-in via dart-define', () {
     final content = File(
       'lib/core/media_enrichment/media_enrichment_gate_audio_transcribe.dart',
     ).readAsStringSync();
@@ -13,10 +13,31 @@ void main() {
       contains('SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK'),
     );
     expect(content, contains('bool.fromEnvironment'));
+    expect(content, contains('bool _shouldEnableMacosSpeechFallback()'));
+    expect(content, contains('if (!_shouldEnableMacosSpeechFallback())'));
 
-    final gateIndex = content.indexOf('if (!_kEnableMacosNativeSttFallback)');
-    final clientIndex = content.indexOf('NativeSttAudioTranscribeClient(');
+    final gateIndex =
+        content.indexOf('if (!_shouldEnableMacosSpeechFallback())');
+    final nativeClientIndex =
+        content.indexOf('NativeSttAudioTranscribeClient(');
     expect(gateIndex, greaterThanOrEqualTo(0));
-    expect(clientIndex, greaterThan(gateIndex));
+    expect(nativeClientIndex, greaterThan(gateIndex));
+  });
+
+  test('macos local runtime fallback is also gated behind same switch', () {
+    final content = File(
+      'lib/core/media_enrichment/media_enrichment_gate_audio_transcribe.dart',
+    ).readAsStringSync();
+
+    expect(content, contains('shouldEnableLocalRuntimeFallback'));
+    expect(content, contains('shouldEnableMacosSpeechFallback'));
+
+    final localRuntimeGateIndex =
+        content.indexOf('if (shouldEnableLocalRuntimeFallback)');
+    final localRuntimeClientIndex =
+        content.indexOf('LocalRuntimeAudioTranscribeClient(');
+
+    expect(localRuntimeGateIndex, greaterThanOrEqualTo(0));
+    expect(localRuntimeClientIndex, greaterThan(localRuntimeGateIndex));
   });
 }

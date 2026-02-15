@@ -31,9 +31,12 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
         isByokAudioTranscribeEngine(effectiveEngine) ||
         byokProfile != null ||
         cloudEnabled;
+    final shouldEnableMacosSpeechFallback = _shouldEnableMacosSpeechFallback();
+    final shouldEnableLocalRuntimeFallback =
+        shouldEnableLocalFallback && shouldEnableMacosSpeechFallback;
 
     final offlineChain = <AudioTranscribeClient>[
-      if (shouldEnableLocalFallback)
+      if (shouldEnableLocalRuntimeFallback)
         LocalRuntimeAudioTranscribeClient(
           modelName: 'local_runtime',
         ),
@@ -68,12 +71,16 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     );
   }
 
+  bool _shouldEnableMacosSpeechFallback() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
+      return true;
+    }
+    return _kEnableMacosNativeSttFallback;
+  }
+
   List<AudioTranscribeClient>
       _buildOptionalNativeSttAudioTranscribeFallbacks() {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
-      return const <AudioTranscribeClient>[];
-    }
-    if (!_kEnableMacosNativeSttFallback) {
+    if (!_shouldEnableMacosSpeechFallback()) {
       return const <AudioTranscribeClient>[];
     }
     return <AudioTranscribeClient>[
