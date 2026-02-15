@@ -2,7 +2,7 @@ part of 'media_enrichment_gate.dart';
 
 const bool _kEnableMacosNativeSttFallback = bool.fromEnvironment(
   'SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 final class _AudioTranscribeClientSelection {
@@ -31,8 +31,12 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
         isByokAudioTranscribeEngine(effectiveEngine) ||
         byokProfile != null ||
         cloudEnabled;
+    final shouldEnableMacosSpeechFallback = _shouldEnableMacosSpeechFallback();
+    final shouldEnableLocalRuntimeFallback =
+        shouldEnableLocalFallback && shouldEnableMacosSpeechFallback;
+
     final offlineChain = <AudioTranscribeClient>[
-      if (shouldEnableLocalFallback)
+      if (shouldEnableLocalRuntimeFallback)
         LocalRuntimeAudioTranscribeClient(
           modelName: 'local_runtime',
         ),
