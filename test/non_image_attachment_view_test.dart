@@ -415,13 +415,171 @@ void main() {
     );
     expect(find.textContaining('vlog'), findsOneWidget);
     expect(find.textContaining('72%'), findsOneWidget);
-    expect(find.byKey(const ValueKey('video_manifest_poster_preview')),
+    final proxyFinder =
+        find.byKey(const ValueKey('video_manifest_proxy_thumbnail'));
+    final keyframeFinder =
+        find.byKey(const ValueKey('video_manifest_keyframe_preview_0'));
+    expect(proxyFinder, findsOneWidget);
+    expect(keyframeFinder, findsOneWidget);
+    expect(tester.getSize(proxyFinder), tester.getSize(keyframeFinder));
+  });
+
+  testWidgets(
+      'NonImageAttachmentView opens looping gallery from proxy thumbnail',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-gallery',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-gallery.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/png',
+          'keyframes': [
+            {
+              'index': 0,
+              'sha256': 'sha-kf-0',
+              'mime_type': 'image/jpeg',
+              't_ms': 0,
+              'kind': 'scene',
+            },
+            {
+              'index': 1,
+              'sha256': 'sha-kf-1',
+              'mime_type': 'image/jpeg',
+              't_ms': 4000,
+              'kind': 'scene',
+            },
+          ],
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video gallery',
+            initialAnnotationPayload: const <String, Object?>{},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('video_manifest_keyframe_preview_0')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('video_manifest_inline_player')),
+    expect(
+      find.byKey(const ValueKey('video_manifest_gallery_close_button')),
+      findsOneWidget,
+    );
+
+    Finder pageViewFinder() =>
+        find.byKey(const ValueKey('video_manifest_gallery_page_view'));
+
+    expect(find.text('1/3'), findsOneWidget);
+
+    await tester.drag(pageViewFinder(), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('2/3'), findsOneWidget);
+
+    await tester.drag(pageViewFinder(), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('3/3'), findsOneWidget);
+
+    await tester.drag(pageViewFinder(), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('1/3'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('video_manifest_gallery_close_button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
         findsNothing);
-    expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
+  });
+
+  testWidgets('NonImageAttachmentView exits gallery when tapping blank area',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-gallery-dismiss',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-gallery-dismiss.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'keyframes': [
+            {
+              'index': 0,
+              'sha256': 'sha-kf-0',
+              'mime_type': 'image/jpeg',
+              't_ms': 0,
+              'kind': 'scene',
+            },
+          ],
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video gallery dismiss',
+            initialAnnotationPayload: const <String, Object?>{},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
+        findsOneWidget);
+
+    await tester.tapAt(const Offset(2, 2));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
         findsNothing);
   });
 
@@ -488,8 +646,8 @@ void main() {
 
     expect(backend.downloadedShas, contains('sha-poster'));
     expect(backend.downloadedShas, contains('sha-video-proxy'));
-    expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
-        findsNothing);
+    expect(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')),
+        findsOneWidget);
   });
 
   testWidgets(
@@ -554,13 +712,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.downloadAttemptedShas, contains('sha-poster'));
-    final posterFinder =
-        find.byKey(const ValueKey('video_manifest_poster_preview'));
-    expect(posterFinder, findsOneWidget);
-    expect(
-      find.descendant(of: posterFinder, matching: find.byType(Image)),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')),
+        findsOneWidget);
   });
 
   testWidgets('NonImageAttachmentView shows video manifest insight fields',

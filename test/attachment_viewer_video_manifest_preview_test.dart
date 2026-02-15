@@ -48,8 +48,8 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('video_manifest_open_proxy_button')),
-      findsNothing,
+      find.byKey(const ValueKey('video_manifest_proxy_thumbnail')),
+      findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey('video_manifest_keyframe_preview_0')),

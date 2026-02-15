@@ -14,7 +14,7 @@ import '../media_backup/cloud_media_download.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
-import 'video_attachment_inline_player.dart';
+import 'video_manifest_gallery_dialog.dart';
 import 'video_manifest_insight_content.dart';
 import 'video_keyframe_ocr_worker.dart';
 
@@ -530,13 +530,45 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final keyframes = manifest.keyframes
         .where((item) => item.sha256.trim().isNotEmpty)
         .toList(growable: false);
-    final previewKeyframes = keyframes.take(4).toList(growable: false);
     final posterSha256 = (manifest.posterSha256 ?? '').trim();
+    final posterMimeType = manifest.posterMimeType ?? 'image/jpeg';
+    final proxySha256 = (manifest.videoProxySha256 ?? '').trim();
     final confidencePercent =
         (manifest.videoKindConfidence.clamp(0.0, 1.0) * 100).round();
-    final playbackFuture = (manifest.videoProxySha256 ?? '').trim().isNotEmpty
-        ? _loadVideoProxyPlayback(manifest)
-        : null;
+
+    const thumbnailWidth = 156.0;
+    const thumbnailHeight = 96.0;
+
+    final hasProxy = proxySha256.isNotEmpty;
+    final proxyPreviewSha256 = posterSha256.isNotEmpty
+        ? posterSha256
+        : (keyframes.isNotEmpty ? keyframes.first.sha256 : '');
+    final proxyPreviewMimeType = posterSha256.isNotEmpty
+        ? posterMimeType
+        : (keyframes.isNotEmpty ? keyframes.first.mimeType : 'image/jpeg');
+    final playbackFuture = hasProxy ? _loadVideoProxyPlayback(manifest) : null;
+
+    Future<void> openGallery({required int initialIndex}) async {
+      final entries = <VideoManifestGalleryEntry>[
+        if (hasProxy)
+          VideoManifestGalleryEntry.proxy(
+            playbackFuture: playbackFuture!,
+            posterSha256: proxyPreviewSha256,
+          ),
+        for (final keyframe in keyframes)
+          VideoManifestGalleryEntry.keyframe(
+            keyframeSha256: keyframe.sha256,
+          ),
+      ];
+      if (entries.isEmpty) return;
+
+      await showVideoManifestGalleryDialog(
+        context,
+        entries: entries,
+        initialIndex: initialIndex,
+        loadBytes: _readAttachmentBytesBySha,
+      );
+    }
 
     Widget buildStatBadge(String text) {
       return DecoratedBox(
@@ -554,14 +586,44 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       );
     }
 
-    Widget buildPosterFallback() {
-      if (posterSha256.isEmpty) return const SizedBox.shrink();
-      return _buildVideoManifestPreviewTile(
-        sha256: posterSha256,
-        mimeType: manifest.posterMimeType ?? 'image/jpeg',
-        key: const ValueKey('video_manifest_poster_preview'),
-        width: double.infinity,
-        height: 188,
+    Widget buildProxyThumbnail() {
+      return GestureDetector(
+        key: const ValueKey('video_manifest_proxy_thumbnail'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => unawaited(openGallery(initialIndex: 0)),
+        child: SizedBox(
+          width: thumbnailWidth,
+          height: thumbnailHeight,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildVideoManifestPreviewTile(
+                sha256: proxyPreviewSha256,
+                mimeType: proxyPreviewMimeType,
+                key: const ValueKey('video_manifest_proxy_preview_tile'),
+                width: thumbnailWidth,
+                height: thumbnailHeight,
+              ),
+              Container(color: Colors.black.withOpacity(0.18)),
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.45),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -580,47 +642,30 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
               buildStatBadge('keyframes: ${keyframes.length}'),
             ],
           ),
-          if (playbackFuture != null) ...[
-            const SizedBox(height: 12),
-            FutureBuilder<PreparedVideoProxyPlayback>(
-              future: playbackFuture,
-              builder: (context, playbackSnapshot) {
-                final playback = playbackSnapshot.data;
-                if (playback != null && playback.hasSegments) {
-                  return FutureBuilder<Uint8List?>(
-                    future: posterSha256.isNotEmpty
-                        ? _readAttachmentBytesBySha(posterSha256)
-                        : Future<Uint8List?>.value(null),
-                    builder: (context, posterSnapshot) {
-                      return VideoAttachmentInlinePlayer(
-                        key: const ValueKey('video_manifest_inline_player'),
-                        playback: playback,
-                        posterBytes: posterSnapshot.data,
-                      );
-                    },
-                  );
-                }
-                return buildPosterFallback();
-              },
-            ),
-          ] else if (posterSha256.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            buildPosterFallback(),
-          ],
-          if (previewKeyframes.isNotEmpty) ...[
+          if (hasProxy || keyframes.isNotEmpty) ...[
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  for (var i = 0; i < previewKeyframes.length; i++) ...[
+                  if (hasProxy) ...[
+                    buildProxyThumbnail(),
+                    if (keyframes.isNotEmpty) const SizedBox(width: 8),
+                  ],
+                  for (var i = 0; i < keyframes.length; i++) ...[
                     if (i > 0) const SizedBox(width: 8),
-                    _buildVideoManifestPreviewTile(
-                      sha256: previewKeyframes[i].sha256,
-                      mimeType: previewKeyframes[i].mimeType,
-                      key: ValueKey('video_manifest_keyframe_preview_$i'),
-                      width: 156,
-                      height: 96,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => unawaited(
+                        openGallery(initialIndex: hasProxy ? i + 1 : i),
+                      ),
+                      child: _buildVideoManifestPreviewTile(
+                        sha256: keyframes[i].sha256,
+                        mimeType: keyframes[i].mimeType,
+                        key: ValueKey('video_manifest_keyframe_preview_$i'),
+                        width: thumbnailWidth,
+                        height: thumbnailHeight,
+                      ),
                     ),
                   ],
                 ],
