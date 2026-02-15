@@ -364,6 +364,7 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
     required ContentEnrichmentConfig? contentConfig,
     required bool shouldTryMultimodalOcr,
     required bool canUseNetworkOcr,
+    required bool audioTranscribeEnabled,
     required SubscriptionStatus subscriptionStatus,
     required MediaAnnotationConfig mediaAnnotationConfig,
     required List<LlmProfile> llmProfiles,
@@ -475,6 +476,7 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           runningPayload: runningPayload,
           audioSha256: manifest.audioSha256,
           linkedAudioPayload: linkedAudioPayload,
+          allowDeferForMissingLinkedAudio: audioTranscribeEnabled,
         );
         if (transcriptSeed.shouldDeferForLinkedAudio) {
           final queuedPayload = Map<String, Object?>.from(runningPayload);

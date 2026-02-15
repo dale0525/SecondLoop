@@ -63,6 +63,7 @@ VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
   required Map<String, Object?> runningPayload,
   required String? audioSha256,
   required Map<String, Object?>? linkedAudioPayload,
+  bool allowDeferForMissingLinkedAudio = true,
 }) {
   String read(Map<String, Object?> payload, String key) {
     final raw = payload[key];
@@ -95,10 +96,10 @@ VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
   }
 
   if (linkedAudioPayload == null) {
-    return const VideoManifestTranscriptSeed(
+    return VideoManifestTranscriptSeed(
       transcriptFull: '',
       transcriptExcerpt: '',
-      shouldDeferForLinkedAudio: true,
+      shouldDeferForLinkedAudio: allowDeferForMissingLinkedAudio,
     );
   }
 

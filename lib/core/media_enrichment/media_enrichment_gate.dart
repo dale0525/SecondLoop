@@ -621,6 +621,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             contentConfig: contentConfig,
             shouldTryMultimodalOcr: shouldTryMultimodalOcr,
             canUseNetworkOcr: canUseNetworkOcr,
+            audioTranscribeEnabled: audioTranscribeEnabled,
             subscriptionStatus: subscriptionStatus,
             mediaAnnotationConfig: effectiveMediaAnnotationConfig,
             llmProfiles: llmProfiles,

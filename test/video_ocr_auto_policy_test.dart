@@ -114,6 +114,21 @@ void main() {
     expect(result.transcriptExcerpt, isEmpty);
   });
 
+  test(
+      'resolveVideoManifestTranscriptSeed skips defer when linked transcript defer is disabled',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{},
+      audioSha256: 'sha-audio',
+      linkedAudioPayload: null,
+      allowDeferForMissingLinkedAudio: false,
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, isEmpty);
+    expect(result.transcriptExcerpt, isEmpty);
+  });
+
   test('resolveVideoManifestTranscriptSeed uses linked transcript payload', () {
     final result = resolveVideoManifestTranscriptSeed(
       runningPayload: const <String, Object?>{},
