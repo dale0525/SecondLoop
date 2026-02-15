@@ -382,10 +382,17 @@ jobs:
             --app "${app}" \
             --output "${dmg_path}" \
             --volume-name "SecondLoop"
+          dmg_name="$(basename "${dmg_path}")"
+          (
+            cd dist
+            shasum -a 256 "${dmg_name}" > "${dmg_name}.sha256"
+          )
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.dmg.sha256
 
   linux:
     needs: preflight
@@ -567,6 +574,33 @@ jobs:
             --notes-dir "${notes_dir}" \
             --facts dist/release_facts.json \
             --output dist/release-notes.md
+      - name: Append install guidance and build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          {
+            echo
+            echo "---"
+            echo
+            echo "## macOS Installation Note (Unsigned DMG)"
+            echo "- This macOS build is distributed without Apple Developer signing or notarization."
+            echo "- If macOS blocks first launch, Control-click the app, choose Open, then click Open again."
+            echo
+            echo "## Build Provenance"
+            echo "- Commit: \\`${GITHUB_SHA}\\`"
+            echo "- Workflow run: [#${GITHUB_RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo "- Workflow attempt: \\`${GITHUB_RUN_ATTEMPT}\\`"
+            echo "- Generated at (UTC): \\`${generated_at_utc}\\`"
+            echo
+            echo "## macOS 安装提示（未签名 DMG）"
+            echo "- 当前 macOS 安装包未使用 Apple Developer 签名或公证。"
+            echo "- 若首次启动被系统拦截，请按住 Control 点击应用，选择 打开，然后再次确认 打开。"
+            echo
+            echo "## Checksum Verification"
+            echo "- SHA256 checksum files are published as \\`*.dmg.sha256\\` assets."
+            echo "- Verify on macOS with \\`shasum -a 256 -c <dmg-file>.sha256\\`."
+          } >> dist/release-notes.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -575,6 +609,7 @@ jobs:
             dist/*.apk
             dist/*.aab
             dist/*.dmg
+            dist/*.dmg.sha256
             dist/*.msi
             dist/*.tar.gz
             dist/release-notes/*.json
