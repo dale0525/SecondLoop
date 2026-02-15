@@ -36,6 +36,8 @@ void main() {
       contains('build/macos/Build/Products/Debug/SecondLoop.app'),
     );
     expect(content, contains(r'rm -rf "${app_bundle_dir}"'));
+    expect(
+        content, contains('/usr/bin/codesign --verify --strict --verbose=2'));
 
     final declarationIndex = content.indexOf(
       'maybe_clear_macos_stale_app_bundle_for_speech_privacy()',

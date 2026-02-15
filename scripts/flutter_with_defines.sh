@@ -111,12 +111,17 @@ maybe_clear_macos_stale_app_bundle_for_speech_privacy() {
   speech_usage="$(/usr/libexec/PlistBuddy -c 'Print NSSpeechRecognitionUsageDescription' "${app_plist}" 2>/dev/null || true)"
   microphone_usage="$(/usr/libexec/PlistBuddy -c 'Print NSMicrophoneUsageDescription' "${app_plist}" 2>/dev/null || true)"
 
-  if trimmed_nonempty "${speech_usage}" && trimmed_nonempty "${microphone_usage}"; then
+  if ! trimmed_nonempty "${speech_usage}" || ! trimmed_nonempty "${microphone_usage}"; then
+    echo "SecondLoop: stale macOS app bundle missing speech privacy usage keys; removing ${app_bundle_dir}" >&2
+    rm -rf "${app_bundle_dir}"
     return 0
   fi
 
-  echo "SecondLoop: stale macOS app bundle missing speech privacy usage keys; removing ${app_bundle_dir}" >&2
-  rm -rf "${app_bundle_dir}"
+  if ! /usr/bin/codesign --verify --strict --verbose=2 "${app_bundle_dir}" >/dev/null 2>&1; then
+    echo "SecondLoop: stale macOS app bundle has invalid code signature; removing ${app_bundle_dir}" >&2
+    rm -rf "${app_bundle_dir}"
+    return 0
+  fi
 }
 
 if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL+set}" == "set" ]]; then

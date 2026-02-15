@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import Security
 import Speech
 
 private enum AudioTranscribeMethodKind {
@@ -56,6 +57,9 @@ private struct SpeechRecognizerSelection {
   let recognizer: SFSpeechRecognizer
   let localeId: String
 }
+
+private var speechAuthorizationInFlight = false
+private var speechAuthorizationWaiters = [((Bool, String?) -> Void)]()
 
 extension AppDelegate {
   func handleLocalRuntimeTranscribe(call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -264,65 +268,211 @@ extension AppDelegate {
   }
 
   @available(macOS 10.15, *)
-  private func speechUsageDescriptionPreflightError() -> String? {
-    let usageDescription = (Bundle.main.object(
-      forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription"
-    ) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+  private func usageDescriptionValue(
+    forInfoDictionaryKey key: String,
+    in dictionary: [String: Any]?
+  ) -> String {
+    let value = (dictionary?[key] as? String ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return value
+  }
 
-    if !usageDescription.isEmpty {
+  @available(macOS 10.15, *)
+  private func signedInfoPlist() -> [String: Any]? {
+    var staticCode: SecStaticCode?
+    let createStatus = SecStaticCodeCreateWithPath(
+      Bundle.main.bundleURL as CFURL,
+      SecCSFlags(rawValue: 0),
+      &staticCode
+    )
+
+    guard createStatus == errSecSuccess,
+          let staticCode = staticCode else {
+      NSLog(
+        "SecondLoop native stt warning: failed to read app static code (status: \(createStatus))"
+      )
       return nil
     }
 
-    NSLog(
-      "SecondLoop native stt blocked: missing NSSpeechRecognitionUsageDescription in bundle \(Bundle.main.bundlePath)"
+    var signingInfo: CFDictionary?
+    let infoStatus = SecCodeCopySigningInformation(
+      staticCode,
+      SecCSFlags(rawValue: kSecCSSigningInformation),
+      &signingInfo
     )
-    return "speech_permission_usage_description_missing"
+
+    guard infoStatus == errSecSuccess,
+          let signingInfo = signingInfo as? [String: Any],
+          let plist = signingInfo[kSecCodeInfoPList as String] as? [String: Any] else {
+      NSLog(
+        "SecondLoop native stt warning: failed to read app signing info plist (status: \(infoStatus))"
+      )
+      return nil
+    }
+
+    return plist
+  }
+
+  @available(macOS 10.15, *)
+  private func speechUsageDescriptionPreflightError() -> String? {
+    let bundlePath = Bundle.main.bundlePath
+    let runtimeInfo = Bundle.main.infoDictionary
+    let runtimeSpeechUsage = usageDescriptionValue(
+      forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription",
+      in: runtimeInfo
+    )
+    let runtimeMicUsage = usageDescriptionValue(
+      forInfoDictionaryKey: "NSMicrophoneUsageDescription",
+      in: runtimeInfo
+    )
+
+    if runtimeSpeechUsage.isEmpty {
+      NSLog(
+        "SecondLoop native stt blocked: missing NSSpeechRecognitionUsageDescription in bundle \(bundlePath)"
+      )
+      return "speech_permission_usage_description_missing"
+    }
+
+    if runtimeMicUsage.isEmpty {
+      NSLog(
+        "SecondLoop native stt blocked: missing NSMicrophoneUsageDescription in bundle \(bundlePath)"
+      )
+      return "speech_permission_usage_description_missing"
+    }
+
+    guard let signedPlist = signedInfoPlist() else {
+      return nil
+    }
+
+    let signedSpeechUsage = usageDescriptionValue(
+      forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription",
+      in: signedPlist
+    )
+    let signedMicUsage = usageDescriptionValue(
+      forInfoDictionaryKey: "NSMicrophoneUsageDescription",
+      in: signedPlist
+    )
+
+    if signedSpeechUsage.isEmpty {
+      NSLog(
+        "SecondLoop native stt blocked: signed Info.plist missing NSSpeechRecognitionUsageDescription in bundle \(bundlePath)"
+      )
+      return "speech_permission_usage_description_missing"
+    }
+
+    if signedMicUsage.isEmpty {
+      NSLog(
+        "SecondLoop native stt blocked: signed Info.plist missing NSMicrophoneUsageDescription in bundle \(bundlePath)"
+      )
+      return "speech_permission_usage_description_missing"
+    }
+
+    return nil
   }
 
   @available(macOS 10.15, *)
   private func requestSpeechAuthorizationIfNeeded(
     completion: @escaping (Bool, String?) -> Void
   ) {
-    func resolve(_ authorized: Bool, _ error: String?) {
-      if Thread.isMainThread {
-        completion(authorized, error)
-      } else {
-        DispatchQueue.main.async {
-          completion(authorized, error)
-        }
+    func enqueue() {
+      speechAuthorizationWaiters.append(completion)
+      if speechAuthorizationInFlight {
+        return
       }
+
+      speechAuthorizationInFlight = true
+      runSpeechAuthorizationRequest()
     }
 
+    if Thread.isMainThread {
+      enqueue()
+      return
+    }
+
+    DispatchQueue.main.async {
+      enqueue()
+    }
+  }
+
+  @available(macOS 10.15, *)
+  private func runSpeechAuthorizationRequest() {
     if let preflightError = speechUsageDescriptionPreflightError() {
-      resolve(false, preflightError)
+      resolveSpeechAuthorizationWaiters(authorized: false, error: preflightError)
       return
     }
 
     let status = SFSpeechRecognizer.authorizationStatus()
     switch status {
     case .authorized:
-      resolve(true, nil)
+      resolveSpeechAuthorizationWaiters(authorized: true, error: nil)
     case .denied:
-      resolve(false, "speech_permission_denied")
+      resolveSpeechAuthorizationWaiters(
+        authorized: false,
+        error: "speech_permission_denied"
+      )
     case .restricted:
-      resolve(false, "speech_permission_restricted")
+      resolveSpeechAuthorizationWaiters(
+        authorized: false,
+        error: "speech_permission_restricted"
+      )
     case .notDetermined:
       SFSpeechRecognizer.requestAuthorization { nextStatus in
-        switch nextStatus {
-        case .authorized:
-          resolve(true, nil)
-        case .denied:
-          resolve(false, "speech_permission_denied")
-        case .restricted:
-          resolve(false, "speech_permission_restricted")
-        case .notDetermined:
-          resolve(false, "speech_permission_not_determined")
-        @unknown default:
-          resolve(false, "speech_permission_unknown")
+        DispatchQueue.main.async {
+          switch nextStatus {
+          case .authorized:
+            self.resolveSpeechAuthorizationWaiters(authorized: true, error: nil)
+          case .denied:
+            self.resolveSpeechAuthorizationWaiters(
+              authorized: false,
+              error: "speech_permission_denied"
+            )
+          case .restricted:
+            self.resolveSpeechAuthorizationWaiters(
+              authorized: false,
+              error: "speech_permission_restricted"
+            )
+          case .notDetermined:
+            self.resolveSpeechAuthorizationWaiters(
+              authorized: false,
+              error: "speech_permission_not_determined"
+            )
+          @unknown default:
+            self.resolveSpeechAuthorizationWaiters(
+              authorized: false,
+              error: "speech_permission_unknown"
+            )
+          }
         }
       }
     @unknown default:
-      resolve(false, "speech_permission_unknown")
+      resolveSpeechAuthorizationWaiters(
+        authorized: false,
+        error: "speech_permission_unknown"
+      )
+    }
+  }
+
+  @available(macOS 10.15, *)
+  private func resolveSpeechAuthorizationWaiters(
+    authorized: Bool,
+    error: String?
+  ) {
+    if !Thread.isMainThread {
+      DispatchQueue.main.async {
+        self.resolveSpeechAuthorizationWaiters(
+          authorized: authorized,
+          error: error
+        )
+      }
+      return
+    }
+
+    let waiters = speechAuthorizationWaiters
+    speechAuthorizationWaiters.removeAll(keepingCapacity: true)
+    speechAuthorizationInFlight = false
+
+    for waiter in waiters {
+      waiter(authorized, error)
     }
   }
 
