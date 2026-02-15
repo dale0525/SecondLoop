@@ -82,6 +82,19 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         )
         self.assertIn('set position of item "Applications"', script_text)
 
+    def test_macos_release_publishes_dmg_checksums(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('shasum -a 256 "${dmg_name}" > "${dmg_name}.sha256"', workflow_text)
+        self.assertIn('dist/*.dmg.sha256', workflow_text)
+
+    def test_release_notes_include_unsigned_macos_and_build_provenance_guidance(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('## macOS Installation Note (Unsigned DMG)', workflow_text)
+        self.assertIn('## Build Provenance', workflow_text)
+        self.assertIn('actions/runs/${GITHUB_RUN_ID}', workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()
