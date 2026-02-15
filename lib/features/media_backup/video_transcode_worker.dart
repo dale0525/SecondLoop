@@ -274,7 +274,7 @@ final class VideoTranscodeWorker {
   static Future<VideoPreviewExtractResult> extractPreviewFrames(
     Uint8List videoBytes, {
     required String sourceMimeType,
-    int maxKeyframes = 4,
+    int maxKeyframes = 12,
     int frameIntervalSeconds = 8,
     String keyframeKind = 'scene',
     VideoTranscodeCommandRunner? commandRunner,
@@ -302,8 +302,8 @@ final class VideoTranscodeWorker {
       );
     }
 
-    final safeMaxKeyframes = maxKeyframes.clamp(1, 8);
-    final safeInterval = frameIntervalSeconds.clamp(1, 30);
+    final safeMaxKeyframes = maxKeyframes.clamp(1, 24);
+    final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final normalizedKind = keyframeKind.trim().isEmpty
         ? 'scene'
         : keyframeKind.trim().toLowerCase();
@@ -318,6 +318,17 @@ final class VideoTranscodeWorker {
       final scenePattern = '${tempDir.path}/keyframe_scene_%03d.jpg';
       final fpsPattern = '${tempDir.path}/keyframe_fps_%03d.jpg';
       await File(inputPath).writeAsBytes(videoBytes, flush: true);
+
+      final videoDurationSeconds = await _readVideoDurationSeconds(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+      );
+      final effectiveInterval = _resolveAdaptiveFrameIntervalSeconds(
+        baseIntervalSeconds: safeInterval,
+        maxFrames: safeMaxKeyframes,
+        durationSeconds: videoDurationSeconds,
+      );
 
       final posterArgs = <String>[
         '-hide_banner',
@@ -348,7 +359,8 @@ final class VideoTranscodeWorker {
         ffmpegPath: ffmpegPath,
         run: run,
         inputPath: inputPath,
-        filter: "select='eq(n\\,0)+gt(scene\\,0.08)'",
+        filter:
+            "select='eq(n\\,0)+gte(t-prev_selected_t\\,$effectiveInterval)*gt(scene\\,0.08)'",
         maxFrames: safeMaxKeyframes,
         outputPattern: scenePattern,
         useVariableFrameRateSync: true,
@@ -367,7 +379,7 @@ final class VideoTranscodeWorker {
               ffmpegPath: ffmpegPath,
               run: run,
               inputPath: inputPath,
-              filter: 'fps=1/$safeInterval',
+              filter: 'fps=1/$effectiveInterval',
               maxFrames: remainingFrames,
               outputPattern: fpsPattern,
             )
@@ -394,7 +406,7 @@ final class VideoTranscodeWorker {
               index: frameIndex,
               bytes: frameBytes,
               mimeType: 'image/jpeg',
-              tMs: frameIndex * safeInterval * 1000,
+              tMs: frameIndex * effectiveInterval * 1000,
               kind: normalizedKind,
             ),
           );
@@ -465,6 +477,49 @@ final class VideoTranscodeWorker {
     ];
     final result = await run(ffmpegPath, args);
     return result.exitCode == 0;
+  }
+
+  static Future<double> _readVideoDurationSeconds({
+    required String ffmpegPath,
+    required VideoTranscodeCommandRunner run,
+    required String inputPath,
+  }) async {
+    final args = <String>[
+      '-hide_banner',
+      '-i',
+      inputPath,
+      '-f',
+      'null',
+      '-',
+    ];
+    try {
+      final result = await run(ffmpegPath, args);
+      final stderr = result.stderr?.toString() ?? '';
+      final match = RegExp(
+        r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)',
+      ).firstMatch(stderr);
+      if (match == null) return 0;
+      final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+      final seconds = double.tryParse(match.group(3) ?? '') ?? 0;
+      return hours * 3600 + minutes * 60 + seconds;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static int _resolveAdaptiveFrameIntervalSeconds({
+    required int baseIntervalSeconds,
+    required int maxFrames,
+    required double durationSeconds,
+  }) {
+    if (durationSeconds <= 0 || maxFrames <= 0) {
+      return baseIntervalSeconds;
+    }
+    final targetInterval = (durationSeconds / maxFrames).ceil();
+    return targetInterval > baseIntervalSeconds
+        ? targetInterval
+        : baseIntervalSeconds;
   }
 
   static Future<List<File>> _listPreviewFrameFiles(

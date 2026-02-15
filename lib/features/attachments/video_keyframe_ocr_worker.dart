@@ -396,7 +396,7 @@ final class VideoKeyframeOcrWorker {
     final run = commandRunner ?? Process.run;
     final imageOcr = ocrImageFn ?? PlatformPdfOcr.tryOcrImageBytes;
     final safeMaxFrames = maxFrames.clamp(1, 120);
-    final safeInterval = frameIntervalSeconds.clamp(1, 60);
+    final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final hints =
         languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
 
@@ -409,11 +409,23 @@ final class VideoKeyframeOcrWorker {
       final fpsPattern = '${tempDir.path}/frame_fps_%04d.jpg';
       await File(inputPath).writeAsBytes(videoBytes, flush: true);
 
+      final videoDurationSeconds = await _readVideoDurationSeconds(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+      );
+      final effectiveInterval = _resolveAdaptiveFrameIntervalSeconds(
+        baseIntervalSeconds: safeInterval,
+        maxFrames: safeMaxFrames,
+        durationSeconds: videoDurationSeconds,
+      );
+
       final sceneResult = await _extractFramesWithFilter(
         ffmpegPath: ffmpegPath,
         run: run,
         inputPath: inputPath,
-        filter: "select='eq(n\\,0)+gt(scene\\,0.08)'",
+        filter:
+            "select='eq(n\\,0)+gte(t-prev_selected_t\\,$effectiveInterval)*gt(scene\\,0.08)'",
         maxFrames: safeMaxFrames,
         outputPattern: scenePattern,
         useVariableFrameRateSync: true,
@@ -431,7 +443,7 @@ final class VideoKeyframeOcrWorker {
               ffmpegPath: ffmpegPath,
               run: run,
               inputPath: inputPath,
-              filter: 'fps=1/$safeInterval',
+              filter: 'fps=1/$effectiveInterval',
               maxFrames: remainingFrames,
               outputPattern: fpsPattern,
             )
@@ -531,6 +543,49 @@ Future<bool> _extractFramesWithFilter({
   ];
   final result = await run(ffmpegPath, args);
   return result.exitCode == 0;
+}
+
+Future<double> _readVideoDurationSeconds({
+  required String ffmpegPath,
+  required VideoOcrCommandRunner run,
+  required String inputPath,
+}) async {
+  final args = <String>[
+    '-hide_banner',
+    '-i',
+    inputPath,
+    '-f',
+    'null',
+    '-',
+  ];
+  try {
+    final result = await run(ffmpegPath, args);
+    final stderr = result.stderr?.toString() ?? '';
+    final match = RegExp(
+      r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)',
+    ).firstMatch(stderr);
+    if (match == null) return 0;
+    final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+    final seconds = double.tryParse(match.group(3) ?? '') ?? 0;
+    return hours * 3600 + minutes * 60 + seconds;
+  } catch (_) {
+    return 0;
+  }
+}
+
+int _resolveAdaptiveFrameIntervalSeconds({
+  required int baseIntervalSeconds,
+  required int maxFrames,
+  required double durationSeconds,
+}) {
+  if (durationSeconds <= 0 || maxFrames <= 0) {
+    return baseIntervalSeconds;
+  }
+  final targetInterval = (durationSeconds / maxFrames).ceil();
+  return targetInterval > baseIntervalSeconds
+      ? targetInterval
+      : baseIntervalSeconds;
 }
 
 Future<List<File>> _listExtractedFrames(

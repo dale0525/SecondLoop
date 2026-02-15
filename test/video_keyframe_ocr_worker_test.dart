@@ -152,6 +152,13 @@ void main() {
       ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
       commandRunner: (executable, arguments) async {
         expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+        final filterIndex = arguments.indexOf('-vf');
+        if (filterIndex >= 0 && arguments.last.contains('frame_fps_')) {
+          expect(arguments[filterIndex + 1], 'fps=1/120');
+        }
         final outputPattern = arguments.last;
         if (outputPattern.contains('frame_scene_')) {
           sceneRunCount += 1;
