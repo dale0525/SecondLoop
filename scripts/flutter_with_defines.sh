@@ -85,6 +85,40 @@ maybe_clear_macos_module_cache_conflict() {
   rm -rf "${module_cache_root}"
 }
 
+trimmed_nonempty() {
+  local value="$1"
+  [[ -n "${value//[[:space:]]/}" ]]
+}
+
+maybe_clear_macos_stale_app_bundle_for_speech_privacy() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+
+  if ! should_sanitize_macos_module_cache; then
+    return 0
+  fi
+
+  local app_bundle_dir="${repo_root}/build/macos/Build/Products/Debug/SecondLoop.app"
+  local app_plist="${app_bundle_dir}/Contents/Info.plist"
+
+  if [[ ! -f "${app_plist}" ]]; then
+    return 0
+  fi
+
+  local speech_usage
+  local microphone_usage
+  speech_usage="$(/usr/libexec/PlistBuddy -c 'Print NSSpeechRecognitionUsageDescription' "${app_plist}" 2>/dev/null || true)"
+  microphone_usage="$(/usr/libexec/PlistBuddy -c 'Print NSMicrophoneUsageDescription' "${app_plist}" 2>/dev/null || true)"
+
+  if trimmed_nonempty "${speech_usage}" && trimmed_nonempty "${microphone_usage}"; then
+    return 0
+  fi
+
+  echo "SecondLoop: stale macOS app bundle missing speech privacy usage keys; removing ${app_bundle_dir}" >&2
+  rm -rf "${app_bundle_dir}"
+}
+
 if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL+set}" == "set" ]]; then
   cat >&2 <<'EOF'
 SecondLoop: do not set SECONDLOOP_CLOUD_GATEWAY_BASE_URL in `.env.local`.
@@ -155,6 +189,7 @@ EOF
 fi
 
 maybe_clear_macos_module_cache_conflict
+maybe_clear_macos_stale_app_bundle_for_speech_privacy
 
 if (( ${#defines[@]} > 0 )); then
   exec dart pub global run fvm:main flutter "$@" "${defines[@]}"
