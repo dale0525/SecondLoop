@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 
 final class VideoTranscodeSegment {
   const VideoTranscodeSegment({
@@ -399,6 +401,8 @@ final class VideoTranscodeWorker {
                 prefix: 'keyframe_fps_')
             : const <File>[];
         final seenFrames = <String>{};
+        final acceptedFrameBytes = <Uint8List>[];
+        final acceptedFrameSignatures = <({int hash, double darkRatio})?>[];
         final frameFiles = <File>[...sceneFiles, ...fpsFiles];
         for (final frameFile in frameFiles) {
           final frameBytes = await frameFile.readAsBytes();
@@ -407,13 +411,38 @@ final class VideoTranscodeWorker {
           if (!seenFrames.add(frameSignature)) {
             continue;
           }
-          final frameIndex = keyframes.length;
+
+          final visualSignature = _buildFrameVisualSignature(frameBytes);
+          if (acceptedFrameBytes.isNotEmpty && visualSignature != null) {
+            final previousSignature = acceptedFrameSignatures.last;
+            if (previousSignature != null &&
+                _areFramesNearDuplicate(
+                  previousSignature,
+                  visualSignature,
+                )) {
+              if (_shouldPreferRicherFrame(
+                previousSignature,
+                visualSignature,
+              )) {
+                acceptedFrameBytes[acceptedFrameBytes.length - 1] = frameBytes;
+                acceptedFrameSignatures[acceptedFrameSignatures.length - 1] =
+                    visualSignature;
+              }
+              continue;
+            }
+          }
+
+          acceptedFrameBytes.add(frameBytes);
+          acceptedFrameSignatures.add(visualSignature);
+        }
+
+        for (var i = 0; i < acceptedFrameBytes.length; i++) {
           keyframes.add(
             VideoPreviewFrame(
-              index: frameIndex,
-              bytes: frameBytes,
+              index: i,
+              bytes: acceptedFrameBytes[i],
               mimeType: 'image/jpeg',
-              tMs: frameIndex * effectiveInterval * 1000,
+              tMs: i * effectiveInterval * 1000,
               kind: normalizedKind,
             ),
           );
@@ -549,6 +578,80 @@ final class VideoTranscodeWorker {
 
     final effective = recommended > safeBase ? recommended : safeBase;
     return effective.clamp(1, 48);
+  }
+
+  static ({int hash, double darkRatio})? _buildFrameVisualSignature(
+    Uint8List bytes,
+  ) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+
+      final resized = img.copyResize(
+        decoded,
+        width: 8,
+        height: 8,
+        interpolation: img.Interpolation.average,
+      );
+
+      final lumas = <int>[];
+      var sum = 0;
+      var darkCount = 0;
+      for (var y = 0; y < resized.height; y++) {
+        for (var x = 0; x < resized.width; x++) {
+          final pixel = resized.getPixel(x, y);
+          final luma =
+              ((pixel.r * 299 + pixel.g * 587 + pixel.b * 114) / 1000).round();
+          lumas.add(luma);
+          sum += luma;
+          if (luma < 235) {
+            darkCount += 1;
+          }
+        }
+      }
+      if (lumas.isEmpty) return null;
+
+      final average = sum / lumas.length;
+      var hash = 0;
+      for (var i = 0; i < lumas.length; i++) {
+        if (lumas[i] >= average) {
+          hash |= 1 << i;
+        }
+      }
+
+      return (
+        hash: hash,
+        darkRatio: darkCount / lumas.length,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _areFramesNearDuplicate(
+    ({int hash, double darkRatio}) previous,
+    ({int hash, double darkRatio}) current,
+  ) {
+    final hashDistance = _hammingDistance64(previous.hash, current.hash);
+    final darkRatioDelta = (previous.darkRatio - current.darkRatio).abs();
+    return hashDistance <= 8 && darkRatioDelta <= 0.2;
+  }
+
+  static bool _shouldPreferRicherFrame(
+    ({int hash, double darkRatio}) previous,
+    ({int hash, double darkRatio}) current,
+  ) {
+    return (current.darkRatio - previous.darkRatio) >= 0.006;
+  }
+
+  static int _hammingDistance64(int a, int b) {
+    var xor = (a ^ b) & 0xFFFFFFFFFFFFFFFF;
+    var count = 0;
+    while (xor != 0) {
+      xor &= (xor - 1);
+      count += 1;
+    }
+    return count;
   }
 
   static Future<List<File>> _listPreviewFrameFiles(

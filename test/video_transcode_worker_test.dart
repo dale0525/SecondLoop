@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:secondloop/features/media_backup/video_transcode_worker.dart';
 
 void main() {
@@ -357,6 +358,45 @@ void main() {
     expect(result.keyframes.length, 1);
   });
 
+  test('VideoTranscodeWorker keeps later frame for incremental slide builds',
+      () async {
+    final input = Uint8List.fromList(const <int>[12, 13, 14]);
+    final earlyFrameBytes = _buildSlideFrameBytes(hasExtraBullet: false);
+    final lateFrameBytes = _buildSlideFrameBytes(hasExtraBullet: true);
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      input,
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+
+        final outputPath = arguments.last;
+        final outputFile = File(outputPath);
+        await outputFile.parent.create(recursive: true);
+        if (outputPath.endsWith('poster.jpg')) {
+          await outputFile.writeAsBytes(const <int>[1, 2, 3]);
+          return ProcessResult(0, 0, '', '');
+        }
+        if (outputPath.contains('keyframe_scene_')) {
+          return ProcessResult(0, 1, '', 'scene failed');
+        }
+
+        final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+        final keyframe1 = File(outputPath.replaceAll('%03d', '001'));
+        await keyframe0.writeAsBytes(earlyFrameBytes);
+        await keyframe1.writeAsBytes(lateFrameBytes);
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(result.keyframes.length, 1);
+    expect(result.keyframes.first.bytes, lateFrameBytes);
+  });
+
   test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
       () async {
     final result = await VideoTranscodeWorker.extractPreviewFrames(
@@ -369,4 +409,36 @@ void main() {
     expect(result.keyframes, isEmpty);
     expect(result.hasAnyPosterOrKeyframe, isFalse);
   });
+}
+
+Uint8List _buildSlideFrameBytes({required bool hasExtraBullet}) {
+  final image = img.Image(width: 320, height: 180);
+  img.fill(image, color: img.ColorRgb8(255, 255, 255));
+  img.fillRect(
+    image,
+    x1: 20,
+    y1: 20,
+    x2: 300,
+    y2: 36,
+    color: img.ColorRgb8(20, 20, 20),
+  );
+  img.fillRect(
+    image,
+    x1: 36,
+    y1: 60,
+    x2: 280,
+    y2: 72,
+    color: img.ColorRgb8(30, 30, 30),
+  );
+  if (hasExtraBullet) {
+    img.fillRect(
+      image,
+      x1: 36,
+      y1: 88,
+      x2: 260,
+      y2: 100,
+      color: img.ColorRgb8(30, 30, 30),
+    );
+  }
+  return Uint8List.fromList(img.encodeJpg(image, quality: 90));
 }
