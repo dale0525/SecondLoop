@@ -29,14 +29,20 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
       effectiveEngine: effectiveEngine,
     );
     final supportsMethodChannelLocalRuntime =
-        _supportsMethodChannelLocalRuntimeAudioTranscribe();
+        supportsPlatformLocalRuntimeAudioTranscribe();
+    final localRuntimeEnabledForChain =
+        shouldEnableLocalFallback && supportsMethodChannelLocalRuntime;
+    final skipWindowsNativeFallbackBecauseLocalRuntimeMapped = !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.windows &&
+        localRuntimeEnabledForChain;
 
     final offlineChain = <AudioTranscribeClient>[
-      if (shouldEnableLocalFallback && supportsMethodChannelLocalRuntime)
+      if (localRuntimeEnabledForChain)
         LocalRuntimeAudioTranscribeClient(
           modelName: 'local_runtime',
         ),
-      ..._buildOptionalNativeSttAudioTranscribeFallbacks(),
+      if (!skipWindowsNativeFallbackBecauseLocalRuntimeMapped)
+        ..._buildOptionalNativeSttAudioTranscribeFallbacks(),
     ];
 
     final networkChain = <AudioTranscribeClient>[
@@ -99,10 +105,5 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     if (chain.isEmpty) return null;
     if (chain.length == 1) return chain.first;
     return FallbackAudioTranscribeClient(chain: chain);
-  }
-
-  bool _supportsMethodChannelLocalRuntimeAudioTranscribe() {
-    if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.macOS;
   }
 }

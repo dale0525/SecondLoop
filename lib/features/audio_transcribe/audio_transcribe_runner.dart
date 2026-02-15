@@ -157,6 +157,12 @@ bool supportsPlatformLocalRuntimeAudioTranscribe() {
       defaultTargetPlatform == TargetPlatform.windows;
 }
 
+bool supportsPlatformLocalAudioTranscribe() {
+  if (kIsWeb) return false;
+  return defaultTargetPlatform == TargetPlatform.macOS ||
+      defaultTargetPlatform == TargetPlatform.windows;
+}
+
 bool shouldEnableLocalRuntimeAudioFallback({
   required bool supportsLocalRuntime,
   required bool cloudEnabled,

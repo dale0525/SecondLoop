@@ -16,7 +16,7 @@ final class MediaCapabilitySourcePrefs {
     final prefs = await SharedPreferences.getInstance();
     final value = _decode(prefs.getString(_audioSourceKey));
     if (value == MediaSourcePreference.local &&
-        !supportsPlatformLocalRuntimeAudioTranscribe()) {
+        !supportsPlatformLocalAudioTranscribe()) {
       return MediaSourcePreference.auto;
     }
     return value;
@@ -65,7 +65,7 @@ final class MediaCapabilitySourcePrefs {
     };
   }
 
-  static bool supportsPlatformLocalRuntimeAudioTranscribe() {
+  static bool supportsPlatformLocalAudioTranscribe() {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;

@@ -74,6 +74,10 @@ dependencies:
   syncfusion_flutter_pdf: ^29.1.38
   just_audio_windows: ^0.2.2
 
+dependency_overrides:
+  just_audio_windows:
+    path: third_party/just_audio_windows_patched
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

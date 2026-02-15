@@ -119,6 +119,100 @@ void main() {
     expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
   });
 
+  test('supports platform local audio transcribe on macOS and Windows', () {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    expect(supportsPlatformLocalAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    expect(supportsPlatformLocalAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    expect(supportsPlatformLocalAudioTranscribe(), isFalse);
+  });
+
+  test(
+      'selectPlatformLocalRuntimeAudioTranscribeRequest uses windows native stt when windows host',
+      () async {
+    var methodChannelCalls = 0;
+    var windowsNativeCalls = 0;
+    final request = selectPlatformLocalRuntimeAudioTranscribeRequest(
+      methodChannelRequest: ({
+        required appDir,
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        methodChannelCalls += 1;
+        return jsonEncode(<String, Object?>{'text': 'from_method_channel'});
+      },
+      windowsNativeSttRequest: ({
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        windowsNativeCalls += 1;
+        return jsonEncode(<String, Object?>{'text': 'from_windows_native'});
+      },
+      isWindowsHost: true,
+    );
+
+    final raw = await request(
+      appDir: '/tmp/secondloop-test',
+      lang: 'en',
+      mimeType: 'audio/wav',
+      audioBytes: Uint8List.fromList(const <int>[0x52, 0x49, 0x46, 0x46]),
+    );
+
+    expect(methodChannelCalls, 0);
+    expect(windowsNativeCalls, 1);
+    expect((jsonDecode(raw) as Map<String, dynamic>)['text'],
+        'from_windows_native');
+  });
+
+  test(
+      'selectPlatformLocalRuntimeAudioTranscribeRequest uses method channel on non-windows host',
+      () async {
+    var methodChannelCalls = 0;
+    var windowsNativeCalls = 0;
+    final request = selectPlatformLocalRuntimeAudioTranscribeRequest(
+      methodChannelRequest: ({
+        required appDir,
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        methodChannelCalls += 1;
+        return jsonEncode(<String, Object?>{'text': 'from_method_channel'});
+      },
+      windowsNativeSttRequest: ({
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        windowsNativeCalls += 1;
+        return jsonEncode(<String, Object?>{'text': 'from_windows_native'});
+      },
+      isWindowsHost: false,
+    );
+
+    final raw = await request(
+      appDir: '/tmp/secondloop-test',
+      lang: 'en',
+      mimeType: 'audio/mpeg',
+      audioBytes: Uint8List.fromList(const <int>[0x49, 0x44, 0x33]),
+    );
+
+    expect(methodChannelCalls, 1);
+    expect(windowsNativeCalls, 0);
+    expect((jsonDecode(raw) as Map<String, dynamic>)['text'],
+        'from_method_channel');
+  });
+
   test('local runtime fallback is disabled when platform support is missing',
       () {
     final enabled = shouldEnableLocalRuntimeAudioFallback(

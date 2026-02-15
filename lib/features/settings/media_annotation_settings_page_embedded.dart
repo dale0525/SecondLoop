@@ -270,7 +270,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               context.t.settings.aiSelection.mediaUnderstanding.preference;
           final audioRoute = _resolveCapabilityRoute(
             _audioSourcePreference,
-            hasLocalCapability: supportsPlatformLocalRuntimeAudioTranscribe(),
+            hasLocalCapability: supportsPlatformLocalAudioTranscribe(),
           );
 
           return <Widget>[
@@ -373,7 +373,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       title: sourceLabels.byok.title,
                       subtitle: sourceLabels.byok.description,
                     ),
-                    if (supportsPlatformLocalRuntimeAudioTranscribe())
+                    if (supportsPlatformLocalAudioTranscribe())
                       _buildSourcePreferenceTile(
                         value: MediaSourcePreference.local,
                         groupValue: _audioSourcePreference,

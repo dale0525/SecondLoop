@@ -56,4 +56,19 @@ void main() {
     expect(await MediaCapabilitySourcePrefs.readAudio(),
         MediaSourcePreference.auto);
   });
+
+  test('audio source local stays local on windows', () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+    SharedPreferences.setMockInitialValues({
+      'media_capability_audio_source_preference_v1': 'local',
+    });
+
+    expect(await MediaCapabilitySourcePrefs.readAudio(),
+        MediaSourcePreference.local);
+  });
 }

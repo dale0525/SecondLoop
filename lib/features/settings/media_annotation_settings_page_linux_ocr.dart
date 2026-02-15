@@ -141,6 +141,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
         .toLowerCase()
         .startsWith('zh');
     final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    final isWindows = Theme.of(context).platform == TargetPlatform.windows;
     final statusIcon = !status.supported
         ? Icons.info_outline
         : (status.installed ? Icons.check_circle : Icons.error_outline);
@@ -157,9 +158,13 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
           ? (zh
               ? 'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。'
               : 'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).')
-          : (zh
-              ? '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。'
-              : 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.'),
+          : isWindows
+              ? (zh
+                  ? '此处仅展示本地 OCR runtime 状态。Windows 音频转写走系统原生 STT，不依赖这里的 runtime。'
+                  : 'This card only shows local OCR runtime status. Windows audio transcription uses native STT and does not depend on this runtime.')
+              : (zh
+                  ? '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。'
+                  : 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.'),
       statusLabel: _desktopRuntimeSummaryLabel(context, status),
       actions: [
         ListTile(
@@ -217,6 +222,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     BuildContext context,
     LinuxOcrModelStatus status,
   ) {
+    final isWindows = Theme.of(context).platform == TargetPlatform.windows;
     final zh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
@@ -230,6 +236,9 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     if (!status.installed) {
       return zh ? '状态：未安装' : 'Status: runtime missing';
     }
+    if (isWindows) {
+      return zh ? '状态：OCR运行时健康' : 'Status: OCR runtime healthy';
+    }
     return zh ? '状态：健康' : 'Status: healthy';
   }
 
@@ -237,6 +246,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     BuildContext context,
     LinuxOcrModelStatus status,
   ) {
+    final isWindows = Theme.of(context).platform == TargetPlatform.windows;
     final zh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
@@ -262,6 +272,11 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
       return zh ? '运行时缺失' : 'Runtime missing';
     }
     final size = _formatDataSize(status.totalBytes);
+    if (isWindows) {
+      return zh
+          ? 'OCR运行时健康（${status.modelCount} 文件, $size）'
+          : 'OCR runtime healthy (${status.modelCount} files, $size)';
+    }
     return zh
         ? '运行时健康（${status.modelCount} 文件, $size）'
         : 'Runtime healthy (${status.modelCount} files, $size)';
@@ -305,6 +320,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
 
   Future<void> _deleteLinuxOcrModels() async {
     if (_busy || _linuxOcrBusy) return;
+    final isWindows = Theme.of(context).platform == TargetPlatform.windows;
     final zh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
@@ -315,9 +331,13 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
             return AlertDialog(
               title: Text(zh ? '清除本地运行时' : 'Clear Local Runtime'),
               content: Text(
-                zh
-                    ? '清除后会删除本地 OCR/转写共用的桌面 runtime 文件。'
-                    : 'This removes shared desktop runtime files used by local OCR/transcription.',
+                isWindows
+                    ? (zh
+                        ? '清除后会删除本地 OCR runtime 文件。Windows 音频转写仍走系统原生 STT。'
+                        : 'This removes local OCR runtime files. Windows audio transcription still uses native STT.')
+                    : (zh
+                        ? '清除后会删除本地 OCR/转写共用的桌面 runtime 文件。'
+                        : 'This removes shared desktop runtime files used by local OCR/transcription.'),
               ),
               actions: [
                 TextButton(
