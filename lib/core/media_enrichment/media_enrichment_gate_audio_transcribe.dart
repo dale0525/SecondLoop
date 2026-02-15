@@ -2,7 +2,7 @@ part of 'media_enrichment_gate.dart';
 
 const bool _kEnableMacosNativeSttFallback = bool.fromEnvironment(
   'SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 final class _AudioTranscribeClientSelection {

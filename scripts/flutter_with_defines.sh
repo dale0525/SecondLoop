@@ -24,6 +24,67 @@ has_dart_define() {
   return 1
 }
 
+should_sanitize_macos_module_cache() {
+  local arg
+  local expects_device_id=0
+
+  for arg in "${all_args[@]}"; do
+    if (( expects_device_id == 1 )); then
+      if [[ "${arg}" == "macos" ]]; then
+        return 0
+      fi
+      expects_device_id=0
+    fi
+
+    case "${arg}" in
+      macos|--device-id=macos|-dmacos)
+        return 0
+        ;;
+      -d|--device-id)
+        expects_device_id=1
+        ;;
+    esac
+  done
+
+  return 1
+}
+
+maybe_clear_macos_module_cache_conflict() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+
+  if ! should_sanitize_macos_module_cache; then
+    return 0
+  fi
+
+  local module_cache_root="${repo_root}/build/macos/ModuleCache.noindex"
+  if [[ ! -d "${module_cache_root}" ]]; then
+    return 0
+  fi
+
+  local cache_dir
+  local has_conflict=0
+
+  shopt -s nullglob
+  for cache_dir in "${module_cache_root}"/*; do
+    [[ -d "${cache_dir}" ]] || continue
+    local flutter_modules=("${cache_dir}"/FlutterMacOS-*.pcm)
+    if (( ${#flutter_modules[@]} > 1 )); then
+      has_conflict=1
+      break
+    fi
+  done
+  shopt -u nullglob
+
+  if (( has_conflict == 0 )); then
+    return 0
+  fi
+
+  echo "SecondLoop: detected conflicting FlutterMacOS module cache; removing ${module_cache_root}" >&2
+  rm -rf "${module_cache_root}"
+}
+
 if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL+set}" == "set" ]]; then
   cat >&2 <<'EOF'
 SecondLoop: do not set SECONDLOOP_CLOUD_GATEWAY_BASE_URL in `.env.local`.
@@ -92,6 +153,8 @@ SecondLoop: missing SECONDLOOP_FIREBASE_WEB_API_KEY.
 - Fill in `SECONDLOOP_FIREBASE_WEB_API_KEY=...`
 EOF
 fi
+
+maybe_clear_macos_module_cache_conflict
 
 if (( ${#defines[@]} > 0 )); then
   exec dart pub global run fvm:main flutter "$@" "${defines[@]}"

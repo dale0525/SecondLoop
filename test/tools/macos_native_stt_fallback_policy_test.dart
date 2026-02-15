@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('macos speech fallback is opt-in via dart-define', () {
+  test('macos speech fallback is enabled by default with dart-define override',
+      () {
     final content = File(
       'lib/core/media_enrichment/media_enrichment_gate_audio_transcribe.dart',
     ).readAsStringSync();
@@ -13,6 +14,7 @@ void main() {
       contains('SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK'),
     );
     expect(content, contains('bool.fromEnvironment'));
+    expect(content, contains('defaultValue: true'));
     expect(content, contains('bool _shouldEnableMacosSpeechFallback()'));
     expect(content, contains('if (!_shouldEnableMacosSpeechFallback())'));
 

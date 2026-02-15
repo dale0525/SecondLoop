@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/content_enrichment/audio_transcribe_failure_reason.dart';
 import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
 
 part 'audio_transcribe_runner_clients.dart';

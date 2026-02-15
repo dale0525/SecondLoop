@@ -143,7 +143,7 @@ extension AppDelegate {
         return
       }
       guard authorized else {
-        completion(nil, authError ?? "speech_authorization_denied")
+        completion(nil, authError ?? "speech_permission_denied")
         return
       }
 
@@ -151,7 +151,7 @@ extension AppDelegate {
         for: preferredLang,
         requiresOnDeviceRecognition: requiresOnDeviceRecognition
       ) else {
-        completion(nil, "speech_recognizer_unavailable")
+        completion(nil, "speech_runtime_unavailable")
         return
       }
 
@@ -176,7 +176,7 @@ extension AppDelegate {
 
       task = recognizer.recognitionTask(with: request) { speechResult, error in
         if let error = error {
-          finish(payload: nil, error: error.localizedDescription)
+          finish(payload: nil, error: self.normalizeSpeechRecognitionError(error))
           return
         }
         guard let speechResult = speechResult, speechResult.isFinal else {
@@ -222,6 +222,48 @@ extension AppDelegate {
   }
 
   @available(macOS 10.15, *)
+  private func normalizeSpeechRecognitionError(_ error: Error) -> String {
+    let nsError = error as NSError
+    let message = nsError.localizedDescription
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let lower = message.lowercased()
+
+    if lower.contains("siri") &&
+      lower.contains("dictation") &&
+      (lower.contains("disable") || lower.contains("disabled")) {
+      return "speech_service_disabled"
+    }
+
+    if lower.contains("not authorized") ||
+      lower.contains("permission") ||
+      lower.contains("denied") {
+      return "speech_permission_denied"
+    }
+
+    if lower.contains("restricted") {
+      return "speech_permission_restricted"
+    }
+
+    if lower.contains("not available") || lower.contains("unavailable") {
+      return "speech_runtime_unavailable"
+    }
+
+    if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1101 {
+      return "speech_service_disabled"
+    }
+
+    if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1100 {
+      return "speech_runtime_unavailable"
+    }
+
+    if message.isEmpty {
+      return "speech_runtime_unavailable"
+    }
+
+    return message
+  }
+
+  @available(macOS 10.15, *)
   private func speechUsageDescriptionPreflightError() -> String? {
     let usageDescription = (Bundle.main.object(
       forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription"
@@ -234,7 +276,7 @@ extension AppDelegate {
     NSLog(
       "SecondLoop native stt blocked: missing NSSpeechRecognitionUsageDescription in bundle \(Bundle.main.bundlePath)"
     )
-    return "speech_usage_description_missing"
+    return "speech_permission_usage_description_missing"
   }
 
   @available(macOS 10.15, *)
@@ -261,26 +303,26 @@ extension AppDelegate {
     case .authorized:
       resolve(true, nil)
     case .denied:
-      resolve(false, "speech_authorization_denied")
+      resolve(false, "speech_permission_denied")
     case .restricted:
-      resolve(false, "speech_authorization_restricted")
+      resolve(false, "speech_permission_restricted")
     case .notDetermined:
       SFSpeechRecognizer.requestAuthorization { nextStatus in
         switch nextStatus {
         case .authorized:
           resolve(true, nil)
         case .denied:
-          resolve(false, "speech_authorization_denied")
+          resolve(false, "speech_permission_denied")
         case .restricted:
-          resolve(false, "speech_authorization_restricted")
+          resolve(false, "speech_permission_restricted")
         case .notDetermined:
-          resolve(false, "speech_authorization_not_determined")
+          resolve(false, "speech_permission_not_determined")
         @unknown default:
-          resolve(false, "speech_authorization_unknown")
+          resolve(false, "speech_permission_unknown")
         }
       }
     @unknown default:
-      resolve(false, "speech_authorization_unknown")
+      resolve(false, "speech_permission_unknown")
     }
   }
 

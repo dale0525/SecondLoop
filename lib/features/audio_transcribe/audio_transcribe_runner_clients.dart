@@ -640,6 +640,17 @@ Future<String> _requestNativeAudioTranscribeMethod({
   } on PlatformException catch (error) {
     final code = error.code.trim();
     final message = (error.message ?? '').trim();
+    final details = (error.details ?? '').toString().trim();
+
+    final normalizedReason = detectAudioTranscribeFailureReasonToken([
+      if (code.isNotEmpty) code,
+      if (message.isNotEmpty) message,
+      if (details.isNotEmpty) details,
+    ].join(':'));
+    if (normalizedReason != null) {
+      throw StateError('$failedError:$normalizedReason');
+    }
+
     final detail = [
       if (code.isNotEmpty) code,
       if (message.isNotEmpty) message,

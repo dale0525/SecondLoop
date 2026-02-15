@@ -8,7 +8,7 @@ void main() {
         File('macos/Runner/AppDelegate+NativeStt.swift').readAsStringSync();
 
     expect(content, contains('NSSpeechRecognitionUsageDescription'));
-    expect(content, contains('speech_usage_description_missing'));
+    expect(content, contains('speech_permission_usage_description_missing'));
 
     final guardIndex = content.indexOf('NSSpeechRecognitionUsageDescription');
     final authIndex =

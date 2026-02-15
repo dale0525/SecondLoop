@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1424 (712 per locale)
+/// Strings: 1438 (719 per locale)
 ///
-/// Built on 2026-02-14 at 12:07 UTC
+/// Built on 2026-02-15 at 09:10 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1476,6 +1476,9 @@ class _StringsAttachmentsContentEn {
   String get previewUnavailable => 'Preview unavailable';
   String get ocrFinished => 'OCR finished. Refreshing preview…';
   String get ocrFailed => 'OCR failed on this device.';
+  late final _StringsAttachmentsContentSpeechTranscribeIssueEn
+      speechTranscribeIssue =
+      _StringsAttachmentsContentSpeechTranscribeIssueEn._(_root);
   late final _StringsAttachmentsContentVideoInsightsEn videoInsights =
       _StringsAttachmentsContentVideoInsightsEn._(_root);
 }
@@ -2570,6 +2573,27 @@ class _StringsChatEmbeddingsConsentActionsEn {
   // Translations
   String get useLocal => 'Use local';
   String get enableCloud => 'Enable cloud embeddings';
+}
+
+// Path: attachments.content.speechTranscribeIssue
+class _StringsAttachmentsContentSpeechTranscribeIssueEn {
+  _StringsAttachmentsContentSpeechTranscribeIssueEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Speech transcription unavailable';
+  String get openSettings => 'Open settings';
+  String get openSettingsFailed =>
+      'Unable to open system settings automatically. Please check speech permission and Dictation manually.';
+  String get permissionDenied =>
+      'Speech recognition permission is denied. Enable it in system settings, then retry.';
+  String get permissionRestricted =>
+      'Speech recognition is restricted by system policy. Check Screen Time or device management policy.';
+  String get serviceDisabled =>
+      'Siri and Dictation are disabled. Please enable them before retrying.';
+  String get runtimeUnavailable =>
+      'Speech runtime is currently unavailable on this device. Please retry later.';
 }
 
 // Path: attachments.content.videoInsights
@@ -5403,6 +5427,10 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
   @override
   String get ocrFailed => '此设备上 OCR 执行失败。';
   @override
+  late final _StringsAttachmentsContentSpeechTranscribeIssueZhCn
+      speechTranscribeIssue =
+      _StringsAttachmentsContentSpeechTranscribeIssueZhCn._(_root);
+  @override
   late final _StringsAttachmentsContentVideoInsightsZhCn videoInsights =
       _StringsAttachmentsContentVideoInsightsZhCn._(_root);
 }
@@ -7041,6 +7069,33 @@ class _StringsChatEmbeddingsConsentActionsZhCn
   String get useLocal => '使用本地';
   @override
   String get enableCloud => '开启云端向量';
+}
+
+// Path: attachments.content.speechTranscribeIssue
+class _StringsAttachmentsContentSpeechTranscribeIssueZhCn
+    extends _StringsAttachmentsContentSpeechTranscribeIssueEn {
+  _StringsAttachmentsContentSpeechTranscribeIssueZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '语音转录暂不可用';
+  @override
+  String get openSettings => '打开系统设置';
+  @override
+  String get openSettingsFailed => '无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。';
+  @override
+  String get permissionDenied => '语音识别权限已关闭。请在系统设置中开启后重试。';
+  @override
+  String get permissionRestricted => '语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。';
+  @override
+  String get serviceDisabled => '系统“听写与 Siri”已关闭。请先启用后再重试。';
+  @override
+  String get runtimeUnavailable => '当前设备暂时无法使用语音识别运行时。请稍后重试。';
 }
 
 // Path: attachments.content.videoInsights
@@ -9411,6 +9466,20 @@ extension on Translations {
         return 'OCR finished. Refreshing preview…';
       case 'attachments.content.ocrFailed':
         return 'OCR failed on this device.';
+      case 'attachments.content.speechTranscribeIssue.title':
+        return 'Speech transcription unavailable';
+      case 'attachments.content.speechTranscribeIssue.openSettings':
+        return 'Open settings';
+      case 'attachments.content.speechTranscribeIssue.openSettingsFailed':
+        return 'Unable to open system settings automatically. Please check speech permission and Dictation manually.';
+      case 'attachments.content.speechTranscribeIssue.permissionDenied':
+        return 'Speech recognition permission is denied. Enable it in system settings, then retry.';
+      case 'attachments.content.speechTranscribeIssue.permissionRestricted':
+        return 'Speech recognition is restricted by system policy. Check Screen Time or device management policy.';
+      case 'attachments.content.speechTranscribeIssue.serviceDisabled':
+        return 'Siri and Dictation are disabled. Please enable them before retrying.';
+      case 'attachments.content.speechTranscribeIssue.runtimeUnavailable':
+        return 'Speech runtime is currently unavailable on this device. Please retry later.';
       case 'attachments.content.videoInsights.contentKind.knowledge':
         return 'Knowledge video';
       case 'attachments.content.videoInsights.contentKind.nonKnowledge':
@@ -10866,6 +10935,20 @@ extension on _StringsZhCn {
         return 'OCR 已完成，正在刷新预览…';
       case 'attachments.content.ocrFailed':
         return '此设备上 OCR 执行失败。';
+      case 'attachments.content.speechTranscribeIssue.title':
+        return '语音转录暂不可用';
+      case 'attachments.content.speechTranscribeIssue.openSettings':
+        return '打开系统设置';
+      case 'attachments.content.speechTranscribeIssue.openSettingsFailed':
+        return '无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。';
+      case 'attachments.content.speechTranscribeIssue.permissionDenied':
+        return '语音识别权限已关闭。请在系统设置中开启后重试。';
+      case 'attachments.content.speechTranscribeIssue.permissionRestricted':
+        return '语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。';
+      case 'attachments.content.speechTranscribeIssue.serviceDisabled':
+        return '系统“听写与 Siri”已关闭。请先启用后再重试。';
+      case 'attachments.content.speechTranscribeIssue.runtimeUnavailable':
+        return '当前设备暂时无法使用语音识别运行时。请稍后重试。';
       case 'attachments.content.videoInsights.contentKind.knowledge':
         return '知识类视频';
       case 'attachments.content.videoInsights.contentKind.nonKnowledge':
