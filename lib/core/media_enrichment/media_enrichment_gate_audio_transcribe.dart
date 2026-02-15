@@ -31,12 +31,8 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
         isByokAudioTranscribeEngine(effectiveEngine) ||
         byokProfile != null ||
         cloudEnabled;
-    final shouldEnableMacosSpeechFallback = _shouldEnableMacosSpeechFallback();
-    final shouldEnableLocalRuntimeFallback =
-        shouldEnableLocalFallback && shouldEnableMacosSpeechFallback;
-
     final offlineChain = <AudioTranscribeClient>[
-      if (shouldEnableLocalRuntimeFallback)
+      if (shouldEnableLocalFallback)
         LocalRuntimeAudioTranscribeClient(
           modelName: 'local_runtime',
         ),

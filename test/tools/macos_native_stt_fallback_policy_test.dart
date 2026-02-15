@@ -24,16 +24,16 @@ void main() {
     expect(nativeClientIndex, greaterThan(gateIndex));
   });
 
-  test('macos local runtime fallback is also gated behind same switch', () {
+  test('macos local runtime fallback remains enabled independently', () {
     final content = File(
       'lib/core/media_enrichment/media_enrichment_gate_audio_transcribe.dart',
     ).readAsStringSync();
 
-    expect(content, contains('shouldEnableLocalRuntimeFallback'));
-    expect(content, contains('shouldEnableMacosSpeechFallback'));
+    expect(content, contains('if (shouldEnableLocalFallback)'));
+    expect(content, isNot(contains('shouldEnableLocalRuntimeFallback')));
 
     final localRuntimeGateIndex =
-        content.indexOf('if (shouldEnableLocalRuntimeFallback)');
+        content.indexOf('if (shouldEnableLocalFallback)');
     final localRuntimeClientIndex =
         content.indexOf('LocalRuntimeAudioTranscribeClient(');
 
