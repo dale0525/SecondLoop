@@ -11,6 +11,18 @@ typedef OpenVideoProxyInAppOverride = Future<bool> Function(
   String mimeType,
 );
 
+final class PreparedVideoProxyPlayback {
+  const PreparedVideoProxyPlayback({
+    required this.segmentFiles,
+    required this.initialSegmentIndex,
+  });
+
+  final List<VideoAttachmentPlayerSegment> segmentFiles;
+  final int initialSegmentIndex;
+
+  bool get hasSegments => segmentFiles.isNotEmpty;
+}
+
 final class VideoProxySegmentToOpen {
   const VideoProxySegmentToOpen({
     required this.sha256,
@@ -106,14 +118,47 @@ Future<void> openVideoProxyWithBestEffort(
     return;
   }
 
-  final segments = resolveVideoProxySegments(
+  final playback = await prepareVideoProxyPlayback(
     primarySha256: sha256,
     primaryMimeType: mimeType,
+    loadBytes: loadBytes,
+    segmentRefs: segmentRefs,
+  );
+
+  if (!playback.hasSegments) {
+    await openWithSystem();
+    return;
+  }
+
+  if (!context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (pageContext) => VideoAttachmentPlayerPage(
+        segmentFiles: playback.segmentFiles,
+        initialSegmentIndex: playback.initialSegmentIndex,
+        displayTitle: '',
+        onOpenWithSystem: openWithSystem,
+      ),
+    ),
+  );
+}
+
+Future<PreparedVideoProxyPlayback> prepareVideoProxyPlayback({
+  required String primarySha256,
+  required String primaryMimeType,
+  required LoadAttachmentBytesBySha loadBytes,
+  List<({String sha256, String mimeType})>? segmentRefs,
+}) async {
+  final segments = resolveVideoProxySegments(
+    primarySha256: primarySha256,
+    primaryMimeType: primaryMimeType,
     segmentRefs: segmentRefs,
   );
   if (segments.isEmpty) {
-    await openWithSystem();
-    return;
+    return const PreparedVideoProxyPlayback(
+      segmentFiles: <VideoAttachmentPlayerSegment>[],
+      initialSegmentIndex: 0,
+    );
   }
 
   final segmentFiles = <VideoAttachmentPlayerSegment>[];
@@ -122,7 +167,7 @@ Future<void> openVideoProxyWithBestEffort(
     final bytes = await loadBytes(segment.sha256);
     if (bytes == null || bytes.isEmpty) continue;
 
-    final tempFile = await _writeTempVideoFile(
+    final tempFile = await writeTempVideoProxyFile(
       bytes,
       mimeType: segment.mimeType,
       stem: '${segment.sha256}_$i',
@@ -138,33 +183,22 @@ Future<void> openVideoProxyWithBestEffort(
     );
   }
 
-  if (segmentFiles.isEmpty) {
-    await openWithSystem();
-    return;
-  }
-
   var initialSegmentIndex = 0;
+  final normalizedPrimarySha = primarySha256.trim();
   for (var i = 0; i < segmentFiles.length; i++) {
-    if (segmentFiles[i].sha256 == sha256.trim()) {
+    if (segmentFiles[i].sha256 == normalizedPrimarySha) {
       initialSegmentIndex = i;
       break;
     }
   }
 
-  if (!context.mounted) return;
-  await Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (pageContext) => VideoAttachmentPlayerPage(
-        segmentFiles: segmentFiles,
-        initialSegmentIndex: initialSegmentIndex,
-        displayTitle: '',
-        onOpenWithSystem: openWithSystem,
-      ),
-    ),
+  return PreparedVideoProxyPlayback(
+    segmentFiles: List<VideoAttachmentPlayerSegment>.unmodifiable(segmentFiles),
+    initialSegmentIndex: initialSegmentIndex,
   );
 }
 
-Future<File?> _writeTempVideoFile(
+Future<File?> writeTempVideoProxyFile(
   Uint8List bytes, {
   required String mimeType,
   required String stem,
@@ -172,7 +206,7 @@ Future<File?> _writeTempVideoFile(
   if (bytes.isEmpty) return null;
 
   final cleanStem = stem.trim().isEmpty ? 'video_proxy' : stem.trim();
-  final extension = _extensionForVideoMimeType(mimeType);
+  final extension = extensionForVideoMimeType(mimeType);
   final dirPath = '${Directory.systemTemp.path}/secondloop_video_proxy_preview';
   final dir = Directory(dirPath);
   if (!await dir.exists()) {
@@ -185,7 +219,7 @@ Future<File?> _writeTempVideoFile(
   return file;
 }
 
-String _extensionForVideoMimeType(String mimeType) {
+String extensionForVideoMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
   if (normalized.startsWith('video/quicktime')) return '.mov';
   if (normalized.startsWith('video/webm')) return '.webm';

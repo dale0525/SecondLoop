@@ -419,69 +419,10 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('video_manifest_keyframe_preview_0')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('video_manifest_inline_player')),
+        findsNothing);
     expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
-        findsOneWidget);
-  });
-
-  testWidgets(
-      'NonImageAttachmentView routes proxy open to in-app callback when provided',
-      (tester) async {
-    const attachment = Attachment(
-      sha256: 'sha-video-preview-open-in-app',
-      mimeType: 'application/x.secondloop.video+json',
-      path: 'attachments/sha-video-preview-open-in-app.bin',
-      byteLen: 256,
-      createdAtMs: 0,
-    );
-    final bytes = Uint8List.fromList(
-      utf8.encode(
-        jsonEncode({
-          'schema': 'secondloop.video_manifest.v2',
-          'video_sha256': 'sha-video-proxy',
-          'video_mime_type': 'video/mp4',
-          'video_proxy_sha256': 'sha-video-proxy',
-          'video_segments': [
-            {
-              'index': 0,
-              'sha256': 'sha-video-proxy',
-              'mime_type': 'video/mp4',
-            },
-          ],
-        }),
-      ),
-    );
-
-    var called = false;
-    String? openedSha;
-    String? openedMimeType;
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: NonImageAttachmentView(
-            attachment: attachment,
-            bytes: bytes,
-            displayTitle: 'Video preview open in app',
-            onOpenVideoProxyInApp: (sha256, mimeType) async {
-              called = true;
-              openedSha = sha256;
-              openedMimeType = mimeType;
-              return true;
-            },
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    await tester.tap(
-      find.byKey(const ValueKey('video_manifest_open_proxy_button')),
-    );
-    await tester.pump();
-
-    expect(called, isTrue);
-    expect(openedSha, 'sha-video-proxy');
-    expect(openedMimeType, 'video/mp4');
+        findsNothing);
   });
 
   testWidgets(
@@ -546,13 +487,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.downloadedShas, contains('sha-poster'));
-    final posterFinder =
-        find.byKey(const ValueKey('video_manifest_poster_preview'));
-    expect(posterFinder, findsOneWidget);
-    expect(
-      find.descendant(of: posterFinder, matching: find.byType(Image)),
-      findsOneWidget,
-    );
+    expect(backend.downloadedShas, contains('sha-video-proxy'));
+    expect(find.byKey(const ValueKey('video_manifest_open_proxy_button')),
+        findsNothing);
   });
 
   testWidgets(
@@ -682,16 +619,71 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Knowledge video'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('video_manifest_summary_text')),
-      findsOneWidget,
-    );
-    expect(find.text('This lesson explains OCR fallbacks.'), findsOneWidget);
+    expect(find.text('This lesson explains OCR fallbacks.'), findsNothing);
     expect(
       find.byKey(const ValueKey('video_manifest_detail_text')),
       findsOneWidget,
     );
     expect(find.textContaining('Try multimodal'), findsWidgets);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView shows transcript only for vlog without OCR',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-vlog-transcript-only',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-vlog-transcript-only.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-original-video',
+          'video_mime_type': 'video/mp4',
+          'video_kind': 'vlog',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-1',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+    final payload = <String, Object?>{
+      'video_kind': 'vlog',
+      'video_content_kind': 'non_knowledge',
+      'video_description_full': 'A beach scene with people walking around.',
+      'transcript_full': 'Host says hello and introduces the trip.',
+      'video_summary': 'Beach vlog summary.',
+      'ocr_text_full': '',
+      'ocr_text_excerpt': '',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video attachment',
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('video_manifest_insights_surface')),
+      findsNothing,
+    );
+    expect(find.textContaining('Host says hello'), findsOneWidget);
+    expect(find.textContaining('beach scene'), findsNothing);
   });
 
   testWidgets('NonImageAttachmentView localizes video insight labels in zh_CN',
@@ -749,7 +741,6 @@ void main() {
 
     expect(find.text('知识类视频'), findsOneWidget);
     expect(find.text('内容类型'), findsOneWidget);
-    expect(find.text('视频概要'), findsOneWidget);
     expect(find.text('知识文稿'), findsOneWidget);
   });
 

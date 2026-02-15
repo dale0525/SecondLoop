@@ -12,9 +12,9 @@ import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_download.dart';
 import 'attachment_detail_text_content.dart';
-import 'attachment_external_open_helper.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
+import 'video_attachment_inline_player.dart';
 import 'video_manifest_insight_content.dart';
 import 'video_keyframe_ocr_worker.dart';
 
@@ -195,7 +195,6 @@ class NonImageAttachmentView extends StatefulWidget {
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
     this.onSaveFull,
-    this.onOpenVideoProxyInApp,
     super.key,
   });
 
@@ -212,7 +211,6 @@ class NonImageAttachmentView extends StatefulWidget {
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
   final Future<void> Function(String value)? onSaveFull;
-  final OpenVideoProxyInAppOverride? onOpenVideoProxyInApp;
 
   @override
   State<NonImageAttachmentView> createState() => _NonImageAttachmentViewState();
@@ -222,6 +220,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   Future<ParsedVideoManifest?>? _videoManifestFuture;
   final Map<String, Future<Uint8List?>> _attachmentBytesBySha =
       <String, Future<Uint8List?>>{};
+  final Map<String, Future<PreparedVideoProxyPlayback>>
+      _videoProxyPlaybackByKey = <String, Future<PreparedVideoProxyPlayback>>{};
 
   @override
   void initState() {
@@ -239,6 +239,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     if (!didVideoTargetChange) return;
 
     _attachmentBytesBySha.clear();
+    _videoProxyPlaybackByKey.clear();
     _videoManifestFuture = _createVideoManifestFuture();
   }
 
@@ -321,18 +322,55 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     });
   }
 
-  Future<void> _openAttachmentBySha(String sha256, String mimeType) {
-    final extension = fileExtensionForSystemOpenMimeType(mimeType);
-    final stem = sha256.trim().isEmpty
-        ? DateTime.now().millisecondsSinceEpoch.toString()
-        : sha256.trim();
+  Future<PreparedVideoProxyPlayback> _loadVideoProxyPlayback(
+    ParsedVideoManifest manifest,
+  ) {
+    final proxySha256 = (manifest.videoProxySha256 ?? '').trim();
+    if (proxySha256.isEmpty) {
+      return Future<PreparedVideoProxyPlayback>.value(
+        const PreparedVideoProxyPlayback(
+          segmentFiles: [],
+          initialSegmentIndex: 0,
+        ),
+      );
+    }
 
-    return openAttachmentBytesWithSystem(
-      context,
-      loadBytes: () => _readAttachmentBytesBySha(sha256),
-      outputStem: stem,
-      extension: extension,
+    final proxyMimeType = manifest.segments.isNotEmpty
+        ? manifest.segments.first.mimeType
+        : manifest.originalMimeType;
+    final segmentRefs = manifest.segments
+        .map((segment) => (sha256: segment.sha256, mimeType: segment.mimeType))
+        .toList(growable: false);
+    final cacheKey = [
+      proxySha256,
+      proxyMimeType,
+      for (final segment in segmentRefs)
+        '${segment.sha256}:${segment.mimeType}',
+    ].join('|');
+
+    return _videoProxyPlaybackByKey.putIfAbsent(
+      cacheKey,
+      () => prepareVideoProxyPlayback(
+        primarySha256: proxySha256,
+        primaryMimeType: proxyMimeType,
+        loadBytes: _readAttachmentBytesBySha,
+        segmentRefs: segmentRefs,
+      ),
     );
+  }
+
+  bool _isVlogWithoutOcrResult(
+    ParsedVideoManifest manifest,
+    Map<String, Object?>? payload,
+  ) {
+    if (manifest.videoKind != 'vlog') return false;
+    final ocrText = ((payload?['ocr_text_excerpt'] ??
+                payload?['ocr_text_full'] ??
+                payload?['ocr_text']) ??
+            '')
+        .toString()
+        .trim();
+    return ocrText.isEmpty;
   }
 
   Future<void> _runOcrWithDialogOptions({
@@ -432,11 +470,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       segmentValue,
     );
     addField(
-      labels.fields.summary,
-      insights.summary,
-      valueKey: const ValueKey('video_manifest_summary_text'),
-    );
-    addField(
       detailLabel,
       insights.detail,
       valueKey: const ValueKey('video_manifest_detail_text'),
@@ -493,20 +526,17 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   }
 
   Widget _buildVideoManifestPreviewCard(
-    BuildContext context,
-    ParsedVideoManifest manifest,
-  ) {
+      BuildContext context, ParsedVideoManifest manifest) {
     final keyframes = manifest.keyframes
         .where((item) => item.sha256.trim().isNotEmpty)
         .toList(growable: false);
     final previewKeyframes = keyframes.take(4).toList(growable: false);
     final posterSha256 = (manifest.posterSha256 ?? '').trim();
-    final proxySha256 = (manifest.videoProxySha256 ?? '').trim();
-    final proxyMimeType = manifest.segments.isNotEmpty
-        ? manifest.segments.first.mimeType
-        : manifest.originalMimeType;
     final confidencePercent =
         (manifest.videoKindConfidence.clamp(0.0, 1.0) * 100).round();
+    final playbackFuture = (manifest.videoProxySha256 ?? '').trim().isNotEmpty
+        ? _loadVideoProxyPlayback(manifest)
+        : null;
 
     Widget buildStatBadge(String text) {
       return DecoratedBox(
@@ -521,6 +551,17 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
             style: Theme.of(context).textTheme.labelMedium,
           ),
         ),
+      );
+    }
+
+    Widget buildPosterFallback() {
+      if (posterSha256.isEmpty) return const SizedBox.shrink();
+      return _buildVideoManifestPreviewTile(
+        sha256: posterSha256,
+        mimeType: manifest.posterMimeType ?? 'image/jpeg',
+        key: const ValueKey('video_manifest_poster_preview'),
+        width: double.infinity,
+        height: 188,
       );
     }
 
@@ -539,15 +580,32 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
               buildStatBadge('keyframes: ${keyframes.length}'),
             ],
           ),
-          if (posterSha256.isNotEmpty) ...[
+          if (playbackFuture != null) ...[
             const SizedBox(height: 12),
-            _buildVideoManifestPreviewTile(
-              sha256: posterSha256,
-              mimeType: manifest.posterMimeType ?? 'image/jpeg',
-              key: const ValueKey('video_manifest_poster_preview'),
-              width: double.infinity,
-              height: 188,
+            FutureBuilder<PreparedVideoProxyPlayback>(
+              future: playbackFuture,
+              builder: (context, playbackSnapshot) {
+                final playback = playbackSnapshot.data;
+                if (playback != null && playback.hasSegments) {
+                  return FutureBuilder<Uint8List?>(
+                    future: posterSha256.isNotEmpty
+                        ? _readAttachmentBytesBySha(posterSha256)
+                        : Future<Uint8List?>.value(null),
+                    builder: (context, posterSnapshot) {
+                      return VideoAttachmentInlinePlayer(
+                        key: const ValueKey('video_manifest_inline_player'),
+                        playback: playback,
+                        posterBytes: posterSnapshot.data,
+                      );
+                    },
+                  );
+                }
+                return buildPosterFallback();
+              },
             ),
+          ] else if (posterSha256.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            buildPosterFallback(),
           ],
           if (previewKeyframes.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -566,30 +624,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                     ),
                   ],
                 ],
-              ),
-            ),
-          ],
-          if (proxySha256.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                key: const ValueKey('video_manifest_open_proxy_button'),
-                onPressed: () => unawaited(openVideoProxyWithBestEffort(context,
-                    sha256: proxySha256,
-                    mimeType: proxyMimeType,
-                    loadBytes: _readAttachmentBytesBySha,
-                    openWithSystem: () =>
-                        _openAttachmentBySha(proxySha256, proxyMimeType),
-                    onOpenVideoProxyInApp: widget.onOpenVideoProxyInApp,
-                    segmentRefs: manifest.segments
-                        .map((segment) => (
-                              sha256: segment.sha256,
-                              mimeType: segment.mimeType
-                            ))
-                        .toList(growable: false))),
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(context.t.common.actions.open),
               ),
             ),
           ],
@@ -825,7 +859,22 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
               ],
               if (videoInsights != null) ...[
                 buildSection(
-                  _buildVideoManifestInsightsCard(context, videoInsights),
+                  videoManifestFuture == null
+                      ? _buildVideoManifestInsightsCard(context, videoInsights)
+                      : FutureBuilder<ParsedVideoManifest?>(
+                          future: videoManifestFuture,
+                          builder: (context, snapshot) {
+                            final manifest = snapshot.data;
+                            if (manifest != null &&
+                                _isVlogWithoutOcrResult(manifest, payload)) {
+                              return const SizedBox.shrink();
+                            }
+                            return _buildVideoManifestInsightsCard(
+                              context,
+                              videoInsights,
+                            );
+                          },
+                        ),
                   maxWidth: 820,
                 ),
                 const SizedBox(height: 14),

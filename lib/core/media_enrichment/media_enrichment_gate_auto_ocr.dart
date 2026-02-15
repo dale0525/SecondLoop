@@ -774,6 +774,8 @@ Map<String, Object?> buildAutoVideoManifestOcrPayload({
   updatedPayload.remove('ocr_auto_running_ms');
   updatedPayload['video_segment_count'] = manifest.segments.length;
   updatedPayload['video_processed_segment_count'] = processedSegments;
+  updatedPayload['video_kind'] = manifest.videoKind;
+  updatedPayload['video_kind_confidence'] = manifest.videoKindConfidence;
   updatedPayload['video_ocr_segment_limit'] = maxSegments;
   updatedPayload['video_segments'] = segmentPayloads;
   if (manifest.audioSha256 != null) {

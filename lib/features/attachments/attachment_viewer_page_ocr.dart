@@ -144,6 +144,8 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         'mime_type': widget.attachment.mimeType,
         'original_sha256': manifest.originalSha256,
         'original_mime_type': manifest.originalMimeType,
+        'video_kind': manifest.videoKind,
+        'video_kind_confidence': manifest.videoKindConfidence,
         'video_segment_count': manifest.segments.length,
         'video_processed_segment_count': processedSegments,
         'video_ocr_segment_limit': maxSegments,
