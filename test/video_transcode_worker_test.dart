@@ -95,6 +95,94 @@ void main() {
     expect(emptySegment.isStrictVideoProxy, isFalse);
   });
 
+  test('VideoTranscodeResult bounded passthrough allows small mp4/mov only',
+      () {
+    final mp4Passthrough = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/mp4',
+      didTranscode: false,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(
+      mp4Passthrough.canUseBoundedPassthroughProxy(maxSegmentBytes: 4),
+      isTrue,
+    );
+
+    final movPassthrough = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/quicktime',
+      didTranscode: false,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+          mimeType: 'video/quicktime',
+        ),
+      ],
+    );
+    expect(
+      movPassthrough.canUseBoundedPassthroughProxy(maxSegmentBytes: 4),
+      isTrue,
+    );
+
+    final tooLarge = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/mp4',
+      didTranscode: false,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1, 2, 3, 4, 5]),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(
+      tooLarge.canUseBoundedPassthroughProxy(maxSegmentBytes: 4),
+      isFalse,
+    );
+
+    final unsupportedMime = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/webm',
+      didTranscode: false,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1]),
+          mimeType: 'video/webm',
+        ),
+      ],
+    );
+    expect(
+      unsupportedMime.canUseBoundedPassthroughProxy(maxSegmentBytes: 4),
+      isFalse,
+    );
+
+    final transcoded = VideoTranscodeResult(
+      bytes: Uint8List.fromList(const <int>[1]),
+      mimeType: 'video/mp4',
+      didTranscode: true,
+      segments: [
+        VideoTranscodeSegment(
+          index: 0,
+          bytes: Uint8List.fromList(const <int>[1]),
+          mimeType: 'video/mp4',
+        ),
+      ],
+    );
+    expect(
+      transcoded.canUseBoundedPassthroughProxy(maxSegmentBytes: 4),
+      isFalse,
+    );
+  });
+
   test('VideoTranscodeWorker returns segmented mp4 output when ffmpeg succeeds',
       () async {
     final input = Uint8List.fromList(const <int>[11, 12, 13]);

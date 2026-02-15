@@ -331,7 +331,11 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           maxSegmentDurationSeconds: _kChatVideoProxySegmentDurationSeconds,
           maxSegmentBytes: _kChatVideoProxySegmentMaxBytes,
         );
-        if (!videoProxy.isStrictVideoProxy) {
+        final allowBoundedPassthrough =
+            videoProxy.canUseBoundedPassthroughProxy(
+          maxSegmentBytes: _kChatVideoProxySegmentMaxBytes,
+        );
+        if (!videoProxy.isStrictVideoProxy && !allowBoundedPassthrough) {
           throw StateError('video_proxy_transcode_failed');
         }
 

@@ -237,7 +237,11 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               maxSegmentDurationSeconds: _kVideoProxySegmentDurationSeconds,
               maxSegmentBytes: _kVideoProxySegmentMaxBytes,
             );
-            if (!videoProxy.isStrictVideoProxy) {
+            final allowBoundedPassthrough =
+                videoProxy.canUseBoundedPassthroughProxy(
+              maxSegmentBytes: _kVideoProxySegmentMaxBytes,
+            );
+            if (!videoProxy.isStrictVideoProxy && !allowBoundedPassthrough) {
               throw StateError('video_proxy_transcode_failed');
             }
 

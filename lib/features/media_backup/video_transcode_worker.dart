@@ -42,6 +42,37 @@ final class VideoTranscodeResult {
     }
     return true;
   }
+
+  bool canUseBoundedPassthroughProxy({
+    required int maxSegmentBytes,
+    Set<String> allowedMimeTypes = const {
+      'video/mp4',
+      'video/quicktime',
+    },
+  }) {
+    if (didTranscode) return false;
+    if (maxSegmentBytes <= 0) return false;
+    if (segments.isEmpty) return false;
+
+    final allowed = allowedMimeTypes
+        .map((item) => item.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    if (allowed.isEmpty) return false;
+
+    if (!allowed.contains(mimeType.trim().toLowerCase())) {
+      return false;
+    }
+
+    for (final segment in segments) {
+      if (segment.bytes.isEmpty) return false;
+      if (segment.bytes.lengthInBytes > maxSegmentBytes) return false;
+      if (!allowed.contains(segment.mimeType.trim().toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 final class VideoPreviewFrame {
