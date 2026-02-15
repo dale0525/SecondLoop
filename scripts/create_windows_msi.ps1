@@ -134,12 +134,191 @@ function Ensure-WixToolset {
   return $tools
 }
 
+function Test-IsPathEqualOrChild {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$CandidatePath,
+    [Parameter(Mandatory = $true)]
+    [string]$ParentPath
+  )
+
+  $normalizedCandidate = [System.IO.Path]::GetFullPath($CandidatePath).TrimEnd('\', '/')
+  $normalizedParent = [System.IO.Path]::GetFullPath($ParentPath).TrimEnd('\', '/')
+
+  if ($normalizedCandidate.Equals($normalizedParent, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $true
+  }
+
+  $prefix = $normalizedParent + [System.IO.Path]::DirectorySeparatorChar
+  return $normalizedCandidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-ValidSourceDirectory {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ResolvedSourceDir
+  )
+
+  $distPath = Join-Path $repoRootPath 'dist'
+  if (-not (Test-Path $distPath)) {
+    return
+  }
+
+  $resolvedDistPath = (Resolve-Path $distPath).Path
+  if (Test-IsPathEqualOrChild -CandidatePath $ResolvedSourceDir -ParentPath $resolvedDistPath) {
+    throw "SourceDir points to dist output. Use build/windows/x64/runner/Release as SourceDir."
+  }
+}
+
+function Save-XmlDocument {
+  param(
+    [Parameter(Mandatory = $true)]
+    [xml]$Document,
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  $settings = New-Object System.Xml.XmlWriterSettings
+  $settings.Indent = $true
+  $settings.OmitXmlDeclaration = $false
+  $settings.Encoding = [System.Text.UTF8Encoding]::new($false)
+
+  $writer = [System.Xml.XmlWriter]::Create($Path, $settings)
+  try {
+    $Document.Save($writer)
+  } finally {
+    $writer.Dispose()
+  }
+}
+
+function Convert-HarvestToPerUserCompliant {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$HarvestPath
+  )
+
+  if (-not (Test-Path $HarvestPath)) {
+    throw "Harvest manifest not found: $HarvestPath"
+  }
+
+  [xml]$harvestDoc = Get-Content -Path $HarvestPath -Raw
+  $wixNamespace = 'http://schemas.microsoft.com/wix/2006/wi'
+  $nsManager = New-Object System.Xml.XmlNamespaceManager($harvestDoc.NameTable)
+  $nsManager.AddNamespace('wix', $wixNamespace)
+
+  $componentNodes = $harvestDoc.SelectNodes("//wix:DirectoryRef[@Id='INSTALLFOLDER']//wix:Component", $nsManager)
+  if ($null -eq $componentNodes -or $componentNodes.Count -eq 0) {
+    throw "No components were harvested under INSTALLFOLDER in: $HarvestPath"
+  }
+
+  $componentRegistryKey = 'Software\SecondLoop\Installer\Components'
+  foreach ($componentNode in $componentNodes) {
+    $componentId = $componentNode.GetAttribute('Id')
+    if (-not $componentId) {
+      continue
+    }
+
+    $fileNodes = $componentNode.SelectNodes('wix:File', $nsManager)
+    if ($null -eq $fileNodes -or $fileNodes.Count -eq 0) {
+      continue
+    }
+
+    foreach ($fileNode in $fileNodes) {
+      $fileNode.SetAttribute('KeyPath', 'no')
+    }
+
+    $registryNode = $componentNode.SelectSingleNode("wix:RegistryValue[@Root='HKCU' and @Name='$componentId' and @KeyPath='yes']", $nsManager)
+    if (-not $registryNode) {
+      $registryNode = $harvestDoc.CreateElement('RegistryValue', $wixNamespace)
+      $registryNode.SetAttribute('Root', 'HKCU')
+      $registryNode.SetAttribute('Key', $componentRegistryKey)
+      $registryNode.SetAttribute('Name', $componentId)
+      $registryNode.SetAttribute('Type', 'integer')
+      $registryNode.SetAttribute('Value', '1')
+      $registryNode.SetAttribute('KeyPath', 'yes')
+      $componentNode.AppendChild($registryNode) | Out-Null
+    }
+
+  }
+
+  $cleanupComponentId = 'cmpProgramsDirCleanup'
+  $cleanupComponent = $harvestDoc.SelectSingleNode("//wix:Component[@Id='$cleanupComponentId']", $nsManager)
+  if (-not $cleanupComponent) {
+    $installDirectoryRef = $harvestDoc.SelectSingleNode("//wix:DirectoryRef[@Id='INSTALLFOLDER']", $nsManager)
+    if (-not $installDirectoryRef) {
+      throw "INSTALLFOLDER DirectoryRef was not found in: $HarvestPath"
+    }
+
+    $cleanupComponent = $harvestDoc.CreateElement('Component', $wixNamespace)
+    $cleanupComponent.SetAttribute('Id', $cleanupComponentId)
+    $cleanupComponent.SetAttribute('Guid', '*')
+
+    $installDirectoryRef.AppendChild($cleanupComponent) | Out-Null
+
+    $componentGroup = $harvestDoc.SelectSingleNode("//wix:ComponentGroup[@Id='AppFiles']", $nsManager)
+    if (-not $componentGroup) {
+      throw "AppFiles ComponentGroup was not found in: $HarvestPath"
+    }
+
+    $componentRef = $harvestDoc.CreateElement('ComponentRef', $wixNamespace)
+    $componentRef.SetAttribute('Id', $cleanupComponentId)
+    $componentGroup.AppendChild($componentRef) | Out-Null
+  }
+
+  $cleanupRegistry = $cleanupComponent.SelectSingleNode("wix:RegistryValue[@Root='HKCU' and @Name='ProgramsDirCleanup' and @KeyPath='yes']", $nsManager)
+  if (-not $cleanupRegistry) {
+    $cleanupRegistry = $harvestDoc.CreateElement('RegistryValue', $wixNamespace)
+    $cleanupRegistry.SetAttribute('Root', 'HKCU')
+    $cleanupRegistry.SetAttribute('Key', 'Software\SecondLoop\Installer')
+    $cleanupRegistry.SetAttribute('Name', 'ProgramsDirCleanup')
+    $cleanupRegistry.SetAttribute('Type', 'integer')
+    $cleanupRegistry.SetAttribute('Value', '1')
+    $cleanupRegistry.SetAttribute('KeyPath', 'yes')
+    $cleanupComponent.AppendChild($cleanupRegistry) | Out-Null
+  }
+
+  $directoryIds = New-Object System.Collections.Generic.List[string]
+  $directoryIds.Add('ProgramsDir')
+  $directoryIds.Add('INSTALLFOLDER')
+  $harvestedDirectoryNodes = $harvestDoc.SelectNodes("//wix:DirectoryRef[@Id='INSTALLFOLDER']//wix:Directory[@Id]", $nsManager)
+  foreach ($directoryNode in $harvestedDirectoryNodes) {
+    $directoryId = $directoryNode.GetAttribute('Id')
+    if ($directoryId -and -not $directoryIds.Contains($directoryId)) {
+      $directoryIds.Add($directoryId)
+    }
+  }
+
+  $nextRemovalIndex = 1
+  foreach ($directoryId in $directoryIds) {
+    $existingRemoval = $cleanupComponent.SelectSingleNode("wix:RemoveFolder[@Directory='$directoryId']", $nsManager)
+    if ($existingRemoval) {
+      continue
+    }
+
+    $candidateRemovalId = ("rmfDir{0:D4}" -f $nextRemovalIndex)
+    while ($cleanupComponent.SelectSingleNode("wix:RemoveFolder[@Id='$candidateRemovalId']", $nsManager)) {
+      $nextRemovalIndex += 1
+      $candidateRemovalId = ("rmfDir{0:D4}" -f $nextRemovalIndex)
+    }
+
+    $removeDirectory = $harvestDoc.CreateElement('RemoveFolder', $wixNamespace)
+    $removeDirectory.SetAttribute('Id', $candidateRemovalId)
+    $removeDirectory.SetAttribute('Directory', $directoryId)
+    $removeDirectory.SetAttribute('On', 'uninstall')
+    $cleanupComponent.AppendChild($removeDirectory) | Out-Null
+    $nextRemovalIndex += 1
+  }
+
+  Save-XmlDocument -Document $harvestDoc -Path $HarvestPath
+}
+
 $resolvedSourceDir = ''
 try {
   $resolvedSourceDir = (Resolve-Path $SourceDir).Path
 } catch {
   throw "Source directory not found: $SourceDir"
 }
+Assert-ValidSourceDirectory -ResolvedSourceDir $resolvedSourceDir
 
 $resolvedIconPath = ''
 try {
@@ -172,7 +351,7 @@ $shortcutRegKey = 'Software\SecondLoop'
 
 $mainWxsContent = @'
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="__PRODUCT_NAME__" Language="1033" Version="$(var.ProductVersion)" Manufacturer="__MANUFACTURER__" UpgradeCode="__UPGRADE_CODE__">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
@@ -180,11 +359,12 @@ $mainWxsContent = @'
     <Icon Id="AppIcon" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="SECONDLOOP_LAUNCH_AFTER_INSTALL" Value="1" />
-    <CustomAction Id="TerminateSecondLoopOnUninstall" Directory="SystemFolder" ExeCommand="taskkill.exe /F /T /IM secondloop.exe" Return="ignore" Impersonate="yes" />
-    <CustomAction Id="LaunchApplication" Directory="INSTALLFOLDER" ExeCommand="secondloop.exe" Return="asyncNoWait" Impersonate="yes" />
+    <util:CloseApplication Id="CloseSecondLoopOnUninstall" Target="secondloop.exe" CloseMessage="yes" RebootPrompt="no" TerminateProcess="0" Timeout="5">REMOVE~="ALL"</util:CloseApplication>
+    <CustomAction Id="SetLaunchApplicationTarget" Property="WixShellExecTarget" Value="[INSTALLFOLDER]secondloop.exe" />
+    <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Return="check" Impersonate="yes" />
     <InstallExecuteSequence>
-      <Custom Action="TerminateSecondLoopOnUninstall" Before="RemoveFiles">REMOVE~="ALL"</Custom>
-      <Custom Action="LaunchApplication" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 3</Custom>
+      <Custom Action="SetLaunchApplicationTarget" After="InstallFinalize">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 3</Custom>
+      <Custom Action="LaunchApplication" After="SetLaunchApplicationTarget">SECONDLOOP_LAUNCH_AFTER_INSTALL = "1" AND NOT Installed AND UILevel >= 3</Custom>
     </InstallExecuteSequence>
     <Feature Id="MainFeature" Title="__PRODUCT_NAME__" Level="1">
       <ComponentGroupRef Id="AppFiles" />
@@ -255,6 +435,8 @@ if ($LASTEXITCODE -ne 0) {
   throw "heat.exe failed with exit code $LASTEXITCODE"
 }
 
+Convert-HarvestToPerUserCompliant -HarvestPath $harvestWxsPath
+
 $wixObjOutDir = [System.IO.Path]::GetFullPath($wixObjDir) + [System.IO.Path]::DirectorySeparatorChar
 
 $candleArgs = @(
@@ -262,6 +444,8 @@ $candleArgs = @(
   "-dSourceDir=$resolvedSourceDir",
   "-dProductVersion=$msiVersion",
   "-dIconPath=$resolvedIconPath",
+  '-ext',
+  'WixUtilExtension',
   '-out',
   $wixObjOutDir,
   $mainWxsPath,
@@ -279,8 +463,13 @@ $harvestWixObjPath = Join-Path $wixObjDir 'harvest.wixobj'
 
 $lightArgs = @(
   '-nologo',
-  '-sice:ICE38',
-  '-sice:ICE64',
+  # ICE60/ICE91 are expected for per-user app-local assets (fonts and user-profile
+  # directories). Keep strict validation for ICE38/ICE64 while suppressing only
+  # these non-blocking checks to keep release logs actionable.
+  '-sice:ICE60',
+  '-sice:ICE91',
+  '-ext',
+  'WixUtilExtension',
   '-out',
   $msiPath,
   $mainWixObjPath,
