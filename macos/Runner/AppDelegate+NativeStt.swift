@@ -222,6 +222,22 @@ extension AppDelegate {
   }
 
   @available(macOS 10.15, *)
+  private func speechUsageDescriptionPreflightError() -> String? {
+    let usageDescription = (Bundle.main.object(
+      forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription"
+    ) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if !usageDescription.isEmpty {
+      return nil
+    }
+
+    NSLog(
+      "SecondLoop native stt blocked: missing NSSpeechRecognitionUsageDescription in bundle \(Bundle.main.bundlePath)"
+    )
+    return "speech_usage_description_missing"
+  }
+
+  @available(macOS 10.15, *)
   private func requestSpeechAuthorizationIfNeeded(
     completion: @escaping (Bool, String?) -> Void
   ) {
@@ -233,6 +249,11 @@ extension AppDelegate {
           completion(authorized, error)
         }
       }
+    }
+
+    if let preflightError = speechUsageDescriptionPreflightError() {
+      resolve(false, preflightError)
+      return
     }
 
     let status = SFSpeechRecognizer.authorizationStatus()

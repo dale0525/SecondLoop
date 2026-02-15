@@ -19,10 +19,36 @@ class AppDelegate: FlutterAppDelegate {
     dpi: 180
   )
 
+  private var didConfigureMethodChannels = false
+  private var methodChannelSetupAttempt = 0
+  private static let maxMethodChannelSetupAttempt = 20
+
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    guard let controller = mainFlutterWindow?.contentViewController as? FlutterViewController else {
+    super.applicationDidFinishLaunching(notification)
+    configureMethodChannelsIfNeeded()
+  }
+
+  func configureMethodChannelsIfNeeded() {
+    if didConfigureMethodChannels {
       return
     }
+
+    guard let controller = mainFlutterWindow?.contentViewController as? FlutterViewController else {
+      methodChannelSetupAttempt += 1
+      if methodChannelSetupAttempt <= AppDelegate.maxMethodChannelSetupAttempt {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+          self?.configureMethodChannelsIfNeeded()
+        }
+      } else {
+        NSLog(
+          "SecondLoop: FlutterViewController unavailable; native method channels disabled for this run"
+        )
+      }
+      return
+    }
+
+    didConfigureMethodChannels = true
+    methodChannelSetupAttempt = 0
 
     let audioTranscodeChannel = FlutterMethodChannel(
       name: "secondloop/audio_transcode",
