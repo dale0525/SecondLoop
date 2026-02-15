@@ -345,7 +345,7 @@ void main() {
 
         final filterIndex = arguments.indexOf('-vf');
         expect(filterIndex, greaterThanOrEqualTo(0));
-        expect(arguments[filterIndex + 1], 'fps=1/30');
+        expect(arguments[filterIndex + 1], 'fps=1/15');
         sawFpsPass = true;
         final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
         await keyframe0.writeAsBytes(const <int>[6, 6, 6]);

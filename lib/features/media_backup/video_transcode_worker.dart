@@ -303,7 +303,7 @@ final class VideoTranscodeWorker {
     }
 
     final hasCustomMaxKeyframes = maxKeyframes != null;
-    final safeMaxKeyframes = (maxKeyframes ?? 12).clamp(1, 24);
+    final safeMaxKeyframes = (maxKeyframes ?? 24).clamp(1, 48);
     final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final normalizedKind = keyframeKind.trim().isEmpty
         ? 'scene'
@@ -533,22 +533,22 @@ final class VideoTranscodeWorker {
     required int baseMaxFrames,
     required double durationSeconds,
   }) {
-    final safeBase = baseMaxFrames.clamp(1, 24);
+    final safeBase = baseMaxFrames.clamp(1, 48);
     if (durationSeconds <= 0) return safeBase;
 
     int recommended = safeBase;
     if (durationSeconds >= 20 * 60) {
-      recommended = 24;
+      recommended = 48;
     } else if (durationSeconds >= 10 * 60) {
-      recommended = 20;
+      recommended = 40;
     } else if (durationSeconds >= 5 * 60) {
-      recommended = 16;
+      recommended = 32;
     } else if (durationSeconds >= 3 * 60) {
-      recommended = 14;
+      recommended = 28;
     }
 
     final effective = recommended > safeBase ? recommended : safeBase;
-    return effective.clamp(1, 24);
+    return effective.clamp(1, 48);
   }
 
   static Future<List<File>> _listPreviewFrameFiles(
