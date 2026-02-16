@@ -58,10 +58,49 @@ void main() {
     expect(args.reviewStage, isNull);
     expect(args.nextReviewAtMs, isNull);
   });
+
+  test('Semantic-parse create reuses existing source todo id', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _Backend(
+      todos: const [
+        Todo(
+          id: 'legacy:todo:42',
+          title: '旧任务标题',
+          status: 'open',
+          sourceEntryId: 'm3',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    await store.upsertTodoFromMessage(
+      messageId: 'm3',
+      title: '新任务标题',
+      status: 'open',
+      dueAtMs: 123,
+    );
+
+    final args = backend.lastUpsertTodo;
+    expect(args, isNotNull);
+    expect(args!.id, 'legacy:todo:42');
+    expect(args.sourceEntryId, 'm3');
+  });
 }
 
 final class _Backend extends TestAppBackend {
+  _Backend({List<Todo>? todos}) : _todos = List<Todo>.from(todos ?? const []);
+
+  final List<Todo> _todos;
   _UpsertTodoArgs? lastUpsertTodo;
+
+  @override
+  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
 
   @override
   Future<Todo> upsertTodo(
@@ -86,7 +125,7 @@ final class _Backend extends TestAppBackend {
       lastReviewAtMs: lastReviewAtMs,
     );
 
-    return Todo(
+    final todo = Todo(
       id: id,
       title: title,
       dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
@@ -103,6 +142,10 @@ final class _Backend extends TestAppBackend {
           ? null
           : PlatformInt64Util.from(lastReviewAtMs),
     );
+
+    _todos.removeWhere((item) => item.id == id);
+    _todos.add(todo);
+    return todo;
   }
 }
 
