@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1456 (728 per locale)
+/// Strings: 1466 (733 per locale)
 ///
-/// Built on 2026-02-14 at 01:29 UTC
+/// Built on 2026-02-16 at 16:58 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -2398,6 +2398,7 @@ class _StringsSettingsCloudUsageLabelsEn {
   String get tokensUsed30d => 'Tokens (30d):';
   String get requestsUsed30d => 'Requests (30d):';
   String get resetAt => 'Resets on:';
+  String get paymentRequired => 'Subscription required to view cloud usage.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
@@ -3081,6 +3082,8 @@ class _StringsSettingsCloudAccountEmailVerificationLabelsEn {
   // Translations
   String get status => 'Status:';
   String get help => 'Verify your email to use SecondLoop Cloud Ask AI.';
+  String get verifiedHelp =>
+      'Email is verified. You can continue to subscribe.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
@@ -3092,6 +3095,7 @@ class _StringsSettingsCloudAccountEmailVerificationActionsEn {
 
   // Translations
   String get resend => 'Resend verification email';
+  String resendCooldown({required Object seconds}) => 'Resend in ${seconds}s';
 }
 
 // Path: settings.cloudAccount.emailVerification.messages
@@ -3102,6 +3106,9 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesEn {
 
   // Translations
   String get verificationEmailSent => 'Verification email sent';
+  String get verificationAlreadyDone => 'Email is already verified.';
+  String get signUpVerificationPrompt =>
+      'Account created. Please verify your email before subscribing.';
   String verificationEmailSendFailed({required Object error}) =>
       'Failed to send verification email: ${error}';
 }
@@ -6775,6 +6782,8 @@ class _StringsSettingsCloudUsageLabelsZhCn
   @override
   String get resetAt => '重置时间：';
   @override
+  String get paymentRequired => '需订阅后才能查看云端用量。';
+  @override
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
 
@@ -7796,6 +7805,8 @@ class _StringsSettingsCloudAccountEmailVerificationLabelsZhCn
   @override
   String get help => '验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
   @override
+  String get verifiedHelp => '邮箱已验证，可继续订阅。';
+  @override
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
 
@@ -7812,6 +7823,8 @@ class _StringsSettingsCloudAccountEmailVerificationActionsZhCn
   // Translations
   @override
   String get resend => '重新发送验证邮件';
+  @override
+  String resendCooldown({required Object seconds}) => '${seconds} 秒后可重新发送';
 }
 
 // Path: settings.cloudAccount.emailVerification.messages
@@ -7827,6 +7840,10 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesZhCn
   // Translations
   @override
   String get verificationEmailSent => '验证邮件已发送';
+  @override
+  String get verificationAlreadyDone => '邮箱已完成验证。';
+  @override
+  String get signUpVerificationPrompt => '账号已创建，请先完成邮箱验证再进行订阅。';
   @override
   String verificationEmailSendFailed({required Object error}) =>
       '发送验证邮件失败：${error}';
@@ -9010,12 +9027,20 @@ extension on Translations {
         return 'Status:';
       case 'settings.cloudAccount.emailVerification.labels.help':
         return 'Verify your email to use SecondLoop Cloud Ask AI.';
+      case 'settings.cloudAccount.emailVerification.labels.verifiedHelp':
+        return 'Email is verified. You can continue to subscribe.';
       case 'settings.cloudAccount.emailVerification.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.cloudAccount.emailVerification.actions.resend':
         return 'Resend verification email';
+      case 'settings.cloudAccount.emailVerification.actions.resendCooldown':
+        return ({required Object seconds}) => 'Resend in ${seconds}s';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSent':
         return 'Verification email sent';
+      case 'settings.cloudAccount.emailVerification.messages.verificationAlreadyDone':
+        return 'Email is already verified.';
+      case 'settings.cloudAccount.emailVerification.messages.signUpVerificationPrompt':
+        return 'Account created. Please verify your email before subscribing.';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) =>
             'Failed to send verification email: ${error}';
@@ -9045,6 +9070,8 @@ extension on Translations {
         return 'Requests (30d):';
       case 'settings.cloudUsage.labels.resetAt':
         return 'Resets on:';
+      case 'settings.cloudUsage.labels.paymentRequired':
+        return 'Subscription required to view cloud usage.';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.vaultUsage.title':
@@ -10501,12 +10528,20 @@ extension on _StringsZhCn {
         return '状态：';
       case 'settings.cloudAccount.emailVerification.labels.help':
         return '验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
+      case 'settings.cloudAccount.emailVerification.labels.verifiedHelp':
+        return '邮箱已验证，可继续订阅。';
       case 'settings.cloudAccount.emailVerification.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
       case 'settings.cloudAccount.emailVerification.actions.resend':
         return '重新发送验证邮件';
+      case 'settings.cloudAccount.emailVerification.actions.resendCooldown':
+        return ({required Object seconds}) => '${seconds} 秒后可重新发送';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSent':
         return '验证邮件已发送';
+      case 'settings.cloudAccount.emailVerification.messages.verificationAlreadyDone':
+        return '邮箱已完成验证。';
+      case 'settings.cloudAccount.emailVerification.messages.signUpVerificationPrompt':
+        return '账号已创建，请先完成邮箱验证再进行订阅。';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) => '发送验证邮件失败：${error}';
       case 'settings.cloudUsage.title':
@@ -10535,6 +10570,8 @@ extension on _StringsZhCn {
         return '请求数（30 天）：';
       case 'settings.cloudUsage.labels.resetAt':
         return '重置时间：';
+      case 'settings.cloudUsage.labels.paymentRequired':
+        return '需订阅后才能查看云端用量。';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
       case 'settings.vaultUsage.title':

@@ -621,13 +621,17 @@
         "labels": {
           "status": "状态：",
           "help": "验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
+          "verifiedHelp": "邮箱已验证，可继续订阅。",
           "loadFailed": "加载失败：$error"
         },
         "actions": {
-          "resend": "重新发送验证邮件"
+          "resend": "重新发送验证邮件",
+          "resendCooldown": "${seconds} 秒后可重新发送"
         },
         "messages": {
           "verificationEmailSent": "验证邮件已发送",
+          "verificationAlreadyDone": "邮箱已完成验证。",
+          "signUpVerificationPrompt": "账号已创建，请先完成邮箱验证再进行订阅。",
           "verificationEmailSendFailed": "发送验证邮件失败：$error"
         }
       }
@@ -649,6 +653,7 @@
         "tokensUsed30d": "Tokens（30 天）：",
         "requestsUsed30d": "请求数（30 天）：",
         "resetAt": "重置时间：",
+        "paymentRequired": "需订阅后才能查看云端用量。",
         "loadFailed": "加载失败：$error"
       }
     },

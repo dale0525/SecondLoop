@@ -621,13 +621,17 @@
         "labels": {
           "status": "Status:",
           "help": "Verify your email to use SecondLoop Cloud Ask AI.",
+          "verifiedHelp": "Email is verified. You can continue to subscribe.",
           "loadFailed": "Failed to load: $error"
         },
         "actions": {
-          "resend": "Resend verification email"
+          "resend": "Resend verification email",
+          "resendCooldown": "Resend in ${seconds}s"
         },
         "messages": {
           "verificationEmailSent": "Verification email sent",
+          "verificationAlreadyDone": "Email is already verified.",
+          "signUpVerificationPrompt": "Account created. Please verify your email before subscribing.",
           "verificationEmailSendFailed": "Failed to send verification email: $error"
         }
       }
@@ -649,6 +653,7 @@
         "tokensUsed30d": "Tokens (30d):",
         "requestsUsed30d": "Requests (30d):",
         "resetAt": "Resets on:",
+        "paymentRequired": "Subscription required to view cloud usage.",
         "loadFailed": "Failed to load: $error"
       }
     },

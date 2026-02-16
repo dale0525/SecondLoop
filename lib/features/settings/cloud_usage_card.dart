@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_usage_client.dart';
+import '../../core/ai/ai_routing.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 
@@ -86,6 +87,18 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
     super.dispose();
   }
 
+  String _formatUsageError(BuildContext context, Object error) {
+    final status = parseHttpStatusFromError(error);
+    final code = parseCloudErrorCodeFromError(error);
+    if (status == 402 || code == 'payment_required') {
+      return context.t.settings.cloudUsage.labels.paymentRequired;
+    }
+    if (status == 403 && code == 'email_not_verified') {
+      return context.t.chat.cloudGateway.emailNotVerified;
+    }
+    return '$error';
+  }
+
   Future<void> _refresh() async {
     if (_busy) return;
     final scope = CloudAuthScope.maybeOf(context);
@@ -147,7 +160,8 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
       (false, false) when _busy =>
         const Center(child: CircularProgressIndicator()),
       (false, false) when _error != null => Text(
-          context.t.settings.cloudUsage.labels.loadFailed(error: '$_error'),
+          context.t.settings.cloudUsage.labels
+              .loadFailed(error: _formatUsageError(context, _error!)),
         ),
       (false, false) when _summary != null =>
         CloudUsageSummaryView(summary: _summary!),

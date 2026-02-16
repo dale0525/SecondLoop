@@ -111,9 +111,13 @@ final class CloudAuthControllerImpl extends ChangeNotifier
 
   @override
   Future<String?> getIdToken() async {
+    return _getIdToken();
+  }
+
+  Future<String?> _getIdToken({bool forceRefresh = false}) async {
     await _ensureLoaded();
     final cached = _cachedTokens;
-    if (cached != null && _nowMs() < cached.expiresAtMs) {
+    if (!forceRefresh && cached != null && _nowMs() < cached.expiresAtMs) {
       return cached.idToken;
     }
 
@@ -134,7 +138,7 @@ final class CloudAuthControllerImpl extends ChangeNotifier
 
   @override
   Future<void> refreshUserInfo() async {
-    final token = await getIdToken();
+    final token = await _getIdToken();
     if (token == null || token.trim().isEmpty) {
       if (_cachedUserInfo == null) return;
       _cachedUserInfo = null;
@@ -142,20 +146,45 @@ final class CloudAuthControllerImpl extends ChangeNotifier
       return;
     }
 
+    final previousEmailVerified = _cachedUserInfo?.emailVerified;
     final info = await _identityToolkit.lookup(idToken: token);
     _cachedUserInfo = info;
+
+    if (previousEmailVerified == false && info.emailVerified == true) {
+      // Force a token refresh on the next authenticated call so backend checks
+      // immediately observe the verified-email state.
+      _cachedTokens = null;
+    }
+
     notifyListeners();
   }
 
   @override
   Future<void> sendEmailVerification() async {
-    final token = await getIdToken();
-    if (token == null || token.trim().isEmpty) {
-      throw StateError('missing_id_token');
+    Future<void> sendWithToken({required bool forceRefresh}) async {
+      final token = await _getIdToken(forceRefresh: forceRefresh);
+      if (token == null || token.trim().isEmpty) {
+        throw StateError('missing_id_token');
+      }
+
+      await _identityToolkit.sendOobCode(
+        requestType: 'VERIFY_EMAIL',
+        idToken: token,
+      );
     }
-    await _identityToolkit.sendOobCode(
-      requestType: 'VERIFY_EMAIL',
-      idToken: token,
-    );
+
+    try {
+      await sendWithToken(forceRefresh: false);
+    } catch (error) {
+      if (!_shouldRetryEmailVerification(error)) rethrow;
+      await sendWithToken(forceRefresh: true);
+    }
+  }
+
+  static bool _shouldRetryEmailVerification(Object error) {
+    final normalized = error.toString().toLowerCase();
+    return normalized.contains('missing_id_token') ||
+        normalized.contains('invalid_id_token') ||
+        normalized.contains('token_expired');
   }
 }
