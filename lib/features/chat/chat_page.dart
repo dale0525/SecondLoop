@@ -128,6 +128,8 @@ const _kTodoAutoSemanticTimeout = Duration(milliseconds: 280);
 const _kTodoLinkSheetRerankTimeout = Duration(milliseconds: 5000);
 const _kAiSemanticParseTimeout = Duration(milliseconds: 2500);
 const _kAiTimeWindowParseMinConfidence = 0.75;
+const _kTodoSemanticVeryHighConfidenceDistance = 0.12;
+const _kTodoSemanticVeryHighConfidenceGap = 0.12;
 
 bool _looksLikeBareTodoStatusUpdate(String text) {
   return looksLikeBareTodoStatusUpdateForSemanticParse(text);
@@ -167,6 +169,22 @@ int _semanticBoost(int rank, double distance) {
     _ => 0.3,
   };
   return (base * factor).round();
+}
+
+bool _isVeryHighConfidenceTodoSemanticMatch(List<TodoThreadMatch> matches) {
+  if (matches.isEmpty) return false;
+
+  final firstDistance = matches.first.distance;
+  if (!firstDistance.isFinite) return false;
+  if (firstDistance > _kTodoSemanticVeryHighConfidenceDistance) return false;
+
+  if (matches.length <= 1) return true;
+
+  final secondDistance = matches[1].distance;
+  if (!secondDistance.isFinite) return true;
+
+  return (secondDistance - firstDistance) >=
+      _kTodoSemanticVeryHighConfidenceGap;
 }
 
 List<TodoLinkCandidate> _mergeTodoCandidatesWithSemanticMatches({
