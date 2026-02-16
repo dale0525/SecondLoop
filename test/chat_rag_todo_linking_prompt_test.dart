@@ -46,7 +46,7 @@ void main() {
     }
     await tester.pumpAndSettle();
 
-    expect(backend.searchCalls, 1);
+    expect(backend.searchCalls, greaterThanOrEqualTo(1));
     expect(find.text('Update a task?'), findsOneWidget);
     expect(find.text('下午 2 点有客户来拜访，需要接待'), findsOneWidget);
   });

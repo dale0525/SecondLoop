@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_secure_storage_windows
   hotkey_manager_windows
+  just_audio_windows
   local_auth_windows
   record_windows
   screen_retriever
