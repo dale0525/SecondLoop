@@ -43,6 +43,68 @@ void main() {
     expect(backend.clearSavedSessionKeyCalls, 1);
   });
 
+  testWidgets('Settings: enabling Auto lock without master password asks setup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'app_lock_enabled_v1': false,
+    });
+
+    final backend = _CountingBackend(masterPasswordSet: false);
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('app_lock_enabled_v1'), true);
+    expect(prefs.getBool('master_password_setup_required_v1'), true);
+    expect(backend.saveSessionKeyCalls, 0);
+    expect(backend.clearSavedSessionKeyCalls, 0);
+  });
+
+  testWidgets('Settings: lock now without master password asks setup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'app_lock_enabled_v1': false,
+    });
+
+    final backend = _CountingBackend(masterPasswordSet: false);
+    var lockCalls = 0;
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () => lockCalls += 1,
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lock now'));
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('master_password_setup_required_v1'), true);
+    expect(lockCalls, 1);
+  });
+
   testWidgets('Settings: enabling biometrics persists session key',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -102,7 +164,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Auto lock'));
+      await tester.tap(find.byType(SwitchListTile).first);
       await tester.pumpAndSettle();
 
       final prefs = await SharedPreferences.getInstance();
@@ -116,6 +178,9 @@ void main() {
 }
 
 final class _CountingBackend extends AppBackend {
+  _CountingBackend({this.masterPasswordSet = true});
+
+  final bool masterPasswordSet;
   int saveSessionKeyCalls = 0;
   int clearSavedSessionKeyCalls = 0;
 
@@ -123,7 +188,7 @@ final class _CountingBackend extends AppBackend {
   Future<void> init() async {}
 
   @override
-  Future<bool> isMasterPasswordSet() async => true;
+  Future<bool> isMasterPasswordSet() async => masterPasswordSet;
 
   @override
   Future<bool> readAutoUnlockEnabled() async => true;

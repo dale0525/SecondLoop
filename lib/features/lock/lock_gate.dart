@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -23,6 +24,15 @@ class _LockGateState extends State<LockGate> {
   Uint8List? _sessionKey;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
+  static const _kMasterPasswordSetupRequiredPrefsKey =
+      'master_password_setup_required_v1';
+
+  Uint8List _createSessionKey() {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    );
+  }
 
   void _lock() {
     setState(() {
@@ -33,12 +43,35 @@ class _LockGateState extends State<LockGate> {
 
   Future<_GateBootstrapResult> _bootstrap() async {
     final backend = AppBackendScope.of(context);
-
-    final isSet = await backend.isMasterPasswordSet();
-    if (!isSet) return const _GateBootstrapResult.needsSetup();
-
     final prefs = await SharedPreferences.getInstance();
     final appLockEnabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
+    final setupRequired =
+        prefs.getBool(_kMasterPasswordSetupRequiredPrefsKey) ?? false;
+
+    final isSet = await backend.isMasterPasswordSet();
+    if (!isSet) {
+      if (appLockEnabled || setupRequired) {
+        return const _GateBootstrapResult.needsSetup();
+      }
+
+      final savedKey = await backend.loadSavedSessionKey();
+      if (savedKey != null && savedKey.length == 32) {
+        return _GateBootstrapResult.unlocked(savedKey);
+      }
+
+      if (savedKey != null && savedKey.length != 32) {
+        await backend.clearSavedSessionKey();
+      }
+
+      final generatedKey = _createSessionKey();
+      await backend.saveSessionKey(generatedKey);
+      return _GateBootstrapResult.unlocked(generatedKey);
+    }
+
+    if (setupRequired) {
+      await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
+    }
+
     if (appLockEnabled) return const _GateBootstrapResult.needsUnlock();
 
     final savedKey = await backend.loadSavedSessionKey();

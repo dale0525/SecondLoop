@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -12,11 +13,18 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('First launch shows setup page', (WidgetTester tester) async {
-    await tester.pumpWidget(MyApp(backend: FakeBackend()));
-    await tester.pumpAndSettle();
+  testWidgets('First launch goes directly to main stream',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
 
-    expect(find.text('Set master password'), findsOneWidget);
+    await tester.pumpWidget(MyApp(backend: FakeBackend()));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.text('Main Stream').evaluate().isNotEmpty) break;
+    }
+
+    expect(find.text('Set master password'), findsNothing);
+    expect(find.text('Main Stream'), findsWidgets);
   });
 
   testWidgets('Settings shows Sync entry', (WidgetTester tester) async {
