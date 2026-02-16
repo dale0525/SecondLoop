@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -684,51 +684,58 @@ void main() {
   testWidgets(
       'Audio transcribe local runtime mode disables profile override picker',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
-    final store = _FakeMediaAnnotationConfigStore(
-      _defaultMediaConfig(mediaUnderstandingEnabled: true),
-    );
-    final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(mediaUnderstandingEnabled: true),
-    );
+    try {
+      SharedPreferences.setMockInitialValues({});
 
-    await _pumpPage(
-      tester,
-      store: store,
-      contentStore: contentStore,
-      backend: TestAppBackend(),
-    );
+      final store = _FakeMediaAnnotationConfigStore(
+        _defaultMediaConfig(mediaUnderstandingEnabled: true),
+      );
+      final contentStore = _FakeContentEnrichmentConfigStore(
+        _defaultContentConfig(mediaUnderstandingEnabled: true),
+      );
 
-    final scrollable = find.byType(Scrollable).first;
-    final engineTile = find.widgetWithText(ListTile, 'Transcription engine');
-    await tester.scrollUntilVisible(
-      engineTile,
-      260,
-      scrollable: scrollable,
-    );
-    await tester.pumpAndSettle();
+      await _pumpPage(
+        tester,
+        store: store,
+        contentStore: contentStore,
+        backend: TestAppBackend(),
+      );
 
-    await tester.tap(engineTile);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Local runtime').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
+      final scrollable = find.byType(Scrollable).first;
+      final engineTile = find.widgetWithText(ListTile, 'Transcription engine');
+      await tester.scrollUntilVisible(
+        engineTile,
+        260,
+        scrollable: scrollable,
+      );
+      await tester.pumpAndSettle();
 
-    expect(contentStore.writes, isNotEmpty);
-    expect(contentStore.writes.last.audioTranscribeEngine, 'local_runtime');
+      await tester.tap(engineTile);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Local runtime').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
 
-    final audioApiTile =
-        find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
-    expect(
-      find.descendant(of: audioApiTile, matching: find.text('Local mode')),
-      findsOneWidget,
-    );
+      expect(contentStore.writes, isNotEmpty);
+      expect(contentStore.writes.last.audioTranscribeEngine, 'local_runtime');
 
-    await tester.tap(audioApiTile);
-    await tester.pumpAndSettle();
-    expect(find.byType(SimpleDialog), findsNothing);
+      final audioApiTile =
+          find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
+      expect(
+        find.descendant(of: audioApiTile, matching: find.text('Local mode')),
+        findsOneWidget,
+      );
+
+      await tester.tap(audioApiTile);
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = previousPlatform;
+    }
   });
 
   testWidgets('Non-Pro users do not see Use SecondLoop Cloud switch',
@@ -1140,5 +1147,63 @@ void main() {
       find.textContaining('linux_ocr_runtime_exec_not_permitted'),
       findsAtLeastNWidgets(1),
     );
+  });
+
+  testWidgets('Linux OCR models map runtime payload code to user-friendly text',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+    final linuxModelStore = _FakeLinuxOcrModelStore(
+      status: const LinuxOcrModelStatus(
+        supported: true,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 0,
+        totalBytes: 0,
+        source: LinuxOcrModelSource.none,
+      ),
+      downloadResult: const LinuxOcrModelStatus(
+        supported: true,
+        installed: false,
+        modelDirPath: null,
+        modelCount: 1,
+        totalBytes: 114,
+        source: LinuxOcrModelSource.none,
+        message: 'runtime_payload_incomplete',
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      linuxOcrModelStore: linuxModelStore,
+    );
+
+    final scrollable = find.byType(Scrollable).first;
+    final downloadButton =
+        find.byKey(MediaAnnotationSettingsPage.linuxOcrModelDownloadButtonKey);
+    await tester.scrollUntilVisible(
+      downloadButton,
+      260,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(downloadButton);
+    await tester.pumpAndSettle();
+
+    expect(linuxModelStore.downloadCalls, 1);
+    expect(
+      find.textContaining('Runtime files are incomplete'),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('runtime_payload_incomplete'), findsNothing);
   });
 }

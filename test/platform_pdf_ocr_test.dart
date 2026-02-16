@@ -74,6 +74,102 @@ void main() {
     expect(PlatformPdfOcr.lastErrorMessage, isNull);
   });
 
+  test(
+      'PlatformPdfOcr falls back to windows native OCR when runtime reports unsupported image bytes',
+      () async {
+    const channel = MethodChannel('secondloop/ocr');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    var nativeCalled = false;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      nativeCalled = true;
+      expect(call.method, 'ocrImage');
+      return <String, Object?>{
+        'ocr_text_full': 'windows recovered text',
+        'ocr_text_excerpt': 'windows recovered text',
+        'ocr_engine': 'windows_ocr',
+        'ocr_is_truncated': false,
+        'ocr_page_count': 1,
+        'ocr_processed_pages': 1,
+      };
+    });
+
+    final result = await PlatformPdfOcr.tryOcrImageBytes(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      languageHints: 'device_plus_en',
+      ocrImageInvoke: (bytes, {required languageHints}) {
+        throw StateError(
+            'AnyhowException(invalid image bytes: The image format could not be determined)');
+      },
+    );
+
+    expect(result, isNotNull);
+    expect(result!.fullText, 'windows recovered text');
+    expect(result.engine, 'windows_ocr');
+    expect(nativeCalled, isTrue);
+    expect(PlatformPdfOcr.lastErrorMessage, isNull);
+  });
+
+  test(
+      'PlatformPdfOcr transcodes HEIF-like bytes then runs runtime OCR on windows',
+      () async {
+    const channel = MethodChannel('secondloop/ocr');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    var decodeCalled = false;
+    var runtimeCalled = false;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'decodeImageToJpeg') {
+        decodeCalled = true;
+        return <String, Object?>{
+          'image_bytes':
+              Uint8List.fromList(const <int>[0xFF, 0xD8, 0xFF, 0x00]),
+          'image_mime_type': 'image/jpeg',
+        };
+      }
+      fail('unexpected method: ${call.method}');
+    });
+
+    final result = await PlatformPdfOcr.tryOcrImageBytes(
+      Uint8List.fromList(const <int>[
+        0x00,
+        0x00,
+        0x00,
+        0x18,
+        0x66,
+        0x74,
+        0x79,
+        0x70,
+        0x68,
+        0x65,
+        0x69,
+        0x63,
+      ]),
+      languageHints: 'device_plus_en',
+      ocrImageInvoke: (bytes, {required languageHints}) async {
+        runtimeCalled = true;
+        expect(bytes, Uint8List.fromList(const <int>[0xFF, 0xD8, 0xFF, 0x00]));
+        return <String, Object?>{
+          'ocr_text_full': 'runtime heif text',
+          'ocr_text_excerpt': 'runtime heif text',
+          'ocr_engine': 'desktop_rust_image_noop',
+          'ocr_is_truncated': false,
+          'ocr_page_count': 1,
+          'ocr_processed_pages': 1,
+        };
+      },
+    );
+
+    expect(result, isNotNull);
+    expect(result!.fullText, 'runtime heif text');
+    expect(result.engine, 'desktop_rust_image_noop');
+    expect(decodeCalled, isTrue);
+    expect(runtimeCalled, isTrue);
+    expect(PlatformPdfOcr.lastErrorMessage, isNull);
+  });
+
   test('PlatformPdfOcr returns null on malformed payload', () async {
     final result = await PlatformPdfOcr.tryOcrPdfBytes(
       Uint8List.fromList(const <int>[1, 2, 3]),

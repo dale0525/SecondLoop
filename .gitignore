@@ -40,7 +40,14 @@ build/
 logs/
 
 # Local desktop runtime payload cache (downloaded from GitHub Releases)
-assets/ocr/desktop_runtime/
+# Keep directory skeleton tracked to avoid analyzer warnings on clean clones.
+assets/ocr/desktop_runtime/**
+!assets/ocr/desktop_runtime/
+!assets/ocr/desktop_runtime/models/
+!assets/ocr/desktop_runtime/onnxruntime/
+!assets/ocr/desktop_runtime/.gitkeep
+!assets/ocr/desktop_runtime/models/.gitkeep
+!assets/ocr/desktop_runtime/onnxruntime/.gitkeep
 
 # Git worktrees
 .worktrees/

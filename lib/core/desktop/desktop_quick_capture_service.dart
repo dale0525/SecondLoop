@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import '../quick_capture/quick_capture_controller.dart';
 import '../quick_capture/quick_capture_scope.dart';
 import 'desktop_quick_capture_hotkey_prefs.dart';
+import 'desktop_window_manager_bootstrap.dart';
 
 abstract class DesktopHotkeyAdapter {
   Future<void> register(
@@ -85,7 +86,7 @@ class _DesktopQuickCaptureServiceState extends State<DesktopQuickCaptureService>
   }
 
   Future<void> _initDesktop() async {
-    await windowManager.ensureInitialized();
+    await DesktopWindowManagerBootstrap.ensureInitialized();
     windowManager.addListener(this);
 
     await DesktopQuickCaptureHotkeyPrefs.load();
@@ -148,10 +149,14 @@ final class HotkeyManagerDesktopHotkeyAdapter implements DesktopHotkeyAdapter {
 }
 
 final class WindowManagerDesktopWindowAdapter implements DesktopWindowAdapter {
-  static const _kQuickCaptureSize = Size(560, 160);
+  static const _kQuickCaptureSize = Size(560, 72);
 
   Size? _savedSize;
   Offset? _savedPosition;
+  bool? _savedResizable;
+  bool? _savedAlwaysOnTop;
+  bool? _savedSkipTaskbar;
+  bool? _savedHasShadow;
 
   @override
   Future<void> showAndFocus() async {
@@ -168,15 +173,48 @@ final class WindowManagerDesktopWindowAdapter implements DesktopWindowAdapter {
   Future<void> enterQuickCaptureMode() async {
     _savedSize = await windowManager.getSize();
     _savedPosition = await windowManager.getPosition();
+    _savedResizable = await windowManager.isResizable();
+    _savedAlwaysOnTop = await windowManager.isAlwaysOnTop();
+    _savedSkipTaskbar = await windowManager.isSkipTaskbar();
+    _savedHasShadow = await _maybeReadHasShadow();
 
     await windowManager.setAlwaysOnTop(true);
+    await windowManager.setResizable(false);
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.setAsFrameless();
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
+    await _maybeSetHasShadow(false);
     await windowManager.setSize(_kQuickCaptureSize);
     await windowManager.center();
   }
 
   @override
   Future<void> exitQuickCaptureMode() async {
-    await windowManager.setAlwaysOnTop(false);
+    await windowManager.setTitleBarStyle(
+      TitleBarStyle.normal,
+      windowButtonVisibility: true,
+    );
+
+    final savedHasShadow = _savedHasShadow;
+    if (savedHasShadow != null) {
+      await _maybeSetHasShadow(savedHasShadow);
+    }
+
+    final resizable = _savedResizable;
+    final alwaysOnTop = _savedAlwaysOnTop;
+    final skipTaskbar = _savedSkipTaskbar;
+    if (resizable != null) {
+      await windowManager.setResizable(resizable);
+    }
+    if (alwaysOnTop != null) {
+      await windowManager.setAlwaysOnTop(alwaysOnTop);
+    }
+    if (skipTaskbar != null) {
+      await windowManager.setSkipTaskbar(skipTaskbar);
+    }
 
     final size = _savedSize;
     final pos = _savedPosition;
@@ -185,6 +223,36 @@ final class WindowManagerDesktopWindowAdapter implements DesktopWindowAdapter {
 
     _savedSize = null;
     _savedPosition = null;
+    _savedResizable = null;
+    _savedAlwaysOnTop = null;
+    _savedSkipTaskbar = null;
+    _savedHasShadow = null;
+  }
+
+  Future<bool?> _maybeReadHasShadow() async {
+    if (defaultTargetPlatform != TargetPlatform.windows &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return null;
+    }
+
+    try {
+      return await windowManager.hasShadow();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _maybeSetHasShadow(bool hasShadow) async {
+    if (defaultTargetPlatform != TargetPlatform.windows &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return;
+    }
+
+    try {
+      await windowManager.setHasShadow(hasShadow);
+    } catch (_) {
+      // Ignore unsupported platform/runtime edge cases.
+    }
   }
 }
 
@@ -246,6 +314,12 @@ final class DesktopQuickCaptureCoordinator {
     }
 
     await window.exitQuickCaptureMode();
+    final shouldReopenMainWindow =
+        controller.consumeReopenMainWindowOnHideRequest();
+    if (shouldReopenMainWindow) {
+      await window.showAndFocus();
+      return;
+    }
     await window.hide();
   }
 }

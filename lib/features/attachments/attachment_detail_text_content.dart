@@ -61,6 +61,8 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('extracted_text_excerpt'),
   ]);
 
+  final normalizedMime = read('mime_type').toLowerCase();
+  final isImagePayload = normalizedMime.startsWith('image/');
   final hasVideoPayloadSignal = payload != null &&
       (payload.containsKey('video_segment_count') ||
           payload.containsKey('video_segments') ||
@@ -75,6 +77,25 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
   ]).isNotEmpty;
   final isVlogWithoutOcr =
       hasVideoPayloadSignal && videoKind == kVideoKindVlog && !hasOcrText;
+
+  final imageFull = firstNonEmpty(<String?>[
+    read('manual_full_text'),
+    read('full_text'),
+    read('manual_summary'),
+    read('summary'),
+    caption,
+    selected.full,
+    selected.excerpt,
+    read('transcript_full'),
+    read('transcript_excerpt'),
+    read('ocr_text_full', normalizeOcr: true),
+    read('ocr_text', normalizeOcr: true),
+    read('readable_text_full'),
+    read('extracted_text_full'),
+    read('ocr_text_excerpt', normalizeOcr: true),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+  ]);
 
   final videoFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
@@ -105,18 +126,13 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('readable_text_excerpt'),
   ]);
 
-  final fallbackFull = firstNonEmpty(<String?>[
+  final nonImageFallbackFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
     read('full_text'),
-    read('knowledge_markdown_full'),
-    read('video_description_full'),
-    read('knowledge_markdown_excerpt'),
-    read('video_description_excerpt'),
     selected.full,
     read('transcript_full'),
     read('manual_summary'),
     read('summary'),
-    read('video_summary'),
     selected.excerpt,
     read('transcript_excerpt'),
     caption,
@@ -131,7 +147,9 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final full = isVlogWithoutOcr
       ? vlogTranscriptOnlyFull
-      : (hasVideoPayloadSignal ? videoFull : fallbackFull);
+      : (hasVideoPayloadSignal
+          ? videoFull
+          : (isImagePayload ? imageFull : nonImageFallbackFull));
 
   return AttachmentDetailTextContent(summary: summary, full: full);
 }

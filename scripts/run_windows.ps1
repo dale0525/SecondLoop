@@ -99,9 +99,17 @@ if ($UseFlutterRun) {
 
 $devVersion = Get-DevMsiVersion
 $outputName = 'secondloop-dev'
+$devProductName = 'SecondLoop Dev'
+$devUpgradeCode = 'A8A3E3A2-3C6E-4D9D-BD70-82D59F8CF0B2'
 
 Write-Host "Running MSI debug flow. Packaging version: $devVersion"
-$msiPathOutput = & (Join-Path $PSScriptRoot 'package_windows_msi.ps1') -Version $devVersion -OutputPath 'dist' -OutputName $outputName -PassThru
+$msiPathOutput = & (Join-Path $PSScriptRoot 'package_windows_msi.ps1') `
+  -Version $devVersion `
+  -OutputPath 'dist' `
+  -OutputName $outputName `
+  -ProductName $devProductName `
+  -UpgradeCode $devUpgradeCode `
+  -PassThru
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
@@ -111,5 +119,5 @@ if (-not $msiPath -or -not (Test-Path $msiPath)) {
   throw "MSI package path is invalid: $msiPath"
 }
 
-& (Join-Path $PSScriptRoot 'install_windows_msi.ps1') -MsiPath $msiPath -Quiet -LaunchAfterInstall
+& (Join-Path $PSScriptRoot 'install_windows_msi.ps1') -MsiPath $msiPath -Quiet -LaunchAfterInstall -InstallDirName $devProductName
 exit $LASTEXITCODE

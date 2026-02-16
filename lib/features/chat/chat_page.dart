@@ -97,6 +97,7 @@ part 'chat_page_methods_j_message_edit.dart';
 part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
+part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
@@ -131,6 +132,8 @@ const _kTodoAutoSemanticTimeout = Duration(milliseconds: 280);
 const _kTodoLinkSheetRerankTimeout = Duration(milliseconds: 5000);
 const _kAiSemanticParseTimeout = Duration(milliseconds: 2500);
 const _kAiTimeWindowParseMinConfidence = 0.75;
+const _kTodoSemanticVeryHighConfidenceDistance = 0.12;
+const _kTodoSemanticVeryHighConfidenceGap = 0.12;
 
 bool _looksLikeBareTodoStatusUpdate(String text) {
   return looksLikeBareTodoStatusUpdateForSemanticParse(text);
@@ -170,6 +173,22 @@ int _semanticBoost(int rank, double distance) {
     _ => 0.3,
   };
   return (base * factor).round();
+}
+
+bool _isVeryHighConfidenceTodoSemanticMatch(List<TodoThreadMatch> matches) {
+  if (matches.isEmpty) return false;
+
+  final firstDistance = matches.first.distance;
+  if (!firstDistance.isFinite) return false;
+  if (firstDistance > _kTodoSemanticVeryHighConfidenceDistance) return false;
+
+  if (matches.length <= 1) return true;
+
+  final secondDistance = matches[1].distance;
+  if (!secondDistance.isFinite) return true;
+
+  return (secondDistance - firstDistance) >=
+      _kTodoSemanticVeryHighConfidenceGap;
 }
 
 List<TodoLinkCandidate> _mergeTodoCandidatesWithSemanticMatches({

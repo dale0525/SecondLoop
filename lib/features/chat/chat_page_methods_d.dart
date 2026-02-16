@@ -39,17 +39,45 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     }
     if (targets.isEmpty) return;
 
-    final ranked = await _rankTodoCandidatesWithSemanticMatches(
+    final localSemantic = await _searchLocalTodoSemanticMatches(
       backend,
       sessionKey,
       query: message.content,
+      topK: 10,
+    );
+    final localRanked = _mergeTodoCandidatesWithSemanticMatches(
+      query: message.content,
       targets: targets,
       nowLocal: nowLocal,
+      semanticMatches: localSemantic,
       limit: 10,
     );
+    final shouldSkipRemoteSemantic =
+        _isVeryHighConfidenceTodoSemanticMatch(localSemantic);
+
+    Future<List<TodoLinkCandidate>>? cloudRankedFuture;
+    if (!shouldSkipRemoteSemantic) {
+      cloudRankedFuture = _searchRemoteTodoSemanticMatches(
+        backend,
+        sessionKey,
+        query: message.content,
+        topK: 10,
+      ).then((remoteSemantic) {
+        if (remoteSemantic.isEmpty) return localRanked;
+        return _mergeTodoCandidatesWithSemanticMatches(
+          query: message.content,
+          targets: targets,
+          nowLocal: nowLocal,
+          semanticMatches: remoteSemantic,
+          limit: 10,
+        );
+      });
+    }
+
     final selectedTodoId = await _showTodoNoteLinkSheet(
       allTargets: targets,
-      ranked: ranked,
+      initialRanked: localRanked,
+      cloudRankedFuture: cloudRankedFuture,
     );
     if (selectedTodoId == null || !mounted) return;
 
@@ -149,8 +177,136 @@ extension _ChatPageStateMethodsD on _ChatPageState {
 
   Future<String?> _showTodoNoteLinkSheet({
     required List<TodoLinkTarget> allTargets,
-    required List<TodoLinkCandidate> ranked,
+    required List<TodoLinkCandidate> initialRanked,
+    Future<List<TodoLinkCandidate>>? cloudRankedFuture,
   }) async {
+    var canceledCloudRerank = false;
+    final safeCloudRankedFuture = cloudRankedFuture?.then((ranked) {
+      if (canceledCloudRerank) return initialRanked;
+      return ranked;
+    });
+
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (context) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return FutureBuilder<List<TodoLinkCandidate>>(
+              future: safeCloudRankedFuture,
+              builder: (context, snapshot) {
+                final ranked = snapshot.data ?? initialRanked;
+                final candidates = _mergeTodoNoteLinkCandidates(
+                  allTargets: allTargets,
+                  ranked: ranked,
+                );
+
+                List<TodoLinkCandidate> filtered = candidates;
+                final trimmed = query.trim();
+                if (trimmed.isNotEmpty) {
+                  final q = trimmed.toLowerCase();
+                  filtered = candidates
+                      .where((c) => c.target.title.toLowerCase().contains(q))
+                      .toList(growable: false);
+                }
+
+                final isAiAnalyzing = safeCloudRankedFuture != null &&
+                    snapshot.connectionState != ConnectionState.done;
+
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SlSurface(
+                      key: const ValueKey('todo_note_link_sheet'),
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.t.actions.todoNoteLink.title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(context.t.actions.todoNoteLink.subtitle),
+                          const SizedBox(height: 12),
+                          TextField(
+                            key: const ValueKey('todo_note_link_search'),
+                            decoration: InputDecoration(
+                              hintText: context.t.common.actions.search,
+                              prefixIcon: const Icon(Icons.search_rounded),
+                            ),
+                            onChanged: (value) => setState(() => query = value),
+                          ),
+                          if (isAiAnalyzing) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              key:
+                                  const ValueKey('todo_note_link_ai_analyzing'),
+                              children: [
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    context.t.chat.semanticParseStatusRunning,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Flexible(
+                            child: filtered.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      context.t.actions.todoNoteLink.noMatches,
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    shrinkWrap: true,
+                                    itemCount: filtered.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 6),
+                                    itemBuilder: (context, index) {
+                                      final c = filtered[index];
+                                      return ListTile(
+                                        title: Text(c.target.title),
+                                        subtitle: Text(_todoStatusLabel(
+                                          context,
+                                          c.target.status,
+                                        )),
+                                        onTap: () {
+                                          canceledCloudRerank = true;
+                                          Navigator.of(context)
+                                              .pop(c.target.id);
+                                        },
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<TodoLinkCandidate> _mergeTodoNoteLinkCandidates({
+    required List<TodoLinkTarget> allTargets,
+    required List<TodoLinkCandidate> ranked,
+  }) {
     final seen = <String>{};
     final candidates = <TodoLinkCandidate>[];
     for (final c in ranked) {
@@ -161,83 +317,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
       if (seen.contains(t.id)) continue;
       candidates.add(TodoLinkCandidate(target: t, score: 0));
     }
-
-    return showModalBottomSheet<String>(
-      context: context,
-      builder: (context) {
-        var query = '';
-        return StatefulBuilder(
-          builder: (context, setState) {
-            List<TodoLinkCandidate> filtered = candidates;
-            final trimmed = query.trim();
-            if (trimmed.isNotEmpty) {
-              final q = trimmed.toLowerCase();
-              filtered = candidates
-                  .where((c) => c.target.title.toLowerCase().contains(q))
-                  .toList(growable: false);
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: SlSurface(
-                  key: const ValueKey('todo_note_link_sheet'),
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.t.actions.todoNoteLink.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(context.t.actions.todoNoteLink.subtitle),
-                      const SizedBox(height: 12),
-                      TextField(
-                        key: const ValueKey('todo_note_link_search'),
-                        decoration: InputDecoration(
-                          hintText: context.t.common.actions.search,
-                          prefixIcon: const Icon(Icons.search_rounded),
-                        ),
-                        onChanged: (value) => setState(() => query = value),
-                      ),
-                      const SizedBox(height: 12),
-                      Flexible(
-                        child: filtered.isEmpty
-                            ? Center(
-                                child: Text(
-                                  context.t.actions.todoNoteLink.noMatches,
-                                ),
-                              )
-                            : ListView.separated(
-                                shrinkWrap: true,
-                                itemCount: filtered.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 6),
-                                itemBuilder: (context, index) {
-                                  final c = filtered[index];
-                                  return ListTile(
-                                    title: Text(c.target.title),
-                                    subtitle: Text(_todoStatusLabel(
-                                      context,
-                                      c.target.status,
-                                    )),
-                                    onTap: () =>
-                                        Navigator.of(context).pop(c.target.id),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+    return candidates;
   }
 
   String _todoStatusLabel(BuildContext context, String status) =>

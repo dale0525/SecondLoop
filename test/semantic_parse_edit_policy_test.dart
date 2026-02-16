@@ -47,4 +47,11 @@ void main() {
     expect(looksLikeTodoRelevantForSemanticParse('done'), isFalse);
     expect(looksLikeTodoRelevantForSemanticParse('完成了'), isFalse);
   });
+
+  test('todo relevance: long single-line text is filtered out', () {
+    const longText =
+        'tomorrow 3pm submit report with budget details, invoice checklist, stakeholders updates, and audit notes for weekly review';
+
+    expect(looksLikeTodoRelevantForSemanticParse(longText), isFalse);
+  });
 }

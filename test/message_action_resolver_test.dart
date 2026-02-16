@@ -72,6 +72,52 @@ void main() {
     expect(create.dueAtLocal, DateTime(2026, 1, 25, 15, 0));
   });
 
+  test('does not create todo from long-form note with schedule text', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      '明天 3pm 提交材料\n补充：先确认报价，再整理附件后再发送。',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionNoneDecision>());
+  });
+
+  test('does not create todo from long single-line note over threshold', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      'tomorrow 3pm submit report with budget details, invoice checklist, stakeholders updates, and audit notes for weekly review',
+      locale: const Locale('en'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionNoneDecision>());
+  });
+
+  test('long-form note can still map to followup for existing todo', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final targets = <TodoLinkTarget>[
+      const TodoLinkTarget(id: 'todo:1', title: '报销', status: 'inbox'),
+    ];
+
+    final decision = MessageActionResolver.resolve(
+      '今天把报销搞定了。\n明细已经和发票归档，明天继续跟进。',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: targets,
+    );
+
+    expect(decision, isA<MessageActionFollowUpDecision>());
+    final follow = decision as MessageActionFollowUpDecision;
+    expect(follow.todoId, 'todo:1');
+    expect(follow.newStatus, 'done');
+  });
+
   test('smoke: multilingual time create', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final cases = <({Locale locale, String text})>[

@@ -31,11 +31,11 @@ void main() {
       'lib/core/media_enrichment/media_enrichment_gate_audio_transcribe.dart',
     ).readAsStringSync();
 
-    expect(content, contains('if (shouldEnableLocalFallback)'));
+    expect(content, contains('if (localRuntimeEnabledForChain)'));
     expect(content, isNot(contains('shouldEnableLocalRuntimeFallback')));
 
     final localRuntimeGateIndex =
-        content.indexOf('if (shouldEnableLocalFallback)');
+        content.indexOf('if (localRuntimeEnabledForChain)');
     final localRuntimeClientIndex =
         content.indexOf('LocalRuntimeAudioTranscribeClient(');
 

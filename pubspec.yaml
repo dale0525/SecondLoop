@@ -51,6 +51,7 @@ dependencies:
   window_manager: ^0.3.8
   slang_flutter: ^3.32.0
   flutter_markdown: ^0.7.4+3
+  markdown: ^7.3.0
   url_launcher: ^6.3.1
   wakelock_plus: ^1.2.8
   url_launcher_linux: 3.1.1
@@ -71,6 +72,12 @@ dependencies:
   launch_at_startup: ^0.3.1
   universal_io: ^2.2.2
   menu_base: ^0.1.1
+  syncfusion_flutter_pdf: ^29.1.38
+  just_audio_windows: ^0.2.2
+
+dependency_overrides:
+  just_audio_windows:
+    path: third_party/just_audio_windows_patched
 
 dev_dependencies:
   flutter_test:
@@ -102,10 +109,14 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/bin/ffmpeg/
+    - assets/bin/ffmpeg/windows/
     - assets/bin/ffmpeg/macos/
     - assets/bin/ffmpeg/linux/
-    - assets/bin/ffmpeg/windows/
     - assets/ocr/
+    - assets/ocr/desktop_runtime/
+    - assets/ocr/desktop_runtime/models/
+    - assets/ocr/desktop_runtime/onnxruntime/
     - assets/icon/tray_icon.png
     - assets/icon/tray_icon.ico
 

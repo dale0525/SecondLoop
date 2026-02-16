@@ -66,7 +66,7 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
     }
 
     Future<ChatMarkdownEditorResult?> showMarkdownEditor(String initialText) {
-      return Navigator.of(context).push<ChatMarkdownEditorResult>(
+      return _pushRouteFromChat<ChatMarkdownEditorResult>(
         MaterialPageRoute(
           builder: (context) => ChatMarkdownEditorPage(
             initialText: initialText,

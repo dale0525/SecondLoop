@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,5 +39,36 @@ void main() {
         MediaSourcePreference.byok);
     expect(await MediaCapabilitySourcePrefs.readDocumentOcr(),
         MediaSourcePreference.cloud);
+  });
+
+  test('audio source local falls back to auto on unsupported platforms',
+      () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+
+    SharedPreferences.setMockInitialValues({
+      'media_capability_audio_source_preference_v1': 'local',
+    });
+
+    expect(await MediaCapabilitySourcePrefs.readAudio(),
+        MediaSourcePreference.auto);
+  });
+
+  test('audio source local stays local on windows', () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+    SharedPreferences.setMockInitialValues({
+      'media_capability_audio_source_preference_v1': 'local',
+    });
+
+    expect(await MediaCapabilitySourcePrefs.readAudio(),
+        MediaSourcePreference.local);
   });
 }

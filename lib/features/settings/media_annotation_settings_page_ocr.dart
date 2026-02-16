@@ -200,12 +200,21 @@ extension _MediaAnnotationSettingsPageOcrExtension
     return normalizeAudioTranscribeEngine(engine) == 'local_runtime';
   }
 
+  bool _isEffectiveLocalRuntimeAudioTranscribeEngine(String engine) {
+    return _isLocalRuntimeAudioTranscribeEngine(engine) &&
+        supportsPlatformLocalRuntimeAudioTranscribe();
+  }
+
   String _audioTranscribeEngineLabel(BuildContext context, String engine) {
     final labels =
         context.t.settings.mediaAnnotation.audioTranscribe.engine.labels;
+    final zh = _isZhOcrLocale(context);
     switch (normalizeAudioTranscribeEngine(engine)) {
       case 'local_runtime':
-        return _isZhOcrLocale(context) ? '本地转写' : 'Local runtime';
+        if (supportsPlatformLocalRuntimeAudioTranscribe()) {
+          return zh ? '本地转写' : 'Local runtime';
+        }
+        return zh ? '本地转写（此平台不可用）' : 'Local runtime (Unavailable)';
       case 'multimodal_llm':
         return labels.multimodalLlm;
       default:
@@ -223,8 +232,13 @@ extension _MediaAnnotationSettingsPageOcrExtension
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
+        final localRuntimeSupported =
+            supportsPlatformLocalRuntimeAudioTranscribe();
         var value =
             normalizeAudioTranscribeEngine(config.audioTranscribeEngine);
+        if (!localRuntimeSupported && value == 'local_runtime') {
+          value = 'whisper';
+        }
 
         Widget option({
           required String mode,
@@ -252,14 +266,15 @@ extension _MediaAnnotationSettingsPageOcrExtension
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    option(
-                      mode: 'local_runtime',
-                      title: zh ? '本地转写' : 'Local runtime',
-                      subtitle: zh
-                          ? '优先本地 runtime 转写，失败时回落设备原生 STT（若可用）。'
-                          : 'Prefer local runtime transcription, then fallback to native STT when available.',
-                      setInnerState: setInnerState,
-                    ),
+                    if (localRuntimeSupported)
+                      option(
+                        mode: 'local_runtime',
+                        title: zh ? '本地转写' : 'Local runtime',
+                        subtitle: zh
+                            ? '优先本地 runtime 转写，失败时回落设备原生 STT（若可用）。'
+                            : 'Prefer local runtime transcription, then fallback to native STT when available.',
+                        setInnerState: setInnerState,
+                      ),
                     option(
                       mode: 'whisper',
                       title: t.labels.whisper,
@@ -305,6 +320,9 @@ extension _MediaAnnotationSettingsPageOcrExtension
 
     if (normalizedSelected == 'local_runtime') {
       await _persistContentConfig(nextContentConfig);
+      if (mounted) {
+        await _maybePromptWindowsSpeechLanguagePackInstall(force: true);
+      }
       return;
     }
 

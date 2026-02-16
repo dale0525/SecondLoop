@@ -621,13 +621,17 @@
         "labels": {
           "status": "状态：",
           "help": "验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
+          "verifiedHelp": "邮箱已验证，可继续订阅。",
           "loadFailed": "加载失败：$error"
         },
         "actions": {
-          "resend": "重新发送验证邮件"
+          "resend": "重新发送验证邮件",
+          "resendCooldown": "${seconds} 秒后可重新发送"
         },
         "messages": {
           "verificationEmailSent": "验证邮件已发送",
+          "verificationAlreadyDone": "邮箱已完成验证。",
+          "signUpVerificationPrompt": "账号已创建，请先完成邮箱验证再进行订阅。",
           "verificationEmailSendFailed": "发送验证邮件失败：$error"
         }
       }
@@ -649,6 +653,7 @@
         "tokensUsed30d": "Tokens（30 天）：",
         "requestsUsed30d": "请求数（30 天）：",
         "resetAt": "重置时间：",
+        "paymentRequired": "需订阅后才能查看云端用量。",
         "loadFailed": "加载失败：$error"
       }
     },
@@ -818,8 +823,35 @@
       "previewLabel": "预览区",
       "emptyPreview": "输入后会在这里实时预览。",
       "shortcutHint": "提示：按 Cmd/Ctrl + Enter 可快速应用内容。",
+      "listContinuationHint": "在列表项中按 Enter 可自动续写列表。",
+      "quickActionsLabel": "快捷格式",
+      "themeLabel": "预览主题",
+      "themeStudio": "经典",
+      "themePaper": "纸张",
+      "themeOcean": "海洋",
+      "themeNight": "夜色",
+      "exportMenu": "导出预览",
+      "exportPng": "导出为 PNG",
+      "exportPdf": "导出为 PDF",
+      "exportDone": "已导出为 $format",
+      "exportSavedPath": "已保存到：$path",
+      "exportFailed": "导出失败：$error",
       "stats": "$lines 行 · $characters 字符",
-      "simpleInput": "简易输入"
+      "simpleInput": "简易输入",
+      "actions": {
+        "heading": "标题",
+        "headingLevel": "$level 级标题",
+        "bold": "加粗",
+        "italic": "斜体",
+        "strike": "删除线",
+        "code": "行内代码",
+        "link": "插入链接",
+        "blockquote": "引用",
+        "bulletList": "无序列表",
+        "orderedList": "有序列表",
+        "taskList": "任务列表",
+        "codeBlock": "代码块"
+      }
     },
     "focus": {
       "tooltip": "聚焦",

@@ -13,7 +13,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Chat composer opens markdown editor and applies changes',
+  testWidgets('Chat composer opens markdown editor and sends on save',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = TestAppBackend();
@@ -36,9 +36,6 @@ void main() {
     expect(find.byKey(editorOpenKey), findsOneWidget);
     expect(tester.widget<SlIconButton>(find.byKey(editorOpenKey)), isNotNull);
 
-    await tester.enterText(find.byKey(inputKey), '# Draft');
-    await tester.pumpAndSettle();
-
     await tester.tap(find.byKey(editorOpenKey));
     await tester.pumpAndSettle();
 
@@ -53,8 +50,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(editorPageKey), findsNothing);
+
     final input = tester.widget<TextField>(find.byKey(inputKey));
-    expect(input.controller?.text, '## Updated\n\n- item');
+    expect(input.controller?.text, isEmpty);
+
+    final sentMessages = await backend.listMessages(
+      Uint8List.fromList(List<int>.filled(32, 1)),
+      'main_stream',
+    );
+    expect(sentMessages, hasLength(1));
+    expect(sentMessages.single.content, '## Updated\n\n- item');
   });
 
   testWidgets('Desktop composer also exposes markdown editor entry',

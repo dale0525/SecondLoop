@@ -348,6 +348,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
               onLongPress: isDesktopPlatform
                   ? null
                   : () => _showMessageActions(stableMsg),
+              canRequestFocus: isDesktopPlatform,
               borderRadius: BorderRadius.circular(18),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -620,8 +621,29 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                                     attachmentsBackend:
                                                         attachmentsBackend,
                                                     onTap: () {
-                                                      Navigator.of(context)
-                                                          .push(
+                                                      unawaited(
+                                                        _pushRouteFromChat(
+                                                          MaterialPageRoute(
+                                                            builder: (context) {
+                                                              return AttachmentViewerPage(
+                                                                attachment:
+                                                                    items[i],
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                }
+                                                return AttachmentCard(
+                                                  attachment: items[i],
+                                                  annotationJob:
+                                                      annotationJobsBySha256[
+                                                          items[i].sha256],
+                                                  onTap: () {
+                                                    unawaited(
+                                                      _pushRouteFromChat(
                                                         MaterialPageRoute(
                                                           builder: (context) {
                                                             return AttachmentViewerPage(
@@ -630,21 +652,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                                             );
                                                           },
                                                         ),
-                                                      );
-                                                    },
-                                                  );
-                                                }
-                                                return AttachmentCard(
-                                                  attachment: items[i],
-                                                  onTap: () {
-                                                    Navigator.of(context).push(
-                                                      MaterialPageRoute(
-                                                        builder: (context) {
-                                                          return AttachmentViewerPage(
-                                                            attachment:
-                                                                items[i],
-                                                          );
-                                                        },
                                                       ),
                                                     );
                                                   },
@@ -915,18 +922,21 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                   final items = snapshot.data ?? const <Attachment>[];
                   if (items.isEmpty) return const SizedBox.shrink();
 
-                  String? firstImageSha256;
+                  Attachment? targetAttachment;
+                  AttachmentAnnotationJob? targetJob;
                   for (final a in items) {
-                    if (a.mimeType.startsWith('image/')) {
-                      firstImageSha256 = a.sha256;
+                    final job = annotationJobsBySha256[a.sha256];
+                    if (job != null) {
+                      targetAttachment = a;
+                      targetJob = job;
                       break;
                     }
                   }
-                  final sha256 = firstImageSha256;
-                  if (sha256 == null) return const SizedBox.shrink();
-
-                  final job = annotationJobsBySha256[sha256];
-                  if (job == null) return const SizedBox.shrink();
+                  final attachment = targetAttachment;
+                  final job = targetJob;
+                  if (attachment == null || job == null) {
+                    return const SizedBox.shrink();
+                  }
 
                   Future<void> retry() async {
                     final backendAny = AppBackendScope.of(context);
@@ -940,7 +950,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                     try {
                       await backendAny.enqueueAttachmentAnnotation(
                         sessionKey,
-                        attachmentSha256: sha256,
+                        attachmentSha256: attachment.sha256,
                         lang: lang,
                         nowMs: DateTime.now().millisecondsSinceEpoch,
                       );
@@ -958,7 +968,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                       annotateEnabled: attachmentAnnotationEnabled,
                       canAnnotateNow: attachmentAnnotationCanRunNow,
                       onOpenSetup: () async {
-                        await Navigator.of(context).push(
+                        await _pushRouteFromChat(
                           MaterialPageRoute(
                             builder: (context) => Scaffold(
                               appBar: AppBar(
@@ -970,6 +980,11 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                         );
                       },
                       onRetry: job.status == 'failed' ? retry : null,
+                      onInstallSpeechPack: job.status == 'failed'
+                          ? () async {
+                              await _openWindowsSpeechLanguagePackSettings();
+                            }
+                          : null,
                     ),
                   );
                 },

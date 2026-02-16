@@ -19,7 +19,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'Todo linking skips local semantic fallback when cloud embeddings enabled but unavailable',
+      'Todo linking uses local semantic first, then BYOK fallback when cloud embeddings unavailable',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': true,
@@ -79,10 +79,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(backend.calls, isNot(contains('searchSimilarTodoThreads')));
-    expect(backend.calls, isNot(contains('searchSimilarTodoThreadsBrok')));
     expect(
-        backend.calls, isNot(contains('searchSimilarTodoThreadsCloudGateway')));
+      backend.calls,
+      <String>['searchSimilarTodoThreads', 'searchSimilarTodoThreadsBrok'],
+    );
+    expect(
+      backend.calls,
+      isNot(contains('searchSimilarTodoThreadsCloudGateway')),
+    );
   });
 
   testWidgets('Todo linking falls back to local semantic when Pro not entitled',

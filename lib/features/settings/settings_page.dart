@@ -176,6 +176,14 @@ class _SettingsPageState extends State<SettingsPage> {
     return '$r/$c';
   }
 
+  bool _isOperationTimeoutError(Object error) {
+    if (error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('operation timeout') ||
+        message.contains('timed out') ||
+        message.contains('timeout');
+  }
+
   Future<void> _resetLocalData({required bool clearAllRemoteData}) async {
     if (_busy) return;
 
@@ -220,48 +228,58 @@ class _SettingsPageState extends State<SettingsPage> {
       if (sync != null) {
         final deviceId =
             clearAllRemoteData ? null : await backend.getOrCreateDeviceId();
-        await switch (sync.backendType) {
-          SyncBackendType.webdav => backend.syncWebdavClearRemoteRoot(
-              baseUrl: sync.baseUrl ?? '',
-              username: sync.username,
-              password: sync.password,
-              remoteRoot: deviceId == null
-                  ? sync.remoteRoot
-                  : _joinRemotePath(sync.remoteRoot, deviceId),
-            ),
-          SyncBackendType.localDir => backend.syncLocaldirClearRemoteRoot(
-              localDir: sync.localDir ?? '',
-              remoteRoot: deviceId == null
-                  ? sync.remoteRoot
-                  : _joinRemotePath(sync.remoteRoot, deviceId),
-            ),
-          SyncBackendType.managedVault => () async {
-              final idToken = await CloudAuthScope.maybeOf(context)
-                  ?.controller
-                  .getIdToken();
-              if (idToken == null || idToken.trim().isEmpty) {
-                throw StateError('missing_cloud_id_token');
-              }
-              final baseUrl = sync.baseUrl ?? '';
-              if (baseUrl.trim().isEmpty) throw StateError('missing_base_url');
+        try {
+          await switch (sync.backendType) {
+            SyncBackendType.webdav => backend.syncWebdavClearRemoteRoot(
+                baseUrl: sync.baseUrl ?? '',
+                username: sync.username,
+                password: sync.password,
+                remoteRoot: deviceId == null
+                    ? sync.remoteRoot
+                    : _joinRemotePath(sync.remoteRoot, deviceId),
+              ),
+            SyncBackendType.localDir => backend.syncLocaldirClearRemoteRoot(
+                localDir: sync.localDir ?? '',
+                remoteRoot: deviceId == null
+                    ? sync.remoteRoot
+                    : _joinRemotePath(sync.remoteRoot, deviceId),
+              ),
+            SyncBackendType.managedVault => () async {
+                final idToken = await CloudAuthScope.maybeOf(context)
+                    ?.controller
+                    .getIdToken();
+                if (idToken == null || idToken.trim().isEmpty) {
+                  throw StateError('missing_cloud_id_token');
+                }
+                final baseUrl = sync.baseUrl ?? '';
+                if (baseUrl.trim().isEmpty) {
+                  throw StateError('missing_base_url');
+                }
 
-              if (deviceId == null) {
-                await backend.syncManagedVaultClearVault(
+                if (deviceId == null) {
+                  await backend.syncManagedVaultClearVault(
+                    baseUrl: baseUrl,
+                    vaultId: sync.remoteRoot,
+                    idToken: idToken,
+                  );
+                  return;
+                }
+
+                await backend.syncManagedVaultClearDevice(
                   baseUrl: baseUrl,
                   vaultId: sync.remoteRoot,
                   idToken: idToken,
+                  deviceId: deviceId,
                 );
-                return;
-              }
-
-              await backend.syncManagedVaultClearDevice(
-                baseUrl: baseUrl,
-                vaultId: sync.remoteRoot,
-                idToken: idToken,
-                deviceId: deviceId,
-              );
-            }(),
-        };
+              }(),
+          };
+        } catch (e) {
+          if (!(clearAllRemoteData && _isOperationTimeoutError(e))) {
+            rethrow;
+          }
+          debugPrint(
+              'settings debug reset: ignored remote clear timeout in all-devices mode: $e');
+        }
       }
 
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);

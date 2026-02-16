@@ -282,6 +282,10 @@ final class PlatformPdfOcr {
     'desktop_runtime_not_supported',
     'desktop_runtime_dir_unavailable',
   ];
+  static const List<String> _runtimeImageDecodeErrorMarkers = <String>[
+    'invalid image bytes',
+    'image format could not be determined',
+  ];
 
   static String? _lastErrorMessage;
 
@@ -368,17 +372,31 @@ final class PlatformPdfOcr {
     final hints =
         languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
 
+    var runtimeBytes = bytes;
+    final transcodedForRuntime = await _tryDecodeImageToJpegForRuntime(bytes);
+    if (transcodedForRuntime != null && transcodedForRuntime.isNotEmpty) {
+      runtimeBytes = transcodedForRuntime;
+    }
+    _lastErrorMessage = null;
+
     final invoke = ocrImageInvoke ?? _invokeDesktopOcrImage;
     final raw = await _invokeSafely(
       () => invoke(
-        bytes,
+        runtimeBytes,
         languageHints: hints,
       ),
     );
     var parsed = _parsePayload(raw);
     final runtimeError = _lastErrorMessage;
-    if (_shouldFallbackToNativeOcr(
-        parsed: parsed, runtimeError: runtimeError)) {
+    final shouldFallbackToNative = _shouldFallbackToNativeOcr(
+          parsed: parsed,
+          runtimeError: runtimeError,
+        ) ||
+        _shouldFallbackToNativeImageOcrOnDecodeFailure(
+          parsed: parsed,
+          runtimeError: runtimeError,
+        );
+    if (shouldFallbackToNative) {
       final nativeRaw = await _invokeSafely(
         () => _invokeNativeOcrImage(
           bytes,
@@ -432,10 +450,77 @@ final class PlatformPdfOcr {
     if (parsed != null) return false;
     final message = runtimeError?.trim().toLowerCase() ?? '';
     if (message.isEmpty) return false;
-    for (final marker in _runtimeUnavailableErrorMarkers) {
+    return _containsAnyErrorMarker(
+      message: message,
+      markers: _runtimeUnavailableErrorMarkers,
+    );
+  }
+
+  static bool _shouldFallbackToNativeImageOcrOnDecodeFailure({
+    required PlatformPdfOcrResult? parsed,
+    required String? runtimeError,
+  }) {
+    if (!_canUseNativeOcrFallback()) return false;
+    if (parsed != null) return false;
+    final message = runtimeError?.trim().toLowerCase() ?? '';
+    if (message.isEmpty) return false;
+    return _containsAnyErrorMarker(
+      message: message,
+      markers: _runtimeImageDecodeErrorMarkers,
+    );
+  }
+
+  static bool _containsAnyErrorMarker({
+    required String message,
+    required List<String> markers,
+  }) {
+    for (final marker in markers) {
       if (message.contains(marker)) return true;
     }
     return false;
+  }
+
+  static Future<Uint8List?> _tryDecodeImageToJpegForRuntime(
+    Uint8List bytes,
+  ) async {
+    if (!_isDesktopWindows()) return null;
+    if (!_looksLikeHeifFamilyImage(bytes)) return null;
+
+    final previousError = _lastErrorMessage;
+    final raw = await _invokeSafely(
+      () => _invokeNativeDecodeImageToJpeg(bytes),
+    );
+    final payload = _payloadAsMap(raw);
+    final imageBytes = _asBytes(payload?['image_bytes']);
+    final mimeType =
+        payload?['image_mime_type']?.toString().trim().toLowerCase() ?? '';
+
+    _lastErrorMessage = previousError;
+    if (imageBytes == null || imageBytes.isEmpty) return null;
+    if (mimeType != 'image/jpeg') return null;
+    return imageBytes;
+  }
+
+  static bool _looksLikeHeifFamilyImage(Uint8List bytes) {
+    if (bytes.lengthInBytes < 12) return false;
+    if (bytes[4] != 0x66 ||
+        bytes[5] != 0x74 ||
+        bytes[6] != 0x79 ||
+        bytes[7] != 0x70) {
+      return false;
+    }
+    final brand = String.fromCharCodes(bytes.sublist(8, 12)).toLowerCase();
+    switch (brand) {
+      case 'heic':
+      case 'heix':
+      case 'hevc':
+      case 'hevx':
+      case 'mif1':
+      case 'msf1':
+        return true;
+      default:
+        return false;
+    }
   }
 
   static bool _shouldPreferNativeMobilePdfOcr({
@@ -520,6 +605,17 @@ final class PlatformPdfOcr {
     );
   }
 
+  static Future<dynamic> _invokeNativeDecodeImageToJpeg(
+    Uint8List bytes,
+  ) {
+    return _nativeOcrChannel.invokeMethod<dynamic>(
+      'decodeImageToJpeg',
+      <String, Object?>{
+        'bytes': bytes,
+      },
+    );
+  }
+
   static Future<dynamic> _invokeSafely(
     Future<dynamic> Function() run,
   ) async {
@@ -599,5 +695,12 @@ final class PlatformPdfOcr {
       return int.tryParse(raw.trim()) ?? 0;
     }
     return 0;
+  }
+
+  static Uint8List? _asBytes(Object? raw) {
+    if (raw is Uint8List) return raw;
+    if (raw is List<int>) return Uint8List.fromList(raw);
+    if (raw is ByteData) return raw.buffer.asUint8List();
+    return null;
   }
 }

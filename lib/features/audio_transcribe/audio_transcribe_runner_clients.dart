@@ -443,8 +443,16 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     this.modelName = 'local_runtime',
     this.appDirProvider = getNativeAppDir,
     AudioTranscribeLocalRuntimeRequest? requestLocalRuntimeTranscribe,
-  }) : _requestLocalRuntimeTranscribe =
-            requestLocalRuntimeTranscribe ?? _requestLocalRuntimeDefault;
+    AudioTranscribeWindowsNativeSttRequest? requestWindowsNativeSttTranscribe,
+    bool? isWindowsHost,
+  }) : _requestLocalRuntimeTranscribe = requestLocalRuntimeTranscribe ??
+            selectPlatformLocalRuntimeAudioTranscribeRequest(
+              methodChannelRequest: _requestLocalRuntimeMethodChannelDefault,
+              windowsNativeSttRequest: requestWindowsNativeSttTranscribe ??
+                  WindowsNativeSttAudioTranscribeClient
+                      ._requestWindowsNativeSttDefault,
+              isWindowsHost: isWindowsHost,
+            );
 
   @override
   final String modelName;
@@ -485,7 +493,7 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     );
   }
 
-  static Future<String> _requestLocalRuntimeDefault({
+  static Future<String> _requestLocalRuntimeMethodChannelDefault({
     required String appDir,
     required String lang,
     required String mimeType,
@@ -503,6 +511,28 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
       audioBytes: audioBytes,
     );
   }
+}
+
+AudioTranscribeLocalRuntimeRequest
+    selectPlatformLocalRuntimeAudioTranscribeRequest({
+  required AudioTranscribeLocalRuntimeRequest methodChannelRequest,
+  required AudioTranscribeWindowsNativeSttRequest windowsNativeSttRequest,
+  bool? isWindowsHost,
+}) {
+  final useWindowsNativeStt = isWindowsHost ?? (!kIsWeb && Platform.isWindows);
+  if (!useWindowsNativeStt) return methodChannelRequest;
+  return ({
+    required String appDir,
+    required String lang,
+    required String mimeType,
+    required Uint8List audioBytes,
+  }) {
+    return windowsNativeSttRequest(
+      lang: lang,
+      mimeType: mimeType,
+      audioBytes: audioBytes,
+    );
+  };
 }
 
 final class NativeSttAudioTranscribeClient implements AudioTranscribeClient {

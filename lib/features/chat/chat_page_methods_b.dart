@@ -319,177 +319,98 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     required int topK,
     bool requireCloud = false,
   }) async {
-    Future<List<TodoThreadMatch>> resolveSemanticMatches() async {
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final cloudGatewayConfig =
-          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-
-      String? cloudIdToken;
-      try {
-        cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        cloudIdToken = null;
-      }
-
-      final cloudAvailable =
-          subscriptionStatus == SubscriptionStatus.entitled &&
-              cloudIdToken != null &&
-              cloudIdToken.trim().isNotEmpty &&
-              cloudGatewayConfig.baseUrl.trim().isNotEmpty;
-
-      if (cloudAvailable) {
-        if (requireCloud && !_cloudEmbeddingsConsented) {
-          return const <TodoThreadMatch>[];
-        }
-
-        // Avoid prompting for consent during send flow.
-        if (_cloudEmbeddingsConsented) {
-          return backend.searchSimilarTodoThreadsCloudGateway(
-            sessionKey,
-            query,
-            topK: topK,
-            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-            idToken: cloudIdToken,
-            modelName: _kCloudEmbeddingsModelName,
-          );
-        }
-        return backend.searchSimilarTodoThreads(sessionKey, query, topK: topK);
-      }
-
-      if (requireCloud) return const <TodoThreadMatch>[];
-
-      if (_cloudEmbeddingsConsented &&
-          subscriptionStatus != SubscriptionStatus.notEntitled) {
-        return const <TodoThreadMatch>[];
-      }
-
-      try {
-        return await backend.searchSimilarTodoThreadsBrok(
-          sessionKey,
-          query,
-          topK: topK,
-        );
-      } catch (_) {
-        return backend.searchSimilarTodoThreads(sessionKey, query, topK: topK);
-      }
+    final localMatches = await _searchLocalTodoSemanticMatches(
+      backend,
+      sessionKey,
+      query: query,
+      topK: topK,
+    );
+    if (_isVeryHighConfidenceTodoSemanticMatch(localMatches)) {
+      return localMatches;
     }
 
+    final remoteMatches = await _searchRemoteTodoSemanticMatches(
+      backend,
+      sessionKey,
+      query: query,
+      topK: topK,
+      requireCloud: requireCloud,
+    );
+    if (remoteMatches.isNotEmpty) return remoteMatches;
+    return localMatches;
+  }
+
+  Future<List<TodoThreadMatch>> _searchLocalTodoSemanticMatches(
+    AppBackend backend,
+    Uint8List sessionKey, {
+    required String query,
+    required int topK,
+  }) async {
     try {
-      return await resolveSemanticMatches();
+      return await backend.searchSimilarTodoThreads(
+        sessionKey,
+        query,
+        topK: topK,
+      );
     } catch (_) {
       return const <TodoThreadMatch>[];
     }
   }
 
-  Future<List<TodoLinkCandidate>> _rankTodoCandidatesWithSemanticMatches(
+  Future<List<TodoThreadMatch>> _searchRemoteTodoSemanticMatches(
     AppBackend backend,
     Uint8List sessionKey, {
     required String query,
-    required List<TodoLinkTarget> targets,
-    required DateTime nowLocal,
-    required int limit,
+    required int topK,
+    bool requireCloud = false,
   }) async {
-    final ranked =
-        rankTodoCandidates(query, targets, nowLocal: nowLocal, limit: limit);
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final cloudGatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
-    List<TodoThreadMatch> semantic = const <TodoThreadMatch>[];
+    String? cloudIdToken;
     try {
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final cloudGatewayConfig =
-          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-      String? cloudIdToken;
-      try {
-        cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        cloudIdToken = null;
-      }
-
-      final cloudAvailable =
-          subscriptionStatus == SubscriptionStatus.entitled &&
-              cloudIdToken != null &&
-              cloudIdToken.trim().isNotEmpty &&
-              cloudGatewayConfig.baseUrl.trim().isNotEmpty;
-
-      if (cloudAvailable) {
-        final allowCloudEmbeddings =
-            _cloudEmbeddingsConsented || await _ensureEmbeddingsDataConsent();
-        if (allowCloudEmbeddings) {
-          semantic = await backend.searchSimilarTodoThreadsCloudGateway(
-            sessionKey,
-            query,
-            topK: limit,
-            gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-            idToken: cloudIdToken,
-            modelName: _kCloudEmbeddingsModelName,
-          );
-        } else {
-          semantic = await backend.searchSimilarTodoThreads(
-            sessionKey,
-            query,
-            topK: limit,
-          );
-        }
-      } else {
-        if (_cloudEmbeddingsConsented &&
-            subscriptionStatus != SubscriptionStatus.notEntitled) {
-          semantic = const <TodoThreadMatch>[];
-        } else {
-          try {
-            semantic = await backend.searchSimilarTodoThreadsBrok(
-              sessionKey,
-              query,
-              topK: limit,
-            );
-          } catch (_) {
-            semantic = await backend.searchSimilarTodoThreads(
-              sessionKey,
-              query,
-              topK: limit,
-            );
-          }
-        }
-      }
+      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
     } catch (_) {
-      semantic = const <TodoThreadMatch>[];
-    }
-    if (semantic.isEmpty) return ranked;
-
-    final targetsById = <String, TodoLinkTarget>{};
-    for (final t in targets) {
-      targetsById[t.id] = t;
+      cloudIdToken = null;
     }
 
-    final scoreByTodoId = <String, int>{};
-    for (final c in ranked) {
-      scoreByTodoId[c.target.id] = c.score;
+    final cloudAvailable = subscriptionStatus == SubscriptionStatus.entitled &&
+        cloudIdToken != null &&
+        cloudIdToken.trim().isNotEmpty &&
+        cloudGatewayConfig.baseUrl.trim().isNotEmpty;
+
+    if (cloudAvailable) {
+      if (!_cloudEmbeddingsConsented) {
+        return const <TodoThreadMatch>[];
+      }
+      try {
+        return await backend.searchSimilarTodoThreadsCloudGateway(
+          sessionKey,
+          query,
+          topK: topK,
+          gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+          idToken: cloudIdToken,
+          modelName: _kCloudEmbeddingsModelName,
+        );
+      } catch (_) {
+        return const <TodoThreadMatch>[];
+      }
     }
 
-    for (var i = 0; i < semantic.length && i < limit; i++) {
-      final match = semantic[i];
-      final target = targetsById[match.todoId];
-      if (target == null) continue;
+    if (requireCloud) return const <TodoThreadMatch>[];
 
-      final boost = _semanticBoost(i, match.distance);
-      if (boost <= 0) continue;
-
-      final existing = scoreByTodoId[target.id];
-      final base = existing ?? _dueBoost(target.dueLocal, nowLocal);
-      scoreByTodoId[target.id] = base + boost;
+    try {
+      return await backend.searchSimilarTodoThreadsBrok(
+        sessionKey,
+        query,
+        topK: topK,
+      );
+    } catch (_) {
+      return const <TodoThreadMatch>[];
     }
-
-    final merged = <TodoLinkCandidate>[];
-    scoreByTodoId.forEach((id, score) {
-      final target = targetsById[id];
-      if (target == null) return;
-      merged.add(TodoLinkCandidate(target: target, score: score));
-    });
-    merged.sort((a, b) => b.score.compareTo(a.score));
-    if (merged.length <= limit) return merged;
-    return merged.sublist(0, limit);
   }
 
   void _refresh() {

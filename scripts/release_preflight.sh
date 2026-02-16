@@ -14,6 +14,7 @@ Options:
   --remote <name>        Git remote name for repo discovery (default: origin)
   --repo <owner/repo>    Override GitHub repo slug
   --runtime-tag <tag>    Use specific runtime tag (desktop-runtime-vX.Y.Z[.W])
+  --insecure-skip-verify Skip TLS cert verification for runtime payload download (local troubleshooting only)
 
 Checks:
   1) Latest desktop runtime release payload completeness:
@@ -111,6 +112,22 @@ fetch_releases_json() {
 remote="origin"
 repo="${SECONDLOOP_GITHUB_REPO:-}"
 runtime_tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG:-}"
+insecure_skip_verify="${RELEASE_PREFLIGHT_INSECURE_SKIP_VERIFY:-0}"
+
+normalize_bool() {
+  local raw
+  raw="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  case "${raw}" in
+    1|true|yes|on)
+      echo "1"
+      ;;
+    *)
+      echo "0"
+      ;;
+  esac
+}
+
+insecure_skip_verify="$(normalize_bool "${insecure_skip_verify}")"
 
 args=("$@")
 while [[ ${#args[@]} -gt 0 ]]; do
@@ -139,6 +156,10 @@ while [[ ${#args[@]} -gt 0 ]]; do
       fi
       runtime_tag="${args[1]}"
       args=("${args[@]:2}")
+      ;;
+    --insecure-skip-verify)
+      insecure_skip_verify="1"
+      args=("${args[@]:1}")
       ;;
     --*)
       die "Unknown option: ${args[0]}"
@@ -186,12 +207,17 @@ if [[ ! -s "${release_api_payload}" ]]; then
   die "cannot fetch releases for ${repo}: empty API response"
 fi
 
-python3 - "${repo}" "${runtime_tag}" "${release_api_payload}" <<'PY'
+if [[ "${insecure_skip_verify}" == "1" ]]; then
+  echo "release-preflight: WARNING insecure TLS mode enabled for runtime payload checks"
+fi
+
+python3 - "${repo}" "${runtime_tag}" "${release_api_payload}" "${insecure_skip_verify}" <<'PY'
 import hashlib
 import json
 import os
 import pathlib
 import re
+import ssl
 import sys
 import tarfile
 import tempfile
@@ -215,14 +241,14 @@ def runtime_headers() -> dict[str, str]:
     return headers
 
 
-def download_asset_text(asset: dict, timeout: int = 120) -> str:
+def download_asset_text(asset: dict, *, runtime_ssl_context: ssl.SSLContext | None, timeout: int = 120) -> str:
     url = str(asset.get("browser_download_url", "")).strip()
     if not url:
         raise RuntimeError(f"asset missing browser_download_url: {asset.get('name')}")
 
     request = urllib.request.Request(url, headers=runtime_headers())
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout, context=runtime_ssl_context) as response:
             return response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raise RuntimeError(
@@ -232,14 +258,14 @@ def download_asset_text(asset: dict, timeout: int = 120) -> str:
         raise RuntimeError(f"cannot download asset {asset.get('name')}: {exc}") from exc
 
 
-def stream_asset(asset: dict, sink, digest) -> None:
+def stream_asset(asset: dict, sink, digest, *, runtime_ssl_context: ssl.SSLContext | None) -> None:
     url = str(asset.get("browser_download_url", "")).strip()
     if not url:
         raise RuntimeError(f"asset missing browser_download_url: {asset.get('name')}")
 
     request = urllib.request.Request(url, headers=runtime_headers())
     try:
-        with urllib.request.urlopen(request, timeout=300) as response:
+        with urllib.request.urlopen(request, timeout=300, context=runtime_ssl_context) as response:
             while True:
                 chunk = response.read(1024 * 1024)
                 if not chunk:
@@ -303,6 +329,7 @@ def validate_target_payload(
     det_aliases: set[str],
     cls_aliases: set[str],
     rec_aliases: set[str],
+    runtime_ssl_context: ssl.SSLContext | None,
 ) -> None:
     archive_base = f"desktop-runtime-{platform}-{arch}-{runtime_version}.tar.gz"
     parts_list_name = archive_base + ".parts.txt"
@@ -315,7 +342,7 @@ def validate_target_payload(
     if sha_asset is None:
         raise RuntimeError(f"missing {sha_name}")
 
-    parts_raw = download_asset_text(parts_list_asset)
+    parts_raw = download_asset_text(parts_list_asset, runtime_ssl_context=runtime_ssl_context)
     part_names = [line.strip() for line in parts_raw.splitlines() if line.strip()]
     if not part_names:
         raise RuntimeError(f"part list is empty: {parts_list_name}")
@@ -326,14 +353,14 @@ def validate_target_payload(
             f"part list references missing assets: {', '.join(missing_parts)}"
         )
 
-    expected_sha = first_sha_token(download_asset_text(sha_asset))
+    expected_sha = first_sha_token(download_asset_text(sha_asset, runtime_ssl_context=runtime_ssl_context))
 
     with tempfile.TemporaryDirectory(prefix=f"runtime-{platform}-{arch}-") as temp_dir:
         archive_path = pathlib.Path(temp_dir) / archive_base
         digest = hashlib.sha256()
         with archive_path.open("wb") as sink:
             for part_name in part_names:
-                stream_asset(assets_by_name[part_name], sink, digest)
+                stream_asset(assets_by_name[part_name], sink, digest, runtime_ssl_context=runtime_ssl_context)
         actual_sha = digest.hexdigest()
         if actual_sha.lower() != expected_sha.lower():
             raise RuntimeError(
@@ -362,6 +389,8 @@ def validate_target_payload(
 repo = sys.argv[1].strip()
 configured_runtime_tag = sys.argv[2].strip()
 payload_path = sys.argv[3].strip()
+configured_insecure_skip_verify = sys.argv[4].strip().lower() in {"1", "true", "yes", "on"}
+runtime_ssl_context = ssl._create_unverified_context() if configured_insecure_skip_verify else None
 
 try:
     with open(payload_path, "r", encoding="utf-8") as handle:
@@ -493,6 +522,7 @@ for platform, arch in required_targets:
             det_aliases=det_aliases,
             cls_aliases=cls_aliases,
             rec_aliases=rec_aliases,
+            runtime_ssl_context=runtime_ssl_context,
         )
     except RuntimeError as exc:
         payload_errors.append(f"  - {platform}/{arch}: {exc}")

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1438 (719 per locale)
+/// Strings: 1466 (733 per locale)
 ///
-/// Built on 2026-02-15 at 09:10 UTC
+/// Built on 2026-02-16 at 16:58 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1353,9 +1353,25 @@ class _StringsChatMarkdownEditorEn {
   String get previewLabel => 'Preview';
   String get emptyPreview => 'Preview will appear as you type.';
   String get shortcutHint => 'Tip: Cmd/Ctrl + Enter applies changes instantly.';
+  String get listContinuationHint =>
+      'Press Enter in a list item to continue it automatically.';
+  String get quickActionsLabel => 'Quick formatting';
+  String get themeLabel => 'Preview theme';
+  String get themeStudio => 'Studio';
+  String get themePaper => 'Paper';
+  String get themeOcean => 'Ocean';
+  String get themeNight => 'Night';
+  String get exportMenu => 'Export preview';
+  String get exportPng => 'Export as PNG';
+  String get exportPdf => 'Export as PDF';
+  String exportDone({required Object format}) => 'Exported as ${format}';
+  String exportSavedPath({required Object path}) => 'Saved to ${path}';
+  String exportFailed({required Object error}) => 'Export failed: ${error}';
   String stats({required Object lines, required Object characters}) =>
       '${lines} lines · ${characters} chars';
   String get simpleInput => 'Simple input';
+  late final _StringsChatMarkdownEditorActionsEn actions =
+      _StringsChatMarkdownEditorActionsEn._(_root);
 }
 
 // Path: chat.focus
@@ -2387,6 +2403,7 @@ class _StringsSettingsCloudUsageLabelsEn {
   String get tokensUsed30d => 'Tokens (30d):';
   String get requestsUsed30d => 'Requests (30d):';
   String get resetAt => 'Resets on:';
+  String get paymentRequired => 'Subscription required to view cloud usage.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
@@ -2519,6 +2536,27 @@ class _StringsSettingsSubscriptionLabelsEn {
   String get status => 'Status:';
   String get purchaseUnavailable => 'Purchases are not available yet.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
+}
+
+// Path: chat.markdownEditor.actions
+class _StringsChatMarkdownEditorActionsEn {
+  _StringsChatMarkdownEditorActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get heading => 'Heading';
+  String headingLevel({required Object level}) => 'Heading ${level}';
+  String get bold => 'Bold';
+  String get italic => 'Italic';
+  String get strike => 'Strikethrough';
+  String get code => 'Inline code';
+  String get link => 'Insert link';
+  String get blockquote => 'Blockquote';
+  String get bulletList => 'Bullet list';
+  String get orderedList => 'Ordered list';
+  String get taskList => 'Task list';
+  String get codeBlock => 'Code block';
 }
 
 // Path: chat.askAiSetup.actions
@@ -3085,6 +3123,8 @@ class _StringsSettingsCloudAccountEmailVerificationLabelsEn {
   // Translations
   String get status => 'Status:';
   String get help => 'Verify your email to use SecondLoop Cloud Ask AI.';
+  String get verifiedHelp =>
+      'Email is verified. You can continue to subscribe.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
@@ -3096,6 +3136,7 @@ class _StringsSettingsCloudAccountEmailVerificationActionsEn {
 
   // Translations
   String get resend => 'Resend verification email';
+  String resendCooldown({required Object seconds}) => 'Resend in ${seconds}s';
 }
 
 // Path: settings.cloudAccount.emailVerification.messages
@@ -3106,6 +3147,9 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesEn {
 
   // Translations
   String get verificationEmailSent => 'Verification email sent';
+  String get verificationAlreadyDone => 'Email is already verified.';
+  String get signUpVerificationPrompt =>
+      'Account created. Please verify your email before subscribing.';
   String verificationEmailSendFailed({required Object error}) =>
       'Failed to send verification email: ${error}';
 }
@@ -5245,10 +5289,39 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   @override
   String get shortcutHint => '提示：按 Cmd/Ctrl + Enter 可快速应用内容。';
   @override
+  String get listContinuationHint => '在列表项中按 Enter 可自动续写列表。';
+  @override
+  String get quickActionsLabel => '快捷格式';
+  @override
+  String get themeLabel => '预览主题';
+  @override
+  String get themeStudio => '经典';
+  @override
+  String get themePaper => '纸张';
+  @override
+  String get themeOcean => '海洋';
+  @override
+  String get themeNight => '夜色';
+  @override
+  String get exportMenu => '导出预览';
+  @override
+  String get exportPng => '导出为 PNG';
+  @override
+  String get exportPdf => '导出为 PDF';
+  @override
+  String exportDone({required Object format}) => '已导出为 ${format}';
+  @override
+  String exportSavedPath({required Object path}) => '已保存到：${path}';
+  @override
+  String exportFailed({required Object error}) => '导出失败：${error}';
+  @override
   String stats({required Object lines, required Object characters}) =>
       '${lines} 行 · ${characters} 字符';
   @override
   String get simpleInput => '简易输入';
+  @override
+  late final _StringsChatMarkdownEditorActionsZhCn actions =
+      _StringsChatMarkdownEditorActionsZhCn._(_root);
 }
 
 // Path: chat.focus
@@ -6793,6 +6866,8 @@ class _StringsSettingsCloudUsageLabelsZhCn
   @override
   String get resetAt => '重置时间：';
   @override
+  String get paymentRequired => '需订阅后才能查看云端用量。';
+  @override
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
 
@@ -6993,6 +7068,43 @@ class _StringsSettingsSubscriptionLabelsZhCn
   String get purchaseUnavailable => '订阅购买暂未开放。';
   @override
   String loadFailed({required Object error}) => '加载失败：${error}';
+}
+
+// Path: chat.markdownEditor.actions
+class _StringsChatMarkdownEditorActionsZhCn
+    extends _StringsChatMarkdownEditorActionsEn {
+  _StringsChatMarkdownEditorActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get heading => '标题';
+  @override
+  String headingLevel({required Object level}) => '${level} 级标题';
+  @override
+  String get bold => '加粗';
+  @override
+  String get italic => '斜体';
+  @override
+  String get strike => '删除线';
+  @override
+  String get code => '行内代码';
+  @override
+  String get link => '插入链接';
+  @override
+  String get blockquote => '引用';
+  @override
+  String get bulletList => '无序列表';
+  @override
+  String get orderedList => '有序列表';
+  @override
+  String get taskList => '任务列表';
+  @override
+  String get codeBlock => '代码块';
 }
 
 // Path: chat.askAiSetup.actions
@@ -7827,6 +7939,8 @@ class _StringsSettingsCloudAccountEmailVerificationLabelsZhCn
   @override
   String get help => '验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
   @override
+  String get verifiedHelp => '邮箱已验证，可继续订阅。';
+  @override
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
 
@@ -7843,6 +7957,8 @@ class _StringsSettingsCloudAccountEmailVerificationActionsZhCn
   // Translations
   @override
   String get resend => '重新发送验证邮件';
+  @override
+  String resendCooldown({required Object seconds}) => '${seconds} 秒后可重新发送';
 }
 
 // Path: settings.cloudAccount.emailVerification.messages
@@ -7858,6 +7974,10 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesZhCn
   // Translations
   @override
   String get verificationEmailSent => '验证邮件已发送';
+  @override
+  String get verificationAlreadyDone => '邮箱已完成验证。';
+  @override
+  String get signUpVerificationPrompt => '账号已创建，请先完成邮箱验证再进行订阅。';
   @override
   String verificationEmailSendFailed({required Object error}) =>
       '发送验证邮件失败：${error}';
@@ -9098,12 +9218,20 @@ extension on Translations {
         return 'Status:';
       case 'settings.cloudAccount.emailVerification.labels.help':
         return 'Verify your email to use SecondLoop Cloud Ask AI.';
+      case 'settings.cloudAccount.emailVerification.labels.verifiedHelp':
+        return 'Email is verified. You can continue to subscribe.';
       case 'settings.cloudAccount.emailVerification.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.cloudAccount.emailVerification.actions.resend':
         return 'Resend verification email';
+      case 'settings.cloudAccount.emailVerification.actions.resendCooldown':
+        return ({required Object seconds}) => 'Resend in ${seconds}s';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSent':
         return 'Verification email sent';
+      case 'settings.cloudAccount.emailVerification.messages.verificationAlreadyDone':
+        return 'Email is already verified.';
+      case 'settings.cloudAccount.emailVerification.messages.signUpVerificationPrompt':
+        return 'Account created. Please verify your email before subscribing.';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) =>
             'Failed to send verification email: ${error}';
@@ -9133,6 +9261,8 @@ extension on Translations {
         return 'Requests (30d):';
       case 'settings.cloudUsage.labels.resetAt':
         return 'Resets on:';
+      case 'settings.cloudUsage.labels.paymentRequired':
+        return 'Subscription required to view cloud usage.';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.vaultUsage.title':
@@ -9349,11 +9479,61 @@ extension on Translations {
         return 'Preview will appear as you type.';
       case 'chat.markdownEditor.shortcutHint':
         return 'Tip: Cmd/Ctrl + Enter applies changes instantly.';
+      case 'chat.markdownEditor.listContinuationHint':
+        return 'Press Enter in a list item to continue it automatically.';
+      case 'chat.markdownEditor.quickActionsLabel':
+        return 'Quick formatting';
+      case 'chat.markdownEditor.themeLabel':
+        return 'Preview theme';
+      case 'chat.markdownEditor.themeStudio':
+        return 'Studio';
+      case 'chat.markdownEditor.themePaper':
+        return 'Paper';
+      case 'chat.markdownEditor.themeOcean':
+        return 'Ocean';
+      case 'chat.markdownEditor.themeNight':
+        return 'Night';
+      case 'chat.markdownEditor.exportMenu':
+        return 'Export preview';
+      case 'chat.markdownEditor.exportPng':
+        return 'Export as PNG';
+      case 'chat.markdownEditor.exportPdf':
+        return 'Export as PDF';
+      case 'chat.markdownEditor.exportDone':
+        return ({required Object format}) => 'Exported as ${format}';
+      case 'chat.markdownEditor.exportSavedPath':
+        return ({required Object path}) => 'Saved to ${path}';
+      case 'chat.markdownEditor.exportFailed':
+        return ({required Object error}) => 'Export failed: ${error}';
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} lines · ${characters} chars';
       case 'chat.markdownEditor.simpleInput':
         return 'Simple input';
+      case 'chat.markdownEditor.actions.heading':
+        return 'Heading';
+      case 'chat.markdownEditor.actions.headingLevel':
+        return ({required Object level}) => 'Heading ${level}';
+      case 'chat.markdownEditor.actions.bold':
+        return 'Bold';
+      case 'chat.markdownEditor.actions.italic':
+        return 'Italic';
+      case 'chat.markdownEditor.actions.strike':
+        return 'Strikethrough';
+      case 'chat.markdownEditor.actions.code':
+        return 'Inline code';
+      case 'chat.markdownEditor.actions.link':
+        return 'Insert link';
+      case 'chat.markdownEditor.actions.blockquote':
+        return 'Blockquote';
+      case 'chat.markdownEditor.actions.bulletList':
+        return 'Bullet list';
+      case 'chat.markdownEditor.actions.orderedList':
+        return 'Ordered list';
+      case 'chat.markdownEditor.actions.taskList':
+        return 'Task list';
+      case 'chat.markdownEditor.actions.codeBlock':
+        return 'Code block';
       case 'chat.focus.tooltip':
         return 'Focus';
       case 'chat.focus.allMemories':
@@ -10571,12 +10751,20 @@ extension on _StringsZhCn {
         return '状态：';
       case 'settings.cloudAccount.emailVerification.labels.help':
         return '验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。';
+      case 'settings.cloudAccount.emailVerification.labels.verifiedHelp':
+        return '邮箱已验证，可继续订阅。';
       case 'settings.cloudAccount.emailVerification.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
       case 'settings.cloudAccount.emailVerification.actions.resend':
         return '重新发送验证邮件';
+      case 'settings.cloudAccount.emailVerification.actions.resendCooldown':
+        return ({required Object seconds}) => '${seconds} 秒后可重新发送';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSent':
         return '验证邮件已发送';
+      case 'settings.cloudAccount.emailVerification.messages.verificationAlreadyDone':
+        return '邮箱已完成验证。';
+      case 'settings.cloudAccount.emailVerification.messages.signUpVerificationPrompt':
+        return '账号已创建，请先完成邮箱验证再进行订阅。';
       case 'settings.cloudAccount.emailVerification.messages.verificationEmailSendFailed':
         return ({required Object error}) => '发送验证邮件失败：${error}';
       case 'settings.cloudUsage.title':
@@ -10605,6 +10793,8 @@ extension on _StringsZhCn {
         return '请求数（30 天）：';
       case 'settings.cloudUsage.labels.resetAt':
         return '重置时间：';
+      case 'settings.cloudUsage.labels.paymentRequired':
+        return '需订阅后才能查看云端用量。';
       case 'settings.cloudUsage.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
       case 'settings.vaultUsage.title':
@@ -10818,11 +11008,61 @@ extension on _StringsZhCn {
         return '输入后会在这里实时预览。';
       case 'chat.markdownEditor.shortcutHint':
         return '提示：按 Cmd/Ctrl + Enter 可快速应用内容。';
+      case 'chat.markdownEditor.listContinuationHint':
+        return '在列表项中按 Enter 可自动续写列表。';
+      case 'chat.markdownEditor.quickActionsLabel':
+        return '快捷格式';
+      case 'chat.markdownEditor.themeLabel':
+        return '预览主题';
+      case 'chat.markdownEditor.themeStudio':
+        return '经典';
+      case 'chat.markdownEditor.themePaper':
+        return '纸张';
+      case 'chat.markdownEditor.themeOcean':
+        return '海洋';
+      case 'chat.markdownEditor.themeNight':
+        return '夜色';
+      case 'chat.markdownEditor.exportMenu':
+        return '导出预览';
+      case 'chat.markdownEditor.exportPng':
+        return '导出为 PNG';
+      case 'chat.markdownEditor.exportPdf':
+        return '导出为 PDF';
+      case 'chat.markdownEditor.exportDone':
+        return ({required Object format}) => '已导出为 ${format}';
+      case 'chat.markdownEditor.exportSavedPath':
+        return ({required Object path}) => '已保存到：${path}';
+      case 'chat.markdownEditor.exportFailed':
+        return ({required Object error}) => '导出失败：${error}';
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} 行 · ${characters} 字符';
       case 'chat.markdownEditor.simpleInput':
         return '简易输入';
+      case 'chat.markdownEditor.actions.heading':
+        return '标题';
+      case 'chat.markdownEditor.actions.headingLevel':
+        return ({required Object level}) => '${level} 级标题';
+      case 'chat.markdownEditor.actions.bold':
+        return '加粗';
+      case 'chat.markdownEditor.actions.italic':
+        return '斜体';
+      case 'chat.markdownEditor.actions.strike':
+        return '删除线';
+      case 'chat.markdownEditor.actions.code':
+        return '行内代码';
+      case 'chat.markdownEditor.actions.link':
+        return '插入链接';
+      case 'chat.markdownEditor.actions.blockquote':
+        return '引用';
+      case 'chat.markdownEditor.actions.bulletList':
+        return '无序列表';
+      case 'chat.markdownEditor.actions.orderedList':
+        return '有序列表';
+      case 'chat.markdownEditor.actions.taskList':
+        return '任务列表';
+      case 'chat.markdownEditor.actions.codeBlock':
+        return '代码块';
       case 'chat.focus.tooltip':
         return '聚焦';
       case 'chat.focus.allMemories':
