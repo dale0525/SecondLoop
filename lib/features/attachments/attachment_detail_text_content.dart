@@ -57,24 +57,48 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('extracted_text_excerpt'),
   ]);
 
-  final full = firstNonEmpty(<String?>[
-    read('manual_full_text'),
-    read('full_text'),
-    selected.full,
-    read('transcript_full'),
-    read('manual_summary'),
-    read('summary'),
-    selected.excerpt,
-    read('transcript_excerpt'),
-    caption,
-    read('ocr_text_full', normalizeOcr: true),
-    read('ocr_text', normalizeOcr: true),
-    read('readable_text_full'),
-    read('extracted_text_full'),
-    read('ocr_text_excerpt', normalizeOcr: true),
-    read('readable_text_excerpt'),
-    read('extracted_text_excerpt'),
-  ]);
+  final normalizedMime = read('mime_type').toLowerCase();
+  final isImagePayload = normalizedMime.startsWith('image/');
+
+  final full = firstNonEmpty(
+    isImagePayload
+        ? <String?>[
+            read('manual_full_text'),
+            read('full_text'),
+            read('manual_summary'),
+            read('summary'),
+            caption,
+            selected.full,
+            selected.excerpt,
+            read('transcript_full'),
+            read('transcript_excerpt'),
+            read('ocr_text_full', normalizeOcr: true),
+            read('ocr_text', normalizeOcr: true),
+            read('readable_text_full'),
+            read('extracted_text_full'),
+            read('ocr_text_excerpt', normalizeOcr: true),
+            read('readable_text_excerpt'),
+            read('extracted_text_excerpt'),
+          ]
+        : <String?>[
+            read('manual_full_text'),
+            read('full_text'),
+            selected.full,
+            read('transcript_full'),
+            read('manual_summary'),
+            read('summary'),
+            selected.excerpt,
+            read('transcript_excerpt'),
+            caption,
+            read('ocr_text_full', normalizeOcr: true),
+            read('ocr_text', normalizeOcr: true),
+            read('readable_text_full'),
+            read('extracted_text_full'),
+            read('ocr_text_excerpt', normalizeOcr: true),
+            read('readable_text_excerpt'),
+            read('extracted_text_excerpt'),
+          ],
+  );
 
   return AttachmentDetailTextContent(summary: summary, full: full);
 }
