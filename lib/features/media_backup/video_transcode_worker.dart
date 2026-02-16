@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 
 final class VideoTranscodeSegment {
   const VideoTranscodeSegment({
@@ -273,7 +276,7 @@ final class VideoTranscodeWorker {
   static Future<VideoPreviewExtractResult> extractPreviewFrames(
     Uint8List videoBytes, {
     required String sourceMimeType,
-    int maxKeyframes = 4,
+    int? maxKeyframes,
     int frameIntervalSeconds = 8,
     String keyframeKind = 'scene',
     VideoTranscodeCommandRunner? commandRunner,
@@ -301,8 +304,9 @@ final class VideoTranscodeWorker {
       );
     }
 
-    final safeMaxKeyframes = maxKeyframes.clamp(1, 8);
-    final safeInterval = frameIntervalSeconds.clamp(1, 30);
+    final hasCustomMaxKeyframes = maxKeyframes != null;
+    final safeMaxKeyframes = (maxKeyframes ?? 24).clamp(1, 48);
+    final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final normalizedKind = keyframeKind.trim().isEmpty
         ? 'scene'
         : keyframeKind.trim().toLowerCase();
@@ -314,8 +318,26 @@ final class VideoTranscodeWorker {
       final sourceExt = _extensionForMimeType(normalizedMime);
       final inputPath = '${tempDir.path}/input.$sourceExt';
       final posterPath = '${tempDir.path}/poster.jpg';
-      final keyframePattern = '${tempDir.path}/keyframe_%03d.jpg';
+      final scenePattern = '${tempDir.path}/keyframe_scene_%03d.jpg';
+      final fpsPattern = '${tempDir.path}/keyframe_fps_%03d.jpg';
       await File(inputPath).writeAsBytes(videoBytes, flush: true);
+
+      final videoDurationSeconds = await _readVideoDurationSeconds(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+      );
+      final effectiveMaxKeyframes = hasCustomMaxKeyframes
+          ? safeMaxKeyframes
+          : _resolveAutoPreviewMaxKeyframes(
+              baseMaxFrames: safeMaxKeyframes,
+              durationSeconds: videoDurationSeconds,
+            );
+      final effectiveInterval = _resolveAdaptiveFrameIntervalSeconds(
+        baseIntervalSeconds: safeInterval,
+        maxFrames: effectiveMaxKeyframes,
+        durationSeconds: videoDurationSeconds,
+      );
 
       final posterArgs = <String>[
         '-hide_banner',
@@ -342,32 +364,92 @@ final class VideoTranscodeWorker {
         }
       }
 
-      final keyframeArgs = <String>[
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-y',
-        '-i',
-        inputPath,
-        '-vf',
-        'fps=1/$safeInterval',
-        '-frames:v',
-        '$safeMaxKeyframes',
-        keyframePattern,
-      ];
-      final keyframeResult = await run(ffmpegPath, keyframeArgs);
+      final sceneResult = await _extractFramesWithFilter(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+        filter:
+            "select='eq(n\\,0)+gte(t-prev_selected_t\\,$effectiveInterval)*gt(scene\\,0.08)'",
+        maxFrames: effectiveMaxKeyframes,
+        outputPattern: scenePattern,
+        useVariableFrameRateSync: true,
+      );
+      final sceneFiles = sceneResult
+          ? await _listPreviewFrameFiles(tempDir.path,
+              prefix: 'keyframe_scene_')
+          : const <File>[];
+
+      final remainingFrames = (effectiveMaxKeyframes - sceneFiles.length).clamp(
+        0,
+        effectiveMaxKeyframes,
+      );
+      final fpsResult = remainingFrames > 0
+          ? await _extractFramesWithFilter(
+              ffmpegPath: ffmpegPath,
+              run: run,
+              inputPath: inputPath,
+              filter: 'fps=1/$effectiveInterval',
+              maxFrames: remainingFrames,
+              outputPattern: fpsPattern,
+            )
+          : true;
+
       final keyframes = <VideoPreviewFrame>[];
-      if (keyframeResult.exitCode == 0) {
-        final frameFiles = await _listPreviewFrameFiles(tempDir.path);
-        for (var i = 0; i < frameFiles.length; i++) {
-          final frameBytes = await frameFiles[i].readAsBytes();
+      if (sceneResult || fpsResult) {
+        final fpsFiles = fpsResult
+            ? await _listPreviewFrameFiles(tempDir.path,
+                prefix: 'keyframe_fps_')
+            : const <File>[];
+        final seenFrames = <String>{};
+        final acceptedFrameBytes = <Uint8List>[];
+        final acceptedFrameSignatures = <({int hash, double darkRatio})?>[];
+        final frameFiles = <File>[...sceneFiles, ...fpsFiles];
+        for (final frameFile in frameFiles) {
+          final frameBytes = await frameFile.readAsBytes();
           if (frameBytes.isEmpty) continue;
+          final frameSignature = base64.encode(frameBytes);
+          if (!seenFrames.add(frameSignature)) {
+            continue;
+          }
+
+          final visualSignature = _buildFrameVisualSignature(frameBytes);
+          if (acceptedFrameBytes.isNotEmpty && visualSignature != null) {
+            final previousSignature = acceptedFrameSignatures.last;
+            if (previousSignature != null &&
+                _areFramesNearDuplicate(previousSignature, visualSignature)) {
+              if (_shouldPreferRicherFrame(
+                previousSignature,
+                visualSignature,
+              )) {
+                acceptedFrameBytes[acceptedFrameBytes.length - 1] = frameBytes;
+                acceptedFrameSignatures[acceptedFrameSignatures.length - 1] =
+                    visualSignature;
+              }
+              continue;
+            }
+
+            final globalDuplicateIndex = _findNearDuplicateFrameIndex(
+              acceptedFrameSignatures,
+              visualSignature,
+              maxIndexExclusive: acceptedFrameSignatures.length - 1,
+              matcher: _areFramesGlobalDuplicate,
+            );
+            if (globalDuplicateIndex != null) {
+              continue;
+            }
+          }
+
+          acceptedFrameBytes.add(frameBytes);
+          acceptedFrameSignatures.add(visualSignature);
+        }
+
+        for (var i = 0; i < acceptedFrameBytes.length; i++) {
           keyframes.add(
             VideoPreviewFrame(
               index: i,
-              bytes: frameBytes,
+              bytes: acceptedFrameBytes[i],
               mimeType: 'image/jpeg',
-              tMs: i * safeInterval * 1000,
+              tMs: i * effectiveInterval * 1000,
               kind: normalizedKind,
             ),
           );
@@ -411,14 +493,216 @@ final class VideoTranscodeWorker {
     );
   }
 
-  static Future<List<File>> _listPreviewFrameFiles(String dirPath) async {
+  static Future<bool> _extractFramesWithFilter({
+    required String ffmpegPath,
+    required VideoTranscodeCommandRunner run,
+    required String inputPath,
+    required String filter,
+    required int maxFrames,
+    required String outputPattern,
+    bool useVariableFrameRateSync = false,
+  }) async {
+    if (maxFrames <= 0) return true;
+    final args = <String>[
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-i',
+      inputPath,
+      '-vf',
+      filter,
+      if (useVariableFrameRateSync) '-vsync',
+      if (useVariableFrameRateSync) 'vfr',
+      '-frames:v',
+      '$maxFrames',
+      outputPattern,
+    ];
+    final result = await run(ffmpegPath, args);
+    return result.exitCode == 0;
+  }
+
+  static Future<double> _readVideoDurationSeconds({
+    required String ffmpegPath,
+    required VideoTranscodeCommandRunner run,
+    required String inputPath,
+  }) async {
+    final args = <String>[
+      '-hide_banner',
+      '-i',
+      inputPath,
+      '-f',
+      'null',
+      '-',
+    ];
+    try {
+      final result = await run(ffmpegPath, args);
+      final stderr = result.stderr?.toString() ?? '';
+      final match = RegExp(
+        r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)',
+      ).firstMatch(stderr);
+      if (match == null) return 0;
+      final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+      final seconds = double.tryParse(match.group(3) ?? '') ?? 0;
+      return hours * 3600 + minutes * 60 + seconds;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static int _resolveAdaptiveFrameIntervalSeconds({
+    required int baseIntervalSeconds,
+    required int maxFrames,
+    required double durationSeconds,
+  }) {
+    if (durationSeconds <= 0 || maxFrames <= 0) {
+      return baseIntervalSeconds;
+    }
+    final targetInterval = (durationSeconds / maxFrames).ceil();
+    return targetInterval > baseIntervalSeconds
+        ? targetInterval
+        : baseIntervalSeconds;
+  }
+
+  static int _resolveAutoPreviewMaxKeyframes({
+    required int baseMaxFrames,
+    required double durationSeconds,
+  }) {
+    final safeBase = baseMaxFrames.clamp(1, 48);
+    if (durationSeconds <= 0) return safeBase;
+
+    int recommended = safeBase;
+    if (durationSeconds >= 20 * 60) {
+      recommended = 48;
+    } else if (durationSeconds >= 10 * 60) {
+      recommended = 40;
+    } else if (durationSeconds >= 5 * 60) {
+      recommended = 32;
+    } else if (durationSeconds >= 3 * 60) {
+      recommended = 28;
+    }
+
+    final effective = recommended > safeBase ? recommended : safeBase;
+    return effective.clamp(1, 48);
+  }
+
+  static ({int hash, double darkRatio})? _buildFrameVisualSignature(
+    Uint8List bytes,
+  ) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+
+      final resized = img.copyResize(
+        decoded,
+        width: 8,
+        height: 8,
+        interpolation: img.Interpolation.average,
+      );
+
+      final lumas = <int>[];
+      var sum = 0;
+      var darkCount = 0;
+      for (var y = 0; y < resized.height; y++) {
+        for (var x = 0; x < resized.width; x++) {
+          final pixel = resized.getPixel(x, y);
+          final luma =
+              ((pixel.r * 299 + pixel.g * 587 + pixel.b * 114) / 1000).round();
+          lumas.add(luma);
+          sum += luma;
+          if (luma < 235) {
+            darkCount += 1;
+          }
+        }
+      }
+      if (lumas.isEmpty) return null;
+
+      final average = sum / lumas.length;
+      var hash = 0;
+      for (var i = 0; i < lumas.length; i++) {
+        if (lumas[i] >= average) {
+          hash |= 1 << i;
+        }
+      }
+
+      return (
+        hash: hash,
+        darkRatio: darkCount / lumas.length,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _areFramesNearDuplicate(
+    ({int hash, double darkRatio}) previous,
+    ({int hash, double darkRatio}) current,
+  ) {
+    final hashDistance = _hammingDistance64(previous.hash, current.hash);
+    final darkRatioDelta = (previous.darkRatio - current.darkRatio).abs();
+    return hashDistance <= 8 && darkRatioDelta <= 0.2;
+  }
+
+  static int? _findNearDuplicateFrameIndex(
+    List<({int hash, double darkRatio})?> acceptedSignatures,
+    ({int hash, double darkRatio}) current, {
+    int? maxIndexExclusive,
+    required bool Function(
+      ({int hash, double darkRatio}) accepted,
+      ({int hash, double darkRatio}) current,
+    ) matcher,
+  }) {
+    final upperBound = maxIndexExclusive == null
+        ? acceptedSignatures.length
+        : maxIndexExclusive.clamp(0, acceptedSignatures.length);
+    for (var i = 0; i < upperBound; i++) {
+      final acceptedSignature = acceptedSignatures[i];
+      if (acceptedSignature == null) continue;
+      if (matcher(acceptedSignature, current)) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  static bool _areFramesGlobalDuplicate(
+    ({int hash, double darkRatio}) previous,
+    ({int hash, double darkRatio}) current,
+  ) {
+    final hashDistance = _hammingDistance64(previous.hash, current.hash);
+    final darkRatioDelta = (previous.darkRatio - current.darkRatio).abs();
+    return hashDistance <= 4 && darkRatioDelta <= 0.06;
+  }
+
+  static bool _shouldPreferRicherFrame(
+    ({int hash, double darkRatio}) previous,
+    ({int hash, double darkRatio}) current,
+  ) {
+    return (current.darkRatio - previous.darkRatio) >= 0.006;
+  }
+
+  static int _hammingDistance64(int a, int b) {
+    var xor = (a ^ b) & 0xFFFFFFFFFFFFFFFF;
+    var count = 0;
+    while (xor != 0) {
+      xor &= (xor - 1);
+      count += 1;
+    }
+    return count;
+  }
+
+  static Future<List<File>> _listPreviewFrameFiles(
+    String dirPath, {
+    String prefix = 'keyframe_',
+  }) async {
     final files = <File>[];
     await for (final entity in Directory(dirPath).list(followLinks: false)) {
       if (entity is! File) continue;
       final name = entity.uri.pathSegments.isEmpty
           ? entity.path
           : entity.uri.pathSegments.last;
-      if (!name.startsWith('keyframe_') || !name.endsWith('.jpg')) continue;
+      if (!name.startsWith(prefix) || !name.endsWith('.jpg')) continue;
       files.add(entity);
     }
     files.sort((a, b) => a.path.compareTo(b.path));

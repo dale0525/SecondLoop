@@ -141,6 +141,8 @@ void main() {
   test('VideoKeyframeOcrWorker extracts frames and aggregates OCR text',
       () async {
     var ocrCalls = 0;
+    var sceneRunCount = 0;
+    var fpsRunCount = 0;
     final result = await VideoKeyframeOcrWorker.runOnVideoBytes(
       Uint8List.fromList(const <int>[1, 2, 3]),
       sourceMimeType: 'video/mp4',
@@ -150,12 +152,27 @@ void main() {
       ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
       commandRunner: (executable, arguments) async {
         expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+        final filterIndex = arguments.indexOf('-vf');
+        if (filterIndex >= 0 && arguments.last.contains('frame_fps_')) {
+          expect(arguments[filterIndex + 1], 'fps=1/120');
+        }
         final outputPattern = arguments.last;
-        final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
-        final frame2 = File(outputPattern.replaceAll('%04d', '0002'));
-        await frame1.parent.create(recursive: true);
-        await frame1.writeAsBytes(const <int>[7, 8, 9]);
-        await frame2.writeAsBytes(const <int>[10, 11, 12]);
+        if (outputPattern.contains('frame_scene_')) {
+          sceneRunCount += 1;
+          final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
+          await frame1.parent.create(recursive: true);
+          await frame1.writeAsBytes(const <int>[7, 8, 9]);
+        } else {
+          fpsRunCount += 1;
+          final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
+          final frame2 = File(outputPattern.replaceAll('%04d', '0002'));
+          await frame1.parent.create(recursive: true);
+          await frame1.writeAsBytes(const <int>[7, 8, 9]);
+          await frame2.writeAsBytes(const <int>[10, 11, 12]);
+        }
         return ProcessResult(0, 0, '', '');
       },
       ocrImageFn: (bytes, {required languageHints}) async {
@@ -188,6 +205,8 @@ void main() {
     expect(result.fullText, contains('[frame 1]'));
     expect(result.fullText, contains('hello frame'));
     expect(result.fullText, contains('world frame'));
+    expect(sceneRunCount, 1);
+    expect(fpsRunCount, 1);
     expect(ocrCalls, 2);
   });
 }
