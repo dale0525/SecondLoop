@@ -414,21 +414,27 @@ final class VideoTranscodeWorker {
 
           final visualSignature = _buildFrameVisualSignature(frameBytes);
           if (acceptedFrameBytes.isNotEmpty && visualSignature != null) {
-            final duplicateIndex = _findNearDuplicateFrameIndex(
+            final previousSignature = acceptedFrameSignatures.last;
+            if (previousSignature != null &&
+                _areFramesNearDuplicate(previousSignature, visualSignature)) {
+              if (_shouldPreferRicherFrame(
+                previousSignature,
+                visualSignature,
+              )) {
+                acceptedFrameBytes[acceptedFrameBytes.length - 1] = frameBytes;
+                acceptedFrameSignatures[acceptedFrameSignatures.length - 1] =
+                    visualSignature;
+              }
+              continue;
+            }
+
+            final globalDuplicateIndex = _findNearDuplicateFrameIndex(
               acceptedFrameSignatures,
               visualSignature,
+              maxIndexExclusive: acceptedFrameSignatures.length - 1,
+              matcher: _areFramesGlobalDuplicate,
             );
-            if (duplicateIndex != null) {
-              final duplicateSignature =
-                  acceptedFrameSignatures[duplicateIndex];
-              if (duplicateSignature != null &&
-                  _shouldPreferRicherFrame(
-                    duplicateSignature,
-                    visualSignature,
-                  )) {
-                acceptedFrameBytes[duplicateIndex] = frameBytes;
-                acceptedFrameSignatures[duplicateIndex] = visualSignature;
-              }
+            if (globalDuplicateIndex != null) {
               continue;
             }
           }
@@ -640,16 +646,33 @@ final class VideoTranscodeWorker {
 
   static int? _findNearDuplicateFrameIndex(
     List<({int hash, double darkRatio})?> acceptedSignatures,
-    ({int hash, double darkRatio}) current,
-  ) {
-    for (var i = 0; i < acceptedSignatures.length; i++) {
+    ({int hash, double darkRatio}) current, {
+    int? maxIndexExclusive,
+    required bool Function(
+      ({int hash, double darkRatio}) accepted,
+      ({int hash, double darkRatio}) current,
+    ) matcher,
+  }) {
+    final upperBound = maxIndexExclusive == null
+        ? acceptedSignatures.length
+        : maxIndexExclusive.clamp(0, acceptedSignatures.length);
+    for (var i = 0; i < upperBound; i++) {
       final acceptedSignature = acceptedSignatures[i];
       if (acceptedSignature == null) continue;
-      if (_areFramesNearDuplicate(acceptedSignature, current)) {
+      if (matcher(acceptedSignature, current)) {
         return i;
       }
     }
     return null;
+  }
+
+  static bool _areFramesGlobalDuplicate(
+    ({int hash, double darkRatio}) previous,
+    ({int hash, double darkRatio}) current,
+  ) {
+    final hashDistance = _hammingDistance64(previous.hash, current.hash);
+    final darkRatioDelta = (previous.darkRatio - current.darkRatio).abs();
+    return hashDistance <= 4 && darkRatioDelta <= 0.06;
   }
 
   static bool _shouldPreferRicherFrame(

@@ -10,6 +10,7 @@ void main() {
   testWidgets('AttachmentAnnotationJobStatusRow shows running after soft delay',
       (tester) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    final createdAtMs = now + const Duration(minutes: 1).inMilliseconds;
     final job = AttachmentAnnotationJob(
       attachmentSha256: 'abc',
       status: 'pending',
@@ -18,8 +19,8 @@ void main() {
       attempts: 0,
       nextRetryAtMs: null,
       lastError: null,
-      createdAtMs: now,
-      updatedAtMs: now,
+      createdAtMs: createdAtMs,
+      updatedAtMs: createdAtMs,
     );
 
     await tester.pumpWidget(
@@ -38,7 +39,7 @@ void main() {
 
     expect(find.text('AI analyzing…'), findsNothing);
 
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(seconds: 61));
     expect(find.text('AI analyzing…'), findsOneWidget);
   });
 }

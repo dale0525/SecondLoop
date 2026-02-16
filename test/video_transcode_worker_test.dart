@@ -397,9 +397,51 @@ void main() {
     expect(result.keyframes.first.bytes, lateFrameBytes);
   });
 
-  test('VideoTranscodeWorker deduplicates non-contiguous repeated slides',
+  test('VideoTranscodeWorker deduplicates non-contiguous near-identical slides',
       () async {
     final input = Uint8List.fromList(const <int>[21, 22, 23]);
+    final frameA = _buildSlideVariantFrame(0);
+    final frameB = _buildSlideVariantFrame(1);
+    final nearDuplicateRepeat = _buildSlideNearDuplicateFrame();
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      input,
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+
+        final outputPath = arguments.last;
+        final outputFile = File(outputPath);
+        await outputFile.parent.create(recursive: true);
+        if (outputPath.endsWith('poster.jpg')) {
+          await outputFile.writeAsBytes(const <int>[1, 2, 3]);
+          return ProcessResult(0, 0, '', '');
+        }
+        if (outputPath.contains('keyframe_scene_')) {
+          return ProcessResult(0, 1, '', 'scene failed');
+        }
+
+        final keyframe0 = File(outputPath.replaceAll('%03d', '000'));
+        final keyframe1 = File(outputPath.replaceAll('%03d', '001'));
+        final keyframe2 = File(outputPath.replaceAll('%03d', '002'));
+        await keyframe0.writeAsBytes(frameA);
+        await keyframe1.writeAsBytes(frameB);
+        await keyframe2.writeAsBytes(nearDuplicateRepeat);
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(result.keyframes.length, 2);
+    expect(result.keyframes[0].bytes, frameA);
+    expect(result.keyframes[1].bytes, frameB);
+  });
+
+  test('VideoTranscodeWorker keeps non-contiguous richer slides', () async {
+    final input = Uint8List.fromList(const <int>[24, 25, 26]);
     final earlyFrame = _buildSlideFrameBytes(hasExtraBullet: false);
     final frameB = _buildSlideVariantFrame(1);
     final richerRepeatFrame = _buildSlideFrameBytes(hasExtraBullet: true);
@@ -435,9 +477,10 @@ void main() {
       },
     );
 
-    expect(result.keyframes.length, 2);
-    expect(result.keyframes[0].bytes, richerRepeatFrame);
+    expect(result.keyframes.length, 3);
+    expect(result.keyframes[0].bytes, earlyFrame);
     expect(result.keyframes[1].bytes, frameB);
+    expect(result.keyframes[2].bytes, richerRepeatFrame);
   });
 
   test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
@@ -483,6 +526,36 @@ Uint8List _buildSlideFrameBytes({required bool hasExtraBullet}) {
       color: img.ColorRgb8(30, 30, 30),
     );
   }
+  return Uint8List.fromList(img.encodeJpg(image, quality: 90));
+}
+
+Uint8List _buildSlideNearDuplicateFrame() {
+  final image = img.Image(width: 320, height: 180);
+  img.fill(image, color: img.ColorRgb8(255, 255, 255));
+  img.fillRect(
+    image,
+    x1: 20,
+    y1: 20,
+    x2: 300,
+    y2: 36,
+    color: img.ColorRgb8(20, 20, 20),
+  );
+  img.fillRect(
+    image,
+    x1: 36,
+    y1: 70,
+    x2: 280,
+    y2: 82,
+    color: img.ColorRgb8(30, 30, 30),
+  );
+  img.fillRect(
+    image,
+    x1: 296,
+    y1: 8,
+    x2: 302,
+    y2: 14,
+    color: img.ColorRgb8(10, 10, 10),
+  );
   return Uint8List.fromList(img.encodeJpg(image, quality: 90));
 }
 
