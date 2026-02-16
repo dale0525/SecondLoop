@@ -108,6 +108,8 @@ Widget _buildComposerInlineButton(
   required Color backgroundColor,
   required Color foregroundColor,
   Color? borderColor,
+  bool iconOnly = false,
+  double minButtonWidth = 44,
 }) {
   final textTheme = Theme.of(context).textTheme;
   final isEnabled = onPressed != null;
@@ -136,21 +138,26 @@ Widget _buildComposerInlineButton(
         canRequestFocus: false,
         borderRadius: borderRadius,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
+          constraints: BoxConstraints(
+            minHeight: 44,
+            minWidth: minButtonWidth,
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(horizontal: iconOnly ? 10 : 12),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(icon, size: 18, color: effectiveForeground),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: textTheme.labelLarge?.copyWith(
-                    color: effectiveForeground,
-                    fontWeight: FontWeight.w600,
+                if (!iconOnly) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: effectiveForeground,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -256,6 +263,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                   backgroundColor: Colors.transparent,
                   foregroundColor: colorScheme.onSurface,
                   borderColor: tokens.borderSubtle,
+                  iconOnly: true,
                 ),
               );
             }
@@ -295,10 +303,6 @@ extension _ChatPageStateComposerUi on _ChatPageState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (showMarkdownButton) ...[
-                    _buildComposerMarkdownEditorButton(context),
-                    const SizedBox(width: 8),
-                  ],
                   if (_showConfigureAiEntry) ...[
                     _buildComposerInlineButton(
                       context,
@@ -310,6 +314,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                           : _openAskAiSettingsFromComposer,
                       backgroundColor: colorScheme.secondaryContainer,
                       foregroundColor: colorScheme.onSecondaryContainer,
+                      iconOnly: true,
                     ),
                     const SizedBox(width: 8),
                   ] else if (_canAskAiNow) ...[
@@ -321,6 +326,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                       onPressed: _isComposerBusy ? null : _askAi,
                       backgroundColor: colorScheme.secondaryContainer,
                       foregroundColor: colorScheme.onSecondaryContainer,
+                      iconOnly: true,
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -332,6 +338,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                     onPressed: _isComposerBusy ? null : _send,
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
+                    iconOnly: true,
                   ),
                 ],
               ),

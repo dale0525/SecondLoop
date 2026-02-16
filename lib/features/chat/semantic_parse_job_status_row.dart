@@ -281,6 +281,7 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
 
     if (!mounted) return;
     if (todo == null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => TodoDetailPage(initialTodo: todo!),

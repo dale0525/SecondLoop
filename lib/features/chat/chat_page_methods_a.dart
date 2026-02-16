@@ -9,6 +9,18 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   bool _isTransientPendingMessage(Message message) =>
       message.id.startsWith('pending_') && message.id != _kFailedAskMessageId;
 
+  void _unfocusBeforeRoutePush() {
+    if (_isDesktopPlatform) return;
+    _inputFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<T?> _pushRouteFromChat<T>(Route<T> route) {
+    _unfocusBeforeRoutePush();
+    return Navigator.of(context).push(route);
+  }
+
   Future<void> _loadEmbeddingsDataConsentPreference() async {
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) return;
@@ -335,7 +347,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   }
 
   Future<void> _openMessageViewer(String content) async {
-    await Navigator.of(context).push(
+    await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (context) =>
             MessageViewerPage(content: sanitizeChatMarkdown(content)),
@@ -346,7 +358,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<void> _openMarkdownEditor() async {
     if (_isComposerBusy) return;
 
-    final result = await Navigator.of(context).push<ChatMarkdownEditorResult>(
+    final result = await _pushRouteFromChat<ChatMarkdownEditorResult>(
       MaterialPageRoute(
         builder: (context) => ChatMarkdownEditorPage(
           initialText: _controller.text,
@@ -689,7 +701,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<void> _openLinkedTodo(Todo? linkedTodo) async {
     if (linkedTodo == null) return;
     if (!mounted) return;
-    await Navigator.of(context).push(
+    await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (context) => TodoDetailPage(initialTodo: linkedTodo),
       ),

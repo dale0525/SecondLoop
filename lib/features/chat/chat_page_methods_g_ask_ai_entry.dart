@@ -91,7 +91,7 @@ extension _ChatPageStateAskAiEntry on _ChatPageState {
   Future<void> _openAskAiSettingsFromComposer() async {
     if (!mounted) return;
 
-    await Navigator.of(context).push(
+    await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (_) => const AiSettingsPage(
           focusSection: AiSettingsSection.askAi,

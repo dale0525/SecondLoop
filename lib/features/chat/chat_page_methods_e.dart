@@ -321,9 +321,11 @@ extension _ChatPageStateMethodsE on _ChatPageState {
                 action: SnackBarAction(
                   label: context.t.settings.cloudAccount.title,
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const CloudAccountPage(),
+                    unawaited(
+                      _pushRouteFromChat(
+                        MaterialPageRoute(
+                          builder: (context) => const CloudAccountPage(),
+                        ),
                       ),
                     );
                   },
