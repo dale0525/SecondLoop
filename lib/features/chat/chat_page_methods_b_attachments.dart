@@ -2,7 +2,89 @@ part of 'chat_page.dart';
 
 const String _kSecondLoopUrlManifestMimeType =
     'application/x.secondloop.url+json';
+const String kSecondLoopVideoManifestMimeType =
+    'application/x.secondloop.video+json';
 const String _kSecondLoopUrlManifestSchema = 'secondloop.url_manifest.v1';
+const int _kChatVideoProxySegmentDurationSeconds = 20 * 60;
+const int _kChatVideoProxySegmentDurationMs =
+    _kChatVideoProxySegmentDurationSeconds * 1000;
+const int _kChatVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
+const int _kChatVideoProxyMaxDurationMs = 60 * 60 * 1000;
+const int _kChatVideoProxyMaxBytes = 200 * 1024 * 1024;
+
+Map<String, Object?> buildVideoManifestPayload({
+  required String videoSha256,
+  required String videoMimeType,
+  String videoKind = 'unknown',
+  double videoKindConfidence = 0.0,
+  String? videoProxySha256,
+  String? posterSha256,
+  String? posterMimeType,
+  List<({int index, String sha256, String mimeType, int tMs, String kind})>?
+      keyframes,
+  String? audioSha256,
+  String? audioMimeType,
+  int? segmentCount,
+  List<({int index, String sha256, String mimeType})>? videoSegments,
+  int videoProxyMaxDurationMs = _kChatVideoProxyMaxDurationMs,
+  int videoProxyMaxBytes = _kChatVideoProxyMaxBytes,
+  int? videoProxyTotalBytes,
+  bool videoProxyTruncated = false,
+}) {
+  final normalizedKind = normalizeVideoKind(videoKind);
+  final normalizedKindConfidence =
+      videoKindConfidence.clamp(0.0, 1.0).toDouble();
+
+  return <String, Object?>{
+    'schema': 'secondloop.video_manifest.v2',
+    'video_sha256': videoSha256,
+    'video_mime_type': videoMimeType,
+    'original_sha256': videoSha256,
+    'original_mime_type': videoMimeType,
+    'video_kind': normalizedKind,
+    'video_kind_confidence': normalizedKindConfidence,
+    if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
+      'video_proxy_sha256': videoProxySha256,
+    if (posterSha256 != null && posterSha256.trim().isNotEmpty)
+      'poster_sha256': posterSha256,
+    if (posterMimeType != null && posterMimeType.trim().isNotEmpty)
+      'poster_mime_type': posterMimeType,
+    if (keyframes != null && keyframes.isNotEmpty)
+      'keyframes': keyframes
+          .map(
+            (frame) => <String, Object?>{
+              'index': frame.index,
+              'sha256': frame.sha256,
+              'mime_type': frame.mimeType,
+              't_ms': frame.tMs,
+              'kind': frame.kind,
+            },
+          )
+          .toList(growable: false),
+    if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
+    'segment_max_duration_ms': _kChatVideoProxySegmentDurationMs,
+    'segment_max_bytes': _kChatVideoProxySegmentMaxBytes,
+    'video_proxy_max_duration_ms': videoProxyMaxDurationMs,
+    'video_proxy_max_bytes': videoProxyMaxBytes,
+    if (videoProxyTotalBytes != null && videoProxyTotalBytes > 0)
+      'video_proxy_total_bytes': videoProxyTotalBytes,
+    if (videoProxyTruncated) 'video_proxy_truncated': true,
+    if (videoSegments != null && videoSegments.isNotEmpty)
+      'video_segments': videoSegments
+          .map(
+            (segment) => <String, Object?>{
+              'index': segment.index,
+              'sha256': segment.sha256,
+              'mime_type': segment.mimeType,
+            },
+          )
+          .toList(growable: false),
+    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
+      'audio_sha256': audioSha256,
+    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
+      'audio_mime_type': audioMimeType,
+  };
+}
 
 extension _ChatPageStateMethodsBAttachments on _ChatPageState {
   bool _looksLikeHttpUrlText(String raw) {
@@ -58,6 +140,20 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     if (lower.endsWith('.webm')) return 'video/webm';
     if (lower.endsWith('.mkv')) return 'video/x-matroska';
     if (lower.endsWith('.avi')) return 'video/x-msvideo';
+    if (lower.endsWith('.wmv')) return 'video/x-ms-wmv';
+    if (lower.endsWith('.flv')) return 'video/x-flv';
+    if (lower.endsWith('.mpeg') || lower.endsWith('.mpg')) {
+      return 'video/mpeg';
+    }
+    if (lower.endsWith('.ts') ||
+        lower.endsWith('.m2ts') ||
+        lower.endsWith('.mts')) {
+      return 'video/mp2t';
+    }
+    if (lower.endsWith('.3gp')) return 'video/3gpp';
+    if (lower.endsWith('.3g2')) return 'video/3gpp2';
+    if (lower.endsWith('.asf')) return 'video/x-ms-asf';
+    if (lower.endsWith('.ogv')) return 'video/ogg';
 
     return 'application/octet-stream';
   }
@@ -236,27 +332,174 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       }
 
       String shaToLink;
-      late final String shaToBackup;
+      final backupShas = <String>[];
       if (normalizedMimeType.startsWith('video/')) {
-        final original = await backend.insertAttachment(
-          sessionKey,
-          bytes: rawBytes,
-          mimeType: normalizedMimeType,
-        );
-        shaToBackup = original.sha256;
+        ContentEnrichmentConfig? contentConfig;
+        try {
+          contentConfig = await const RustContentEnrichmentConfigStore()
+              .readContentEnrichment(sessionKey);
+        } catch (_) {
+          contentConfig = null;
+        }
 
-        final manifest = jsonEncode({
-          'schema': 'secondloop.video_manifest.v1',
-          'original_sha256': original.sha256,
-          'original_mime_type': normalizedMimeType,
-        });
-        final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
-        final manifestAttachment = await backend.insertAttachment(
-          sessionKey,
-          bytes: manifestBytes,
-          mimeType: 'application/x.secondloop.video+json',
+        int sanitizeVideoProxyLimit(int value, int fallback) {
+          if (value <= 0) return fallback;
+          return value;
+        }
+
+        final videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
+        final configuredVideoProxyMaxDurationMs = sanitizeVideoProxyLimit(
+          (contentConfig?.videoProxyMaxDurationMs ??
+                  _kChatVideoProxyMaxDurationMs)
+              .toInt(),
+          _kChatVideoProxyMaxDurationMs,
         );
-        shaToLink = manifestAttachment.sha256;
+        final configuredVideoProxyMaxBytes = sanitizeVideoProxyLimit(
+          (contentConfig?.videoProxyMaxBytes ?? _kChatVideoProxyMaxBytes)
+              .toInt(),
+          _kChatVideoProxyMaxBytes,
+        );
+
+        if (!videoProxyEnabled) {
+          final attachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: rawBytes,
+            mimeType: normalizedMimeType,
+          );
+          shaToLink = attachment.sha256;
+          backupShas.add(attachment.sha256);
+        } else {
+          final videoProxy =
+              await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
+            rawBytes,
+            sourceMimeType: normalizedMimeType,
+            maxSegmentDurationSeconds: _kChatVideoProxySegmentDurationSeconds,
+            maxSegmentBytes: _kChatVideoProxySegmentMaxBytes,
+          );
+          final selectedSegments =
+              selectVideoProxySegments(videoProxy.segments);
+          if (!selectedSegments.hasSegments) {
+            throw StateError('video_proxy_segments_empty');
+          }
+
+          final videoSegments =
+              <({int index, String sha256, String mimeType})>[];
+          for (final segment in selectedSegments.segments) {
+            final segmentAttachment = await backend.insertAttachment(
+              sessionKey,
+              bytes: segment.bytes,
+              mimeType: segment.mimeType,
+            );
+            videoSegments.add(
+              (
+                index: segment.index,
+                sha256: segmentAttachment.sha256,
+                mimeType: segmentAttachment.mimeType,
+              ),
+            );
+            backupShas.add(segmentAttachment.sha256);
+          }
+
+          final primarySegment = selectedSegments.segments.first;
+          final primaryVideo = videoSegments.first;
+
+          String? posterSha256;
+          String? posterMimeType;
+          final keyframeRefs = <({
+            int index,
+            String sha256,
+            String mimeType,
+            int tMs,
+            String kind
+          })>[];
+          final preview = await VideoTranscodeWorker.extractPreviewFrames(
+            primarySegment.bytes,
+            sourceMimeType: primarySegment.mimeType,
+          );
+          final videoKindClassification = await classifyVideoKind(
+            filename: filename,
+            sourceMimeType: primarySegment.mimeType,
+            posterBytes: preview.posterBytes,
+            keyframes: preview.keyframes,
+          );
+          final resolvedKeyframeKind = videoKindClassification.keyframeKind;
+          final posterBytes = preview.posterBytes;
+          if (posterBytes != null && posterBytes.isNotEmpty) {
+            final posterAttachment = await backend.insertAttachment(
+              sessionKey,
+              bytes: posterBytes,
+              mimeType: preview.posterMimeType,
+            );
+            posterSha256 = posterAttachment.sha256;
+            posterMimeType = posterAttachment.mimeType;
+            backupShas.add(posterAttachment.sha256);
+          }
+
+          for (final frame in preview.keyframes) {
+            final frameAttachment = await backend.insertAttachment(
+              sessionKey,
+              bytes: frame.bytes,
+              mimeType: frame.mimeType,
+            );
+            keyframeRefs.add(
+              (
+                index: frame.index,
+                sha256: frameAttachment.sha256,
+                mimeType: frameAttachment.mimeType,
+                tMs: frame.tMs,
+                kind: resolvedKeyframeKind,
+              ),
+            );
+            backupShas.add(frameAttachment.sha256);
+          }
+
+          String? audioSha256;
+          String? audioMimeType;
+          final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+            rawBytes,
+            sourceMimeType: normalizedMimeType,
+          );
+          if (audioProxy.didTranscode &&
+              audioProxy.bytes.isNotEmpty &&
+              audioProxy.mimeType.trim().toLowerCase().startsWith('audio/')) {
+            final audioAttachment = await backend.insertAttachment(
+              sessionKey,
+              bytes: audioProxy.bytes,
+              mimeType: audioProxy.mimeType,
+            );
+            audioSha256 = audioAttachment.sha256;
+            audioMimeType = audioAttachment.mimeType;
+            backupShas.add(audioAttachment.sha256);
+          }
+
+          final manifest = jsonEncode({
+            ...buildVideoManifestPayload(
+              videoSha256: primaryVideo.sha256,
+              videoMimeType: primaryVideo.mimeType,
+              videoKind: videoKindClassification.kind,
+              videoKindConfidence: videoKindClassification.confidence,
+              videoProxySha256: primaryVideo.sha256,
+              posterSha256: posterSha256,
+              posterMimeType: posterMimeType,
+              keyframes: keyframeRefs,
+              audioSha256: audioSha256,
+              audioMimeType: audioMimeType,
+              segmentCount: videoSegments.length,
+              videoSegments: videoSegments,
+              videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
+              videoProxyMaxBytes: configuredVideoProxyMaxBytes,
+              videoProxyTotalBytes: selectedSegments.totalBytes,
+              videoProxyTruncated: selectedSegments.isTruncated,
+            ),
+          });
+          final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
+          final manifestAttachment = await backend.insertAttachment(
+            sessionKey,
+            bytes: manifestBytes,
+            mimeType: kSecondLoopVideoManifestMimeType,
+          );
+          shaToLink = manifestAttachment.sha256;
+        }
       } else if (normalizedMimeType.startsWith('audio/')) {
         final proxy = useLocalAudioTranscode
             ? await AudioTranscodeWorker.transcodeToM4aProxy(
@@ -274,7 +517,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           mimeType: proxy.mimeType,
         );
         shaToLink = attachment.sha256;
-        shaToBackup = attachment.sha256;
+        backupShas.add(attachment.sha256);
       } else {
         final attachment = await backend.insertAttachment(
           sessionKey,
@@ -282,16 +525,18 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           mimeType: normalizedMimeType,
         );
         shaToLink = attachment.sha256;
-        shaToBackup = attachment.sha256;
+        backupShas.add(attachment.sha256);
       }
 
-      unawaited(
-        _maybeEnqueueCloudMediaBackup(
-          backend,
-          sessionKey,
-          shaToBackup,
-        ),
-      );
+      for (final backupSha in backupShas.toSet()) {
+        unawaited(
+          _maybeEnqueueCloudMediaBackup(
+            backend,
+            sessionKey,
+            backupSha,
+          ),
+        );
+      }
 
       await backend.linkAttachmentToMessage(
         sessionKey,

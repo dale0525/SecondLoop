@@ -1,0 +1,308 @@
+{
+  "schema": "secondloop.video_kind_eval.v1",
+  "description": "Synthetic multilingual baseline samples for offline video-kind evaluation.",
+  "part": 3,
+  "total_parts": 4,
+  "samples": [
+    {
+      "id": "de_filename_screen_recording_061",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "bildschirmaufnahme_demo.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_vlog_062",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "tagebuch_alltag_vlog.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_tutorial_063",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "anleitung_tutorial_installieren.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_lecture_064",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "vorlesung_kurs_woche1.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_meeting_065",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "besprechung_team_woche.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_interview_066",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "vorstellungsgesprach_kandidat.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_gameplay_067",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "spiel_gameplay_rangliste.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_filename_presentation_068",
+      "language": "de",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "praesentation_quartal_bericht.mp4",
+      "ocr_text": "",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_ocr_meeting_069",
+      "language": "de",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_de_069.mp4",
+      "ocr_text": "agenda besprechung nächste schritte aufgaben",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "de_ocr_interview_070",
+      "language": "de",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_de_070.mp4",
+      "ocr_text": "frage antwort vorstellungsgespräch kandidat",
+      "language_hints": "de_en"
+    },
+    {
+      "id": "pt_filename_screen_recording_071",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "gravacao_de_tela_demo.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_vlog_072",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "cotidiano_vlog_diario.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_tutorial_073",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "passo_a_passo_tutorial_guia.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_lecture_074",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "aula_curso_semana1.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_meeting_075",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "reuniao_equipe_semanal.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_interview_076",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "entrevista_candidato_tecnica.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_gameplay_077",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "jogo_gameplay_ranqueada.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_filename_presentation_078",
+      "language": "pt",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "apresentacao_resultados_q1.mp4",
+      "ocr_text": "",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_ocr_meeting_079",
+      "language": "pt",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_pt_079.mp4",
+      "ocr_text": "agenda reunião ações próximos passos bloqueios",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "pt_ocr_interview_080",
+      "language": "pt",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_pt_080.mp4",
+      "ocr_text": "entrevista pergunta resposta candidato",
+      "language_hints": "es_en"
+    },
+    {
+      "id": "it_filename_screen_recording_081",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "registrazione_schermo_demo.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_vlog_082",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "giornata_vlog_diario.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_tutorial_083",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "guida_tutorial_installare.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_lecture_084",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "lezione_corso_settimana1.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_meeting_085",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "riunione_team_settimanale.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_interview_086",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "colloquio_candidato_tecnico.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_gameplay_087",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "gioco_gameplay_classificata.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_filename_presentation_088",
+      "language": "it",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "presentazione_risultati_q1.mp4",
+      "ocr_text": "",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_ocr_meeting_089",
+      "language": "it",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_it_089.mp4",
+      "ocr_text": "agenda riunione azioni prossimi passi",
+      "language_hints": "fr_en"
+    },
+    {
+      "id": "it_ocr_interview_090",
+      "language": "it",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_it_090.mp4",
+      "ocr_text": "colloquio domanda risposta candidato",
+      "language_hints": "fr_en"
+    }
+  ]
+}

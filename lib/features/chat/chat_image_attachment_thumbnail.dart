@@ -10,6 +10,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
+import '../attachments/video_keyframe_ocr_worker.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../media_backup/cloud_media_download_ui.dart';
 import '../../src/rust/db.dart';
@@ -123,14 +124,55 @@ class _ChatImageAttachmentThumbnailState
     }
   }
 
-  Future<Uint8List?> _loadBytes() async {
-    final sessionKey = SessionScope.of(context).sessionKey;
-    _blockedByWifiOnly = false;
+  static bool _isVideoManifest(String mimeType) {
+    return mimeType.trim().toLowerCase() == kSecondLoopVideoManifestMimeType;
+  }
 
+  Future<Uint8List?> _loadBytes() async {
+    _blockedByWifiOnly = false;
+    if (_isVideoManifest(widget.attachment.mimeType)) {
+      return _loadVideoManifestPreviewBytes();
+    }
+    return _readAttachmentBytesBySha(widget.attachment.sha256);
+  }
+
+  Future<Uint8List?> _loadVideoManifestPreviewBytes() async {
+    final manifestBytes =
+        await _readAttachmentBytesBySha(widget.attachment.sha256);
+    if (manifestBytes == null || manifestBytes.isEmpty) return null;
+
+    final manifest = parseVideoManifestPayload(manifestBytes);
+    if (manifest == null) return null;
+
+    final posterSha = (manifest.posterSha256 ?? '').trim();
+    if (posterSha.isNotEmpty) {
+      final posterBytes = await _readAttachmentBytesBySha(posterSha);
+      if (posterBytes != null && posterBytes.isNotEmpty) {
+        return posterBytes;
+      }
+    }
+
+    for (final frame in manifest.keyframes) {
+      final frameSha = frame.sha256.trim();
+      if (frameSha.isEmpty) continue;
+      final frameBytes = await _readAttachmentBytesBySha(frameSha);
+      if (frameBytes != null && frameBytes.isNotEmpty) {
+        return frameBytes;
+      }
+    }
+
+    return null;
+  }
+
+  Future<Uint8List?> _readAttachmentBytesBySha(String sha256) async {
+    final normalizedSha = sha256.trim();
+    if (normalizedSha.isEmpty) return null;
+
+    final sessionKey = SessionScope.of(context).sessionKey;
     try {
       final bytes = await widget.attachmentsBackend.readAttachmentBytes(
         sessionKey,
-        sha256: widget.attachment.sha256,
+        sha256: normalizedSha,
       );
       _blockedByWifiOnly = false;
       return bytes;
@@ -149,18 +191,20 @@ class _ChatImageAttachmentThumbnailState
         backend: backend,
         sessionKey: sessionKey,
         idTokenGetter: idTokenGetter,
-        sha256: widget.attachment.sha256,
+        sha256: normalizedSha,
         allowCellular: false,
       );
       final uiError =
           cloudMediaDownloadUiErrorFromFailureReason(result.failureReason);
-      _blockedByWifiOnly = uiError == CloudMediaDownloadUiError.wifiOnlyBlocked;
+      if (uiError == CloudMediaDownloadUiError.wifiOnlyBlocked) {
+        _blockedByWifiOnly = true;
+      }
       if (!result.didDownload) return null;
 
       try {
         final bytes = await widget.attachmentsBackend.readAttachmentBytes(
           sessionKey,
-          sha256: widget.attachment.sha256,
+          sha256: normalizedSha,
         );
         _blockedByWifiOnly = false;
         return bytes;
@@ -174,6 +218,7 @@ class _ChatImageAttachmentThumbnailState
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final radius = BorderRadius.circular(tokens.radiusLg);
+    final isVideoManifest = _isVideoManifest(widget.attachment.mimeType);
 
     return SlSurface(
       borderRadius: radius,
@@ -193,7 +238,9 @@ class _ChatImageAttachmentThumbnailState
                   if (snapshot.connectionState != ConnectionState.done) {
                     return _placeholder(
                       context,
-                      icon: Icons.image_outlined,
+                      icon: isVideoManifest
+                          ? Icons.smart_display_outlined
+                          : Icons.image_outlined,
                       statusText: context.t.sync.progressDialog.preparing,
                       showSpinner: true,
                     );
@@ -203,7 +250,9 @@ class _ChatImageAttachmentThumbnailState
                       context,
                       icon: _blockedByWifiOnly
                           ? Icons.wifi_off_rounded
-                          : Icons.broken_image_outlined,
+                          : (isVideoManifest
+                              ? Icons.smart_display_outlined
+                              : Icons.broken_image_outlined),
                       statusText: _blockedByWifiOnly
                           ? context
                               .t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle

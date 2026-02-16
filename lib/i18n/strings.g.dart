@@ -1492,6 +1492,11 @@ class _StringsAttachmentsContentEn {
   String get previewUnavailable => 'Preview unavailable';
   String get ocrFinished => 'OCR finished. Refreshing preview…';
   String get ocrFailed => 'OCR failed on this device.';
+  late final _StringsAttachmentsContentSpeechTranscribeIssueEn
+      speechTranscribeIssue =
+      _StringsAttachmentsContentSpeechTranscribeIssueEn._(_root);
+  late final _StringsAttachmentsContentVideoInsightsEn videoInsights =
+      _StringsAttachmentsContentVideoInsightsEn._(_root);
 }
 
 // Path: sync.progressDialog
@@ -2608,6 +2613,42 @@ class _StringsChatEmbeddingsConsentActionsEn {
   String get enableCloud => 'Enable cloud embeddings';
 }
 
+// Path: attachments.content.speechTranscribeIssue
+class _StringsAttachmentsContentSpeechTranscribeIssueEn {
+  _StringsAttachmentsContentSpeechTranscribeIssueEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Speech transcription unavailable';
+  String get openSettings => 'Open settings';
+  String get openSettingsFailed =>
+      'Unable to open system settings automatically. Please check speech permission and Dictation manually.';
+  String get permissionDenied =>
+      'Speech recognition permission is denied. Enable it in system settings, then retry.';
+  String get permissionRestricted =>
+      'Speech recognition is restricted by system policy. Check Screen Time or device management policy.';
+  String get serviceDisabled =>
+      'Siri and Dictation are disabled. Please enable them before retrying.';
+  String get runtimeUnavailable =>
+      'Speech runtime is currently unavailable on this device. Please retry later.';
+}
+
+// Path: attachments.content.videoInsights
+class _StringsAttachmentsContentVideoInsightsEn {
+  _StringsAttachmentsContentVideoInsightsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsAttachmentsContentVideoInsightsContentKindEn contentKind =
+      _StringsAttachmentsContentVideoInsightsContentKindEn._(_root);
+  late final _StringsAttachmentsContentVideoInsightsDetailEn detail =
+      _StringsAttachmentsContentVideoInsightsDetailEn._(_root);
+  late final _StringsAttachmentsContentVideoInsightsFieldsEn fields =
+      _StringsAttachmentsContentVideoInsightsFieldsEn._(_root);
+}
+
 // Path: sync.mediaBackup.cellularDialog
 class _StringsSyncMediaBackupCellularDialogEn {
   _StringsSyncMediaBackupCellularDialogEn._(this._root);
@@ -3127,6 +3168,42 @@ class _StringsSettingsSubscriptionBenefitsItemsEn {
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchEn._(_root);
+}
+
+// Path: attachments.content.videoInsights.contentKind
+class _StringsAttachmentsContentVideoInsightsContentKindEn {
+  _StringsAttachmentsContentVideoInsightsContentKindEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get knowledge => 'Knowledge video';
+  String get nonKnowledge => 'Non-knowledge video';
+  String get unknown => 'Unknown';
+}
+
+// Path: attachments.content.videoInsights.detail
+class _StringsAttachmentsContentVideoInsightsDetailEn {
+  _StringsAttachmentsContentVideoInsightsDetailEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get knowledgeMarkdown => 'Knowledge markdown';
+  String get videoDescription => 'Video description';
+  String get extractedContent => 'Extracted content';
+}
+
+// Path: attachments.content.videoInsights.fields
+class _StringsAttachmentsContentVideoInsightsFieldsEn {
+  _StringsAttachmentsContentVideoInsightsFieldsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get contentType => 'Content type';
+  String get segments => 'Segments';
+  String get summary => 'Video summary';
 }
 
 // Path: settings.aiSelection.askAi.preference.auto
@@ -5422,6 +5499,13 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
   String get ocrFinished => 'OCR 已完成，正在刷新预览…';
   @override
   String get ocrFailed => '此设备上 OCR 执行失败。';
+  @override
+  late final _StringsAttachmentsContentSpeechTranscribeIssueZhCn
+      speechTranscribeIssue =
+      _StringsAttachmentsContentSpeechTranscribeIssueZhCn._(_root);
+  @override
+  late final _StringsAttachmentsContentVideoInsightsZhCn videoInsights =
+      _StringsAttachmentsContentVideoInsightsZhCn._(_root);
 }
 
 // Path: sync.progressDialog
@@ -7099,6 +7183,56 @@ class _StringsChatEmbeddingsConsentActionsZhCn
   String get enableCloud => '开启云端向量';
 }
 
+// Path: attachments.content.speechTranscribeIssue
+class _StringsAttachmentsContentSpeechTranscribeIssueZhCn
+    extends _StringsAttachmentsContentSpeechTranscribeIssueEn {
+  _StringsAttachmentsContentSpeechTranscribeIssueZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '语音转录暂不可用';
+  @override
+  String get openSettings => '打开系统设置';
+  @override
+  String get openSettingsFailed => '无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。';
+  @override
+  String get permissionDenied => '语音识别权限已关闭。请在系统设置中开启后重试。';
+  @override
+  String get permissionRestricted => '语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。';
+  @override
+  String get serviceDisabled => '系统“听写与 Siri”已关闭。请先启用后再重试。';
+  @override
+  String get runtimeUnavailable => '当前设备暂时无法使用语音识别运行时。请稍后重试。';
+}
+
+// Path: attachments.content.videoInsights
+class _StringsAttachmentsContentVideoInsightsZhCn
+    extends _StringsAttachmentsContentVideoInsightsEn {
+  _StringsAttachmentsContentVideoInsightsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsAttachmentsContentVideoInsightsContentKindZhCn
+      contentKind =
+      _StringsAttachmentsContentVideoInsightsContentKindZhCn._(_root);
+  @override
+  late final _StringsAttachmentsContentVideoInsightsDetailZhCn detail =
+      _StringsAttachmentsContentVideoInsightsDetailZhCn._(_root);
+  @override
+  late final _StringsAttachmentsContentVideoInsightsFieldsZhCn fields =
+      _StringsAttachmentsContentVideoInsightsFieldsZhCn._(_root);
+}
+
 // Path: sync.mediaBackup.cellularDialog
 class _StringsSyncMediaBackupCellularDialogZhCn
     extends _StringsSyncMediaBackupCellularDialogEn {
@@ -7870,6 +8004,63 @@ class _StringsSettingsSubscriptionBenefitsItemsZhCn
   late final _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn
       mobileSearch =
       _StringsSettingsSubscriptionBenefitsItemsMobileSearchZhCn._(_root);
+}
+
+// Path: attachments.content.videoInsights.contentKind
+class _StringsAttachmentsContentVideoInsightsContentKindZhCn
+    extends _StringsAttachmentsContentVideoInsightsContentKindEn {
+  _StringsAttachmentsContentVideoInsightsContentKindZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get knowledge => '知识类视频';
+  @override
+  String get nonKnowledge => '非知识类视频';
+  @override
+  String get unknown => '未知';
+}
+
+// Path: attachments.content.videoInsights.detail
+class _StringsAttachmentsContentVideoInsightsDetailZhCn
+    extends _StringsAttachmentsContentVideoInsightsDetailEn {
+  _StringsAttachmentsContentVideoInsightsDetailZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get knowledgeMarkdown => '知识文稿';
+  @override
+  String get videoDescription => '视频描述';
+  @override
+  String get extractedContent => '提取内容';
+}
+
+// Path: attachments.content.videoInsights.fields
+class _StringsAttachmentsContentVideoInsightsFieldsZhCn
+    extends _StringsAttachmentsContentVideoInsightsFieldsEn {
+  _StringsAttachmentsContentVideoInsightsFieldsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get contentType => '内容类型';
+  @override
+  String get segments => '分段处理';
+  @override
+  String get summary => '视频概要';
 }
 
 // Path: settings.aiSelection.askAi.preference.auto
@@ -9455,6 +9646,38 @@ extension on Translations {
         return 'OCR finished. Refreshing preview…';
       case 'attachments.content.ocrFailed':
         return 'OCR failed on this device.';
+      case 'attachments.content.speechTranscribeIssue.title':
+        return 'Speech transcription unavailable';
+      case 'attachments.content.speechTranscribeIssue.openSettings':
+        return 'Open settings';
+      case 'attachments.content.speechTranscribeIssue.openSettingsFailed':
+        return 'Unable to open system settings automatically. Please check speech permission and Dictation manually.';
+      case 'attachments.content.speechTranscribeIssue.permissionDenied':
+        return 'Speech recognition permission is denied. Enable it in system settings, then retry.';
+      case 'attachments.content.speechTranscribeIssue.permissionRestricted':
+        return 'Speech recognition is restricted by system policy. Check Screen Time or device management policy.';
+      case 'attachments.content.speechTranscribeIssue.serviceDisabled':
+        return 'Siri and Dictation are disabled. Please enable them before retrying.';
+      case 'attachments.content.speechTranscribeIssue.runtimeUnavailable':
+        return 'Speech runtime is currently unavailable on this device. Please retry later.';
+      case 'attachments.content.videoInsights.contentKind.knowledge':
+        return 'Knowledge video';
+      case 'attachments.content.videoInsights.contentKind.nonKnowledge':
+        return 'Non-knowledge video';
+      case 'attachments.content.videoInsights.contentKind.unknown':
+        return 'Unknown';
+      case 'attachments.content.videoInsights.detail.knowledgeMarkdown':
+        return 'Knowledge markdown';
+      case 'attachments.content.videoInsights.detail.videoDescription':
+        return 'Video description';
+      case 'attachments.content.videoInsights.detail.extractedContent':
+        return 'Extracted content';
+      case 'attachments.content.videoInsights.fields.contentType':
+        return 'Content type';
+      case 'attachments.content.videoInsights.fields.segments':
+        return 'Segments';
+      case 'attachments.content.videoInsights.fields.summary':
+        return 'Video summary';
       case 'semanticSearch.preparing':
         return 'Preparing semantic search…';
       case 'semanticSearch.indexingMessages':
@@ -10952,6 +11175,38 @@ extension on _StringsZhCn {
         return 'OCR 已完成，正在刷新预览…';
       case 'attachments.content.ocrFailed':
         return '此设备上 OCR 执行失败。';
+      case 'attachments.content.speechTranscribeIssue.title':
+        return '语音转录暂不可用';
+      case 'attachments.content.speechTranscribeIssue.openSettings':
+        return '打开系统设置';
+      case 'attachments.content.speechTranscribeIssue.openSettingsFailed':
+        return '无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。';
+      case 'attachments.content.speechTranscribeIssue.permissionDenied':
+        return '语音识别权限已关闭。请在系统设置中开启后重试。';
+      case 'attachments.content.speechTranscribeIssue.permissionRestricted':
+        return '语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。';
+      case 'attachments.content.speechTranscribeIssue.serviceDisabled':
+        return '系统“听写与 Siri”已关闭。请先启用后再重试。';
+      case 'attachments.content.speechTranscribeIssue.runtimeUnavailable':
+        return '当前设备暂时无法使用语音识别运行时。请稍后重试。';
+      case 'attachments.content.videoInsights.contentKind.knowledge':
+        return '知识类视频';
+      case 'attachments.content.videoInsights.contentKind.nonKnowledge':
+        return '非知识类视频';
+      case 'attachments.content.videoInsights.contentKind.unknown':
+        return '未知';
+      case 'attachments.content.videoInsights.detail.knowledgeMarkdown':
+        return '知识文稿';
+      case 'attachments.content.videoInsights.detail.videoDescription':
+        return '视频描述';
+      case 'attachments.content.videoInsights.detail.extractedContent':
+        return '提取内容';
+      case 'attachments.content.videoInsights.fields.contentType':
+        return '内容类型';
+      case 'attachments.content.videoInsights.fields.segments':
+        return '分段处理';
+      case 'attachments.content.videoInsights.fields.summary':
+        return '视频概要';
       case 'semanticSearch.preparing':
         return '正在准备语义检索…';
       case 'semanticSearch.indexingMessages':

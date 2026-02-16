@@ -11,6 +11,7 @@ import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
 
 const _kOcrMarkdownLangPrefix = 'ocr_markdown:';
+const _kVideoExtractLangPrefix = 'video_extract:';
 const _kDefaultLanguageHints = 'device_plus_en';
 const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
 final RegExp _kCloudDetachedRequestIdPattern = RegExp(
@@ -30,6 +31,39 @@ typedef TryByokOcrForPdf = Future<PlatformPdfOcrResult?> Function({
   required Uint8List mediaBytes,
   required int pageCountHint,
 });
+
+typedef TryCloudVideoInsight = Future<MultimodalVideoInsight?> Function({
+  required String mimeType,
+  required Uint8List mediaBytes,
+});
+
+typedef TryByokVideoInsight = Future<MultimodalVideoInsight?> Function({
+  required String profileId,
+  required String modelName,
+  required String mimeType,
+  required Uint8List mediaBytes,
+});
+
+final class MultimodalVideoInsight {
+  const MultimodalVideoInsight({
+    required this.contentKind,
+    required this.summary,
+    required this.knowledgeMarkdown,
+    required this.videoDescription,
+    required this.engine,
+  });
+
+  final String contentKind;
+  final String summary;
+  final String knowledgeMarkdown;
+  final String videoDescription;
+  final String engine;
+
+  bool get hasAny =>
+      summary.isNotEmpty ||
+      knowledgeMarkdown.isNotEmpty ||
+      videoDescription.isNotEmpty;
+}
 
 String normalizeOcrEngineMode(String mode) {
   switch (mode.trim()) {
@@ -282,6 +316,255 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalMediaOcr({
   }
 }
 
+Future<MultimodalVideoInsight?> tryMultimodalVideoInsightViaByok({
+  required Uint8List sessionKey,
+  required String profileId,
+  required String modelName,
+  required String languageHints,
+  required String mimeType,
+  required Uint8List mediaBytes,
+}) async {
+  if (mediaBytes.isEmpty) return null;
+  final appDir = await getNativeAppDir();
+  final payloadJson = await rust_media_annotation.mediaAnnotationByokProfile(
+    appDir: appDir,
+    key: sessionKey,
+    profileId: profileId,
+    localDay: _formatLocalDayKey(DateTime.now()),
+    lang: _buildVideoExtractLang(languageHints),
+    mimeType: mimeType,
+    imageBytes: mediaBytes,
+  );
+  return extractMultimodalVideoInsight(
+    payloadJson,
+    defaultEngine: 'multimodal_byok_video_extract:$modelName',
+  );
+}
+
+Future<MultimodalVideoInsight?> tryMultimodalVideoInsightViaCloud({
+  required NativeAppBackend backend,
+  required String gatewayBaseUrl,
+  required String idToken,
+  required String modelName,
+  required String languageHints,
+  required String mimeType,
+  required Uint8List mediaBytes,
+}) async {
+  if (mediaBytes.isEmpty) return null;
+  final payloadJson = await backend.mediaAnnotationCloudGateway(
+    gatewayBaseUrl: gatewayBaseUrl,
+    idToken: idToken,
+    modelName: modelName,
+    lang: _buildVideoExtractLang(languageHints),
+    mimeType: mimeType,
+    imageBytes: mediaBytes,
+  );
+
+  final detachedRequestId =
+      _extractCloudDetachedRequestIdFromMediaPayloadJson(payloadJson);
+  if (detachedRequestId != null) {
+    unawaited(
+      _ackCloudDetachedChatJob(
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        requestId: detachedRequestId,
+      ),
+    );
+  }
+
+  return extractMultimodalVideoInsight(
+    payloadJson,
+    defaultEngine: 'multimodal_cloud_video_extract:$modelName',
+  );
+}
+
+Future<MultimodalVideoInsight?> tryConfiguredMultimodalVideoInsight({
+  required NativeAppBackend backend,
+  required Uint8List sessionKey,
+  required String mimeType,
+  required Uint8List mediaBytes,
+  required String languageHints,
+  required SubscriptionStatus subscriptionStatus,
+  required MediaAnnotationConfig mediaAnnotationConfig,
+  required List<LlmProfile> llmProfiles,
+  required String cloudGatewayBaseUrl,
+  required String cloudIdToken,
+  required String cloudModelName,
+  TryCloudVideoInsight? tryCloudInsight,
+  TryByokVideoInsight? tryByokInsight,
+}) async {
+  if (mediaBytes.isEmpty) return null;
+
+  final canUseCloud = canUseCloudMultimodalOcr(
+    subscriptionStatus: subscriptionStatus,
+    mediaAnnotationConfig: mediaAnnotationConfig,
+    cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+    cloudIdToken: cloudIdToken,
+  );
+
+  final byokProfile = resolveMultimodalOcrByokProfile(
+    profiles: llmProfiles,
+    preferredProfileId: mediaAnnotationConfig.byokProfileId,
+  );
+
+  if (!canUseCloud && byokProfile == null) return null;
+
+  final cloudRunner = tryCloudInsight ??
+      ({
+        required String mimeType,
+        required Uint8List mediaBytes,
+      }) {
+        return tryMultimodalVideoInsightViaCloud(
+          backend: backend,
+          gatewayBaseUrl: cloudGatewayBaseUrl,
+          idToken: cloudIdToken,
+          modelName: cloudModelName,
+          languageHints: languageHints,
+          mimeType: mimeType,
+          mediaBytes: mediaBytes,
+        );
+      };
+
+  final byokRunner = tryByokInsight ??
+      ({
+        required String profileId,
+        required String modelName,
+        required String mimeType,
+        required Uint8List mediaBytes,
+      }) {
+        return tryMultimodalVideoInsightViaByok(
+          sessionKey: sessionKey,
+          profileId: profileId,
+          modelName: modelName,
+          languageHints: languageHints,
+          mimeType: mimeType,
+          mediaBytes: mediaBytes,
+        );
+      };
+
+  if (canUseCloud) {
+    try {
+      final cloud = await cloudRunner(
+        mimeType: mimeType,
+        mediaBytes: mediaBytes,
+      );
+      if (cloud != null) return cloud;
+    } catch (_) {}
+
+    if (byokProfile != null) {
+      try {
+        final byok = await byokRunner(
+          profileId: byokProfile.id,
+          modelName: byokProfile.modelName,
+          mimeType: mimeType,
+          mediaBytes: mediaBytes,
+        );
+        if (byok != null) return byok;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  if (byokProfile == null) return null;
+  try {
+    return await byokRunner(
+      profileId: byokProfile.id,
+      modelName: byokProfile.modelName,
+      mimeType: mimeType,
+      mediaBytes: mediaBytes,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+MultimodalVideoInsight? mergeMultimodalVideoInsights(
+  Iterable<MultimodalVideoInsight?> insights, {
+  int maxSummaryChars = 1024,
+  int maxKnowledgeChars = 12 * 1024,
+  int maxDescriptionChars = 12 * 1024,
+}) {
+  final normalized = insights
+      .whereType<MultimodalVideoInsight>()
+      .where((insight) => insight.hasAny)
+      .toList(growable: false);
+  if (normalized.isEmpty) return null;
+
+  final summary = _mergeUniqueMultimodalInsightBlocks(
+    normalized.map((insight) => insight.summary),
+    maxChars: maxSummaryChars,
+  );
+  final knowledgeMarkdown = _mergeUniqueMultimodalInsightBlocks(
+    normalized.map((insight) => insight.knowledgeMarkdown),
+    maxChars: maxKnowledgeChars,
+  );
+  final videoDescription = _mergeUniqueMultimodalInsightBlocks(
+    normalized.map((insight) => insight.videoDescription),
+    maxChars: maxDescriptionChars,
+  );
+
+  var knowledgeVotes = 0;
+  var nonKnowledgeVotes = 0;
+  for (final insight in normalized) {
+    final contentKind = _normalizeVideoContentKind(insight.contentKind);
+    if (contentKind == 'knowledge') {
+      knowledgeVotes += 1;
+      continue;
+    }
+    if (contentKind == 'non_knowledge') {
+      nonKnowledgeVotes += 1;
+      continue;
+    }
+
+    final hasKnowledge = insight.knowledgeMarkdown.trim().isNotEmpty;
+    final hasDescription = insight.videoDescription.trim().isNotEmpty;
+    if (hasKnowledge && !hasDescription) {
+      knowledgeVotes += 1;
+    } else if (hasDescription && !hasKnowledge) {
+      nonKnowledgeVotes += 1;
+    }
+  }
+
+  var resolvedContentKind = 'unknown';
+  if (knowledgeVotes > nonKnowledgeVotes) {
+    resolvedContentKind = 'knowledge';
+  } else if (nonKnowledgeVotes > knowledgeVotes) {
+    resolvedContentKind = 'non_knowledge';
+  } else {
+    for (final insight in normalized) {
+      final normalizedKind = _normalizeVideoContentKind(insight.contentKind);
+      if (normalizedKind != 'unknown') {
+        resolvedContentKind = normalizedKind;
+        break;
+      }
+    }
+  }
+
+  if (resolvedContentKind == 'unknown') {
+    if (knowledgeMarkdown.isNotEmpty && videoDescription.isEmpty) {
+      resolvedContentKind = 'knowledge';
+    } else if (videoDescription.isNotEmpty && knowledgeMarkdown.isEmpty) {
+      resolvedContentKind = 'non_knowledge';
+    }
+  }
+
+  final fallbackSummary = _firstNonEmptyString(<String>[
+    summary,
+    _buildExcerpt(knowledgeMarkdown, maxChars: 240),
+    _buildExcerpt(videoDescription, maxChars: 240),
+  ]);
+
+  return MultimodalVideoInsight(
+    contentKind: resolvedContentKind,
+    summary: fallbackSummary,
+    knowledgeMarkdown: knowledgeMarkdown,
+    videoDescription: videoDescription,
+    engine: _dominantNonEmptyMultimodalEngine(
+      normalized.map((insight) => insight.engine),
+    ),
+  );
+}
+
 Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
   required NativeAppBackend backend,
   required Uint8List sessionKey,
@@ -330,6 +613,177 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
     tryCloudOcr: tryCloudOcr,
     tryByokOcr: tryByokOcr,
   );
+}
+
+MultimodalVideoInsight? extractMultimodalVideoInsight(
+  String payloadJson, {
+  required String defaultEngine,
+}) {
+  final raw = payloadJson.trim();
+  if (raw.isEmpty) return null;
+
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final payload = Map<String, Object?>.from(decoded);
+
+    var contentKind = _normalizeVideoContentKind(
+      _firstNonEmptyJsonString(
+        payload,
+        const <String>['video_content_kind', 'video_kind', 'content_kind'],
+      ),
+    );
+
+    final summary = _firstNonEmptyJsonString(
+      payload,
+      const <String>['video_summary', 'summary', 'caption_long'],
+    );
+
+    var knowledgeMarkdown = _normalizeMarkdownValue(
+      _firstNonEmptyJsonString(
+        payload,
+        const <String>[
+          'knowledge_markdown',
+          'knowledge_markdown_full',
+          'knowledge_markdown_excerpt',
+        ],
+      ),
+    );
+
+    var videoDescription = _firstNonEmptyJsonString(
+      payload,
+      const <String>[
+        'video_description',
+        'video_description_full',
+        'video_description_excerpt',
+      ],
+    );
+
+    final normalizedFullText = _normalizeMarkdownValue(
+      _firstNonEmptyJsonString(
+        payload,
+        const <String>['full_text', 'ocr_text'],
+      ),
+    );
+
+    if (contentKind == 'knowledge' && knowledgeMarkdown.isEmpty) {
+      knowledgeMarkdown = normalizedFullText;
+    }
+    if (contentKind == 'non_knowledge' && videoDescription.isEmpty) {
+      videoDescription = normalizedFullText;
+    }
+
+    if (contentKind == 'unknown') {
+      if (knowledgeMarkdown.isNotEmpty && videoDescription.isEmpty) {
+        contentKind = 'knowledge';
+      } else if (videoDescription.isNotEmpty && knowledgeMarkdown.isEmpty) {
+        contentKind = 'non_knowledge';
+      }
+    }
+
+    final fallbackSummary = _firstNonEmptyString(
+      <String>[
+        summary,
+        _buildExcerpt(knowledgeMarkdown, maxChars: 240),
+        _buildExcerpt(videoDescription, maxChars: 240),
+        _buildExcerpt(normalizedFullText, maxChars: 240),
+      ],
+    );
+
+    final engine = _firstNonEmptyString(
+      <String>[
+        _firstNonEmptyJsonString(
+          payload,
+          const <String>['video_extract_engine', 'engine', 'model'],
+        ),
+        defaultEngine,
+      ],
+    );
+
+    final insight = MultimodalVideoInsight(
+      contentKind: contentKind,
+      summary: fallbackSummary,
+      knowledgeMarkdown: knowledgeMarkdown,
+      videoDescription: videoDescription,
+      engine: engine,
+    );
+
+    if (contentKind == 'unknown' && !insight.hasAny) return null;
+    return insight;
+  } catch (_) {
+    return null;
+  }
+}
+
+String _normalizeVideoContentKind(String raw) {
+  switch (raw.trim().toLowerCase()) {
+    case 'knowledge':
+      return 'knowledge';
+    case 'non_knowledge':
+      return 'non_knowledge';
+    default:
+      return 'unknown';
+  }
+}
+
+String _firstNonEmptyJsonString(
+  Map<String, Object?> payload,
+  List<String> keys,
+) {
+  for (final key in keys) {
+    final raw = payload[key];
+    if (raw == null) continue;
+    final value = raw.toString().trim();
+    if (value.isEmpty || value.toLowerCase() == 'null') continue;
+    return value;
+  }
+  return '';
+}
+
+String _firstNonEmptyString(List<String> values) {
+  for (final raw in values) {
+    final value = raw.trim();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+String _mergeUniqueMultimodalInsightBlocks(
+  Iterable<String> values, {
+  required int maxChars,
+}) {
+  final seen = <String>{};
+  final unique = <String>[];
+  for (final raw in values) {
+    final value = raw.trim();
+    if (value.isEmpty) continue;
+    if (!seen.add(value)) continue;
+    unique.add(value);
+  }
+  if (unique.isEmpty) return '';
+  final merged = unique.join('\n\n');
+  if (maxChars <= 0) return '';
+  return _buildExcerpt(merged, maxChars: maxChars);
+}
+
+String _dominantNonEmptyMultimodalEngine(Iterable<String> engines) {
+  final counts = <String, int>{};
+  for (final raw in engines) {
+    final value = raw.trim();
+    if (value.isEmpty) continue;
+    counts.update(value, (count) => count + 1, ifAbsent: () => 1);
+  }
+  if (counts.isEmpty) return '';
+
+  var bestEngine = '';
+  var bestCount = -1;
+  counts.forEach((engine, count) {
+    if (count > bestCount) {
+      bestEngine = engine;
+      bestCount = count;
+    }
+  });
+  return bestEngine;
 }
 
 String? extractOcrMarkdownFromMediaAnnotationPayload(String payloadJson) {
@@ -433,6 +887,13 @@ String _buildOcrLang(String languageHints) {
       ? _kDefaultLanguageHints
       : languageHints.trim();
   return '$_kOcrMarkdownLangPrefix$normalizedHints';
+}
+
+String _buildVideoExtractLang(String languageHints) {
+  final normalizedHints = languageHints.trim().isEmpty
+      ? _kDefaultLanguageHints
+      : languageHints.trim();
+  return '$_kVideoExtractLangPrefix$normalizedHints';
 }
 
 String _normalizeMarkdownValue(String raw) {

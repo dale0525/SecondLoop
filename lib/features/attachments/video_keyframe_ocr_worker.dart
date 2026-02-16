@@ -4,11 +4,25 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../media_backup/video_kind_classifier.dart';
 import 'platform_pdf_ocr.dart';
 
 const String kSecondLoopVideoManifestMimeType =
     'application/x.secondloop.video+json';
-const String kSecondLoopVideoManifestSchema = 'secondloop.video_manifest.v1';
+const String kSecondLoopVideoManifestSchemaV1 = 'secondloop.video_manifest.v1';
+const String kSecondLoopVideoManifestSchemaV2 = 'secondloop.video_manifest.v2';
+const String kSecondLoopVideoManifestSchemaV3 = 'secondloop.video_manifest.v3';
+
+final RegExp _videoManifestSchemaPattern =
+    RegExp(r'^secondloop\.video_manifest\.v\d+$');
+
+bool _isSupportedVideoManifestSchema(String schema) {
+  final normalized = schema.trim().toLowerCase();
+  if (normalized == kSecondLoopVideoManifestSchemaV1) return true;
+  if (normalized == kSecondLoopVideoManifestSchemaV2) return true;
+  if (normalized == kSecondLoopVideoManifestSchemaV3) return true;
+  return _videoManifestSchemaPattern.hasMatch(normalized);
+}
 
 const int _kVideoOcrMaxFullBytes = 256 * 1024;
 const int _kVideoOcrMaxExcerptBytes = 8 * 1024;
@@ -25,14 +39,64 @@ typedef VideoOcrImageRunner = Future<PlatformPdfOcrResult?> Function(
   required String languageHints,
 });
 
+final class VideoManifestSegmentRef {
+  const VideoManifestSegmentRef({
+    required this.index,
+    required this.sha256,
+    required this.mimeType,
+  });
+
+  final int index;
+  final String sha256;
+  final String mimeType;
+}
+
+final class VideoManifestPreviewRef {
+  const VideoManifestPreviewRef({
+    required this.index,
+    required this.sha256,
+    required this.mimeType,
+    required this.tMs,
+    required this.kind,
+  });
+
+  final int index;
+  final String sha256;
+  final String mimeType;
+  final int tMs;
+  final String kind;
+}
+
 final class ParsedVideoManifest {
   const ParsedVideoManifest({
     required this.originalSha256,
     required this.originalMimeType,
+    required this.segments,
+    this.audioSha256,
+    this.audioMimeType,
+    this.videoKind = 'unknown',
+    this.videoKindConfidence = 0.0,
+    this.posterSha256,
+    this.posterMimeType,
+    this.videoProxySha256,
+    this.keyframes = const <VideoManifestPreviewRef>[],
+    this.videoProxyMaxDurationMs = 60 * 60 * 1000,
+    this.videoProxyMaxBytes = 200 * 1024 * 1024,
   });
 
   final String originalSha256;
   final String originalMimeType;
+  final String? audioSha256;
+  final String? audioMimeType;
+  final String videoKind;
+  final double videoKindConfidence;
+  final String? posterSha256;
+  final String? posterMimeType;
+  final String? videoProxySha256;
+  final List<VideoManifestPreviewRef> keyframes;
+  final int videoProxyMaxDurationMs;
+  final int videoProxyMaxBytes;
+  final List<VideoManifestSegmentRef> segments;
 }
 
 final class VideoKeyframeOcrResult {
@@ -59,18 +123,247 @@ ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
     final decoded = String.fromCharCodes(bytes);
     final payload = jsonDecode(decoded);
     if (payload is! Map) return null;
+    final map = Map<dynamic, dynamic>.from(payload);
 
-    final schema = payload['schema']?.toString().trim() ?? '';
-    if (schema != kSecondLoopVideoManifestSchema) return null;
+    String readMapNonEmptyField(
+      Map<dynamic, dynamic> source,
+      List<String> keys,
+    ) {
+      for (final key in keys) {
+        final raw = source[key];
+        if (raw == null) continue;
+        final normalized = raw.toString().trim();
+        if (normalized.isEmpty) continue;
+        if (normalized.toLowerCase() == 'null') continue;
+        return normalized;
+      }
+      return '';
+    }
 
-    final originalSha256 = payload['original_sha256']?.toString().trim() ?? '';
-    final originalMimeType =
-        payload['original_mime_type']?.toString().trim() ?? '';
+    Object? readMapRawField(
+      Map<dynamic, dynamic> source,
+      List<String> keys,
+    ) {
+      for (final key in keys) {
+        if (!source.containsKey(key)) continue;
+        return source[key];
+      }
+      return null;
+    }
+
+    String readNonEmptyField(
+      List<String> keys, {
+      String fallbackValue = '',
+    }) {
+      final value = readMapNonEmptyField(map, keys);
+      if (value.isNotEmpty) return value;
+      return fallbackValue.trim();
+    }
+
+    String? readOptionalNonEmptyField(List<String> keys) {
+      final value = readMapNonEmptyField(map, keys);
+      if (value.isEmpty) return null;
+      return value;
+    }
+
+    final schema = readNonEmptyField(const <String>['schema']);
+    if (!_isSupportedVideoManifestSchema(schema)) return null;
+
+    int readIntField(Object? raw, {int fallback = 0}) {
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+      return fallback;
+    }
+
+    double readDoubleField(Object? raw, {double fallback = 0.0}) {
+      if (raw is double) return raw;
+      if (raw is num) return raw.toDouble();
+      if (raw is String) return double.tryParse(raw.trim()) ?? fallback;
+      return fallback;
+    }
+
+    List<VideoManifestSegmentRef> readSegments() {
+      final raw = readMapRawField(
+        map,
+        const <String>['video_segments', 'videoSegments'],
+      );
+      if (raw is! List) return const <VideoManifestSegmentRef>[];
+      final refs = <VideoManifestSegmentRef>[];
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final itemMap = Map<dynamic, dynamic>.from(item);
+        final sha256 = readMapNonEmptyField(itemMap, const <String>['sha256']);
+        final mimeType = readMapNonEmptyField(
+            itemMap, const <String>['mime_type', 'mimeType']);
+        if (sha256.isEmpty || mimeType.isEmpty) continue;
+
+        var index = refs.length;
+        final rawIndex = readMapRawField(itemMap, const <String>['index']);
+        if (rawIndex is int) {
+          index = rawIndex;
+        } else if (rawIndex is num) {
+          index = rawIndex.toInt();
+        } else if (rawIndex is String) {
+          final parsedIndex = int.tryParse(rawIndex.trim());
+          if (parsedIndex != null) {
+            index = parsedIndex;
+          }
+        }
+
+        refs.add(
+          VideoManifestSegmentRef(
+            index: index,
+            sha256: sha256,
+            mimeType: mimeType,
+          ),
+        );
+      }
+      refs.sort((a, b) {
+        final byIndex = a.index.compareTo(b.index);
+        if (byIndex != 0) return byIndex;
+        return a.sha256.compareTo(b.sha256);
+      });
+      return List<VideoManifestSegmentRef>.unmodifiable(refs);
+    }
+
+    final segments = readSegments();
+    String firstSegmentField(String key) {
+      if (segments.isEmpty) return '';
+      return switch (key) {
+        'sha256' => segments.first.sha256,
+        'mime_type' => segments.first.mimeType,
+        _ => '',
+      };
+    }
+
+    final originalSha256 = readNonEmptyField(
+      const <String>[
+        'video_sha256',
+        'videoSha256',
+        'original_sha256',
+        'originalSha256',
+      ],
+      fallbackValue: firstSegmentField('sha256'),
+    );
+    final originalMimeType = readNonEmptyField(
+      const <String>[
+        'video_mime_type',
+        'videoMimeType',
+        'original_mime_type',
+        'originalMimeType',
+      ],
+      fallbackValue: firstSegmentField('mime_type'),
+    );
     if (originalSha256.isEmpty || originalMimeType.isEmpty) return null;
+
+    final audioSha256 = readOptionalNonEmptyField(
+      const <String>['audio_sha256', 'audioSha256'],
+    );
+    final audioMimeType = readOptionalNonEmptyField(
+      const <String>['audio_mime_type', 'audioMimeType'],
+    );
+
+    final rawVideoKind =
+        readNonEmptyField(const <String>['video_kind', 'videoKind']);
+    final normalizedVideoKind = normalizeVideoKind(rawVideoKind);
+    final normalizedVideoKindConfidence = readDoubleField(
+      readMapRawField(
+        map,
+        const <String>['video_kind_confidence', 'videoKindConfidence'],
+      ),
+      fallback: 0.0,
+    ).clamp(0.0, 1.0).toDouble();
+
+    List<VideoManifestPreviewRef> readKeyframes() {
+      final raw = readMapRawField(map, const <String>['keyframes']);
+      if (raw is! List) return const <VideoManifestPreviewRef>[];
+      final refs = <VideoManifestPreviewRef>[];
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final itemMap = Map<dynamic, dynamic>.from(item);
+        final sha256 = readMapNonEmptyField(itemMap, const <String>['sha256']);
+        final mimeType = readMapNonEmptyField(
+            itemMap, const <String>['mime_type', 'mimeType']);
+        if (sha256.isEmpty || mimeType.isEmpty) continue;
+        final rawKind = readMapNonEmptyField(itemMap, const <String>['kind']);
+        refs.add(
+          VideoManifestPreviewRef(
+            index: readIntField(
+              readMapRawField(itemMap, const <String>['index']),
+              fallback: refs.length,
+            ),
+            sha256: sha256,
+            mimeType: mimeType,
+            tMs: readIntField(
+              readMapRawField(itemMap, const <String>['t_ms', 'tMs']),
+            ),
+            kind: rawKind.isEmpty ? 'scene' : rawKind.toLowerCase(),
+          ),
+        );
+      }
+      refs.sort((a, b) => a.index.compareTo(b.index));
+      return List<VideoManifestPreviewRef>.unmodifiable(refs);
+    }
+
+    final normalizedKeyframes = readKeyframes();
+    final normalizedPosterSha256 = readOptionalNonEmptyField(
+      const <String>['poster_sha256', 'posterSha256'],
+    );
+    final normalizedPosterMimeType = readOptionalNonEmptyField(
+      const <String>['poster_mime_type', 'posterMimeType'],
+    );
+    final normalizedVideoProxySha256 = readOptionalNonEmptyField(const <String>[
+          'video_proxy_sha256',
+          'videoProxySha256',
+          'video_sha256',
+          'videoSha256',
+          'original_sha256',
+          'originalSha256',
+        ]) ??
+        originalSha256;
+    final normalizedVideoProxyMaxDurationMs = readIntField(
+      readMapRawField(
+        map,
+        const <String>[
+          'video_proxy_max_duration_ms',
+          'videoProxyMaxDurationMs'
+        ],
+      ),
+      fallback: 60 * 60 * 1000,
+    );
+    final normalizedVideoProxyMaxBytes = readIntField(
+      readMapRawField(
+        map,
+        const <String>['video_proxy_max_bytes', 'videoProxyMaxBytes'],
+      ),
+      fallback: 200 * 1024 * 1024,
+    );
+
+    final normalizedSegments = segments.isNotEmpty
+        ? segments
+        : List<VideoManifestSegmentRef>.unmodifiable([
+            VideoManifestSegmentRef(
+              index: 0,
+              sha256: originalSha256,
+              mimeType: originalMimeType,
+            ),
+          ]);
 
     return ParsedVideoManifest(
       originalSha256: originalSha256,
       originalMimeType: originalMimeType,
+      audioSha256: audioSha256,
+      audioMimeType: audioMimeType,
+      videoKind: normalizedVideoKind,
+      videoKindConfidence: normalizedVideoKindConfidence,
+      posterSha256: normalizedPosterSha256,
+      posterMimeType: normalizedPosterMimeType,
+      videoProxySha256: normalizedVideoProxySha256,
+      keyframes: normalizedKeyframes,
+      videoProxyMaxDurationMs: normalizedVideoProxyMaxDurationMs,
+      videoProxyMaxBytes: normalizedVideoProxyMaxBytes,
+      segments: normalizedSegments,
     );
   } catch (_) {
     return null;
@@ -100,7 +393,7 @@ final class VideoKeyframeOcrWorker {
     final run = commandRunner ?? Process.run;
     final imageOcr = ocrImageFn ?? PlatformPdfOcr.tryOcrImageBytes;
     final safeMaxFrames = maxFrames.clamp(1, 120);
-    final safeInterval = frameIntervalSeconds.clamp(1, 60);
+    final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final hints =
         languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
 
@@ -109,26 +402,64 @@ final class VideoKeyframeOcrWorker {
       tempDir = await Directory.systemTemp.createTemp('secondloop_video_ocr_');
       final sourceExt = _extensionForMimeType(normalizedMime);
       final inputPath = '${tempDir.path}/input.$sourceExt';
-      final framesPattern = '${tempDir.path}/frame_%04d.jpg';
+      final scenePattern = '${tempDir.path}/frame_scene_%04d.jpg';
+      final fpsPattern = '${tempDir.path}/frame_fps_%04d.jpg';
       await File(inputPath).writeAsBytes(videoBytes, flush: true);
 
-      final args = <String>[
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-y',
-        '-i',
-        inputPath,
-        '-vf',
-        'fps=1/$safeInterval',
-        '-frames:v',
-        '$safeMaxFrames',
-        framesPattern,
-      ];
-      final ffmpegResult = await run(ffmpegPath, args);
-      if (ffmpegResult.exitCode != 0) return null;
+      final videoDurationSeconds = await _readVideoDurationSeconds(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+      );
+      final effectiveInterval = _resolveAdaptiveFrameIntervalSeconds(
+        baseIntervalSeconds: safeInterval,
+        maxFrames: safeMaxFrames,
+        durationSeconds: videoDurationSeconds,
+      );
 
-      final frames = await _listExtractedFrames(tempDir.path);
+      final sceneResult = await _extractFramesWithFilter(
+        ffmpegPath: ffmpegPath,
+        run: run,
+        inputPath: inputPath,
+        filter:
+            "select='eq(n\\,0)+gte(t-prev_selected_t\\,$effectiveInterval)*gt(scene\\,0.08)'",
+        maxFrames: safeMaxFrames,
+        outputPattern: scenePattern,
+        useVariableFrameRateSync: true,
+      );
+      final sceneFrames = sceneResult
+          ? await _listExtractedFrames(tempDir.path, prefix: 'frame_scene_')
+          : const <File>[];
+
+      final remainingFrames = (safeMaxFrames - sceneFrames.length).clamp(
+        0,
+        safeMaxFrames,
+      );
+      final fpsResult = remainingFrames > 0
+          ? await _extractFramesWithFilter(
+              ffmpegPath: ffmpegPath,
+              run: run,
+              inputPath: inputPath,
+              filter: 'fps=1/$effectiveInterval',
+              maxFrames: remainingFrames,
+              outputPattern: fpsPattern,
+            )
+          : true;
+      final fpsFrames = fpsResult
+          ? await _listExtractedFrames(tempDir.path, prefix: 'frame_fps_')
+          : const <File>[];
+
+      final seenFrames = <String>{};
+      final frames = <File>[];
+      for (final frame in <File>[...sceneFrames, ...fpsFrames]) {
+        final frameBytes = await frame.readAsBytes();
+        if (frameBytes.isEmpty) continue;
+        final frameSignature = base64.encode(frameBytes);
+        if (!seenFrames.add(frameSignature)) {
+          continue;
+        }
+        frames.add(frame);
+      }
       if (frames.isEmpty) return null;
 
       var processedFrames = 0;
@@ -182,14 +513,89 @@ final class VideoKeyframeOcrWorker {
   }
 }
 
-Future<List<File>> _listExtractedFrames(String dirPath) async {
+Future<bool> _extractFramesWithFilter({
+  required String ffmpegPath,
+  required VideoOcrCommandRunner run,
+  required String inputPath,
+  required String filter,
+  required int maxFrames,
+  required String outputPattern,
+  bool useVariableFrameRateSync = false,
+}) async {
+  if (maxFrames <= 0) return true;
+  final args = <String>[
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    inputPath,
+    '-vf',
+    filter,
+    if (useVariableFrameRateSync) '-vsync',
+    if (useVariableFrameRateSync) 'vfr',
+    '-frames:v',
+    '$maxFrames',
+    outputPattern,
+  ];
+  final result = await run(ffmpegPath, args);
+  return result.exitCode == 0;
+}
+
+Future<double> _readVideoDurationSeconds({
+  required String ffmpegPath,
+  required VideoOcrCommandRunner run,
+  required String inputPath,
+}) async {
+  final args = <String>[
+    '-hide_banner',
+    '-i',
+    inputPath,
+    '-f',
+    'null',
+    '-',
+  ];
+  try {
+    final result = await run(ffmpegPath, args);
+    final stderr = result.stderr?.toString() ?? '';
+    final match = RegExp(
+      r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)',
+    ).firstMatch(stderr);
+    if (match == null) return 0;
+    final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+    final seconds = double.tryParse(match.group(3) ?? '') ?? 0;
+    return hours * 3600 + minutes * 60 + seconds;
+  } catch (_) {
+    return 0;
+  }
+}
+
+int _resolveAdaptiveFrameIntervalSeconds({
+  required int baseIntervalSeconds,
+  required int maxFrames,
+  required double durationSeconds,
+}) {
+  if (durationSeconds <= 0 || maxFrames <= 0) {
+    return baseIntervalSeconds;
+  }
+  final targetInterval = (durationSeconds / maxFrames).ceil();
+  return targetInterval > baseIntervalSeconds
+      ? targetInterval
+      : baseIntervalSeconds;
+}
+
+Future<List<File>> _listExtractedFrames(
+  String dirPath, {
+  String prefix = 'frame_',
+}) async {
   final files = <File>[];
   await for (final entity in Directory(dirPath).list(followLinks: false)) {
     if (entity is! File) continue;
     final name = entity.uri.pathSegments.isEmpty
         ? entity.path
         : entity.uri.pathSegments.last;
-    if (!name.startsWith('frame_') || !name.endsWith('.jpg')) continue;
+    if (!name.startsWith(prefix) || !name.endsWith('.jpg')) continue;
     files.add(entity);
   }
   files.sort((a, b) => a.path.compareTo(b.path));

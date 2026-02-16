@@ -12,3 +12,6 @@ PRODUCT_BUNDLE_IDENTIFIER = com.secondloop.secondloop
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.secondloop. All rights reserved.
+
+INFOPLIST_KEY_NSMicrophoneUsageDescription = Record audio in chat.
+INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = Transcribe local audio attachments using on-device speech recognition.

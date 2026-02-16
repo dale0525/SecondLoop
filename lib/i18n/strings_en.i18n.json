@@ -933,7 +933,33 @@
       "openWithSystem": "Open with system app",
       "previewUnavailable": "Preview unavailable",
       "ocrFinished": "OCR finished. Refreshing preview…",
-      "ocrFailed": "OCR failed on this device."
+      "ocrFailed": "OCR failed on this device.",
+      "speechTranscribeIssue": {
+        "title": "Speech transcription unavailable",
+        "openSettings": "Open settings",
+        "openSettingsFailed": "Unable to open system settings automatically. Please check speech permission and Dictation manually.",
+        "permissionDenied": "Speech recognition permission is denied. Enable it in system settings, then retry.",
+        "permissionRestricted": "Speech recognition is restricted by system policy. Check Screen Time or device management policy.",
+        "serviceDisabled": "Siri and Dictation are disabled. Please enable them before retrying.",
+        "runtimeUnavailable": "Speech runtime is currently unavailable on this device. Please retry later."
+      },
+      "videoInsights": {
+        "contentKind": {
+          "knowledge": "Knowledge video",
+          "nonKnowledge": "Non-knowledge video",
+          "unknown": "Unknown"
+        },
+        "detail": {
+          "knowledgeMarkdown": "Knowledge markdown",
+          "videoDescription": "Video description",
+          "extractedContent": "Extracted content"
+        },
+        "fields": {
+          "contentType": "Content type",
+          "segments": "Segments",
+          "summary": "Video summary"
+        }
+      }
     }
   },
   "semanticSearch": {

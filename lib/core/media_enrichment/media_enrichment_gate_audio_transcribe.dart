@@ -1,5 +1,10 @@
 part of 'media_enrichment_gate.dart';
 
+const bool _kEnableMacosNativeSttFallback = bool.fromEnvironment(
+  'SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK',
+  defaultValue: true,
+);
+
 final class _AudioTranscribeClientSelection {
   const _AudioTranscribeClientSelection({
     required this.networkClient,
@@ -22,14 +27,14 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     required String cloudIdToken,
     required Uint8List sessionKey,
   }) {
+    final supportsMethodChannelLocalRuntime =
+        supportsPlatformLocalRuntimeAudioTranscribe();
     final shouldEnableLocalFallback = shouldEnableLocalRuntimeAudioFallback(
-      supportsLocalRuntime: supportsPlatformLocalRuntimeAudioTranscribe(),
+      supportsLocalRuntime: supportsMethodChannelLocalRuntime,
       cloudEnabled: cloudEnabled,
       hasByokProfile: byokProfile != null,
       effectiveEngine: effectiveEngine,
     );
-    final supportsMethodChannelLocalRuntime =
-        supportsPlatformLocalRuntimeAudioTranscribe();
     final localRuntimeEnabledForChain =
         shouldEnableLocalFallback && supportsMethodChannelLocalRuntime;
     final skipWindowsNativeFallbackBecauseLocalRuntimeMapped = !kIsWeb &&
@@ -73,6 +78,13 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     );
   }
 
+  bool _shouldEnableMacosSpeechFallback() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
+      return true;
+    }
+    return _kEnableMacosNativeSttFallback;
+  }
+
   List<AudioTranscribeClient>
       _buildOptionalNativeSttAudioTranscribeFallbacks() {
     if (kIsWeb) {
@@ -80,6 +92,9 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.macOS:
+        if (!_shouldEnableMacosSpeechFallback()) {
+          return const <AudioTranscribeClient>[];
+        }
         return <AudioTranscribeClient>[
           NativeSttAudioTranscribeClient(
             modelName: 'macos_native_stt',

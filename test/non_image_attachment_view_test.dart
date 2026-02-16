@@ -3,8 +3,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/attachments_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/attachments/non_image_attachment_view.dart';
+import 'package:secondloop/features/attachments/video_proxy_open_helper.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -94,7 +101,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Example Title'), findsNothing);
     expect(find.text('Original URL'), findsNothing);
@@ -311,6 +318,585 @@ void main() {
     expect(runInvoked, 1);
   });
 
+  test('supportsInAppVideoProxyPlayback only enables supported platforms', () {
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.macOS,
+        isWeb: false,
+      ),
+      isTrue,
+    );
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.android,
+        isWeb: false,
+      ),
+      isTrue,
+    );
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.windows,
+        isWeb: false,
+      ),
+      isFalse,
+    );
+    expect(
+      supportsInAppVideoProxyPlayback(
+        platform: TargetPlatform.macOS,
+        isWeb: true,
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('NonImageAttachmentView shows video manifest preview metadata',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-preview',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_kind': 'vlog',
+          'video_kind_confidence': 0.72,
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/jpeg',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'keyframes': [
+            {
+              'index': 0,
+              'sha256': 'sha-kf-0',
+              'mime_type': 'image/jpeg',
+              't_ms': 0,
+              'kind': 'scene',
+            },
+            {
+              'index': 1,
+              'sha256': 'sha-kf-1',
+              'mime_type': 'image/jpeg',
+              't_ms': 4000,
+              'kind': 'scene',
+            },
+          ],
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-0',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video preview',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('video_manifest_preview_surface')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('vlog'), findsOneWidget);
+    expect(find.textContaining('72%'), findsOneWidget);
+    final proxyFinder =
+        find.byKey(const ValueKey('video_manifest_proxy_thumbnail'));
+    final keyframeFinder =
+        find.byKey(const ValueKey('video_manifest_keyframe_preview_0'));
+    expect(proxyFinder, findsOneWidget);
+    expect(keyframeFinder, findsOneWidget);
+    expect(tester.getSize(proxyFinder), tester.getSize(keyframeFinder));
+  });
+
+  testWidgets(
+      'NonImageAttachmentView opens looping gallery from proxy thumbnail',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-gallery',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-gallery.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/png',
+          'keyframes': [
+            {
+              'index': 0,
+              'sha256': 'sha-kf-0',
+              'mime_type': 'image/jpeg',
+              't_ms': 0,
+              'kind': 'scene',
+            },
+            {
+              'index': 1,
+              'sha256': 'sha-kf-1',
+              'mime_type': 'image/jpeg',
+              't_ms': 4000,
+              'kind': 'scene',
+            },
+          ],
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video gallery',
+            initialAnnotationPayload: const <String, Object?>{},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
+        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('video_manifest_gallery_close_button')),
+      findsOneWidget,
+    );
+
+    Finder pageViewFinder() =>
+        find.byKey(const ValueKey('video_manifest_gallery_page_view'));
+
+    expect(find.text('1/3'), findsOneWidget);
+
+    await tester.drag(pageViewFinder(), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('2/3'), findsOneWidget);
+
+    await tester.drag(pageViewFinder(), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('3/3'), findsOneWidget);
+
+    await tester.drag(pageViewFinder(), const Offset(-420, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('1/3'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('video_manifest_gallery_close_button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
+        findsNothing);
+  });
+
+  testWidgets('NonImageAttachmentView exits gallery when tapping blank area',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-gallery-dismiss',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-gallery-dismiss.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'keyframes': [
+            {
+              'index': 0,
+              'sha256': 'sha-kf-0',
+              'mime_type': 'image/jpeg',
+              't_ms': 0,
+              'kind': 'scene',
+            },
+          ],
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video gallery dismiss',
+            initialAnnotationPayload: const <String, Object?>{},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
+        findsOneWidget);
+
+    await tester.tapAt(const Offset(2, 2));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('video_manifest_gallery_dialog')),
+        findsNothing);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView downloads video preview assets from sync when local bytes are missing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'localdir',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kLocalDir: '/tmp/secondloop-test',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 7)),
+      }),
+    });
+
+    final backend = _PreviewDownloadBackend();
+    const attachment = Attachment(
+      sha256: 'sha-video-preview-cloud',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview-cloud.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/png',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: AppBackendScope(
+            backend: backend,
+            child: MaterialApp(
+              home: NonImageAttachmentView(
+                attachment: attachment,
+                bytes: bytes,
+                displayTitle: 'Video preview cloud',
+                initialAnnotationPayload: const <String, Object?>{},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.downloadedShas, contains('sha-poster'));
+    expect(backend.downloadedShas, contains('sha-video-proxy'));
+    expect(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')),
+        findsOneWidget);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView keeps video preview placeholder when sync download fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'localdir',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kLocalDir: '/tmp/secondloop-test',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 7)),
+      }),
+    });
+
+    final backend = _PreviewDownloadBackend(downloadSucceeds: false);
+    const attachment = Attachment(
+      sha256: 'sha-video-preview-cloud-failed',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-preview-cloud-failed.bin',
+      byteLen: 256,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-video-proxy',
+          'video_mime_type': 'video/mp4',
+          'video_proxy_sha256': 'sha-video-proxy',
+          'poster_sha256': 'sha-poster',
+          'poster_mime_type': 'image/png',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-video-proxy',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: AppBackendScope(
+            backend: backend,
+            child: MaterialApp(
+              home: NonImageAttachmentView(
+                attachment: attachment,
+                bytes: bytes,
+                displayTitle: 'Video preview cloud failed',
+                initialAnnotationPayload: const <String, Object?>{},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.downloadAttemptedShas, contains('sha-poster'));
+    expect(find.byKey(const ValueKey('video_manifest_proxy_thumbnail')),
+        findsOneWidget);
+  });
+
+  testWidgets('NonImageAttachmentView shows video manifest insight fields',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-insights',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-insights.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-original-video',
+          'video_mime_type': 'video/mp4',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-1',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+    final payload = <String, Object?>{
+      'video_content_kind': 'knowledge',
+      'video_summary': 'This lesson explains OCR fallbacks.',
+      'knowledge_markdown_excerpt': '## Steps\n1. Try multimodal\n2. Fallback',
+      'readable_text_full': '## Steps\n1. Try multimodal\n2. Fallback',
+      'readable_text_excerpt': 'This lesson explains OCR fallbacks.',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video attachment',
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('video_manifest_insights_surface')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('video_manifest_content_kind_value')),
+      findsOneWidget,
+    );
+    expect(find.text('Knowledge video'), findsOneWidget);
+    expect(find.text('This lesson explains OCR fallbacks.'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('video_manifest_detail_text')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Try multimodal'), findsWidgets);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView shows transcript only for vlog without OCR',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-video-vlog-transcript-only',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-vlog-transcript-only.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-original-video',
+          'video_mime_type': 'video/mp4',
+          'video_kind': 'vlog',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-1',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+    final payload = <String, Object?>{
+      'video_kind': 'vlog',
+      'video_content_kind': 'non_knowledge',
+      'video_description_full': 'A beach scene with people walking around.',
+      'transcript_full': 'Host says hello and introduces the trip.',
+      'video_summary': 'Beach vlog summary.',
+      'ocr_text_full': '',
+      'ocr_text_excerpt': '',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Video attachment',
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('video_manifest_insights_surface')),
+      findsNothing,
+    );
+    expect(find.textContaining('Host says hello'), findsOneWidget);
+    expect(find.textContaining('beach scene'), findsNothing);
+  });
+
+  testWidgets('NonImageAttachmentView localizes video insight labels in zh_CN',
+      (tester) async {
+    final previousLocale = LocaleSettings.currentLocale;
+    addTearDown(() {
+      LocaleSettings.setLocale(previousLocale);
+    });
+    LocaleSettings.setLocale(AppLocale.zhCn);
+
+    const attachment = Attachment(
+      sha256: 'sha-video-insights-zh',
+      mimeType: 'application/x.secondloop.video+json',
+      path: 'attachments/sha-video-insights-zh.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.video_manifest.v2',
+          'video_sha256': 'sha-original-video',
+          'video_mime_type': 'video/mp4',
+          'video_segments': [
+            {
+              'index': 0,
+              'sha256': 'sha-seg-1',
+              'mime_type': 'video/mp4',
+            },
+          ],
+        }),
+      ),
+    );
+    final payload = <String, Object?>{
+      'video_content_kind': 'knowledge',
+      'video_summary': '这是一个知识类视频概要。',
+      'knowledge_markdown_excerpt': '## 要点\n1. 多模态优先\n2. 本地回退',
+      'readable_text_full': '## 要点\n1. 多模态优先\n2. 本地回退',
+    };
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: '视频附件',
+            initialAnnotationPayload: payload,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('知识类视频'), findsOneWidget);
+    expect(find.text('内容类型'), findsOneWidget);
+    expect(find.text('知识文稿'), findsOneWidget);
+  });
+
   testWidgets('NonImageAttachmentView disables regenerate action while running',
       (tester) async {
     const attachment = Attachment(
@@ -487,4 +1073,62 @@ void main() {
     expect(find.text('Preparing semantic search…'), findsNothing);
     expect(find.text('Preview unavailable'), findsNothing);
   });
+}
+
+final class _PreviewDownloadBackend implements AppBackend, AttachmentsBackend {
+  _PreviewDownloadBackend({this.downloadSucceeds = true});
+
+  static final Uint8List _png1x1 = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6Xgm1sAAAAASUVORK5CYII=',
+  );
+
+  final bool downloadSucceeds;
+  final Set<String> downloadedShas = <String>{};
+  final Set<String> downloadAttemptedShas = <String>{};
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    if (!downloadedShas.contains(sha256)) {
+      throw Exception('missing_attachment_bytes:$sha256');
+    }
+    return _png1x1;
+  }
+
+  @override
+  Future<void> syncLocaldirDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    downloadAttemptedShas.add(sha256);
+    if (!downloadSucceeds) {
+      throw Exception('download_failed:$sha256');
+    }
+    downloadedShas.add(sha256);
+  }
+
+  @override
+  Future<void> syncWebdavDownloadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    downloadAttemptedShas.add(sha256);
+    if (!downloadSucceeds) {
+      throw Exception('download_failed:$sha256');
+    }
+    downloadedShas.add(sha256);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

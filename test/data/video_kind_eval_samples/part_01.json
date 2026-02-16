@@ -1,0 +1,308 @@
+{
+  "schema": "secondloop.video_kind_eval.v1",
+  "description": "Synthetic multilingual baseline samples for offline video-kind evaluation.",
+  "part": 1,
+  "total_parts": 4,
+  "samples": [
+    {
+      "id": "en_filename_screen_recording_001",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "screen_recording_demo.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_vlog_002",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "travel_vlog_day1.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_tutorial_003",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "how_to_install_tutorial.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_lecture_004",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "computer_science_lecture_week1.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_meeting_005",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "weekly_meeting_sync.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_interview_006",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "candidate_interview_round2.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_gameplay_007",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "ranked_gameplay_highlight.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_filename_presentation_008",
+      "language": "en",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "quarterly_presentation_deck.mp4",
+      "ocr_text": "",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_ocr_meeting_009",
+      "language": "en",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_en_009.mp4",
+      "ocr_text": "Agenda action items next steps blockers owner due date",
+      "language_hints": "en"
+    },
+    {
+      "id": "en_ocr_interview_010",
+      "language": "en",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_en_010.mp4",
+      "ocr_text": "Q: question A: answer interviewer candidate feedback",
+      "language_hints": "en"
+    },
+    {
+      "id": "zh_filename_screen_recording_011",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "屏幕录制演示.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_vlog_012",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "日常生活记录.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_tutorial_013",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "安装教程指南.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_lecture_014",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "课程讲座第一课.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_meeting_015",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "会议纪要本周.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_interview_016",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "面试对谈记录.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_gameplay_017",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "游戏实况对局.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_filename_presentation_018",
+      "language": "zh",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "发布会演示汇报.mp4",
+      "ocr_text": "",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_ocr_meeting_019",
+      "language": "zh",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_zh_019.mp4",
+      "ocr_text": "会议纪要 待办 负责人 下一步",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "zh_ocr_interview_020",
+      "language": "zh",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_zh_020.mp4",
+      "ocr_text": "面试官 候选人 问题 回答",
+      "language_hints": "zh_en"
+    },
+    {
+      "id": "ja_filename_screen_recording_021",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "画面録画デモ.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_vlog_022",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "日常記録vlog.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_tutorial_023",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "チュートリアル設定ガイド.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_lecture_024",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "講義第一回.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_meeting_025",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "会議メモ週次.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_interview_026",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "インタビュー候補者.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_gameplay_027",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "ゲームプレイ実況.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_filename_presentation_028",
+      "language": "ja",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "プレゼン資料共有.mp4",
+      "ocr_text": "",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_ocr_meeting_029",
+      "language": "ja",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_ja_029.mp4",
+      "ocr_text": "会議メモ 会議 議題 次のステップ",
+      "language_hints": "ja_en"
+    },
+    {
+      "id": "ja_ocr_interview_030",
+      "language": "ja",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_ja_030.mp4",
+      "ocr_text": "インタビュー 質問 回答 候補者",
+      "language_hints": "ja_en"
+    }
+  ]
+}

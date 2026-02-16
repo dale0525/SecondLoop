@@ -20,6 +20,121 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.originalSha256, 'sha-x');
     expect(parsed.originalMimeType, 'video/mp4');
+    expect(parsed.audioSha256, isNull);
+    expect(parsed.audioMimeType, isNull);
+    expect(parsed.segments.length, 1);
+    expect(parsed.segments.first.sha256, 'sha-x');
+    expect(parsed.segments.first.mimeType, 'video/mp4');
+
+    final validV2 = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-v2","video_mime_type":"video/mp4","audio_sha256":"sha-audio","audio_mime_type":"audio/mp4","video_segments":[{"index":0,"sha256":"sha-v2-seg0","mime_type":"video/mp4"},{"index":1,"sha256":"sha-v2-seg1","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+    final parsedV2 = parseVideoManifestPayload(validV2);
+    expect(parsedV2, isNotNull);
+    expect(parsedV2!.originalSha256, 'sha-v2');
+    expect(parsedV2.originalMimeType, 'video/mp4');
+    expect(parsedV2.audioSha256, 'sha-audio');
+    expect(parsedV2.audioMimeType, 'audio/mp4');
+    expect(parsedV2.segments.length, 2);
+    expect(parsedV2.segments.first.sha256, 'sha-v2-seg0');
+    expect(parsedV2.segments[1].sha256, 'sha-v2-seg1');
+
+    final v2SegmentsOnly = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+    final parsedV2SegmentsOnly = parseVideoManifestPayload(v2SegmentsOnly);
+    expect(parsedV2SegmentsOnly, isNotNull);
+    expect(parsedV2SegmentsOnly!.originalSha256, 'sha-seg-0');
+    expect(parsedV2SegmentsOnly.originalMimeType, 'video/mp4');
+    expect(parsedV2SegmentsOnly.segments.length, 1);
+    expect(parsedV2SegmentsOnly.segments.first.sha256, 'sha-seg-0');
+  });
+
+  test('parseVideoManifestPayload parses preview and proxy fields', () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-video","video_mime_type":"video/mp4","video_kind":"screen_recording","video_kind_confidence":"0.8","poster_sha256":"sha-poster","poster_mime_type":"image/jpeg","video_proxy_sha256":"sha-proxy","video_proxy_max_duration_ms":"60000","video_proxy_max_bytes":"4096","keyframes":[{"index":2,"sha256":"sha-kf-2","mime_type":"image/jpeg","t_ms":"2000","kind":"slide"},{"index":1,"sha256":"sha-kf-1","mime_type":"image/jpeg","t_ms":1000}],"video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.videoKind, 'screen_recording');
+    expect(parsed.videoKindConfidence, 0.8);
+    expect(parsed.posterSha256, 'sha-poster');
+    expect(parsed.posterMimeType, 'image/jpeg');
+    expect(parsed.videoProxySha256, 'sha-proxy');
+    expect(parsed.videoProxyMaxDurationMs, 60000);
+    expect(parsed.videoProxyMaxBytes, 4096);
+    expect(parsed.keyframes.length, 2);
+    expect(parsed.keyframes[0].index, 1);
+    expect(parsed.keyframes[0].sha256, 'sha-kf-1');
+    expect(parsed.keyframes[0].kind, 'scene');
+    expect(parsed.keyframes[1].index, 2);
+    expect(parsed.keyframes[1].kind, 'slide');
+  });
+
+  test('parseVideoManifestPayload keeps predefined common video kind', () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-video","video_mime_type":"video/mp4","video_kind":"meeting","video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.videoKind, 'meeting');
+  });
+
+  test('parseVideoManifestPayload supports manifest aliases and v3 schema', () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v3","videoSha256":"sha-video-v3","videoMimeType":"video/mp4","videoProxySha256":"sha-proxy-v3","posterSha256":"sha-poster-v3","posterMimeType":"image/png","keyframes":[{"index":"1","sha256":"sha-kf-v3","mimeType":"image/png","tMs":"1500","kind":"slide"}],"videoSegments":[{"index":"0","sha256":"sha-seg-v3","mimeType":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.originalSha256, 'sha-video-v3');
+    expect(parsed.originalMimeType, 'video/mp4');
+    expect(parsed.videoProxySha256, 'sha-proxy-v3');
+    expect(parsed.posterSha256, 'sha-poster-v3');
+    expect(parsed.posterMimeType, 'image/png');
+    expect(parsed.keyframes.length, 1);
+    expect(parsed.keyframes.first.sha256, 'sha-kf-v3');
+    expect(parsed.keyframes.first.tMs, 1500);
+    expect(parsed.segments.length, 1);
+    expect(parsed.segments.first.sha256, 'sha-seg-v3');
+  });
+
+  test('parseVideoManifestPayload accepts forward-compatible schema versions',
+      () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v4","video_sha256":"sha-v4","video_mime_type":"video/mp4","video_segments":[{"index":0,"sha256":"sha-seg-v4","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.originalSha256, 'sha-v4');
+    expect(parsed.segments.length, 1);
+    expect(parsed.segments.first.sha256, 'sha-seg-v4');
+  });
+
+  test('parseVideoManifestPayload falls back to v1 original sha as proxy sha',
+      () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v1","original_sha256":"sha-v1","original_mime_type":"video/mp4"}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.videoProxySha256, 'sha-v1');
   });
 
   test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
@@ -38,6 +153,8 @@ void main() {
   test('VideoKeyframeOcrWorker extracts frames and aggregates OCR text',
       () async {
     var ocrCalls = 0;
+    var sceneRunCount = 0;
+    var fpsRunCount = 0;
     final result = await VideoKeyframeOcrWorker.runOnVideoBytes(
       Uint8List.fromList(const <int>[1, 2, 3]),
       sourceMimeType: 'video/mp4',
@@ -47,12 +164,27 @@ void main() {
       ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
       commandRunner: (executable, arguments) async {
         expect(executable, '/tmp/ffmpeg');
+        if (arguments.contains('null') && arguments.last == '-') {
+          return ProcessResult(0, 0, '', 'Duration: 00:08:00.00');
+        }
+        final filterIndex = arguments.indexOf('-vf');
+        if (filterIndex >= 0 && arguments.last.contains('frame_fps_')) {
+          expect(arguments[filterIndex + 1], 'fps=1/120');
+        }
         final outputPattern = arguments.last;
-        final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
-        final frame2 = File(outputPattern.replaceAll('%04d', '0002'));
-        await frame1.parent.create(recursive: true);
-        await frame1.writeAsBytes(const <int>[7, 8, 9]);
-        await frame2.writeAsBytes(const <int>[10, 11, 12]);
+        if (outputPattern.contains('frame_scene_')) {
+          sceneRunCount += 1;
+          final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
+          await frame1.parent.create(recursive: true);
+          await frame1.writeAsBytes(const <int>[7, 8, 9]);
+        } else {
+          fpsRunCount += 1;
+          final frame1 = File(outputPattern.replaceAll('%04d', '0001'));
+          final frame2 = File(outputPattern.replaceAll('%04d', '0002'));
+          await frame1.parent.create(recursive: true);
+          await frame1.writeAsBytes(const <int>[7, 8, 9]);
+          await frame2.writeAsBytes(const <int>[10, 11, 12]);
+        }
         return ProcessResult(0, 0, '', '');
       },
       ocrImageFn: (bytes, {required languageHints}) async {
@@ -85,6 +217,8 @@ void main() {
     expect(result.fullText, contains('[frame 1]'));
     expect(result.fullText, contains('hello frame'));
     expect(result.fullText, contains('world frame'));
+    expect(sceneRunCount, 1);
+    expect(fpsRunCount, 1);
     expect(ocrCalls, 2);
   });
 }

@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -20,6 +20,7 @@ import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/content_enrichment/ocr_result_preference.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
+import '../../core/content_enrichment/audio_transcribe_failure_reason.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
@@ -42,6 +43,7 @@ part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
 part 'attachment_viewer_page_title.dart';
 part 'attachment_viewer_page_error.dart';
+part 'attachment_viewer_page_recognition.dart';
 
 class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
@@ -77,6 +79,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   AttachmentMetadata? _metadata;
   Map<String, Object?>? _annotationPayload;
   Map<String, Object?>? _lastNonEmptyAnnotationPayload;
+  AttachmentAnnotationJob? _annotationJob;
+  bool _loadingAnnotationJob = false;
   bool _runningDocumentOcr = false;
   String? _documentOcrStatusText;
   String _documentOcrLanguageHints = 'device_plus_en';
@@ -357,59 +361,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     );
   }
 
-  String _payloadOcrAutoStatus(Map<String, Object?>? payload) {
-    return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
-  }
-
-  bool _payloadOcrTerminalWithoutText(Map<String, Object?>? payload) {
-    final status = _payloadOcrAutoStatus(payload);
-    return status == 'ok' || status == 'failed';
-  }
-
-  String? _preserveAnnotationCaptionWhileRecognition(String? nextCaption) {
-    final normalized = (nextCaption ?? '').trim();
-    if (normalized.isNotEmpty) return normalized;
-    if (!_awaitingAttachmentRecognitionResult) return null;
-    final existing = (_annotationCaption ?? '').trim();
-    return existing.isEmpty ? null : existing;
-  }
-
-  Map<String, Object?>? _resolveDisplayAnnotationPayload(
-    Map<String, Object?>? nextPayload,
-  ) {
-    final nextTextContent = _resolveIntrinsicTextContentForPayload(nextPayload);
-    if (nextTextContent.hasAny) {
-      _awaitingAttachmentRecognitionResult = false;
-      _preserveRetryFallbackText = false;
-      _documentOcrStatusText = null;
-      _lastNonEmptyAnnotationPayload = nextPayload;
-      return nextPayload;
-    }
-
-    if (_awaitingAttachmentRecognitionResult &&
-        _payloadOcrTerminalWithoutText(nextPayload)) {
-      _awaitingAttachmentRecognitionResult = false;
-      final status = _payloadOcrAutoStatus(nextPayload);
-      if (status == 'failed') {
-        _documentOcrStatusText = context.t.attachments.content.ocrFailed;
-      }
-    }
-
-    final fallbackPayload =
-        _lastNonEmptyAnnotationPayload ?? _annotationPayload;
-    final fallbackTextContent =
-        _resolveIntrinsicTextContentForPayload(fallbackPayload);
-    final shouldPreserveCurrentText = _preserveRetryFallbackText &&
-        !nextTextContent.hasAny &&
-        fallbackTextContent.hasAny;
-
-    if (shouldPreserveCurrentText) {
-      return fallbackPayload;
-    }
-
-    return nextPayload;
-  }
-
   void _startAnnotationCaptionLoad() {
     _loadingAnnotation = true;
     _annotationCaptionFuture = _loadAnnotationCaptionLong().then((value) {
@@ -433,6 +384,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
   void _startAnnotationPayloadLoad() {
     _loadingAnnotationPayload = true;
+    _startAnnotationJobLoad();
     _annotationPayloadFuture = _loadAnnotationPayload().then((value) {
       final displayPayload = _resolveDisplayAnnotationPayload(value);
       if (!mounted) {
@@ -688,6 +640,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       _awaitingAttachmentRecognitionResult = true;
       _preserveRetryFallbackText = true;
       _documentOcrStatusText = context.t.attachments.content.ocrRunning;
+      _annotationJob = null;
     });
     try {
       final hint = (ocrLanguageHints ?? '').trim();
@@ -903,20 +856,40 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 runOcr = _runVideoManifestOcr;
               }
 
-              return NonImageAttachmentView(
-                attachment: widget.attachment,
-                bytes: _nonImagePlaceholderBytes,
-                displayTitle: appBarTitle,
-                metadataFuture: _metadataFuture,
-                initialMetadata: metadata,
-                annotationPayloadFuture: _annotationPayloadFuture,
-                initialAnnotationPayload: _annotationPayload,
-                onRunOcr: runOcr,
-                ocrRunning: _runningDocumentOcr,
-                ocrStatusText: _documentOcrStatusText,
-                ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
-                onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
-                onSaveFull: _canEditAttachmentText ? _saveAttachmentFull : null,
+              Widget buildNonImageDetail(Uint8List bytes) {
+                return _wrapWithRecognitionIssueBanner(
+                  NonImageAttachmentView(
+                    attachment: widget.attachment,
+                    bytes: bytes,
+                    displayTitle: appBarTitle,
+                    metadataFuture: _metadataFuture,
+                    initialMetadata: metadata,
+                    annotationPayloadFuture: _annotationPayloadFuture,
+                    initialAnnotationPayload: _annotationPayload,
+                    onRunOcr: runOcr,
+                    ocrRunning: _runningDocumentOcr,
+                    ocrStatusText: _documentOcrStatusText,
+                    ocrLanguageHints: _effectiveDocumentOcrLanguageHints,
+                    onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
+                    onSaveFull:
+                        _canEditAttachmentText ? _saveAttachmentFull : null,
+                  ),
+                );
+              }
+
+              if (bytesFuture == null) {
+                return buildNonImageDetail(_nonImagePlaceholderBytes);
+              }
+
+              return FutureBuilder<Uint8List>(
+                future: bytesFuture,
+                builder: (context, snapshot) {
+                  final bytes = snapshot.data;
+                  if (bytes == null || bytes.isEmpty) {
+                    return buildNonImageDetail(_nonImagePlaceholderBytes);
+                  }
+                  return buildNonImageDetail(bytes);
+                },
               );
             }
 
@@ -959,19 +932,21 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                 if (bytes == null) return const SizedBox.shrink();
 
                 if (isAudio) {
-                  return AudioAttachmentPlayerView(
-                    attachment: widget.attachment,
-                    bytes: bytes,
-                    displayTitle: appBarTitle,
-                    metadataFuture: _metadataFuture,
-                    initialMetadata: metadata,
-                    annotationPayloadFuture: _annotationPayloadFuture,
-                    initialAnnotationPayload: _annotationPayload,
-                    onRetryRecognition: _canRetryAttachmentRecognition
-                        ? _retryAttachmentRecognition
-                        : null,
-                    onSaveFull:
-                        _canEditAttachmentText ? _saveAttachmentFull : null,
+                  return _wrapWithRecognitionIssueBanner(
+                    AudioAttachmentPlayerView(
+                      attachment: widget.attachment,
+                      bytes: bytes,
+                      displayTitle: appBarTitle,
+                      metadataFuture: _metadataFuture,
+                      initialMetadata: metadata,
+                      annotationPayloadFuture: _annotationPayloadFuture,
+                      initialAnnotationPayload: _annotationPayload,
+                      onRetryRecognition: _canRetryAttachmentRecognition
+                          ? _retryAttachmentRecognition
+                          : null,
+                      onSaveFull:
+                          _canEditAttachmentText ? _saveAttachmentFull : null,
+                    ),
                   );
                 }
 

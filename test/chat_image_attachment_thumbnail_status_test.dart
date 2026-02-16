@@ -175,6 +175,44 @@ void main() {
       ConnectivityPlatform.instance = oldPlatform;
     }
   });
+
+  testWidgets('Chat image thumbnail renders poster from video manifest payload',
+      (tester) async {
+    final posterBytes = _BackendWithVideoManifestPoster.posterBytes;
+    final backend = _BackendWithVideoManifestPoster();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: Scaffold(
+              body: ChatImageAttachmentThumbnail(
+                attachment: const Attachment(
+                  sha256: 'sha-video-manifest',
+                  mimeType: 'application/x.secondloop.video+json',
+                  path: 'attachments/sha-video-manifest.bin',
+                  byteLen: 128,
+                  createdAtMs: 0,
+                ),
+                attachmentsBackend: backend,
+                onTap: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_image_attachment_status_text')),
+        findsNothing);
+    expect(backend.posterReadCount, 1);
+    expect(posterBytes, isNotEmpty);
+  });
 }
 
 final class _FakeConnectivityPlatform extends ConnectivityPlatform {
@@ -192,6 +230,88 @@ final class _FakeConnectivityPlatform extends ConnectivityPlatform {
   Future<void> close() async {
     await _controller.close();
   }
+}
+
+final class _BackendWithVideoManifestPoster implements AttachmentsBackend {
+  static final Uint8List posterBytes = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6Xgm1sAAAAASUVORK5CYII=',
+  );
+
+  final Uint8List _manifestBytes = Uint8List.fromList(
+    utf8.encode(
+      jsonEncode(<String, Object?>{
+        'schema': 'secondloop.video_manifest.v3',
+        'videoSha256': 'sha-video-segment',
+        'videoMimeType': 'video/mp4',
+        'posterSha256': 'sha-video-poster',
+        'posterMimeType': 'image/png',
+        'videoSegments': [
+          {
+            'index': 0,
+            'sha256': 'sha-video-segment',
+            'mimeType': 'video/mp4',
+          },
+        ],
+      }),
+    ),
+  );
+
+  int posterReadCount = 0;
+
+  @override
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  }) async =>
+      const <Attachment>[];
+
+  @override
+  Future<void> linkAttachmentToMessage(
+    Uint8List key,
+    String messageId, {
+    required String attachmentSha256,
+  }) async {}
+
+  @override
+  Future<List<Attachment>> listMessageAttachments(
+    Uint8List key,
+    String messageId,
+  ) async =>
+      const <Attachment>[];
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    if (sha256 == 'sha-video-manifest') return _manifestBytes;
+    if (sha256 == 'sha-video-poster') {
+      posterReadCount += 1;
+      return posterBytes;
+    }
+    throw StateError('missing_local_bytes');
+  }
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
 }
 
 final class _BackendWithPendingLoad implements AttachmentsBackend {

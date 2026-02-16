@@ -11,6 +11,7 @@ use std::time::Duration;
 use sha2::{Digest, Sha256};
 
 const OCR_MARKDOWN_LANG_PREFIX: &str = "ocr_markdown:";
+const VIDEO_EXTRACT_LANG_PREFIX: &str = "video_extract:";
 const DETACHED_JOB_STATUS_TIMEOUT_SECONDS: u64 = 12;
 const SECONDLOOP_CLOUD_REQUEST_ID_KEY: &str = "secondloop_cloud_request_id";
 
@@ -32,6 +33,7 @@ fn build_request_id(
     match prompt_mode {
         MediaAnnotationPromptMode::Annotation => hasher.update(b"annotation"),
         MediaAnnotationPromptMode::OcrMarkdown => hasher.update(b"ocr_markdown"),
+        MediaAnnotationPromptMode::VideoExtract => hasher.update(b"video_extract"),
     }
     hasher.update([0]);
     hasher.update(image_bytes.len().to_le_bytes());
@@ -201,6 +203,21 @@ fn ocr_markdown_prompt() -> String {
     "Perform OCR on the provided file/image and respond ONLY as JSON with keys: tag (array of strings), summary (string), full_text (string). Put recognized text in full_text using Markdown and preserve original layout as much as possible (headings, lists, tables, line breaks). If no readable text exists, set full_text to an empty string. summary must be a short overview. Do not wrap JSON in markdown fences.".to_string()
 }
 
+fn video_extract_prompt(lang: &str) -> String {
+    let language_instruction = {
+        let trimmed = lang.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("und") {
+            "Respond in the user's device language.".to_string()
+        } else {
+            format!("Respond in the user's device language ({trimmed}).")
+        }
+    };
+
+    format!(
+        "Analyze the provided video/image content and respond ONLY as JSON with keys: video_content_kind (knowledge|non_knowledge|unknown), video_summary (string), knowledge_markdown (string), video_description (string), summary (string), full_text (string), tag (array of strings). Rules: if the content is educational/tutorial/document-like, set video_content_kind=knowledge and provide concise structured Markdown in knowledge_markdown while video_description should be empty. If the content is narrative/lifestyle/entertainment, set video_content_kind=non_knowledge and provide a detailed scene description in video_description while knowledge_markdown should be empty. If uncertain, set video_content_kind=unknown and still provide a useful video_summary. summary should be concise and full_text can mirror the richest textual field. Do not wrap JSON in markdown fences. {language_instruction}"
+    )
+}
+
 fn extract_first_non_empty_string(map: &Map<String, Value>, keys: &[&str]) -> String {
     for key in keys {
         let Some(value) = map.get(*key) else {
@@ -263,17 +280,44 @@ fn normalize_annotation_payload(payload: Value) -> Result<Value> {
     };
 
     let tags = normalized_tags(&map);
-    let summary = extract_first_non_empty_string(&map, &["summary", "caption_long"]);
-    let full_text = extract_first_non_empty_string(&map, &["full_text", "ocr_text"]);
+    let summary =
+        extract_first_non_empty_string(&map, &["summary", "caption_long", "video_summary"]);
+    let full_text = extract_first_non_empty_string(
+        &map,
+        &[
+            "full_text",
+            "ocr_text",
+            "knowledge_markdown",
+            "video_description",
+        ],
+    );
+
+    let raw_video_content_kind =
+        extract_first_non_empty_string(&map, &["video_content_kind", "video_kind", "content_kind"]);
+    let normalized_video_content_kind =
+        match raw_video_content_kind.trim().to_ascii_lowercase().as_str() {
+            "knowledge" => "knowledge".to_string(),
+            "non_knowledge" => "non_knowledge".to_string(),
+            _ => "unknown".to_string(),
+        };
 
     let tags_json = Value::Array(tags.iter().map(|tag| Value::String(tag.clone())).collect());
 
     map.insert("tag".to_string(), tags_json.clone());
     map.insert("summary".to_string(), Value::String(summary.clone()));
     map.insert("full_text".to_string(), Value::String(full_text.clone()));
+    map.insert(
+        "video_content_kind".to_string(),
+        Value::String(normalized_video_content_kind.clone()),
+    );
+    map.insert(
+        "video_kind".to_string(),
+        Value::String(normalized_video_content_kind),
+    );
 
     map.insert("tags".to_string(), tags_json);
-    map.insert("caption_long".to_string(), Value::String(summary));
+    map.insert("caption_long".to_string(), Value::String(summary.clone()));
+    map.insert("video_summary".to_string(), Value::String(summary));
     if full_text.is_empty() {
         map.insert("ocr_text".to_string(), Value::Null);
     } else {
@@ -287,6 +331,7 @@ fn normalize_annotation_payload(payload: Value) -> Result<Value> {
 enum MediaAnnotationPromptMode {
     Annotation,
     OcrMarkdown,
+    VideoExtract,
 }
 
 fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, String) {
@@ -298,6 +343,17 @@ fn parse_prompt_mode_and_lang(raw_lang: &str) -> (MediaAnnotationPromptMode, Str
         }
         return (
             MediaAnnotationPromptMode::OcrMarkdown,
+            normalized.to_string(),
+        );
+    }
+
+    if let Some(rest) = trimmed.strip_prefix(VIDEO_EXTRACT_LANG_PREFIX) {
+        let normalized = rest.trim();
+        if normalized.is_empty() {
+            return (MediaAnnotationPromptMode::VideoExtract, "und".to_string());
+        }
+        return (
+            MediaAnnotationPromptMode::VideoExtract,
             normalized.to_string(),
         );
     }
@@ -343,6 +399,7 @@ fn build_request(
     let prompt = match prompt_mode {
         MediaAnnotationPromptMode::Annotation => annotation_prompt(&normalized_lang),
         MediaAnnotationPromptMode::OcrMarkdown => ocr_markdown_prompt(),
+        MediaAnnotationPromptMode::VideoExtract => video_extract_prompt(&normalized_lang),
     };
 
     Ok((
@@ -676,11 +733,14 @@ impl CloudGatewayMediaAnnotationClient {
         let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
         let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
             image_bytes.len(),
-            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown,
+            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown
+                || prompt_mode == MediaAnnotationPromptMode::VideoExtract,
         );
         let purpose = match prompt_mode {
             MediaAnnotationPromptMode::Annotation => "media_annotation",
-            MediaAnnotationPromptMode::OcrMarkdown => "ask_ai",
+            MediaAnnotationPromptMode::OcrMarkdown | MediaAnnotationPromptMode::VideoExtract => {
+                "ask_ai"
+            }
         };
         let request_id =
             build_request_id(&self.model_name, lang, mime_type, image_bytes, prompt_mode);
@@ -757,7 +817,8 @@ impl OpenAiCompatibleMediaAnnotationClient {
         let (req, prompt_mode) = build_request(&self.model_name, lang, mime_type, image_bytes)?;
         let request_timeout = crate::llm::timeouts::media_annotation_timeout_for_image_bytes(
             image_bytes.len(),
-            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown,
+            prompt_mode == MediaAnnotationPromptMode::OcrMarkdown
+                || prompt_mode == MediaAnnotationPromptMode::VideoExtract,
         );
 
         let url = openai_compatible_chat_completions_url(&self.base_url);
@@ -784,7 +845,11 @@ impl OpenAiCompatibleMediaAnnotationClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_request, MediaAnnotationChatContentPart, MediaAnnotationPromptMode};
+    use super::{
+        build_request, normalize_annotation_payload, MediaAnnotationChatContentPart,
+        MediaAnnotationPromptMode,
+    };
+    use serde_json::{json, Value};
 
     fn prompt_text_for(req: &super::MediaAnnotationChatCompletionsRequest) -> &str {
         let msg = req.messages.first().expect("missing first message");
@@ -819,5 +884,101 @@ mod tests {
         assert_eq!(mode, MediaAnnotationPromptMode::Annotation);
         let prompt = prompt_text_for(&req);
         assert!(prompt.contains("user's device language (en-US)."));
+    }
+
+    #[test]
+    fn video_extract_prompt_mode_and_schema_keys() {
+        let (req, mode) = build_request(
+            "gpt-test",
+            "video_extract:zh-CN",
+            "video/mp4",
+            b"video-bytes",
+        )
+        .expect("build request");
+
+        assert_eq!(mode, MediaAnnotationPromptMode::VideoExtract);
+        let prompt = prompt_text_for(&req);
+        assert!(prompt.contains("video_content_kind"));
+        assert!(prompt.contains("knowledge_markdown"));
+        assert!(prompt.contains("video_description"));
+        assert!(prompt.contains("user's device language (zh-CN)."));
+    }
+    #[test]
+    fn normalize_annotation_payload_keeps_video_extract_fields() {
+        let normalized = normalize_annotation_payload(json!({
+            "video_kind": "knowledge",
+            "video_summary": "OCR fallback walkthrough",
+            "knowledge_markdown": "## Steps\n1. Extract\n2. Fallback",
+            "tag": ["ocr", "OCR"],
+            "tags": ["tutorial", "ocr", "tutorial"],
+        }))
+        .expect("normalize payload");
+
+        let map = normalized
+            .as_object()
+            .expect("normalized payload should be object");
+
+        assert_eq!(
+            map.get("video_content_kind").and_then(Value::as_str),
+            Some("knowledge")
+        );
+        assert_eq!(
+            map.get("video_kind").and_then(Value::as_str),
+            Some("knowledge")
+        );
+        assert_eq!(
+            map.get("summary").and_then(Value::as_str),
+            Some("OCR fallback walkthrough")
+        );
+        assert_eq!(
+            map.get("video_summary").and_then(Value::as_str),
+            Some("OCR fallback walkthrough")
+        );
+        assert_eq!(
+            map.get("full_text").and_then(Value::as_str),
+            Some("## Steps\n1. Extract\n2. Fallback")
+        );
+        assert_eq!(
+            map.get("ocr_text").and_then(Value::as_str),
+            Some("## Steps\n1. Extract\n2. Fallback")
+        );
+
+        let tags = map
+            .get("tag")
+            .and_then(Value::as_array)
+            .expect("tag should be array");
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags.first().and_then(Value::as_str), Some("ocr"));
+        assert_eq!(tags.get(1).and_then(Value::as_str), Some("tutorial"));
+    }
+
+    #[test]
+    fn normalize_annotation_payload_sets_unknown_video_kind_and_null_ocr_when_empty() {
+        let normalized = normalize_annotation_payload(json!({
+            "video_content_kind": "anything",
+            "caption_long": "Fallback summary",
+            "knowledge_markdown": "",
+            "video_description": "",
+        }))
+        .expect("normalize payload");
+
+        let map = normalized
+            .as_object()
+            .expect("normalized payload should be object");
+
+        assert_eq!(
+            map.get("video_content_kind").and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(
+            map.get("video_kind").and_then(Value::as_str),
+            Some("unknown")
+        );
+        assert_eq!(
+            map.get("summary").and_then(Value::as_str),
+            Some("Fallback summary")
+        );
+        assert_eq!(map.get("full_text").and_then(Value::as_str), Some(""));
+        assert!(matches!(map.get("ocr_text"), Some(Value::Null)));
     }
 }

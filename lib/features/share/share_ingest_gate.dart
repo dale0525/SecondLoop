@@ -21,7 +21,17 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
+import '../media_backup/video_kind_classifier.dart';
+import '../media_backup/video_proxy_segment_policy.dart';
+import '../media_backup/video_transcode_worker.dart';
 import 'share_ingest.dart';
+
+const int _kVideoProxySegmentDurationSeconds = 20 * 60;
+const int _kVideoProxySegmentDurationMs =
+    _kVideoProxySegmentDurationSeconds * 1000;
+const int _kVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
+const int _kVideoProxyMaxDurationMs = 60 * 60 * 1000;
+const int _kVideoProxyMaxBytes = 200 * 1024 * 1024;
 
 final class ShareIngestGate extends StatefulWidget {
   const ShareIngestGate({required this.child, super.key});
@@ -175,6 +185,30 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         subscriptionStatus: subscriptionStatus,
       );
 
+      ContentEnrichmentConfig? contentConfig;
+      try {
+        contentConfig = await const RustContentEnrichmentConfigStore()
+            .readContentEnrichment(sessionKey);
+      } catch (_) {
+        contentConfig = null;
+      }
+
+      int sanitizeVideoProxyLimit(int value, int fallback) {
+        if (value <= 0) return fallback;
+        return value;
+      }
+
+      final videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
+      final configuredVideoProxyMaxDurationMs = sanitizeVideoProxyLimit(
+        (contentConfig?.videoProxyMaxDurationMs ?? _kVideoProxyMaxDurationMs)
+            .toInt(),
+        _kVideoProxyMaxDurationMs,
+      );
+      final configuredVideoProxyMaxBytes = sanitizeVideoProxyLimit(
+        (contentConfig?.videoProxyMaxBytes ?? _kVideoProxyMaxBytes).toInt(),
+        _kVideoProxyMaxBytes,
+      );
+
       Future<String> Function(String path, String mimeType, String? filename)?
           onImage;
       Future<String> Function(String path, String mimeType, String? filename)?
@@ -219,16 +253,123 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           final normalizedMimeType = mimeType.trim();
 
           if (normalizedMimeType.startsWith('video/')) {
-            final original = await backend.insertAttachment(
-              sessionKey,
-              bytes: bytes,
-              mimeType: normalizedMimeType,
+            if (!videoProxyEnabled) {
+              final attachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: bytes,
+                mimeType: normalizedMimeType,
+              );
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                attachment.sha256,
+              ));
+
+              try {
+                await File(path).delete();
+              } catch (_) {
+                // ignore
+              }
+
+              return attachment.sha256;
+            }
+
+            final videoProxy =
+                await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
+              bytes,
+              sourceMimeType: normalizedMimeType,
+              maxSegmentDurationSeconds: _kVideoProxySegmentDurationSeconds,
+              maxSegmentBytes: _kVideoProxySegmentMaxBytes,
             );
-            unawaited(_maybeEnqueueCloudMediaBackup(
-              backend,
-              sessionKey,
-              original.sha256,
-            ));
+            final selectedSegments =
+                selectVideoProxySegments(videoProxy.segments);
+
+            if (!selectedSegments.hasSegments) {
+              throw StateError('video_proxy_segments_empty');
+            }
+
+            final videoSegments =
+                <({int index, String sha256, String mimeType})>[];
+            for (final segment in selectedSegments.segments) {
+              final segmentAttachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: segment.bytes,
+                mimeType: segment.mimeType,
+              );
+              videoSegments.add(
+                (
+                  index: segment.index,
+                  sha256: segmentAttachment.sha256,
+                  mimeType: segmentAttachment.mimeType,
+                ),
+              );
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                segmentAttachment.sha256,
+              ));
+            }
+
+            final primarySegment = selectedSegments.segments.first;
+            final primaryVideo = videoSegments.first;
+
+            String? posterSha256;
+            String? posterMimeType;
+            final keyframeRefs = <({
+              int index,
+              String sha256,
+              String mimeType,
+              int tMs,
+              String kind
+            })>[];
+            final preview = await VideoTranscodeWorker.extractPreviewFrames(
+              primarySegment.bytes,
+              sourceMimeType: primarySegment.mimeType,
+            );
+            final videoKindClassification = await classifyVideoKind(
+              filename: filename,
+              sourceMimeType: primarySegment.mimeType,
+              posterBytes: preview.posterBytes,
+              keyframes: preview.keyframes,
+            );
+            final resolvedKeyframeKind = videoKindClassification.keyframeKind;
+            final posterBytes = preview.posterBytes;
+            if (posterBytes != null && posterBytes.isNotEmpty) {
+              final posterAttachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: posterBytes,
+                mimeType: preview.posterMimeType,
+              );
+              posterSha256 = posterAttachment.sha256;
+              posterMimeType = posterAttachment.mimeType;
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                posterAttachment.sha256,
+              ));
+            }
+
+            for (final frame in preview.keyframes) {
+              final frameAttachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: frame.bytes,
+                mimeType: frame.mimeType,
+              );
+              keyframeRefs.add(
+                (
+                  index: frame.index,
+                  sha256: frameAttachment.sha256,
+                  mimeType: frameAttachment.mimeType,
+                  tMs: frame.tMs,
+                  kind: resolvedKeyframeKind,
+                ),
+              );
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                frameAttachment.sha256,
+              ));
+            }
 
             String? audioSha256;
             String? audioMimeType;
@@ -263,10 +404,22 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 
             final manifest = jsonEncode({
               ...buildVideoManifestPayload(
-                originalSha256: original.sha256,
-                originalMimeType: normalizedMimeType,
+                videoSha256: primaryVideo.sha256,
+                videoMimeType: primaryVideo.mimeType,
+                videoKind: videoKindClassification.kind,
+                videoKindConfidence: videoKindClassification.confidence,
+                videoProxySha256: primaryVideo.sha256,
+                posterSha256: posterSha256,
+                posterMimeType: posterMimeType,
+                keyframes: keyframeRefs,
                 audioSha256: audioSha256,
                 audioMimeType: audioMimeType,
+                segmentCount: videoSegments.length,
+                videoSegments: videoSegments,
+                videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
+                videoProxyMaxBytes: configuredVideoProxyMaxBytes,
+                videoProxyTotalBytes: selectedSegments.totalBytes,
+                videoProxyTruncated: selectedSegments.isTruncated,
               ),
             });
             final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
@@ -396,15 +549,73 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
 
 Map<String, Object?> buildVideoManifestPayload({
-  required String originalSha256,
-  required String originalMimeType,
+  required String videoSha256,
+  required String videoMimeType,
+  String videoKind = 'unknown',
+  double videoKindConfidence = 0.0,
+  String? videoProxySha256,
+  String? posterSha256,
+  String? posterMimeType,
+  List<({int index, String sha256, String mimeType, int tMs, String kind})>?
+      keyframes,
   String? audioSha256,
   String? audioMimeType,
+  int? segmentCount,
+  List<({int index, String sha256, String mimeType})>? videoSegments,
+  int videoProxyMaxDurationMs = _kVideoProxyMaxDurationMs,
+  int videoProxyMaxBytes = _kVideoProxyMaxBytes,
+  int? videoProxyTotalBytes,
+  bool videoProxyTruncated = false,
 }) {
+  final normalizedKind = normalizeVideoKind(videoKind);
+  final normalizedKindConfidence =
+      videoKindConfidence.clamp(0.0, 1.0).toDouble();
+
   return <String, Object?>{
-    'schema': 'secondloop.video_manifest.v1',
-    'original_sha256': originalSha256,
-    'original_mime_type': originalMimeType,
+    'schema': 'secondloop.video_manifest.v2',
+    'video_sha256': videoSha256,
+    'video_mime_type': videoMimeType,
+    // Backward-compatible fields for readers that still expect v1 keys.
+    'original_sha256': videoSha256,
+    'original_mime_type': videoMimeType,
+    'video_kind': normalizedKind,
+    'video_kind_confidence': normalizedKindConfidence,
+    if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
+      'video_proxy_sha256': videoProxySha256,
+    if (posterSha256 != null && posterSha256.trim().isNotEmpty)
+      'poster_sha256': posterSha256,
+    if (posterMimeType != null && posterMimeType.trim().isNotEmpty)
+      'poster_mime_type': posterMimeType,
+    if (keyframes != null && keyframes.isNotEmpty)
+      'keyframes': keyframes
+          .map(
+            (frame) => <String, Object?>{
+              'index': frame.index,
+              'sha256': frame.sha256,
+              'mime_type': frame.mimeType,
+              't_ms': frame.tMs,
+              'kind': frame.kind,
+            },
+          )
+          .toList(growable: false),
+    if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
+    'segment_max_duration_ms': _kVideoProxySegmentDurationMs,
+    'segment_max_bytes': _kVideoProxySegmentMaxBytes,
+    'video_proxy_max_duration_ms': videoProxyMaxDurationMs,
+    'video_proxy_max_bytes': videoProxyMaxBytes,
+    if (videoProxyTotalBytes != null && videoProxyTotalBytes > 0)
+      'video_proxy_total_bytes': videoProxyTotalBytes,
+    if (videoProxyTruncated) 'video_proxy_truncated': true,
+    if (videoSegments != null && videoSegments.isNotEmpty)
+      'video_segments': videoSegments
+          .map(
+            (segment) => <String, Object?>{
+              'index': segment.index,
+              'sha256': segment.sha256,
+              'mime_type': segment.mimeType,
+            },
+          )
+          .toList(growable: false),
     if (audioSha256 != null && audioSha256.trim().isNotEmpty)
       'audio_sha256': audioSha256,
     if (audioMimeType != null && audioMimeType.trim().isNotEmpty)

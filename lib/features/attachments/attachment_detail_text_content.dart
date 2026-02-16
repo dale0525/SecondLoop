@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../media_backup/video_kind_classifier.dart';
 import 'attachment_ocr_text_normalizer.dart';
 import 'attachment_text_source_policy.dart';
 
@@ -48,6 +49,9 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
   final summary = firstNonEmpty(<String?>[
     read('manual_summary'),
     read('summary'),
+    read('video_summary'),
+    read('knowledge_markdown_excerpt'),
+    read('video_description_excerpt'),
     selected.excerpt,
     read('transcript_excerpt'),
     caption,
@@ -59,46 +63,93 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final normalizedMime = read('mime_type').toLowerCase();
   final isImagePayload = normalizedMime.startsWith('image/');
+  final hasVideoPayloadSignal = payload != null &&
+      (payload.containsKey('video_segment_count') ||
+          payload.containsKey('video_segments') ||
+          payload.containsKey('video_kind') ||
+          payload.containsKey('video_content_kind') ||
+          payload.containsKey('video_proxy_sha256'));
+  final videoKind = normalizeVideoKind(read('video_kind'));
+  final hasOcrText = firstNonEmpty(<String?>[
+    read('ocr_text_full', normalizeOcr: true),
+    read('ocr_text_excerpt', normalizeOcr: true),
+    read('ocr_text', normalizeOcr: true),
+  ]).isNotEmpty;
+  final isVlogWithoutOcr =
+      hasVideoPayloadSignal && videoKind == kVideoKindVlog && !hasOcrText;
 
-  final full = firstNonEmpty(
-    isImagePayload
-        ? <String?>[
-            read('manual_full_text'),
-            read('full_text'),
-            read('manual_summary'),
-            read('summary'),
-            caption,
-            selected.full,
-            selected.excerpt,
-            read('transcript_full'),
-            read('transcript_excerpt'),
-            read('ocr_text_full', normalizeOcr: true),
-            read('ocr_text', normalizeOcr: true),
-            read('readable_text_full'),
-            read('extracted_text_full'),
-            read('ocr_text_excerpt', normalizeOcr: true),
-            read('readable_text_excerpt'),
-            read('extracted_text_excerpt'),
-          ]
-        : <String?>[
-            read('manual_full_text'),
-            read('full_text'),
-            selected.full,
-            read('transcript_full'),
-            read('manual_summary'),
-            read('summary'),
-            selected.excerpt,
-            read('transcript_excerpt'),
-            caption,
-            read('ocr_text_full', normalizeOcr: true),
-            read('ocr_text', normalizeOcr: true),
-            read('readable_text_full'),
-            read('extracted_text_full'),
-            read('ocr_text_excerpt', normalizeOcr: true),
-            read('readable_text_excerpt'),
-            read('extracted_text_excerpt'),
-          ],
-  );
+  final imageFull = firstNonEmpty(<String?>[
+    read('manual_full_text'),
+    read('full_text'),
+    read('manual_summary'),
+    read('summary'),
+    caption,
+    selected.full,
+    selected.excerpt,
+    read('transcript_full'),
+    read('transcript_excerpt'),
+    read('ocr_text_full', normalizeOcr: true),
+    read('ocr_text', normalizeOcr: true),
+    read('readable_text_full'),
+    read('extracted_text_full'),
+    read('ocr_text_excerpt', normalizeOcr: true),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+  ]);
+
+  final videoFull = firstNonEmpty(<String?>[
+    read('manual_full_text'),
+    read('full_text'),
+    read('knowledge_markdown_full'),
+    read('video_description_full'),
+    selected.full,
+    read('transcript_full'),
+    read('ocr_text_full', normalizeOcr: true),
+    read('ocr_text', normalizeOcr: true),
+    read('readable_text_full'),
+    read('extracted_text_full'),
+    read('knowledge_markdown_excerpt'),
+    read('video_description_excerpt'),
+    read('transcript_excerpt'),
+    read('ocr_text_excerpt', normalizeOcr: true),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+    caption,
+  ]);
+
+  final vlogTranscriptOnlyFull = firstNonEmpty(<String?>[
+    read('manual_full_text'),
+    read('full_text'),
+    read('transcript_full'),
+    read('transcript_excerpt'),
+    read('readable_text_full'),
+    read('readable_text_excerpt'),
+  ]);
+
+  final nonImageFallbackFull = firstNonEmpty(<String?>[
+    read('manual_full_text'),
+    read('full_text'),
+    selected.full,
+    read('transcript_full'),
+    read('manual_summary'),
+    read('summary'),
+    selected.excerpt,
+    read('transcript_excerpt'),
+    caption,
+    read('ocr_text_full', normalizeOcr: true),
+    read('ocr_text', normalizeOcr: true),
+    read('readable_text_full'),
+    read('extracted_text_full'),
+    read('ocr_text_excerpt', normalizeOcr: true),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+  ]);
+
+  final full = isVlogWithoutOcr
+      ? vlogTranscriptOnlyFull
+      : (hasVideoPayloadSignal
+          ? videoFull
+          : (isImagePayload ? imageFull : nonImageFallbackFull));
 
   return AttachmentDetailTextContent(summary: summary, full: full);
 }

@@ -71,6 +71,163 @@ void main() {
       findsOneWidget,
     );
   });
+  testWidgets('Chat bubble renders video-manifest poster thumbnail preview',
+      (tester) async {
+    final backend = _Backend(
+      messages: const [
+        Message(
+          id: 'm2',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'Video',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      attachmentsByMessageId: const {
+        'm2': [
+          Attachment(
+            sha256: 'manifest1',
+            mimeType: 'application/x.secondloop.video+json',
+            path: 'attachments/manifest1.bin',
+            byteLen: 67,
+            createdAtMs: 0,
+          ),
+        ],
+      },
+      attachmentBytesBySha: {
+        'manifest1': Uint8List.fromList(
+          utf8.encode(
+            jsonEncode(<String, Object?>{
+              'schema': 'secondloop.video_manifest.v3',
+              'videoSha256': 'sha-video-segment',
+              'videoMimeType': 'video/mp4',
+              'posterSha256': 'poster1',
+              'posterMimeType': 'image/png',
+              'videoSegments': [
+                {
+                  'index': 0,
+                  'sha256': 'sha-video-segment',
+                  'mimeType': 'video/mp4',
+                },
+              ],
+            }),
+          ),
+        ),
+        'poster1': _tinyPngBytes(),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final thumbFinder =
+        find.byKey(const ValueKey('chat_attachment_image_manifest1'));
+    expect(thumbFinder, findsOneWidget);
+    expect(
+      find.descendant(of: thumbFinder, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Chat bubble renders video-manifest preview for forward schema',
+      (tester) async {
+    final backend = _Backend(
+      messages: const [
+        Message(
+          id: 'm3',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'Video v4',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      attachmentsByMessageId: const {
+        'm3': [
+          Attachment(
+            sha256: 'manifest2',
+            mimeType: 'application/x.secondloop.video+json',
+            path: 'attachments/manifest2.bin',
+            byteLen: 67,
+            createdAtMs: 0,
+          ),
+        ],
+      },
+      attachmentBytesBySha: {
+        'manifest2': Uint8List.fromList(
+          utf8.encode(
+            jsonEncode(<String, Object?>{
+              'schema': 'secondloop.video_manifest.v4',
+              'video_sha256': 'sha-video-segment-v4',
+              'video_mime_type': 'video/mp4',
+              'poster_sha256': 'poster2',
+              'poster_mime_type': 'image/png',
+              'video_segments': [
+                {
+                  'index': 0,
+                  'sha256': 'sha-video-segment-v4',
+                  'mime_type': 'video/mp4',
+                },
+              ],
+            }),
+          ),
+        ),
+        'poster2': _tinyPngBytes(),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final thumbFinder =
+        find.byKey(const ValueKey('chat_attachment_image_manifest2'));
+    expect(thumbFinder, findsOneWidget);
+    expect(
+      find.descendant(of: thumbFinder, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+  });
 }
 
 Uint8List _tinyPngBytes() {

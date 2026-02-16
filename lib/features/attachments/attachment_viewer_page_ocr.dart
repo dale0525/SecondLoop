@@ -49,29 +49,56 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       }
 
       final languageHints = _effectiveDocumentOcrLanguageHints;
+      const maxSegments = 6;
+      final segmentRefs =
+          manifest.segments.take(maxSegments).toList(growable: false);
+      final maxFramesPerSegment =
+          segmentRefs.length <= 1 ? 12 : (segmentRefs.length <= 2 ? 8 : 4);
 
-      final originalVideoBytes = await backend.readAttachmentBytes(
-        sessionKey,
-        sha256: manifest.originalSha256,
-      );
-      if (originalVideoBytes.isEmpty) {
-        final failedText = _buildOcrFailedStatus('original_video_missing');
-        if (!mounted) return;
-        _updateViewerState(() {
-          _runningDocumentOcr = false;
-          _documentOcrStatusText = failedText;
-        });
-        return;
+      final ocrBlocks = <String>[];
+      final ocrEngines = <String>[];
+      var totalFrameCount = 0;
+      var totalProcessedFrames = 0;
+      var ocrTruncated = manifest.segments.length > segmentRefs.length;
+      var processedSegments = 0;
+
+      for (var i = 0; i < segmentRefs.length; i++) {
+        final segment = segmentRefs[i];
+        final segmentBytes = await backend.readAttachmentBytes(
+          sessionKey,
+          sha256: segment.sha256,
+        );
+        if (segmentBytes.isEmpty) continue;
+
+        final ocr = await VideoKeyframeOcrWorker.runOnVideoBytes(
+          segmentBytes,
+          sourceMimeType: segment.mimeType,
+          maxFrames: maxFramesPerSegment,
+          frameIntervalSeconds: 5,
+          languageHints: languageHints,
+        );
+        if (ocr == null) continue;
+
+        processedSegments += 1;
+        totalFrameCount += ocr.frameCount;
+        totalProcessedFrames += ocr.processedFrames;
+        ocrTruncated = ocrTruncated || ocr.isTruncated;
+
+        final engine = ocr.engine.trim();
+        if (engine.isNotEmpty) {
+          ocrEngines.add(engine);
+        }
+
+        final full = ocr.fullText.trim();
+        if (full.isEmpty) continue;
+        if (segmentRefs.length <= 1) {
+          ocrBlocks.add(full);
+        } else {
+          ocrBlocks.add('[segment ${i + 1}]\n$full');
+        }
       }
 
-      final ocr = await VideoKeyframeOcrWorker.runOnVideoBytes(
-        originalVideoBytes,
-        sourceMimeType: manifest.originalMimeType,
-        maxFrames: 12,
-        frameIntervalSeconds: 5,
-        languageHints: languageHints,
-      );
-      if (ocr == null) {
+      if (processedSegments <= 0) {
         final detail = PlatformPdfOcr.lastErrorMessage;
         if (detail != null && detail.isNotEmpty) {
           debugPrint('Video manifest OCR returned null: $detail');
@@ -86,21 +113,58 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         return;
       }
 
+      final ocrFullText = ocrBlocks.join('\n\n').trim();
+      final ocrExcerpt = _truncateUtf8(ocrFullText, 8 * 1024);
+      final ocrEngine = _dominantString(ocrEngines);
+
+      final transcriptPayload = await _loadAttachmentAnnotationPayloadBySha(
+        backend,
+        sessionKey,
+        manifest.audioSha256,
+      );
+      final transcriptFull =
+          (transcriptPayload?['transcript_full'] ?? '').toString().trim();
+      final transcriptExcerptRaw =
+          (transcriptPayload?['transcript_excerpt'] ?? '').toString().trim();
+      final transcriptExcerpt = transcriptExcerptRaw.isNotEmpty
+          ? transcriptExcerptRaw
+          : _truncateUtf8(transcriptFull, 8 * 1024);
+
+      final readableTextFull = _joinNonEmptyBlocks([
+        transcriptFull,
+        ocrFullText,
+      ]);
+      final readableTextExcerpt = _joinNonEmptyBlocks([
+        transcriptExcerpt,
+        ocrExcerpt,
+      ]);
+
       final payloadJson = jsonEncode(<String, Object?>{
         'schema': 'secondloop.video_extract.v1',
         'mime_type': widget.attachment.mimeType,
         'original_sha256': manifest.originalSha256,
         'original_mime_type': manifest.originalMimeType,
-        'needs_ocr': ocr.fullText.trim().isEmpty,
-        'readable_text_full': ocr.fullText,
-        'readable_text_excerpt': ocr.excerpt,
-        'ocr_text_full': ocr.fullText,
-        'ocr_text_excerpt': ocr.excerpt,
-        'ocr_engine': ocr.engine,
+        'video_kind': manifest.videoKind,
+        'video_kind_confidence': manifest.videoKindConfidence,
+        'video_segment_count': manifest.segments.length,
+        'video_processed_segment_count': processedSegments,
+        'video_ocr_segment_limit': maxSegments,
+        if (manifest.audioSha256 != null) 'audio_sha256': manifest.audioSha256,
+        if (manifest.audioMimeType != null)
+          'audio_mime_type': manifest.audioMimeType,
+        if (transcriptFull.isNotEmpty) 'transcript_full': transcriptFull,
+        if (transcriptExcerpt.isNotEmpty)
+          'transcript_excerpt': transcriptExcerpt,
+        'needs_ocr': ocrFullText.isEmpty,
+        'readable_text_full': readableTextFull,
+        'readable_text_excerpt': readableTextExcerpt,
+        'ocr_text_full': ocrFullText,
+        'ocr_text_excerpt': ocrExcerpt,
+        'ocr_engine': ocrEngine,
         'ocr_lang_hints': languageHints,
-        'ocr_is_truncated': ocr.isTruncated,
-        'ocr_page_count': ocr.frameCount,
-        'ocr_processed_pages': ocr.processedFrames,
+        'ocr_is_truncated': ocrTruncated,
+        'ocr_page_count': totalFrameCount,
+        'ocr_processed_pages': totalProcessedFrames,
       });
       await backend.markAttachmentAnnotationOkJson(
         sessionKey,
@@ -146,6 +210,66 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         _documentOcrStatusText = failedText;
       });
     }
+  }
+
+  Future<Map<String, Object?>?> _loadAttachmentAnnotationPayloadBySha(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String? attachmentSha256,
+  ) async {
+    final sha = (attachmentSha256 ?? '').trim();
+    if (sha.isEmpty) return null;
+    try {
+      final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+        sessionKey,
+        sha256: sha,
+      );
+      final raw = payloadJson?.trim();
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return Map<String, Object?>.from(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _joinNonEmptyBlocks(List<String> parts) {
+    final values = parts
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (values.isEmpty) return '';
+    return values.join('\n\n');
+  }
+
+  String _truncateUtf8(String text, int maxBytes) {
+    final bytes = utf8.encode(text);
+    if (bytes.length <= maxBytes) return text;
+    if (maxBytes <= 0) return '';
+    var end = maxBytes;
+    while (end > 0 && (bytes[end - 1] & 0xC0) == 0x80) {
+      end -= 1;
+    }
+    if (end <= 0) return '';
+    return utf8.decode(bytes.sublist(0, end), allowMalformed: true);
+  }
+
+  String _dominantString(List<String> values) {
+    if (values.isEmpty) return '';
+    final counts = <String, int>{};
+    for (final value in values) {
+      counts.update(value, (count) => count + 1, ifAbsent: () => 1);
+    }
+    String winner = '';
+    var bestCount = -1;
+    counts.forEach((value, count) {
+      if (count > bestCount) {
+        winner = value;
+        bestCount = count;
+      }
+    });
+    return winner;
   }
 
   Future<void> _runDocumentOcr() async {
