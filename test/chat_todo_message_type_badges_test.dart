@@ -81,6 +81,70 @@ void main() {
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
   });
 
+  testWidgets('create todo message bubble tap opens todo detail',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm_bubble_open',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: '晚上收快递',
+          createdAtMs: 10,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't_bubble_open',
+          title: '收快递',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          sourceEntryId: 'm_bubble_open',
+        ),
+      ],
+      jobsByMessageId: <String, SemanticParseJob>{
+        'm_bubble_open': _job(
+          messageId: 'm_bubble_open',
+          actionKind: 'create',
+          todoId: 't_bubble_open',
+          todoTitle: '收快递',
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('message_bubble_m_bubble_open')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
+  });
+
   testWidgets(
     'returning from todo detail via badge keeps chat input unfocused',
     (tester) async {

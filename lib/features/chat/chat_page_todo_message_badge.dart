@@ -52,7 +52,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     return meta.isRelated ? 'Related task' : 'Task';
   }
 
-  Future<void> _openTodoFromBadge(_TodoMessageBadgeMeta meta) async {
+  Future<bool> _openTodoFromBadge(_TodoMessageBadgeMeta meta) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
 
@@ -69,12 +69,13 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
       todo = null;
     }
 
-    if (!mounted || todo == null) return;
+    if (!mounted || todo == null) return false;
     await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (context) => TodoDetailPage(initialTodo: todo!),
       ),
     );
+    return true;
   }
 
   Widget _buildTodoTypeBadge({

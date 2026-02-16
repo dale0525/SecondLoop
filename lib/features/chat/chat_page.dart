@@ -100,6 +100,7 @@ part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
+part 'chat_page_message_bubble_detail.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
 part 'chat_page_build_helpers.dart';
 part 'chat_page_build.dart';
