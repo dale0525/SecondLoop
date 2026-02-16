@@ -76,6 +76,18 @@ void main() {
     expect(parsed.keyframes[1].kind, 'slide');
   });
 
+  test('parseVideoManifestPayload keeps predefined common video kind', () {
+    final payload = Uint8List.fromList(
+      '{"schema":"secondloop.video_manifest.v2","video_sha256":"sha-video","video_mime_type":"video/mp4","video_kind":"meeting","video_segments":[{"index":0,"sha256":"sha-seg-0","mime_type":"video/mp4"}]}'
+          .codeUnits,
+    );
+
+    final parsed = parseVideoManifestPayload(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed!.videoKind, 'meeting');
+  });
+
   test('parseVideoManifestPayload supports manifest aliases and v3 schema', () {
     final payload = Uint8List.fromList(
       '{"schema":"secondloop.video_manifest.v3","videoSha256":"sha-video-v3","videoMimeType":"video/mp4","videoProxySha256":"sha-proxy-v3","posterSha256":"sha-poster-v3","posterMimeType":"image/png","keyframes":[{"index":"1","sha256":"sha-kf-v3","mimeType":"image/png","tMs":"1500","kind":"slide"}],"videoSegments":[{"index":"0","sha256":"sha-seg-v3","mimeType":"video/mp4"}]}'

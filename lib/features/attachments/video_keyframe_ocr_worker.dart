@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../media_backup/video_kind_classifier.dart';
 import 'platform_pdf_ocr.dart';
 
 const String kSecondLoopVideoManifestMimeType =
@@ -265,11 +266,7 @@ ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
 
     final rawVideoKind =
         readNonEmptyField(const <String>['video_kind', 'videoKind']);
-    final normalizedVideoKind = switch (rawVideoKind.toLowerCase()) {
-      'screen_recording' => 'screen_recording',
-      'vlog' => 'vlog',
-      _ => 'unknown',
-    };
+    final normalizedVideoKind = normalizeVideoKind(rawVideoKind);
     final normalizedVideoKindConfidence = readDoubleField(
       readMapRawField(
         map,

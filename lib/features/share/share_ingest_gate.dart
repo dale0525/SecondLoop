@@ -22,6 +22,7 @@ import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
 import '../media_backup/video_kind_classifier.dart';
+import '../media_backup/video_proxy_segment_policy.dart';
 import '../media_backup/video_transcode_worker.dart';
 import 'share_ingest.dart';
 
@@ -31,8 +32,6 @@ const int _kVideoProxySegmentDurationMs =
 const int _kVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
 const int _kVideoProxyMaxDurationMs = 60 * 60 * 1000;
 const int _kVideoProxyMaxBytes = 200 * 1024 * 1024;
-const int _kVideoProxyMaxSegments =
-    _kVideoProxyMaxDurationMs ~/ _kVideoProxySegmentDurationMs;
 
 final class ShareIngestGate extends StatefulWidget {
   const ShareIngestGate({required this.child, super.key});
@@ -186,6 +185,30 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         subscriptionStatus: subscriptionStatus,
       );
 
+      ContentEnrichmentConfig? contentConfig;
+      try {
+        contentConfig = await const RustContentEnrichmentConfigStore()
+            .readContentEnrichment(sessionKey);
+      } catch (_) {
+        contentConfig = null;
+      }
+
+      int sanitizeVideoProxyLimit(int value, int fallback) {
+        if (value <= 0) return fallback;
+        return value;
+      }
+
+      final videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
+      final configuredVideoProxyMaxDurationMs = sanitizeVideoProxyLimit(
+        (contentConfig?.videoProxyMaxDurationMs ?? _kVideoProxyMaxDurationMs)
+            .toInt(),
+        _kVideoProxyMaxDurationMs,
+      );
+      final configuredVideoProxyMaxBytes = sanitizeVideoProxyLimit(
+        (contentConfig?.videoProxyMaxBytes ?? _kVideoProxyMaxBytes).toInt(),
+        _kVideoProxyMaxBytes,
+      );
+
       Future<String> Function(String path, String mimeType, String? filename)?
           onImage;
       Future<String> Function(String path, String mimeType, String? filename)?
@@ -230,6 +253,27 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           final normalizedMimeType = mimeType.trim();
 
           if (normalizedMimeType.startsWith('video/')) {
+            if (!videoProxyEnabled) {
+              final attachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: bytes,
+                mimeType: normalizedMimeType,
+              );
+              unawaited(_maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                attachment.sha256,
+              ));
+
+              try {
+                await File(path).delete();
+              } catch (_) {
+                // ignore
+              }
+
+              return attachment.sha256;
+            }
+
             final videoProxy =
                 await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
               bytes,
@@ -237,39 +281,16 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               maxSegmentDurationSeconds: _kVideoProxySegmentDurationSeconds,
               maxSegmentBytes: _kVideoProxySegmentMaxBytes,
             );
-            final allowBoundedPassthrough =
-                videoProxy.canUseBoundedPassthroughProxy(
-              maxSegmentBytes: _kVideoProxySegmentMaxBytes,
-            );
-            if (!videoProxy.isStrictVideoProxy && !allowBoundedPassthrough) {
-              throw StateError('video_proxy_transcode_failed');
-            }
+            final selectedSegments =
+                selectVideoProxySegments(videoProxy.segments);
 
-            final boundedSegments = <VideoTranscodeSegment>[];
-            var boundedVideoProxyBytes = 0;
-            for (final segment in videoProxy.segments) {
-              if (boundedSegments.length >= _kVideoProxyMaxSegments) {
-                break;
-              }
-              final nextTotalBytes =
-                  boundedVideoProxyBytes + segment.bytes.lengthInBytes;
-              if (nextTotalBytes > _kVideoProxyMaxBytes) {
-                break;
-              }
-              boundedSegments.add(segment);
-              boundedVideoProxyBytes = nextTotalBytes;
-            }
-
-            if (boundedSegments.isEmpty) {
+            if (!selectedSegments.hasSegments) {
               throw StateError('video_proxy_segments_empty');
             }
 
-            final videoProxyTruncated =
-                boundedSegments.length < videoProxy.segments.length;
-
             final videoSegments =
                 <({int index, String sha256, String mimeType})>[];
-            for (final segment in boundedSegments) {
+            for (final segment in selectedSegments.segments) {
               final segmentAttachment = await backend.insertAttachment(
                 sessionKey,
                 bytes: segment.bytes,
@@ -289,7 +310,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               ));
             }
 
-            final primarySegment = boundedSegments.first;
+            final primarySegment = selectedSegments.segments.first;
             final primaryVideo = videoSegments.first;
 
             String? posterSha256;
@@ -395,10 +416,10 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                 audioMimeType: audioMimeType,
                 segmentCount: videoSegments.length,
                 videoSegments: videoSegments,
-                videoProxyMaxDurationMs: _kVideoProxyMaxDurationMs,
-                videoProxyMaxBytes: _kVideoProxyMaxBytes,
-                videoProxyTotalBytes: boundedVideoProxyBytes,
-                videoProxyTruncated: videoProxyTruncated,
+                videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
+                videoProxyMaxBytes: configuredVideoProxyMaxBytes,
+                videoProxyTotalBytes: selectedSegments.totalBytes,
+                videoProxyTruncated: selectedSegments.isTruncated,
               ),
             });
             final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
@@ -546,11 +567,7 @@ Map<String, Object?> buildVideoManifestPayload({
   int? videoProxyTotalBytes,
   bool videoProxyTruncated = false,
 }) {
-  final normalizedKind = switch (videoKind.trim().toLowerCase()) {
-    'screen_recording' => 'screen_recording',
-    'vlog' => 'vlog',
-    _ => 'unknown',
-  };
+  final normalizedKind = normalizeVideoKind(videoKind);
   final normalizedKindConfidence =
       videoKindConfidence.clamp(0.0, 1.0).toDouble();
 

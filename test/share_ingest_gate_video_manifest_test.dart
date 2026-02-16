@@ -99,4 +99,14 @@ void main() {
     expect(payload.containsKey('video_proxy_total_bytes'), isFalse);
     expect(payload.containsKey('video_proxy_truncated'), isFalse);
   });
+
+  test('video manifest payload keeps predefined common video kinds', () {
+    final payload = buildVideoManifestPayload(
+      videoSha256: 'sha_video_proxy',
+      videoMimeType: 'video/mp4',
+      videoKind: 'meeting',
+    );
+
+    expect(payload['video_kind'], 'meeting');
+  });
 }

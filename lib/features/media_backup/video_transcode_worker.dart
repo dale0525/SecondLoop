@@ -852,6 +852,22 @@ final class VideoTranscodeWorker {
         return 'mkv';
       case 'video/x-msvideo':
         return 'avi';
+      case 'video/x-ms-wmv':
+        return 'wmv';
+      case 'video/x-ms-asf':
+        return 'asf';
+      case 'video/x-flv':
+        return 'flv';
+      case 'video/mpeg':
+        return 'mpeg';
+      case 'video/mp2t':
+        return 'ts';
+      case 'video/3gpp':
+        return '3gp';
+      case 'video/3gpp2':
+        return '3g2';
+      case 'video/ogg':
+        return 'ogv';
       default:
         return 'mp4';
     }

@@ -11,6 +11,7 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_download.dart';
+import '../media_backup/video_kind_classifier.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
@@ -363,7 +364,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     ParsedVideoManifest manifest,
     Map<String, Object?>? payload,
   ) {
-    if (manifest.videoKind != 'vlog') return false;
+    if (normalizeVideoKind(manifest.videoKind) != kVideoKindVlog) return false;
     final ocrText = ((payload?['ocr_text_excerpt'] ??
                 payload?['ocr_text_full'] ??
                 payload?['ocr_text']) ??

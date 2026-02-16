@@ -221,7 +221,18 @@ Future<File?> writeTempVideoProxyFile(
 
 String extensionForVideoMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
+  if (normalized.startsWith('video/x-m4v')) return '.m4v';
   if (normalized.startsWith('video/quicktime')) return '.mov';
   if (normalized.startsWith('video/webm')) return '.webm';
+  if (normalized.startsWith('video/x-matroska')) return '.mkv';
+  if (normalized.startsWith('video/x-msvideo')) return '.avi';
+  if (normalized.startsWith('video/x-ms-wmv')) return '.wmv';
+  if (normalized.startsWith('video/x-ms-asf')) return '.asf';
+  if (normalized.startsWith('video/x-flv')) return '.flv';
+  if (normalized.startsWith('video/mpeg')) return '.mpeg';
+  if (normalized.startsWith('video/mp2t')) return '.ts';
+  if (normalized.startsWith('video/3gpp2')) return '.3g2';
+  if (normalized.startsWith('video/3gpp')) return '.3gp';
+  if (normalized.startsWith('video/ogg')) return '.ogv';
   return '.mp4';
 }

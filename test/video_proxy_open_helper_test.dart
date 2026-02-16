@@ -33,4 +33,19 @@ void main() {
       'sha-seg-2',
     ]);
   });
+
+  test('extensionForVideoMimeType supports common video formats', () {
+    expect(extensionForVideoMimeType('video/mp4'), '.mp4');
+    expect(extensionForVideoMimeType('video/quicktime'), '.mov');
+    expect(extensionForVideoMimeType('video/x-matroska'), '.mkv');
+    expect(extensionForVideoMimeType('video/x-msvideo'), '.avi');
+    expect(extensionForVideoMimeType('video/x-ms-wmv'), '.wmv');
+    expect(extensionForVideoMimeType('video/x-ms-asf'), '.asf');
+    expect(extensionForVideoMimeType('video/x-flv'), '.flv');
+    expect(extensionForVideoMimeType('video/mpeg'), '.mpeg');
+    expect(extensionForVideoMimeType('video/mp2t'), '.ts');
+    expect(extensionForVideoMimeType('video/3gpp'), '.3gp');
+    expect(extensionForVideoMimeType('video/3gpp2'), '.3g2');
+    expect(extensionForVideoMimeType('video/ogg'), '.ogv');
+  });
 }

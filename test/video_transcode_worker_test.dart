@@ -184,6 +184,35 @@ void main() {
     );
   });
 
+  test('VideoTranscodeWorker maps video mime type to input extension',
+      () async {
+    final input = Uint8List.fromList(const <int>[5, 6, 7]);
+    String? capturedInputPath;
+
+    final result = await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
+      input,
+      sourceMimeType: 'video/x-ms-wmv',
+      ffmpegExecutableResolver: () async => '/tmp/ffmpeg',
+      commandRunner: (executable, arguments) async {
+        expect(executable, '/tmp/ffmpeg');
+        final inputIndex = arguments.indexOf('-i');
+        expect(inputIndex, greaterThanOrEqualTo(0));
+        capturedInputPath = arguments[inputIndex + 1];
+        expect(capturedInputPath!.endsWith('.wmv'), isTrue);
+
+        final segmentPattern = arguments.last;
+        final segment0 = File(segmentPattern.replaceAll('%03d', '000'));
+        await segment0.parent.create(recursive: true);
+        await segment0.writeAsBytes(const <int>[41, 42, 43]);
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+
+    expect(result.didTranscode, isTrue);
+    expect(capturedInputPath, isNotNull);
+    expect(capturedInputPath!.endsWith('.wmv'), isTrue);
+  });
+
   test('VideoTranscodeWorker returns segmented mp4 output when ffmpeg succeeds',
       () async {
     final input = Uint8List.fromList(const <int>[11, 12, 13]);

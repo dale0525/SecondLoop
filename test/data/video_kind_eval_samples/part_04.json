@@ -1,0 +1,308 @@
+{
+  "schema": "secondloop.video_kind_eval.v1",
+  "description": "Synthetic multilingual baseline samples for offline video-kind evaluation.",
+  "part": 4,
+  "total_parts": 4,
+  "samples": [
+    {
+      "id": "ru_filename_screen_recording_091",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "запись_экрана_демо.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_vlog_092",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "дневник_vlog_день1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_tutorial_093",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "руководство_учебник_установка.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_lecture_094",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "лекция_курс_неделя1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_meeting_095",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "встреча_команды_неделя.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_interview_096",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "интервью_кандидат_тех.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_gameplay_097",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "игра_геймплей_рейтинговый.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_filename_presentation_098",
+      "language": "ru",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "презентация_результаты_q1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_ocr_meeting_099",
+      "language": "ru",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_ru_099.mp4",
+      "ocr_text": "повестка встреча следующие шаги задачи",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ru_ocr_interview_100",
+      "language": "ru",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_ru_100.mp4",
+      "ocr_text": "интервью вопрос ответ кандидат",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_screen_recording_101",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "تسجيل_الشاشة_تجريبي.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_vlog_102",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "يوميات_vlog_اليوم1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_tutorial_103",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "دليل_تعليمات_تثبيت.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_lecture_104",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "محاضرة_مقرر_الاسبوع1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_meeting_105",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "اجتماع_الفريق_اسبوعي.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_interview_106",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "مقابلة_مرشح_تقني.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_gameplay_107",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "لعبة_جيمبلاي_مميز.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_filename_presentation_108",
+      "language": "ar",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "عرض_تقديمي_نتائج_q1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_ocr_meeting_109",
+      "language": "ar",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_ar_109.mp4",
+      "ocr_text": "اجتماع جدول الأعمال خطوات قادمة مهام",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "ar_ocr_interview_110",
+      "language": "ar",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_ar_110.mp4",
+      "ocr_text": "مقابلة سؤال جواب مرشح",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_screen_recording_111",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "screen_recording",
+      "source_mime_type": "video/mp4",
+      "filename": "स्क्रीन_रिकॉर्डिंग_डेमो.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_vlog_112",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "vlog",
+      "source_mime_type": "video/mp4",
+      "filename": "दैनिक_vlog_दिन1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_tutorial_113",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "tutorial",
+      "source_mime_type": "video/mp4",
+      "filename": "ट्यूटोरियल_मार्गदर्शिका_इंस्टॉल.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_lecture_114",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "lecture",
+      "source_mime_type": "video/mp4",
+      "filename": "व्याख्यान_कोर्स_सप्ताह1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_meeting_115",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "बैठक_टीम_साप्ताहिक.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_interview_116",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "साक्षात्कार_उम्मीदवार_तकनीकी.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_gameplay_117",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "gameplay",
+      "source_mime_type": "video/mp4",
+      "filename": "गेमप्ले_हाइलाइट_रैंक्ड.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_filename_presentation_118",
+      "language": "hi",
+      "source": "filename",
+      "expected_kind": "presentation",
+      "source_mime_type": "video/mp4",
+      "filename": "प्रस्तुति_परिणाम_q1.mp4",
+      "ocr_text": "",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_ocr_meeting_119",
+      "language": "hi",
+      "source": "ocr",
+      "expected_kind": "meeting",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_hi_119.mp4",
+      "ocr_text": "बैठक कार्यसूची अगले कदम कार्य",
+      "language_hints": "device_plus_en"
+    },
+    {
+      "id": "hi_ocr_interview_120",
+      "language": "hi",
+      "source": "ocr",
+      "expected_kind": "interview",
+      "source_mime_type": "video/mp4",
+      "filename": "clip_hi_120.mp4",
+      "ocr_text": "साक्षात्कार प्रश्न उत्तर उम्मीदवार",
+      "language_hints": "device_plus_en"
+    }
+  ]
+}

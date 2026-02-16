@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../media_backup/video_kind_classifier.dart';
 import 'attachment_ocr_text_normalizer.dart';
 import 'attachment_text_source_policy.dart';
 
@@ -66,14 +67,14 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
           payload.containsKey('video_kind') ||
           payload.containsKey('video_content_kind') ||
           payload.containsKey('video_proxy_sha256'));
-  final videoKind = read('video_kind').toLowerCase();
+  final videoKind = normalizeVideoKind(read('video_kind'));
   final hasOcrText = firstNonEmpty(<String?>[
     read('ocr_text_full', normalizeOcr: true),
     read('ocr_text_excerpt', normalizeOcr: true),
     read('ocr_text', normalizeOcr: true),
   ]).isNotEmpty;
   final isVlogWithoutOcr =
-      hasVideoPayloadSignal && videoKind == 'vlog' && !hasOcrText;
+      hasVideoPayloadSignal && videoKind == kVideoKindVlog && !hasOcrText;
 
   final videoFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
