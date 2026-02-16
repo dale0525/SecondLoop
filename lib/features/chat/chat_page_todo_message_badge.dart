@@ -70,7 +70,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     }
 
     if (!mounted || todo == null) return;
-    await Navigator.of(context).push(
+    await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (context) => TodoDetailPage(initialTodo: todo!),
       ),

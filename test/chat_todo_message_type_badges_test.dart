@@ -81,6 +81,165 @@ void main() {
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
   });
 
+  testWidgets(
+    'returning from todo detail via badge keeps chat input unfocused',
+    (tester) async {
+      final backend = _Backend(
+        initialMessages: const [
+          Message(
+            id: 'm_focus_badge',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: '查看事项详情',
+            createdAtMs: 11,
+            isMemory: true,
+          ),
+        ],
+        todos: const [
+          Todo(
+            id: 't_focus_badge',
+            title: '查看事项详情',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            sourceEntryId: 'm_focus_badge',
+          ),
+        ],
+        jobsByMessageId: <String, SemanticParseJob>{
+          'm_focus_badge': _job(
+            messageId: 'm_focus_badge',
+            actionKind: 'create',
+            todoId: 't_focus_badge',
+            todoTitle: '查看事项详情',
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            locale: const Locale('zh', 'CN'),
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final inputFinder = find.byKey(const ValueKey('chat_input'));
+      TextField input() => tester.widget<TextField>(inputFinder);
+
+      await tester.tap(inputFinder);
+      await tester.pump();
+      expect(input().focusNode?.hasFocus, isTrue);
+
+      await tester.tap(
+        find.byKey(const ValueKey('message_todo_type_badge_m_focus_badge')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('todo_detail_header')), findsNothing);
+      expect(input().focusNode?.hasFocus, isFalse);
+    },
+  );
+
+  testWidgets(
+    'returning from todo detail via message action keeps input unfocused',
+    (tester) async {
+      final backend = _Backend(
+        initialMessages: const [
+          Message(
+            id: 'm_focus_action',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: '打开事项详情',
+            createdAtMs: 12,
+            isMemory: true,
+          ),
+        ],
+        todos: const [
+          Todo(
+            id: 't_focus_action',
+            title: '打开事项详情',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            sourceEntryId: 'm_focus_action',
+          ),
+        ],
+        jobsByMessageId: const <String, SemanticParseJob>{},
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            locale: const Locale('zh', 'CN'),
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final inputFinder = find.byKey(const ValueKey('chat_input'));
+      TextField input() => tester.widget<TextField>(inputFinder);
+
+      await tester.tap(inputFinder);
+      await tester.pump();
+      expect(input().focusNode?.hasFocus, isTrue);
+
+      await tester.longPress(
+        find.byKey(const ValueKey('message_bubble_m_focus_action')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const ValueKey('message_actions_sheet')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('message_action_open_todo')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('todo_detail_header')), findsNothing);
+      expect(input().focusNode?.hasFocus, isFalse);
+    },
+  );
+
   testWidgets('followup todo message shows root quote and opens todo detail',
       (tester) async {
     final backend = _Backend(
