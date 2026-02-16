@@ -34,6 +34,43 @@ void main() {
     expect(await controller.getIdToken(), 'id_token_2');
     expect(toolkit.refreshCalls, 1);
   });
+
+  test('refreshUserInfo invalidates cached token after email becomes verified',
+      () async {
+    final clock = _FakeClockMs(1000);
+    final toolkit = _FakeIdentityToolkit(
+      clock: clock,
+      lookupResponses: const <FirebaseUserInfo>[
+        FirebaseUserInfo(email: 'test@example.com', emailVerified: false),
+        FirebaseUserInfo(email: 'test@example.com', emailVerified: true),
+      ],
+    );
+    final store = _InMemoryCloudAuthStore();
+
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: clock.nowMs,
+    );
+
+    await controller.signInWithEmailPassword(
+      email: 'test@example.com',
+      password: 'pw',
+    );
+
+    expect(await controller.getIdToken(), 'id_token_1');
+    expect(toolkit.refreshCalls, 0);
+
+    await controller.refreshUserInfo();
+    expect(controller.emailVerified, isFalse);
+    expect(await controller.getIdToken(), 'id_token_1');
+    expect(toolkit.refreshCalls, 0);
+
+    await controller.refreshUserInfo();
+    expect(controller.emailVerified, isTrue);
+    expect(await controller.getIdToken(), 'id_token_2');
+    expect(toolkit.refreshCalls, 1);
+  });
 }
 
 final class _FakeClockMs {
@@ -49,12 +86,20 @@ final class _FakeClockMs {
 }
 
 final class _FakeIdentityToolkit implements FirebaseIdentityToolkit {
-  _FakeIdentityToolkit({required this.clock});
+  _FakeIdentityToolkit({
+    required this.clock,
+    List<FirebaseUserInfo>? lookupResponses,
+  }) : _lookupResponses = lookupResponses ??
+            const <FirebaseUserInfo>[
+              FirebaseUserInfo(email: null, emailVerified: null),
+            ];
 
   final _FakeClockMs clock;
+  final List<FirebaseUserInfo> _lookupResponses;
 
   int signInCalls = 0;
   int refreshCalls = 0;
+  int lookupCalls = 0;
 
   @override
   Future<FirebaseAuthTokens> signInWithPassword({
@@ -98,7 +143,13 @@ final class _FakeIdentityToolkit implements FirebaseIdentityToolkit {
 
   @override
   Future<FirebaseUserInfo> lookup({required String idToken}) async {
-    return const FirebaseUserInfo(email: null, emailVerified: null);
+    final index = lookupCalls;
+    lookupCalls += 1;
+
+    if (index >= _lookupResponses.length) {
+      return _lookupResponses.last;
+    }
+    return _lookupResponses[index];
   }
 }
 

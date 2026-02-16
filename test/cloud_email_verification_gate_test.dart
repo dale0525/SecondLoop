@@ -49,6 +49,46 @@ void main() {
   });
 
   testWidgets(
+      'Cloud account resend verification enters cooldown before re-enable',
+      (tester) async {
+    final cloudAuth = _FakeCloudAuthController(
+      idToken: 'test-id-token',
+      uid: 'uid_1',
+      emailVerified: false,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: cloudAuth,
+            child: const CloudAccountPage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final resendButton =
+        find.byKey(const ValueKey('cloud_resend_verification'));
+    expect(resendButton, findsOneWidget);
+
+    await tester.tap(resendButton);
+    await tester.pump();
+
+    expect(cloudAuth.sendEmailVerificationCalls, 1);
+    expect(find.text('Resend in 60s'), findsOneWidget);
+    expect(tester.widget<OutlinedButton>(resendButton).onPressed, isNull);
+
+    await tester.pump(const Duration(seconds: 30));
+    expect(find.text('Resend in 30s'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 30));
+    expect(find.text('Resend verification email'), findsOneWidget);
+    expect(tester.widget<OutlinedButton>(resendButton).onPressed, isNotNull);
+  });
+
+  testWidgets(
       'Ask AI shows verify-email prompt when cloud returns email_not_verified',
       (tester) async {
     SharedPreferences.setMockInitialValues({

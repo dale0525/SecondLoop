@@ -33,6 +33,10 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   String? _userInfoUid;
 
   bool _verificationBusy = false;
+  String? _verificationHint;
+  static const Duration _verificationResendCooldown = Duration(seconds: 60);
+  Timer? _verificationCooldownTimer;
+  int _verificationCooldownSeconds = 0;
 
   bool _subBusy = false;
   Object? _subError;
@@ -40,6 +44,12 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
 
   bool _billingBusy = false;
   Object? _billingError;
+
+  bool get _verificationCooldownActive => _verificationCooldownSeconds > 0;
+
+  static final RegExp _jsonStringErrorPattern =
+      RegExp(r'"error"\s*:\s*"([^"]+)"');
+  static final RegExp _jsonCodeErrorPattern = RegExp(r'"code"\s*:\s*"([^"]+)"');
 
   CloudSubscriptionController? _subscriptionController(BuildContext context) {
     final controller = SubscriptionScope.maybeOf(context);
@@ -68,6 +78,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
 
   @override
   void dispose() {
+    _verificationCooldownTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -124,6 +135,110 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     } finally {
       if (mounted) setState(() => _subBusy = false);
     }
+  }
+
+  void _startVerificationCooldown(
+      [Duration duration = _verificationResendCooldown]) {
+    _verificationCooldownTimer?.cancel();
+
+    final totalSeconds = duration.inSeconds;
+    if (!mounted || totalSeconds <= 0) return;
+
+    setState(() => _verificationCooldownSeconds = totalSeconds);
+
+    _verificationCooldownTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        if (_verificationCooldownSeconds <= 1) {
+          timer.cancel();
+          setState(() {
+            _verificationCooldownSeconds = 0;
+            _verificationCooldownTimer = null;
+          });
+          return;
+        }
+
+        setState(() => _verificationCooldownSeconds -= 1);
+      },
+    );
+  }
+
+  String _extractErrorCode(Object error) {
+    String normalize(String value) {
+      return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    }
+
+    if (error is FirebaseAuthException) {
+      return normalize(error.code);
+    }
+
+    final message = error.toString();
+    final stringMatch = _jsonStringErrorPattern.firstMatch(message);
+    if (stringMatch != null) {
+      return normalize(stringMatch.group(1) ?? '');
+    }
+
+    final codeMatch = _jsonCodeErrorPattern.firstMatch(message);
+    if (codeMatch != null) {
+      return normalize(codeMatch.group(1) ?? '');
+    }
+
+    final tokenMatch = RegExp(r'\b([A-Z][A-Z0-9_]{2,})\b').firstMatch(message);
+    if (tokenMatch != null) {
+      return normalize(tokenMatch.group(1) ?? '');
+    }
+
+    return normalize(message);
+  }
+
+  bool _isEmailAlreadyVerifiedError(Object error) {
+    const knownCodes = <String>{
+      'email_already_verified',
+      'already_verified',
+      'email_verified',
+    };
+
+    final code = _extractErrorCode(error);
+    if (knownCodes.contains(code)) {
+      return true;
+    }
+
+    final message = error.toString().toLowerCase();
+    return message.contains('already verified') ||
+        message.contains('已验证') ||
+        message.contains('not needed');
+  }
+
+  String _formatCloudSubscriptionError(BuildContext context, Object error) {
+    final t = context.t;
+    final status = parseHttpStatusFromError(error);
+    final code = parseCloudErrorCodeFromError(error);
+    if (status == 402 || code == 'payment_required') {
+      return t.sync.cloudManagedVault.paymentRequired;
+    }
+    if (status == 403 && code == 'email_not_verified') {
+      return t.chat.cloudGateway.emailNotVerified;
+    }
+
+    if (error is FirebaseAuthException) {
+      if (error.code == 'missing_web_api_key' ||
+          error.code == 'missing_wwb_api_key') {
+        return t.settings.cloudAccount.errors.missingWebApiKey;
+      }
+    }
+
+    final message = error.toString();
+    if (message.contains('missing_web_api_key') ||
+        message.contains('missing_wwb_api_key')) {
+      return t.settings.cloudAccount.errors.missingWebApiKey;
+    }
+
+    return message;
   }
 
   Future<void> _openCheckout() async {
@@ -189,24 +304,57 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   }
 
   Future<void> _resendVerificationEmail() async {
-    if (_verificationBusy) return;
+    if (_verificationBusy || _verificationCooldownActive) return;
     final controller = CloudAuthScope.of(context).controller;
 
-    setState(() => _verificationBusy = true);
+    setState(() {
+      _verificationBusy = true;
+      _verificationHint = null;
+    });
     try {
       await controller.sendEmailVerification();
+      _startVerificationCooldown();
+      await controller.refreshUserInfo();
+      if (!mounted) return;
+      final verified = controller.emailVerified == true;
+      final message = verified
+          ? context.t.settings.cloudAccount.emailVerification.messages
+              .verificationAlreadyDone
+          : context.t.settings.cloudAccount.emailVerification.messages
+              .verificationEmailSent;
+      if (verified) {
+        setState(() {
+          _verificationHint = context
+              .t.settings.cloudAccount.emailVerification.labels.verifiedHelp;
+        });
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            context.t.settings.cloudAccount.emailVerification.messages
-                .verificationEmailSent,
-          ),
+          content: Text(message),
           duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
       if (!mounted) return;
+      if (_isEmailAlreadyVerifiedError(e)) {
+        await controller.refreshUserInfo();
+        if (!mounted) return;
+        setState(() {
+          _verificationHint = context
+              .t.settings.cloudAccount.emailVerification.labels.verifiedHelp;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.t.settings.cloudAccount.emailVerification.messages
+                  .verificationAlreadyDone,
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -279,12 +427,25 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       final controller = CloudAuthScope.of(context).controller;
       await controller.signUpWithEmailPassword(
           email: email, password: password);
+      await controller.refreshUserInfo();
+      await controller.sendEmailVerification();
+      _startVerificationCooldown();
       if (!mounted) return;
       setState(() {
         _passwordController.clear();
+        _verificationHint = context.t.settings.cloudAccount.emailVerification
+            .messages.signUpVerificationPrompt;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t.settings.cloudAccount.emailVerification.messages
+                .signUpVerificationPrompt,
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
       unawaited(_refreshUserInfo());
-      unawaited(_resendVerificationEmail());
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = _formatCloudAuthError(context, e));
@@ -302,6 +463,12 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     try {
       final controller = CloudAuthScope.of(context).controller;
       await controller.signOut();
+      if (!mounted) return;
+      _verificationCooldownTimer?.cancel();
+      setState(() {
+        _verificationHint = null;
+        _verificationCooldownSeconds = 0;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '$e');
@@ -328,6 +495,10 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     if (uid != _userInfoUid) {
       _userInfoUid = uid;
       _userInfoError = null;
+      _verificationHint = null;
+      _verificationCooldownTimer?.cancel();
+      _verificationCooldownTimer = null;
+      _verificationCooldownSeconds = 0;
       if (uid != null) {
         unawaited(_refreshUserInfo());
       }
@@ -337,6 +508,10 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
         SubscriptionStatus.unknown;
     final canManageSubscription =
         _subscriptionDetailsController(context)?.canManageSubscription ?? true;
+    final resendLabel = _verificationCooldownActive
+        ? context.t.settings.cloudAccount.emailVerification.actions
+            .resendCooldown(seconds: _verificationCooldownSeconds)
+        : context.t.settings.cloudAccount.emailVerification.actions.resend;
 
     return Scaffold(
       appBar: AppBar(
@@ -429,6 +604,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                     children: [
                       Expanded(
                         child: FilledButton(
+                          key: const ValueKey('cloud_sign_in'),
                           onPressed: _busy ? null : _signIn,
                           child: Text(
                             context.t.settings.cloudAccount.actions.signIn,
@@ -438,6 +614,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton(
+                          key: const ValueKey('cloud_sign_up'),
                           onPressed: _busy ? null : _signUp,
                           child: Text(
                             context.t.settings.cloudAccount.actions.signUp,
@@ -522,6 +699,15 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                       ),
                     ),
                   ],
+                  if (_verificationHint != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      _verificationHint!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
                   if (controller?.emailVerified == false) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -532,11 +718,10 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                     OutlinedButton(
                       key: const ValueKey('cloud_resend_verification'),
                       onPressed:
-                          _verificationBusy ? null : _resendVerificationEmail,
-                      child: Text(
-                        context.t.settings.cloudAccount.emailVerification
-                            .actions.resend,
-                      ),
+                          (_verificationBusy || _verificationCooldownActive)
+                              ? null
+                              : _resendVerificationEmail,
+                      child: Text(resendLabel),
                     ),
                   ],
                 ],
@@ -569,7 +754,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                   if (_subError != null) ...[
                     Text(
                       context.t.settings.subscription.labels.loadFailed(
-                        error: '$_subError',
+                        error:
+                            _formatCloudSubscriptionError(context, _subError!),
                       ),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
@@ -580,7 +766,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                   if (_billingError != null) ...[
                     Text(
                       context.t.settings.subscription.labels.loadFailed(
-                        error: '$_billingError',
+                        error: _formatCloudSubscriptionError(
+                            context, _billingError!),
                       ),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
