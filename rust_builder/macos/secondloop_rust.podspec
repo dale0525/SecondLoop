@@ -13,6 +13,13 @@ A new Flutter FFI plugin project.
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'email@example.com' }
 
+  clang_runtime_dir = `xcrun --toolchain XcodeDefault.xctoolchain clang --print-runtime-dir 2>/dev/null`.strip
+  clang_rt_link_flags = if clang_runtime_dir.empty?
+    ''
+  else
+    " -L#{clang_runtime_dir} -lclang_rt.osx"
+  end
+
   # This will ensure the source files in Classes/ are included in the native
   # builds of apps using this FFI plugin. Podspec does not support relative
   # paths, so Classes contains a forwarder C file that relatively imports
@@ -20,9 +27,8 @@ A new Flutter FFI plugin project.
   s.source           = { :path => '.' }
   s.source_files     = 'Classes/**/*'
   s.dependency 'FlutterMacOS'
-  s.frameworks = 'Accelerate'
-  s.platform = :osx, '10.11'
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.frameworks = ['Accelerate', 'Foundation', 'Metal', 'MetalKit']
+  s.platform = :osx, '10.15'
   s.swift_version = '5.0'
 
   s.script_phase = {
@@ -35,6 +41,7 @@ A new Flutter FFI plugin project.
     # created by this build step.
     :output_files => ["${BUILT_PRODUCTS_DIR}/libsecondloop_rust.a"],
   }
+
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     # Flutter.framework does not contain a i386 slice.
@@ -43,6 +50,6 @@ A new Flutter FFI plugin project.
     # cross targets (e.g. x86_64-apple-darwin on Apple Silicon) during dev runs.
     'ARCHS' => '$(NATIVE_ARCH_ACTUAL)',
     'ONLY_ACTIVE_ARCH' => 'YES',
-    'OTHER_LDFLAGS' => '$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/libsecondloop_rust.a -lc++',
+    'OTHER_LDFLAGS' => "$(inherited) -force_load ${BUILT_PRODUCTS_DIR}/libsecondloop_rust.a -lc++#{clang_rt_link_flags}",
   }
 end
