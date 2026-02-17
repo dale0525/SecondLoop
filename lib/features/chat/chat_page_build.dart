@@ -155,14 +155,28 @@ extension _ChatPageStateBuild on _ChatPageState {
                             ? backend as AttachmentsBackend
                             : null;
                         final semanticJobsFuture =
-                            Future<List<SemanticParseJob>>.sync(() {
+                            Future<List<SemanticParseJob>>.sync(() async {
                           if (messages.isEmpty) {
                             return const <SemanticParseJob>[];
                           }
+
+                          final prefs = await SharedPreferences.getInstance();
+                          final semanticParseConsented = prefs.getBool(
+                                SemanticParseDataConsentPrefs.prefsKey,
+                              ) ??
+                              false;
+                          if (!semanticParseConsented) {
+                            return const <SemanticParseJob>[];
+                          }
+
                           final ids = messages
                               .map((m) => m.id)
                               .where((id) => !id.startsWith('pending_'))
                               .toList(growable: false);
+                          if (ids.isEmpty) {
+                            return const <SemanticParseJob>[];
+                          }
+
                           return backend.listSemanticParseJobsByMessageIds(
                             sessionKey,
                             messageIds: ids,

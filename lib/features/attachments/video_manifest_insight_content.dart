@@ -1,3 +1,5 @@
+import '../../core/content_enrichment/video_ocr_auto_policy.dart';
+
 final class VideoManifestInsightContent {
   const VideoManifestInsightContent({
     required this.contentKind,
@@ -52,6 +54,24 @@ VideoManifestInsightContent? resolveVideoManifestInsightContent(
     _ => 'unknown',
   };
 
+  final transcriptForInference = firstNonEmpty(const <String>[
+    'transcript_full',
+    'transcript_excerpt',
+  ]);
+  final ocrTextForInference = firstNonEmpty(const <String>[
+    'ocr_text_full',
+    'ocr_text_excerpt',
+  ]);
+  final readableTextForInference = firstNonEmpty(const <String>[
+    'readable_text_full',
+    'readable_text_excerpt',
+    'transcript_full',
+    'transcript_excerpt',
+    'ocr_text_full',
+    'ocr_text_excerpt',
+    'video_summary',
+  ]);
+
   if (contentKind == 'unknown') {
     final hasKnowledgeMarkdown = firstNonEmpty(const <String>[
       'knowledge_markdown_excerpt',
@@ -70,11 +90,22 @@ VideoManifestInsightContent? resolveVideoManifestInsightContent(
       'ocr_text_excerpt',
       'ocr_text_full',
     ]).isNotEmpty;
+
     if (hasKnowledgeMarkdown && !hasVideoDescription) {
       contentKind = 'knowledge';
-    } else if ((hasVideoDescription || hasSummarySignal) &&
-        !hasKnowledgeMarkdown) {
+    } else if (hasVideoDescription && !hasKnowledgeMarkdown) {
       contentKind = 'non_knowledge';
+    } else if (hasSummarySignal) {
+      final inferred = inferVideoContentKind(
+        transcriptFull: transcriptForInference,
+        ocrTextFull: ocrTextForInference,
+        readableTextFull: readableTextForInference,
+      );
+      if (inferred == 'knowledge' || inferred == 'non_knowledge') {
+        contentKind = inferred;
+      } else if (!hasKnowledgeMarkdown) {
+        contentKind = 'non_knowledge';
+      }
     }
   }
 
@@ -93,16 +124,26 @@ VideoManifestInsightContent? resolveVideoManifestInsightContent(
         'knowledge_markdown_full',
         'readable_text_excerpt',
         'readable_text_full',
+        'transcript_excerpt',
+        'transcript_full',
+        'ocr_text_excerpt',
+        'ocr_text_full',
       ]),
     'non_knowledge' => firstNonEmpty(const <String>[
         'video_description_excerpt',
         'video_description_full',
         'readable_text_excerpt',
         'readable_text_full',
+        'transcript_excerpt',
+        'transcript_full',
+        'ocr_text_excerpt',
+        'ocr_text_full',
       ]),
     _ => firstNonEmpty(const <String>[
         'readable_text_excerpt',
         'readable_text_full',
+        'transcript_excerpt',
+        'transcript_full',
         'ocr_text_excerpt',
         'ocr_text_full',
       ]),
