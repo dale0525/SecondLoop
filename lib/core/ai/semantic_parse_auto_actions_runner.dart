@@ -121,7 +121,7 @@ abstract class SemanticParseAutoActionsStore {
     required int nowMs,
   });
 
-  Future<void> upsertTodoFromMessage({
+  Future<String> upsertTodoFromMessage({
     required String messageId,
     required String title,
     required String status,
@@ -312,7 +312,7 @@ final class SemanticParseAutoActionsRunner {
               didUpdateJobs = true;
               break;
             }
-            await store.upsertTodoFromMessage(
+            final appliedTodoId = await store.upsertTodoFromMessage(
               messageId: job.messageId,
               title: title,
               status: status,
@@ -323,7 +323,7 @@ final class SemanticParseAutoActionsRunner {
               SemanticParseJobSucceededArgs(
                 messageId: job.messageId,
                 appliedActionKind: 'create',
-                appliedTodoId: 'todo:${job.messageId}',
+                appliedTodoId: appliedTodoId,
                 appliedTodoTitle: title,
                 appliedPrevTodoStatus: null,
                 nowMs: nowMs,
@@ -738,7 +738,7 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<void> upsertTodoFromMessage({
+  Future<String> upsertTodoFromMessage({
     required String messageId,
     required String title,
     required String status,
@@ -770,7 +770,7 @@ final class BackendSemanticParseAutoActionsStore
       nextReviewAtMs = nextLocal.toUtc().millisecondsSinceEpoch;
     }
 
-    final todoId = 'todo:$messageId';
+    final todoId = await _resolveCreateTodoId(messageId);
     await _backend.upsertTodo(
       _sessionKey,
       id: todoId,
@@ -792,6 +792,37 @@ final class BackendSemanticParseAutoActionsStore
         ruleJson: normalizedRule,
       );
     }
+
+    return todoId;
+  }
+
+  Future<String> _resolveCreateTodoId(String messageId) async {
+    final normalizedMessageId = messageId.trim();
+    if (normalizedMessageId.isEmpty) {
+      return 'todo:$messageId';
+    }
+
+    try {
+      final todos = await _backend.listTodos(_sessionKey);
+      for (final todo in todos) {
+        final sourceMessageId = todo.sourceEntryId?.trim();
+        if (sourceMessageId != normalizedMessageId) continue;
+        if (todo.status != 'done' && todo.status != 'dismissed') {
+          return todo.id;
+        }
+      }
+
+      for (final todo in todos) {
+        final sourceMessageId = todo.sourceEntryId?.trim();
+        if (sourceMessageId == normalizedMessageId) {
+          return todo.id;
+        }
+      }
+    } catch (_) {
+      // ignore and fall back to deterministic todo id
+    }
+
+    return 'todo:$messageId';
   }
 
   @override

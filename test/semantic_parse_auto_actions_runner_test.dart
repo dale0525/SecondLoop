@@ -120,6 +120,46 @@ void main() {
     expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 
+  test('runner records the actual applied todo id from store', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:custom',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:custom': '更新事项内容'},
+      upsertTodoResultByMessageId: const {'msg:custom': 'legacy:todo:42'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"更新事项内容","status":"open","due_local_iso":"2026-02-04T09:00:00"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(store.lastSucceeded?.appliedActionKind, 'create');
+    expect(store.lastSucceeded?.appliedTodoId, 'legacy:todo:42');
+  });
+
   test('runner falls back to local resolver when client throws', () async {
     final store = _FakeStore(
       jobs: [
@@ -272,6 +312,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     List<SemanticParseTodoCandidate> openCandidates =
         const <SemanticParseTodoCandidate>[],
     Map<String, String> previousStatusByTodoId = const <String, String>{},
+    Map<String, String>? upsertTodoResultByMessageId,
   })  : _jobs = List<SemanticParseAutoActionJob>.from(jobs),
         _messages = Map<String, String>.from(messages),
         _messageInputs = Map<String, SemanticParseMessageInput>.from(
@@ -279,13 +320,16 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
         ),
         _openCandidates = List<SemanticParseTodoCandidate>.from(openCandidates),
         _previousStatusByTodoId =
-            Map<String, String>.from(previousStatusByTodoId);
+            Map<String, String>.from(previousStatusByTodoId),
+        _upsertTodoResultByMessageId =
+            Map<String, String>.from(upsertTodoResultByMessageId ?? const {});
 
   final List<SemanticParseAutoActionJob> _jobs;
   final Map<String, String> _messages;
   final Map<String, SemanticParseMessageInput> _messageInputs;
   final List<SemanticParseTodoCandidate> _openCandidates;
   final Map<String, String> _previousStatusByTodoId;
+  final Map<String, String> _upsertTodoResultByMessageId;
 
   final List<String> createdTodoIds = <String>[];
   final Map<String, String> updatedStatusByTodoId = <String, String>{};
@@ -347,15 +391,17 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }) async {}
 
   @override
-  Future<void> upsertTodoFromMessage({
+  Future<String> upsertTodoFromMessage({
     required String messageId,
     required String title,
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
   }) async {
-    createdTodoIds.add('todo:$messageId');
+    final todoId = _upsertTodoResultByMessageId[messageId] ?? 'todo:$messageId';
+    createdTodoIds.add(todoId);
     lastRecurrenceRuleJson = recurrenceRuleJson;
+    return todoId;
   }
 
   @override
