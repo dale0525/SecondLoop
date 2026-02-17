@@ -157,3 +157,81 @@ fn semantic_parse_jobs_enqueue_reopens_existing_job() {
     assert_eq!(jobs[0].applied_prev_todo_status, None);
     assert_eq!(jobs[0].undone_at_ms, None);
 }
+
+#[test]
+fn attachment_annotation_requeues_semantic_parse_for_linked_user_message() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+
+    let key = [3u8; 32];
+    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let long_content = "A".repeat(150);
+    let message = insert_message(&conn, &key, &conversation.id, "user", &long_content)
+        .expect("insert message");
+    let attachment =
+        insert_attachment(&conn, &key, &app_dir, b"img", "image/png").expect("insert attachment");
+    link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256).expect("link");
+
+    let now_ms = 5_000i64;
+    let due_before = list_due_semantic_parse_jobs(&conn, now_ms, 10).expect("list due before");
+    assert!(due_before.is_empty());
+
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment.sha256,
+        "und",
+        "vision.v1",
+        &serde_json::json!({
+            "caption_long": "Client recap notes are visible in the attachment"
+        }),
+        now_ms,
+    )
+    .expect("mark ok");
+
+    let due_after = list_due_semantic_parse_jobs(&conn, now_ms, 10).expect("list due after");
+    assert_eq!(due_after.len(), 1);
+    assert_eq!(due_after[0].message_id, message.id);
+    assert_eq!(due_after[0].status, "pending");
+    assert_eq!(due_after[0].attempts, 0);
+}
+
+#[test]
+fn attachment_annotation_running_payload_does_not_requeue_semantic_parse() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+
+    let key = [4u8; 32];
+    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "follow up from attachment",
+    )
+    .expect("insert message");
+    let attachment =
+        insert_attachment(&conn, &key, &app_dir, b"img", "image/png").expect("insert attachment");
+    link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256).expect("link");
+
+    let now_ms = 6_000i64;
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment.sha256,
+        "und",
+        "vision.v1",
+        &serde_json::json!({
+            "ocr_auto_status": "running",
+            "caption_long": "in-progress extraction output"
+        }),
+        now_ms,
+    )
+    .expect("mark ok");
+
+    let due = list_due_semantic_parse_jobs(&conn, now_ms, 10).expect("list due");
+    assert!(due.is_empty());
+}

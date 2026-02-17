@@ -158,19 +158,137 @@ void main() {
     expect(store.lastFailed, isNull);
     expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
+
+  test('runner marks none when create is disallowed for the message input',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:create_blocked',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const {},
+      messageInputs: const {
+        'msg:create_blocked': SemanticParseMessageInput(
+          sourceText:
+              'This is a very long source note that should not create a todo automatically.',
+          analysisText: 'tomorrow send the recap',
+          allowCreate: false,
+        ),
+      },
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"send the recap","status":"inbox","due_local_iso":null}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'en-US',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(store.createdTodoIds, isEmpty);
+    expect(store.lastSucceeded?.appliedActionKind, 'none');
+  });
+
+  test('runner still allows followup when create is disallowed', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:followup_allowed',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const {},
+      messageInputs: const {
+        'msg:followup_allowed': SemanticParseMessageInput(
+          sourceText:
+              'This is an attachment-driven message context that should only link to existing tasks.',
+          analysisText: 'mark it done',
+          allowCreate: false,
+        ),
+      },
+      openCandidates: const [
+        SemanticParseTodoCandidate(
+          id: 'todo:existing',
+          title: 'Prepare project recap',
+          status: 'open',
+        ),
+      ],
+      previousStatusByTodoId: const {'todo:existing': 'open'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"followup","confidence":1.0,"todo_id":"todo:existing","new_status":"done"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'en-US',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(store.createdTodoIds, isEmpty);
+    expect(store.updatedStatusByTodoId['todo:existing'], 'done');
+    expect(store.lastSucceeded?.appliedActionKind, 'followup');
+  });
 }
 
 final class _FakeStore implements SemanticParseAutoActionsStore {
   _FakeStore({
     required List<SemanticParseAutoActionJob> jobs,
     required Map<String, String> messages,
+    Map<String, SemanticParseMessageInput>? messageInputs,
+    List<SemanticParseTodoCandidate> openCandidates =
+        const <SemanticParseTodoCandidate>[],
+    Map<String, String> previousStatusByTodoId = const <String, String>{},
   })  : _jobs = List<SemanticParseAutoActionJob>.from(jobs),
-        _messages = Map<String, String>.from(messages);
+        _messages = Map<String, String>.from(messages),
+        _messageInputs = Map<String, SemanticParseMessageInput>.from(
+          messageInputs ?? const <String, SemanticParseMessageInput>{},
+        ),
+        _openCandidates = List<SemanticParseTodoCandidate>.from(openCandidates),
+        _previousStatusByTodoId =
+            Map<String, String>.from(previousStatusByTodoId);
 
   final List<SemanticParseAutoActionJob> _jobs;
   final Map<String, String> _messages;
+  final Map<String, SemanticParseMessageInput> _messageInputs;
+  final List<SemanticParseTodoCandidate> _openCandidates;
+  final Map<String, String> _previousStatusByTodoId;
 
   final List<String> createdTodoIds = <String>[];
+  final Map<String, String> updatedStatusByTodoId = <String, String>{};
   SemanticParseJobSucceededArgs? lastSucceeded;
   SemanticParseJobFailedArgs? lastFailed;
   String? lastRecurrenceRuleJson;
@@ -184,8 +302,17 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
-  Future<String?> getMessageText(String messageId) async {
-    return _messages[messageId];
+  Future<SemanticParseMessageInput?> getMessageInput(String messageId) async {
+    final predefined = _messageInputs[messageId];
+    if (predefined != null) return predefined;
+
+    final sourceText = _messages[messageId];
+    if (sourceText == null) return null;
+    return SemanticParseMessageInput(
+      sourceText: sourceText,
+      analysisText: sourceText,
+      allowCreate: true,
+    );
   }
 
   @override
@@ -194,7 +321,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required DateTime nowLocal,
     required int limit,
   }) async {
-    return const <SemanticParseTodoCandidate>[];
+    return _openCandidates.take(limit).toList(growable: false);
   }
 
   @override
@@ -237,7 +364,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String todoId,
     required String newStatus,
   }) async {
-    return null;
+    updatedStatusByTodoId[todoId] = newStatus;
+    return _previousStatusByTodoId[todoId];
   }
 }
 
