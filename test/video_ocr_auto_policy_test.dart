@@ -13,6 +13,25 @@ void main() {
     expect(shouldAutoRunVideoManifestOcr(payload), isTrue);
   });
 
+  test('shouldAutoRunVideoManifestOcr allows legacy payload with media mime',
+      () {
+    final payload = <String, Object?>{
+      'schema': 'secondloop.video_extract.v1',
+      'mime_type': 'video/mp4',
+      'video_segment_count': 1,
+      'video_segments': const [
+        {
+          'index': 0,
+          'sha256': 'segment-sha',
+          'mime_type': 'video/mp4',
+        },
+      ],
+      'needs_ocr': true,
+    };
+
+    expect(shouldAutoRunVideoManifestOcr(payload), isTrue);
+  });
+
   test('shouldAutoRunVideoManifestOcr skips when OCR engine already exists',
       () {
     final payload = <String, Object?>{
