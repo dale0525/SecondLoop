@@ -144,7 +144,7 @@ fn process_pending_document_extractions_enriches_video_manifest_from_audio_trans
         payload["readable_text_excerpt"].as_str(),
         Some("audio transcript excerpt")
     );
-    assert_eq!(payload["needs_ocr"].as_bool(), Some(false));
+    assert_eq!(payload["needs_ocr"].as_bool(), Some(true));
 }
 
 #[test]
@@ -333,7 +333,7 @@ fn process_pending_video_manifest_enqueues_audio_transcript_when_missing_and_ena
             |row| row.get(0),
         )
         .expect("manifest status");
-    assert_eq!(manifest_status, "failed");
+    assert_eq!(manifest_status, "pending");
 
     let manifest_attempts: i64 = conn
         .query_row(
@@ -342,7 +342,23 @@ fn process_pending_video_manifest_enqueues_audio_transcript_when_missing_and_ena
             |row| row.get(0),
         )
         .expect("manifest attempts");
-    assert_eq!(manifest_attempts, 1);
+    assert_eq!(manifest_attempts, 0);
+
+    let manifest_last_error: Option<String> = conn
+        .query_row(
+            r#"SELECT last_error FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
+            rusqlite::params![manifest.sha256],
+            |row| row.get(0),
+        )
+        .expect("manifest last error");
+    assert!(
+        manifest_last_error
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or_default()
+            .is_empty(),
+        "manifest waiting state should not expose user-visible error"
+    );
 
     let audio_status: String = conn
         .query_row(
