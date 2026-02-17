@@ -26,6 +26,15 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     final normalizedEngine = normalizeAudioTranscribeEngine(effectiveEngine);
     final useWhisperEngine =
         normalizedEngine == 'whisper' || normalizedEngine == 'local_runtime';
+    final supportsLocalRuntime = supportsPlatformLocalRuntimeAudioTranscribe();
+
+    final localRuntimeChain = <AudioTranscribeClient>[
+      if (supportsLocalRuntime && useWhisperEngine)
+        LocalRuntimeAudioTranscribeClient(
+          modelName: 'runtime-whisper-$whisperModel',
+          whisperModel: whisperModel,
+        ),
+    ];
 
     final networkChain = <AudioTranscribeClient>[
       if (cloudEnabled)
@@ -46,11 +55,12 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
           profileId: byokProfile.id,
           modelName: byokProfile.modelName,
         ),
+      ...localRuntimeChain,
     ];
 
     return _AudioTranscribeClientSelection(
       networkClient: _buildFallbackAudioTranscribeClient(networkChain),
-      offlineClient: null,
+      offlineClient: _buildFallbackAudioTranscribeClient(localRuntimeChain),
     );
   }
 

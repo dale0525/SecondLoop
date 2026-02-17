@@ -592,6 +592,47 @@ void main() {
     );
   });
 
+  test('runner uses longer retry delay for missing local whisper model',
+      () async {
+    final store = _MemStore(
+      jobs: const [
+        AudioTranscribeJob(
+          attachmentSha256: 'd2',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'd2': Uint8List.fromList(const <int>[0x49, 0x44, 0x33, 0x03]),
+      },
+    );
+    final client = _MemClient(
+      engineName: 'local_runtime',
+      modelName: 'runtime-whisper-base',
+    )
+      ..shouldFail = true
+      ..failError =
+          StateError('audio_transcribe_local_runtime_model_missing:base');
+    const nowMs = 6000;
+    final runner = AudioTranscribeRunner(
+      store: store,
+      client: client,
+      nowMs: () => nowMs,
+    );
+
+    final result = await runner.runOnce(limit: 5);
+    expect(result.processed, 0);
+    expect(client.calls, 1);
+    expect(
+      store.failedNextRetryBySha['d2'],
+      greaterThanOrEqualTo(
+        nowMs + const Duration(hours: 12).inMilliseconds,
+      ),
+    );
+  });
+
   test('byok whisper client parses verbose json response', () async {
     final client = ByokWhisperAudioTranscribeClient(
       sessionKey: Uint8List.fromList(List<int>.filled(32, 3)),

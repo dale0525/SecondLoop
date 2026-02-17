@@ -440,22 +440,21 @@ final class ByokMultimodalAudioTranscribeClient
 
 final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
   LocalRuntimeAudioTranscribeClient({
-    this.modelName = 'local_runtime',
+    this.modelName = 'runtime-whisper-base',
+    this.whisperModel = 'base',
     this.appDirProvider = getNativeAppDir,
     AudioTranscribeLocalRuntimeRequest? requestLocalRuntimeTranscribe,
-    AudioTranscribeWindowsNativeSttRequest? requestWindowsNativeSttTranscribe,
-    bool? isWindowsHost,
+    AudioTranscribeLocalWhisperRequest? requestLocalWhisperTranscribe,
   }) : _requestLocalRuntimeTranscribe = requestLocalRuntimeTranscribe ??
-            selectPlatformLocalRuntimeAudioTranscribeRequest(
-              methodChannelRequest: _requestLocalRuntimeMethodChannelDefault,
-              windowsNativeSttRequest: requestWindowsNativeSttTranscribe ??
-                  WindowsNativeSttAudioTranscribeClient
-                      ._requestWindowsNativeSttDefault,
-              isWindowsHost: isWindowsHost,
+            _buildDefaultLocalRuntimeRequest(
+              whisperModel: whisperModel,
+              requestLocalWhisperTranscribe: requestLocalWhisperTranscribe ??
+                  rust_audio_transcribe.audioTranscribeLocalWhisper,
             );
 
   @override
   final String modelName;
+  final String whisperModel;
   final Future<String> Function() appDirProvider;
   final AudioTranscribeLocalRuntimeRequest _requestLocalRuntimeTranscribe;
 
@@ -493,23 +492,129 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     );
   }
 
-  static Future<String> _requestLocalRuntimeMethodChannelDefault({
+  static AudioTranscribeLocalRuntimeRequest _buildDefaultLocalRuntimeRequest({
+    required String whisperModel,
+    required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
+  }) {
+    final normalizedModelName = _normalizeRuntimeWhisperModel(whisperModel);
+    return ({
+      required String appDir,
+      required String lang,
+      required String mimeType,
+      required Uint8List audioBytes,
+    }) {
+      return _requestLocalRuntimeWhisperDefault(
+        appDir: appDir,
+        whisperModel: normalizedModelName,
+        lang: lang,
+        mimeType: mimeType,
+        audioBytes: audioBytes,
+        requestLocalWhisperTranscribe: requestLocalWhisperTranscribe,
+      );
+    };
+  }
+
+  static String _normalizeRuntimeWhisperModel(String model) {
+    final normalized = model.trim().toLowerCase();
+    switch (normalized) {
+      case 'tiny':
+      case 'base':
+      case 'small':
+      case 'medium':
+      case 'large-v3':
+      case 'large-v3-turbo':
+        return normalized;
+      default:
+        return 'base';
+    }
+  }
+
+  static Future<String> _requestLocalRuntimeWhisperDefault({
     required String appDir,
+    required String whisperModel,
     required String lang,
     required String mimeType,
     required Uint8List audioBytes,
-  }) {
-    return _requestNativeAudioTranscribeMethod(
-      methodName: 'localRuntimeTranscribe',
-      unavailableError: 'audio_transcribe_local_runtime_unavailable',
-      failedError: 'audio_transcribe_local_runtime_failed',
-      emptyError: 'audio_transcribe_local_runtime_empty',
-      invalidPayloadError: 'audio_transcribe_local_runtime_invalid_payload',
-      appDir: appDir,
-      lang: lang,
-      mimeType: mimeType,
-      audioBytes: audioBytes,
-    );
+    required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
+  }) async {
+    if (kIsWeb ||
+        !(Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      throw StateError('audio_transcribe_local_runtime_unavailable');
+    }
+
+    Directory? tempDir;
+    try {
+      final ffmpegPath =
+          await _resolveBundledFfmpegExecutablePathForAudioTranscribe();
+      if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
+        throw StateError(
+            'audio_transcribe_local_runtime_unavailable:ffmpeg_missing');
+      }
+
+      tempDir =
+          await Directory.systemTemp.createTemp('secondloop-local-whisper-');
+      final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
+        mimeType,
+      );
+      final sourcePath = '${tempDir.path}/source.$ext';
+      final wavPath = '${tempDir.path}/input.wav';
+      final sourceFile = File(sourcePath);
+      final wavFile = File(wavPath);
+      await sourceFile.writeAsBytes(audioBytes, flush: true);
+
+      final ffmpegResult = await Process.run(
+        ffmpegPath,
+        <String>[
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-i',
+          sourcePath,
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-c:a',
+          'pcm_s16le',
+          wavPath,
+        ],
+      );
+      if (ffmpegResult.exitCode != 0 || !await wavFile.exists()) {
+        final ffmpegError = [
+          ffmpegResult.stderr?.toString().trim() ?? '',
+          ffmpegResult.stdout?.toString().trim() ?? '',
+        ].where((v) => v.isNotEmpty).join(' | ');
+        final detail = ffmpegError.isEmpty
+            ? 'ffmpeg_exit_${ffmpegResult.exitCode}'
+            : ffmpegError;
+        throw StateError('audio_transcribe_local_runtime_failed:$detail');
+      }
+
+      final wavBytes = await wavFile.readAsBytes();
+      if (wavBytes.isEmpty) {
+        throw StateError('audio_transcribe_local_runtime_empty');
+      }
+
+      final normalizedLang = isAutoAudioTranscribeLang(lang) ? '' : lang.trim();
+      return await requestLocalWhisperTranscribe(
+        appDir: appDir,
+        modelName: whisperModel,
+        lang: normalizedLang,
+        wavBytes: wavBytes,
+      );
+    } catch (error) {
+      if (error is StateError) rethrow;
+      final detail = error.toString().trim();
+      if (detail.isEmpty) {
+        throw StateError('audio_transcribe_local_runtime_failed');
+      }
+      throw StateError('audio_transcribe_local_runtime_failed:$detail');
+    } finally {
+      if (tempDir != null && await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    }
   }
 }
 

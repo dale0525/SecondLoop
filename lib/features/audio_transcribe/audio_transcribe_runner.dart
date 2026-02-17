@@ -134,6 +134,12 @@ typedef AudioTranscribeLocalRuntimeRequest = Future<String> Function({
   required String mimeType,
   required Uint8List audioBytes,
 });
+typedef AudioTranscribeLocalWhisperRequest = Future<String> Function({
+  required String appDir,
+  required String modelName,
+  required String lang,
+  required List<int> wavBytes,
+});
 typedef AudioTranscribeNativeSttRequest = Future<String> Function({
   required String lang,
   required String mimeType,
@@ -342,7 +348,8 @@ final class AudioTranscribeRunner {
     final detail = error.toString().trim().toLowerCase();
     if (detail.isEmpty) return false;
     return detail.contains('audio_transcribe_native_stt_missing_speech_pack') ||
-        detail.contains('speech_recognizer_unavailable');
+        detail.contains('speech_recognizer_unavailable') ||
+        detail.contains('audio_transcribe_local_runtime_model_missing');
   }
 
   static Map<String, Object?> _buildPayload({
