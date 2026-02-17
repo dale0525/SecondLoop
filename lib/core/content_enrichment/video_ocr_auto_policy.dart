@@ -15,8 +15,7 @@ bool shouldAutoRunVideoManifestOcr(
   }
 
   final mime = (payload['mime_type'] ?? '').toString().trim().toLowerCase();
-  if (mime != _kVideoManifestMimeType &&
-      !_looksLikeLegacyVideoManifestPayload(payload)) {
+  if (mime != _kVideoManifestMimeType) {
     return false;
   }
 
@@ -227,33 +226,6 @@ int _countStructuredInstructionLines(String text) {
     }
   }
   return count;
-}
-
-bool _looksLikeLegacyVideoManifestPayload(Map<String, Object?> payload) {
-  final originalSha = (payload['original_sha256'] ?? '').toString().trim();
-  if (originalSha.isNotEmpty) {
-    return true;
-  }
-
-  final originalMime =
-      (payload['original_mime_type'] ?? '').toString().trim().toLowerCase();
-  if (originalMime.startsWith('video/')) {
-    return true;
-  }
-
-  final segmentCount = payload['video_segment_count'];
-  if (segmentCount is num && segmentCount > 0) {
-    return true;
-  }
-  if (segmentCount is String && int.tryParse(segmentCount.trim()) != null) {
-    final parsed = int.tryParse(segmentCount.trim()) ?? 0;
-    if (parsed > 0) {
-      return true;
-    }
-  }
-
-  final segments = payload['video_segments'];
-  return segments is List && segments.isNotEmpty;
 }
 
 int _asMillis(Object? raw) {

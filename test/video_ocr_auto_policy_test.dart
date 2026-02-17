@@ -13,7 +13,7 @@ void main() {
     expect(shouldAutoRunVideoManifestOcr(payload), isTrue);
   });
 
-  test('shouldAutoRunVideoManifestOcr allows legacy payload with media mime',
+  test('shouldAutoRunVideoManifestOcr skips legacy payload with media mime',
       () {
     final payload = <String, Object?>{
       'schema': 'secondloop.video_extract.v1',
@@ -29,7 +29,7 @@ void main() {
       'needs_ocr': true,
     };
 
-    expect(shouldAutoRunVideoManifestOcr(payload), isTrue);
+    expect(shouldAutoRunVideoManifestOcr(payload), isFalse);
   });
 
   test('shouldAutoRunVideoManifestOcr skips when OCR engine already exists',
