@@ -607,7 +607,7 @@ pub fn process_pending_document_extractions(
                 let needs_ocr = true;
                 let payload = serde_json::json!({
                     "schema": "secondloop.video_extract.v1",
-                    "mime_type": manifest.video_mime_type,
+                    "mime_type": VIDEO_MANIFEST_MIME,
                     "original_sha256": manifest.video_sha256,
                     "original_mime_type": manifest.video_mime_type,
                     "video_segment_count": manifest.segments.len(),

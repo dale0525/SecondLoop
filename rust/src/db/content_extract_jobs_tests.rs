@@ -133,6 +133,11 @@ fn process_pending_document_extractions_enriches_video_manifest_from_audio_trans
         Some("secondloop.video_extract.v1")
     );
     assert_eq!(
+        payload["mime_type"].as_str(),
+        Some("application/x.secondloop.video+json")
+    );
+    assert_eq!(payload["original_mime_type"].as_str(), Some("video/mp4"));
+    assert_eq!(
         payload["audio_sha256"].as_str(),
         Some(audio.sha256.as_str())
     );
