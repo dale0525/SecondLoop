@@ -45,7 +45,6 @@ VideoManifestInsightContent? resolveVideoManifestInsightContent(
 
   final rawContentKind = firstNonEmpty(const <String>[
     'video_content_kind',
-    'video_kind',
     'content_kind',
   ]).toLowerCase();
   var contentKind = switch (rawContentKind) {

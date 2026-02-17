@@ -19,6 +19,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     required Map<String, _TodoMessageBadgeMeta> linkedTodoBadgeByMessageId,
     required String displayText,
   }) {
+    final linkedBadge = linkedTodoBadgeByMessageId[message.id];
+    if (linkedBadge != null) return linkedBadge;
+
     final job = jobsByMessageId[message.id];
     if (job != null && job.status == 'succeeded' && job.undoneAtMs == null) {
       final kind = job.appliedActionKind?.trim();
@@ -37,7 +40,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
       }
     }
 
-    return linkedTodoBadgeByMessageId[message.id];
+    return null;
   }
 
   String _todoMessageBadgeLabel(
@@ -52,7 +55,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     return meta.isRelated ? 'Related task' : 'Task';
   }
 
-  Future<void> _openTodoFromBadge(_TodoMessageBadgeMeta meta) async {
+  Future<bool> _openTodoFromBadge(_TodoMessageBadgeMeta meta) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
 
@@ -69,12 +72,13 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
       todo = null;
     }
 
-    if (!mounted || todo == null) return;
+    if (!mounted || todo == null) return false;
     await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (context) => TodoDetailPage(initialTodo: todo!),
       ),
     );
+    return true;
   }
 
   Widget _buildTodoTypeBadge({

@@ -117,7 +117,7 @@ extension _SettingsPageBuild on _SettingsPageState {
           ListTile(
             title: Text(context.t.settings.lockNow.title),
             subtitle: Text(context.t.settings.lockNow.subtitle),
-            onTap: _busy ? null : SessionScope.of(context).lock,
+            onTap: _busy ? null : _lockNow,
           ),
         ]),
         const SizedBox(height: 16),

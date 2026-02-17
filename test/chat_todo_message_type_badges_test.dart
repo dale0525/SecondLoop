@@ -81,6 +81,70 @@ void main() {
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
   });
 
+  testWidgets('create todo message bubble tap opens todo detail',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm_bubble_open',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: '晚上收快递',
+          createdAtMs: 10,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't_bubble_open',
+          title: '收快递',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          sourceEntryId: 'm_bubble_open',
+        ),
+      ],
+      jobsByMessageId: <String, SemanticParseJob>{
+        'm_bubble_open': _job(
+          messageId: 'm_bubble_open',
+          actionKind: 'create',
+          todoId: 't_bubble_open',
+          todoTitle: '收快递',
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('message_bubble_m_bubble_open')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
+  });
+
   testWidgets(
     'returning from todo detail via badge keeps chat input unfocused',
     (tester) async {
@@ -575,6 +639,90 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
   });
+
+  testWidgets(
+    'linked related todo badge wins over stale semantic create job',
+    (tester) async {
+      final backend = _Backend(
+        initialMessages: const [
+          Message(
+            id: 'm9',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: '更新了任务内容',
+            createdAtMs: 9,
+            isMemory: true,
+          ),
+        ],
+        todos: const [
+          Todo(
+            id: 't9_old',
+            title: '旧任务',
+            status: 'dismissed',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+          Todo(
+            id: 't9_new',
+            title: '新任务',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+        jobsByMessageId: <String, SemanticParseJob>{
+          'm9': _job(
+            messageId: 'm9',
+            actionKind: 'create',
+            todoId: 't9_old',
+            todoTitle: '旧任务',
+          ),
+        },
+        todoActivities: const [
+          TodoActivity(
+            id: 'a9',
+            todoId: 't9_new',
+            activityType: 'note',
+            content: '更新了任务内容',
+            sourceMessageId: 'm9',
+            createdAtMs: 0,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            locale: const Locale('en'),
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('message_todo_type_badge_m9')),
+          findsOneWidget);
+      expect(find.text('Related task'), findsOneWidget);
+      expect(find.text('Task'), findsNothing);
+      expect(find.byKey(const ValueKey('message_related_todo_root_m9')),
+          findsOneWidget);
+      expect(find.text('「新任务」'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'linked todo messages still show markers without semantic jobs',

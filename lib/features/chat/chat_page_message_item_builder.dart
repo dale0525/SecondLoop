@@ -314,7 +314,13 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           shouldCollapse ||
           actionSuggestions.isNotEmpty ||
           !stableMsg.isMemory;
-
+      final hasKnownAttachments = _messageHasAttachmentInCache(stableMsg.id);
+      final mayHaveAttachments = supportsAttachments &&
+          (hasKnownAttachments || !attachmentsLoadedForEdit);
+      final shouldEnableBubbleTap = !isPending &&
+          ((shouldCollapse && !isDesktopPlatform) ||
+              todoBadgeMeta != null ||
+              mayHaveAttachments);
       final bubble = ConstrainedBox(
         key: ValueKey('message_bubble_${stableMsg.id}'),
         constraints: const BoxConstraints(maxWidth: 560),
@@ -340,11 +346,24 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                     );
                   },
             child: InkWell(
-              onTap: shouldCollapse && !isDesktopPlatform
-                  ? () => unawaited(
-                        _openMessageViewer(displayText),
-                      )
-                  : null,
+              onTap: !shouldEnableBubbleTap
+                  ? null
+                  : () => unawaited(
+                        () async {
+                          final openedDetail =
+                              await _openMessageBubblePrimaryDetail(
+                            message: stableMsg,
+                            todoBadgeMeta: todoBadgeMeta,
+                            attachmentsBackend:
+                                mayHaveAttachments ? attachmentsBackend : null,
+                            sessionKey: sessionKey,
+                          );
+                          if (openedDetail) return;
+                          if (shouldCollapse && !isDesktopPlatform) {
+                            await _openMessageViewer(displayText);
+                          }
+                        }(),
+                      ),
               onLongPress: isDesktopPlatform
                   ? null
                   : () => _showMessageActions(stableMsg),
@@ -620,20 +639,9 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                                     attachment: items[i],
                                                     attachmentsBackend:
                                                         attachmentsBackend,
-                                                    onTap: () {
-                                                      unawaited(
-                                                        _pushRouteFromChat(
-                                                          MaterialPageRoute(
-                                                            builder: (context) {
-                                                              return AttachmentViewerPage(
-                                                                attachment:
-                                                                    items[i],
-                                                              );
-                                                            },
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
+                                                    onTap: () => unawaited(
+                                                        _openAttachmentDetail(
+                                                            items[i])),
                                                   );
                                                 }
                                                 return AttachmentCard(
@@ -641,26 +649,14 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                                   annotationJob:
                                                       annotationJobsBySha256[
                                                           items[i].sha256],
-                                                  onTap: () {
-                                                    unawaited(
-                                                      _pushRouteFromChat(
-                                                        MaterialPageRoute(
-                                                          builder: (context) {
-                                                            return AttachmentViewerPage(
-                                                              attachment:
-                                                                  items[i],
-                                                            );
-                                                          },
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
+                                                  onTap: () => unawaited(
+                                                      _openAttachmentDetail(
+                                                          items[i])),
                                                 );
                                               }(),
                                             ),
                                         ],
                                       );
-
                                       Widget rowWidget = thumbRow;
                                       if (shouldScroll) {
                                         rowWidget = SizedBox(

@@ -60,6 +60,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
+  static const _kMasterPasswordSetupRequiredPrefsKey =
+      'master_password_setup_required_v1';
 
   HotKey _defaultQuickCaptureHotKey(TargetPlatform platform) => HotKey(
         identifier: DesktopQuickCaptureHotkeyPrefs.hotKeyIdentifier,
@@ -525,9 +527,26 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
+      final sessionScope = SessionScope.of(context);
+      final sessionKey = sessionScope.sessionKey;
+      final lock = sessionScope.lock;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kAppLockEnabledPrefsKey, enabled);
+      if (!enabled) {
+        await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
+      }
+
+      final isMasterPasswordSet = await backend.isMasterPasswordSet();
+      if (enabled && !isMasterPasswordSet) {
+        await prefs.setBool(_kMasterPasswordSetupRequiredPrefsKey, true);
+        await BackgroundSync.refreshSchedule(backend: backend);
+        if (mounted) {
+          setState(() => _appLockEnabled = true);
+        }
+        lock();
+        return;
+      }
+
       final biometricEnabled =
           _biometricUnlockEnabled ?? _defaultSystemUnlockEnabled();
       final shouldPersist = !enabled || biometricEnabled;
@@ -536,11 +555,26 @@ class _SettingsPageState extends State<SettingsPage> {
       } else {
         await backend.clearSavedSessionKey();
       }
+      await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
       await BackgroundSync.refreshSchedule(backend: backend);
       if (mounted) setState(() => _appLockEnabled = enabled);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _lockNow() async {
+    if (_busy) return;
+
+    final backend = AppBackendScope.of(context);
+    final prefs = await SharedPreferences.getInstance();
+    final isMasterPasswordSet = await backend.isMasterPasswordSet();
+    if (!isMasterPasswordSet) {
+      await prefs.setBool(_kMasterPasswordSetupRequiredPrefsKey, true);
+    }
+
+    if (!mounted) return;
+    SessionScope.of(context).lock();
   }
 
   Future<void> _setBiometricUnlock(bool enabled) async {

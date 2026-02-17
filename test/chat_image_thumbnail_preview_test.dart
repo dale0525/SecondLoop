@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -44,13 +45,13 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: const ChatPage(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
                 conversation: Conversation(
                   id: 'main_stream',
                   title: 'Main Stream',
@@ -71,6 +72,65 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('Chat bubble tap opens first attachment detail', (tester) async {
+    final backend = _Backend(
+      messages: const [
+        Message(
+          id: 'm_tap',
+          conversationId: 'main_stream',
+          role: 'user',
+          content: 'Tap me',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      attachmentsByMessageId: const {
+        'm_tap': [
+          Attachment(
+            sha256: 'tap_abc',
+            mimeType: 'image/png',
+            path: 'attachments/tap_abc.bin',
+            byteLen: 67,
+            createdAtMs: 0,
+          ),
+        ],
+      },
+      attachmentBytesBySha: {
+        'tap_abc': _tinyPngBytes(),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bubble = find.byKey(const ValueKey('message_bubble_m_tap'));
+    await tester.tapAt(tester.getTopLeft(bubble) + const Offset(16, 16));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AttachmentViewerPage), findsOneWidget);
+  });
+
   testWidgets('Chat bubble renders video-manifest poster thumbnail preview',
       (tester) async {
     final backend = _Backend(

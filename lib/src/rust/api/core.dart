@@ -18,6 +18,13 @@ Future<Uint8List> authInitMasterPassword(
     RustLib.instance.api
         .crateApiCoreAuthInitMasterPassword(appDir: appDir, password: password);
 
+Future<Uint8List> authInitMasterPasswordWithExistingKey(
+        {required String appDir,
+        required String password,
+        required List<int> key}) =>
+    RustLib.instance.api.crateApiCoreAuthInitMasterPasswordWithExistingKey(
+        appDir: appDir, password: password, key: key);
+
 Future<Uint8List> authUnlockWithPassword(
         {required String appDir, required String password}) =>
     RustLib.instance.api

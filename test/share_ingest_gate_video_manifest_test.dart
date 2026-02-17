@@ -36,8 +36,6 @@ void main() {
     final payload = buildVideoManifestPayload(
       videoSha256: 'sha_video_proxy',
       videoMimeType: 'video/mp4',
-      videoKind: 'screen_recording',
-      videoKindConfidence: 1.4,
       videoProxySha256: 'sha_video_proxy',
       posterSha256: 'sha_poster',
       posterMimeType: 'image/jpeg',
@@ -56,8 +54,8 @@ void main() {
       videoProxyTruncated: true,
     );
 
-    expect(payload['video_kind'], 'screen_recording');
-    expect(payload['video_kind_confidence'], 1.0);
+    expect(payload.containsKey('video_kind'), isFalse);
+    expect(payload.containsKey('video_kind_confidence'), isFalse);
     expect(payload['video_proxy_sha256'], 'sha_video_proxy');
     expect(payload['poster_sha256'], 'sha_poster');
     expect(payload['poster_mime_type'], 'image/jpeg');
@@ -82,15 +80,13 @@ void main() {
     final payload = buildVideoManifestPayload(
       videoSha256: 'sha_video_proxy',
       videoMimeType: 'video/mp4',
-      videoKind: 'invalid_kind',
-      videoKindConfidence: -1.0,
     );
 
     expect(payload['schema'], 'secondloop.video_manifest.v2');
     expect(payload['video_sha256'], 'sha_video_proxy');
     expect(payload['video_mime_type'], 'video/mp4');
-    expect(payload['video_kind'], 'unknown');
-    expect(payload['video_kind_confidence'], 0.0);
+    expect(payload.containsKey('video_kind'), isFalse);
+    expect(payload.containsKey('video_kind_confidence'), isFalse);
     expect(payload['audio_sha256'], isNull);
     expect(payload['audio_mime_type'], isNull);
     expect(payload.containsKey('video_proxy_sha256'), isFalse);
@@ -98,15 +94,5 @@ void main() {
     expect(payload.containsKey('keyframes'), isFalse);
     expect(payload.containsKey('video_proxy_total_bytes'), isFalse);
     expect(payload.containsKey('video_proxy_truncated'), isFalse);
-  });
-
-  test('video manifest payload keeps predefined common video kinds', () {
-    final payload = buildVideoManifestPayload(
-      videoSha256: 'sha_video_proxy',
-      videoMimeType: 'video/mp4',
-      videoKind: 'meeting',
-    );
-
-    expect(payload['video_kind'], 'meeting');
   });
 }
