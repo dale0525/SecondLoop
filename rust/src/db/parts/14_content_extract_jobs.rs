@@ -11,6 +11,12 @@ const VIDEO_MANIFEST_SCHEMA_V2: &str = "secondloop.video_manifest.v2";
 const VIDEO_MANIFEST_SCHEMA_V3: &str = "secondloop.video_manifest.v3";
 const VIDEO_EXTRACT_EXCERPT_MAX_BYTES: usize = 8 * 1024;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ContentExtractProcessOutcome {
+    Completed,
+    Deferred,
+}
+
 fn retry_backoff_ms(attempts: i64) -> i64 {
     let clamped = attempts.clamp(1, 10) as u32;
     let multiplier = 1i64
@@ -509,7 +515,7 @@ pub fn process_pending_document_extractions(
             continue;
         }
 
-        let result: Result<()> = (|| {
+        let result: Result<ContentExtractProcessOutcome> = (|| {
             let mime_type = read_attachment_mime_type(conn, &job.attachment_sha256)?;
             let bytes = read_attachment_bytes(conn, key, app_dir, &job.attachment_sha256)?;
             let normalized_mime = mime_type.trim().to_ascii_lowercase();
@@ -551,7 +557,7 @@ pub fn process_pending_document_extractions(
                     &payload,
                     now,
                 )?;
-                return Ok(());
+                return Ok(ContentExtractProcessOutcome::Completed);
             }
 
             if process_video_manifests && is_video_manifest_mime_type(&normalized_mime) {
@@ -569,7 +575,13 @@ pub fn process_pending_document_extractions(
                         transcript_excerpt = excerpt;
                     } else if cfg.audio_transcribe_enabled {
                         enqueue_attachment_annotation(conn, audio_sha256, "und", now)?;
-                        return Err(anyhow!("audio transcript not ready"));
+                        enqueue_attachment_annotation(
+                            conn,
+                            &job.attachment_sha256,
+                            &job.lang,
+                            now,
+                        )?;
+                        return Ok(ContentExtractProcessOutcome::Deferred);
                     }
                 }
 
@@ -592,7 +604,7 @@ pub fn process_pending_document_extractions(
                     })
                     .collect::<Vec<_>>();
 
-                let needs_ocr = readable_text_full.is_empty();
+                let needs_ocr = true;
                 let payload = serde_json::json!({
                     "schema": "secondloop.video_extract.v1",
                     "mime_type": manifest.video_mime_type,
@@ -635,16 +647,17 @@ pub fn process_pending_document_extractions(
                     &payload,
                     now,
                 )?;
-                return Ok(());
+                return Ok(ContentExtractProcessOutcome::Completed);
             }
 
-            Ok(())
+            Ok(ContentExtractProcessOutcome::Completed)
         })();
 
         match result {
-            Ok(()) => {
+            Ok(ContentExtractProcessOutcome::Completed) => {
                 processed += 1;
             }
+            Ok(ContentExtractProcessOutcome::Deferred) => {}
             Err(e) => {
                 let attempts = job.attempts.saturating_add(1);
                 let next_retry_at_ms = now.saturating_add(retry_backoff_ms(attempts));
