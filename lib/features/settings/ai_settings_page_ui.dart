@@ -211,6 +211,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     final hasCloudAccount = cloudUid.isNotEmpty;
     final canUseCloudEmbeddings =
         hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
+    final canUseSemanticParse = canUseCloudEmbeddings || _byokConfigured;
 
     final cloudEmbeddingsSubtitle =
         subscriptionStatus == SubscriptionStatus.notEntitled
@@ -221,11 +222,13 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                     ? context.t.settings.cloudEmbeddings.subtitleEnabled
                     : context.t.settings.cloudEmbeddings.subtitleDisabled;
 
-    final semanticParseSubtitle = !_semanticParseConfigured
-        ? context.t.settings.semanticParseAutoActions.subtitleUnset
-        : (_semanticParseEnabled ?? false)
-            ? context.t.settings.semanticParseAutoActions.subtitleEnabled
-            : context.t.settings.semanticParseAutoActions.subtitleDisabled;
+    final semanticParseSubtitle = !canUseSemanticParse
+        ? context.t.settings.semanticParseAutoActions.subtitleRequiresSetup
+        : !_semanticParseConfigured
+            ? context.t.settings.semanticParseAutoActions.subtitleUnset
+            : (_semanticParseEnabled ?? false)
+                ? context.t.settings.semanticParseAutoActions.subtitleEnabled
+                : context.t.settings.semanticParseAutoActions.subtitleDisabled;
 
     final askPreferredRoute = _preferredAskAiRoute(_askAiPreference);
     final askAiUnavailable = !_askAiLoading &&
@@ -319,6 +322,24 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                 onChanged: _automationLoading || _automationSaving
                     ? null
                     : (value) async {
+                        if (value && !canUseSemanticParse) {
+                          if (subscriptionStatus ==
+                                  SubscriptionStatus.entitled &&
+                              !hasCloudAccount) {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CloudAccountPage(),
+                              ),
+                            );
+                            if (!mounted) return;
+                            await _reloadAutomationState(forceLoading: false);
+                            return;
+                          }
+
+                          await _openLlmProfilesForByokSetupAndRefreshRoutes();
+                          return;
+                        }
+
                         await _setSemanticParseEnabled(value);
                       },
               ),

@@ -16,9 +16,12 @@ import 'noop_sync_runner.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Auto-created inbox todo is scheduled for review reminders',
+  testWidgets(
+      'Auto-created inbox todo is scheduled for review reminders when enhanced semantic mode is off',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': false,
+    });
     final backend = _Backend();
 
     await tester.pumpWidget(

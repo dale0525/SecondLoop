@@ -143,7 +143,7 @@ void main() {
   });
 
   testWidgets(
-    'semantic parse toggle can be enabled without cloud/byok setup',
+    'semantic parse toggle requires cloud/byok setup',
     (tester) async {
       SharedPreferences.setMockInitialValues({
         'semantic_parse_data_consent_v1': false,
@@ -174,21 +174,11 @@ void main() {
       await tester.tap(semanticSwitch);
       await tester.pumpAndSettle();
 
-      final dialog = find.byType(AlertDialog);
-      expect(dialog, findsOneWidget);
-
-      final enableButton = find.descendant(
-        of: dialog,
-        matching: find.byType(FilledButton),
-      );
-      expect(enableButton, findsOneWidget);
-      await tester.tap(enableButton);
-      await tester.pumpAndSettle();
-
-      expect(_switchValue(tester, semanticSwitch), isTrue);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(_switchValue(tester, semanticSwitch), isFalse);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('semantic_parse_data_consent_v1'), isTrue);
+      expect(prefs.getBool('semantic_parse_data_consent_v1'), isFalse);
     },
   );
 }

@@ -405,13 +405,13 @@
       }
     },
     "semanticParseAutoActions": {
-      "title": "自动整理待办（语义解析）",
-      "subtitleEnabled": "已开启。系统会理解消息内容，自动创建或更新待办。",
-      "subtitleDisabled": "已关闭。消息不会触发自动整理待办。",
-      "subtitleUnset": "尚未设置，默认关闭。",
-      "subtitleRequiresSetup": "需要 SecondLoop Pro，或先配置 API 密钥（BYOK）。",
-      "dialogTitle": "开启自动整理待办？",
-      "dialogBody": "为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 做语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。",
+      "title": "更智能的语义分析",
+      "subtitleEnabled": "已开启增强模式。在本地语义分析基础上，会使用 Cloud/BYOK 提升自动整理准确度。",
+      "subtitleDisabled": "已关闭增强模式。仍会使用本地语义分析。",
+      "subtitleUnset": "尚未设置，默认关闭增强模式（仍会使用本地语义分析）。",
+      "subtitleRequiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启增强模式。",
+      "dialogTitle": "开启更智能的语义分析？",
+      "dialogBody": "本地语义分析始终开启。开启增强模式后，SecondLoop 会在本地分析基础上，将消息文本发送给 AI 做更智能的语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。",
       "dialogActions": {
         "enable": "开启"
       }

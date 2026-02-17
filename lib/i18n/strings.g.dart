@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1466 (733 per locale)
+/// Strings: 1498 (749 per locale)
 ///
-/// Built on 2026-02-16 at 16:58 UTC
+/// Built on 2026-02-17 at 11:09 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1041,17 +1041,18 @@ class _StringsSettingsSemanticParseAutoActionsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'AI semantic actions';
+  String get title => 'Smarter semantic analysis';
   String get subtitleEnabled =>
-      'On. Messages may be sent to AI to create or update todos automatically.';
+      'Enhanced mode is on. Local semantic analysis stays on, and Cloud/BYOK improves automation quality.';
   String get subtitleDisabled =>
-      'Off. Messages won\'t be sent for automatic actions.';
-  String get subtitleUnset => 'Not set. Default is off.';
+      'Enhanced mode is off. Local semantic analysis remains active.';
+  String get subtitleUnset =>
+      'Not set. Enhanced mode is off by default (local semantic analysis remains active).';
   String get subtitleRequiresSetup =>
-      'Requires SecondLoop Pro or an API key (BYOK).';
-  String get dialogTitle => 'Turn on AI semantic actions?';
+      'Sign in with SecondLoop Pro or configure an API key (BYOK) to enable enhanced mode.';
+  String get dialogTitle => 'Enable smarter semantic analysis?';
   String get dialogBody =>
-      'To automatically create or update todos, SecondLoop can send message text to an AI model.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
+      'Local semantic analysis is always on. When enhanced mode is enabled, SecondLoop may send message text to AI for smarter semantic parsing on top of local analysis.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
   late final _StringsSettingsSemanticParseAutoActionsDialogActionsEn
       dialogActions =
       _StringsSettingsSemanticParseAutoActionsDialogActionsEn._(_root);
@@ -4823,20 +4824,21 @@ class _StringsSettingsSemanticParseAutoActionsZhCn
 
   // Translations
   @override
-  String get title => '自动整理待办（语义解析）';
+  String get title => '更智能的语义分析';
   @override
-  String get subtitleEnabled => '已开启。系统会理解消息内容，自动创建或更新待办。';
+  String get subtitleEnabled => '已开启增强模式。在本地语义分析基础上，会使用 Cloud/BYOK 提升自动整理准确度。';
   @override
-  String get subtitleDisabled => '已关闭。消息不会触发自动整理待办。';
+  String get subtitleDisabled => '已关闭增强模式。仍会使用本地语义分析。';
   @override
-  String get subtitleUnset => '尚未设置，默认关闭。';
+  String get subtitleUnset => '尚未设置，默认关闭增强模式（仍会使用本地语义分析）。';
   @override
-  String get subtitleRequiresSetup => '需要 SecondLoop Pro，或先配置 API 密钥（BYOK）。';
+  String get subtitleRequiresSetup =>
+      '需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启增强模式。';
   @override
-  String get dialogTitle => '开启自动整理待办？';
+  String get dialogTitle => '开启更智能的语义分析？';
   @override
   String get dialogBody =>
-      '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 做语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。';
+      '本地语义分析始终开启。开启增强模式后，SecondLoop 会在本地分析基础上，将消息文本发送给 AI 做更智能的语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。';
   @override
   late final _StringsSettingsSemanticParseAutoActionsDialogActionsZhCn
       dialogActions =
@@ -8966,19 +8968,19 @@ extension on Translations {
       case 'settings.aiSelection.mediaUnderstanding.actions.openByok':
         return 'Open API keys';
       case 'settings.semanticParseAutoActions.title':
-        return 'AI semantic actions';
+        return 'Smarter semantic analysis';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
-        return 'On. Messages may be sent to AI to create or update todos automatically.';
+        return 'Enhanced mode is on. Local semantic analysis stays on, and Cloud/BYOK improves automation quality.';
       case 'settings.semanticParseAutoActions.subtitleDisabled':
-        return 'Off. Messages won\'t be sent for automatic actions.';
+        return 'Enhanced mode is off. Local semantic analysis remains active.';
       case 'settings.semanticParseAutoActions.subtitleUnset':
-        return 'Not set. Default is off.';
+        return 'Not set. Enhanced mode is off by default (local semantic analysis remains active).';
       case 'settings.semanticParseAutoActions.subtitleRequiresSetup':
-        return 'Requires SecondLoop Pro or an API key (BYOK).';
+        return 'Sign in with SecondLoop Pro or configure an API key (BYOK) to enable enhanced mode.';
       case 'settings.semanticParseAutoActions.dialogTitle':
-        return 'Turn on AI semantic actions?';
+        return 'Enable smarter semantic analysis?';
       case 'settings.semanticParseAutoActions.dialogBody':
-        return 'To automatically create or update todos, SecondLoop can send message text to an AI model.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
+        return 'Local semantic analysis is always on. When enhanced mode is enabled, SecondLoop may send message text to AI for smarter semantic parsing on top of local analysis.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.';
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return 'Enable';
       case 'settings.mediaAnnotation.title':
@@ -10499,19 +10501,19 @@ extension on _StringsZhCn {
       case 'settings.aiSelection.mediaUnderstanding.actions.openByok':
         return '打开 API 密钥';
       case 'settings.semanticParseAutoActions.title':
-        return '自动整理待办（语义解析）';
+        return '更智能的语义分析';
       case 'settings.semanticParseAutoActions.subtitleEnabled':
-        return '已开启。系统会理解消息内容，自动创建或更新待办。';
+        return '已开启增强模式。在本地语义分析基础上，会使用 Cloud/BYOK 提升自动整理准确度。';
       case 'settings.semanticParseAutoActions.subtitleDisabled':
-        return '已关闭。消息不会触发自动整理待办。';
+        return '已关闭增强模式。仍会使用本地语义分析。';
       case 'settings.semanticParseAutoActions.subtitleUnset':
-        return '尚未设置，默认关闭。';
+        return '尚未设置，默认关闭增强模式（仍会使用本地语义分析）。';
       case 'settings.semanticParseAutoActions.subtitleRequiresSetup':
-        return '需要 SecondLoop Pro，或先配置 API 密钥（BYOK）。';
+        return '需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启增强模式。';
       case 'settings.semanticParseAutoActions.dialogTitle':
-        return '开启自动整理待办？';
+        return '开启更智能的语义分析？';
       case 'settings.semanticParseAutoActions.dialogBody':
-        return '为了自动创建或更新待办，SecondLoop 可以将消息文本发送给 AI 做语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。';
+        return '本地语义分析始终开启。开启增强模式后，SecondLoop 会在本地分析基础上，将消息文本发送给 AI 做更智能的语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。';
       case 'settings.semanticParseAutoActions.dialogActions.enable':
         return '开启';
       case 'settings.mediaAnnotation.title':
