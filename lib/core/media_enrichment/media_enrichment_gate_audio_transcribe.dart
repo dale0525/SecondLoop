@@ -1,10 +1,5 @@
 part of 'media_enrichment_gate.dart';
 
-const bool _kEnableMacosNativeSttFallback = bool.fromEnvironment(
-  'SECONDLOOP_ENABLE_MACOS_NATIVE_STT_FALLBACK',
-  defaultValue: true,
-);
-
 final class _AudioTranscribeClientSelection {
   const _AudioTranscribeClientSelection({
     required this.networkClient,
@@ -23,95 +18,40 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     required bool cloudEnabled,
     required LlmProfile? byokProfile,
     required String effectiveEngine,
+    required String whisperModel,
     required String gatewayBaseUrl,
     required String cloudIdToken,
     required Uint8List sessionKey,
   }) {
-    final supportsMethodChannelLocalRuntime =
-        supportsPlatformLocalRuntimeAudioTranscribe();
-    final shouldEnableLocalFallback = shouldEnableLocalRuntimeAudioFallback(
-      supportsLocalRuntime: supportsMethodChannelLocalRuntime,
-      cloudEnabled: cloudEnabled,
-      hasByokProfile: byokProfile != null,
-      effectiveEngine: effectiveEngine,
-    );
-    final localRuntimeEnabledForChain =
-        shouldEnableLocalFallback && supportsMethodChannelLocalRuntime;
-    final skipWindowsNativeFallbackBecauseLocalRuntimeMapped = !kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.windows &&
-        localRuntimeEnabledForChain;
-
-    final offlineChain = <AudioTranscribeClient>[
-      if (localRuntimeEnabledForChain)
-        LocalRuntimeAudioTranscribeClient(
-          modelName: 'local_runtime',
-        ),
-      if (!skipWindowsNativeFallbackBecauseLocalRuntimeMapped)
-        ..._buildOptionalNativeSttAudioTranscribeFallbacks(),
-    ];
+    final normalizedEngine = normalizeAudioTranscribeEngine(effectiveEngine);
+    final useWhisperEngine =
+        normalizedEngine == 'whisper' || normalizedEngine == 'local_runtime';
 
     final networkChain = <AudioTranscribeClient>[
       if (cloudEnabled)
         CloudGatewayWhisperAudioTranscribeClient(
           gatewayBaseUrl: gatewayBaseUrl,
           idToken: cloudIdToken,
-          modelName: 'cloud',
+          modelName: whisperModel,
         ),
-      if (effectiveEngine == 'multimodal_llm' && byokProfile != null)
+      if (normalizedEngine == 'multimodal_llm' && byokProfile != null)
         ByokMultimodalAudioTranscribeClient(
           sessionKey: Uint8List.fromList(sessionKey),
           profileId: byokProfile.id,
           modelName: byokProfile.modelName,
         ),
-      if (effectiveEngine == 'whisper' && byokProfile != null)
+      if (useWhisperEngine && byokProfile != null)
         ByokWhisperAudioTranscribeClient(
           sessionKey: Uint8List.fromList(sessionKey),
           profileId: byokProfile.id,
           modelName: byokProfile.modelName,
         ),
-      ...offlineChain,
     ];
 
     return _AudioTranscribeClientSelection(
       networkClient: _buildFallbackAudioTranscribeClient(networkChain),
-      offlineClient: _buildFallbackAudioTranscribeClient(offlineChain),
+      offlineClient: null,
     );
-  }
-
-  bool _shouldEnableMacosSpeechFallback() {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) {
-      return true;
-    }
-    return _kEnableMacosNativeSttFallback;
-  }
-
-  List<AudioTranscribeClient>
-      _buildOptionalNativeSttAudioTranscribeFallbacks() {
-    if (kIsWeb) {
-      return const <AudioTranscribeClient>[];
-    }
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.macOS:
-        if (!_shouldEnableMacosSpeechFallback()) {
-          return const <AudioTranscribeClient>[];
-        }
-        return <AudioTranscribeClient>[
-          NativeSttAudioTranscribeClient(
-            modelName: 'macos_native_stt',
-          ),
-        ];
-      case TargetPlatform.windows:
-        return <AudioTranscribeClient>[
-          WindowsNativeSttAudioTranscribeClient(
-            modelName: 'windows_native_stt',
-          ),
-        ];
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-      case TargetPlatform.linux:
-      case TargetPlatform.fuchsia:
-        return const <AudioTranscribeClient>[];
-    }
   }
 
   AudioTranscribeClient? _buildFallbackAudioTranscribeClient(

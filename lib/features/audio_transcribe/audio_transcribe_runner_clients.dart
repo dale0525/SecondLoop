@@ -56,7 +56,7 @@ final class CloudGatewayWhisperAudioTranscribeClient
   CloudGatewayWhisperAudioTranscribeClient({
     required this.gatewayBaseUrl,
     required this.idToken,
-    this.modelName = 'cloud',
+    this.modelName = 'base',
   });
 
   final String gatewayBaseUrl;
@@ -90,7 +90,7 @@ final class CloudGatewayWhisperAudioTranscribeClient
         'secondloop-audio-${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
     final ext = _fileExtByMimeType(mimeType);
     final fields = <String, String>{
-      'model': modelName.trim().isEmpty ? 'cloud' : modelName,
+      'model': modelName.trim().isEmpty ? 'base' : modelName,
       'response_format': 'verbose_json',
       'timestamp_granularities[]': 'segment',
       'stream': 'true',

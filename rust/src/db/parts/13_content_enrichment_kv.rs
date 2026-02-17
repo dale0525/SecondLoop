@@ -146,9 +146,8 @@ fn kv_string_or(conn: &Connection, key: &str, default: &str) -> Result<String> {
 
 fn normalize_audio_transcribe_engine(engine: &str) -> &'static str {
     match engine.trim() {
-        "" | "whisper" => "whisper",
+        "" | "whisper" | "local_runtime" => "whisper",
         "multimodal_llm" => "multimodal_llm",
-        "local_runtime" => "local_runtime",
         _ => "whisper",
     }
 }

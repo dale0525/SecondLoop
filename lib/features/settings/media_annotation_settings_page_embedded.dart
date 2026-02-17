@@ -145,6 +145,23 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
     );
   }
 
+  Widget _buildAudioWhisperModelTile() {
+    return ListTile(
+      key: const ValueKey('media_annotation_settings_audio_whisper_model_tile'),
+      title: Text(_audioWhisperModelTitle(context)),
+      subtitle: Text(_audioWhisperModelSubtitle(context)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_audioWhisperModelLabel(context, _audioWhisperModel)),
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
+      onTap: _busy ? null : _pickAudioWhisperModel,
+    );
+  }
+
   Future<void> _pickAudioByokEngine(ContentEnrichmentConfig config) async {
     if (_busy) return;
     final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
@@ -270,7 +287,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               context.t.settings.aiSelection.mediaUnderstanding.preference;
           final audioRoute = _resolveCapabilityRoute(
             _audioSourcePreference,
-            hasLocalCapability: supportsPlatformLocalAudioTranscribe(),
+            hasLocalCapability: false,
           );
 
           return <Widget>[
@@ -373,17 +390,6 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       title: sourceLabels.byok.title,
                       subtitle: sourceLabels.byok.description,
                     ),
-                    if (supportsPlatformLocalAudioTranscribe())
-                      _buildSourcePreferenceTile(
-                        value: MediaSourcePreference.local,
-                        groupValue: _audioSourcePreference,
-                        onChanged: _setAudioSourcePreference,
-                        tileKey: const ValueKey(
-                          'media_annotation_settings_audio_mode_local',
-                        ),
-                        title: sourceLabels.local.title,
-                        subtitle: sourceLabels.local.description,
-                      ),
                     _buildScopedWifiOnlyTile(
                       tileKey:
                           MediaAnnotationSettingsPage.audioWifiOnlySwitchKey,
@@ -398,6 +404,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                         'media_annotation_settings_audio_open_api_keys',
                       ),
                     ),
+                    _buildAudioWhisperModelTile(),
                     if (_audioSourcePreference == MediaSourcePreference.byok)
                       _buildAudioByokEngineTile(contentConfig),
                   ],
@@ -432,47 +439,20 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                         ? null
                         : () => _pickAudioTranscribeEngine(contentConfig),
                   ),
+                  _buildAudioWhisperModelTile(),
                   ListTile(
                     key: MediaAnnotationSettingsPage.audioApiProfileTileKey,
                     title: Text(t.audioTranscribe.configureApi.title),
-                    subtitle: Text(
-                      _audioTranscribeApiProfileSubtitle(
-                        context,
-                        localRuntime: contentConfig != null &&
-                            _isEffectiveLocalRuntimeAudioTranscribeEngine(
-                              contentConfig.audioTranscribeEngine,
-                            ),
-                      ),
-                    ),
+                    subtitle: Text(_audioTranscribeApiProfileSubtitle(context)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          contentConfig != null &&
-                                  _isEffectiveLocalRuntimeAudioTranscribeEngine(
-                                    contentConfig.audioTranscribeEngine,
-                                  )
-                              ? (_isZhOcrLocale(context)
-                                  ? '本地模式'
-                                  : 'Local mode')
-                              : _apiProfileLabel(context, config.byokProfileId),
-                        ),
-                        if (!(contentConfig != null &&
-                            _isEffectiveLocalRuntimeAudioTranscribeEngine(
-                              contentConfig.audioTranscribeEngine,
-                            ))) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right),
-                        ],
+                        Text(_apiProfileLabel(context, config.byokProfileId)),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right),
                       ],
                     ),
-                    onTap: _busy ||
-                            (contentConfig != null &&
-                                _isEffectiveLocalRuntimeAudioTranscribeEngine(
-                                  contentConfig.audioTranscribeEngine,
-                                ))
-                        ? null
-                        : () => _pickApiProfileOverride(config),
+                    onTap: _busy ? null : () => _pickApiProfileOverride(config),
                   ),
                 ]),
               ],

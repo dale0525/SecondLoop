@@ -122,7 +122,7 @@ fn content_enrichment_ocr_pdf_settings_are_fixed_on_write() {
     db::set_content_enrichment_config(&conn, &cfg).expect("write config");
 
     let next = db::get_content_enrichment_config(&conn).expect("read updated config");
-    assert_eq!(next.audio_transcribe_engine.as_str(), "local_runtime");
+    assert_eq!(next.audio_transcribe_engine.as_str(), "whisper");
     assert_eq!(next.ocr_pdf_dpi, 180);
     assert_eq!(next.ocr_pdf_auto_max_pages, 0);
     assert_eq!(next.ocr_pdf_max_pages, 0);
@@ -130,7 +130,7 @@ fn content_enrichment_ocr_pdf_settings_are_fixed_on_write() {
     assert_eq!(next.ocr_engine_mode.as_str(), "multimodal_llm");
     assert_eq!(
         kv_value(&conn, "content_enrichment.audio_transcribe_engine").as_deref(),
-        Some("local_runtime")
+        Some("whisper")
     );
     assert_eq!(
         kv_value(&conn, "content_enrichment.ocr_pdf_dpi").as_deref(),
