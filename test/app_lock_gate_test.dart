@@ -23,16 +23,34 @@ void main() {
 
     expect(find.byKey(const ValueKey('unlock_password')), findsOneWidget);
   });
+
+  testWidgets('setup required flag -> requires master password setup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'app_lock_enabled_v1': false,
+      'master_password_setup_required_v1': true,
+    });
+
+    final backend = _SavedKeyBackend(masterPasswordSet: false);
+
+    await tester.pumpWidget(MyApp(backend: backend));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('setup_password')), findsOneWidget);
+  });
 }
 
 final class _SavedKeyBackend extends AppBackend {
+  _SavedKeyBackend({this.masterPasswordSet = true});
+
+  final bool masterPasswordSet;
   final Uint8List _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<void> init() async {}
 
   @override
-  Future<bool> isMasterPasswordSet() async => true;
+  Future<bool> isMasterPasswordSet() async => masterPasswordSet;
 
   @override
   Future<bool> readAutoUnlockEnabled() async => true;
@@ -54,8 +72,8 @@ final class _SavedKeyBackend extends AppBackend {
   Future<void> validateKey(Uint8List key) async {}
 
   @override
-  Future<Uint8List> initMasterPassword(String password) =>
-      throw UnimplementedError();
+  Future<Uint8List> initMasterPassword(String password) async =>
+      Uint8List.fromList(List<int>.filled(32, 1));
 
   @override
   Future<Uint8List> unlockWithPassword(String password) =>

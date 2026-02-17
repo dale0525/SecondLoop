@@ -19,6 +19,8 @@ class SetupMasterPasswordPage extends StatefulWidget {
 class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
+  static const _kMasterPasswordSetupRequiredPrefsKey =
+      'master_password_setup_required_v1';
 
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -70,6 +72,8 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
           prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
               _defaultSystemUnlockEnabled();
       final shouldPersist = !appLockEnabled || systemUnlockEnabled;
+
+      await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
 
       if (shouldPersist) {
         await backend.saveSessionKey(key);

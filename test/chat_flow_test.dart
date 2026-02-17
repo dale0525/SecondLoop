@@ -14,21 +14,14 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Setup -> main stream -> send message', (tester) async {
+  testWidgets('First launch -> main stream -> send message', (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = MemoryBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));
     await tester.pumpAndSettle();
 
-    expect(find.text('Set master password'), findsOneWidget);
-
-    await tester.enterText(find.byKey(MemoryBackend.kSetupPassword), 'pw');
-    await tester.enterText(
-        find.byKey(MemoryBackend.kSetupConfirmPassword), 'pw');
-    await tester.tap(find.byKey(MemoryBackend.kSetupContinue));
-    await tester.pumpAndSettle();
-
+    expect(find.text('Set master password'), findsNothing);
     expect(find.text('Main Stream'), findsWidgets);
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
@@ -205,9 +198,6 @@ void main() {
 }
 
 class MemoryBackend extends AppBackend {
-  static const kSetupPassword = ValueKey('setup_password');
-  static const kSetupConfirmPassword = ValueKey('setup_confirm_password');
-  static const kSetupContinue = ValueKey('setup_continue');
   static const kChatInput = ValueKey('chat_input');
   static const kChatSend = ValueKey('chat_send');
 

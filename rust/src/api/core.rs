@@ -104,6 +104,27 @@ pub fn auth_init_master_password(app_dir: String, password: String) -> Result<Ve
 }
 
 #[flutter_rust_bridge::frb]
+pub fn auth_init_master_password_with_existing_key(
+    app_dir: String,
+    password: String,
+    key: Vec<u8>,
+) -> Result<Vec<u8>> {
+    let kdf = KdfParams {
+        m_cost_kib: 8 * 1024,
+        t_cost: 2,
+        p_cost: 1,
+    };
+    let session_key = key_from_bytes(key)?;
+    let key = auth::init_master_password_with_existing_key(
+        Path::new(&app_dir),
+        &password,
+        kdf,
+        session_key,
+    )?;
+    Ok(key.to_vec())
+}
+
+#[flutter_rust_bridge::frb]
 pub fn auth_unlock_with_password(app_dir: String, password: String) -> Result<Vec<u8>> {
     let key = auth::unlock_with_password(Path::new(&app_dir), &password)?;
     Ok(key.to_vec())

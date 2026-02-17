@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -23,6 +25,43 @@ class _LockGateState extends State<LockGate> {
   Uint8List? _sessionKey;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
+  static const _kMasterPasswordSetupRequiredPrefsKey =
+      'master_password_setup_required_v1';
+  static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
+
+  Uint8List _createSessionKey() {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    );
+  }
+
+  Uint8List? _decodeSessionKeyB64(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final bytes = base64Decode(value);
+      if (bytes.length != 32) return null;
+      return Uint8List.fromList(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List> _loadOrCreateDeferredSessionKey(
+    SharedPreferences prefs,
+  ) async {
+    final stored = _decodeSessionKeyB64(
+      prefs.getString(_kDeferredSessionKeyB64PrefsKey),
+    );
+    if (stored != null) return stored;
+
+    final generated = _createSessionKey();
+    await prefs.setString(
+      _kDeferredSessionKeyB64PrefsKey,
+      base64Encode(generated),
+    );
+    return generated;
+  }
 
   void _lock() {
     setState(() {
@@ -33,12 +72,28 @@ class _LockGateState extends State<LockGate> {
 
   Future<_GateBootstrapResult> _bootstrap() async {
     final backend = AppBackendScope.of(context);
-
-    final isSet = await backend.isMasterPasswordSet();
-    if (!isSet) return const _GateBootstrapResult.needsSetup();
-
     final prefs = await SharedPreferences.getInstance();
     final appLockEnabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
+    final setupRequired =
+        prefs.getBool(_kMasterPasswordSetupRequiredPrefsKey) ?? false;
+
+    final isSet = await backend.isMasterPasswordSet();
+    if (!isSet) {
+      if (appLockEnabled || setupRequired) {
+        return const _GateBootstrapResult.needsSetup();
+      }
+
+      final deferredKey = await _loadOrCreateDeferredSessionKey(prefs);
+      return _GateBootstrapResult.unlocked(deferredKey);
+    }
+
+    if (setupRequired) {
+      await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
+    }
+    if (prefs.containsKey(_kDeferredSessionKeyB64PrefsKey)) {
+      await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+    }
+
     if (appLockEnabled) return const _GateBootstrapResult.needsUnlock();
 
     final savedKey = await backend.loadSavedSessionKey();

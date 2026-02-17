@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -12,11 +13,24 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('First launch shows setup page', (WidgetTester tester) async {
-    await tester.pumpWidget(MyApp(backend: FakeBackend()));
-    await tester.pumpAndSettle();
+  testWidgets('First launch goes directly to main stream',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
 
-    expect(find.text('Set master password'), findsOneWidget);
+    final backend = FakeBackend();
+    await tester.pumpWidget(MyApp(backend: backend));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.text('Main Stream').evaluate().isNotEmpty) break;
+    }
+
+    expect(find.text('Set master password'), findsNothing);
+    expect(find.text('Main Stream'), findsWidgets);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('deferred_session_key_b64_v1'), isNotEmpty);
+    expect(backend.saveSessionKeyCalls, 0);
+    expect(backend.loadSavedSessionKeyCalls, 0);
   });
 
   testWidgets('Settings shows Sync entry', (WidgetTester tester) async {
@@ -45,6 +59,8 @@ void main() {
 }
 
 class FakeBackend extends AppBackend {
+  int saveSessionKeyCalls = 0;
+  int loadSavedSessionKeyCalls = 0;
   @override
   Future<void> init() async {}
 
@@ -52,7 +68,10 @@ class FakeBackend extends AppBackend {
   Future<bool> isMasterPasswordSet() async => false;
 
   @override
-  Future<Uint8List?> loadSavedSessionKey() async => null;
+  Future<Uint8List?> loadSavedSessionKey() async {
+    loadSavedSessionKeyCalls += 1;
+    return null;
+  }
 
   @override
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
@@ -64,7 +83,9 @@ class FakeBackend extends AppBackend {
   Future<void> clearSavedSessionKey() async {}
 
   @override
-  Future<void> saveSessionKey(Uint8List key) async {}
+  Future<void> saveSessionKey(Uint8List key) async {
+    saveSessionKeyCalls += 1;
+  }
 
   @override
   Future<void> validateKey(Uint8List key) async {}
