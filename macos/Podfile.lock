@@ -145,7 +145,7 @@ SPEC CHECKSUMS:
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   record_darwin: 30509266ae213af8afdb09a8ae7467cb64c1377e
   screen_retriever: 4f97c103641aab8ce183fa5af3b87029df167936
-  secondloop_rust: a4481537f15e435f9f45ade8bc2779f487f0c280
+  secondloop_rust: 26adf7ce728268e17e24eab36e38f83ce7f191cb
   share_plus: 11c7b7fa7020465584eca3ff6392c5bc1e399d6e
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   tray_manager: a104b5c81b578d83f3c3d0f40a997c8b10810166
