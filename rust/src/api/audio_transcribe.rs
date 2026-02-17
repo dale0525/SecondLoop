@@ -387,6 +387,227 @@ fn extract_transcript_text(response: &Value) -> String {
     text
 }
 
+fn normalize_local_whisper_model_name(model_name: &str) -> &'static str {
+    match model_name.trim().to_ascii_lowercase().as_str() {
+        "tiny" => "tiny",
+        "base" => "base",
+        "small" => "small",
+        "medium" => "medium",
+        "large-v3" => "large-v3",
+        "large-v3-turbo" => "large-v3-turbo",
+        _ => "base",
+    }
+}
+
+fn local_whisper_model_filename(model_name: &str) -> &'static str {
+    match model_name {
+        "tiny" => "ggml-tiny.bin",
+        "base" => "ggml-base.bin",
+        "small" => "ggml-small.bin",
+        "medium" => "ggml-medium.bin",
+        "large-v3" => "ggml-large-v3.bin",
+        "large-v3-turbo" => "ggml-large-v3-turbo.bin",
+        _ => "ggml-base.bin",
+    }
+}
+
+fn resolve_local_whisper_model_path(
+    app_dir: &str,
+    model_name: &str,
+) -> Result<(String, std::path::PathBuf)> {
+    let normalized_model = normalize_local_whisper_model_name(model_name).to_string();
+    let runtime_whisper_dir = Path::new(app_dir)
+        .join("ocr")
+        .join("desktop")
+        .join("runtime")
+        .join("whisper");
+
+    let preferred = runtime_whisper_dir.join(local_whisper_model_filename(&normalized_model));
+    if preferred.is_file() {
+        return Ok((normalized_model, preferred));
+    }
+
+    if normalized_model != "base" {
+        let fallback = runtime_whisper_dir.join(local_whisper_model_filename("base"));
+        if fallback.is_file() {
+            return Ok(("base".to_string(), fallback));
+        }
+    }
+
+    Err(anyhow!(
+        "audio_transcribe_local_runtime_model_missing:{}",
+        normalized_model
+    ))
+}
+
+fn normalize_local_whisper_lang(lang: &str) -> Option<String> {
+    if is_auto_transcribe_lang(lang) {
+        return None;
+    }
+
+    let normalized = lang.trim().replace('_', "-").to_ascii_lowercase();
+    let primary = normalized.split('-').next().unwrap_or("").trim();
+    if primary.is_empty() {
+        None
+    } else {
+        Some(primary.to_string())
+    }
+}
+
+fn decode_local_whisper_wav_bytes(wav_bytes: &[u8]) -> Result<Vec<f32>> {
+    if wav_bytes.is_empty() {
+        return Err(anyhow!("audio_transcribe_local_runtime_wav_empty"));
+    }
+
+    let mut reader = hound::WavReader::new(std::io::Cursor::new(wav_bytes))
+        .map_err(|e| anyhow!("audio_transcribe_local_runtime_wav_invalid:{e}"))?;
+    let spec = reader.spec();
+
+    if spec.channels != 1 {
+        return Err(anyhow!(
+            "audio_transcribe_local_runtime_wav_channels:{}",
+            spec.channels
+        ));
+    }
+    if spec.sample_rate != 16_000 {
+        return Err(anyhow!(
+            "audio_transcribe_local_runtime_wav_sample_rate:{}",
+            spec.sample_rate
+        ));
+    }
+
+    let samples = match (spec.sample_format, spec.bits_per_sample) {
+        (hound::SampleFormat::Int, 16) => {
+            let pcm_i16 = reader
+                .samples::<i16>()
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|e| anyhow!("audio_transcribe_local_runtime_wav_read_failed:{e}"))?;
+            let mut pcm_f32 = vec![0.0f32; pcm_i16.len()];
+            whisper_rs::convert_integer_to_float_audio(&pcm_i16, &mut pcm_f32)
+                .map_err(|e| anyhow!("audio_transcribe_local_runtime_wav_convert_failed:{e}"))?;
+            pcm_f32
+        }
+        (hound::SampleFormat::Float, 32) => reader
+            .samples::<f32>()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| anyhow!("audio_transcribe_local_runtime_wav_read_failed:{e}"))?,
+        _ => {
+            return Err(anyhow!(
+                "audio_transcribe_local_runtime_wav_unsupported_format:{}:{}",
+                spec.bits_per_sample,
+                match spec.sample_format {
+                    hound::SampleFormat::Int => "int",
+                    hound::SampleFormat::Float => "float",
+                }
+            ))
+        }
+    };
+
+    if samples.is_empty() {
+        return Err(anyhow!("audio_transcribe_local_runtime_wav_empty"));
+    }
+
+    Ok(samples)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn audio_transcribe_local_whisper(
+    app_dir: String,
+    model_name: String,
+    lang: String,
+    wav_bytes: Vec<u8>,
+) -> Result<String> {
+    let app_dir = app_dir.trim();
+    if app_dir.is_empty() {
+        return Err(anyhow!("app_dir is required"));
+    }
+
+    let (resolved_model_name, model_path) = resolve_local_whisper_model_path(app_dir, &model_name)?;
+    let model_path_string = model_path
+        .to_str()
+        .ok_or_else(|| anyhow!("audio_transcribe_local_runtime_model_path_invalid"))?
+        .to_string();
+
+    let pcm_f32 = decode_local_whisper_wav_bytes(&wav_bytes)?;
+
+    let context = whisper_rs::WhisperContext::new_with_params(
+        &model_path_string,
+        whisper_rs::WhisperContextParameters::default(),
+    )
+    .map_err(|e| anyhow!("audio_transcribe_local_runtime_load_model_failed:{e}"))?;
+    let mut state = context
+        .create_state()
+        .map_err(|e| anyhow!("audio_transcribe_local_runtime_create_state_failed:{e}"))?;
+
+    let thread_count = std::thread::available_parallelism()
+        .map(|v| v.get())
+        .unwrap_or(2)
+        .clamp(1, 8) as i32;
+
+    let normalized_lang = normalize_local_whisper_lang(&lang);
+    let mut params =
+        whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
+    params.set_n_threads(thread_count);
+    params.set_translate(false);
+    params.set_print_special(false);
+    params.set_print_progress(false);
+    params.set_print_realtime(false);
+    params.set_print_timestamps(false);
+    if let Some(lang_code) = normalized_lang.as_deref() {
+        params.set_language(Some(lang_code));
+    } else {
+        params.set_language(None);
+    }
+
+    state
+        .full(params, &pcm_f32)
+        .map_err(|e| anyhow!("audio_transcribe_local_runtime_infer_failed:{e}"))?;
+
+    let mut transcript_parts = Vec::new();
+    let mut segments = Vec::new();
+    let mut duration_ms: i64 = 0;
+
+    for segment in state.as_iter() {
+        let text = segment
+            .to_str_lossy()
+            .map_err(|e| anyhow!("audio_transcribe_local_runtime_segment_decode_failed:{e}"))?
+            .trim()
+            .to_string();
+        if text.is_empty() {
+            continue;
+        }
+
+        let start_ms = (segment.start_timestamp() * 10).max(0);
+        let end_ms = (segment.end_timestamp() * 10).max(start_ms);
+        duration_ms = duration_ms.max(end_ms);
+
+        transcript_parts.push(text.clone());
+        segments.push(serde_json::json!({
+            "t_ms": start_ms,
+            "text": text,
+        }));
+    }
+
+    let transcript = transcript_parts.join(" ").trim().to_string();
+    if transcript.is_empty() {
+        return Err(anyhow!("audio_transcribe_local_runtime_empty"));
+    }
+
+    let mut payload = serde_json::Map::new();
+    payload.insert("text".to_string(), Value::String(transcript));
+    payload.insert(
+        "duration".to_string(),
+        Value::from(duration_ms as f64 / 1000.0),
+    );
+    payload.insert("segments".to_string(), Value::Array(segments));
+    payload.insert("model".to_string(), Value::String(resolved_model_name));
+    if let Some(lang_code) = normalized_lang {
+        payload.insert("language".to_string(), Value::String(lang_code));
+    }
+
+    Ok(Value::Object(payload).to_string())
+}
+
 #[derive(Debug, Deserialize)]
 struct OpenAiAudioTranscribeResponse {
     #[serde(default)]
@@ -683,4 +904,34 @@ pub fn audio_transcribe_byok_profile_multimodal(
     }
 
     Ok(json.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_local_whisper_lang, normalize_local_whisper_model_name};
+
+    #[test]
+    fn normalize_local_whisper_model_name_uses_supported_values() {
+        assert_eq!(normalize_local_whisper_model_name("base"), "base");
+        assert_eq!(normalize_local_whisper_model_name("SMALL"), "small");
+        assert_eq!(
+            normalize_local_whisper_model_name("large-v3-turbo"),
+            "large-v3-turbo"
+        );
+        assert_eq!(normalize_local_whisper_model_name("unknown"), "base");
+    }
+
+    #[test]
+    fn normalize_local_whisper_lang_reduces_to_primary_tag() {
+        assert_eq!(
+            normalize_local_whisper_lang("zh-CN"),
+            Some("zh".to_string())
+        );
+        assert_eq!(
+            normalize_local_whisper_lang("en_US"),
+            Some("en".to_string())
+        );
+        assert_eq!(normalize_local_whisper_lang("auto"), None);
+        assert_eq!(normalize_local_whisper_lang(""), None);
+    }
 }

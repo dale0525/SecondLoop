@@ -1,4 +1,4 @@
-Desktop OCR runtime/model assets are prepared into:
+Desktop OCR runtime/model assets (and optional Whisper runtime payload) are prepared into:
 
 - `assets/ocr/desktop_runtime/`
 

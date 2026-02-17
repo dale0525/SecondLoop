@@ -31,6 +31,10 @@ on:
         description: rapidocr_onnxruntime version (used when model_source=rapidocr-wheel)
         required: false
         default: '1.4.4'
+      whisper_model:
+        description: Whisper payload model (base|none)
+        required: false
+        default: base
   push:
     tags:
       - 'desktop-runtime-v*'
@@ -50,6 +54,7 @@ jobs:
       DESKTOP_RUNTIME_MODEL_SOURCE: ${{ github.event.inputs.model_source || vars.DESKTOP_RUNTIME_MODEL_SOURCE || 'modelscope-v5' }}
       DESKTOP_RUNTIME_MODELSCOPE_VERSION: ${{ github.event.inputs.modelscope_version || vars.DESKTOP_RUNTIME_MODELSCOPE_VERSION || 'v3.6.0' }}
       RAPIDOCR_ONNXRUNTIME_VERSION: ${{ github.event.inputs.rapidocr_version || vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.4.4' }}
+      DESKTOP_RUNTIME_WHISPER_MODEL: ${{ github.event.inputs.whisper_model || vars.DESKTOP_RUNTIME_WHISPER_MODEL || 'base' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +68,8 @@ jobs:
             --arch "${ARCH}" \
             --model-source "${DESKTOP_RUNTIME_MODEL_SOURCE}" \
             --modelscope-version "${DESKTOP_RUNTIME_MODELSCOPE_VERSION}" \
-            --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
+            --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}" \
+            --whisper-model "${DESKTOP_RUNTIME_WHISPER_MODEL}"
 
       - name: Build runtime archive
         shell: bash
@@ -78,6 +84,7 @@ jobs:
             --arch "${ARCH}"
             --input-dir "${RUNTIME_INPUT_DIR}"
             --output-dir dist/runtime
+            --whisper-model "${DESKTOP_RUNTIME_WHISPER_MODEL}"
           )
           if [[ -n "${runtime_version}" ]]; then
             args+=(--version "${runtime_version}")
@@ -129,6 +136,7 @@ jobs:
       DESKTOP_RUNTIME_MODEL_SOURCE: ${{ vars.DESKTOP_RUNTIME_MODEL_SOURCE || 'modelscope-v5' }}
       DESKTOP_RUNTIME_MODELSCOPE_VERSION: ${{ vars.DESKTOP_RUNTIME_MODELSCOPE_VERSION || 'v3.6.0' }}
       RAPIDOCR_ONNXRUNTIME_VERSION: ${{ vars.RAPIDOCR_ONNXRUNTIME_VERSION || '1.4.4' }}
+      DESKTOP_RUNTIME_WHISPER_MODEL: ${{ vars.DESKTOP_RUNTIME_WHISPER_MODEL || 'base' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -142,7 +150,8 @@ jobs:
             --arch "${ARCH}" \
             --model-source "${DESKTOP_RUNTIME_MODEL_SOURCE}" \
             --modelscope-version "${DESKTOP_RUNTIME_MODELSCOPE_VERSION}" \
-            --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}"
+            --rapidocr-version "${RAPIDOCR_ONNXRUNTIME_VERSION}" \
+            --whisper-model "${DESKTOP_RUNTIME_WHISPER_MODEL}"
 
       - name: Build runtime archive
         shell: bash
@@ -157,6 +166,7 @@ jobs:
             --arch "${ARCH}"
             --input-dir "${RUNTIME_INPUT_DIR}"
             --output-dir dist/runtime
+            --whisper-model "${DESKTOP_RUNTIME_WHISPER_MODEL}"
           )
           if [[ -n "${runtime_version}" ]]; then
             args+=(--version "${runtime_version}")

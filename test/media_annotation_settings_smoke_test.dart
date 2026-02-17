@@ -682,7 +682,7 @@ void main() {
     expect(find.text('Gemini'), findsNothing);
   });
   testWidgets(
-      'Audio transcribe local runtime mode disables profile override picker',
+      'Audio transcribe engine picker no longer exposes local runtime mode',
       (tester) async {
     final previousPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -701,7 +701,7 @@ void main() {
         tester,
         store: store,
         contentStore: contentStore,
-        backend: TestAppBackend(),
+        backend: _MixedProfilesBackend(),
       );
 
       final scrollable = find.byType(Scrollable).first;
@@ -715,24 +715,15 @@ void main() {
 
       await tester.tap(engineTile);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Local runtime').last);
+      expect(find.text('Local runtime'), findsNothing);
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-
-      expect(contentStore.writes, isNotEmpty);
-      expect(contentStore.writes.last.audioTranscribeEngine, 'local_runtime');
 
       final audioApiTile =
           find.byKey(MediaAnnotationSettingsPage.audioApiProfileTileKey);
-      expect(
-        find.descendant(of: audioApiTile, matching: find.text('Local mode')),
-        findsOneWidget,
-      );
-
       await tester.tap(audioApiTile);
       await tester.pumpAndSettle();
-      expect(find.byType(SimpleDialog), findsNothing);
+      expect(find.byType(SimpleDialog), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = previousPlatform;
     }

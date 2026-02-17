@@ -15,6 +15,9 @@ Options:
   --onnxruntime-version <ver>   ONNX Runtime version (default: 1.23.0)
   --platform <name>             Runtime platform (linux|macos|windows)
   --arch <name>                 Runtime arch (x64|arm64)
+  --whisper-model <name>        Whisper payload model: base|none (default: base)
+  --whisper-base-url <url>      Base URL for whisper model downloads
+  --no-whisper                  Disable whisper model payload download/check
   --no-download                 Fail instead of downloading when models are missing
   -h, --help                    Show help
 
@@ -22,6 +25,7 @@ Behavior:
   - Ensures required OCR model files + ONNX Runtime dynamic library are present.
   - Downloads OCR models from the selected source when needed.
   - Downloads ONNX Runtime archive for the target platform/arch when needed.
+  - Ensures whisper base model payload is included unless --no-whisper is used.
 USAGE
 }
 
@@ -127,6 +131,38 @@ normalize_model_source() {
       ;;
     rapidocr-wheel|rapidocr|wheel)
       echo "rapidocr-wheel"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+normalize_whisper_model() {
+  local raw="$1"
+  local lower
+  lower="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    base)
+      echo "base"
+      ;;
+    none|off|disabled)
+      echo "none"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+whisper_model_filename() {
+  local model="$1"
+  case "$model" in
+    base)
+      echo "ggml-base.bin"
+      ;;
+    none)
+      echo ""
       ;;
     *)
       return 1
@@ -285,6 +321,67 @@ has_required_payload() {
   has_required_models "$dir" && has_onnxruntime_lib "$dir" "$platform"
 }
 
+has_whisper_model_payload() {
+  local dir="$1"
+  local model="$2"
+  if [[ "$model" == "none" ]]; then
+    return 0
+  fi
+
+  local model_file=''
+  model_file="$(whisper_model_filename "$model")"
+  if [[ -z "$model_file" ]]; then
+    return 1
+  fi
+
+  local whisper_file="$dir/whisper/$model_file"
+  [[ -s "$whisper_file" ]]
+}
+
+download_whisper_model_payload() {
+  local output_dir="$1"
+  local model="$2"
+  local whisper_base_url="$3"
+
+  if [[ "$model" == "none" ]]; then
+    return 0
+  fi
+
+  local model_file=''
+  model_file="$(whisper_model_filename "$model")"
+  if [[ -z "$model_file" ]]; then
+    die "unsupported whisper model: $model"
+  fi
+
+  local target_dir="$output_dir/whisper"
+  local target_file="$target_dir/$model_file"
+  local download_url="${whisper_base_url%/}/$model_file"
+
+  mkdir -p "$target_dir"
+  echo "prepare-desktop-runtime-payload: downloading whisper model ${model} from ${download_url}"
+  python3 - "$download_url" "$target_file" <<'PY_DOWNLOAD_WHISPER'
+import pathlib
+import shutil
+import sys
+import urllib.request
+
+url = sys.argv[1]
+dest = pathlib.Path(sys.argv[2])
+temp = dest.with_suffix(dest.suffix + '.download')
+dest.parent.mkdir(parents=True, exist_ok=True)
+
+with urllib.request.urlopen(url, timeout=120) as response, temp.open('wb') as output:
+    shutil.copyfileobj(response, output)
+
+if temp.stat().st_size <= 0:
+    temp.unlink(missing_ok=True)
+    raise SystemExit(f'downloaded whisper model is empty: {url}')
+
+temp.replace(dest)
+print(f'whisper_model_bytes={dest.stat().st_size}')
+PY_DOWNLOAD_WHISPER
+}
+
 download_rapidocr_wheel_models() {
   local output_dir="$1"
   local rapidocr_version="$2"
@@ -439,6 +536,8 @@ model_source="${DESKTOP_RUNTIME_MODEL_SOURCE:-modelscope-v5}"
 modelscope_version="${DESKTOP_RUNTIME_MODELSCOPE_VERSION:-v3.6.0}"
 rapidocr_version="${RAPIDOCR_ONNXRUNTIME_VERSION:-1.4.4}"
 onnxruntime_version="${ONNXRUNTIME_VERSION:-1.23.0}"
+whisper_model="${DESKTOP_RUNTIME_WHISPER_MODEL:-base}"
+whisper_base_url="${DESKTOP_RUNTIME_WHISPER_BASE_URL:-https://huggingface.co/ggerganov/whisper.cpp/resolve/main}"
 platform="${DESKTOP_RUNTIME_PLATFORM:-}"
 arch="${DESKTOP_RUNTIME_ARCH:-}"
 allow_download=1
@@ -478,6 +577,18 @@ while [[ $# -gt 0 ]]; do
       arch="${2:-}"
       shift 2
       ;;
+    --whisper-model)
+      whisper_model="${2:-}"
+      shift 2
+      ;;
+    --whisper-base-url)
+      whisper_base_url="${2:-}"
+      shift 2
+      ;;
+    --no-whisper)
+      whisper_model='none'
+      shift
+      ;;
     --no-download)
       allow_download=0
       shift
@@ -513,6 +624,10 @@ fi
 
 if ! model_source="$(normalize_model_source "$model_source")"; then
   die "Unsupported model source: $model_source"
+fi
+
+if ! whisper_model="$(normalize_whisper_model "$whisper_model")"; then
+  die "Unsupported whisper model: $whisper_model"
 fi
 
 require_cmd python3
@@ -641,6 +756,17 @@ PY
   fi
 fi
 
+if ! has_whisper_model_payload "$output_dir" "$whisper_model"; then
+  if [[ "$allow_download" -eq 0 ]]; then
+    die "whisper model payload missing in $output_dir and --no-download is set"
+  fi
+  download_whisper_model_payload "$output_dir" "$whisper_model" "$whisper_base_url"
+fi
+
+if ! has_whisper_model_payload "$output_dir" "$whisper_model"; then
+  die "whisper model payload missing after preparation in $output_dir"
+fi
+
 if ! has_required_payload "$output_dir" "$platform"; then
   die "payload prepared but required runtime files are still missing in $output_dir"
 fi
@@ -656,6 +782,8 @@ rapidocr_version=${rapidocr_version}
 platform=${platform}
 arch=${arch}
 onnxruntime=${onnxruntime_version}
+whisper_model=${whisper_model}
+whisper_base_url=${whisper_base_url}
 EOF
 
 echo "prepare-desktop-runtime-payload: ready -> $output_dir"

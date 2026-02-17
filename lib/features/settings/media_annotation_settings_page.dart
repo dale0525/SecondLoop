@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/audio_transcribe_whisper_model_prefs.dart';
+import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/ai/media_capability_source_prefs.dart';
 import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
@@ -35,12 +35,14 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
     this.configStore,
     this.contentConfigStore,
     this.linuxOcrModelStore,
+    this.audioWhisperModelStore,
     this.embedded = false,
   });
 
   final MediaAnnotationConfigStore? configStore;
   final ContentEnrichmentConfigStore? contentConfigStore;
   final LinuxOcrModelStore? linuxOcrModelStore;
+  final AudioTranscribeWhisperModelStore? audioWhisperModelStore;
   final bool embedded;
 
   static const embeddedRootKey =
@@ -115,7 +117,12 @@ class _MediaAnnotationSettingsPageState
   bool _ocrWifiOnly = true;
   MediaSourcePreference _audioSourcePreference = MediaSourcePreference.auto;
   MediaSourcePreference _ocrSourcePreference = MediaSourcePreference.auto;
-  bool _didPromptWindowsSpeechPackInstall = false;
+  String _audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
+  AudioTranscribeWhisperModelStore? _audioWhisperModelStoreCached;
+  bool _audioWhisperModelDownloading = false;
+  String? _audioWhisperModelDownloadingTarget;
+  int _audioWhisperModelDownloadReceivedBytes = 0;
+  int? _audioWhisperModelDownloadTotalBytes;
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
@@ -123,6 +130,10 @@ class _MediaAnnotationSettingsPageState
       widget.contentConfigStore ?? const RustContentEnrichmentConfigStore();
   LinuxOcrModelStore get _linuxOcrModelStore =>
       widget.linuxOcrModelStore ?? createLinuxOcrModelStore();
+  AudioTranscribeWhisperModelStore get _audioWhisperModelStore =>
+      widget.audioWhisperModelStore ??
+      (_audioWhisperModelStoreCached ??=
+          createAudioTranscribeWhisperModelStore());
 
   Future<void> _showSetupRequiredDialog({
     required String reason,
@@ -152,85 +163,6 @@ class _MediaAnnotationSettingsPageState
           ],
         );
       },
-    );
-  }
-
-  Future<void> _maybePromptWindowsSpeechLanguagePackInstall({
-    bool force = false,
-  }) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) return;
-    if (!force && _didPromptWindowsSpeechPackInstall) return;
-
-    final localeTag = Localizations.localeOf(context).toLanguageTag();
-    final hasRecognizer = await hasWindowsSpeechRecognizerForLang(localeTag);
-    if (!mounted || hasRecognizer) return;
-    _didPromptWindowsSpeechPackInstall = true;
-
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-    final title = zh ? '需要安装语音识别语言包' : 'Speech pack required';
-    final body = zh
-        ? '检测到当前 Windows 未安装语音识别语言包，本地音频转写将无法工作。\n\n安装步骤：\n1. 打开“设置 > 时间和语言 > 语言和区域”。\n2. 添加或选择你正在使用的语言。\n3. 在语言选项里安装“语音（Speech）”组件。\n4. 安装完成后重启 SecondLoop。'
-        : 'Windows speech recognition language pack is not installed, so local audio transcription cannot run.\n\nInstall steps:\n1. Open Settings > Time & language > Language & region.\n2. Add/select your language.\n3. In language options, install the Speech component.\n4. Restart SecondLoop after install.';
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(body),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.notNow),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                unawaited(_openWindowsSpeechLanguagePackSettings());
-              },
-              child: Text(zh ? '打开设置' : 'Open settings'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _openWindowsSpeechLanguagePackSettings() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) return;
-    final uris = <Uri>[
-      Uri.parse('ms-settings:regionlanguage'),
-      Uri.parse('ms-settings:speech'),
-    ];
-    for (final uri in uris) {
-      try {
-        final opened = await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
-        if (opened) return;
-      } catch (_) {
-        // try next.
-      }
-    }
-
-    if (!mounted) return;
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          zh
-              ? '无法自动打开系统设置。请手动前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。'
-              : 'Unable to open Settings automatically. Open Settings > Time & language > Language & region and install a language pack with Speech.',
-        ),
-        duration: const Duration(seconds: 3),
-      ),
     );
   }
 
@@ -583,22 +515,26 @@ class _MediaAnnotationSettingsPageState
 
       var audioSourcePreference = MediaSourcePreference.auto;
       var ocrSourcePreference = MediaSourcePreference.auto;
+      var audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       try {
         audioSourcePreference = await MediaCapabilitySourcePrefs.readAudio();
+        if (audioSourcePreference == MediaSourcePreference.local) {
+          audioSourcePreference = MediaSourcePreference.auto;
+          unawaited(
+            MediaCapabilitySourcePrefs.write(
+              MediaCapabilitySourceScope.audioTranscribe,
+              preference: audioSourcePreference,
+            ),
+          );
+        }
         ocrSourcePreference =
             await MediaCapabilitySourcePrefs.readDocumentOcr();
+        audioWhisperModel = await AudioTranscribeWhisperModelPrefs.read();
       } catch (_) {
         audioSourcePreference = MediaSourcePreference.auto;
         ocrSourcePreference = MediaSourcePreference.auto;
+        audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       }
-      final shouldPromptWindowsSpeechPack =
-          audioSourcePreference == MediaSourcePreference.local ||
-              (contentConfig != null &&
-                  normalizeAudioTranscribeEngine(
-                        contentConfig.audioTranscribeEngine,
-                      ) ==
-                      'local_runtime');
-
       if (!mounted) return;
       setState(() {
         _config = config;
@@ -610,11 +546,9 @@ class _MediaAnnotationSettingsPageState
         _ocrWifiOnly = ocrWifiOnly;
         _audioSourcePreference = audioSourcePreference;
         _ocrSourcePreference = ocrSourcePreference;
+        _audioWhisperModel = audioWhisperModel;
         _loadError = null;
       });
-      if (shouldPromptWindowsSpeechPack) {
-        unawaited(_maybePromptWindowsSpeechLanguagePackInstall());
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -685,22 +619,19 @@ class _MediaAnnotationSettingsPageState
   }
 
   Future<void> _setAudioSourcePreference(MediaSourcePreference next) async {
-    if (_busy || _audioSourcePreference == next) return;
+    final normalizedNext =
+        next == MediaSourcePreference.local ? MediaSourcePreference.auto : next;
+    if (_busy || _audioSourcePreference == normalizedNext) return;
     final messenger = ScaffoldMessenger.of(context);
 
     setState(() => _busy = true);
     try {
       await MediaCapabilitySourcePrefs.write(
         MediaCapabilitySourceScope.audioTranscribe,
-        preference: next,
+        preference: normalizedNext,
       );
       if (!mounted) return;
-      setState(() => _audioSourcePreference = next);
-      if (next == MediaSourcePreference.local) {
-        unawaited(
-          _maybePromptWindowsSpeechLanguagePackInstall(force: true),
-        );
-      }
+      setState(() => _audioSourcePreference = normalizedNext);
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -737,6 +668,108 @@ class _MediaAnnotationSettingsPageState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _setAudioWhisperModel(String next) async {
+    if (_busy) return;
+    final normalized = normalizeAudioTranscribeWhisperModel(next);
+    if (_audioWhisperModel == normalized) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final store = _audioWhisperModelStore;
+    final supportsDownload = store.supportsRuntimeDownload;
+
+    setState(() {
+      _busy = true;
+      _audioWhisperModelDownloading = supportsDownload;
+      _audioWhisperModelDownloadingTarget = normalized;
+      _audioWhisperModelDownloadReceivedBytes = 0;
+      _audioWhisperModelDownloadTotalBytes = null;
+    });
+
+    try {
+      final ensureResult = await store.ensureModelAvailable(
+        model: normalized,
+        onProgress: _onAudioWhisperModelDownloadProgress,
+      );
+
+      await AudioTranscribeWhisperModelPrefs.write(normalized);
+
+      if (!mounted) return;
+      setState(() => _audioWhisperModel = normalized);
+
+      if (ensureResult.status == AudioWhisperModelEnsureStatus.downloaded) {
+        final zh = Localizations.localeOf(context)
+            .languageCode
+            .toLowerCase()
+            .startsWith('zh');
+        final modelLabel = _audioWhisperModelLabel(context, normalized);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              zh
+                  ? '已下载 $modelLabel 模型，可用于本地转写。'
+                  : 'Downloaded $modelLabel for local transcription.',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _audioWhisperModelDownloading = false;
+          _audioWhisperModelDownloadingTarget = null;
+          _audioWhisperModelDownloadReceivedBytes = 0;
+          _audioWhisperModelDownloadTotalBytes = null;
+        });
+      }
+    }
+  }
+
+  void _onAudioWhisperModelDownloadProgress(
+    AudioWhisperModelDownloadProgress progress,
+  ) {
+    if (!mounted) return;
+
+    final received = progress.receivedBytes < 0 ? 0 : progress.receivedBytes;
+    final total = (progress.totalBytes != null && progress.totalBytes! > 0)
+        ? progress.totalBytes
+        : null;
+
+    if (_audioWhisperModelDownloadReceivedBytes == received &&
+        _audioWhisperModelDownloadTotalBytes == total &&
+        _audioWhisperModelDownloadingTarget == progress.model &&
+        _audioWhisperModelDownloading) {
+      return;
+    }
+
+    setState(() {
+      _audioWhisperModelDownloading = true;
+      _audioWhisperModelDownloadingTarget = progress.model;
+      _audioWhisperModelDownloadReceivedBytes = received;
+      _audioWhisperModelDownloadTotalBytes = total;
+    });
+  }
+
+  String _formatWhisperModelByteSize(int bytes) {
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
   }
 
   ContentEnrichmentConfig _copyContentConfig(

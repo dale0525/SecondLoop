@@ -37,6 +37,9 @@ const List<String> _kOnnxRuntimeLibAliases = <String>[
   'libonnxruntime.so',
   'onnxruntime.dll',
 ];
+const List<String> _kWhisperBaseModelAliases = <String>[
+  'ggml-base.bin',
+];
 
 Directory? _runtimeDirFromAppDir(String appDirPath) {
   if (!supportsDesktopManagedOcrRuntime()) return null;
@@ -71,6 +74,7 @@ final class DesktopRuntimeHealth {
     required this.runtimeDirPath,
     required this.fileCount,
     required this.totalBytes,
+    this.whisperBaseModelInstalled = false,
     this.message,
   });
 
@@ -79,6 +83,7 @@ final class DesktopRuntimeHealth {
   final String? runtimeDirPath;
   final int fileCount;
   final int totalBytes;
+  final bool whisperBaseModelInstalled;
   final String? message;
 }
 
@@ -125,6 +130,7 @@ Future<DesktopRuntimeHealth> readDesktopRuntimeHealth({
   final manifestFile = File('${runtimeDir.path}/$_kRuntimeManifestName');
   final hasManifest = await manifestFile.exists();
   final hasPayload = _hasRequiredRuntimePayload(runtimeBasenames);
+  final hasWhisperBaseModel = _hasWhisperBaseModel(runtimeBasenames);
   final installed = hasManifest && hasPayload;
 
   String? message;
@@ -144,6 +150,7 @@ Future<DesktopRuntimeHealth> readDesktopRuntimeHealth({
     runtimeDirPath: installed ? runtimeDir.path : null,
     fileCount: fileCount,
     totalBytes: totalBytes,
+    whisperBaseModelInstalled: hasWhisperBaseModel,
     message: message,
   );
 }
@@ -260,4 +267,8 @@ bool _hasRequiredRuntimePayload(Set<String> basenames) {
       _containsAnyAlias(basenames, _kClsModelAliases) &&
       _containsAnyAlias(basenames, _kRecModelAliases) &&
       _containsAnyAlias(basenames, _kOnnxRuntimeLibAliases);
+}
+
+bool _hasWhisperBaseModel(Set<String> basenames) {
+  return _containsAnyAlias(basenames, _kWhisperBaseModelAliases);
 }

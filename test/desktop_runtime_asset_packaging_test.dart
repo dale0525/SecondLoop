@@ -12,6 +12,7 @@ void main() {
     expect(content, contains('- assets/ocr/desktop_runtime/'));
     expect(content, contains('- assets/ocr/desktop_runtime/models/'));
     expect(content, contains('- assets/ocr/desktop_runtime/onnxruntime/'));
+    expect(content, contains('- assets/ocr/desktop_runtime/whisper/'));
   });
 
   test('desktop runtime asset skeleton placeholders exist in repo', () {
@@ -22,6 +23,10 @@ void main() {
     );
     expect(
       File('assets/ocr/desktop_runtime/onnxruntime/.gitkeep').existsSync(),
+      isTrue,
+    );
+    expect(
+      File('assets/ocr/desktop_runtime/whisper/.gitkeep').existsSync(),
       isTrue,
     );
   });

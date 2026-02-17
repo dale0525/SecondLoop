@@ -117,6 +117,7 @@ flutter:
     - assets/ocr/desktop_runtime/
     - assets/ocr/desktop_runtime/models/
     - assets/ocr/desktop_runtime/onnxruntime/
+    - assets/ocr/desktop_runtime/whisper/
     - assets/icon/tray_icon.png
     - assets/icon/tray_icon.ico
 

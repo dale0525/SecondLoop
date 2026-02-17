@@ -45,9 +45,11 @@ assets/ocr/desktop_runtime/**
 !assets/ocr/desktop_runtime/
 !assets/ocr/desktop_runtime/models/
 !assets/ocr/desktop_runtime/onnxruntime/
+!assets/ocr/desktop_runtime/whisper/
 !assets/ocr/desktop_runtime/.gitkeep
 !assets/ocr/desktop_runtime/models/.gitkeep
 !assets/ocr/desktop_runtime/onnxruntime/.gitkeep
+!assets/ocr/desktop_runtime/whisper/.gitkeep
 
 # Git worktrees
 .worktrees/

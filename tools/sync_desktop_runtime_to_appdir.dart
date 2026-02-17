@@ -34,6 +34,9 @@ const List<String> _kOnnxRuntimeLibAliases = <String>[
   'libonnxruntime.so',
   'onnxruntime.dll',
 ];
+const List<String> _kWhisperBaseModelAliases = <String>[
+  'ggml-base.bin',
+];
 
 enum _DesktopPlatform {
   macos,
@@ -80,6 +83,12 @@ Future<void> main(List<String> args) async {
       'sync-desktop-runtime-to-appdir: warning: OCR runtime payload incomplete in ${sourceDir.path}',
     );
   }
+  final whisperBaseModelReady = _hasWhisperBaseModelPayload(sourceFiles);
+  if (!whisperBaseModelReady) {
+    stderr.writeln(
+      'sync-desktop-runtime-to-appdir: warning: whisper base model payload missing in ${sourceDir.path}',
+    );
+  }
 
   final appSupportDir = _resolveAppSupportDir(
     platform: config.platform,
@@ -94,7 +103,8 @@ Future<void> main(List<String> args) async {
       'dest=${runtimeDir.path} '
       'files=${sourceFiles.length} '
       'release_marker=$hasReleaseMarker '
-      'runtime_payload_detected=$runtimePayloadReady',
+      'runtime_payload_detected=$runtimePayloadReady '
+      'whisper_base_detected=$whisperBaseModelReady',
     );
     return;
   }
@@ -118,6 +128,7 @@ Future<void> main(List<String> args) async {
     'copied_file_count': copiedCount,
     'release_marker_present': hasReleaseMarker,
     'runtime_payload_detected': runtimePayloadReady,
+    'whisper_base_model_detected': whisperBaseModelReady,
   };
   await File(_joinPath(runtimeDir.path, _kRuntimeManifest))
       .writeAsString(jsonEncode(manifestPayload), flush: true);
@@ -286,20 +297,24 @@ Future<Set<String>> _collectRelativeFilePaths(Directory baseDir) async {
   return files;
 }
 
-bool _hasRequiredRuntimePayload(Set<String> sourceFiles) {
-  bool containsAnyAlias(List<String> aliases) {
-    for (final alias in aliases) {
-      for (final path in sourceFiles) {
-        if (path.endsWith('/$alias') || path == alias) return true;
-      }
+bool _containsAnyAlias(Set<String> sourceFiles, List<String> aliases) {
+  for (final alias in aliases) {
+    for (final path in sourceFiles) {
+      if (path.endsWith('/$alias') || path == alias) return true;
     }
-    return false;
   }
+  return false;
+}
 
-  return containsAnyAlias(_kDetModelAliases) &&
-      containsAnyAlias(_kClsModelAliases) &&
-      containsAnyAlias(_kRecModelAliases) &&
-      containsAnyAlias(_kOnnxRuntimeLibAliases);
+bool _hasRequiredRuntimePayload(Set<String> sourceFiles) {
+  return _containsAnyAlias(sourceFiles, _kDetModelAliases) &&
+      _containsAnyAlias(sourceFiles, _kClsModelAliases) &&
+      _containsAnyAlias(sourceFiles, _kRecModelAliases) &&
+      _containsAnyAlias(sourceFiles, _kOnnxRuntimeLibAliases);
+}
+
+bool _hasWhisperBaseModelPayload(Set<String> sourceFiles) {
+  return _containsAnyAlias(sourceFiles, _kWhisperBaseModelAliases);
 }
 
 Future<int> _copyDirectoryContents({

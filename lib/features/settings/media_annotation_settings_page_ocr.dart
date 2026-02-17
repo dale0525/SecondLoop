@@ -177,44 +177,21 @@ extension _MediaAnnotationSettingsPageOcrExtension
     );
   }
 
-  String _audioTranscribeApiProfileSubtitle(
-    BuildContext context, {
-    required bool localRuntime,
-  }) {
+  String _audioTranscribeApiProfileSubtitle(BuildContext context) {
     final zh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
         .startsWith('zh');
-    if (localRuntime) {
-      return zh
-          ? '当前使用本地转写，不依赖 BYOK profile。'
-          : 'Local runtime transcription is active and does not use a BYOK profile.';
-    }
     if (zh) {
       return '默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。';
     }
     return 'Default follows the active API profile. You can choose an existing OpenAI-compatible API profile.';
   }
 
-  bool _isLocalRuntimeAudioTranscribeEngine(String engine) {
-    return normalizeAudioTranscribeEngine(engine) == 'local_runtime';
-  }
-
-  bool _isEffectiveLocalRuntimeAudioTranscribeEngine(String engine) {
-    return _isLocalRuntimeAudioTranscribeEngine(engine) &&
-        supportsPlatformLocalRuntimeAudioTranscribe();
-  }
-
   String _audioTranscribeEngineLabel(BuildContext context, String engine) {
     final labels =
         context.t.settings.mediaAnnotation.audioTranscribe.engine.labels;
-    final zh = _isZhOcrLocale(context);
     switch (normalizeAudioTranscribeEngine(engine)) {
-      case 'local_runtime':
-        if (supportsPlatformLocalRuntimeAudioTranscribe()) {
-          return zh ? '本地转写' : 'Local runtime';
-        }
-        return zh ? '本地转写（此平台不可用）' : 'Local runtime (Unavailable)';
       case 'multimodal_llm':
         return labels.multimodalLlm;
       default:
@@ -222,21 +199,131 @@ extension _MediaAnnotationSettingsPageOcrExtension
     }
   }
 
+  String _audioWhisperModelTitle(BuildContext context) {
+    final zh = _isZhOcrLocale(context);
+    return zh ? 'Whisper 模型' : 'Whisper model';
+  }
+
+  String _audioWhisperModelLabel(BuildContext context, String model) {
+    final normalized = normalizeAudioTranscribeWhisperModel(model);
+    final zh = _isZhOcrLocale(context);
+    switch (normalized) {
+      case 'tiny':
+        return zh ? 'Tiny（最快）' : 'Tiny (Fastest)';
+      case 'base':
+        return zh ? 'Base（默认）' : 'Base (Default)';
+      case 'small':
+        return zh ? 'Small（更准）' : 'Small (Better quality)';
+      case 'medium':
+        return zh ? 'Medium（高精度）' : 'Medium (High quality)';
+      case 'large-v3-turbo':
+        return zh ? 'Large V3 Turbo（推荐高性能）' : 'Large V3 Turbo';
+      case 'large-v3':
+        return zh ? 'Large V3（最高精度）' : 'Large V3';
+      default:
+        return normalized;
+    }
+  }
+
+  String _audioWhisperModelSubtitle(BuildContext context) {
+    final zh = _isZhOcrLocale(context);
+
+    if (_audioWhisperModelDownloading) {
+      final targetModel = normalizeAudioTranscribeWhisperModel(
+        _audioWhisperModelDownloadingTarget ?? _audioWhisperModel,
+      );
+      final targetLabel = _audioWhisperModelLabel(context, targetModel);
+      final received = _audioWhisperModelDownloadReceivedBytes;
+      final total = _audioWhisperModelDownloadTotalBytes;
+
+      final receivedLabel = _formatWhisperModelByteSize(received);
+      if (total != null && total > 0) {
+        final percent =
+            ((received / total) * 100).clamp(0, 100).toStringAsFixed(1);
+        final totalLabel = _formatWhisperModelByteSize(total);
+        return zh
+            ? '正在下载 $targetLabel：$percent%（$receivedLabel/$totalLabel）'
+            : 'Downloading $targetLabel: $percent% ($receivedLabel/$totalLabel)';
+      }
+
+      return zh
+          ? '正在下载 $targetLabel：$receivedLabel'
+          : 'Downloading $targetLabel: $receivedLabel';
+    }
+
+    return zh
+        ? '用于 Whisper 转写路径。默认 Base，可按性能与精度手动调整。'
+        : 'Used for Whisper transcription path. Base by default.';
+  }
+
+  Future<void> _pickAudioWhisperModel() async {
+    if (_busy) return;
+    final zh = _isZhOcrLocale(context);
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        var value = normalizeAudioTranscribeWhisperModel(_audioWhisperModel);
+
+        Widget option(
+          String model,
+          void Function(void Function()) setInnerState,
+        ) {
+          return RadioListTile<String>(
+            value: model,
+            groupValue: value,
+            title: Text(_audioWhisperModelLabel(context, model)),
+            onChanged: (next) {
+              if (next == null) return;
+              setInnerState(() => value = next);
+            },
+          );
+        }
+
+        return AlertDialog(
+          title: Text(_audioWhisperModelTitle(context)),
+          content: StatefulBuilder(
+            builder: (context, setInnerState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final model in audioTranscribeWhisperModelOptions)
+                      option(model, setInnerState),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+              child: Text(context.t.common.actions.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(value),
+              child: Text(zh ? '保存' : 'Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || selected == null) return;
+    await _setAudioWhisperModel(selected);
+  }
+
   Future<void> _pickAudioTranscribeEngine(
     ContentEnrichmentConfig config,
   ) async {
     if (_busy) return;
     final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
-    final zh = _isZhOcrLocale(context);
 
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        final localRuntimeSupported =
-            supportsPlatformLocalRuntimeAudioTranscribe();
         var value =
             normalizeAudioTranscribeEngine(config.audioTranscribeEngine);
-        if (!localRuntimeSupported && value == 'local_runtime') {
+        if (value == 'local_runtime') {
           value = 'whisper';
         }
 
@@ -266,15 +353,6 @@ extension _MediaAnnotationSettingsPageOcrExtension
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (localRuntimeSupported)
-                      option(
-                        mode: 'local_runtime',
-                        title: zh ? '本地转写' : 'Local runtime',
-                        subtitle: zh
-                            ? '优先本地 runtime 转写，失败时回落设备原生 STT（若可用）。'
-                            : 'Prefer local runtime transcription, then fallback to native STT when available.',
-                        setInnerState: setInnerState,
-                      ),
                     option(
                       mode: 'whisper',
                       title: t.labels.whisper,
@@ -317,14 +395,6 @@ extension _MediaAnnotationSettingsPageOcrExtension
       config,
       audioTranscribeEngine: normalizedSelected,
     );
-
-    if (normalizedSelected == 'local_runtime') {
-      await _persistContentConfig(nextContentConfig);
-      if (mounted) {
-        await _maybePromptWindowsSpeechLanguagePackInstall(force: true);
-      }
-      return;
-    }
 
     final mediaConfig = _config;
     if (mediaConfig == null) {

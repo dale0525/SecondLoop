@@ -10,6 +10,7 @@ import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_enrichment/ocr_fallback_media_annotation_client.dart';
 import '../../features/url_enrichment/url_enrichment_runner.dart';
 import '../ai/ai_routing.dart';
+import '../ai/audio_transcribe_whisper_model_prefs.dart';
 import '../ai/media_capability_source_prefs.dart';
 import '../ai/media_capability_wifi_prefs.dart';
 import '../ai/media_source_prefs.dart';
@@ -254,6 +255,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       var audioWifiOnly = fallbackWifiOnly;
       var ocrWifiOnly = fallbackWifiOnly;
       var imageWifiOnly = fallbackWifiOnly;
+      var audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       try {
         audioWifiOnly = await MediaCapabilityWifiPrefs.readAudioWifiOnly(
           fallbackWifiOnly: fallbackWifiOnly,
@@ -264,10 +266,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         imageWifiOnly = await MediaCapabilityWifiPrefs.readImageWifiOnly(
           fallbackWifiOnly: fallbackWifiOnly,
         );
+        audioWhisperModel = await AudioTranscribeWhisperModelPrefs.read();
       } catch (_) {
         audioWifiOnly = fallbackWifiOnly;
         ocrWifiOnly = fallbackWifiOnly;
         imageWifiOnly = fallbackWifiOnly;
+        audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       }
 
       final geoReverseEnabled = availability.geoReverseAvailable;
@@ -372,6 +376,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         audioPreference,
         cloudAvailable: cloudAvailable,
         hasByokProfile: hasOpenAiByokProfile,
+        hasLocalCapability: false,
       );
       final ocrRoute = resolveMediaSourceRoute(
         ocrPreference,
@@ -431,20 +436,19 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                   hasCloudAnnotationModel ||
                   allowImageOcrFallback);
       final audioTranscribeCloudEnabled =
-          audioRoute == MediaSourceRouteKind.cloudGateway && cloudAvailable;
+          audioRoute != MediaSourceRouteKind.byok && cloudAvailable;
       final audioTranscribeByokProfile =
-          audioRoute == MediaSourceRouteKind.local
+          audioRoute == MediaSourceRouteKind.cloudGateway
               ? null
               : effectiveOpenAiProfile();
-      final effectiveAudioEngine = audioRoute == MediaSourceRouteKind.local
-          ? 'local_runtime'
-          : normalizeAudioTranscribeEngine(
-              contentConfig?.audioTranscribeEngine ?? 'whisper',
-            );
+      final effectiveAudioEngine = normalizeAudioTranscribeEngine(
+        contentConfig?.audioTranscribeEngine ?? 'whisper',
+      );
       final audioTranscribeSelection = _buildAudioTranscribeClientSelection(
         cloudEnabled: audioTranscribeCloudEnabled,
         byokProfile: audioTranscribeByokProfile,
         effectiveEngine: effectiveAudioEngine,
+        whisperModel: audioWhisperModel,
         gatewayBaseUrl: gatewayConfig.baseUrl,
         cloudIdToken: idToken?.trim() ?? '',
         sessionKey: Uint8List.fromList(sessionKey),

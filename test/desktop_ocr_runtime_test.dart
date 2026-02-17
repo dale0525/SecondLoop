@@ -17,6 +17,7 @@ void main() {
       );
       expect(initial.supported, isTrue);
       expect(initial.installed, isFalse);
+      expect(initial.whisperBaseModelInstalled, isFalse);
 
       final repaired = await repairDesktopRuntimeInstall(
         appDirProvider: () async => appDir.path,
@@ -37,6 +38,48 @@ void main() {
         appDirProvider: () async => appDir.path,
       );
       expect(cleared.installed, isFalse);
+      expect(cleared.whisperBaseModelInstalled, isFalse);
+    } finally {
+      await appDir.delete(recursive: true);
+    }
+  });
+
+  test('desktop runtime health detects whisper base model payload', () async {
+    if (!supportsDesktopManagedOcrRuntime()) return;
+
+    final appDir = await Directory.systemTemp.createTemp(
+      'secondloop_desktop_runtime_whisper_payload_test_',
+    );
+    try {
+      final runtimeDir = Directory('${appDir.path}/ocr/desktop/runtime');
+      final modelsDir = Directory('${runtimeDir.path}/models');
+      final onnxDir = Directory('${runtimeDir.path}/onnxruntime');
+      final whisperDir = Directory('${runtimeDir.path}/whisper');
+      await modelsDir.create(recursive: true);
+      await onnxDir.create(recursive: true);
+      await whisperDir.create(recursive: true);
+
+      await File(
+        '${runtimeDir.path}/_secondloop_desktop_runtime_manifest.json',
+      ).writeAsString('{"runtime":"desktop_media"}', flush: true);
+      await File('${modelsDir.path}/ch_PP-OCRv5_mobile_det.onnx')
+          .writeAsBytes(const <int>[1], flush: true);
+      await File('${modelsDir.path}/ch_ppocr_mobile_v2.0_cls_infer.onnx')
+          .writeAsBytes(const <int>[1], flush: true);
+      await File('${modelsDir.path}/ch_PP-OCRv5_mobile_rec.onnx')
+          .writeAsBytes(const <int>[1], flush: true);
+      await File('${onnxDir.path}/onnxruntime.dll')
+          .writeAsBytes(const <int>[1], flush: true);
+      await File('${whisperDir.path}/ggml-base.bin')
+          .writeAsBytes(const <int>[1], flush: true);
+
+      final health = await readDesktopRuntimeHealth(
+        appDirProvider: () async => appDir.path,
+      );
+      expect(health.supported, isTrue);
+      expect(health.installed, isTrue);
+      expect(health.whisperBaseModelInstalled, isTrue);
+      expect(health.message, isNull);
     } finally {
       await appDir.delete(recursive: true);
     }
