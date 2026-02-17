@@ -70,6 +70,8 @@ void main() {
         payload['video_content_kind_engine'],
         'multimodal_cloud_video_extract:gpt-4.1-mini',
       );
+      expect(payload.containsKey('video_kind'), isFalse);
+      expect(payload.containsKey('video_kind_confidence'), isFalse);
       expect(payload['knowledge_markdown_full'], contains('Key steps'));
       expect(payload.containsKey('video_description_full'), isFalse);
       expect(payload['video_segment_count'], 2);
@@ -83,7 +85,7 @@ void main() {
       expect(viewerInsight.detail, contains('Segment'));
 
       final detailText = resolveAttachmentDetailTextContent(payload);
-      expect(detailText.summary, 'Video explains OCR fallback decision tree.');
+      expect(detailText.summary, contains('Key steps'));
       expect(detailText.full, contains('Key steps'));
     },
   );
@@ -131,6 +133,8 @@ void main() {
 
       expect(payload['video_content_kind'], 'non_knowledge');
       expect(payload.containsKey('video_content_kind_engine'), isFalse);
+      expect(payload.containsKey('video_kind'), isFalse);
+      expect(payload.containsKey('video_kind_confidence'), isFalse);
       expect(payload.containsKey('knowledge_markdown_full'), isFalse);
       expect(payload.containsKey('knowledge_markdown_excerpt'), isFalse);
       expect(
@@ -153,8 +157,7 @@ void main() {
     },
   );
 
-  test(
-      'viewer insight falls back to legacy content-kind keys and transcript progress',
+  test('viewer insight ignores legacy video_kind aliases and infers from text',
       () {
     final payload = <String, Object?>{
       'video_kind': 'knowledge',
@@ -169,7 +172,7 @@ void main() {
     final viewerInsight = resolveVideoManifestInsightContent(payload);
 
     expect(viewerInsight, isNotNull);
-    expect(viewerInsight!.contentKind, 'knowledge');
+    expect(viewerInsight!.contentKind, 'non_knowledge');
     expect(viewerInsight.segmentCount, 1);
     expect(viewerInsight.processedSegmentCount, 1);
   });

@@ -15,8 +15,6 @@ const int _kChatVideoProxyMaxBytes = 200 * 1024 * 1024;
 Map<String, Object?> buildVideoManifestPayload({
   required String videoSha256,
   required String videoMimeType,
-  String videoKind = 'unknown',
-  double videoKindConfidence = 0.0,
   String? videoProxySha256,
   String? posterSha256,
   String? posterMimeType,
@@ -31,18 +29,12 @@ Map<String, Object?> buildVideoManifestPayload({
   int? videoProxyTotalBytes,
   bool videoProxyTruncated = false,
 }) {
-  final normalizedKind = normalizeVideoKind(videoKind);
-  final normalizedKindConfidence =
-      videoKindConfidence.clamp(0.0, 1.0).toDouble();
-
   return <String, Object?>{
     'schema': 'secondloop.video_manifest.v2',
     'video_sha256': videoSha256,
     'video_mime_type': videoMimeType,
     'original_sha256': videoSha256,
     'original_mime_type': videoMimeType,
-    'video_kind': normalizedKind,
-    'video_kind_confidence': normalizedKindConfidence,
     if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
       'video_proxy_sha256': videoProxySha256,
     if (posterSha256 != null && posterSha256.trim().isNotEmpty)
@@ -416,13 +408,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
             primarySegment.bytes,
             sourceMimeType: primarySegment.mimeType,
           );
-          final videoKindClassification = await classifyVideoKind(
-            filename: filename,
-            sourceMimeType: primarySegment.mimeType,
-            posterBytes: preview.posterBytes,
-            keyframes: preview.keyframes,
-          );
-          final resolvedKeyframeKind = videoKindClassification.keyframeKind;
+          const resolvedKeyframeKind = 'scene';
           final posterBytes = preview.posterBytes;
           if (posterBytes != null && posterBytes.isNotEmpty) {
             final posterAttachment = await backend.insertAttachment(
@@ -476,8 +462,6 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
             ...buildVideoManifestPayload(
               videoSha256: primaryVideo.sha256,
               videoMimeType: primaryVideo.mimeType,
-              videoKind: videoKindClassification.kind,
-              videoKindConfidence: videoKindClassification.confidence,
               videoProxySha256: primaryVideo.sha256,
               posterSha256: posterSha256,
               posterMimeType: posterMimeType,

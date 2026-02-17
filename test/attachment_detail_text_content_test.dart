@@ -14,7 +14,7 @@ void main() {
       },
     );
 
-    expect(content.summary, 'Lesson summary from classifier');
+    expect(content.summary, '## Key points');
     expect(content.full, '## Key points\n1. OCR\n2. fallback');
   });
 
@@ -30,19 +30,16 @@ void main() {
       },
     );
 
-    expect(content.summary, 'Travel vlog summary');
+    expect(content.summary, 'A calm beach sunset scene.');
     expect(
       content.full,
       'A calm beach sunset scene with walking and ambient sounds.',
     );
   });
 
-  test(
-      'resolveAttachmentDetailTextContent uses transcript for vlog without OCR',
-      () {
+  test('resolveAttachmentDetailTextContent prefers extracted video detail', () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
-        'video_kind': 'vlog',
         'video_segment_count': 1,
         'video_summary': 'Travel vlog summary',
         'video_description_full': 'A calm beach sunset scene.',
@@ -52,8 +49,8 @@ void main() {
       },
     );
 
-    expect(content.summary, 'Travel vlog summary');
-    expect(content.full, 'Narrator talks about the trip.');
+    expect(content.summary, '');
+    expect(content.full, 'A calm beach sunset scene.');
   });
 
   test('image detail full prefers summary over extracted metadata', () {

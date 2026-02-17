@@ -364,8 +364,6 @@ void main() {
           'schema': 'secondloop.video_manifest.v2',
           'video_sha256': 'sha-video-proxy',
           'video_mime_type': 'video/mp4',
-          'video_kind': 'vlog',
-          'video_kind_confidence': 0.72,
           'poster_sha256': 'sha-poster',
           'poster_mime_type': 'image/jpeg',
           'video_proxy_sha256': 'sha-video-proxy',
@@ -413,8 +411,8 @@ void main() {
       find.byKey(const ValueKey('video_manifest_preview_surface')),
       findsOneWidget,
     );
-    expect(find.textContaining('vlog'), findsOneWidget);
-    expect(find.textContaining('72%'), findsOneWidget);
+    expect(find.textContaining('segments: 1'), findsOneWidget);
+    expect(find.textContaining('keyframes: 2'), findsOneWidget);
     final proxyFinder =
         find.byKey(const ValueKey('video_manifest_proxy_thumbnail'));
     final keyframeFinder =
@@ -781,7 +779,7 @@ void main() {
   });
 
   testWidgets(
-      'NonImageAttachmentView shows transcript only for vlog without OCR',
+      'NonImageAttachmentView keeps video insights visible without OCR text',
       (tester) async {
     const attachment = Attachment(
       sha256: 'sha-video-vlog-transcript-only',
@@ -796,7 +794,6 @@ void main() {
           'schema': 'secondloop.video_manifest.v2',
           'video_sha256': 'sha-original-video',
           'video_mime_type': 'video/mp4',
-          'video_kind': 'vlog',
           'video_segments': [
             {
               'index': 0,
@@ -808,7 +805,6 @@ void main() {
       ),
     );
     final payload = <String, Object?>{
-      'video_kind': 'vlog',
       'video_content_kind': 'non_knowledge',
       'video_description_full': 'A beach scene with people walking around.',
       'transcript_full': 'Host says hello and introduces the trip.',
@@ -833,10 +829,9 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('video_manifest_insights_surface')),
-      findsNothing,
+      findsOneWidget,
     );
-    expect(find.textContaining('Host says hello'), findsOneWidget);
-    expect(find.textContaining('beach scene'), findsNothing);
+    expect(find.textContaining('beach scene'), findsWidgets);
   });
 
   testWidgets('NonImageAttachmentView localizes video insight labels in zh_CN',

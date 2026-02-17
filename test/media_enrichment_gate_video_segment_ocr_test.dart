@@ -177,6 +177,8 @@ void main() {
         payload['video_content_kind_engine'],
         'multimodal_cloud_video_extract:gpt-4.1-mini',
       );
+      expect(payload.containsKey('video_kind'), isFalse);
+      expect(payload.containsKey('video_kind_confidence'), isFalse);
       expect(payload['video_summary'], 'A concise multimodal summary.');
       expect(
         payload['knowledge_markdown_full'],
@@ -250,6 +252,8 @@ void main() {
 
       expect(payload['video_content_kind'], 'non_knowledge');
       expect(payload.containsKey('video_content_kind_engine'), isFalse);
+      expect(payload.containsKey('video_kind'), isFalse);
+      expect(payload.containsKey('video_kind_confidence'), isFalse);
       expect(payload.containsKey('knowledge_markdown_full'), isFalse);
       expect(payload.containsKey('knowledge_markdown_excerpt'), isFalse);
       expect(

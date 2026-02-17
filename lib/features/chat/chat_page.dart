@@ -71,7 +71,6 @@ import '../attachments/platform_exif_metadata.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
-import '../media_backup/video_kind_classifier.dart';
 import '../media_backup/video_proxy_segment_policy.dart';
 import '../media_backup/video_transcode_worker.dart';
 import '../settings/cloud_account_page.dart';

@@ -38,6 +38,7 @@ import '../../i18n/strings.g.dart';
 part 'media_enrichment_gate_clients.dart';
 part 'media_enrichment_gate_audio_transcribe.dart';
 part 'media_enrichment_gate_auto_ocr.dart';
+part 'media_enrichment_gate_auto_ocr_helpers.dart';
 
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});

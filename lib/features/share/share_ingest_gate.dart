@@ -21,7 +21,6 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
-import '../media_backup/video_kind_classifier.dart';
 import '../media_backup/video_proxy_segment_policy.dart';
 import '../media_backup/video_transcode_worker.dart';
 import 'share_ingest.dart';
@@ -326,13 +325,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               primarySegment.bytes,
               sourceMimeType: primarySegment.mimeType,
             );
-            final videoKindClassification = await classifyVideoKind(
-              filename: filename,
-              sourceMimeType: primarySegment.mimeType,
-              posterBytes: preview.posterBytes,
-              keyframes: preview.keyframes,
-            );
-            final resolvedKeyframeKind = videoKindClassification.keyframeKind;
+            const resolvedKeyframeKind = 'scene';
             final posterBytes = preview.posterBytes;
             if (posterBytes != null && posterBytes.isNotEmpty) {
               final posterAttachment = await backend.insertAttachment(
@@ -406,8 +399,6 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               ...buildVideoManifestPayload(
                 videoSha256: primaryVideo.sha256,
                 videoMimeType: primaryVideo.mimeType,
-                videoKind: videoKindClassification.kind,
-                videoKindConfidence: videoKindClassification.confidence,
                 videoProxySha256: primaryVideo.sha256,
                 posterSha256: posterSha256,
                 posterMimeType: posterMimeType,
@@ -551,8 +542,6 @@ Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
 Map<String, Object?> buildVideoManifestPayload({
   required String videoSha256,
   required String videoMimeType,
-  String videoKind = 'unknown',
-  double videoKindConfidence = 0.0,
   String? videoProxySha256,
   String? posterSha256,
   String? posterMimeType,
@@ -567,10 +556,6 @@ Map<String, Object?> buildVideoManifestPayload({
   int? videoProxyTotalBytes,
   bool videoProxyTruncated = false,
 }) {
-  final normalizedKind = normalizeVideoKind(videoKind);
-  final normalizedKindConfidence =
-      videoKindConfidence.clamp(0.0, 1.0).toDouble();
-
   return <String, Object?>{
     'schema': 'secondloop.video_manifest.v2',
     'video_sha256': videoSha256,
@@ -578,8 +563,6 @@ Map<String, Object?> buildVideoManifestPayload({
     // Backward-compatible fields for readers that still expect v1 keys.
     'original_sha256': videoSha256,
     'original_mime_type': videoMimeType,
-    'video_kind': normalizedKind,
-    'video_kind_confidence': normalizedKindConfidence,
     if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
       'video_proxy_sha256': videoProxySha256,
     if (posterSha256 != null && posterSha256.trim().isNotEmpty)
