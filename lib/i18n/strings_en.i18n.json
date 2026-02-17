@@ -405,13 +405,13 @@
       }
     },
     "semanticParseAutoActions": {
-      "title": "AI semantic actions",
-      "subtitleEnabled": "On. Messages may be sent to AI to create or update todos automatically.",
-      "subtitleDisabled": "Off. Messages won't be sent for automatic actions.",
-      "subtitleUnset": "Not set. Default is off.",
-      "subtitleRequiresSetup": "Requires SecondLoop Pro or an API key (BYOK).",
-      "dialogTitle": "Turn on AI semantic actions?",
-      "dialogBody": "To automatically create or update todos, SecondLoop can send message text to an AI model.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.",
+      "title": "Smarter semantic analysis",
+      "subtitleEnabled": "Enhanced mode is on. Local semantic analysis stays on, and Cloud/BYOK improves automation quality.",
+      "subtitleDisabled": "Enhanced mode is off. Local semantic analysis remains active.",
+      "subtitleUnset": "Not set. Enhanced mode is off by default (local semantic analysis remains active).",
+      "subtitleRequiresSetup": "Sign in with SecondLoop Pro or configure an API key (BYOK) to enable enhanced mode.",
+      "dialogTitle": "Enable smarter semantic analysis?",
+      "dialogBody": "Local semantic analysis is always on. When enhanced mode is enabled, SecondLoop may send message text to AI for smarter semantic parsing on top of local analysis.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.",
       "dialogActions": {
         "enable": "Enable"
       }
