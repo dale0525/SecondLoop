@@ -141,4 +141,54 @@ void main() {
     expect(prefs.getBool('semantic_parse_data_consent_v1'), isFalse);
     expect(prefs.getBool('embeddings_data_consent_v1'), isFalse);
   });
+
+  testWidgets(
+    'semantic parse toggle can be enabled without cloud/byok setup',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'semantic_parse_data_consent_v1': false,
+      });
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: AiSettingsPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final semanticSwitch = find.byKey(
+        const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
+      );
+      final listView = find.byType(ListView);
+      await tester.dragUntilVisible(
+        semanticSwitch,
+        listView,
+        const Offset(0, -160),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_switchValue(tester, semanticSwitch), isFalse);
+
+      await tester.tap(semanticSwitch);
+      await tester.pumpAndSettle();
+
+      final dialog = find.byType(AlertDialog);
+      expect(dialog, findsOneWidget);
+
+      final enableButton = find.descendant(
+        of: dialog,
+        matching: find.byType(FilledButton),
+      );
+      expect(enableButton, findsOneWidget);
+      await tester.tap(enableButton);
+      await tester.pumpAndSettle();
+
+      expect(_switchValue(tester, semanticSwitch), isTrue);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('semantic_parse_data_consent_v1'), isTrue);
+    },
+  );
 }

@@ -80,7 +80,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   bool _cloudEmbeddingsConfigured = false;
   bool? _semanticParseEnabled;
   bool _semanticParseConfigured = false;
-  bool _byokConfigured = false;
   int _automationLoadGeneration = 0;
 
   Timer? _clearHighlightTimer;
@@ -329,24 +328,11 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       setState(() => _automationLoading = true);
     }
 
-    final backend = AppBackendScope.maybeOf(context);
-    final sessionKey =
-        backend == null ? null : SessionScope.of(context).sessionKey;
-
     final prefs = await SharedPreferences.getInstance();
     final cloudEmbeddingsEnabled =
         prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey);
     final semanticParseEnabled =
         prefs.getBool(SemanticParseDataConsentPrefs.prefsKey);
-
-    var byokConfigured = false;
-    if (backend != null && sessionKey != null) {
-      try {
-        byokConfigured = await hasActiveLlmProfile(backend, sessionKey);
-      } catch (_) {
-        byokConfigured = false;
-      }
-    }
 
     if (!mounted || generation != _automationLoadGeneration) return;
     setState(() {
@@ -354,7 +340,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       _cloudEmbeddingsConfigured = cloudEmbeddingsEnabled != null;
       _semanticParseEnabled = semanticParseEnabled ?? false;
       _semanticParseConfigured = semanticParseEnabled != null;
-      _byokConfigured = byokConfigured;
       _automationLoading = false;
     });
   }
