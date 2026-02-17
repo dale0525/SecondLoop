@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/audio_transcribe_whisper_model_prefs.dart';
+import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/ai/media_capability_source_prefs.dart';
 import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
@@ -34,12 +35,14 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
     this.configStore,
     this.contentConfigStore,
     this.linuxOcrModelStore,
+    this.audioWhisperModelStore,
     this.embedded = false,
   });
 
   final MediaAnnotationConfigStore? configStore;
   final ContentEnrichmentConfigStore? contentConfigStore;
   final LinuxOcrModelStore? linuxOcrModelStore;
+  final AudioTranscribeWhisperModelStore? audioWhisperModelStore;
   final bool embedded;
 
   static const embeddedRootKey =
@@ -115,6 +118,11 @@ class _MediaAnnotationSettingsPageState
   MediaSourcePreference _audioSourcePreference = MediaSourcePreference.auto;
   MediaSourcePreference _ocrSourcePreference = MediaSourcePreference.auto;
   String _audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
+  AudioTranscribeWhisperModelStore? _audioWhisperModelStoreCached;
+  bool _audioWhisperModelDownloading = false;
+  String? _audioWhisperModelDownloadingTarget;
+  int _audioWhisperModelDownloadReceivedBytes = 0;
+  int? _audioWhisperModelDownloadTotalBytes;
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
@@ -122,6 +130,10 @@ class _MediaAnnotationSettingsPageState
       widget.contentConfigStore ?? const RustContentEnrichmentConfigStore();
   LinuxOcrModelStore get _linuxOcrModelStore =>
       widget.linuxOcrModelStore ?? createLinuxOcrModelStore();
+  AudioTranscribeWhisperModelStore get _audioWhisperModelStore =>
+      widget.audioWhisperModelStore ??
+      (_audioWhisperModelStoreCached ??=
+          createAudioTranscribeWhisperModelStore());
 
   Future<void> _showSetupRequiredDialog({
     required String reason,
@@ -664,11 +676,45 @@ class _MediaAnnotationSettingsPageState
     if (_audioWhisperModel == normalized) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    setState(() => _busy = true);
+    final store = _audioWhisperModelStore;
+    final supportsDownload = store.supportsRuntimeDownload;
+
+    setState(() {
+      _busy = true;
+      _audioWhisperModelDownloading = supportsDownload;
+      _audioWhisperModelDownloadingTarget = normalized;
+      _audioWhisperModelDownloadReceivedBytes = 0;
+      _audioWhisperModelDownloadTotalBytes = null;
+    });
+
     try {
+      final ensureResult = await store.ensureModelAvailable(
+        model: normalized,
+        onProgress: _onAudioWhisperModelDownloadProgress,
+      );
+
       await AudioTranscribeWhisperModelPrefs.write(normalized);
+
       if (!mounted) return;
       setState(() => _audioWhisperModel = normalized);
+
+      if (ensureResult.status == AudioWhisperModelEnsureStatus.downloaded) {
+        final zh = Localizations.localeOf(context)
+            .languageCode
+            .toLowerCase()
+            .startsWith('zh');
+        final modelLabel = _audioWhisperModelLabel(context, normalized);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              zh
+                  ? '已下载 $modelLabel 模型，可用于本地转写。'
+                  : 'Downloaded $modelLabel for local transcription.',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -678,8 +724,52 @@ class _MediaAnnotationSettingsPageState
         ),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _audioWhisperModelDownloading = false;
+          _audioWhisperModelDownloadingTarget = null;
+          _audioWhisperModelDownloadReceivedBytes = 0;
+          _audioWhisperModelDownloadTotalBytes = null;
+        });
+      }
     }
+  }
+
+  void _onAudioWhisperModelDownloadProgress(
+    AudioWhisperModelDownloadProgress progress,
+  ) {
+    if (!mounted) return;
+
+    final received = progress.receivedBytes < 0 ? 0 : progress.receivedBytes;
+    final total = (progress.totalBytes != null && progress.totalBytes! > 0)
+        ? progress.totalBytes
+        : null;
+
+    if (_audioWhisperModelDownloadReceivedBytes == received &&
+        _audioWhisperModelDownloadTotalBytes == total &&
+        _audioWhisperModelDownloadingTarget == progress.model &&
+        _audioWhisperModelDownloading) {
+      return;
+    }
+
+    setState(() {
+      _audioWhisperModelDownloading = true;
+      _audioWhisperModelDownloadingTarget = progress.model;
+      _audioWhisperModelDownloadReceivedBytes = received;
+      _audioWhisperModelDownloadTotalBytes = total;
+    });
+  }
+
+  String _formatWhisperModelByteSize(int bytes) {
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
   }
 
   ContentEnrichmentConfig _copyContentConfig(

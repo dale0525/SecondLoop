@@ -227,6 +227,30 @@ extension _MediaAnnotationSettingsPageOcrExtension
 
   String _audioWhisperModelSubtitle(BuildContext context) {
     final zh = _isZhOcrLocale(context);
+
+    if (_audioWhisperModelDownloading) {
+      final targetModel = normalizeAudioTranscribeWhisperModel(
+        _audioWhisperModelDownloadingTarget ?? _audioWhisperModel,
+      );
+      final targetLabel = _audioWhisperModelLabel(context, targetModel);
+      final received = _audioWhisperModelDownloadReceivedBytes;
+      final total = _audioWhisperModelDownloadTotalBytes;
+
+      final receivedLabel = _formatWhisperModelByteSize(received);
+      if (total != null && total > 0) {
+        final percent =
+            ((received / total) * 100).clamp(0, 100).toStringAsFixed(1);
+        final totalLabel = _formatWhisperModelByteSize(total);
+        return zh
+            ? '正在下载 $targetLabel：$percent%（$receivedLabel/$totalLabel）'
+            : 'Downloading $targetLabel: $percent% ($receivedLabel/$totalLabel)';
+      }
+
+      return zh
+          ? '正在下载 $targetLabel：$receivedLabel'
+          : 'Downloading $targetLabel: $receivedLabel';
+    }
+
     return zh
         ? '用于 Whisper 转写路径。默认 Base，可按性能与精度手动调整。'
         : 'Used for Whisper transcription path. Base by default.';

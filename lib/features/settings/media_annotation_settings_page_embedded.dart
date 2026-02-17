@@ -153,9 +153,17 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(_audioWhisperModelLabel(context, _audioWhisperModel)),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right),
+          if (_audioWhisperModelDownloading)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else ...[
+            Text(_audioWhisperModelLabel(context, _audioWhisperModel)),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right),
+          ],
         ],
       ),
       onTap: _busy ? null : _pickAudioWhisperModel,
