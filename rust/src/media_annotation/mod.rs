@@ -293,7 +293,7 @@ fn normalize_annotation_payload(payload: Value) -> Result<Value> {
     );
 
     let raw_video_content_kind =
-        extract_first_non_empty_string(&map, &["video_content_kind", "video_kind", "content_kind"]);
+        extract_first_non_empty_string(&map, &["video_content_kind", "content_kind"]);
     let normalized_video_content_kind =
         match raw_video_content_kind.trim().to_ascii_lowercase().as_str() {
             "knowledge" => "knowledge".to_string(),
@@ -303,6 +303,9 @@ fn normalize_annotation_payload(payload: Value) -> Result<Value> {
 
     let tags_json = Value::Array(tags.iter().map(|tag| Value::String(tag.clone())).collect());
 
+    map.remove("video_kind");
+    map.remove("video_kind_confidence");
+
     map.insert("tag".to_string(), tags_json.clone());
     map.insert("summary".to_string(), Value::String(summary.clone()));
     map.insert("full_text".to_string(), Value::String(full_text.clone()));
@@ -310,11 +313,6 @@ fn normalize_annotation_payload(payload: Value) -> Result<Value> {
         "video_content_kind".to_string(),
         Value::String(normalized_video_content_kind.clone()),
     );
-    map.insert(
-        "video_kind".to_string(),
-        Value::String(normalized_video_content_kind),
-    );
-
     map.insert("tags".to_string(), tags_json);
     map.insert("caption_long".to_string(), Value::String(summary.clone()));
     map.insert("video_summary".to_string(), Value::String(summary));
@@ -906,7 +904,7 @@ mod tests {
     #[test]
     fn normalize_annotation_payload_keeps_video_extract_fields() {
         let normalized = normalize_annotation_payload(json!({
-            "video_kind": "knowledge",
+            "video_content_kind": "knowledge",
             "video_summary": "OCR fallback walkthrough",
             "knowledge_markdown": "## Steps\n1. Extract\n2. Fallback",
             "tag": ["ocr", "OCR"],
@@ -922,10 +920,7 @@ mod tests {
             map.get("video_content_kind").and_then(Value::as_str),
             Some("knowledge")
         );
-        assert_eq!(
-            map.get("video_kind").and_then(Value::as_str),
-            Some("knowledge")
-        );
+        assert!(map.get("video_kind").is_none());
         assert_eq!(
             map.get("summary").and_then(Value::as_str),
             Some("OCR fallback walkthrough")
@@ -951,11 +946,11 @@ mod tests {
         assert_eq!(tags.first().and_then(Value::as_str), Some("ocr"));
         assert_eq!(tags.get(1).and_then(Value::as_str), Some("tutorial"));
     }
-
     #[test]
-    fn normalize_annotation_payload_sets_unknown_video_kind_and_null_ocr_when_empty() {
+    fn normalize_annotation_payload_sets_unknown_video_content_kind_and_null_ocr_when_empty() {
         let normalized = normalize_annotation_payload(json!({
             "video_content_kind": "anything",
+            "video_kind": "knowledge",
             "caption_long": "Fallback summary",
             "knowledge_markdown": "",
             "video_description": "",
@@ -970,10 +965,7 @@ mod tests {
             map.get("video_content_kind").and_then(Value::as_str),
             Some("unknown")
         );
-        assert_eq!(
-            map.get("video_kind").and_then(Value::as_str),
-            Some("unknown")
-        );
+        assert!(map.get("video_kind").is_none());
         assert_eq!(
             map.get("summary").and_then(Value::as_str),
             Some("Fallback summary")

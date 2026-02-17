@@ -630,7 +630,7 @@ MultimodalVideoInsight? extractMultimodalVideoInsight(
     var contentKind = _normalizeVideoContentKind(
       _firstNonEmptyJsonString(
         payload,
-        const <String>['video_content_kind', 'video_kind', 'content_kind'],
+        const <String>['video_content_kind', 'content_kind'],
       ),
     );
 

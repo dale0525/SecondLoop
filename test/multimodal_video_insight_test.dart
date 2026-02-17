@@ -46,6 +46,24 @@ void main() {
     expect(insight.knowledgeMarkdown, isEmpty);
   });
 
+  test(
+      'extractMultimodalVideoInsight does not treat video_kind as content kind',
+      () {
+    final payloadJson = jsonEncode(<String, Object?>{
+      'video_kind': 'knowledge',
+      'summary': 'Fallback summary only.',
+    });
+
+    final insight = extractMultimodalVideoInsight(
+      payloadJson,
+      defaultEngine: 'multimodal_byok_video_extract:gpt-4.1-mini',
+    );
+
+    expect(insight, isNotNull);
+    expect(insight!.contentKind, 'unknown');
+    expect(insight.summary, 'Fallback summary only.');
+  });
+
   test('mergeMultimodalVideoInsights aggregates multi-segment knowledge fields',
       () {
     final merged = mergeMultimodalVideoInsights([

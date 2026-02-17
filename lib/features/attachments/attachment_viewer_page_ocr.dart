@@ -139,13 +139,51 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         ocrExcerpt,
       ]);
 
+      final videoContentKind = inferVideoContentKind(
+        transcriptFull: transcriptFull,
+        ocrTextFull: ocrFullText,
+        readableTextFull: readableTextFull,
+      );
+      final videoSummary = buildVideoSummaryText(
+        readableTextExcerpt.isNotEmpty ? readableTextExcerpt : readableTextFull,
+        maxBytes: 2048,
+      );
+      final knowledgeMarkdownFull =
+          videoContentKind == 'knowledge' ? readableTextFull : '';
+      final knowledgeMarkdownExcerpt = videoContentKind == 'knowledge'
+          ? _truncateUtf8(
+              readableTextExcerpt.isNotEmpty
+                  ? readableTextExcerpt
+                  : readableTextFull,
+              8 * 1024,
+            )
+          : '';
+      final videoDescriptionFull =
+          videoContentKind == 'non_knowledge' ? readableTextFull : '';
+      final videoDescriptionExcerpt = videoContentKind == 'non_knowledge'
+          ? _truncateUtf8(
+              readableTextExcerpt.isNotEmpty
+                  ? readableTextExcerpt
+                  : readableTextFull,
+              8 * 1024,
+            )
+          : '';
+
       final payloadJson = jsonEncode(<String, Object?>{
         'schema': 'secondloop.video_extract.v1',
         'mime_type': widget.attachment.mimeType,
         'original_sha256': manifest.originalSha256,
         'original_mime_type': manifest.originalMimeType,
-        'video_kind': manifest.videoKind,
-        'video_kind_confidence': manifest.videoKindConfidence,
+        'video_content_kind': videoContentKind,
+        if (videoSummary.isNotEmpty) 'video_summary': videoSummary,
+        if (knowledgeMarkdownFull.isNotEmpty)
+          'knowledge_markdown_full': knowledgeMarkdownFull,
+        if (knowledgeMarkdownExcerpt.isNotEmpty)
+          'knowledge_markdown_excerpt': knowledgeMarkdownExcerpt,
+        if (videoDescriptionFull.isNotEmpty)
+          'video_description_full': videoDescriptionFull,
+        if (videoDescriptionExcerpt.isNotEmpty)
+          'video_description_excerpt': videoDescriptionExcerpt,
         'video_segment_count': manifest.segments.length,
         'video_processed_segment_count': processedSegments,
         'video_ocr_segment_limit': maxSegments,

@@ -11,7 +11,6 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_download.dart';
-import '../media_backup/video_kind_classifier.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
@@ -360,20 +359,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     );
   }
 
-  bool _isVlogWithoutOcrResult(
-    ParsedVideoManifest manifest,
-    Map<String, Object?>? payload,
-  ) {
-    if (normalizeVideoKind(manifest.videoKind) != kVideoKindVlog) return false;
-    final ocrText = ((payload?['ocr_text_excerpt'] ??
-                payload?['ocr_text_full'] ??
-                payload?['ocr_text']) ??
-            '')
-        .toString()
-        .trim();
-    return ocrText.isEmpty;
-  }
-
   Future<void> _runOcrWithDialogOptions({
     required String initialHint,
     required ValueChanged<String>? onOcrLanguageHintsChanged,
@@ -534,9 +519,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final posterSha256 = (manifest.posterSha256 ?? '').trim();
     final posterMimeType = manifest.posterMimeType ?? 'image/jpeg';
     final proxySha256 = (manifest.videoProxySha256 ?? '').trim();
-    final confidencePercent =
-        (manifest.videoKindConfidence.clamp(0.0, 1.0) * 100).round();
-
     const thumbnailWidth = 156.0;
     const thumbnailHeight = 96.0;
 
@@ -638,7 +620,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              buildStatBadge('${manifest.videoKind} ($confidencePercent%)'),
               buildStatBadge('segments: ${manifest.segments.length}'),
               buildStatBadge('keyframes: ${keyframes.length}'),
             ],
@@ -909,12 +890,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                       ? _buildVideoManifestInsightsCard(context, videoInsights)
                       : FutureBuilder<ParsedVideoManifest?>(
                           future: videoManifestFuture,
-                          builder: (context, snapshot) {
-                            final manifest = snapshot.data;
-                            if (manifest != null &&
-                                _isVlogWithoutOcrResult(manifest, payload)) {
-                              return const SizedBox.shrink();
-                            }
+                          builder: (context, _) {
                             return _buildVideoManifestInsightsCard(
                               context,
                               videoInsights,
