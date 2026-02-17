@@ -9,6 +9,9 @@ use serde_json::Value;
 
 use crate::db;
 
+mod local_whisper_runtime;
+use local_whisper_runtime::create_local_whisper_context;
+
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     if bytes.len() != 32 {
         return Err(anyhow!("invalid key length"));
@@ -510,21 +513,6 @@ fn decode_local_whisper_wav_bytes(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     Ok(samples)
 }
 
-fn build_local_whisper_context_parameters() -> whisper_rs::WhisperContextParameters<'static> {
-    #[cfg(target_os = "macos")]
-    let mut context_params = whisper_rs::WhisperContextParameters::default();
-    #[cfg(not(target_os = "macos"))]
-    let context_params = whisper_rs::WhisperContextParameters::default();
-
-    #[cfg(target_os = "macos")]
-    {
-        context_params.use_gpu(true);
-        context_params.gpu_device(0);
-    }
-
-    context_params
-}
-
 #[flutter_rust_bridge::frb]
 pub fn audio_transcribe_local_whisper(
     app_dir: String,
@@ -545,9 +533,7 @@ pub fn audio_transcribe_local_whisper(
 
     let pcm_f32 = decode_local_whisper_wav_bytes(&wav_bytes)?;
 
-    let context_params = build_local_whisper_context_parameters();
-    let context = whisper_rs::WhisperContext::new_with_params(&model_path_string, context_params)
-        .map_err(|e| anyhow!("audio_transcribe_local_runtime_load_model_failed:{e}"))?;
+    let context = create_local_whisper_context(&model_path_string)?;
     let mut state = context
         .create_state()
         .map_err(|e| anyhow!("audio_transcribe_local_runtime_create_state_failed:{e}"))?;
@@ -921,10 +907,7 @@ pub fn audio_transcribe_byok_profile_multimodal(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_local_whisper_context_parameters, normalize_local_whisper_lang,
-        normalize_local_whisper_model_name,
-    };
+    use super::{normalize_local_whisper_lang, normalize_local_whisper_model_name};
 
     #[test]
     fn normalize_local_whisper_model_name_uses_supported_values() {
@@ -949,20 +932,5 @@ mod tests {
         );
         assert_eq!(normalize_local_whisper_lang("auto"), None);
         assert_eq!(normalize_local_whisper_lang(""), None);
-    }
-
-    #[test]
-    fn build_local_whisper_context_parameters_matches_platform_gpu_policy() {
-        let params = build_local_whisper_context_parameters();
-        #[cfg(target_os = "macos")]
-        {
-            assert!(params.use_gpu);
-            assert_eq!(params.gpu_device, 0);
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            assert!(!params.use_gpu);
-            assert_eq!(params.gpu_device, 0);
-        }
     }
 }

@@ -14,10 +14,10 @@ Do not commit `assets/ocr/desktop_runtime/` into git. The folder is ignored by
 ### Current state
 
 - `rust/Cargo.toml` enables `whisper-rs` with `metal` on macOS.
-- `rust/Cargo.toml` keeps Windows/Linux `whisper-rs` builds without GPU features.
-- `rust/src/api/audio_transcribe.rs` enables `use_gpu(true)` only for macOS.
+- `rust/Cargo.toml` enables `whisper-rs` with `vulkan` on Windows/Linux.
+- `rust/src/api/audio_transcribe.rs` tries GPU first on desktop (macOS/Windows/Linux), then falls back to CPU if GPU context init fails.
 
-So Windows/Linux local Whisper currently runs in CPU mode by default.
+So Windows/Linux local Whisper now follows GPU-first policy with CPU fallback.
 
 ### Backend options
 
@@ -28,8 +28,8 @@ So Windows/Linux local Whisper currently runs in CPU mode by default.
 
 ### Recommended rollout
 
-1. Phase 1: add `vulkan` backend builds for Windows/Linux and keep CPU fallback.
-2. Phase 2: add optional `cuda` backend builds for Windows/Linux NVIDIA-focused distribution.
+1. Completed Phase 1: `vulkan` backend builds for Windows/Linux with CPU fallback.
+2. Next Phase 2: add optional `cuda` backend builds for Windows/Linux NVIDIA-focused distribution.
 3. Defer `hipblas` and OpenVINO until backend matrix and CI capacity are ready.
 
 ### Packaging and CI implications
