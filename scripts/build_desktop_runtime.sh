@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<USAGE
-Usage: $0 --platform <platform> --arch <arch> --input-dir <dir> --output-dir <dir> [--version <version>]
+Usage: $0 --platform <platform> --arch <arch> --input-dir <dir> --output-dir <dir> [--version <version>] [--whisper-model <name>]
 
 Build a platform runtime archive and emit SHA256 metadata.
 USAGE
@@ -14,6 +14,7 @@ arch=''
 input_dir=''
 output_dir=''
 version=''
+whisper_model="${DESKTOP_RUNTIME_WHISPER_MODEL:-base}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --version)
       version="${2:-}"
+      shift 2
+      ;;
+    --whisper-model)
+      whisper_model="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -59,7 +64,20 @@ if [[ ! -d "$input_dir" ]]; then
   exit 1
 fi
 
-python3 - "$input_dir" "$platform" <<'PY'
+case "$(printf '%s' "$whisper_model" | tr '[:upper:]' '[:lower:]')" in
+  base)
+    whisper_model='base'
+    ;;
+  none|off|disabled)
+    whisper_model='none'
+    ;;
+  *)
+    echo "Unsupported whisper model: $whisper_model" >&2
+    exit 2
+    ;;
+esac
+
+python3 - "$input_dir" "$platform" "$whisper_model" <<'PY'
 import pathlib
 import sys
 
@@ -71,6 +89,7 @@ def fail(message: str) -> None:
 
 root = pathlib.Path(sys.argv[1]).resolve()
 platform = sys.argv[2].strip().lower()
+whisper_model = sys.argv[3].strip().lower()
 if not root.is_dir():
     fail(f"input directory does not exist: {root}")
 
@@ -102,6 +121,11 @@ rec_aliases = {
     "chinese_cht_PP-OCRv3_rec_infer.onnx",
 }
 
+
+whisper_base_aliases = {
+    "ggml-base.bin",
+}
+
 if platform == "windows":
     has_onnxruntime = any(
         name.lower().startswith("onnxruntime") and name.lower().endswith(".dll")
@@ -120,6 +144,13 @@ elif platform == "linux":
 else:
     fail(f"unsupported platform: {platform}")
 
+if whisper_model == "base":
+    has_whisper_model = bool(all_files & whisper_base_aliases)
+elif whisper_model == "none":
+    has_whisper_model = True
+else:
+    fail(f"unsupported whisper model: {whisper_model}")
+
 missing_sections = []
 if not (all_files & det_aliases):
     missing_sections.append("DET model")
@@ -129,6 +160,8 @@ if not (all_files & rec_aliases):
     missing_sections.append("REC model")
 if not has_onnxruntime:
     missing_sections.append("ONNX Runtime dynamic library")
+if not has_whisper_model:
+    missing_sections.append("Whisper base model")
 
 if missing_sections:
     fail(

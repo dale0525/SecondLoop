@@ -37,6 +37,9 @@ const _onnxRuntimeLibAliases = <String>[
   'libonnxruntime.so',
   'onnxruntime.dll',
 ];
+const _whisperBaseModelAliases = <String>[
+  'ggml-base.bin',
+];
 
 enum _DesktopPlatform {
   linux,
@@ -427,12 +430,19 @@ Future<bool> _isRuntimeAlreadyInstalled({
 
 Future<void> _validateRuntimePayload(Directory outputDir) async {
   final hasRequiredRuntime = await _hasRequiredRuntimePayload(outputDir);
-  if (hasRequiredRuntime) return;
+  if (!hasRequiredRuntime) {
+    throw StateError(
+      'Runtime payload missing required OCR runtime files in ${outputDir.path}. '
+      'Expected DET/CLS/REC model files and ONNX Runtime dynamic library.',
+    );
+  }
 
-  throw StateError(
-    'Runtime payload missing required OCR runtime files in ${outputDir.path}. '
-    'Expected DET/CLS/REC model files and ONNX Runtime dynamic library.',
-  );
+  final hasWhisperBaseModel = await _hasWhisperBaseModelPayload(outputDir);
+  if (!hasWhisperBaseModel) {
+    stderr.writeln(
+      'prepare-desktop-runtime: warning: whisper base model payload missing in ${outputDir.path}',
+    );
+  }
 }
 
 String _basenameFromAnyPath(String path) {
@@ -468,6 +478,23 @@ Future<bool> _hasRequiredRuntimePayload(Directory outputDir) async {
       containsAny(_clsModelAliases) &&
       containsAny(_recModelAliases) &&
       containsAny(_onnxRuntimeLibAliases);
+}
+
+Future<bool> _hasWhisperBaseModelPayload(Directory outputDir) async {
+  if (!await outputDir.exists()) return false;
+  final basenames = <String>{};
+  await for (final entity in outputDir.list(recursive: true)) {
+    if (entity is! File) continue;
+    final basename = _basenameFromAnyPath(entity.path);
+    if (basename.isNotEmpty) {
+      basenames.add(basename);
+    }
+  }
+
+  for (final alias in _whisperBaseModelAliases) {
+    if (basenames.contains(alias)) return true;
+  }
+  return false;
 }
 
 Future<void> _downloadReleaseAsset({
