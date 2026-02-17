@@ -117,6 +117,7 @@ final class VideoKeyframeOcrResult {
     required this.isTruncated,
     required this.frameCount,
     required this.processedFrames,
+    this.keyframeTexts = const <VideoManifestKeyframeOcrText>[],
   });
 
   final String fullText;
@@ -125,16 +126,37 @@ final class VideoKeyframeOcrResult {
   final bool isTruncated;
   final int frameCount;
   final int processedFrames;
+  final List<VideoManifestKeyframeOcrText> keyframeTexts;
+}
+
+final class VideoManifestKeyframeOcrText {
+  const VideoManifestKeyframeOcrText({
+    required this.index,
+    required this.sha256,
+    required this.mimeType,
+    required this.tMs,
+    required this.kind,
+    required this.text,
+  });
+
+  final int index;
+  final String sha256;
+  final String mimeType;
+  final int tMs;
+  final String kind;
+  final String text;
 }
 
 final class _VideoOcrFrameSample {
   const _VideoOcrFrameSample({
     required this.bytes,
     required this.label,
+    this.frame,
   });
 
   final Uint8List bytes;
   final String label;
+  final VideoManifestPreviewRef? frame;
 }
 
 ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
@@ -415,6 +437,7 @@ final class VideoKeyframeOcrWorker {
         _VideoOcrFrameSample(
           bytes: frameBytes,
           label: '[keyframe ${frame.index + 1} @${frame.tMs}ms]',
+          frame: frame,
         ),
       );
     }
@@ -548,6 +571,7 @@ final class VideoKeyframeOcrWorker {
     var processedFrames = 0;
     final blocks = <String>[];
     final engines = <String>[];
+    final keyframeTexts = <VideoManifestKeyframeOcrText>[];
     for (final sample in samples) {
       if (sample.bytes.isEmpty) continue;
       final ocr = await imageOcr(sample.bytes, languageHints: languageHints);
@@ -560,6 +584,21 @@ final class VideoKeyframeOcrWorker {
         engines.add(engine);
       }
       if (text.isEmpty) continue;
+
+      final frame = sample.frame;
+      if (frame != null) {
+        keyframeTexts.add(
+          VideoManifestKeyframeOcrText(
+            index: frame.index,
+            sha256: frame.sha256,
+            mimeType: frame.mimeType,
+            tMs: frame.tMs,
+            kind: frame.kind,
+            text: text,
+          ),
+        );
+      }
+
       blocks.add('${sample.label}\n$text');
     }
 
@@ -579,6 +618,9 @@ final class VideoKeyframeOcrWorker {
       isTruncated: isTruncated,
       frameCount: samples.length,
       processedFrames: processedFrames,
+      keyframeTexts: List<VideoManifestKeyframeOcrText>.unmodifiable(
+        keyframeTexts,
+      ),
     );
   }
 }

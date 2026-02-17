@@ -15,7 +15,6 @@ import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_manifest_gallery_dialog.dart';
-import 'video_manifest_insight_content.dart';
 import 'video_keyframe_ocr_worker.dart';
 
 export 'video_manifest_insight_content.dart'
@@ -218,6 +217,8 @@ class NonImageAttachmentView extends StatefulWidget {
 
 class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   Future<ParsedVideoManifest?>? _videoManifestFuture;
+  final ScrollController _videoManifestPreviewScrollController =
+      ScrollController();
   final Map<String, Future<Uint8List?>> _attachmentBytesBySha =
       <String, Future<Uint8List?>>{};
   final Map<String, Future<PreparedVideoProxyPlayback>>
@@ -227,6 +228,12 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   void initState() {
     super.initState();
     _videoManifestFuture = _createVideoManifestFuture();
+  }
+
+  @override
+  void dispose() {
+    _videoManifestPreviewScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -260,6 +267,26 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     if (raw is num) return raw.toInt();
     if (raw is String) return int.tryParse(raw.trim()) ?? 0;
     return 0;
+  }
+
+  List<({String sha256, String text})> _resolveKeyframeOcrTexts(
+    Map<String, Object?>? payload,
+  ) {
+    final raw = payload?['ocr_keyframe_texts'];
+    if (raw is! List) return const <({String sha256, String text})>[];
+
+    final values = <({String sha256, String text})>[];
+    final seen = <String>{};
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final map = Map<dynamic, dynamic>.from(item);
+      final sha = (map['sha256'] ?? '').toString().trim();
+      final text = (map['text'] ?? '').toString().trim();
+      if (sha.isEmpty || text.isEmpty) continue;
+      if (!seen.add(sha)) continue;
+      values.add((sha256: sha, text: text));
+    }
+    return List<({String sha256, String text})>.unmodifiable(values);
   }
 
   Future<ParsedVideoManifest?> _createVideoManifestFuture() async {
@@ -396,81 +423,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     );
   }
 
-  Widget _buildVideoManifestInsightsCard(
-    BuildContext context,
-    VideoManifestInsightContent insights,
-  ) {
-    final labels = context.t.attachments.content.videoInsights;
-
-    final contentKindLabel = switch (insights.contentKind) {
-      'knowledge' => labels.contentKind.knowledge,
-      'non_knowledge' => labels.contentKind.nonKnowledge,
-      _ => labels.contentKind.unknown,
-    };
-
-    final detailLabel = switch (insights.contentKind) {
-      'knowledge' => labels.detail.knowledgeMarkdown,
-      'non_knowledge' => labels.detail.videoDescription,
-      _ => labels.detail.extractedContent,
-    };
-
-    final hasSegmentStats =
-        insights.segmentCount > 0 || insights.processedSegmentCount > 0;
-    final segmentTotal = insights.segmentCount > 0
-        ? insights.segmentCount
-        : insights.processedSegmentCount;
-    final segmentDone = insights.processedSegmentCount;
-    final segmentValue = hasSegmentStats ? '$segmentDone/$segmentTotal' : '';
-
-    final children = <Widget>[];
-
-    void addField(String fieldLabel, String fieldValue, {Key? valueKey}) {
-      final normalizedValue = fieldValue.trim();
-      if (normalizedValue.isEmpty) return;
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(height: 10));
-      }
-      children.add(
-        Text(
-          fieldLabel,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-      );
-      children.add(const SizedBox(height: 4));
-      children.add(
-        SelectableText(
-          normalizedValue,
-          key: valueKey,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      );
-    }
-
-    addField(
-      labels.fields.contentType,
-      contentKindLabel,
-      valueKey: const ValueKey('video_manifest_content_kind_value'),
-    );
-    addField(
-      labels.fields.segments,
-      segmentValue,
-    );
-    addField(
-      detailLabel,
-      insights.detail,
-      valueKey: const ValueKey('video_manifest_detail_text'),
-    );
-
-    return SlSurface(
-      key: const ValueKey('video_manifest_insights_surface'),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
   Widget _buildVideoManifestPreviewTile({
     required String sha256,
     required String mimeType,
@@ -512,10 +464,18 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   }
 
   Widget _buildVideoManifestPreviewCard(
-      BuildContext context, ParsedVideoManifest manifest) {
+    BuildContext context,
+    ParsedVideoManifest manifest, {
+    required Map<String, Object?>? payload,
+  }) {
     final keyframes = manifest.keyframes
         .where((item) => item.sha256.trim().isNotEmpty)
         .toList(growable: false);
+    final keyframeOcrTexts = {
+      for (final item in _resolveKeyframeOcrTexts(payload))
+        item.sha256: item.text,
+    };
+    final keyframeOcrEngine = (payload?['ocr_engine'] ?? '').toString().trim();
     final posterSha256 = (manifest.posterSha256 ?? '').trim();
     final posterMimeType = manifest.posterMimeType ?? 'image/jpeg';
     final proxySha256 = (manifest.videoProxySha256 ?? '').trim();
@@ -541,6 +501,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         for (final keyframe in keyframes)
           VideoManifestGalleryEntry.keyframe(
             keyframeSha256: keyframe.sha256,
+            keyframeOcrText: keyframeOcrTexts[keyframe.sha256.trim()],
+            keyframeOcrEngine: keyframeOcrEngine,
           ),
       ];
       if (entries.isEmpty) return;
@@ -550,22 +512,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         entries: entries,
         initialIndex: initialIndex,
         loadBytes: _readAttachmentBytesBySha,
-      );
-    }
-
-    Widget buildStatBadge(String text) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-        ),
       );
     }
 
@@ -616,41 +562,41 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              buildStatBadge('segments: ${manifest.segments.length}'),
-              buildStatBadge('keyframes: ${keyframes.length}'),
-            ],
-          ),
           if (hasProxy || keyframes.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  if (hasProxy) ...[
-                    buildProxyThumbnail(),
-                    if (keyframes.isNotEmpty) const SizedBox(width: 8),
-                  ],
-                  for (var i = 0; i < keyframes.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 8),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => unawaited(
-                        openGallery(initialIndex: hasProxy ? i + 1 : i),
+            Scrollbar(
+              key: const ValueKey('video_manifest_preview_scrollbar'),
+              controller: _videoManifestPreviewScrollController,
+              interactive: true,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                key: const ValueKey('video_manifest_preview_scroll'),
+                controller: _videoManifestPreviewScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: [
+                    if (hasProxy) ...[
+                      buildProxyThumbnail(),
+                      if (keyframes.isNotEmpty) const SizedBox(width: 8),
+                    ],
+                    for (var i = 0; i < keyframes.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => unawaited(
+                          openGallery(initialIndex: hasProxy ? i + 1 : i),
+                        ),
+                        child: _buildVideoManifestPreviewTile(
+                          sha256: keyframes[i].sha256,
+                          mimeType: keyframes[i].mimeType,
+                          key: ValueKey('video_manifest_keyframe_preview_$i'),
+                          width: thumbnailWidth,
+                          height: thumbnailHeight,
+                        ),
                       ),
-                      child: _buildVideoManifestPreviewTile(
-                        sha256: keyframes[i].sha256,
-                        mimeType: keyframes[i].mimeType,
-                        key: ValueKey('video_manifest_keyframe_preview_$i'),
-                        width: thumbnailWidth,
-                        height: thumbnailHeight,
-                      ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],
@@ -687,8 +633,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final isVideoManifest = mime == kSecondLoopVideoManifestMimeType;
     final supportsOcr = isPdf || isDocx || isVideoManifest;
     final canRunOcr = supportsOcr && onRunOcr != null;
-    final videoInsights =
-        isVideoManifest ? resolveVideoManifestInsightContent(payload) : null;
     final videoManifestFuture = isVideoManifest
         ? (_videoManifestFuture ??= _createVideoManifestFuture())
         : null;
@@ -877,26 +821,13 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                     builder: (context, snapshot) {
                       final manifest = snapshot.data;
                       if (manifest == null) return const SizedBox.shrink();
-                      return _buildVideoManifestPreviewCard(context, manifest);
+                      return _buildVideoManifestPreviewCard(
+                        context,
+                        manifest,
+                        payload: payload,
+                      );
                     },
                   ),
-                  maxWidth: 820,
-                ),
-                const SizedBox(height: 14),
-              ],
-              if (videoInsights != null) ...[
-                buildSection(
-                  videoManifestFuture == null
-                      ? _buildVideoManifestInsightsCard(context, videoInsights)
-                      : FutureBuilder<ParsedVideoManifest?>(
-                          future: videoManifestFuture,
-                          builder: (context, _) {
-                            return _buildVideoManifestInsightsCard(
-                              context,
-                              videoInsights,
-                            );
-                          },
-                        ),
                   maxWidth: 820,
                 ),
                 const SizedBox(height: 14),

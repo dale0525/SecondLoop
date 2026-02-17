@@ -514,6 +514,8 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         final ocrBlocks = <String>[];
         final ocrEngines = <String>[];
         final ocrKeyframes = <VideoManifestPreviewRef>[];
+        final ocrKeyframeTexts = <VideoManifestKeyframeOcrText>[];
+        final seenOcrKeyframeShas = <String>{};
         var totalFrameCount = 0;
         var totalProcessedFrames = 0;
         var processedSegments = 0;
@@ -577,6 +579,15 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
             },
           );
           if (ocrResult == null) continue;
+
+          if (ocrResult.source == AutoVideoSegmentOcrSource.keyframe &&
+              ocrResult.keyframeTexts.isNotEmpty) {
+            for (final item in ocrResult.keyframeTexts) {
+              final sha = item.sha256.trim();
+              if (sha.isEmpty || !seenOcrKeyframeShas.add(sha)) continue;
+              ocrKeyframeTexts.add(item);
+            }
+          }
 
           processedSegments += 1;
           totalFrameCount += ocrResult.pageCount;
@@ -690,6 +701,7 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           heuristicContentKind: heuristicContentKind,
           multimodalInsight: multimodalInsight,
           ocrKeyframes: ocrKeyframes,
+          ocrKeyframeTexts: ocrKeyframeTexts,
           nowMs: DateTime.now().millisecondsSinceEpoch,
         );
 
@@ -740,6 +752,8 @@ Map<String, Object?> buildAutoVideoManifestOcrPayload({
   required MultimodalVideoInsight? multimodalInsight,
   List<VideoManifestPreviewRef> ocrKeyframes =
       const <VideoManifestPreviewRef>[],
+  List<VideoManifestKeyframeOcrText> ocrKeyframeTexts =
+      const <VideoManifestKeyframeOcrText>[],
   required int nowMs,
 }) {
   final videoContentKind = _resolvedVideoContentKindForAutoOcr(
@@ -842,6 +856,22 @@ Map<String, Object?> buildAutoVideoManifestOcrPayload({
   } else {
     updatedPayload.remove('ocr_keyframes');
   }
+  if (ocrKeyframeTexts.isNotEmpty) {
+    updatedPayload['ocr_keyframe_texts'] = ocrKeyframeTexts
+        .map(
+          (item) => <String, Object?>{
+            'index': item.index,
+            'sha256': item.sha256,
+            'mime_type': item.mimeType,
+            't_ms': item.tMs,
+            'kind': item.kind,
+            'text': item.text,
+          },
+        )
+        .toList(growable: false);
+  } else {
+    updatedPayload.remove('ocr_keyframe_texts');
+  }
   updatedPayload['video_content_kind'] = videoContentKind;
 
   final videoContentKindEngine = (multimodalInsight?.engine ?? '').trim();
@@ -919,6 +949,7 @@ final class AutoVideoSegmentOcrResult {
     required this.isTruncated,
     required this.pageCount,
     required this.processedPages,
+    this.keyframeTexts = const <VideoManifestKeyframeOcrText>[],
   });
 
   final AutoVideoSegmentOcrSource source;
@@ -927,6 +958,7 @@ final class AutoVideoSegmentOcrResult {
   final bool isTruncated;
   final int pageCount;
   final int processedPages;
+  final List<VideoManifestKeyframeOcrText> keyframeTexts;
 }
 
 @visibleForTesting
@@ -968,6 +1000,7 @@ Future<AutoVideoSegmentOcrResult?> runAutoVideoSegmentOcrWithFallback({
     isTruncated: keyframeOcr.isTruncated,
     pageCount: pageCount,
     processedPages: processedPages,
+    keyframeTexts: keyframeOcr.keyframeTexts,
   );
 }
 
