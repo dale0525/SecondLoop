@@ -67,6 +67,16 @@ final class VideoManifestPreviewRef {
   final String kind;
 }
 
+final class VideoManifestKeyframeImage {
+  const VideoManifestKeyframeImage({
+    required this.frame,
+    required this.bytes,
+  });
+
+  final VideoManifestPreviewRef frame;
+  final Uint8List bytes;
+}
+
 final class ParsedVideoManifest {
   const ParsedVideoManifest({
     required this.originalSha256,
@@ -115,6 +125,16 @@ final class VideoKeyframeOcrResult {
   final bool isTruncated;
   final int frameCount;
   final int processedFrames;
+}
+
+final class _VideoOcrFrameSample {
+  const _VideoOcrFrameSample({
+    required this.bytes,
+    required this.label,
+  });
+
+  final Uint8List bytes;
+  final String label;
 }
 
 ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
@@ -371,6 +391,41 @@ ParsedVideoManifest? parseVideoManifestPayload(Uint8List bytes) {
 }
 
 final class VideoKeyframeOcrWorker {
+  static Future<VideoKeyframeOcrResult?> runOnManifestKeyframes(
+    List<VideoManifestKeyframeImage> keyframes, {
+    required String languageHints,
+    VideoOcrImageRunner? ocrImageFn,
+  }) async {
+    if (keyframes.isEmpty) return null;
+    final imageOcr = ocrImageFn ?? PlatformPdfOcr.tryOcrImageBytes;
+    final hints =
+        languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
+
+    final seenFrames = <String>{};
+    final samples = <_VideoOcrFrameSample>[];
+    for (final keyframe in keyframes) {
+      final frameBytes = keyframe.bytes;
+      if (frameBytes.isEmpty) continue;
+      final frameSignature = base64.encode(frameBytes);
+      if (!seenFrames.add(frameSignature)) {
+        continue;
+      }
+      final frame = keyframe.frame;
+      samples.add(
+        _VideoOcrFrameSample(
+          bytes: frameBytes,
+          label: '[keyframe ${frame.index + 1} @${frame.tMs}ms]',
+        ),
+      );
+    }
+
+    return _runOcrOnFrameSamples(
+      samples,
+      imageOcr: imageOcr,
+      languageHints: hints,
+    );
+  }
+
   static Future<VideoKeyframeOcrResult?> runOnVideoBytes(
     Uint8List videoBytes, {
     required String sourceMimeType,
@@ -450,7 +505,7 @@ final class VideoKeyframeOcrWorker {
           : const <File>[];
 
       final seenFrames = <String>{};
-      final frames = <File>[];
+      final samples = <_VideoOcrFrameSample>[];
       for (final frame in <File>[...sceneFrames, ...fpsFrames]) {
         final frameBytes = await frame.readAsBytes();
         if (frameBytes.isEmpty) continue;
@@ -458,46 +513,17 @@ final class VideoKeyframeOcrWorker {
         if (!seenFrames.add(frameSignature)) {
           continue;
         }
-        frames.add(frame);
+        samples.add(
+          _VideoOcrFrameSample(
+            bytes: frameBytes,
+            label: '[frame ${samples.length + 1}]',
+          ),
+        );
       }
-      if (frames.isEmpty) return null;
-
-      var processedFrames = 0;
-      final blocks = <String>[];
-      final engines = <String>[];
-      for (var i = 0; i < frames.length; i++) {
-        final frame = frames[i];
-        final frameBytes = await frame.readAsBytes();
-        if (frameBytes.isEmpty) continue;
-        final ocr = await imageOcr(frameBytes, languageHints: hints);
-        if (ocr == null) continue;
-
-        processedFrames += 1;
-        final text = ocr.fullText.trim();
-        final engine = ocr.engine.trim();
-        if (engine.isNotEmpty) {
-          engines.add(engine);
-        }
-        if (text.isEmpty) continue;
-        blocks.add('[frame ${i + 1}]\n$text');
-      }
-
-      final full = blocks.join('\n\n').trim();
-      final fullTruncated = _truncateUtf8(full, _kVideoOcrMaxFullBytes);
-      final excerpt = _truncateUtf8(fullTruncated, _kVideoOcrMaxExcerptBytes);
-      final engine = _dominantEngine(engines);
-      if (engine.isEmpty) return null;
-
-      final isTruncated =
-          fullTruncated != full || processedFrames < frames.length;
-
-      return VideoKeyframeOcrResult(
-        fullText: fullTruncated,
-        excerpt: excerpt,
-        engine: engine,
-        isTruncated: isTruncated,
-        frameCount: frames.length,
-        processedFrames: processedFrames,
+      return _runOcrOnFrameSamples(
+        samples,
+        imageOcr: imageOcr,
+        languageHints: hints,
       );
     } catch (_) {
       return null;
@@ -510,6 +536,50 @@ final class VideoKeyframeOcrWorker {
         }
       }
     }
+  }
+
+  static Future<VideoKeyframeOcrResult?> _runOcrOnFrameSamples(
+    List<_VideoOcrFrameSample> samples, {
+    required VideoOcrImageRunner imageOcr,
+    required String languageHints,
+  }) async {
+    if (samples.isEmpty) return null;
+
+    var processedFrames = 0;
+    final blocks = <String>[];
+    final engines = <String>[];
+    for (final sample in samples) {
+      if (sample.bytes.isEmpty) continue;
+      final ocr = await imageOcr(sample.bytes, languageHints: languageHints);
+      if (ocr == null) continue;
+
+      processedFrames += 1;
+      final text = ocr.fullText.trim();
+      final engine = ocr.engine.trim();
+      if (engine.isNotEmpty) {
+        engines.add(engine);
+      }
+      if (text.isEmpty) continue;
+      blocks.add('${sample.label}\n$text');
+    }
+
+    final full = blocks.join('\n\n').trim();
+    final fullTruncated = _truncateUtf8(full, _kVideoOcrMaxFullBytes);
+    final excerpt = _truncateUtf8(fullTruncated, _kVideoOcrMaxExcerptBytes);
+    final engine = _dominantEngine(engines);
+    if (engine.isEmpty) return null;
+
+    final isTruncated =
+        fullTruncated != full || processedFrames < samples.length;
+
+    return VideoKeyframeOcrResult(
+      fullText: fullTruncated,
+      excerpt: excerpt,
+      engine: engine,
+      isTruncated: isTruncated,
+      frameCount: samples.length,
+      processedFrames: processedFrames,
+    );
   }
 }
 

@@ -57,44 +57,81 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
 
       final ocrBlocks = <String>[];
       final ocrEngines = <String>[];
+      final ocrKeyframes = <VideoManifestPreviewRef>[];
       var totalFrameCount = 0;
       var totalProcessedFrames = 0;
       var ocrTruncated = manifest.segments.length > segmentRefs.length;
       var processedSegments = 0;
 
-      for (var i = 0; i < segmentRefs.length; i++) {
-        final segment = segmentRefs[i];
-        final segmentBytes = await backend.readAttachmentBytes(
-          sessionKey,
-          sha256: segment.sha256,
-        );
-        if (segmentBytes.isEmpty) continue;
-
-        final ocr = await VideoKeyframeOcrWorker.runOnVideoBytes(
-          segmentBytes,
-          sourceMimeType: segment.mimeType,
-          maxFrames: maxFramesPerSegment,
-          frameIntervalSeconds: 5,
+      if (manifest.keyframes.isNotEmpty) {
+        final keyframeImages = <VideoManifestKeyframeImage>[];
+        for (final frame in manifest.keyframes) {
+          final frameBytes = await backend.readAttachmentBytes(
+            sessionKey,
+            sha256: frame.sha256,
+          );
+          if (frameBytes.isEmpty) continue;
+          keyframeImages
+              .add(VideoManifestKeyframeImage(frame: frame, bytes: frameBytes));
+        }
+        final keyframeOcr = await VideoKeyframeOcrWorker.runOnManifestKeyframes(
+          keyframeImages,
           languageHints: languageHints,
         );
-        if (ocr == null) continue;
-
-        processedSegments += 1;
-        totalFrameCount += ocr.frameCount;
-        totalProcessedFrames += ocr.processedFrames;
-        ocrTruncated = ocrTruncated || ocr.isTruncated;
-
-        final engine = ocr.engine.trim();
-        if (engine.isNotEmpty) {
-          ocrEngines.add(engine);
+        if (keyframeOcr != null) {
+          ocrKeyframes
+            ..clear()
+            ..addAll(keyframeImages.map((item) => item.frame));
+          processedSegments = 1;
+          totalFrameCount = keyframeOcr.frameCount;
+          totalProcessedFrames = keyframeOcr.processedFrames;
+          ocrTruncated = ocrTruncated || keyframeOcr.isTruncated;
+          final engine = keyframeOcr.engine.trim();
+          if (engine.isNotEmpty) {
+            ocrEngines.add(engine);
+          }
+          final full = keyframeOcr.fullText.trim();
+          if (full.isNotEmpty) {
+            ocrBlocks.add(full);
+          }
         }
+      }
 
-        final full = ocr.fullText.trim();
-        if (full.isEmpty) continue;
-        if (segmentRefs.length <= 1) {
-          ocrBlocks.add(full);
-        } else {
-          ocrBlocks.add('[segment ${i + 1}]\n$full');
+      if (processedSegments <= 0) {
+        for (var i = 0; i < segmentRefs.length; i++) {
+          final segment = segmentRefs[i];
+          final segmentBytes = await backend.readAttachmentBytes(
+            sessionKey,
+            sha256: segment.sha256,
+          );
+          if (segmentBytes.isEmpty) continue;
+
+          final ocr = await VideoKeyframeOcrWorker.runOnVideoBytes(
+            segmentBytes,
+            sourceMimeType: segment.mimeType,
+            maxFrames: maxFramesPerSegment,
+            frameIntervalSeconds: 5,
+            languageHints: languageHints,
+          );
+          if (ocr == null) continue;
+
+          processedSegments += 1;
+          totalFrameCount += ocr.frameCount;
+          totalProcessedFrames += ocr.processedFrames;
+          ocrTruncated = ocrTruncated || ocr.isTruncated;
+
+          final engine = ocr.engine.trim();
+          if (engine.isNotEmpty) {
+            ocrEngines.add(engine);
+          }
+
+          final full = ocr.fullText.trim();
+          if (full.isEmpty) continue;
+          if (segmentRefs.length <= 1) {
+            ocrBlocks.add(full);
+          } else {
+            ocrBlocks.add('[segment ${i + 1}]\n$full');
+          }
         }
       }
 
@@ -203,6 +240,18 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
         'ocr_is_truncated': ocrTruncated,
         'ocr_page_count': totalFrameCount,
         'ocr_processed_pages': totalProcessedFrames,
+        if (ocrKeyframes.isNotEmpty)
+          'ocr_keyframes': ocrKeyframes
+              .map(
+                (frame) => <String, Object?>{
+                  'index': frame.index,
+                  'sha256': frame.sha256,
+                  'mime_type': frame.mimeType,
+                  't_ms': frame.tMs,
+                  'kind': frame.kind,
+                },
+              )
+              .toList(growable: false),
       });
       await backend.markAttachmentAnnotationOkJson(
         sessionKey,

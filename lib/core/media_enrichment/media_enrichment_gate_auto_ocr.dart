@@ -513,11 +513,14 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
 
         final ocrBlocks = <String>[];
         final ocrEngines = <String>[];
+        final ocrKeyframes = <VideoManifestPreviewRef>[];
         var totalFrameCount = 0;
         var totalProcessedFrames = 0;
         var processedSegments = 0;
         var ocrTruncated = manifest.segments.length > segmentRefs.length;
         final insightCandidates = <({Uint8List bytes, String mimeType})>[];
+        Future<VideoKeyframeOcrResult?>? manifestKeyframeOcrFuture;
+        var manifestKeyframeOcrConsumed = false;
 
         for (var i = 0; i < segmentRefs.length; i++) {
           final segment = segmentRefs[i];
@@ -551,6 +554,19 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
               );
             },
             runKeyframeOcr: () {
+              if (manifest.keyframes.isNotEmpty) {
+                if (manifestKeyframeOcrConsumed) return Future.value(null);
+                manifestKeyframeOcrConsumed = true;
+                manifestKeyframeOcrFuture ??=
+                    _loadManifestKeyframeOcrForAutoOcr(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  manifest: manifest,
+                  languageHints: languageHints,
+                  ocrKeyframes: ocrKeyframes,
+                );
+                return manifestKeyframeOcrFuture!;
+              }
               return VideoKeyframeOcrWorker.runOnVideoBytes(
                 segmentBytes,
                 sourceMimeType: segment.mimeType,
@@ -673,6 +689,7 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           totalProcessedFrames: totalProcessedFrames,
           heuristicContentKind: heuristicContentKind,
           multimodalInsight: multimodalInsight,
+          ocrKeyframes: ocrKeyframes,
           nowMs: DateTime.now().millisecondsSinceEpoch,
         );
 
@@ -721,6 +738,8 @@ Map<String, Object?> buildAutoVideoManifestOcrPayload({
   required int totalProcessedFrames,
   required String heuristicContentKind,
   required MultimodalVideoInsight? multimodalInsight,
+  List<VideoManifestPreviewRef> ocrKeyframes =
+      const <VideoManifestPreviewRef>[],
   required int nowMs,
 }) {
   final videoContentKind = _resolvedVideoContentKindForAutoOcr(
@@ -808,6 +827,21 @@ Map<String, Object?> buildAutoVideoManifestOcrPayload({
   updatedPayload['ocr_is_truncated'] = ocrTruncated;
   updatedPayload['ocr_page_count'] = totalFrameCount;
   updatedPayload['ocr_processed_pages'] = totalProcessedFrames;
+  if (ocrKeyframes.isNotEmpty) {
+    updatedPayload['ocr_keyframes'] = ocrKeyframes
+        .map(
+          (frame) => <String, Object?>{
+            'index': frame.index,
+            'sha256': frame.sha256,
+            'mime_type': frame.mimeType,
+            't_ms': frame.tMs,
+            'kind': frame.kind,
+          },
+        )
+        .toList(growable: false);
+  } else {
+    updatedPayload.remove('ocr_keyframes');
+  }
   updatedPayload['video_content_kind'] = videoContentKind;
 
   final videoContentKindEngine = (multimodalInsight?.engine ?? '').trim();
