@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
 import 'ai_routing.dart';
+import 'semantic_parse_edit_policy.dart';
 import '../../features/actions/review/review_backoff.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
 import '../../features/actions/todo/message_action_resolver.dart';
@@ -11,6 +13,8 @@ import '../../features/actions/todo/todo_linking.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart' as rust_semantic;
 import '../backend/app_backend.dart';
+import '../backend/attachments_backend.dart';
+import '../backend/native_backend.dart';
 import 'semantic_parse.dart';
 
 final class SemanticParseAutoActionJob {
@@ -41,6 +45,18 @@ final class SemanticParseTodoCandidate {
   final String title;
   final String status;
   final String? dueLocalIso;
+}
+
+final class SemanticParseMessageInput {
+  const SemanticParseMessageInput({
+    required this.sourceText,
+    required this.analysisText,
+    required this.allowCreate,
+  });
+
+  final String sourceText;
+  final String analysisText;
+  final bool allowCreate;
 }
 
 final class SemanticParseJobSucceededArgs {
@@ -83,7 +99,7 @@ abstract class SemanticParseAutoActionsStore {
     int limit = 5,
   });
 
-  Future<String?> getMessageText(String messageId);
+  Future<SemanticParseMessageInput?> getMessageInput(String messageId);
 
   Future<List<SemanticParseTodoCandidate>> listOpenTodoCandidates({
     required String query,
@@ -202,8 +218,9 @@ final class SemanticParseAutoActionsRunner {
         continue;
       }
 
-      final messageText = (await store.getMessageText(job.messageId))?.trim();
-      if (messageText == null || messageText.isEmpty) {
+      final messageInput = await store.getMessageInput(job.messageId);
+      final analysisText = messageInput?.analysisText.trim() ?? '';
+      if (analysisText.isEmpty) {
         await store.markJobCanceled(messageId: job.messageId, nowMs: nowMs);
         didUpdateJobs = true;
         continue;
@@ -214,7 +231,7 @@ final class SemanticParseAutoActionsRunner {
         didUpdateJobs = true;
 
         final candidates = await store.listOpenTodoCandidates(
-          query: messageText,
+          query: analysisText,
           nowLocal: nowLocal,
           limit: 8,
         );
@@ -226,7 +243,7 @@ final class SemanticParseAutoActionsRunner {
         try {
           final json = await client
               .parseMessageActionJson(
-                text: messageText,
+                text: analysisText,
                 nowLocalIso: nowLocal.toIso8601String(),
                 localeTag: localeTag,
                 dayEndMinutes: dayEndMinutes,
@@ -248,7 +265,7 @@ final class SemanticParseAutoActionsRunner {
           }
         } catch (_) {
           final localDecision = _resolveLocallyWhenRemoteFails(
-            messageText,
+            analysisText,
             locale: locale,
             nowLocal: nowLocal,
             dayEndMinutes: dayEndMinutes,
@@ -281,6 +298,20 @@ final class SemanticParseAutoActionsRunner {
               :final dueAtLocal,
               :final recurrenceRule,
             ):
+            if (!(messageInput?.allowCreate ?? false)) {
+              await store.markJobSucceeded(
+                SemanticParseJobSucceededArgs(
+                  messageId: job.messageId,
+                  appliedActionKind: 'none',
+                  appliedTodoId: null,
+                  appliedTodoTitle: null,
+                  appliedPrevTodoStatus: null,
+                  nowMs: nowMs,
+                ),
+              );
+              didUpdateJobs = true;
+              break;
+            }
             final appliedTodoId = await store.upsertTodoFromMessage(
               messageId: job.messageId,
               title: title,
@@ -440,6 +471,24 @@ final class BackendSemanticParseAutoActionsStore
   final AppBackend _backend;
   final Uint8List _sessionKey;
 
+  static const int _kMaxAttachmentSemanticSnippets = 10;
+  static const int _kMaxAttachmentSnippetRunes = 320;
+  static const int _kMaxSemanticAnalysisRunes = 2400;
+  static const List<String> _kAttachmentSemanticPayloadKeys = <String>[
+    'caption_long',
+    'summary',
+    'video_summary',
+    'extracted_text_excerpt',
+    'extracted_text_full',
+    'readable_text_excerpt',
+    'readable_text_full',
+    'ocr_text_excerpt',
+    'ocr_text_full',
+    'ocr_text',
+    'transcript_excerpt',
+    'transcript_full',
+  ];
+
   @override
   Future<List<SemanticParseAutoActionJob>> listDueJobs({
     required int nowMs,
@@ -464,9 +513,131 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<String?> getMessageText(String messageId) async {
+  Future<SemanticParseMessageInput?> getMessageInput(String messageId) async {
     final msg = await _backend.getMessageById(_sessionKey, messageId);
-    return msg?.content;
+    final sourceText = (msg?.content ?? '').trim();
+
+    final attachmentSnippets = await _loadAttachmentSemanticSnippets(messageId);
+    final hasAttachmentSemanticContext = attachmentSnippets.isNotEmpty;
+
+    final chunks = <String>[];
+    if (sourceText.isNotEmpty) chunks.add(sourceText);
+    chunks.addAll(attachmentSnippets);
+
+    final analysisText = _truncateToRunes(
+      chunks.join('\n'),
+      _kMaxSemanticAnalysisRunes,
+    ).trim();
+    if (analysisText.isEmpty) return null;
+
+    final allowCreate = sourceText.isNotEmpty &&
+        !isLongTextForTodoAutomation(sourceText) &&
+        !hasAttachmentSemanticContext;
+
+    return SemanticParseMessageInput(
+      sourceText: sourceText,
+      analysisText: analysisText,
+      allowCreate: allowCreate,
+    );
+  }
+
+  Future<List<String>> _loadAttachmentSemanticSnippets(String messageId) async {
+    if (_backend is! AttachmentsBackend) return const <String>[];
+
+    final attachmentsBackend = _backend as AttachmentsBackend;
+    List<Attachment> attachments = const <Attachment>[];
+    try {
+      attachments = await attachmentsBackend.listMessageAttachments(
+        _sessionKey,
+        messageId,
+      );
+    } catch (_) {
+      return const <String>[];
+    }
+    if (attachments.isEmpty) return const <String>[];
+
+    final snippets = <String>[];
+    final seen = <String>{};
+
+    void addSnippet(String? raw) {
+      final normalized = _normalizeSemanticSnippet(raw);
+      if (normalized == null) return;
+      if (!seen.add(normalized)) return;
+      snippets.add(normalized);
+    }
+
+    final backend = _backend;
+
+    for (final attachment in attachments) {
+      if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+
+      try {
+        final caption =
+            await attachmentsBackend.readAttachmentAnnotationCaptionLong(
+          _sessionKey,
+          sha256: attachment.sha256,
+        );
+        addSnippet(caption);
+      } catch (_) {
+        // Ignore and continue with other signals.
+      }
+
+      if (backend is NativeAppBackend) {
+        try {
+          final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+            _sessionKey,
+            sha256: attachment.sha256,
+          );
+          if (payloadJson != null && payloadJson.trim().isNotEmpty) {
+            for (final snippet in _extractSemanticSnippetsFromPayload(
+              payloadJson,
+            )) {
+              addSnippet(snippet);
+              if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+            }
+          }
+        } catch (_) {
+          // Ignore and continue with other attachments.
+        }
+      }
+    }
+
+    return snippets;
+  }
+
+  static List<String> _extractSemanticSnippetsFromPayload(String payloadJson) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(payloadJson);
+    } catch (_) {
+      return const <String>[];
+    }
+    if (decoded is! Map) return const <String>[];
+
+    final payload = Map<String, Object?>.from(decoded);
+    final out = <String>[];
+    for (final key in _kAttachmentSemanticPayloadKeys) {
+      final value = payload[key];
+      if (value is! String) continue;
+      final normalized = _normalizeSemanticSnippet(value);
+      if (normalized == null) continue;
+      out.add(normalized);
+    }
+    return out;
+  }
+
+  static String? _normalizeSemanticSnippet(String? raw) {
+    if (raw == null) return null;
+    final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (collapsed.isEmpty) return null;
+    return _truncateToRunes(collapsed, _kMaxAttachmentSnippetRunes);
+  }
+
+  static String _truncateToRunes(String value, int maxRunes) {
+    if (maxRunes <= 0) return '';
+    final runes = value.runes;
+    if (runes.length <= maxRunes) return value;
+    return String.fromCharCodes(runes.take(maxRunes));
   }
 
   @override

@@ -550,6 +550,66 @@ WHERE id IN (
     Ok(())
 }
 
+fn attachment_payload_has_semantic_signal(payload: &serde_json::Value) -> bool {
+    let auto_status = payload
+        .get("ocr_auto_status")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if matches!(auto_status.as_str(), "running" | "queued" | "failed") {
+        return false;
+    }
+
+    const SIGNAL_KEYS: &[&str] = &[
+        "caption_long",
+        "summary",
+        "video_summary",
+        "extracted_text_excerpt",
+        "extracted_text_full",
+        "readable_text_excerpt",
+        "readable_text_full",
+        "ocr_text_excerpt",
+        "ocr_text_full",
+        "ocr_text",
+        "transcript_excerpt",
+        "transcript_full",
+    ];
+
+    SIGNAL_KEYS.iter().any(|key| {
+        payload
+            .get(*key)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .is_some_and(|v| !v.is_empty())
+    })
+}
+
+fn enqueue_semantic_parse_jobs_for_attachment_messages(
+    conn: &Connection,
+    attachment_sha256: &str,
+    now_ms: i64,
+) -> Result<()> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT m.id
+FROM message_attachments ma
+JOIN messages m ON m.id = ma.message_id
+WHERE ma.attachment_sha256 = ?1
+  AND COALESCE(m.is_deleted, 0) = 0
+  AND COALESCE(m.is_memory, 1) = 1
+  AND m.role = 'user'
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![attachment_sha256])?;
+    while let Some(row) = rows.next()? {
+        let message_id: String = row.get(0)?;
+        enqueue_semantic_parse_job(conn, &message_id, now_ms)?;
+    }
+    Ok(())
+}
+
 fn attachment_exists(conn: &Connection, attachment_sha256: &str) -> Result<bool> {
     let exists: Option<i64> = conn
         .query_row(
@@ -749,6 +809,9 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
     insert_oplog(conn, key, &op)?;
 
     mark_messages_linked_to_attachment_for_reembedding(conn, attachment_sha256)?;
+    if attachment_payload_has_semantic_signal(payload) {
+        enqueue_semantic_parse_jobs_for_attachment_messages(conn, attachment_sha256, now_ms)?;
+    }
     Ok(())
 }
 
