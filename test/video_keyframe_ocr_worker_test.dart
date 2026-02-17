@@ -221,4 +221,54 @@ void main() {
     expect(fpsRunCount, 1);
     expect(ocrCalls, 2);
   });
+
+  test('VideoKeyframeOcrWorker reuses manifest keyframes for OCR', () async {
+    var ocrCalls = 0;
+
+    final result = await VideoKeyframeOcrWorker.runOnManifestKeyframes(
+      [
+        VideoManifestKeyframeImage(
+          frame: const VideoManifestPreviewRef(
+            index: 0,
+            sha256: 'sha-kf-0',
+            mimeType: 'image/jpeg',
+            tMs: 0,
+            kind: 'scene',
+          ),
+          bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+        ),
+        VideoManifestKeyframeImage(
+          frame: const VideoManifestPreviewRef(
+            index: 4,
+            sha256: 'sha-kf-4',
+            mimeType: 'image/jpeg',
+            tMs: 8000,
+            kind: 'slide',
+          ),
+          bytes: Uint8List.fromList(const <int>[4, 5, 6]),
+        ),
+      ],
+      languageHints: 'device_plus_en',
+      ocrImageFn: (bytes, {required languageHints}) async {
+        ocrCalls += 1;
+        return PlatformPdfOcrResult(
+          fullText: ocrCalls == 1 ? 'intro text' : 'chapter text',
+          excerpt: ocrCalls == 1 ? 'intro text' : 'chapter text',
+          engine: 'apple_vision',
+          isTruncated: false,
+          pageCount: 1,
+          processedPages: 1,
+        );
+      },
+    );
+
+    expect(result, isNotNull);
+    expect(result!.engine, 'apple_vision');
+    expect(result.frameCount, 2);
+    expect(result.processedFrames, 2);
+    expect(result.fullText, contains('[keyframe 1 @0ms]'));
+    expect(result.fullText, contains('[keyframe 5 @8000ms]'));
+    expect(result.fullText, contains('intro text'));
+    expect(result.fullText, contains('chapter text'));
+  });
 }

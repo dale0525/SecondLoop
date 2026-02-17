@@ -45,3 +45,30 @@ String _dominantStringForAutoOcr(List<String> values) {
   });
   return winner;
 }
+
+Future<VideoKeyframeOcrResult?> _loadManifestKeyframeOcrForAutoOcr({
+  required NativeAppBackend backend,
+  required Uint8List sessionKey,
+  required ParsedVideoManifest manifest,
+  required String languageHints,
+  required List<VideoManifestPreviewRef> ocrKeyframes,
+}) async {
+  final keyframeImages = <VideoManifestKeyframeImage>[];
+  for (final frame in manifest.keyframes) {
+    final frameBytes = await backend.readAttachmentBytes(
+      sessionKey,
+      sha256: frame.sha256,
+    );
+    if (frameBytes.isEmpty) continue;
+    keyframeImages
+        .add(VideoManifestKeyframeImage(frame: frame, bytes: frameBytes));
+  }
+  if (keyframeImages.isEmpty) return null;
+  ocrKeyframes
+    ..clear()
+    ..addAll(keyframeImages.map((item) => item.frame));
+  return VideoKeyframeOcrWorker.runOnManifestKeyframes(
+    keyframeImages,
+    languageHints: languageHints,
+  );
+}

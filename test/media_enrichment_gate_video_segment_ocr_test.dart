@@ -169,6 +169,15 @@ void main() {
         totalProcessedFrames: 3,
         heuristicContentKind: 'non_knowledge',
         multimodalInsight: multimodalInsight,
+        ocrKeyframes: const <VideoManifestPreviewRef>[
+          VideoManifestPreviewRef(
+            index: 1,
+            sha256: 'sha-kf-1',
+            mimeType: 'image/jpeg',
+            tMs: 1000,
+            kind: 'slide',
+          ),
+        ],
         nowMs: 1700000000000,
       );
 
@@ -192,6 +201,18 @@ void main() {
       expect(payload.containsKey('video_description_excerpt'), isFalse);
       expect(payload['ocr_auto_status'], 'ok');
       expect(payload['ocr_auto_last_success_ms'], 1700000000000);
+      expect(
+        payload['ocr_keyframes'],
+        [
+          {
+            'index': 1,
+            'sha256': 'sha-kf-1',
+            'mime_type': 'image/jpeg',
+            't_ms': 1000,
+            'kind': 'slide',
+          },
+        ],
+      );
 
       final viewerInsight = resolveVideoManifestInsightContent(payload);
       expect(viewerInsight, isNotNull);
