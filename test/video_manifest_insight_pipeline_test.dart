@@ -157,6 +157,31 @@ void main() {
     },
   );
 
+  test(
+    'viewer insight infers knowledge from long transcript when kind is missing',
+    () {
+      final longTranscript = List<String>.filled(
+        80,
+        'Lesson objective: understand conditional clauses with examples.',
+      ).join('\n');
+      final payload = <String, Object?>{
+        'video_segment_count': 4,
+        'video_processed_segment_count': 0,
+        'needs_ocr': false,
+        'transcript_full': longTranscript,
+        'transcript_excerpt': 'Lesson objective: conditional clauses.',
+      };
+
+      final viewerInsight = resolveVideoManifestInsightContent(payload);
+
+      expect(viewerInsight, isNotNull);
+      expect(viewerInsight!.contentKind, 'knowledge');
+      expect(viewerInsight.summary, contains('conditional clauses'));
+      expect(viewerInsight.detail, contains('Lesson objective'));
+      expect(viewerInsight.processedSegmentCount, 4);
+    },
+  );
+
   test('viewer insight ignores legacy video_kind aliases and infers from text',
       () {
     final payload = <String, Object?>{
