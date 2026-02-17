@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -26,12 +27,40 @@ class _LockGateState extends State<LockGate> {
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kMasterPasswordSetupRequiredPrefsKey =
       'master_password_setup_required_v1';
+  static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
 
   Uint8List _createSessionKey() {
     final random = Random.secure();
     return Uint8List.fromList(
       List<int>.generate(32, (_) => random.nextInt(256)),
     );
+  }
+
+  Uint8List? _decodeSessionKeyB64(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final bytes = base64Decode(value);
+      if (bytes.length != 32) return null;
+      return Uint8List.fromList(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List> _loadOrCreateDeferredSessionKey(
+    SharedPreferences prefs,
+  ) async {
+    final stored = _decodeSessionKeyB64(
+      prefs.getString(_kDeferredSessionKeyB64PrefsKey),
+    );
+    if (stored != null) return stored;
+
+    final generated = _createSessionKey();
+    await prefs.setString(
+      _kDeferredSessionKeyB64PrefsKey,
+      base64Encode(generated),
+    );
+    return generated;
   }
 
   void _lock() {
@@ -54,22 +83,15 @@ class _LockGateState extends State<LockGate> {
         return const _GateBootstrapResult.needsSetup();
       }
 
-      final savedKey = await backend.loadSavedSessionKey();
-      if (savedKey != null && savedKey.length == 32) {
-        return _GateBootstrapResult.unlocked(savedKey);
-      }
-
-      if (savedKey != null && savedKey.length != 32) {
-        await backend.clearSavedSessionKey();
-      }
-
-      final generatedKey = _createSessionKey();
-      await backend.saveSessionKey(generatedKey);
-      return _GateBootstrapResult.unlocked(generatedKey);
+      final deferredKey = await _loadOrCreateDeferredSessionKey(prefs);
+      return _GateBootstrapResult.unlocked(deferredKey);
     }
 
     if (setupRequired) {
       await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
+    }
+    if (prefs.containsKey(_kDeferredSessionKeyB64PrefsKey)) {
+      await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
     }
 
     if (appLockEnabled) return const _GateBootstrapResult.needsUnlock();

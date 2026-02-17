@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 import '../semantic_parse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_embedding_model_name_for_platform`, `finish_ask_ai_stream`, `key_from_bytes`, `normalize_embedding_model_name`, `sync_key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `default_embedding_model_name_for_platform`, `emit_ask_ai_meta_if_any`, `finish_ask_ai_stream`, `key_from_bytes`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -17,6 +17,13 @@ Future<Uint8List> authInitMasterPassword(
         {required String appDir, required String password}) =>
     RustLib.instance.api
         .crateApiCoreAuthInitMasterPassword(appDir: appDir, password: password);
+
+Future<Uint8List> authInitMasterPasswordWithExistingKey(
+        {required String appDir,
+        required String password,
+        required List<int> key}) =>
+    RustLib.instance.api.crateApiCoreAuthInitMasterPasswordWithExistingKey(
+        appDir: appDir, password: password, key: key);
 
 Future<Uint8List> authUnlockWithPassword(
         {required String appDir, required String password}) =>

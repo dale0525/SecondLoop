@@ -83,6 +83,7 @@ class NativeAppBackend
 
   static const _kLegacyPrefsAutoUnlockEnabled = 'auto_unlock_enabled_v1';
   static const _kLegacyPrefsSessionKeyB64 = 'session_key_b64_v1';
+  static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
 
   static Future<String> _defaultAppDirProvider() async {
     final dir = await getApplicationSupportDirectory();
@@ -206,7 +207,44 @@ class NativeAppBackend
   @override
   Future<Uint8List> initMasterPassword(String password) async {
     final appDir = await _getAppDir();
-    return rust_core.authInitMasterPassword(appDir: appDir, password: password);
+    final prefs = await SharedPreferences.getInstance();
+    final deferredB64 = prefs.getString(_kDeferredSessionKeyB64PrefsKey);
+
+    Future<Uint8List> init() async {
+      if (deferredB64 == null || deferredB64.isEmpty) {
+        return rust_core.authInitMasterPassword(
+          appDir: appDir,
+          password: password,
+        );
+      }
+
+      try {
+        final deferred = base64Decode(deferredB64);
+        if (deferred.length != 32) {
+          await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+          return rust_core.authInitMasterPassword(
+            appDir: appDir,
+            password: password,
+          );
+        }
+
+        return rust_core.authInitMasterPasswordWithExistingKey(
+          appDir: appDir,
+          password: password,
+          key: deferred,
+        );
+      } catch (_) {
+        await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+        return rust_core.authInitMasterPassword(
+          appDir: appDir,
+          password: password,
+        );
+      }
+    }
+
+    final key = await init();
+    await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+    return key;
   }
 
   @override

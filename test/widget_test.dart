@@ -17,7 +17,8 @@ void main() {
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
 
-    await tester.pumpWidget(MyApp(backend: FakeBackend()));
+    final backend = FakeBackend();
+    await tester.pumpWidget(MyApp(backend: backend));
     for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 100));
       if (find.text('Main Stream').evaluate().isNotEmpty) break;
@@ -25,6 +26,11 @@ void main() {
 
     expect(find.text('Set master password'), findsNothing);
     expect(find.text('Main Stream'), findsWidgets);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('deferred_session_key_b64_v1'), isNotEmpty);
+    expect(backend.saveSessionKeyCalls, 0);
+    expect(backend.loadSavedSessionKeyCalls, 0);
   });
 
   testWidgets('Settings shows Sync entry', (WidgetTester tester) async {
@@ -53,6 +59,8 @@ void main() {
 }
 
 class FakeBackend extends AppBackend {
+  int saveSessionKeyCalls = 0;
+  int loadSavedSessionKeyCalls = 0;
   @override
   Future<void> init() async {}
 
@@ -60,7 +68,10 @@ class FakeBackend extends AppBackend {
   Future<bool> isMasterPasswordSet() async => false;
 
   @override
-  Future<Uint8List?> loadSavedSessionKey() async => null;
+  Future<Uint8List?> loadSavedSessionKey() async {
+    loadSavedSessionKeyCalls += 1;
+    return null;
+  }
 
   @override
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
@@ -72,7 +83,9 @@ class FakeBackend extends AppBackend {
   Future<void> clearSavedSessionKey() async {}
 
   @override
-  Future<void> saveSessionKey(Uint8List key) async {}
+  Future<void> saveSessionKey(Uint8List key) async {
+    saveSessionKeyCalls += 1;
+  }
 
   @override
   Future<void> validateKey(Uint8List key) async {}
