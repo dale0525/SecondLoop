@@ -19,6 +19,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     required Map<String, _TodoMessageBadgeMeta> linkedTodoBadgeByMessageId,
     required String displayText,
   }) {
+    final linkedBadge = linkedTodoBadgeByMessageId[message.id];
+    if (linkedBadge != null) return linkedBadge;
+
     final job = jobsByMessageId[message.id];
     if (job != null && job.status == 'succeeded' && job.undoneAtMs == null) {
       final kind = job.appliedActionKind?.trim();
@@ -37,7 +40,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
       }
     }
 
-    return linkedTodoBadgeByMessageId[message.id];
+    return null;
   }
 
   String _todoMessageBadgeLabel(
