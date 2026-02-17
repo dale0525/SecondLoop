@@ -511,12 +511,17 @@ fn decode_local_whisper_wav_bytes(wav_bytes: &[u8]) -> Result<Vec<f32>> {
 }
 
 fn build_local_whisper_context_parameters() -> whisper_rs::WhisperContextParameters<'static> {
+    #[cfg(target_os = "macos")]
     let mut context_params = whisper_rs::WhisperContextParameters::default();
+    #[cfg(not(target_os = "macos"))]
+    let context_params = whisper_rs::WhisperContextParameters::default();
+
     #[cfg(target_os = "macos")]
     {
         context_params.use_gpu(true);
         context_params.gpu_device(0);
     }
+
     context_params
 }
 
