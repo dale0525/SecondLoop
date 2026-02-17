@@ -80,6 +80,10 @@ jobs:
       RUSTFLAGS: "-C debuginfo=0"
     steps:
       - uses: actions/checkout@v4
+      - name: Install Vulkan development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.1"
