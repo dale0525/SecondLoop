@@ -112,7 +112,6 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       },
       'device_id': deviceId,
       'cloud': <String, Object?>{
-        'gateway_base_url': cloudScope?.gatewayConfig.baseUrl,
         'uid': cloudScope?.controller.uid,
         'subscription_status': subscription?.name,
       },

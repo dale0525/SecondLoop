@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -41,5 +42,48 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('diagnostics_page')), findsOneWidget);
+  });
+
+  testWidgets('Diagnostics JSON does not expose cloud gateway URL', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final diagnosticsFinder =
+        find.byKey(const ValueKey('settings_diagnostics'));
+    await tester.scrollUntilVisible(
+      diagnosticsFinder,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(diagnosticsFinder);
+    await tester.pumpAndSettle();
+
+    final diagnosticsJsonText = tester.widget<SelectableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('diagnostics_page')),
+        matching: find.byType(SelectableText),
+      ),
+    );
+    final diagnosticsJson =
+        jsonDecode(diagnosticsJsonText.data!) as Map<String, Object?>;
+    final cloud = diagnosticsJson['cloud'] as Map<String, Object?>;
+
+    expect(cloud.containsKey('gateway_base_url'), isFalse);
   });
 }
