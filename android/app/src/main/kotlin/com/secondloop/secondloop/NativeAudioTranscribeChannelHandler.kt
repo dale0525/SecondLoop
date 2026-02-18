@@ -27,6 +27,7 @@ import java.nio.ByteOrder
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -169,6 +170,8 @@ class NativeAudioTranscribeChannelHandler(
 
     var transcript: String? = null
     var errorReason: String? = null
+    val segmentedTranscripts = mutableListOf<String>()
+    val segmentedSessionMode = AtomicBoolean(false)
     val done = CountDownLatch(1)
     val mainHandler = Handler(Looper.getMainLooper())
 
@@ -189,12 +192,28 @@ class NativeAudioTranscribeChannelHandler(
       }
 
       override fun onResults(results: Bundle?) {
-        val candidates =
-          results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            ?: arrayListOf()
-        transcript = candidates.firstOrNull { it.trim().isNotEmpty() }?.trim()
+        transcript = extractTranscriptCandidate(results)
         if (transcript.isNullOrEmpty()) {
           errorReason = "speech_transcript_empty"
+        }
+        done.countDown()
+      }
+
+      override fun onSegmentResults(segmentResults: Bundle) {
+        segmentedSessionMode.set(true)
+
+        val segment = extractTranscriptCandidate(segmentResults) ?: return
+        if (segmentedTranscripts.isEmpty() || segmentedTranscripts.last() != segment) {
+          segmentedTranscripts.add(segment)
+        }
+      }
+
+      override fun onEndOfSegmentedSession() {
+        if (segmentedSessionMode.get()) {
+          transcript = segmentedTranscripts.joinToString(separator = " ").trim()
+          if (transcript.isNullOrEmpty()) {
+            errorReason = "speech_transcript_empty"
+          }
         }
         done.countDown()
       }
@@ -297,8 +316,15 @@ class NativeAudioTranscribeChannelHandler(
       putExtra(kExtraAudioSourceChannelCount, kTargetChannelCount)
       putExtra(kExtraAudioSourceEncoding, AudioFormat.ENCODING_PCM_16BIT)
       putExtra(kExtraAudioSourceSamplingRate, kTargetSampleRate)
-      putExtra(kExtraSegmentedSession, true)
+      putExtra(kExtraSegmentedSession, kExtraAudioSource)
     }
+  }
+
+  private fun extractTranscriptCandidate(results: Bundle?): String? {
+    val candidates =
+      results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        ?: arrayListOf()
+    return candidates.firstOrNull { it.trim().isNotEmpty() }?.trim()
   }
 
   private fun createSpeechRecognizer(): SpeechRecognizer {
