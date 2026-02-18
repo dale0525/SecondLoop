@@ -13,6 +13,8 @@ import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
 import 'ai_routing.dart';
+import 'embeddings_data_consent_prefs.dart';
+import 'embeddings_source_prefs.dart';
 import 'semantic_parse_auto_actions_runner.dart';
 import 'semantic_parse_data_consent_prefs.dart';
 
@@ -33,6 +35,7 @@ class _SemanticParseAutoActionsGateState
   static const _kFailureInterval = Duration(seconds: 10);
 
   static const _kHardTimeout = Duration(seconds: 60);
+  static const _kCloudEmbeddingsModelName = 'baai/bge-m3';
   static const _kMinAutoConfidence = 0.86;
   static const _kBatchLimit = 5;
 
@@ -164,9 +167,9 @@ class _SemanticParseAutoActionsGateState
         idToken = null;
       }
 
-      AskAiRouteKind route;
+      AskAiRouteKind askAiRoute;
       try {
-        route = await decideAiAutomationRoute(
+        askAiRoute = await decideAiAutomationRoute(
           backend,
           Uint8List.fromList(sessionKey),
           cloudIdToken: idToken,
@@ -174,14 +177,45 @@ class _SemanticParseAutoActionsGateState
           subscriptionStatus: subscriptionStatus,
         );
       } catch (_) {
-        route = AskAiRouteKind.needsSetup;
+        askAiRoute = AskAiRouteKind.needsSetup;
       }
 
       if (!mounted) return;
-      if (route == AskAiRouteKind.needsSetup) {
+      if (askAiRoute == AskAiRouteKind.needsSetup) {
         _schedule(_kIdleInterval);
         return;
       }
+
+      final cloudAvailable =
+          subscriptionStatus == SubscriptionStatus.entitled &&
+              idToken != null &&
+              idToken.trim().isNotEmpty &&
+              gatewayConfig.baseUrl.trim().isNotEmpty;
+
+      final embeddingsPreference = switch (
+          (prefs.getString(EmbeddingsSourcePrefs.prefsKey) ?? '').trim()) {
+        'cloud' => EmbeddingsSourcePreference.cloud,
+        'byok' => EmbeddingsSourcePreference.byok,
+        'local' => EmbeddingsSourcePreference.local,
+        _ => EmbeddingsSourcePreference.auto,
+      };
+      final cloudEmbeddingsSelected =
+          prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false;
+
+      var hasByokEmbeddingsProfile = false;
+      try {
+        final profiles = await backend.listEmbeddingProfiles(sessionKey);
+        hasByokEmbeddingsProfile = profiles.any((profile) => profile.isActive);
+      } catch (_) {
+        hasByokEmbeddingsProfile = false;
+      }
+
+      final embeddingsRoute = resolveEmbeddingsSourceRoute(
+        embeddingsPreference,
+        cloudEmbeddingsSelected: cloudEmbeddingsSelected,
+        cloudAvailable: cloudAvailable,
+        hasByokProfile: hasByokEmbeddingsProfile,
+      );
 
       final settings = await ActionsSettingsStore.load();
       if (!mounted) return;
@@ -194,10 +228,12 @@ class _SemanticParseAutoActionsGateState
         client: BackendSemanticParseAutoActionsClient(
           backend: backend,
           sessionKey: Uint8List.fromList(sessionKey),
-          route: route,
+          askAiRoute: askAiRoute,
+          embeddingsRoute: embeddingsRoute,
           gatewayBaseUrl: gatewayConfig.baseUrl,
           idToken: (idToken ?? '').trim(),
           modelName: gatewayConfig.modelName,
+          embeddingsModelName: _kCloudEmbeddingsModelName,
         ),
         settings: const SemanticParseAutoActionsRunnerSettings(
           hardTimeout: _kHardTimeout,
