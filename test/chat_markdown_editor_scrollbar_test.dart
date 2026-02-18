@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -232,6 +233,25 @@ void main() {
     },
     variant: const TargetPlatformVariant(
       <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Mobile app bar keeps markdown title fully visible',
+    (tester) async {
+      await pumpEditor(tester, size: const Size(430, 932));
+
+      final titleFinder = find.text('Markdown editor');
+      expect(titleFinder, findsOneWidget);
+
+      final titleRenderParagraph =
+          tester.renderObject<RenderParagraph>(titleFinder);
+
+      expect(titleRenderParagraph.size.width, greaterThan(120));
+      expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.android},
     ),
   );
 }
