@@ -136,6 +136,13 @@ class NativeAudioTranscribeChannelHandler(
       )
     }
 
+    if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+      throw NativeSttException(
+        "native_stt_failed",
+        "speech_offline_unavailable",
+      )
+    }
+
     val pcmAudio = decodeAudioToPcm16Mono16k(audioFile)
     if (pcmAudio.bytes.isEmpty()) {
       throw NativeSttException(
@@ -209,6 +216,9 @@ class NativeAudioTranscribeChannelHandler(
             readFd = readFd,
           ),
         )
+      } catch (error: NativeSttException) {
+        errorReason = error.message
+        done.countDown()
       } catch (_: Throwable) {
         errorReason = "speech_runtime_unavailable"
         done.countDown()
@@ -292,14 +302,28 @@ class NativeAudioTranscribeChannelHandler(
   }
 
   private fun createSpeechRecognizer(): SpeechRecognizer {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      try {
-        return SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-      } catch (_: Throwable) {
-        // Fallback to default speech recognizer service.
-      }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+      throw NativeSttException(
+        "native_stt_failed",
+        "speech_offline_unavailable",
+      )
     }
-    return SpeechRecognizer.createSpeechRecognizer(context)
+
+    if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+      throw NativeSttException(
+        "native_stt_failed",
+        "speech_offline_unavailable",
+      )
+    }
+
+    return try {
+      SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+    } catch (_: Throwable) {
+      throw NativeSttException(
+        "native_stt_failed",
+        "speech_offline_unavailable",
+      )
+    }
   }
 
   private fun normalizePreferredLang(lang: String): String {
@@ -316,6 +340,10 @@ class NativeAudioTranscribeChannelHandler(
   private fun normalizeRecognizerError(error: Int): String {
     return when (error) {
       SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "speech_permission_denied"
+      SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE,
+      SpeechRecognizer.ERROR_CANNOT_LISTEN_TO_DOWNLOAD_EVENTS,
+      -> "speech_offline_unavailable"
+
       SpeechRecognizer.ERROR_AUDIO,
       SpeechRecognizer.ERROR_CLIENT,
       SpeechRecognizer.ERROR_NETWORK,
@@ -326,9 +354,7 @@ class NativeAudioTranscribeChannelHandler(
       SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
       SpeechRecognizer.ERROR_TOO_MANY_REQUESTS,
       SpeechRecognizer.ERROR_CANNOT_CHECK_SUPPORT,
-      SpeechRecognizer.ERROR_CANNOT_LISTEN_TO_DOWNLOAD_EVENTS,
       SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
-      SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE,
       SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
       -> "speech_runtime_unavailable"
 

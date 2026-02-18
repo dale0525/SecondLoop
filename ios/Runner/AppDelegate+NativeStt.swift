@@ -115,11 +115,16 @@ extension AppDelegate {
         return
       }
 
+      if !selection.recognizer.supportsOnDeviceRecognition {
+        completion(nil, "speech_offline_unavailable")
+        return
+      }
+
       let request = SFSpeechURLRecognitionRequest(
         url: URL(fileURLWithPath: audioFilePath)
       )
       request.shouldReportPartialResults = false
-      request.requiresOnDeviceRecognition = false
+      request.requiresOnDeviceRecognition = true
 
       var didComplete = false
       var task: SFSpeechRecognitionTask?
@@ -198,15 +203,31 @@ extension AppDelegate {
       return "speech_permission_restricted"
     }
 
-    if lower.contains("not available") || lower.contains("unavailable") {
-      return "speech_runtime_unavailable"
+    if lower.contains("on-device") &&
+      (lower.contains("not available") || lower.contains("unavailable")) {
+      return "speech_offline_unavailable"
+    }
+
+    if lower.contains("offline") &&
+      (lower.contains("not available") ||
+        lower.contains("unavailable") ||
+        lower.contains("unsupported")) {
+      return "speech_offline_unavailable"
     }
 
     if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1101 {
       return "speech_service_disabled"
     }
 
+    if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1107 {
+      return "speech_offline_unavailable"
+    }
+
     if nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1100 {
+      return "speech_runtime_unavailable"
+    }
+
+    if lower.contains("not available") || lower.contains("unavailable") {
       return "speech_runtime_unavailable"
     }
 
