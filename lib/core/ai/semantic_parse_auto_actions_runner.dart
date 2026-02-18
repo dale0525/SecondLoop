@@ -5,10 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 
 import 'ai_routing.dart';
+import 'embeddings_source_prefs.dart';
 import 'semantic_parse_edit_policy.dart';
 import '../../features/actions/review/review_backoff.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
 import '../../features/actions/todo/message_action_resolver.dart';
+import '../../features/actions/todo/todo_thread_match.dart';
 import '../../features/actions/todo/todo_linking.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart' as rust_semantic;
@@ -105,6 +107,7 @@ abstract class SemanticParseAutoActionsStore {
     required String query,
     required DateTime nowLocal,
     required int limit,
+    List<String> preferredTodoIds = const <String>[],
   });
 
   Future<void> markJobRunning({
@@ -138,6 +141,11 @@ abstract class SemanticParseAutoActionsStore {
 }
 
 abstract class SemanticParseAutoActionsClient {
+  Future<List<String>> retrieveTodoCandidateIds({
+    required String query,
+    required int topK,
+  });
+
   Future<String> parseMessageActionJson({
     required String text,
     required String nowLocalIso,
@@ -230,10 +238,21 @@ final class SemanticParseAutoActionsRunner {
         await store.markJobRunning(messageId: job.messageId, nowMs: nowMs);
         didUpdateJobs = true;
 
+        List<String> preferredTodoIds = const <String>[];
+        try {
+          preferredTodoIds = await client.retrieveTodoCandidateIds(
+            query: analysisText,
+            topK: 8,
+          );
+        } catch (_) {
+          preferredTodoIds = const <String>[];
+        }
+
         final candidates = await store.listOpenTodoCandidates(
           query: analysisText,
           nowLocal: nowLocal,
           limit: 8,
+          preferredTodoIds: preferredTodoIds,
         );
 
         final locale = _localeFromTag(localeTag);
@@ -645,46 +664,70 @@ final class BackendSemanticParseAutoActionsStore
     required String query,
     required DateTime nowLocal,
     required int limit,
+    List<String> preferredTodoIds = const <String>[],
   }) async {
     final todos = await _backend.listTodos(_sessionKey);
     final targets = <TodoLinkTarget>[];
+    final targetsById = <String, TodoLinkTarget>{};
     for (final todo in todos) {
       if (todo.status == 'done' || todo.status == 'dismissed') continue;
       final dueMs = todo.dueAtMs;
-      targets.add(
-        TodoLinkTarget(
-          id: todo.id,
-          title: todo.title,
-          status: todo.status,
-          dueLocal: dueMs == null
-              ? null
-              : DateTime.fromMillisecondsSinceEpoch(
-                  dueMs,
-                  isUtc: true,
-                ).toLocal(),
+      final target = TodoLinkTarget(
+        id: todo.id,
+        title: todo.title,
+        status: todo.status,
+        dueLocal: dueMs == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(
+                dueMs,
+                isUtc: true,
+              ).toLocal(),
+      );
+      targets.add(target);
+      targetsById[target.id] = target;
+    }
+
+    final out = <SemanticParseTodoCandidate>[];
+    final seen = <String>{};
+
+    void appendTarget(TodoLinkTarget target) {
+      if (!seen.add(target.id)) return;
+      out.add(
+        SemanticParseTodoCandidate(
+          id: target.id,
+          title: target.title,
+          status: target.status,
+          dueLocalIso: target.dueLocal?.toIso8601String(),
         ),
       );
     }
+
+    for (final rawId in preferredTodoIds) {
+      if (out.length >= limit) break;
+      final id = rawId.trim();
+      if (id.isEmpty) continue;
+      final target = targetsById[id];
+      if (target == null) continue;
+      appendTarget(target);
+    }
+
+    if (out.length >= limit) {
+      return out;
+    }
+
+    final rankingLimit = (limit + preferredTodoIds.length).clamp(limit, 64);
 
     final ranked = rankTodoCandidates(
       query,
       targets,
       nowLocal: nowLocal,
-      limit: limit,
+      limit: rankingLimit,
     );
-
-    final out = <SemanticParseTodoCandidate>[];
     for (final c in ranked) {
-      final dueIso = c.target.dueLocal?.toIso8601String();
-      out.add(
-        SemanticParseTodoCandidate(
-          id: c.target.id,
-          title: c.target.title,
-          status: c.target.status,
-          dueLocalIso: dueIso,
-        ),
-      );
+      if (out.length >= limit) break;
+      appendTarget(c.target);
     }
+
     return out;
   }
 
@@ -853,10 +896,12 @@ final class BackendSemanticParseAutoActionsClient
   BackendSemanticParseAutoActionsClient({
     required AppBackend backend,
     required Uint8List sessionKey,
-    required this.route,
+    required this.askAiRoute,
+    required this.embeddingsRoute,
     required this.gatewayBaseUrl,
     required this.idToken,
     required this.modelName,
+    this.embeddingsModelName = 'baai/bge-m3',
     this.forceCandidatesLimit = 8,
   })  : _backend = backend,
         _sessionKey = Uint8List.fromList(sessionKey);
@@ -864,11 +909,138 @@ final class BackendSemanticParseAutoActionsClient
   final AppBackend _backend;
   final Uint8List _sessionKey;
 
-  final AskAiRouteKind route;
+  final AskAiRouteKind askAiRoute;
+  final EmbeddingsSourceRouteKind embeddingsRoute;
   final String gatewayBaseUrl;
   final String idToken;
   final String modelName;
+  final String embeddingsModelName;
   final int forceCandidatesLimit;
+
+  static const int _kTodoSyncLimit = 16;
+  static const int _kActivitySyncLimit = 32;
+
+  @override
+  Future<List<String>> retrieveTodoCandidateIds({
+    required String query,
+    required int topK,
+  }) async {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty || topK <= 0) {
+      return const <String>[];
+    }
+
+    for (final route in _embeddingsRouteFallbackOrder()) {
+      try {
+        await _refreshTodoThreadEmbeddings(route);
+        final matches = await _searchSimilarTodoThreads(
+          trimmedQuery,
+          topK,
+          route,
+        );
+        return _extractTodoIds(matches, topK);
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return const <String>[];
+  }
+
+  List<EmbeddingsSourceRouteKind> _embeddingsRouteFallbackOrder() {
+    return switch (embeddingsRoute) {
+      EmbeddingsSourceRouteKind.cloudGateway =>
+        const <EmbeddingsSourceRouteKind>[
+          EmbeddingsSourceRouteKind.cloudGateway,
+          EmbeddingsSourceRouteKind.byok,
+          EmbeddingsSourceRouteKind.local,
+        ],
+      EmbeddingsSourceRouteKind.byok => const <EmbeddingsSourceRouteKind>[
+          EmbeddingsSourceRouteKind.byok,
+          EmbeddingsSourceRouteKind.local,
+        ],
+      EmbeddingsSourceRouteKind.local => const <EmbeddingsSourceRouteKind>[
+          EmbeddingsSourceRouteKind.local,
+        ],
+    };
+  }
+
+  List<String> _extractTodoIds(List<TodoThreadMatch> matches, int topK) {
+    if (matches.isEmpty) {
+      return const <String>[];
+    }
+
+    final out = <String>[];
+    final seen = <String>{};
+    for (final match in matches) {
+      final todoId = match.todoId.trim();
+      if (todoId.isEmpty || !seen.add(todoId)) continue;
+      out.add(todoId);
+      if (out.length >= topK) break;
+    }
+    return out;
+  }
+
+  Future<void> _refreshTodoThreadEmbeddings(
+    EmbeddingsSourceRouteKind route,
+  ) async {
+    switch (route) {
+      case EmbeddingsSourceRouteKind.cloudGateway:
+        await _backend.processPendingTodoThreadEmbeddingsCloudGateway(
+          _sessionKey,
+          todoLimit: _kTodoSyncLimit,
+          activityLimit: _kActivitySyncLimit,
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken,
+          modelName: embeddingsModelName,
+        );
+        break;
+      case EmbeddingsSourceRouteKind.byok:
+        await _backend.processPendingTodoThreadEmbeddingsBrok(
+          _sessionKey,
+          todoLimit: _kTodoSyncLimit,
+          activityLimit: _kActivitySyncLimit,
+        );
+        break;
+      case EmbeddingsSourceRouteKind.local:
+        await _backend.processPendingTodoThreadEmbeddings(
+          _sessionKey,
+          todoLimit: _kTodoSyncLimit,
+          activityLimit: _kActivitySyncLimit,
+        );
+        break;
+    }
+  }
+
+  Future<List<TodoThreadMatch>> _searchSimilarTodoThreads(
+    String query,
+    int topK,
+    EmbeddingsSourceRouteKind route,
+  ) {
+    switch (route) {
+      case EmbeddingsSourceRouteKind.cloudGateway:
+        return _backend.searchSimilarTodoThreadsCloudGateway(
+          _sessionKey,
+          query,
+          topK: topK,
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken,
+          modelName: embeddingsModelName,
+        );
+      case EmbeddingsSourceRouteKind.byok:
+        return _backend.searchSimilarTodoThreadsBrok(
+          _sessionKey,
+          query,
+          topK: topK,
+        );
+      case EmbeddingsSourceRouteKind.local:
+        return _backend.searchSimilarTodoThreads(
+          _sessionKey,
+          query,
+          topK: topK,
+        );
+    }
+  }
 
   @override
   Future<String> parseMessageActionJson({
@@ -892,7 +1064,7 @@ final class BackendSemanticParseAutoActionsClient
         )
         .toList(growable: false);
 
-    final future = route == AskAiRouteKind.cloudGateway
+    final future = askAiRoute == AskAiRouteKind.cloudGateway
         ? _backend.semanticParseMessageActionCloudGateway(
             _sessionKey,
             text: text,

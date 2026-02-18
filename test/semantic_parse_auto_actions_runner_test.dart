@@ -279,6 +279,7 @@ void main() {
     final client = _FakeClient(
       responseJson:
           '{"kind":"followup","confidence":1.0,"todo_id":"todo:existing","new_status":"done"}',
+      candidateTodoIds: const ['todo:existing'],
     );
 
     final runner = SemanticParseAutoActionsRunner(
@@ -364,6 +365,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String query,
     required DateTime nowLocal,
     required int limit,
+    List<String> preferredTodoIds = const <String>[],
   }) async {
     return _openCandidates.take(limit).toList(growable: false);
   }
@@ -416,10 +418,24 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
 }
 
 final class _FakeClient implements SemanticParseAutoActionsClient {
-  _FakeClient({this.responseJson, this.error});
+  _FakeClient({
+    this.responseJson,
+    this.error,
+    this.candidateTodoIds = const <String>[],
+  });
 
   final String? responseJson;
   final Object? error;
+  final List<String> candidateTodoIds;
+
+  @override
+  Future<List<String>> retrieveTodoCandidateIds({
+    required String query,
+    required int topK,
+  }) async {
+    if (topK <= 0) return const <String>[];
+    return candidateTodoIds.take(topK).toList(growable: false);
+  }
 
   @override
   Future<String> parseMessageActionJson({
