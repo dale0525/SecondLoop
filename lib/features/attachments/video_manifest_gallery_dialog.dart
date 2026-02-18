@@ -17,10 +17,14 @@ final class VideoManifestGalleryEntry {
     required this.playbackFuture,
     this.posterSha256,
   })  : type = VideoManifestGalleryEntryType.proxy,
-        keyframeSha256 = null;
+        keyframeSha256 = null,
+        keyframeOcrText = null,
+        keyframeOcrEngine = null;
 
   const VideoManifestGalleryEntry.keyframe({
     required this.keyframeSha256,
+    this.keyframeOcrText,
+    this.keyframeOcrEngine,
   })  : type = VideoManifestGalleryEntryType.keyframe,
         playbackFuture = null,
         posterSha256 = null;
@@ -29,6 +33,8 @@ final class VideoManifestGalleryEntry {
   final Future<PreparedVideoProxyPlayback>? playbackFuture;
   final String? posterSha256;
   final String? keyframeSha256;
+  final String? keyframeOcrText;
+  final String? keyframeOcrEngine;
 }
 
 Future<void> showVideoManifestGalleryDialog(
@@ -311,27 +317,112 @@ class _VideoManifestGalleryDialogState
 
   Widget _buildKeyframeEntry(VideoManifestGalleryEntry entry) {
     final sha256 = (entry.keyframeSha256 ?? '').trim();
+    final ocrText = (entry.keyframeOcrText ?? '').trim();
+    final ocrEngine = (entry.keyframeOcrEngine ?? '').trim();
+    final hasOcrText = ocrText.isNotEmpty;
+
+    Widget buildFrameContent(Uint8List? bytes) {
+      if (bytes == null || bytes.isEmpty) {
+        return const Center(child: Icon(Icons.image_outlined, size: 36));
+      }
+
+      return Image.memory(
+        bytes,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+      );
+    }
+
+    Widget buildOverlay() {
+      if (!hasOcrText) return const SizedBox.shrink();
+
+      final label = ocrEngine.isEmpty ? 'OCR' : 'OCR · $ocrEngine';
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          key: const ValueKey('video_manifest_gallery_keyframe_ocr_surface'),
+          constraints: const BoxConstraints(maxWidth: 760),
+          margin: const EdgeInsets.fromLTRB(14, 14, 14, 18),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.68),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.14)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.text_snippet_outlined,
+                    size: 16,
+                    color: Colors.white70,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 160),
+                child: SingleChildScrollView(
+                  key: const ValueKey(
+                      'video_manifest_gallery_keyframe_ocr_scroll'),
+                  child: SelectableText(
+                    ocrText,
+                    key: const ValueKey(
+                        'video_manifest_gallery_keyframe_ocr_text'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (sha256.isEmpty) {
       return _buildGalleryFrame(
-        const Center(child: Icon(Icons.image_not_supported_outlined, size: 36)),
+        Stack(
+          fit: StackFit.expand,
+          children: [
+            const Center(
+                child: Icon(Icons.image_not_supported_outlined, size: 36)),
+            buildOverlay(),
+          ],
+        ),
       );
     }
 
     return FutureBuilder<Uint8List?>(
       future: _loadBytesBySha(sha256),
       builder: (context, snapshot) {
-        final bytes = snapshot.data;
-        if (bytes == null || bytes.isEmpty) {
-          return _buildGalleryFrame(
-            const Center(child: Icon(Icons.image_outlined, size: 36)),
-          );
-        }
-
         return _buildGalleryFrame(
-          Image.memory(
-            bytes,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
+          Stack(
+            fit: StackFit.expand,
+            children: [
+              buildFrameContent(snapshot.data),
+              buildOverlay(),
+            ],
           ),
         );
       },

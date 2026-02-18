@@ -178,6 +178,16 @@ void main() {
             kind: 'slide',
           ),
         ],
+        ocrKeyframeTexts: const <VideoManifestKeyframeOcrText>[
+          VideoManifestKeyframeOcrText(
+            index: 1,
+            sha256: 'sha-kf-1',
+            mimeType: 'image/jpeg',
+            tMs: 1000,
+            kind: 'slide',
+            text: 'Slide title',
+          ),
+        ],
         nowMs: 1700000000000,
       );
 
@@ -210,6 +220,19 @@ void main() {
             'mime_type': 'image/jpeg',
             't_ms': 1000,
             'kind': 'slide',
+          },
+        ],
+      );
+      expect(
+        payload['ocr_keyframe_texts'],
+        [
+          {
+            'index': 1,
+            'sha256': 'sha-kf-1',
+            'mime_type': 'image/jpeg',
+            't_ms': 1000,
+            'kind': 'slide',
+            'text': 'Slide title',
           },
         ],
       );

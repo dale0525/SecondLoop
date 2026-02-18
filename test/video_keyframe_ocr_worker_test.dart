@@ -270,5 +270,10 @@ void main() {
     expect(result.fullText, contains('[keyframe 5 @8000ms]'));
     expect(result.fullText, contains('intro text'));
     expect(result.fullText, contains('chapter text'));
+    expect(result.keyframeTexts.length, 2);
+    expect(result.keyframeTexts.first.sha256, 'sha-kf-0');
+    expect(result.keyframeTexts.first.text, 'intro text');
+    expect(result.keyframeTexts[1].sha256, 'sha-kf-4');
+    expect(result.keyframeTexts[1].text, 'chapter text');
   });
 }

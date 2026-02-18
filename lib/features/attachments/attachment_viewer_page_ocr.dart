@@ -58,6 +58,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       final ocrBlocks = <String>[];
       final ocrEngines = <String>[];
       final ocrKeyframes = <VideoManifestPreviewRef>[];
+      final ocrKeyframeTexts = <VideoManifestKeyframeOcrText>[];
       var totalFrameCount = 0;
       var totalProcessedFrames = 0;
       var ocrTruncated = manifest.segments.length > segmentRefs.length;
@@ -86,6 +87,11 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
           totalFrameCount = keyframeOcr.frameCount;
           totalProcessedFrames = keyframeOcr.processedFrames;
           ocrTruncated = ocrTruncated || keyframeOcr.isTruncated;
+          if (keyframeOcr.keyframeTexts.isNotEmpty) {
+            ocrKeyframeTexts
+              ..clear()
+              ..addAll(keyframeOcr.keyframeTexts);
+          }
           final engine = keyframeOcr.engine.trim();
           if (engine.isNotEmpty) {
             ocrEngines.add(engine);
@@ -249,6 +255,19 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
                   'mime_type': frame.mimeType,
                   't_ms': frame.tMs,
                   'kind': frame.kind,
+                },
+              )
+              .toList(growable: false),
+        if (ocrKeyframeTexts.isNotEmpty)
+          'ocr_keyframe_texts': ocrKeyframeTexts
+              .map(
+                (item) => <String, Object?>{
+                  'index': item.index,
+                  'sha256': item.sha256,
+                  'mime_type': item.mimeType,
+                  't_ms': item.tMs,
+                  'kind': item.kind,
+                  'text': item.text,
                 },
               )
               .toList(growable: false),
