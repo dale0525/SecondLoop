@@ -11,6 +11,9 @@ Future<DateTime?> showSlDateTimePickerDialog(
   required DateTime lastDate,
   required String title,
   Key? surfaceKey,
+  String? noDueActionLabel,
+  Key? noDueActionKey,
+  VoidCallback? onNoDueAction,
 }) async {
   return showDialog<DateTime>(
     context: context,
@@ -107,6 +110,18 @@ Future<DateTime?> showSlDateTimePickerDialog(
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
+                            if (noDueActionLabel != null) ...[
+                              SlButton(
+                                key: noDueActionKey,
+                                variant: SlButtonVariant.outline,
+                                onPressed: () {
+                                  onNoDueAction?.call();
+                                  Navigator.of(context).pop();
+                                },
+                                child: Text(noDueActionLabel),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             SlButton(
                               variant: SlButtonVariant.outline,
                               onPressed: () => Navigator.of(context).pop(),

@@ -600,6 +600,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
 
     DateTime? dueAtLocal;
+    var convertWithoutDue = false;
     final candidates = timeResolution?.candidates ?? const <DueCandidate>[];
     if (candidates.isNotEmpty) {
       dueAtLocal = candidates.first.dueAtLocal;
@@ -618,21 +619,38 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         lastDate: DateTime(nowLocal.year + 3),
         title: context.t.actions.calendar.pickCustom,
         surfaceKey: ValueKey('message_convert_todo_due_picker_${message.id}'),
+        noDueActionLabel: context.t.common.actions.notNow,
+        noDueActionKey: ValueKey('message_convert_todo_no_due_${message.id}'),
+        onNoDueAction: () => convertWithoutDue = true,
       );
     }
 
-    if (dueAtLocal == null || !mounted) return;
+    if ((dueAtLocal == null && !convertWithoutDue) || !mounted) return;
+
+    final dueAtMs = dueAtLocal?.toUtc().millisecondsSinceEpoch;
+    var status = 'open';
+    int? reviewStage;
+    int? nextReviewAtMs;
+    if (dueAtMs == null) {
+      final nextLocal = ReviewBackoff.initialNextReviewAt(
+        DateTime.now(),
+        settings,
+      );
+      status = 'inbox';
+      reviewStage = 0;
+      nextReviewAtMs = nextLocal.toUtc().millisecondsSinceEpoch;
+    }
 
     try {
       await backend.upsertTodo(
         sessionKey,
         id: todoId,
         title: trimmed,
-        dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
-        status: 'open',
+        dueAtMs: dueAtMs,
+        status: status,
         sourceEntryId: message.id,
-        reviewStage: null,
-        nextReviewAtMs: null,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
         lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
       );
     } catch (_) {
