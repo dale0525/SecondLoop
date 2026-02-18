@@ -8,7 +8,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
-import 'test_backend.dart';
+import 'chat_todo_message_type_badges_test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
@@ -732,6 +732,90 @@ void main() {
   );
 
   testWidgets(
+    'convert todo to info clears marker even with semantic create history',
+    (tester) async {
+      final backend = _Backend(
+        initialMessages: const [
+          Message(
+            id: 'm10',
+            conversationId: 'main_stream',
+            role: 'user',
+            content: 'Call supplier',
+            createdAtMs: 10,
+            isMemory: true,
+          ),
+        ],
+        todos: const [
+          Todo(
+            id: 't10',
+            title: 'Call supplier',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            sourceEntryId: 'm10',
+          ),
+        ],
+        jobsByMessageId: <String, SemanticParseJob>{
+          'm10': _job(
+            messageId: 'm10',
+            actionKind: 'create',
+            todoId: 't10',
+            todoTitle: 'Call supplier',
+          ),
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            locale: const Locale('en'),
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'main_stream',
+                    title: 'Main Stream',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('message_todo_type_badge_m10')),
+          findsOneWidget);
+
+      await tester.longPress(find.byKey(const ValueKey('message_bubble_m10')));
+      await tester.pumpAndSettle();
+
+      await tester
+          .tap(find.byKey(const ValueKey('message_action_convert_to_info')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Convert to note?'), findsOneWidget);
+
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('message_todo_type_badge_m10')),
+        findsNothing,
+      );
+      expect(
+        backend.undoneSemanticJobMessageIds,
+        contains('m10'),
+      );
+    },
+  );
+
+  testWidgets(
     'linked todo messages still show markers without semantic jobs',
     (tester) async {
       final backend = _Backend(
@@ -843,39 +927,4 @@ SemanticParseJob _job({
   );
 }
 
-final class _Backend extends TestAppBackend {
-  _Backend({
-    required super.initialMessages,
-    required this.jobsByMessageId,
-    required this.todos,
-    this.todoActivities = const <TodoActivity>[],
-  });
-
-  final Map<String, SemanticParseJob> jobsByMessageId;
-  final List<Todo> todos;
-  final List<TodoActivity> todoActivities;
-
-  @override
-  Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
-    Uint8List key, {
-    required List<String> messageIds,
-  }) async {
-    final jobs = <SemanticParseJob>[];
-    for (final id in messageIds) {
-      final job = jobsByMessageId[id];
-      if (job != null) jobs.add(job);
-    }
-    return jobs;
-  }
-
-  @override
-  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(todos);
-
-  @override
-  Future<List<TodoActivity>> listTodoActivitiesInRange(
-    Uint8List key, {
-    required int startAtMsInclusive,
-    required int endAtMsExclusive,
-  }) async =>
-      List<TodoActivity>.from(todoActivities);
-}
+typedef _Backend = ChatTodoMessageTypeBadgesTestBackend;
