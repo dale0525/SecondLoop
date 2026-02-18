@@ -37,9 +37,13 @@ class MainActivity : FlutterFragmentActivity() {
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
+  private var audioTranscribeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
+  }
+  private val nativeAudioTranscribeChannelHandler by lazy {
+    NativeAudioTranscribeChannelHandler(context = this)
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -183,6 +187,13 @@ class MainActivity : FlutterFragmentActivity() {
             "transcodeToM4a" -> handleTranscodeToM4a(call, result)
             else -> result.notImplemented()
           }
+        }
+      }
+
+    audioTranscribeChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/audio_transcribe").apply {
+        setMethodCallHandler { call, result ->
+          nativeAudioTranscribeChannelHandler.handle(call, result)
         }
       }
 

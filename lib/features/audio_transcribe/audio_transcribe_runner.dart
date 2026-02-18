@@ -170,6 +170,12 @@ bool supportsPlatformLocalAudioTranscribe() {
       defaultTargetPlatform == TargetPlatform.windows;
 }
 
+bool supportsPlatformNativeSttAudioTranscribe() {
+  if (kIsWeb) return false;
+  return defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
+}
+
 bool shouldEnableLocalRuntimeAudioFallback({
   required bool supportsLocalRuntime,
   required bool cloudEnabled,
