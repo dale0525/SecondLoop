@@ -51,18 +51,20 @@
 		<string>fetch</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
-		<array>
-			<string>com.secondloop.secondloop.backgroundSync</string>
-		</array>
-		<key>NSCameraUsageDescription</key>
-		<string>Take photos to send in chat.</string>
-		<key>NSMicrophoneUsageDescription</key>
-		<string>Record audio in chat.</string>
-		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>Add location metadata to photos you take in chat.</string>
-		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Select photos (with optional location metadata) to send in chat.</string>
-		<key>NSFaceIDUsageDescription</key>
-		<string>Unlock SecondLoop with Face ID</string>
+	<array>
+		<string>com.secondloop.secondloop.backgroundSync</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to send in chat.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record audio in chat.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Transcribe local audio attachments using native speech recognition.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Add location metadata to photos you take in chat.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select photos (with optional location metadata) to send in chat.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock SecondLoop with Face ID</string>
 	</dict>
 </plist>

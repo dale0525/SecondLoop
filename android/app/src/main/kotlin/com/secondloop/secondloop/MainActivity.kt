@@ -31,15 +31,24 @@ import java.io.File
 import java.io.FileOutputStream
 
 class MainActivity : FlutterFragmentActivity() {
+  private data class PendingNativeSttRequest(
+    val arguments: Any?,
+    val result: MethodChannel.Result,
+  )
+
   private val pendingShares = mutableListOf<Map<String, String>>()
   private var shareChannel: MethodChannel? = null
   private var exifChannel: MethodChannel? = null
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
+  private var audioTranscribeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
+  }
+  private val nativeAudioTranscribeChannelHandler by lazy {
+    NativeAudioTranscribeChannelHandler(context = this)
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -64,6 +73,30 @@ class MainActivity : FlutterFragmentActivity() {
       }
 
       fetchAndReturnLocation(result)
+    }
+
+  private var pendingNativeSttRequest: PendingNativeSttRequest? = null
+  private val requestRecordAudioPermissionLauncher =
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+      val pending = pendingNativeSttRequest
+      pendingNativeSttRequest = null
+      if (pending == null) {
+        return@registerForActivityResult
+      }
+
+      if (!granted) {
+        pending.result.error(
+          "native_stt_failed",
+          "speech_permission_denied",
+          null,
+        )
+        return@registerForActivityResult
+      }
+
+      nativeAudioTranscribeChannelHandler.handle(
+        MethodCall("nativeSttTranscribe", pending.arguments),
+        pending.result,
+      )
     }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -186,6 +219,16 @@ class MainActivity : FlutterFragmentActivity() {
         }
       }
 
+    audioTranscribeChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/audio_transcribe").apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "nativeSttTranscribe" -> handleNativeSttTranscribeCall(call, result)
+            else -> nativeAudioTranscribeChannelHandler.handle(call, result)
+          }
+        }
+      }
+
     ocrChannel =
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/ocr").apply {
         setMethodCallHandler { call, result ->
@@ -203,6 +246,39 @@ class MainActivity : FlutterFragmentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     handleShareIntent(intent)
+  }
+
+
+  private fun handleNativeSttTranscribeCall(
+    call: MethodCall,
+    result: MethodChannel.Result,
+  ) {
+    if (hasRecordAudioPermission()) {
+      nativeAudioTranscribeChannelHandler.handle(call, result)
+      return
+    }
+
+    if (pendingNativeSttRequest != null) {
+      result.error(
+        "native_stt_failed",
+        "speech_permission_not_determined",
+        null,
+      )
+      return
+    }
+
+    pendingNativeSttRequest = PendingNativeSttRequest(
+      arguments = call.arguments,
+      result = result,
+    )
+    requestRecordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+  }
+
+  private fun hasRecordAudioPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+      this,
+      Manifest.permission.RECORD_AUDIO,
+    ) == PackageManager.PERMISSION_GRANTED
   }
 
   private fun handleShareIntent(intent: Intent?) {

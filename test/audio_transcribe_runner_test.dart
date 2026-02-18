@@ -135,6 +135,22 @@ void main() {
     expect(supportsPlatformLocalAudioTranscribe(), isFalse);
   });
 
+  test('supports platform native stt audio transcribe on iOS and Android', () {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(supportsPlatformNativeSttAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    expect(supportsPlatformNativeSttAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    expect(supportsPlatformNativeSttAudioTranscribe(), isFalse);
+  });
+
   test(
       'selectPlatformLocalRuntimeAudioTranscribeRequest uses windows native stt when windows host',
       () async {

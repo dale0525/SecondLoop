@@ -132,6 +132,11 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
   }
 
   Widget? _buildDesktopRuntimeHealthTile(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) {
+      return null;
+    }
+
     final status = _linuxOcrModelStatus;
 
     final actionEnabled = !_busy && !_linuxOcrBusy && status.supported;
@@ -140,8 +145,8 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
         .languageCode
         .toLowerCase()
         .startsWith('zh');
-    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-    final isWindows = Theme.of(context).platform == TargetPlatform.windows;
+    final isMacOS = platform == TargetPlatform.macOS;
+    final isWindows = platform == TargetPlatform.windows;
     final statusIcon = !status.supported
         ? Icons.info_outline
         : (status.installed ? Icons.check_circle : Icons.error_outline);

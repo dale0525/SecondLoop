@@ -12,8 +12,18 @@ void main() {
       kAudioTranscribeFailureSpeechPermissionDenied,
     );
     expect(
+      detectAudioTranscribeFailureReasonToken(
+        'audio_transcribe_native_stt_failed:speech_permission_not_determined',
+      ),
+      kAudioTranscribeFailureSpeechPermissionNotDetermined,
+    );
+    expect(
       detectAudioTranscribeFailureReasonToken('speech_service_disabled'),
       kAudioTranscribeFailureSpeechServiceDisabled,
+    );
+    expect(
+      detectAudioTranscribeFailureReasonToken('speech_offline_unavailable'),
+      kAudioTranscribeFailureSpeechOfflineUnavailable,
     );
     expect(
       detectAudioTranscribeFailureReasonToken('speech_runtime_unavailable'),
@@ -34,6 +44,18 @@ void main() {
       detectAudioTranscribeFailureReasonToken(
           'speech_authorization_restricted'),
       kAudioTranscribeFailureSpeechPermissionRestricted,
+    );
+    expect(
+      detectAudioTranscribeFailureReasonToken(
+        'audio_transcribe_native_stt_failed:speech_authorization_not_determined',
+      ),
+      kAudioTranscribeFailureSpeechPermissionNotDetermined,
+    );
+    expect(
+      detectAudioTranscribeFailureReasonToken(
+        'audio_transcribe_native_stt_failed:on-device recognition is not available',
+      ),
+      kAudioTranscribeFailureSpeechOfflineUnavailable,
     );
     expect(
       detectAudioTranscribeFailureReasonToken('speech_recognizer_unavailable'),
@@ -72,6 +94,18 @@ void main() {
         kAudioTranscribeFailureSpeechServiceDisabled,
       ),
       isTrue,
+    );
+    expect(
+      shouldOpenAudioTranscribeSystemSettings(
+        kAudioTranscribeFailureSpeechPermissionNotDetermined,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldOpenAudioTranscribeSystemSettings(
+        kAudioTranscribeFailureSpeechOfflineUnavailable,
+      ),
+      isFalse,
     );
     expect(
       shouldOpenAudioTranscribeSystemSettings(
