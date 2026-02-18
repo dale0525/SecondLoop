@@ -677,6 +677,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
     try {
       await backend.upsertTodo(
         sessionKey,
@@ -691,6 +692,16 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       );
     } catch (_) {
       return;
+    }
+
+    try {
+      await backend.markSemanticParseJobUndone(
+        sessionKey,
+        messageId: message.id,
+        nowMs: nowMs,
+      );
+    } catch (_) {
+      // ignore
     }
 
     if (!mounted) return;
