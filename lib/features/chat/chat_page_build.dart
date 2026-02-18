@@ -14,7 +14,7 @@ extension _ChatPageStateBuild on _ChatPageState {
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: useCompactComposer,
       appBar: AppBar(
         title: Text(title),
         actions: [
@@ -362,9 +362,7 @@ extension _ChatPageStateBuild on _ChatPageState {
           AnimatedPadding(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
-            padding: EdgeInsets.only(
-              bottom: useCompactComposer ? keyboardInsetBottom : 0,
-            ),
+            padding: EdgeInsets.zero,
             child: SafeArea(
               top: false,
               child: Center(
