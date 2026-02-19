@@ -64,6 +64,11 @@ clear_stale_flutter_runtime_cache() {
 
   if "$adb_bin" -s "$device_serial" shell "run-as $ANDROID_APP_ID sh -c 'rm -rf app_flutter cache code_cache'" >/dev/null 2>&1; then
     echo "Cleared stale Flutter runtime cache for $ANDROID_APP_ID on $device_serial"
+    return 0
+  fi
+
+  if "$adb_bin" -s "$device_serial" shell pm clear "$ANDROID_APP_ID" >/dev/null 2>&1; then
+    echo "run-as cache clear failed; cleared app data for $ANDROID_APP_ID on $device_serial"
   fi
 }
 
