@@ -905,7 +905,69 @@
     "semanticParseStatusUpdated": "已更新待办：$title",
     "semanticParseStatusUpdatedGeneric": "已更新待办",
     "semanticParseStatusUndone": "已撤销自动动作",
-    "askAiRecoveredDetached": "已恢复已完成的云端回答。"
+    "askAiRecoveredDetached": "已恢复已完成的云端回答。",
+    "topicThread": {
+      "filterTooltip": "主题线程筛选",
+      "actionLabel": "主题线程",
+      "create": "新建主题线程",
+      "clearFilter": "清除线程筛选",
+      "clear": "清除线程",
+      "manage": "管理线程",
+      "rename": "重命名线程",
+      "delete": "删除线程",
+      "deleteDialog": {
+        "title": "删除主题线程？",
+        "message": "删除后将移除该线程及其消息归属，且无法撤销。",
+        "confirm": "删除"
+      },
+      "addMessage": "加入此消息",
+      "removeMessage": "移除此消息",
+      "createDialogTitle": "新建主题线程",
+      "renameDialogTitle": "重命名主题线程",
+      "titleFieldLabel": "线程标题（可选）",
+      "untitled": "未命名主题线程"
+    },
+    "tagFilter": {
+      "tooltip": "标签筛选",
+      "clearFilter": "清空标签筛选",
+      "sheet": {
+        "title": "按标签筛选",
+        "apply": "应用",
+        "clear": "清空",
+        "includeHint": "点击：包含",
+        "excludeHint": "再次点击：排除",
+        "empty": "暂无标签"
+      }
+    },
+    "tagPicker": {
+      "title": "管理标签",
+      "suggested": "建议标签",
+      "mergeSuggestions": "合并建议",
+      "mergeAction": "合并",
+      "mergeSuggestionMessages": "将影响 $count 条已打标签消息",
+      "mergeReasonSystemDomain": "匹配系统领域标签",
+      "mergeReasonNameCompact": "可能是重复标签",
+      "mergeReasonNameContains": "名称高度相似",
+      "mergeDialog": {
+        "title": "确认合并标签？",
+        "message": "将“$source”合并到“$target”？这会更新已有消息上的标签。",
+        "confirm": "合并"
+      },
+      "mergeApplied": "已合并 $count 条消息",
+      "all": "全部标签",
+      "inputHint": "输入标签名称",
+      "add": "添加",
+      "save": "保存",
+      "tagActionLabel": "标签"
+    },
+    "askScopeEmpty": {
+      "title": "当前范围未找到结果",
+      "actions": {
+        "expandTimeWindow": "扩大时间窗口",
+        "removeIncludeTags": "移除包含标签",
+        "switchScopeToAll": "切换范围到全部"
+      }
+    }
   },
   "attachments": {
     "metadata": {

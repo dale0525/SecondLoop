@@ -250,6 +250,11 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           actionSuggestions.isEmpty;
       final isFailedPendingUser =
           stableMsg.id == _kFailedAskMessageId && pendingFailureMessage != null;
+      final hoverActionCount = 1 +
+          (canEditMessage ? 1 : 0) +
+          (stableMsg.id != _kFailedAskMessageId ? 1 : 0);
+      final hoverMenuWidth =
+          (hoverActionCount * 32.0) + ((hoverActionCount - 1) * 6.0);
 
       final hoverMenuSlot = _hoverActionsEnabled && !isPending
           ? Padding(
@@ -257,7 +262,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                 horizontal: 8,
               ),
               child: SizedBox(
-                width: 72,
+                width: hoverMenuWidth,
                 height: 32,
                 child: showHoverMenu
                     ? Row(
@@ -270,6 +275,16 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                               key: ValueKey('message_edit_${stableMsg.id}'),
                               icon: Icons.edit_rounded,
                               onPressed: () => _editMessage(stableMsg),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          if (stableMsg.id != _kFailedAskMessageId) ...[
+                            SlIconButton(
+                              key: ValueKey('message_tags_${stableMsg.id}'),
+                              icon: Icons.sell_outlined,
+                              tooltip: context.t.chat.tagPicker.tagActionLabel,
+                              onPressed: () =>
+                                  unawaited(_openMessageTagPicker(stableMsg)),
                             ),
                             const SizedBox(width: 6),
                           ],

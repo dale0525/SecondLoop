@@ -280,6 +280,128 @@ fn apply_message_set_v2(
     Ok(())
 }
 
+fn sync_system_key_from_tag_id(tag_id: &str) -> Option<&str> {
+    let key = tag_id.strip_prefix("system.tag.")?;
+    if is_sync_system_key(key) {
+        Some(key)
+    } else {
+        None
+    }
+}
+
+fn ensure_sync_system_tag_row(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    tag_id: &str,
+    system_key: &str,
+    ts_ms: i64,
+) -> Result<()> {
+    let aad = format!("tag.name:{tag_id}");
+    let name_blob = encrypt_bytes(db_key, system_key.as_bytes(), aad.as_bytes())?;
+    conn.execute(
+        r#"INSERT OR IGNORE INTO tags(id, name, system_key, is_system, color, created_at_ms, updated_at_ms)
+           VALUES (?1, ?2, ?3, 1, NULL, ?4, ?5)"#,
+        params![tag_id, name_blob, system_key, ts_ms, ts_ms],
+    )?;
+    Ok(())
+}
+
+fn apply_message_tag_set(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let message_id = payload["message_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("message.tag_set.v1 missing message_id"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("message.tag_set.v1 missing created_at_ms"))?;
+
+    let message_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM messages WHERE id = ?1"#,
+            params![message_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if message_exists.is_none() {
+        return Ok(());
+    }
+
+    let tag_values = payload["tag_ids"]
+        .as_array()
+        .ok_or_else(|| anyhow!("message.tag_set.v1 missing tag_ids"))?;
+
+    let mut desired_tag_ids = BTreeSet::<String>::new();
+    for value in tag_values {
+        let Some(raw_tag_id) = value.as_str() else {
+            continue;
+        };
+        let tag_id = raw_tag_id.trim();
+        if tag_id.is_empty() {
+            continue;
+        }
+
+        let tag_exists: Option<i64> = conn
+            .query_row(
+                r#"SELECT 1 FROM tags WHERE id = ?1"#,
+                params![tag_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if tag_exists.is_none() {
+            if let Some(system_key) = sync_system_key_from_tag_id(tag_id) {
+                ensure_sync_system_tag_row(conn, db_key, tag_id, system_key, created_at_ms)?;
+            }
+        }
+
+        let tag_exists_after: Option<i64> = conn
+            .query_row(
+                r#"SELECT 1 FROM tags WHERE id = ?1"#,
+                params![tag_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if tag_exists_after.is_some() {
+            desired_tag_ids.insert(tag_id.to_string());
+        }
+    }
+
+    let desired_tag_ids: Vec<String> = desired_tag_ids.into_iter().collect();
+
+    let mut stmt = conn.prepare(
+        r#"SELECT tag_id
+           FROM message_tags
+           WHERE message_id = ?1
+           ORDER BY tag_id ASC"#,
+    )?;
+    let mut rows = stmt.query(params![message_id])?;
+    let mut existing_tag_ids = Vec::<String>::new();
+    while let Some(row) = rows.next()? {
+        existing_tag_ids.push(row.get(0)?);
+    }
+
+    if existing_tag_ids == desired_tag_ids {
+        return Ok(());
+    }
+
+    conn.execute(
+        r#"DELETE FROM message_tags WHERE message_id = ?1"#,
+        params![message_id],
+    )?;
+    for tag_id in &desired_tag_ids {
+        conn.execute(
+            r#"INSERT INTO message_tags(message_id, tag_id, created_at_ms)
+               VALUES (?1, ?2, ?3)"#,
+            params![message_id, tag_id, created_at_ms],
+        )?;
+    }
+
+    Ok(())
+}
+
 fn apply_attachment_upsert(
     conn: &Connection,
     _db_key: &[u8; 32],

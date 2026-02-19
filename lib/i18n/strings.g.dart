@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1498 (749 per locale)
+/// Strings: 1590 (795 per locale)
 ///
-/// Built on 2026-02-17 at 11:09 UTC
+/// Built on 2026-02-18 at 14:59 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -428,6 +428,14 @@ class _StringsChatEn {
   String get semanticParseStatusUpdatedGeneric => 'Updated task';
   String get semanticParseStatusUndone => 'Undid auto action';
   String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
+  late final _StringsChatTopicThreadEn topicThread =
+      _StringsChatTopicThreadEn._(_root);
+  late final _StringsChatTagFilterEn tagFilter =
+      _StringsChatTagFilterEn._(_root);
+  late final _StringsChatTagPickerEn tagPicker =
+      _StringsChatTagPickerEn._(_root);
+  late final _StringsChatAskScopeEmptyEn askScopeEmpty =
+      _StringsChatAskScopeEmptyEn._(_root);
 }
 
 // Path: attachments
@@ -1442,6 +1450,82 @@ class _StringsChatEmbeddingsConsentEn {
   String get dontShowAgain => 'Remember my choice';
   late final _StringsChatEmbeddingsConsentActionsEn actions =
       _StringsChatEmbeddingsConsentActionsEn._(_root);
+}
+
+// Path: chat.topicThread
+class _StringsChatTopicThreadEn {
+  _StringsChatTopicThreadEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get filterTooltip => 'Topic thread filter';
+  String get actionLabel => 'Topic thread';
+  String get create => 'Create topic thread';
+  String get clearFilter => 'Clear topic thread filter';
+  String get clear => 'Clear thread';
+  String get manage => 'Manage thread';
+  String get rename => 'Rename thread';
+  String get delete => 'Delete thread';
+  late final _StringsChatTopicThreadDeleteDialogEn deleteDialog =
+      _StringsChatTopicThreadDeleteDialogEn._(_root);
+  String get addMessage => 'Add this message';
+  String get removeMessage => 'Remove this message';
+  String get createDialogTitle => 'Create topic thread';
+  String get renameDialogTitle => 'Rename topic thread';
+  String get titleFieldLabel => 'Thread title (optional)';
+  String get untitled => 'Untitled topic thread';
+}
+
+// Path: chat.tagFilter
+class _StringsChatTagFilterEn {
+  _StringsChatTagFilterEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get tooltip => 'Tag filter';
+  String get clearFilter => 'Clear tag filter';
+  late final _StringsChatTagFilterSheetEn sheet =
+      _StringsChatTagFilterSheetEn._(_root);
+}
+
+// Path: chat.tagPicker
+class _StringsChatTagPickerEn {
+  _StringsChatTagPickerEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Manage tags';
+  String get suggested => 'Suggested tags';
+  String get mergeSuggestions => 'Merge suggestions';
+  String get mergeAction => 'Merge';
+  String mergeSuggestionMessages({required Object count}) =>
+      'Affects ${count} tagged messages';
+  String get mergeReasonSystemDomain => 'Matches system domain';
+  String get mergeReasonNameCompact => 'Likely duplicate name';
+  String get mergeReasonNameContains => 'Very similar name';
+  late final _StringsChatTagPickerMergeDialogEn mergeDialog =
+      _StringsChatTagPickerMergeDialogEn._(_root);
+  String mergeApplied({required Object count}) => 'Merged ${count} messages';
+  String get all => 'All tags';
+  String get inputHint => 'Type a tag name';
+  String get add => 'Add';
+  String get save => 'Save';
+  String get tagActionLabel => 'Tags';
+}
+
+// Path: chat.askScopeEmpty
+class _StringsChatAskScopeEmptyEn {
+  _StringsChatAskScopeEmptyEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'No results in current scope';
+  late final _StringsChatAskScopeEmptyActionsEn actions =
+      _StringsChatAskScopeEmptyActionsEn._(_root);
 }
 
 // Path: attachments.metadata
@@ -2612,6 +2696,59 @@ class _StringsChatEmbeddingsConsentActionsEn {
   // Translations
   String get useLocal => 'Use local';
   String get enableCloud => 'Enable cloud embeddings';
+}
+
+// Path: chat.topicThread.deleteDialog
+class _StringsChatTopicThreadDeleteDialogEn {
+  _StringsChatTopicThreadDeleteDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete topic thread?';
+  String get message =>
+      'Deleting removes this thread and its message memberships.';
+  String get confirm => 'Delete';
+}
+
+// Path: chat.tagFilter.sheet
+class _StringsChatTagFilterSheetEn {
+  _StringsChatTagFilterSheetEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Filter by tags';
+  String get apply => 'Apply';
+  String get clear => 'Clear';
+  String get includeHint => 'Tap: Include';
+  String get excludeHint => 'Tap again: Exclude';
+  String get empty => 'No tags yet';
+}
+
+// Path: chat.tagPicker.mergeDialog
+class _StringsChatTagPickerMergeDialogEn {
+  _StringsChatTagPickerMergeDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Merge tags?';
+  String message({required Object source, required Object target}) =>
+      'Merge "${source}" into "${target}"? This updates existing message tags.';
+  String get confirm => 'Merge';
+}
+
+// Path: chat.askScopeEmpty.actions
+class _StringsChatAskScopeEmptyActionsEn {
+  _StringsChatAskScopeEmptyActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get expandTimeWindow => 'Expand time window';
+  String get removeIncludeTags => 'Remove include tags';
+  String get switchScopeToAll => 'Switch scope to All';
 }
 
 // Path: attachments.content.speechTranscribeIssue
@@ -3883,6 +4020,18 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusUndone => '已撤销自动动作';
   @override
   String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
+  @override
+  late final _StringsChatTopicThreadZhCn topicThread =
+      _StringsChatTopicThreadZhCn._(_root);
+  @override
+  late final _StringsChatTagFilterZhCn tagFilter =
+      _StringsChatTagFilterZhCn._(_root);
+  @override
+  late final _StringsChatTagPickerZhCn tagPicker =
+      _StringsChatTagPickerZhCn._(_root);
+  @override
+  late final _StringsChatAskScopeEmptyZhCn askScopeEmpty =
+      _StringsChatAskScopeEmptyZhCn._(_root);
 }
 
 // Path: attachments
@@ -5423,6 +5572,129 @@ class _StringsChatEmbeddingsConsentZhCn
   @override
   late final _StringsChatEmbeddingsConsentActionsZhCn actions =
       _StringsChatEmbeddingsConsentActionsZhCn._(_root);
+}
+
+// Path: chat.topicThread
+class _StringsChatTopicThreadZhCn extends _StringsChatTopicThreadEn {
+  _StringsChatTopicThreadZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get filterTooltip => '主题线程筛选';
+  @override
+  String get actionLabel => '主题线程';
+  @override
+  String get create => '新建主题线程';
+  @override
+  String get clearFilter => '清除线程筛选';
+  @override
+  String get clear => '清除线程';
+  @override
+  String get manage => '管理线程';
+  @override
+  String get rename => '重命名线程';
+  @override
+  String get delete => '删除线程';
+  @override
+  late final _StringsChatTopicThreadDeleteDialogZhCn deleteDialog =
+      _StringsChatTopicThreadDeleteDialogZhCn._(_root);
+  @override
+  String get addMessage => '加入此消息';
+  @override
+  String get removeMessage => '移除此消息';
+  @override
+  String get createDialogTitle => '新建主题线程';
+  @override
+  String get renameDialogTitle => '重命名主题线程';
+  @override
+  String get titleFieldLabel => '线程标题（可选）';
+  @override
+  String get untitled => '未命名主题线程';
+}
+
+// Path: chat.tagFilter
+class _StringsChatTagFilterZhCn extends _StringsChatTagFilterEn {
+  _StringsChatTagFilterZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get tooltip => '标签筛选';
+  @override
+  String get clearFilter => '清空标签筛选';
+  @override
+  late final _StringsChatTagFilterSheetZhCn sheet =
+      _StringsChatTagFilterSheetZhCn._(_root);
+}
+
+// Path: chat.tagPicker
+class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
+  _StringsChatTagPickerZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '管理标签';
+  @override
+  String get suggested => '建议标签';
+  @override
+  String get mergeSuggestions => '合并建议';
+  @override
+  String get mergeAction => '合并';
+  @override
+  String mergeSuggestionMessages({required Object count}) =>
+      '将影响 ${count} 条已打标签消息';
+  @override
+  String get mergeReasonSystemDomain => '匹配系统领域标签';
+  @override
+  String get mergeReasonNameCompact => '可能是重复标签';
+  @override
+  String get mergeReasonNameContains => '名称高度相似';
+  @override
+  late final _StringsChatTagPickerMergeDialogZhCn mergeDialog =
+      _StringsChatTagPickerMergeDialogZhCn._(_root);
+  @override
+  String mergeApplied({required Object count}) => '已合并 ${count} 条消息';
+  @override
+  String get all => '全部标签';
+  @override
+  String get inputHint => '输入标签名称';
+  @override
+  String get add => '添加';
+  @override
+  String get save => '保存';
+  @override
+  String get tagActionLabel => '标签';
+}
+
+// Path: chat.askScopeEmpty
+class _StringsChatAskScopeEmptyZhCn extends _StringsChatAskScopeEmptyEn {
+  _StringsChatAskScopeEmptyZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '当前范围未找到结果';
+  @override
+  late final _StringsChatAskScopeEmptyActionsZhCn actions =
+      _StringsChatAskScopeEmptyActionsZhCn._(_root);
 }
 
 // Path: attachments.metadata
@@ -7183,6 +7455,88 @@ class _StringsChatEmbeddingsConsentActionsZhCn
   String get useLocal => '使用本地';
   @override
   String get enableCloud => '开启云端向量';
+}
+
+// Path: chat.topicThread.deleteDialog
+class _StringsChatTopicThreadDeleteDialogZhCn
+    extends _StringsChatTopicThreadDeleteDialogEn {
+  _StringsChatTopicThreadDeleteDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除主题线程？';
+  @override
+  String get message => '删除后将移除该线程及其消息归属，且无法撤销。';
+  @override
+  String get confirm => '删除';
+}
+
+// Path: chat.tagFilter.sheet
+class _StringsChatTagFilterSheetZhCn extends _StringsChatTagFilterSheetEn {
+  _StringsChatTagFilterSheetZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '按标签筛选';
+  @override
+  String get apply => '应用';
+  @override
+  String get clear => '清空';
+  @override
+  String get includeHint => '点击：包含';
+  @override
+  String get excludeHint => '再次点击：排除';
+  @override
+  String get empty => '暂无标签';
+}
+
+// Path: chat.tagPicker.mergeDialog
+class _StringsChatTagPickerMergeDialogZhCn
+    extends _StringsChatTagPickerMergeDialogEn {
+  _StringsChatTagPickerMergeDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '确认合并标签？';
+  @override
+  String message({required Object source, required Object target}) =>
+      '将“${source}”合并到“${target}”？这会更新已有消息上的标签。';
+  @override
+  String get confirm => '合并';
+}
+
+// Path: chat.askScopeEmpty.actions
+class _StringsChatAskScopeEmptyActionsZhCn
+    extends _StringsChatAskScopeEmptyActionsEn {
+  _StringsChatAskScopeEmptyActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get expandTimeWindow => '扩大时间窗口';
+  @override
+  String get removeIncludeTags => '移除包含标签';
+  @override
+  String get switchScopeToAll => '切换范围到全部';
 }
 
 // Path: attachments.content.speechTranscribeIssue
@@ -9606,6 +9960,99 @@ extension on Translations {
         return 'Undid auto action';
       case 'chat.askAiRecoveredDetached':
         return 'Recovered the completed cloud answer.';
+      case 'chat.topicThread.filterTooltip':
+        return 'Topic thread filter';
+      case 'chat.topicThread.actionLabel':
+        return 'Topic thread';
+      case 'chat.topicThread.create':
+        return 'Create topic thread';
+      case 'chat.topicThread.clearFilter':
+        return 'Clear topic thread filter';
+      case 'chat.topicThread.clear':
+        return 'Clear thread';
+      case 'chat.topicThread.manage':
+        return 'Manage thread';
+      case 'chat.topicThread.rename':
+        return 'Rename thread';
+      case 'chat.topicThread.delete':
+        return 'Delete thread';
+      case 'chat.topicThread.deleteDialog.title':
+        return 'Delete topic thread?';
+      case 'chat.topicThread.deleteDialog.message':
+        return 'Deleting removes this thread and its message memberships.';
+      case 'chat.topicThread.deleteDialog.confirm':
+        return 'Delete';
+      case 'chat.topicThread.addMessage':
+        return 'Add this message';
+      case 'chat.topicThread.removeMessage':
+        return 'Remove this message';
+      case 'chat.topicThread.createDialogTitle':
+        return 'Create topic thread';
+      case 'chat.topicThread.renameDialogTitle':
+        return 'Rename topic thread';
+      case 'chat.topicThread.titleFieldLabel':
+        return 'Thread title (optional)';
+      case 'chat.topicThread.untitled':
+        return 'Untitled topic thread';
+      case 'chat.tagFilter.tooltip':
+        return 'Tag filter';
+      case 'chat.tagFilter.clearFilter':
+        return 'Clear tag filter';
+      case 'chat.tagFilter.sheet.title':
+        return 'Filter by tags';
+      case 'chat.tagFilter.sheet.apply':
+        return 'Apply';
+      case 'chat.tagFilter.sheet.clear':
+        return 'Clear';
+      case 'chat.tagFilter.sheet.includeHint':
+        return 'Tap: Include';
+      case 'chat.tagFilter.sheet.excludeHint':
+        return 'Tap again: Exclude';
+      case 'chat.tagFilter.sheet.empty':
+        return 'No tags yet';
+      case 'chat.tagPicker.title':
+        return 'Manage tags';
+      case 'chat.tagPicker.suggested':
+        return 'Suggested tags';
+      case 'chat.tagPicker.mergeSuggestions':
+        return 'Merge suggestions';
+      case 'chat.tagPicker.mergeAction':
+        return 'Merge';
+      case 'chat.tagPicker.mergeSuggestionMessages':
+        return ({required Object count}) => 'Affects ${count} tagged messages';
+      case 'chat.tagPicker.mergeReasonSystemDomain':
+        return 'Matches system domain';
+      case 'chat.tagPicker.mergeReasonNameCompact':
+        return 'Likely duplicate name';
+      case 'chat.tagPicker.mergeReasonNameContains':
+        return 'Very similar name';
+      case 'chat.tagPicker.mergeDialog.title':
+        return 'Merge tags?';
+      case 'chat.tagPicker.mergeDialog.message':
+        return ({required Object source, required Object target}) =>
+            'Merge "${source}" into "${target}"? This updates existing message tags.';
+      case 'chat.tagPicker.mergeDialog.confirm':
+        return 'Merge';
+      case 'chat.tagPicker.mergeApplied':
+        return ({required Object count}) => 'Merged ${count} messages';
+      case 'chat.tagPicker.all':
+        return 'All tags';
+      case 'chat.tagPicker.inputHint':
+        return 'Type a tag name';
+      case 'chat.tagPicker.add':
+        return 'Add';
+      case 'chat.tagPicker.save':
+        return 'Save';
+      case 'chat.tagPicker.tagActionLabel':
+        return 'Tags';
+      case 'chat.askScopeEmpty.title':
+        return 'No results in current scope';
+      case 'chat.askScopeEmpty.actions.expandTimeWindow':
+        return 'Expand time window';
+      case 'chat.askScopeEmpty.actions.removeIncludeTags':
+        return 'Remove include tags';
+      case 'chat.askScopeEmpty.actions.switchScopeToAll':
+        return 'Switch scope to All';
       case 'attachments.metadata.format':
         return 'Format';
       case 'attachments.metadata.size':
@@ -11135,6 +11582,99 @@ extension on _StringsZhCn {
         return '已撤销自动动作';
       case 'chat.askAiRecoveredDetached':
         return '已恢复已完成的云端回答。';
+      case 'chat.topicThread.filterTooltip':
+        return '主题线程筛选';
+      case 'chat.topicThread.actionLabel':
+        return '主题线程';
+      case 'chat.topicThread.create':
+        return '新建主题线程';
+      case 'chat.topicThread.clearFilter':
+        return '清除线程筛选';
+      case 'chat.topicThread.clear':
+        return '清除线程';
+      case 'chat.topicThread.manage':
+        return '管理线程';
+      case 'chat.topicThread.rename':
+        return '重命名线程';
+      case 'chat.topicThread.delete':
+        return '删除线程';
+      case 'chat.topicThread.deleteDialog.title':
+        return '删除主题线程？';
+      case 'chat.topicThread.deleteDialog.message':
+        return '删除后将移除该线程及其消息归属，且无法撤销。';
+      case 'chat.topicThread.deleteDialog.confirm':
+        return '删除';
+      case 'chat.topicThread.addMessage':
+        return '加入此消息';
+      case 'chat.topicThread.removeMessage':
+        return '移除此消息';
+      case 'chat.topicThread.createDialogTitle':
+        return '新建主题线程';
+      case 'chat.topicThread.renameDialogTitle':
+        return '重命名主题线程';
+      case 'chat.topicThread.titleFieldLabel':
+        return '线程标题（可选）';
+      case 'chat.topicThread.untitled':
+        return '未命名主题线程';
+      case 'chat.tagFilter.tooltip':
+        return '标签筛选';
+      case 'chat.tagFilter.clearFilter':
+        return '清空标签筛选';
+      case 'chat.tagFilter.sheet.title':
+        return '按标签筛选';
+      case 'chat.tagFilter.sheet.apply':
+        return '应用';
+      case 'chat.tagFilter.sheet.clear':
+        return '清空';
+      case 'chat.tagFilter.sheet.includeHint':
+        return '点击：包含';
+      case 'chat.tagFilter.sheet.excludeHint':
+        return '再次点击：排除';
+      case 'chat.tagFilter.sheet.empty':
+        return '暂无标签';
+      case 'chat.tagPicker.title':
+        return '管理标签';
+      case 'chat.tagPicker.suggested':
+        return '建议标签';
+      case 'chat.tagPicker.mergeSuggestions':
+        return '合并建议';
+      case 'chat.tagPicker.mergeAction':
+        return '合并';
+      case 'chat.tagPicker.mergeSuggestionMessages':
+        return ({required Object count}) => '将影响 ${count} 条已打标签消息';
+      case 'chat.tagPicker.mergeReasonSystemDomain':
+        return '匹配系统领域标签';
+      case 'chat.tagPicker.mergeReasonNameCompact':
+        return '可能是重复标签';
+      case 'chat.tagPicker.mergeReasonNameContains':
+        return '名称高度相似';
+      case 'chat.tagPicker.mergeDialog.title':
+        return '确认合并标签？';
+      case 'chat.tagPicker.mergeDialog.message':
+        return ({required Object source, required Object target}) =>
+            '将“${source}”合并到“${target}”？这会更新已有消息上的标签。';
+      case 'chat.tagPicker.mergeDialog.confirm':
+        return '合并';
+      case 'chat.tagPicker.mergeApplied':
+        return ({required Object count}) => '已合并 ${count} 条消息';
+      case 'chat.tagPicker.all':
+        return '全部标签';
+      case 'chat.tagPicker.inputHint':
+        return '输入标签名称';
+      case 'chat.tagPicker.add':
+        return '添加';
+      case 'chat.tagPicker.save':
+        return '保存';
+      case 'chat.tagPicker.tagActionLabel':
+        return '标签';
+      case 'chat.askScopeEmpty.title':
+        return '当前范围未找到结果';
+      case 'chat.askScopeEmpty.actions.expandTimeWindow':
+        return '扩大时间窗口';
+      case 'chat.askScopeEmpty.actions.removeIncludeTags':
+        return '移除包含标签';
+      case 'chat.askScopeEmpty.actions.switchScopeToAll':
+        return '切换范围到全部';
       case 'attachments.metadata.format':
         return '格式';
       case 'attachments.metadata.size':

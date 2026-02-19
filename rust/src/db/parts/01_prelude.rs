@@ -50,6 +50,36 @@ pub struct Message {
 }
 
 #[derive(Clone, Debug)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub system_key: Option<String>,
+    pub is_system: bool,
+    pub color: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct TagMergeSuggestion {
+    pub source_tag: Tag,
+    pub target_tag: Tag,
+    pub reason: String,
+    pub score: f64,
+    pub source_usage_count: i64,
+    pub target_usage_count: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct TopicThread {
+    pub id: String,
+    pub conversation_id: String,
+    pub title: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct SimilarMessage {
     pub message: Message,
     pub distance: f64,

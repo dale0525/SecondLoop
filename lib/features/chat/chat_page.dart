@@ -27,6 +27,7 @@ import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/backend/native_app_dir.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -37,6 +38,7 @@ import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/platform/platform_location.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/db.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_focus_ring.dart';
@@ -73,6 +75,11 @@ import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
 import '../media_backup/video_proxy_segment_policy.dart';
 import '../media_backup/video_transcode_worker.dart';
+import '../tags/tag_filter_sheet.dart';
+import '../tags/tag_localization.dart';
+import '../tags/tag_picker.dart';
+import '../tags/tag_repository.dart';
+import '../topic_threads/topic_thread_repository.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
@@ -82,6 +89,7 @@ import 'chat_markdown_sanitizer.dart';
 import 'message_viewer_page.dart';
 import 'chat_markdown_editor_page.dart';
 import 'ask_ai_intent_resolver.dart';
+import 'ask_scope_empty.dart';
 import 'semantic_parse_job_status_row.dart';
 import 'attachment_annotation_job_status_row.dart';
 
@@ -96,6 +104,10 @@ part 'chat_page_methods_j_message_edit.dart';
 part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
+part 'chat_page_methods_k_tags.dart';
+part 'chat_page_methods_l_ask_scope.dart';
+part 'chat_page_methods_m_ask_scope_empty_card.dart';
+part 'chat_page_methods_n_topic_threads.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
@@ -312,11 +324,15 @@ class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.conversation,
     this.isTabActive = true,
+    this.tagRepository = const TagRepository(),
+    this.topicThreadRepository = const TopicThreadRepository(),
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
+  final TagRepository tagRepository;
+  final TopicThreadRepository topicThreadRepository;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -339,6 +355,13 @@ class _ChatPageState extends State<ChatPage> {
       <String, Future<_AttachmentEnrichment>>{};
   final Map<String, _AttachmentEnrichment> _attachmentEnrichmentCacheBySha256 =
       <String, _AttachmentEnrichment>{};
+  TagRepository get _tagRepository => widget.tagRepository;
+  TopicThreadRepository get _topicThreadRepository =>
+      widget.topicThreadRepository;
+  final Set<String> _selectedTagFilterIds = <String>{};
+  final Map<String, Tag> _selectedTagFilterTagById = <String, Tag>{};
+  final Set<String> _selectedTagExcludeIds = <String>{};
+  final Map<String, Tag> _selectedTagExcludeTagById = <String, Tag>{};
   List<Message> _paginatedMessages = <Message>[];
   List<Message> _latestLoadedMessages = const <Message>[];
   bool _loadingMoreMessages = false;
@@ -351,6 +374,8 @@ class _ChatPageState extends State<ChatPage> {
   bool _desktopDropActive = false;
   bool _recordingAudio = false;
   bool _thisThreadOnly = false;
+  String? _activeTopicThreadId;
+  TopicThread? _activeTopicThread;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
   bool _composerAskAiRouteLoading = true;
@@ -360,6 +385,8 @@ class _ChatPageState extends State<ChatPage> {
   String? _askError;
   String? _askFailureMessage;
   String? _askFailureQuestion;
+  String? _askScopeEmptyQuestion;
+  String? _askScopeEmptyAnswer;
   int? _askAttemptCreatedAtMs;
   int? _askFailureCreatedAtMs;
   String? _askAttemptAnchorMessageId;
@@ -640,6 +667,8 @@ enum _MessageAction {
   convertTodoToInfo,
   openTodo,
   edit,
+  tags,
+  topicThread,
   linkTodo,
   delete,
 }
