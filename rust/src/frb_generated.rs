@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -696215254;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1880590734;
 
 // Section: executor
 
@@ -6831,6 +6831,50 @@ fn wire__crate__api__tags__db_merge_tags_impl(
         },
     )
 }
+fn wire__crate__api__tags__db_record_tag_merge_feedback_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_record_tag_merge_feedback",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_source_tag_id = <String>::sse_decode(&mut deserializer);
+            let api_target_tag_id = <String>::sse_decode(&mut deserializer);
+            let api_reason = <String>::sse_decode(&mut deserializer);
+            let api_action = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::tags::db_record_tag_merge_feedback(
+                        api_app_dir,
+                        api_key,
+                        api_source_tag_id,
+                        api_target_tag_id,
+                        api_reason,
+                        api_action,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__tags__db_set_message_tags_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -8949,39 +8993,45 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         163 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
         164 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-        165 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
-        167 => wire__crate__api__topic_threads__db_create_topic_thread_impl(
+        165 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__topic_threads__db_delete_topic_thread_impl(
+        166 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        167 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__topic_threads__db_create_topic_thread_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__topic_threads__db_list_topic_thread_message_ids_impl(
+        169 => wire__crate__api__topic_threads__db_delete_topic_thread_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => wire__crate__api__topic_threads__db_list_topic_threads_impl(
+        170 => wire__crate__api__topic_threads__db_list_topic_thread_message_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        171 => wire__crate__api__topic_threads__db_set_topic_thread_message_ids_impl(
+        171 => wire__crate__api__topic_threads__db_list_topic_threads_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        172 => wire__crate__api__topic_threads__db_update_topic_thread_title_impl(
+        172 => wire__crate__api__topic_threads__db_set_topic_thread_message_ids_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        173 => wire__crate__api__topic_threads__db_update_topic_thread_title_impl(
             port,
             ptr,
             rust_vec_len,

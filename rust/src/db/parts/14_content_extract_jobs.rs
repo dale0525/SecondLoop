@@ -709,3 +709,42 @@ pub fn read_attachment_annotation_payload_json(
     };
     Ok(Some(s))
 }
+
+pub fn list_message_attachment_annotation_payloads(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+) -> Result<Vec<serde_json::Value>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT ma.attachment_sha256, aa.lang, aa.payload
+           FROM message_attachments ma
+           JOIN attachment_annotations aa ON aa.attachment_sha256 = ma.attachment_sha256
+           WHERE ma.message_id = ?1
+             AND aa.status = 'ok'
+             AND aa.payload IS NOT NULL
+           ORDER BY ma.created_at ASC, aa.attachment_sha256 ASC"#,
+    )?;
+    let mut rows = stmt.query(params![message_id])?;
+
+    let mut out = Vec::<serde_json::Value>::new();
+    while let Some(row) = rows.next()? {
+        let attachment_sha256: String = row.get(0)?;
+        let lang: String = row.get(1)?;
+        let payload_blob: Vec<u8> = row.get(2)?;
+
+        let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
+        let payload_json = match decrypt_bytes(key, &payload_blob, aad.as_bytes()) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let payload: serde_json::Value = match serde_json::from_slice(&payload_json) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        out.push(payload);
+    }
+
+    Ok(out)
+}

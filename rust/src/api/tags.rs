@@ -85,6 +85,20 @@ pub fn db_merge_tags(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_record_tag_merge_feedback(
+    app_dir: String,
+    key: Vec<u8>,
+    source_tag_id: String,
+    target_tag_id: String,
+    reason: String,
+    action: String,
+) -> Result<()> {
+    let _ = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::record_tag_merge_feedback(&conn, &source_tag_id, &target_tag_id, &reason, &action)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_message_ids_by_tag_ids(
     app_dir: String,
     key: Vec<u8>,

@@ -230,6 +230,17 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
         sourceTagId: suggestion.sourceTag.id,
         targetTagId: suggestion.targetTag.id,
       );
+
+      unawaited(
+        widget.repository.recordTagMergeFeedback(
+          widget.sessionKey,
+          sourceTagId: suggestion.sourceTag.id,
+          targetTagId: suggestion.targetTag.id,
+          reason: suggestion.reason,
+          action: TagMergeFeedbackAction.accept,
+        ),
+      );
+
       if (!mounted) return;
 
       await _load();
@@ -238,6 +249,58 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.t.chat.tagPicker.mergeApplied(count: updated)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  void _removeMergeSuggestion(TagMergeSuggestion suggestion) {
+    _mergeSuggestions = _mergeSuggestions
+        .where(
+          (item) =>
+              item.sourceTag.id != suggestion.sourceTag.id ||
+              item.targetTag.id != suggestion.targetTag.id,
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _applyMergeFeedbackOnly(
+    TagMergeSuggestion suggestion, {
+    required TagMergeFeedbackAction action,
+    required String notice,
+  }) async {
+    if (_saving) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await widget.repository.recordTagMergeFeedback(
+        widget.sessionKey,
+        sourceTagId: suggestion.sourceTag.id,
+        targetTagId: suggestion.targetTag.id,
+        reason: suggestion.reason,
+        action: action,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _removeMergeSuggestion(suggestion);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(notice),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -260,6 +323,8 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     final suggestedTitle = context.t.chat.tagPicker.suggested;
     final mergeSuggestionsTitle = context.t.chat.tagPicker.mergeSuggestions;
     final mergeActionLabel = context.t.chat.tagPicker.mergeAction;
+    final mergeDismissLabel = context.t.chat.tagPicker.mergeDismissAction;
+    final mergeLaterLabel = context.t.chat.tagPicker.mergeLaterAction;
     final allTitle = context.t.chat.tagPicker.all;
     final addHint = context.t.chat.tagPicker.inputHint;
     final addLabel = context.t.chat.tagPicker.add;
@@ -353,20 +418,77 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                                 ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: ListTile(
-                                dense: true,
-                                title: Text(mergeTitle),
-                                subtitle: Text(mergeSubtitle),
-                                trailing: TextButton(
-                                  key: ValueKey(
-                                    'tag_picker_merge_apply_${suggestion.sourceTag.id}_${suggestion.targetTag.id}',
-                                  ),
-                                  onPressed: _saving
-                                      ? null
-                                      : () => unawaited(
-                                            _confirmAndApplyMerge(suggestion),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(mergeTitle),
+                                    const SizedBox(height: 4),
+                                    Text(mergeSubtitle),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      children: [
+                                        TextButton(
+                                          key: ValueKey(
+                                            'tag_picker_merge_apply_${suggestion.sourceTag.id}_${suggestion.targetTag.id}',
                                           ),
-                                  child: Text(mergeActionLabel),
+                                          onPressed: _saving
+                                              ? null
+                                              : () => unawaited(
+                                                    _confirmAndApplyMerge(
+                                                      suggestion,
+                                                    ),
+                                                  ),
+                                          child: Text(mergeActionLabel),
+                                        ),
+                                        TextButton(
+                                          key: ValueKey(
+                                            'tag_picker_merge_dismiss_${suggestion.sourceTag.id}_${suggestion.targetTag.id}',
+                                          ),
+                                          onPressed: _saving
+                                              ? null
+                                              : () => unawaited(
+                                                    _applyMergeFeedbackOnly(
+                                                      suggestion,
+                                                      action:
+                                                          TagMergeFeedbackAction
+                                                              .dismiss,
+                                                      notice: context
+                                                          .t
+                                                          .chat
+                                                          .tagPicker
+                                                          .mergeDismissed,
+                                                    ),
+                                                  ),
+                                          child: Text(mergeDismissLabel),
+                                        ),
+                                        TextButton(
+                                          key: ValueKey(
+                                            'tag_picker_merge_later_${suggestion.sourceTag.id}_${suggestion.targetTag.id}',
+                                          ),
+                                          onPressed: _saving
+                                              ? null
+                                              : () => unawaited(
+                                                    _applyMergeFeedbackOnly(
+                                                      suggestion,
+                                                      action:
+                                                          TagMergeFeedbackAction
+                                                              .later,
+                                                      notice: context
+                                                          .t
+                                                          .chat
+                                                          .tagPicker
+                                                          .mergeSavedForLater,
+                                                    ),
+                                                  ),
+                                          child: Text(mergeLaterLabel),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
