@@ -3,6 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+resolve_rust_toolchain() {
+  local toolchain_file="$ROOT_DIR/rust-toolchain.toml"
+  if [[ -f "$toolchain_file" ]]; then
+    awk -F'"' '/^channel[[:space:]]*=/ {print $2; exit}' "$toolchain_file"
+  fi
+}
+
 if ! command -v curl >/dev/null 2>&1; then
   echo "Missing dependency: curl" >&2
   exit 1
@@ -43,6 +50,10 @@ export RUSTUP_HOME="${RUSTUP_HOME:-"$ROOT_DIR/.tool/rustup"}"
 
 mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
 
+resolved_rust_toolchain="$(resolve_rust_toolchain || true)"
+rust_toolchain="${RUSTUP_TOOLCHAIN:-${resolved_rust_toolchain:-stable}}"
+export RUSTUP_TOOLCHAIN="$rust_toolchain"
+
 rustup_bin="$CARGO_HOME/bin/rustup"
 if [[ -x "$rustup_bin" ]]; then
   echo "rustup already installed: $rustup_bin"
@@ -65,13 +76,15 @@ else
   fi
 
   echo "Installing rustup into: $CARGO_HOME (RUSTUP_HOME=$RUSTUP_HOME)"
-  "$rustup_init" -y --no-modify-path --profile minimal --default-toolchain stable
+  "$rustup_init" -y --no-modify-path --profile minimal --default-toolchain "$rust_toolchain"
 fi
 
 export PATH="$CARGO_HOME/bin:$PATH"
 
-echo "Installing Android Rust targets (stable)…"
-rustup target add --toolchain stable \
+rustup toolchain install "$rust_toolchain" --profile minimal
+
+echo "Installing Android Rust targets ($rust_toolchain)…"
+rustup target add --toolchain "$rust_toolchain" \
   aarch64-linux-android \
   armv7-linux-androideabi \
   i686-linux-android \
