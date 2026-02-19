@@ -11,6 +11,7 @@ export ANDROID_AVD_HOME
 
 ANDROID_API_LEVEL="${SECONDLOOP_ANDROID_API_LEVEL:-34}"
 ANDROID_AVD_NAME="${SECONDLOOP_ANDROID_AVD_NAME:-secondloop_api34}"
+ANDROID_APP_ID="${SECONDLOOP_ANDROID_APP_ID:-com.secondloop.secondloop}"
 
 system_image_arch="${SECONDLOOP_ANDROID_IMAGE_ARCH:-}"
 if [[ -z "$system_image_arch" ]]; then
@@ -48,6 +49,22 @@ first_android_device_serial() {
   fi
 
   "$adb_bin" devices | awk 'NR > 1 && $2 == "device" {print $1; exit}'
+}
+
+clear_stale_flutter_runtime_cache() {
+  local device_serial="$1"
+
+  if [[ -z "$ANDROID_APP_ID" ]]; then
+    return 0
+  fi
+
+  if ! "$adb_bin" -s "$device_serial" shell pm path "$ANDROID_APP_ID" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if "$adb_bin" -s "$device_serial" shell "run-as $ANDROID_APP_ID sh -c 'rm -rf app_flutter cache code_cache'" >/dev/null 2>&1; then
+    echo "Cleared stale Flutter runtime cache for $ANDROID_APP_ID on $device_serial"
+  fi
 }
 
 
@@ -150,6 +167,8 @@ run_flutter_android() {
       echo "Could not determine Android device serial from adb." >&2
       exit 1
     fi
+
+    clear_stale_flutter_runtime_cache "$device_serial"
 
     exec bash "$ROOT_DIR/scripts/flutter_with_defines.sh" run -d "$device_serial"
   fi
