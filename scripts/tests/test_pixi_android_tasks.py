@@ -45,6 +45,22 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn('"emulator"', script)
         self.assertIn('"system-images;android-${ANDROID_API_LEVEL};google_apis;', script)
 
+    def test_auto_emulator_script_exports_android_avd_home(self) -> None:
+        script = ANDROID_RUN_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("export ANDROID_AVD_HOME", script)
+
+    def test_auto_emulator_device_detection_uses_adb_not_flutter_devices(self) -> None:
+        script = ANDROID_RUN_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn('flutter_with_defines.sh" devices --machine', script)
+
+    def test_auto_emulator_script_runs_flutter_with_detected_device_serial(self) -> None:
+        script = ANDROID_RUN_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("first_android_device_serial", script)
+        self.assertIn('run -d "$device_serial"', script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,9 @@ SDK_ROOT="${ANDROID_SDK_ROOT:-"$ROOT_DIR/.tool/android-sdk"}"
 ANDROID_USER_HOME="${ANDROID_USER_HOME:-"$ROOT_DIR/.tool/android"}"
 ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-"$ANDROID_USER_HOME/avd"}"
 
+export ANDROID_USER_HOME
+export ANDROID_AVD_HOME
+
 ANDROID_API_LEVEL="${SECONDLOOP_ANDROID_API_LEVEL:-34}"
 ANDROID_AVD_NAME="${SECONDLOOP_ANDROID_AVD_NAME:-secondloop_api34}"
 
@@ -29,38 +32,24 @@ emulator_bin="$SDK_ROOT/emulator/emulator"
 adb_bin="$SDK_ROOT/platform-tools/adb"
 
 has_connected_android_device() {
-  local devices_json
-  devices_json="$(bash "$ROOT_DIR/scripts/flutter_with_defines.sh" devices --machine 2>/dev/null || true)"
-  if [[ -z "$devices_json" ]]; then
+  if [[ ! -x "$adb_bin" ]]; then
     return 1
   fi
 
-  if ! DEVICES_JSON="$devices_json" python - <<'PY'; then
-import json
-import os
-import sys
+  "$adb_bin" start-server >/dev/null 2>&1 || true
 
-raw = os.environ.get("DEVICES_JSON", "").strip()
-if not raw:
-    raise SystemExit(1)
-
-try:
-    devices = json.loads(raw)
-except json.JSONDecodeError:
-    raise SystemExit(1)
-
-for device in devices:
-    target_platform = str(device.get("targetPlatform", ""))
-    if target_platform.startswith("android"):
-        raise SystemExit(0)
-
-raise SystemExit(1)
-PY
-    return 1
-  fi
-
-  return 0
+  "$adb_bin" devices | awk 'NR > 1 && $2 == "device" {found = 1} END {exit(found ? 0 : 1)}'
 }
+
+
+first_android_device_serial() {
+  if [[ ! -x "$adb_bin" ]]; then
+    return 1
+  fi
+
+  "$adb_bin" devices | awk 'NR > 1 && $2 == "device" {print $1; exit}'
+}
+
 
 ensure_emulator_components() {
   if [[ ! -x "$sdkmanager" ]]; then
@@ -155,7 +144,14 @@ start_emulator_if_needed() {
 
 run_flutter_android() {
   if [[ "$#" -eq 0 ]]; then
-    exec bash "$ROOT_DIR/scripts/flutter_with_defines.sh" run -d android
+    local device_serial
+    device_serial="$(first_android_device_serial)"
+    if [[ -z "$device_serial" ]]; then
+      echo "Could not determine Android device serial from adb." >&2
+      exit 1
+    fi
+
+    exec bash "$ROOT_DIR/scripts/flutter_with_defines.sh" run -d "$device_serial"
   fi
 
   exec bash "$ROOT_DIR/scripts/flutter_with_defines.sh" "$@"
