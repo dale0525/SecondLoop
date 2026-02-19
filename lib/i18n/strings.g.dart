@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1590 (795 per locale)
+/// Strings: 1594 (797 per locale)
 ///
-/// Built on 2026-02-18 at 14:59 UTC
+/// Built on 2026-02-19 at 08:42 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -2763,13 +2763,17 @@ class _StringsAttachmentsContentSpeechTranscribeIssueEn {
   String get openSettingsFailed =>
       'Unable to open system settings automatically. Please check speech permission and Dictation manually.';
   String get permissionDenied =>
-      'Speech recognition permission is denied. Enable it in system settings, then retry.';
+      'Speech permission was denied. Tap Retry to request it again, or open system settings if it remains blocked.';
   String get permissionRestricted =>
       'Speech recognition is restricted by system policy. Check Screen Time or device management policy.';
   String get serviceDisabled =>
       'Siri and Dictation are disabled. Please enable them before retrying.';
   String get runtimeUnavailable =>
       'Speech runtime is currently unavailable on this device. Please retry later.';
+  String get permissionRequest =>
+      'Local speech transcription needs speech permission. Tap Retry and allow the system permission prompt.';
+  String get offlineUnavailable =>
+      'On-device offline speech recognition is unavailable for this device or language. Install speech packs or switch to cloud transcription.';
 }
 
 // Path: attachments.content.videoInsights
@@ -7557,13 +7561,18 @@ class _StringsAttachmentsContentSpeechTranscribeIssueZhCn
   @override
   String get openSettingsFailed => '无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。';
   @override
-  String get permissionDenied => '语音识别权限已关闭。请在系统设置中开启后重试。';
+  String get permissionDenied =>
+      '语音识别权限被拒绝。请先点击“重试”再次触发系统授权弹窗；若仍被拦截，请前往系统设置开启权限。';
   @override
   String get permissionRestricted => '语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。';
   @override
   String get serviceDisabled => '系统“听写与 Siri”已关闭。请先启用后再重试。';
   @override
   String get runtimeUnavailable => '当前设备暂时无法使用语音识别运行时。请稍后重试。';
+  @override
+  String get permissionRequest => '本地语音转录需要语音识别权限。请点击“重试”，并在系统弹窗中允许授权。';
+  @override
+  String get offlineUnavailable => '当前设备或语言暂不支持离线语音识别。请先安装系统语音包，或切换到云端转录。';
 }
 
 // Path: attachments.content.videoInsights
@@ -10102,13 +10111,17 @@ extension on Translations {
       case 'attachments.content.speechTranscribeIssue.openSettingsFailed':
         return 'Unable to open system settings automatically. Please check speech permission and Dictation manually.';
       case 'attachments.content.speechTranscribeIssue.permissionDenied':
-        return 'Speech recognition permission is denied. Enable it in system settings, then retry.';
+        return 'Speech permission was denied. Tap Retry to request it again, or open system settings if it remains blocked.';
       case 'attachments.content.speechTranscribeIssue.permissionRestricted':
         return 'Speech recognition is restricted by system policy. Check Screen Time or device management policy.';
       case 'attachments.content.speechTranscribeIssue.serviceDisabled':
         return 'Siri and Dictation are disabled. Please enable them before retrying.';
       case 'attachments.content.speechTranscribeIssue.runtimeUnavailable':
         return 'Speech runtime is currently unavailable on this device. Please retry later.';
+      case 'attachments.content.speechTranscribeIssue.permissionRequest':
+        return 'Local speech transcription needs speech permission. Tap Retry and allow the system permission prompt.';
+      case 'attachments.content.speechTranscribeIssue.offlineUnavailable':
+        return 'On-device offline speech recognition is unavailable for this device or language. Install speech packs or switch to cloud transcription.';
       case 'attachments.content.videoInsights.contentKind.knowledge':
         return 'Knowledge video';
       case 'attachments.content.videoInsights.contentKind.nonKnowledge':
@@ -11724,13 +11737,17 @@ extension on _StringsZhCn {
       case 'attachments.content.speechTranscribeIssue.openSettingsFailed':
         return '无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。';
       case 'attachments.content.speechTranscribeIssue.permissionDenied':
-        return '语音识别权限已关闭。请在系统设置中开启后重试。';
+        return '语音识别权限被拒绝。请先点击“重试”再次触发系统授权弹窗；若仍被拦截，请前往系统设置开启权限。';
       case 'attachments.content.speechTranscribeIssue.permissionRestricted':
         return '语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。';
       case 'attachments.content.speechTranscribeIssue.serviceDisabled':
         return '系统“听写与 Siri”已关闭。请先启用后再重试。';
       case 'attachments.content.speechTranscribeIssue.runtimeUnavailable':
         return '当前设备暂时无法使用语音识别运行时。请稍后重试。';
+      case 'attachments.content.speechTranscribeIssue.permissionRequest':
+        return '本地语音转录需要语音识别权限。请点击“重试”，并在系统弹窗中允许授权。';
+      case 'attachments.content.speechTranscribeIssue.offlineUnavailable':
+        return '当前设备或语言暂不支持离线语音识别。请先安装系统语音包，或切换到云端转录。';
       case 'attachments.content.videoInsights.contentKind.knowledge':
         return '知识类视频';
       case 'attachments.content.videoInsights.contentKind.nonKnowledge':

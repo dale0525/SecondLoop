@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
@@ -670,6 +671,13 @@ class _MediaAnnotationSettingsPageState
     }
   }
 
+  bool _supportsDesktopWhisperModelRuntimeDownload() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
   Future<void> _setAudioWhisperModel(String next) async {
     if (_busy) return;
     final normalized = normalizeAudioTranscribeWhisperModel(next);
@@ -677,28 +685,32 @@ class _MediaAnnotationSettingsPageState
 
     final messenger = ScaffoldMessenger.of(context);
     final store = _audioWhisperModelStore;
-    final supportsDownload = store.supportsRuntimeDownload;
+    final shouldDownload = store.supportsRuntimeDownload &&
+        _supportsDesktopWhisperModelRuntimeDownload();
 
     setState(() {
       _busy = true;
-      _audioWhisperModelDownloading = supportsDownload;
+      _audioWhisperModelDownloading = shouldDownload;
       _audioWhisperModelDownloadingTarget = normalized;
       _audioWhisperModelDownloadReceivedBytes = 0;
       _audioWhisperModelDownloadTotalBytes = null;
     });
 
     try {
-      final ensureResult = await store.ensureModelAvailable(
-        model: normalized,
-        onProgress: _onAudioWhisperModelDownloadProgress,
-      );
+      AudioWhisperModelEnsureResult? ensureResult;
+      if (shouldDownload) {
+        ensureResult = await store.ensureModelAvailable(
+          model: normalized,
+          onProgress: _onAudioWhisperModelDownloadProgress,
+        );
+      }
 
       await AudioTranscribeWhisperModelPrefs.write(normalized);
 
       if (!mounted) return;
       setState(() => _audioWhisperModel = normalized);
 
-      if (ensureResult.status == AudioWhisperModelEnsureStatus.downloaded) {
+      if (ensureResult?.status == AudioWhisperModelEnsureStatus.downloaded) {
         final zh = Localizations.localeOf(context)
             .languageCode
             .toLowerCase()

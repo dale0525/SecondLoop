@@ -91,6 +91,50 @@ void main() {
     expect(args!.id, 'legacy:todo:42');
     expect(args.sourceEntryId, 'm3');
   });
+
+  test('Preferred semantic todo ids are prioritized in candidates', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _Backend(
+      todos: [
+        Todo(
+          id: 'todo:tianjin-snack',
+          title: '要和朋友去天津吃小吃',
+          status: 'open',
+          sourceEntryId: 'm:tj',
+          createdAtMs: PlatformInt64Util.from(1),
+          updatedAtMs: PlatformInt64Util.from(2),
+        ),
+        Todo(
+          id: 'todo:milk',
+          title: '买牛奶',
+          status: 'open',
+          sourceEntryId: 'm:milk',
+          createdAtMs: PlatformInt64Util.from(1),
+          updatedAtMs: PlatformInt64Util.from(2),
+        ),
+      ],
+    );
+
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    final candidates = await store.listOpenTodoCandidates(
+      query: '狗不理包子',
+      nowLocal: DateTime(2026, 2, 18, 10, 0),
+      limit: 5,
+      preferredTodoIds: const ['todo:tianjin-snack'],
+    );
+
+    expect(candidates, isNotEmpty);
+    expect(candidates.first.id, 'todo:tianjin-snack');
+    expect(
+      candidates.any((candidate) => candidate.id == 'todo:tianjin-snack'),
+      isTrue,
+    );
+  });
 }
 
 final class _Backend extends TestAppBackend {

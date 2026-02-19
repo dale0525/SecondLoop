@@ -215,6 +215,7 @@ Future<void> _pumpPage(
   String cloudGatewayBaseUrl = 'https://gateway.test',
   AppBackend? backend,
   bool embedded = false,
+  TargetPlatform? platform,
 }) async {
   Widget page = MediaAnnotationSettingsPage(
     configStore: store,
@@ -225,6 +226,9 @@ Future<void> _pumpPage(
   if (embedded) {
     page = SingleChildScrollView(child: page);
   }
+
+  final effectivePlatform =
+      platform ?? (linuxOcrModelStore != null ? TargetPlatform.linux : null);
 
   Widget home = SubscriptionScope(
     controller: _FakeSubscriptionController(subscriptionStatus),
@@ -253,6 +257,9 @@ Future<void> _pumpPage(
       lock: () {},
       child: wrapWithI18n(
         MaterialApp(
+          theme: effectivePlatform == null
+              ? null
+              : ThemeData(platform: effectivePlatform),
           home: home,
         ),
       ),
@@ -857,6 +864,7 @@ void main() {
       store: store,
       contentStore: contentStore,
       linuxOcrModelStore: linuxModelStore,
+      platform: TargetPlatform.linux,
     );
 
     final scrollable = find.byType(Scrollable).first;
@@ -897,6 +905,7 @@ void main() {
       store: store,
       contentStore: contentStore,
       linuxOcrModelStore: linuxModelStore,
+      platform: TargetPlatform.linux,
     );
 
     final scrollable = find.byType(Scrollable).first;
@@ -946,6 +955,7 @@ void main() {
       store: store,
       contentStore: contentStore,
       linuxOcrModelStore: linuxModelStore,
+      platform: TargetPlatform.linux,
     );
 
     final scrollable = find.byType(Scrollable).first;
@@ -960,6 +970,30 @@ void main() {
 
     expect(runtimeTile, findsOneWidget);
     expect(find.textContaining('runtime'), findsWidgets);
+  });
+
+  testWidgets('Local capability engine card is hidden on mobile platforms',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: true),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: true),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+      platform: TargetPlatform.android,
+    );
+
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.linuxOcrModelTileKey),
+      findsNothing,
+    );
   });
 
   testWidgets('Linux OCR download shows progress bar while downloading',

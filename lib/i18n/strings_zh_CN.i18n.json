@@ -1000,10 +1000,12 @@
         "title": "语音转录暂不可用",
         "openSettings": "打开系统设置",
         "openSettingsFailed": "无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。",
-        "permissionDenied": "语音识别权限已关闭。请在系统设置中开启后重试。",
+        "permissionDenied": "语音识别权限被拒绝。请先点击“重试”再次触发系统授权弹窗；若仍被拦截，请前往系统设置开启权限。",
         "permissionRestricted": "语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。",
         "serviceDisabled": "系统“听写与 Siri”已关闭。请先启用后再重试。",
-        "runtimeUnavailable": "当前设备暂时无法使用语音识别运行时。请稍后重试。"
+        "runtimeUnavailable": "当前设备暂时无法使用语音识别运行时。请稍后重试。",
+        "permissionRequest": "本地语音转录需要语音识别权限。请点击“重试”，并在系统弹窗中允许授权。",
+        "offlineUnavailable": "当前设备或语言暂不支持离线语音识别。请先安装系统语音包，或切换到云端转录。"
       },
       "videoInsights": {
         "contentKind": {

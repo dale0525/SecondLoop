@@ -257,8 +257,12 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
         context.t.attachments.content.speechTranscribeIssue.permissionDenied,
       kAudioTranscribeFailureSpeechPermissionRestricted => context
           .t.attachments.content.speechTranscribeIssue.permissionRestricted,
+      kAudioTranscribeFailureSpeechPermissionNotDetermined =>
+        context.t.attachments.content.speechTranscribeIssue.permissionRequest,
       kAudioTranscribeFailureSpeechServiceDisabled =>
         context.t.attachments.content.speechTranscribeIssue.serviceDisabled,
+      kAudioTranscribeFailureSpeechOfflineUnavailable =>
+        context.t.attachments.content.speechTranscribeIssue.offlineUnavailable,
       kAudioTranscribeFailureSpeechRuntimeUnavailable =>
         context.t.attachments.content.speechTranscribeIssue.runtimeUnavailable,
       _ => context.t.errors.loadFailed(error: issue.rawError),

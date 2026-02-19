@@ -1000,10 +1000,12 @@
         "title": "Speech transcription unavailable",
         "openSettings": "Open settings",
         "openSettingsFailed": "Unable to open system settings automatically. Please check speech permission and Dictation manually.",
-        "permissionDenied": "Speech recognition permission is denied. Enable it in system settings, then retry.",
+        "permissionDenied": "Speech permission was denied. Tap Retry to request it again, or open system settings if it remains blocked.",
         "permissionRestricted": "Speech recognition is restricted by system policy. Check Screen Time or device management policy.",
         "serviceDisabled": "Siri and Dictation are disabled. Please enable them before retrying.",
-        "runtimeUnavailable": "Speech runtime is currently unavailable on this device. Please retry later."
+        "runtimeUnavailable": "Speech runtime is currently unavailable on this device. Please retry later.",
+        "permissionRequest": "Local speech transcription needs speech permission. Tap Retry and allow the system permission prompt.",
+        "offlineUnavailable": "On-device offline speech recognition is unavailable for this device or language. Install speech packs or switch to cloud transcription."
       },
       "videoInsights": {
         "contentKind": {

@@ -278,37 +278,20 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
   Widget build(BuildContext context) {
     final title = widget.title ?? context.t.chat.markdownEditor.title;
     final saveLabel = widget.saveLabel ?? context.t.common.actions.save;
+    final compactActions = MediaQuery.sizeOf(context).width < 720;
 
     return CallbackShortcuts(
       bindings: _shortcutBindings(),
       child: Scaffold(
         key: const ValueKey('chat_markdown_editor_page'),
         appBar: AppBar(
-          title: Text(title),
+          title: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           actions: [
-            PopupMenuButton<_MarkdownExportFormat>(
-              key: const ValueKey('chat_markdown_editor_export_menu'),
-              tooltip: context.t.chat.markdownEditor.exportMenu,
-              enabled: !_exporting,
-              onSelected: _export,
-              itemBuilder: (context) => <PopupMenuEntry<_MarkdownExportFormat>>[
-                PopupMenuItem<_MarkdownExportFormat>(
-                  value: _MarkdownExportFormat.png,
-                  child: Text(context.t.chat.markdownEditor.exportPng),
-                ),
-                PopupMenuItem<_MarkdownExportFormat>(
-                  value: _MarkdownExportFormat.pdf,
-                  child: Text(context.t.chat.markdownEditor.exportPdf),
-                ),
-              ],
-              icon: _exporting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.ios_share_rounded),
-            ),
+            _buildExportMenuButton(context),
             if (widget.allowPlainMode)
               IconButton(
                 key: const ValueKey('chat_markdown_editor_switch_plain'),
@@ -316,22 +299,57 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
                 onPressed: _switchToPlainMode,
                 icon: const Icon(Icons.notes_rounded),
               ),
-            TextButton(
-              onPressed: _cancel,
-              child: Text(context.t.common.actions.cancel),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              key: widget.saveButtonKey,
-              onPressed: _save,
-              icon: const Icon(Icons.save_rounded, size: 18),
-              label: Text(saveLabel),
-            ),
-            const SizedBox(width: 12),
+            if (compactActions)
+              IconButton(
+                key: widget.saveButtonKey,
+                tooltip: saveLabel,
+                onPressed: _save,
+                icon: const Icon(Icons.save_rounded),
+              )
+            else ...[
+              TextButton(
+                onPressed: _cancel,
+                child: Text(context.t.common.actions.cancel),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: widget.saveButtonKey,
+                onPressed: _save,
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: Text(saveLabel),
+              ),
+              const SizedBox(width: 12),
+            ],
           ],
         ),
         body: _buildMarkdownEditorBody(context),
       ),
+    );
+  }
+
+  Widget _buildExportMenuButton(BuildContext context) {
+    return PopupMenuButton<_MarkdownExportFormat>(
+      key: const ValueKey('chat_markdown_editor_export_menu'),
+      tooltip: context.t.chat.markdownEditor.exportMenu,
+      enabled: !_exporting,
+      onSelected: _export,
+      itemBuilder: (context) => <PopupMenuEntry<_MarkdownExportFormat>>[
+        PopupMenuItem<_MarkdownExportFormat>(
+          value: _MarkdownExportFormat.png,
+          child: Text(context.t.chat.markdownEditor.exportPng),
+        ),
+        PopupMenuItem<_MarkdownExportFormat>(
+          value: _MarkdownExportFormat.pdf,
+          child: Text(context.t.chat.markdownEditor.exportPdf),
+        ),
+      ],
+      icon: _exporting
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.ios_share_rounded),
     );
   }
 
@@ -414,25 +432,36 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
                           ),
                     ),
                   ),
-                  Text(
-                    _themeLabel(context, _themePreset),
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    context.t.chat.markdownEditor.stats(
-                      lines: lines,
-                      characters: characters,
-                    ),
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSecondaryContainer,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      _themeLabel(context, _themePreset),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    Text(
+                      context.t.chat.markdownEditor.stats(
+                        lines: lines,
+                        characters: characters,
+                      ),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSecondaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
               ),
             ],
           );

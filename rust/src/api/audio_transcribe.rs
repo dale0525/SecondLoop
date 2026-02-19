@@ -9,7 +9,9 @@ use serde_json::Value;
 
 use crate::db;
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 mod local_whisper_runtime;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use local_whisper_runtime::create_local_whisper_context;
 
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
@@ -390,6 +392,7 @@ fn extract_transcript_text(response: &Value) -> String {
     text
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn normalize_local_whisper_model_name(model_name: &str) -> &'static str {
     match model_name.trim().to_ascii_lowercase().as_str() {
         "tiny" => "tiny",
@@ -402,6 +405,7 @@ fn normalize_local_whisper_model_name(model_name: &str) -> &'static str {
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn local_whisper_model_filename(model_name: &str) -> &'static str {
     match model_name {
         "tiny" => "ggml-tiny.bin",
@@ -414,6 +418,7 @@ fn local_whisper_model_filename(model_name: &str) -> &'static str {
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn resolve_local_whisper_model_path(
     app_dir: &str,
     model_name: &str,
@@ -443,6 +448,7 @@ fn resolve_local_whisper_model_path(
     ))
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn normalize_local_whisper_lang(lang: &str) -> Option<String> {
     if is_auto_transcribe_lang(lang) {
         return None;
@@ -457,6 +463,7 @@ fn normalize_local_whisper_lang(lang: &str) -> Option<String> {
     }
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn decode_local_whisper_wav_bytes(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     if wav_bytes.is_empty() {
         return Err(anyhow!("audio_transcribe_local_runtime_wav_empty"));
@@ -513,6 +520,7 @@ fn decode_local_whisper_wav_bytes(wav_bytes: &[u8]) -> Result<Vec<f32>> {
     Ok(samples)
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[flutter_rust_bridge::frb]
 pub fn audio_transcribe_local_whisper(
     app_dir: String,
@@ -605,6 +613,19 @@ pub fn audio_transcribe_local_whisper(
     }
 
     Ok(Value::Object(payload).to_string())
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+#[flutter_rust_bridge::frb]
+pub fn audio_transcribe_local_whisper(
+    _app_dir: String,
+    _model_name: String,
+    _lang: String,
+    _wav_bytes: Vec<u8>,
+) -> Result<String> {
+    Err(anyhow!(
+        "audio_transcribe_local_runtime_unsupported_platform"
+    ))
 }
 
 #[derive(Debug, Deserialize)]
