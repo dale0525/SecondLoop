@@ -845,6 +845,88 @@ class StoragePolicyConfig {
           autoPurgeIncludeImages == other.autoPurgeIncludeImages;
 }
 
+class Tag {
+  final String id;
+  final String name;
+  final String? systemKey;
+  final bool isSystem;
+  final String? color;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const Tag({
+    required this.id,
+    required this.name,
+    this.systemKey,
+    required this.isSystem,
+    this.color,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      systemKey.hashCode ^
+      isSystem.hashCode ^
+      color.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Tag &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          systemKey == other.systemKey &&
+          isSystem == other.isSystem &&
+          color == other.color &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
+class TagMergeSuggestion {
+  final Tag sourceTag;
+  final Tag targetTag;
+  final String reason;
+  final double score;
+  final PlatformInt64 sourceUsageCount;
+  final PlatformInt64 targetUsageCount;
+
+  const TagMergeSuggestion({
+    required this.sourceTag,
+    required this.targetTag,
+    required this.reason,
+    required this.score,
+    required this.sourceUsageCount,
+    required this.targetUsageCount,
+  });
+
+  @override
+  int get hashCode =>
+      sourceTag.hashCode ^
+      targetTag.hashCode ^
+      reason.hashCode ^
+      score.hashCode ^
+      sourceUsageCount.hashCode ^
+      targetUsageCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TagMergeSuggestion &&
+          runtimeType == other.runtimeType &&
+          sourceTag == other.sourceTag &&
+          targetTag == other.targetTag &&
+          reason == other.reason &&
+          score == other.score &&
+          sourceUsageCount == other.sourceUsageCount &&
+          targetUsageCount == other.targetUsageCount;
+}
+
 class Todo {
   final String id;
   final String title;
@@ -945,4 +1027,39 @@ class TodoActivity {
           content == other.content &&
           sourceMessageId == other.sourceMessageId &&
           createdAtMs == other.createdAtMs;
+}
+
+class TopicThread {
+  final String id;
+  final String conversationId;
+  final String? title;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const TopicThread({
+    required this.id,
+    required this.conversationId,
+    this.title,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      conversationId.hashCode ^
+      title.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TopicThread &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          conversationId == other.conversationId &&
+          title == other.title &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
 }

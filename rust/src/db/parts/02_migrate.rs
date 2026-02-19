@@ -645,6 +645,77 @@ CREATE INDEX IF NOT EXISTS idx_todo_recurrences_series_occurrence
 PRAGMA user_version = 22;
 "#,
         )?;
+        user_version = 22;
+    }
+
+    if user_version < 23 {
+        // v23: tags + message tag relations.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS tags (
+  id TEXT PRIMARY KEY,
+  name BLOB NOT NULL,
+  system_key TEXT,
+  is_system INTEGER NOT NULL DEFAULT 0,
+  color TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  CHECK (is_system IN (0, 1))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_system_key_unique
+  ON tags(system_key)
+  WHERE system_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_tags_updated_at_ms
+  ON tags(updated_at_ms);
+
+CREATE TABLE IF NOT EXISTS message_tags (
+  message_id TEXT NOT NULL,
+  tag_id TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (message_id, tag_id),
+  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_message_tags_tag_id
+  ON message_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_message_tags_message_id
+  ON message_tags(message_id);
+PRAGMA user_version = 23;
+"#,
+        )?;
+        user_version = 23;
+    }
+
+    if user_version < 24 {
+        // v24: topic threads + thread message relations.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS topic_threads (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  title BLOB,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_topic_threads_conversation_updated
+  ON topic_threads(conversation_id, updated_at_ms DESC, id ASC);
+
+CREATE TABLE IF NOT EXISTS topic_thread_messages (
+  thread_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (thread_id, message_id),
+  FOREIGN KEY(thread_id) REFERENCES topic_threads(id) ON DELETE CASCADE,
+  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_topic_thread_messages_message_id
+  ON topic_thread_messages(message_id);
+CREATE INDEX IF NOT EXISTS idx_topic_thread_messages_thread_id
+  ON topic_thread_messages(thread_id);
+PRAGMA user_version = 24;
+"#,
+        )?;
     }
 
     Ok(())
@@ -694,6 +765,9 @@ DELETE FROM message_embeddings;
 DELETE FROM todo_embeddings;
 DELETE FROM todo_activity_embeddings;
 DELETE FROM semantic_parse_jobs;
+DELETE FROM topic_thread_messages;
+DELETE FROM topic_threads;
+DELETE FROM message_tags;
 DELETE FROM message_attachments;
 DELETE FROM cloud_media_backup;
 DELETE FROM attachment_variants;
@@ -704,6 +778,7 @@ DELETE FROM attachment_annotations;
 DELETE FROM attachment_deletions;
 DELETE FROM attachments;
 DELETE FROM messages;
+DELETE FROM tags;
 DELETE FROM conversations;
 DELETE FROM todo_deletions;
 DELETE FROM todos;

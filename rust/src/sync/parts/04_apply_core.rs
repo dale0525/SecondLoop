@@ -6,6 +6,14 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "conversation.upsert.v1" => apply_conversation_upsert(conn, db_key, &op["payload"]),
         "message.insert.v1" => apply_message_insert(conn, db_key, op),
         "message.set.v2" => apply_message_set_v2(conn, db_key, op),
+        "tag.upsert.v2" => apply_tag_upsert(conn, db_key, &op["payload"]),
+        "tag.delete.v1" => apply_tag_delete(conn, &op["payload"]),
+        "message.tag_set.v1" => apply_message_tag_set(conn, db_key, &op["payload"]),
+        "topic_thread.upsert.v1" => apply_topic_thread_upsert(conn, db_key, &op["payload"]),
+        "topic_thread.message_set.v1" => {
+            apply_topic_thread_message_set(conn, db_key, &op["payload"])
+        }
+        "topic_thread.delete.v1" => apply_topic_thread_delete(conn, &op["payload"]),
         "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
         "attachment.delete.v1" => apply_attachment_delete(conn, db_key, op),
         "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),
@@ -72,6 +80,209 @@ ON CONFLICT(id) DO UPDATE SET
     if should_update_title {
         kv_set_i64(conn, &title_updated_at_key, updated_at_ms)?;
     }
+    Ok(())
+}
+
+const SYNC_SYSTEM_TAG_KEYS: [&str; 10] = [
+    "work",
+    "personal",
+    "family",
+    "health",
+    "finance",
+    "study",
+    "travel",
+    "social",
+    "home",
+    "hobby",
+];
+
+fn is_sync_system_key(system_key: &str) -> bool {
+    SYNC_SYSTEM_TAG_KEYS.contains(&system_key)
+}
+
+fn apply_tag_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let incoming_tag_id = payload["tag_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("tag.upsert.v2 missing tag_id"))?
+        .trim();
+    if incoming_tag_id.is_empty() {
+        return Err(anyhow!("tag.upsert.v2 tag_id cannot be empty"));
+    }
+
+    let incoming_name = payload["name"]
+        .as_str()
+        .ok_or_else(|| anyhow!("tag.upsert.v2 missing name"))?
+        .trim();
+    if incoming_name.is_empty() {
+        return Err(anyhow!("tag.upsert.v2 name cannot be empty"));
+    }
+
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("tag.upsert.v2 missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("tag.upsert.v2 missing updated_at_ms"))?;
+
+    let mut target_tag_id = incoming_tag_id.to_string();
+    let mut target_name = incoming_name.to_string();
+    let mut target_system_key = payload["system_key"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(std::string::ToString::to_string);
+    let mut target_is_system = payload["is_system"]
+        .as_bool()
+        .unwrap_or_else(|| target_system_key.is_some());
+
+    if target_is_system || target_system_key.is_some() {
+        let Some(system_key) = target_system_key.as_deref() else {
+            return Err(anyhow!("tag.upsert.v2 system tag missing system_key"));
+        };
+        if !is_sync_system_key(system_key) {
+            return Err(anyhow!("tag.upsert.v2 invalid system_key: {system_key}"));
+        }
+
+        target_tag_id = format!("system.tag.{system_key}");
+        target_name = system_key.to_string();
+        target_system_key = Some(system_key.to_string());
+        target_is_system = true;
+    }
+
+    if !target_is_system {
+        let deleted_at_key = format!("tag.deleted_at:{target_tag_id}");
+        let existing_deleted_at_ms = kv_get_i64(conn, &deleted_at_key)?.unwrap_or(0);
+        if existing_deleted_at_ms > 0 && updated_at_ms <= existing_deleted_at_ms {
+            return Ok(());
+        }
+    }
+
+    let existing: Option<(i64, i64, Option<String>)> = conn
+        .query_row(
+            r#"SELECT updated_at_ms, COALESCE(is_system, 0), system_key
+               FROM tags
+               WHERE id = ?1"#,
+            params![target_tag_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    if let Some((existing_updated_at_ms, existing_is_system_i64, existing_system_key)) = existing {
+        if updated_at_ms < existing_updated_at_ms {
+            return Ok(());
+        }
+
+        if existing_is_system_i64 != 0 {
+            let Some(system_key) = existing_system_key.as_deref() else {
+                return Err(anyhow!(
+                    "tag.upsert.v2 system tag row missing system_key: {target_tag_id}"
+                ));
+            };
+            if !is_sync_system_key(system_key) {
+                return Err(anyhow!("tag.upsert.v2 invalid system_key: {system_key}"));
+            }
+            target_tag_id = format!("system.tag.{system_key}");
+            target_name = system_key.to_string();
+            target_system_key = Some(system_key.to_string());
+            target_is_system = true;
+        }
+    }
+
+    if target_name.trim().is_empty() {
+        return Err(anyhow!("tag.upsert.v2 resolved name cannot be empty"));
+    }
+
+    let color = payload["color"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(std::string::ToString::to_string);
+    let color = if target_is_system { None } else { color };
+
+    let aad = format!("tag.name:{target_tag_id}");
+    let name_blob = encrypt_bytes(db_key, target_name.as_bytes(), aad.as_bytes())?;
+
+    conn.execute(
+        r#"
+INSERT INTO tags(id, name, system_key, is_system, color, created_at_ms, updated_at_ms)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+ON CONFLICT(id) DO UPDATE SET
+  name = CASE
+    WHEN excluded.updated_at_ms >= tags.updated_at_ms THEN excluded.name
+    ELSE tags.name
+  END,
+  system_key = CASE
+    WHEN excluded.updated_at_ms >= tags.updated_at_ms THEN excluded.system_key
+    ELSE tags.system_key
+  END,
+  is_system = CASE
+    WHEN excluded.updated_at_ms >= tags.updated_at_ms THEN excluded.is_system
+    ELSE tags.is_system
+  END,
+  color = CASE
+    WHEN excluded.updated_at_ms >= tags.updated_at_ms THEN excluded.color
+    ELSE tags.color
+  END,
+  created_at_ms = min(tags.created_at_ms, excluded.created_at_ms),
+  updated_at_ms = max(tags.updated_at_ms, excluded.updated_at_ms)
+"#,
+        params![
+            target_tag_id,
+            name_blob,
+            target_system_key,
+            if target_is_system { 1 } else { 0 },
+            color,
+            created_at_ms,
+            updated_at_ms
+        ],
+    )?;
+
+    Ok(())
+}
+
+fn apply_tag_delete(conn: &Connection, payload: &serde_json::Value) -> Result<()> {
+    let tag_id = payload["tag_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("tag.delete.v1 missing tag_id"))?
+        .trim();
+    if tag_id.is_empty() {
+        return Err(anyhow!("tag.delete.v1 tag_id cannot be empty"));
+    }
+
+    let deleted_at_ms = payload["deleted_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("tag.delete.v1 missing deleted_at_ms"))?;
+
+    let deleted_at_key = format!("tag.deleted_at:{tag_id}");
+    let existing_deleted_at_ms = kv_get_i64(conn, &deleted_at_key)?.unwrap_or(0);
+    if deleted_at_ms < existing_deleted_at_ms {
+        return Ok(());
+    }
+
+    let existing_is_system: Option<i64> = conn
+        .query_row(
+            r#"SELECT COALESCE(is_system, 0)
+               FROM tags
+               WHERE id = ?1"#,
+            params![tag_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if existing_is_system.unwrap_or(0) != 0 {
+        return Err(anyhow!("tag.delete.v1 cannot delete system tag: {tag_id}"));
+    }
+
+    conn.execute(
+        r#"DELETE FROM message_tags WHERE tag_id = ?1"#,
+        params![tag_id],
+    )?;
+    conn.execute(r#"DELETE FROM tags WHERE id = ?1"#, params![tag_id])?;
+    kv_set_i64(conn, &deleted_at_key, deleted_at_ms)?;
+
     Ok(())
 }
 
@@ -163,7 +374,7 @@ ON CONFLICT(id) DO UPDATE SET
   next_review_at_ms = excluded.next_review_at_ms,
   last_review_at_ms = excluded.last_review_at_ms,
   needs_embedding = 1
-WHERE excluded.updated_at_ms > todos.updated_at_ms
+WHERE excluded.updated_at_ms >= todos.updated_at_ms
 "#,
         params![
             todo_id,

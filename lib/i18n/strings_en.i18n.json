@@ -905,7 +905,69 @@
     "semanticParseStatusUpdated": "Updated task: $title",
     "semanticParseStatusUpdatedGeneric": "Updated task",
     "semanticParseStatusUndone": "Undid auto action",
-    "askAiRecoveredDetached": "Recovered the completed cloud answer."
+    "askAiRecoveredDetached": "Recovered the completed cloud answer.",
+    "topicThread": {
+      "filterTooltip": "Topic thread filter",
+      "actionLabel": "Topic thread",
+      "create": "Create topic thread",
+      "clearFilter": "Clear topic thread filter",
+      "clear": "Clear thread",
+      "manage": "Manage thread",
+      "rename": "Rename thread",
+      "delete": "Delete thread",
+      "deleteDialog": {
+        "title": "Delete topic thread?",
+        "message": "Deleting removes this thread and its message memberships.",
+        "confirm": "Delete"
+      },
+      "addMessage": "Add this message",
+      "removeMessage": "Remove this message",
+      "createDialogTitle": "Create topic thread",
+      "renameDialogTitle": "Rename topic thread",
+      "titleFieldLabel": "Thread title (optional)",
+      "untitled": "Untitled topic thread"
+    },
+    "tagFilter": {
+      "tooltip": "Tag filter",
+      "clearFilter": "Clear tag filter",
+      "sheet": {
+        "title": "Filter by tags",
+        "apply": "Apply",
+        "clear": "Clear",
+        "includeHint": "Tap: Include",
+        "excludeHint": "Tap again: Exclude",
+        "empty": "No tags yet"
+      }
+    },
+    "tagPicker": {
+      "title": "Manage tags",
+      "suggested": "Suggested tags",
+      "mergeSuggestions": "Merge suggestions",
+      "mergeAction": "Merge",
+      "mergeSuggestionMessages": "Affects $count tagged messages",
+      "mergeReasonSystemDomain": "Matches system domain",
+      "mergeReasonNameCompact": "Likely duplicate name",
+      "mergeReasonNameContains": "Very similar name",
+      "mergeDialog": {
+        "title": "Merge tags?",
+        "message": "Merge \"$source\" into \"$target\"? This updates existing message tags.",
+        "confirm": "Merge"
+      },
+      "mergeApplied": "Merged $count messages",
+      "all": "All tags",
+      "inputHint": "Type a tag name",
+      "add": "Add",
+      "save": "Save",
+      "tagActionLabel": "Tags"
+    },
+    "askScopeEmpty": {
+      "title": "No results in current scope",
+      "actions": {
+        "expandTimeWindow": "Expand time window",
+        "removeIncludeTags": "Remove include tags",
+        "switchScopeToAll": "Switch scope to All"
+      }
+    }
   },
   "attachments": {
     "metadata": {

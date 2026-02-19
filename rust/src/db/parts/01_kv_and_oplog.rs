@@ -26,6 +26,10 @@ fn kv_set_string(conn: &Connection, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+fn kv_set_i64(conn: &Connection, key: &str, value: i64) -> Result<()> {
+    kv_set_string(conn, key, &value.to_string())
+}
+
 fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) -> Result<()> {
     let op_id = op_json["op_id"]
         .as_str()

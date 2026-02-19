@@ -13,6 +13,9 @@ extension _ChatPageStateBuild on _ChatPageState {
     final title = widget.conversation.id == 'main_stream'
         ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
+    final locale = Localizations.localeOf(context);
+    final activeTagFilterCount =
+        _selectedTagFilterIds.length + _selectedTagExcludeIds.length;
     return Scaffold(
       resizeToAvoidBottomInset: useCompactComposer,
       appBar: AppBar(
@@ -37,6 +40,64 @@ extension _ChatPageStateBuild on _ChatPageState {
               icon: Icons.filter_alt_rounded,
             ),
           ),
+          IconButton(
+            key: const ValueKey('chat_tag_filter_button'),
+            tooltip: _tagFilterTooltip(locale),
+            onPressed: () => unawaited(_openTagFilterSheet()),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.sell_outlined),
+                if (activeTagFilterCount > 0)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        activeTagFilterCount.toString(),
+                        style: TextStyle(
+                          color: colorScheme.onPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('chat_topic_thread_filter_button'),
+            tooltip: _topicThreadFilterTooltip(locale),
+            onPressed: () => unawaited(_openTopicThreadFilterSheet()),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.forum_outlined),
+                if (_activeTopicThreadId != null)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           if (!isDesktopPlatform)
             IconButton(
               key: const ValueKey('chat_open_settings'),
@@ -57,6 +118,8 @@ extension _ChatPageStateBuild on _ChatPageState {
       ),
       body: Column(
         children: [
+          _buildSelectedTagFilterBar(),
+          _buildActiveTopicThreadBar(),
           if (!isMobileKeyboardVisible) ...[
             FutureBuilder<_TodoAgendaSummary>(
               future: _agendaFuture,
@@ -359,6 +422,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                 ),
               ),
             ),
+          _buildAskScopeEmptyCard(),
           AnimatedPadding(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,

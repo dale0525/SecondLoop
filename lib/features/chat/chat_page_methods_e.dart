@@ -45,7 +45,10 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     _setState(() => _stopRequested = false);
   }
 
-  Future<void> _askAi({String? questionOverride}) async {
+  Future<void> _askAi({
+    String? questionOverride,
+    bool forceDisableTimeWindow = false,
+  }) async {
     if (_asking) return;
     if (_sending) return;
     if (_recordingAudio) return;
@@ -113,6 +116,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       _askFailureQuestion = null;
       _askFailureCreatedAtMs = null;
       _askFailureAnchorMessageId = null;
+      _clearAskScopeEmptyState();
       _askAttemptCreatedAtMs = attemptCreatedAtMs;
       _askAttemptAnchorMessageId = attemptAnchorMessageId;
       _pendingQuestion = question;
@@ -127,17 +131,19 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final firstDayOfWeekIndex =
         MaterialLocalizations.of(context).firstDayOfWeekIndex;
     final nowLocal = DateTime.now();
-    final intent = AskAiIntentResolver.resolve(
-      question,
-      nowLocal,
-      locale: locale,
-      firstDayOfWeekIndex: firstDayOfWeekIndex,
-    );
-
+    final intent = forceDisableTimeWindow
+        ? null
+        : AskAiIntentResolver.resolve(
+            question,
+            nowLocal,
+            locale: locale,
+            firstDayOfWeekIndex: firstDayOfWeekIndex,
+          );
     var timeStartMs =
-        intent.timeRange?.startLocal.toUtc().millisecondsSinceEpoch;
-    var timeEndMs = intent.timeRange?.endLocal.toUtc().millisecondsSinceEpoch;
-    if (timeStartMs == null || timeEndMs == null) {
+        intent?.timeRange?.startLocal.toUtc().millisecondsSinceEpoch;
+    var timeEndMs = intent?.timeRange?.endLocal.toUtc().millisecondsSinceEpoch;
+
+    if (!forceDisableTimeWindow && (timeStartMs == null || timeEndMs == null)) {
       String? json;
       try {
         final future = route == AskAiRouteKind.cloudGateway
@@ -277,6 +283,20 @@ extension _ChatPageStateMethodsE on _ChatPageState {
                     thisThreadOnly: _thisThreadOnly,
                   ));
         break;
+    }
+
+    final tagScopedStream = await _buildTagScopedAskStream(
+      backend: backend,
+      route: route,
+      sessionKey: sessionKey,
+      question: question,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
+      cloudGatewayConfig: cloudGatewayConfig,
+      cloudIdToken: cloudIdToken,
+    );
+    if (tagScopedStream != null) {
+      stream = tagScopedStream;
     }
 
     Future<void> startStream(
@@ -499,11 +519,16 @@ extension _ChatPageStateMethodsE on _ChatPageState {
           final completedRequestId = _activeCloudRequestId;
           final completedGatewayBaseUrl = _activeCloudGatewayBaseUrl;
           final completedIdToken = _activeCloudIdToken;
+          final completedAnswer = _streamingAnswer;
           _setState(() {
             _askSub = null;
             _asking = false;
             _pendingQuestion = null;
             _streamingAnswer = '';
+            _captureAskScopeEmptyState(
+              question: question,
+              answer: completedAnswer,
+            );
             _askAttemptCreatedAtMs = null;
             _askAttemptAnchorMessageId = null;
             _activeCloudRequestId = null;
@@ -537,13 +562,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       cloudIdTokenForStream:
           route == AskAiRouteKind.cloudGateway ? cloudIdToken : null,
     );
-  }
-
-  bool _isCloudEmbeddingsPreflightFailure(Object error) {
-    final message = error.toString().toLowerCase();
-    return message.contains('embedding') ||
-        message.contains('embedder') ||
-        message.contains('query vector dim mismatch');
   }
 
   Future<bool> _ensureAskAiDataConsent({bool allowPrompt = true}) async {
@@ -674,18 +692,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     _cloudEmbeddingsConsented = true;
     await EmbeddingsDataConsentPrefs.setEnabled(prefs, true);
     return true;
-  }
-
-  Future<bool> _hasActiveEmbeddingProfile(
-    AppBackend backend,
-    Uint8List sessionKey,
-  ) async {
-    try {
-      final profiles = await backend.listEmbeddingProfiles(sessionKey);
-      return profiles.any((p) => p.isActive);
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<void> _handleCloudAskMetaDelta(

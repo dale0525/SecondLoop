@@ -134,6 +134,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     final action = await showModalBottomSheet<_MessageAction>(
       context: context,
+      isScrollControlled: true,
       builder: (context) {
         final tokens = SlTokens.of(context);
         final colorScheme = Theme.of(context).colorScheme;
@@ -161,72 +162,94 @@ extension _ChatPageStateMethodsA on _ChatPageState {
                       ? context.t.actions.todoNoteLink.action
                       : context.t.chat.messageActions.linkOtherTodo;
 
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        key: const ValueKey('message_action_copy'),
-                        leading: const Icon(Icons.copy_all_rounded),
-                        title: Text(context.t.common.actions.copy),
-                        onTap: () =>
-                            Navigator.of(context).pop(_MessageAction.copy),
-                      ),
-                      if (snapshot.connectionState == ConnectionState.done) ...[
-                        if (canConvertToTodo)
-                          ListTile(
-                            key: const ValueKey('message_action_convert_todo'),
-                            leading: const Icon(Icons.task_alt_rounded),
-                            title: Text(
-                                context.t.chat.messageActions.convertToTodo),
-                            onTap: () => Navigator.of(context)
-                                .pop(_MessageAction.convertTodo),
-                          )
-                        else if (resolvedTodo != null) ...[
-                          ListTile(
-                            key: const ValueKey('message_action_open_todo'),
-                            leading: const Icon(Icons.chevron_right_rounded),
-                            title: Text(context.t.chat.messageActions.openTodo),
-                            onTap: () => Navigator.of(context)
-                                .pop(_MessageAction.openTodo),
-                          ),
-                          if (resolvedTodo.isSourceEntry)
-                            ListTile(
-                              key: const ValueKey(
-                                  'message_action_convert_to_info'),
-                              leading: const Icon(Icons.undo_rounded),
-                              title: Text(context
-                                  .t.chat.messageActions.convertTodoToInfo),
-                              onTap: () => Navigator.of(context)
-                                  .pop(_MessageAction.convertTodoToInfo),
-                            ),
-                        ],
-                      ],
-                      if (canEdit)
+                  return SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         ListTile(
-                          key: const ValueKey('message_action_edit'),
-                          leading: const Icon(Icons.edit_rounded),
-                          title: Text(context.t.common.actions.edit),
+                          key: const ValueKey('message_action_copy'),
+                          leading: const Icon(Icons.copy_all_rounded),
+                          title: Text(context.t.common.actions.copy),
                           onTap: () =>
-                              Navigator.of(context).pop(_MessageAction.edit),
+                              Navigator.of(context).pop(_MessageAction.copy),
                         ),
-                      if (showLinkTodo)
+                        if (snapshot.connectionState ==
+                            ConnectionState.done) ...[
+                          if (canConvertToTodo)
+                            ListTile(
+                              key:
+                                  const ValueKey('message_action_convert_todo'),
+                              leading: const Icon(Icons.task_alt_rounded),
+                              title: Text(
+                                  context.t.chat.messageActions.convertToTodo),
+                              onTap: () => Navigator.of(context)
+                                  .pop(_MessageAction.convertTodo),
+                            )
+                          else if (resolvedTodo != null) ...[
+                            ListTile(
+                              key: const ValueKey('message_action_open_todo'),
+                              leading: const Icon(Icons.chevron_right_rounded),
+                              title:
+                                  Text(context.t.chat.messageActions.openTodo),
+                              onTap: () => Navigator.of(context)
+                                  .pop(_MessageAction.openTodo),
+                            ),
+                            if (resolvedTodo.isSourceEntry)
+                              ListTile(
+                                key: const ValueKey(
+                                    'message_action_convert_to_info'),
+                                leading: const Icon(Icons.undo_rounded),
+                                title: Text(context
+                                    .t.chat.messageActions.convertTodoToInfo),
+                                onTap: () => Navigator.of(context)
+                                    .pop(_MessageAction.convertTodoToInfo),
+                              ),
+                          ],
+                        ],
+                        if (canEdit)
+                          ListTile(
+                            key: const ValueKey('message_action_edit'),
+                            leading: const Icon(Icons.edit_rounded),
+                            title: Text(context.t.common.actions.edit),
+                            onTap: () =>
+                                Navigator.of(context).pop(_MessageAction.edit),
+                          ),
                         ListTile(
-                          key: const ValueKey('message_action_link_todo'),
-                          leading: const Icon(Icons.link_rounded),
-                          title: Text(linkTodoTitle),
-                          onTap: () => Navigator.of(context)
-                              .pop(_MessageAction.linkTodo),
+                          key: const ValueKey('message_action_tags'),
+                          leading: const Icon(Icons.sell_outlined),
+                          title: Text(
+                            context.t.chat.tagPicker.tagActionLabel,
+                          ),
+                          onTap: () =>
+                              Navigator.of(context).pop(_MessageAction.tags),
                         ),
-                      ListTile(
-                        key: const ValueKey('message_action_delete'),
-                        leading: const Icon(Icons.delete_outline_rounded),
-                        iconColor: colorScheme.error,
-                        textColor: colorScheme.error,
-                        title: Text(context.t.common.actions.delete),
-                        onTap: () =>
-                            Navigator.of(context).pop(_MessageAction.delete),
-                      ),
-                    ],
+                        ListTile(
+                          key: const ValueKey('message_action_topic_thread'),
+                          leading: const Icon(Icons.forum_outlined),
+                          title: Text(_topicThreadActionLabel(
+                              Localizations.localeOf(context))),
+                          onTap: () => Navigator.of(context)
+                              .pop(_MessageAction.topicThread),
+                        ),
+                        if (showLinkTodo)
+                          ListTile(
+                            key: const ValueKey('message_action_link_todo'),
+                            leading: const Icon(Icons.link_rounded),
+                            title: Text(linkTodoTitle),
+                            onTap: () => Navigator.of(context)
+                                .pop(_MessageAction.linkTodo),
+                          ),
+                        ListTile(
+                          key: const ValueKey('message_action_delete'),
+                          leading: const Icon(Icons.delete_outline_rounded),
+                          iconColor: colorScheme.error,
+                          textColor: colorScheme.error,
+                          title: Text(context.t.common.actions.delete),
+                          onTap: () =>
+                              Navigator.of(context).pop(_MessageAction.delete),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -253,6 +276,12 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         break;
       case _MessageAction.edit:
         await _editMessage(message);
+        break;
+      case _MessageAction.tags:
+        await _openMessageTagPicker(message);
+        break;
+      case _MessageAction.topicThread:
+        await _openMessageTopicThreadPicker(message);
         break;
       case _MessageAction.linkTodo:
         await _linkMessageToTodo(message);
@@ -461,6 +490,18 @@ extension _ChatPageStateMethodsA on _ChatPageState {
             value: _MessageAction.edit,
             child: Text(context.t.common.actions.edit),
           ),
+        PopupMenuItem<_MessageAction>(
+          key: const ValueKey('message_context_tags'),
+          value: _MessageAction.tags,
+          child: Text(
+            context.t.chat.tagPicker.tagActionLabel,
+          ),
+        ),
+        PopupMenuItem<_MessageAction>(
+          key: const ValueKey('message_context_topic_thread'),
+          value: _MessageAction.topicThread,
+          child: Text(_topicThreadActionLabel(Localizations.localeOf(context))),
+        ),
         if (linkedTodo == null)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_link_todo'),
@@ -497,6 +538,12 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         break;
       case _MessageAction.edit:
         await _editMessage(message);
+        break;
+      case _MessageAction.tags:
+        await _openMessageTagPicker(message);
+        break;
+      case _MessageAction.topicThread:
+        await _openMessageTopicThreadPicker(message);
         break;
       case _MessageAction.linkTodo:
         await _linkMessageToTodo(message);

@@ -44,7 +44,11 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
     let user_version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("user_version");
-    assert_eq!(user_version, 22);
+    assert!(
+        user_version >= 22,
+        "expected schema version >= 22, got {}",
+        user_version
+    );
 
     let mut stmt = conn
         .prepare("PRAGMA table_info(attachment_places)")

@@ -103,7 +103,11 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   Future<List<Message>> _loadMessages() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    if (_usePagination) {
+
+    if (_usePagination &&
+        _selectedTagFilterIds.isEmpty &&
+        _selectedTagExcludeIds.isEmpty &&
+        _activeTopicThreadId == null) {
       final page = await backend.listMessagesPage(
         sessionKey,
         widget.conversation.id,
@@ -123,12 +127,37 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
 
     final list = await backend.listMessages(sessionKey, widget.conversation.id);
-    _latestLoadedMessages = list;
-    return list;
+    final tagFiltered = await _filterMessagesBySelectedTags(sessionKey, list);
+    final filtered = await _filterMessagesByActiveTopicThread(
+      sessionKey,
+      tagFiltered,
+    );
+
+    if (_usePagination) {
+      if (mounted) {
+        _setState(() {
+          _paginatedMessages = filtered;
+          _latestLoadedMessages = filtered;
+          _hasMoreMessages = false;
+          _loadingMoreMessages = false;
+        });
+      } else {
+        _latestLoadedMessages = filtered;
+      }
+      return filtered;
+    }
+
+    _latestLoadedMessages = filtered;
+    return filtered;
   }
 
   Future<void> _loadOlderMessages() async {
     if (!_usePagination) return;
+    if (_selectedTagFilterIds.isNotEmpty ||
+        _selectedTagExcludeIds.isNotEmpty ||
+        _activeTopicThreadId != null) {
+      return;
+    }
     if (_loadingMoreMessages || !_hasMoreMessages) return;
     if (_paginatedMessages.isEmpty) return;
 

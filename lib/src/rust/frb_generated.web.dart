@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/ask_scope.dart';
 import 'api/attachments.dart';
 import 'api/audio_transcribe.dart';
 import 'api/content_enrichment.dart';
@@ -15,6 +16,8 @@ import 'api/desktop_media.dart';
 import 'api/media_annotation.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
+import 'api/tags.dart';
+import 'api/topic_threads.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -165,6 +168,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SimilarTodoThread> dco_decode_list_similar_todo_thread(dynamic raw);
 
   @protected
+  List<Tag> dco_decode_list_tag(dynamic raw);
+
+  @protected
+  List<TagMergeSuggestion> dco_decode_list_tag_merge_suggestion(dynamic raw);
+
+  @protected
   List<Todo> dco_decode_list_todo(dynamic raw);
 
   @protected
@@ -172,6 +181,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TodoCandidate> dco_decode_list_todo_candidate(dynamic raw);
+
+  @protected
+  List<TopicThread> dco_decode_list_topic_thread(dynamic raw);
 
   @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
@@ -221,6 +233,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StoragePolicyConfig dco_decode_storage_policy_config(dynamic raw);
 
   @protected
+  Tag dco_decode_tag(dynamic raw);
+
+  @protected
+  TagMergeSuggestion dco_decode_tag_merge_suggestion(dynamic raw);
+
+  @protected
   Todo dco_decode_todo(dynamic raw);
 
   @protected
@@ -228,6 +246,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoCandidate dco_decode_todo_candidate(dynamic raw);
+
+  @protected
+  TopicThread dco_decode_topic_thread(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -391,6 +412,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<Tag> sse_decode_list_tag(SseDeserializer deserializer);
+
+  @protected
+  List<TagMergeSuggestion> sse_decode_list_tag_merge_suggestion(
+      SseDeserializer deserializer);
+
+  @protected
   List<Todo> sse_decode_list_todo(SseDeserializer deserializer);
 
   @protected
@@ -400,6 +428,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<TodoCandidate> sse_decode_list_todo_candidate(
       SseDeserializer deserializer);
+
+  @protected
+  List<TopicThread> sse_decode_list_topic_thread(SseDeserializer deserializer);
 
   @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
@@ -453,6 +484,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  Tag sse_decode_tag(SseDeserializer deserializer);
+
+  @protected
+  TagMergeSuggestion sse_decode_tag_merge_suggestion(
+      SseDeserializer deserializer);
+
+  @protected
   Todo sse_decode_todo(SseDeserializer deserializer);
 
   @protected
@@ -460,6 +498,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoCandidate sse_decode_todo_candidate(SseDeserializer deserializer);
+
+  @protected
+  TopicThread sse_decode_topic_thread(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -632,6 +673,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<SimilarTodoThread> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_tag(List<Tag> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_tag_merge_suggestion(
+      List<TagMergeSuggestion> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_todo(List<Todo> self, SseSerializer serializer);
 
   @protected
@@ -641,6 +689,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_todo_candidate(
       List<TodoCandidate> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_topic_thread(
+      List<TopicThread> self, SseSerializer serializer);
 
   @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
@@ -698,6 +750,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       StoragePolicyConfig self, SseSerializer serializer);
 
   @protected
+  void sse_encode_tag(Tag self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tag_merge_suggestion(
+      TagMergeSuggestion self, SseSerializer serializer);
+
+  @protected
   void sse_encode_todo(Todo self, SseSerializer serializer);
 
   @protected
@@ -705,6 +764,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_todo_candidate(TodoCandidate self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_topic_thread(TopicThread self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
