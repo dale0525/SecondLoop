@@ -20,6 +20,8 @@ include!("parts/11_events.rs");
 include!("parts/12_media_annotation_config.rs");
 include!("parts/16_tags.rs");
 include!("parts/17_topic_threads.rs");
+include!("parts/18_tag_merge_feedback.rs");
+include!("parts/19_suggested_tags.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;

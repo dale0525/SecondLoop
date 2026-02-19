@@ -71,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -696215254;
+  int get rustContentHash => 1880590734;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1152,6 +1152,14 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required String sourceTagId,
       required String targetTagId});
+
+  Future<void> crateApiTagsDbRecordTagMergeFeedback(
+      {required String appDir,
+      required List<int> key,
+      required String sourceTagId,
+      required String targetTagId,
+      required String reason,
+      required String action});
 
   Future<List<Tag>> crateApiTagsDbSetMessageTags(
       {required String appDir,
@@ -7629,6 +7637,49 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiTagsDbRecordTagMergeFeedback(
+      {required String appDir,
+      required List<int> key,
+      required String sourceTagId,
+      required String targetTagId,
+      required String reason,
+      required String action}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(sourceTagId, serializer);
+        sse_encode_String(targetTagId, serializer);
+        sse_encode_String(reason, serializer);
+        sse_encode_String(action, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 165, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiTagsDbRecordTagMergeFeedbackConstMeta,
+      argValues: [appDir, key, sourceTagId, targetTagId, reason, action],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiTagsDbRecordTagMergeFeedbackConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_record_tag_merge_feedback",
+        argNames: [
+          "appDir",
+          "key",
+          "sourceTagId",
+          "targetTagId",
+          "reason",
+          "action"
+        ],
+      );
+
+  @override
   Future<List<Tag>> crateApiTagsDbSetMessageTags(
       {required String appDir,
       required List<int> key,
@@ -7642,7 +7693,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 165, port: port_);
+            funcId: 166, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -7670,7 +7721,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 166, port: port_);
+            funcId: 167, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_tag,
@@ -7701,7 +7752,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_opt_String(title, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 167, port: port_);
+            funcId: 168, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_topic_thread,
@@ -7731,7 +7782,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(threadId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 168, port: port_);
+            funcId: 169, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -7761,7 +7812,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(threadId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 169, port: port_);
+            funcId: 170, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -7791,7 +7842,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(conversationId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 170, port: port_);
+            funcId: 171, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_topic_thread,
@@ -7823,7 +7874,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(threadId, serializer);
         sse_encode_list_String(messageIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 171, port: port_);
+            funcId: 172, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -7855,7 +7906,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(threadId, serializer);
         sse_encode_opt_String(title, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 172, port: port_);
+            funcId: 173, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_topic_thread,

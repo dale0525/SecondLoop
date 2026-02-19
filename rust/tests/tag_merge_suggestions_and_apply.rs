@@ -20,8 +20,13 @@ fn tag_merge_suggestion_can_be_applied_to_reassign_messages() {
 
     db::set_message_tags(&conn, &key, &message_a.id, &[primary.id.clone()])
         .expect("set message_a tags");
-    db::set_message_tags(&conn, &key, &message_b.id, &[alias.id.clone()])
-        .expect("set message_b tags");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &message_b.id,
+        &[alias.id.clone(), primary.id.clone()],
+    )
+    .expect("set message_b tags");
 
     let suggestions =
         db::list_tag_merge_suggestions(&conn, &key, 10).expect("list merge suggestions");

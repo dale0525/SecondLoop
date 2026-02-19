@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1594 (797 per locale)
+/// Strings: 1602 (801 per locale)
 ///
-/// Built on 2026-02-19 at 08:42 UTC
+/// Built on 2026-02-19 at 10:22 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1501,6 +1501,8 @@ class _StringsChatTagPickerEn {
   String get suggested => 'Suggested tags';
   String get mergeSuggestions => 'Merge suggestions';
   String get mergeAction => 'Merge';
+  String get mergeDismissAction => 'Dismiss';
+  String get mergeLaterAction => 'Later';
   String mergeSuggestionMessages({required Object count}) =>
       'Affects ${count} tagged messages';
   String get mergeReasonSystemDomain => 'Matches system domain';
@@ -1509,6 +1511,8 @@ class _StringsChatTagPickerEn {
   late final _StringsChatTagPickerMergeDialogEn mergeDialog =
       _StringsChatTagPickerMergeDialogEn._(_root);
   String mergeApplied({required Object count}) => 'Merged ${count} messages';
+  String get mergeDismissed => 'Merge suggestion dismissed';
+  String get mergeSavedForLater => 'Merge suggestion saved for later';
   String get all => 'All tags';
   String get inputHint => 'Type a tag name';
   String get add => 'Add';
@@ -5659,6 +5663,10 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   @override
   String get mergeAction => '合并';
   @override
+  String get mergeDismissAction => '忽略';
+  @override
+  String get mergeLaterAction => '稍后';
+  @override
   String mergeSuggestionMessages({required Object count}) =>
       '将影响 ${count} 条已打标签消息';
   @override
@@ -5672,6 +5680,10 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
       _StringsChatTagPickerMergeDialogZhCn._(_root);
   @override
   String mergeApplied({required Object count}) => '已合并 ${count} 条消息';
+  @override
+  String get mergeDismissed => '已忽略该合并建议';
+  @override
+  String get mergeSavedForLater => '已暂存该合并建议';
   @override
   String get all => '全部标签';
   @override
@@ -10027,6 +10039,10 @@ extension on Translations {
         return 'Merge suggestions';
       case 'chat.tagPicker.mergeAction':
         return 'Merge';
+      case 'chat.tagPicker.mergeDismissAction':
+        return 'Dismiss';
+      case 'chat.tagPicker.mergeLaterAction':
+        return 'Later';
       case 'chat.tagPicker.mergeSuggestionMessages':
         return ({required Object count}) => 'Affects ${count} tagged messages';
       case 'chat.tagPicker.mergeReasonSystemDomain':
@@ -10044,6 +10060,10 @@ extension on Translations {
         return 'Merge';
       case 'chat.tagPicker.mergeApplied':
         return ({required Object count}) => 'Merged ${count} messages';
+      case 'chat.tagPicker.mergeDismissed':
+        return 'Merge suggestion dismissed';
+      case 'chat.tagPicker.mergeSavedForLater':
+        return 'Merge suggestion saved for later';
       case 'chat.tagPicker.all':
         return 'All tags';
       case 'chat.tagPicker.inputHint':
@@ -11653,6 +11673,10 @@ extension on _StringsZhCn {
         return '合并建议';
       case 'chat.tagPicker.mergeAction':
         return '合并';
+      case 'chat.tagPicker.mergeDismissAction':
+        return '忽略';
+      case 'chat.tagPicker.mergeLaterAction':
+        return '稍后';
       case 'chat.tagPicker.mergeSuggestionMessages':
         return ({required Object count}) => '将影响 ${count} 条已打标签消息';
       case 'chat.tagPicker.mergeReasonSystemDomain':
@@ -11670,6 +11694,10 @@ extension on _StringsZhCn {
         return '合并';
       case 'chat.tagPicker.mergeApplied':
         return ({required Object count}) => '已合并 ${count} 条消息';
+      case 'chat.tagPicker.mergeDismissed':
+        return '已忽略该合并建议';
+      case 'chat.tagPicker.mergeSavedForLater':
+        return '已暂存该合并建议';
       case 'chat.tagPicker.all':
         return '全部标签';
       case 'chat.tagPicker.inputHint':

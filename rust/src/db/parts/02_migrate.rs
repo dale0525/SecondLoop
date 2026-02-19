@@ -716,6 +716,28 @@ CREATE INDEX IF NOT EXISTS idx_topic_thread_messages_thread_id
 PRAGMA user_version = 24;
 "#,
         )?;
+        user_version = 24;
+    }
+
+    if user_version < 25 {
+        // v25: tag merge suggestion feedback learning.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS tag_merge_feedback (
+  source_tag_id TEXT NOT NULL,
+  target_tag_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  accept_count INTEGER NOT NULL DEFAULT 0,
+  dismiss_count INTEGER NOT NULL DEFAULT 0,
+  later_count INTEGER NOT NULL DEFAULT 0,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (source_tag_id, target_tag_id, reason)
+);
+CREATE INDEX IF NOT EXISTS idx_tag_merge_feedback_reason
+  ON tag_merge_feedback(reason, updated_at_ms DESC);
+PRAGMA user_version = 25;
+"#,
+        )?;
     }
 
     Ok(())
@@ -767,6 +789,7 @@ DELETE FROM todo_activity_embeddings;
 DELETE FROM semantic_parse_jobs;
 DELETE FROM topic_thread_messages;
 DELETE FROM topic_threads;
+DELETE FROM tag_merge_feedback;
 DELETE FROM message_tags;
 DELETE FROM message_attachments;
 DELETE FROM cloud_media_backup;

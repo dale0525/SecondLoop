@@ -4,6 +4,20 @@ import '../../core/backend/native_app_dir.dart';
 import '../../src/rust/api/tags.dart' as rust_tags;
 import '../../src/rust/db.dart';
 
+enum TagMergeFeedbackAction {
+  accept,
+  dismiss,
+  later,
+}
+
+extension TagMergeFeedbackActionWire on TagMergeFeedbackAction {
+  String get wireValue => switch (this) {
+        TagMergeFeedbackAction.accept => 'accept',
+        TagMergeFeedbackAction.dismiss => 'dismiss',
+        TagMergeFeedbackAction.later => 'later',
+      };
+}
+
 class TagRepository {
   const TagRepository();
 
@@ -98,6 +112,24 @@ class TagRepository {
       key: key,
       sourceTagId: sourceTagId,
       targetTagId: targetTagId,
+    );
+  }
+
+  Future<void> recordTagMergeFeedback(
+    Uint8List key, {
+    required String sourceTagId,
+    required String targetTagId,
+    required String reason,
+    required TagMergeFeedbackAction action,
+  }) async {
+    final appDir = await _requireAppDir();
+    await rust_tags.dbRecordTagMergeFeedback(
+      appDir: appDir,
+      key: key,
+      sourceTagId: sourceTagId,
+      targetTagId: targetTagId,
+      reason: reason,
+      action: action.wireValue,
     );
   }
 

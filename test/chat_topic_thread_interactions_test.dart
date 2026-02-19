@@ -1,12 +1,12 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/tags/tag_repository.dart';
 import 'package:secondloop/features/topic_threads/topic_thread_repository.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -76,6 +76,63 @@ void main() {
     expect(find.byKey(const ValueKey('message_bubble_m2')), findsNothing);
     expect(
         find.byKey(const ValueKey('topic_thread_active_chip')), findsOneWidget);
+  });
+
+  testWidgets('intersects active topic thread with include tag filter',
+      (tester) async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+    final repository = _FakeTopicThreadRepository(
+      initialThreads: <TopicThread>[
+        const TopicThread(
+          id: 'thread_focus',
+          conversationId: 'main_stream',
+          title: 'Focus',
+          createdAtMs: 1,
+          updatedAtMs: 2,
+        ),
+      ],
+      initialMessageIdsByThreadId: <String, List<String>>{
+        'thread_focus': <String>['m1', 'm2'],
+      },
+    );
+
+    final tagRepository = _FakeTagRepository(
+      tags: <Tag>[
+        _tag(
+            id: 'system.tag.work',
+            name: 'work',
+            systemKey: 'work',
+            isSystem: true),
+      ],
+      messageIdsByTagId: <String, List<String>>{
+        'system.tag.work': <String>['m2'],
+      },
+    );
+
+    await _pumpChatPage(
+      tester,
+      backend: _TopicThreadTestBackend(),
+      topicThreadRepository: repository,
+      tagRepository: tagRepository,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('chat_tag_filter_button')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('tag_filter_chip_system.tag.work')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('topic_thread_filter_thread_focus')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message_bubble_m2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_bubble_m1')), findsNothing);
   });
 
   testWidgets('toggles message membership in existing topic thread',
@@ -220,6 +277,7 @@ Future<void> _pumpChatPage(
   WidgetTester tester, {
   required AppBackend backend,
   required TopicThreadRepository topicThreadRepository,
+  TagRepository tagRepository = const TagRepository(),
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(1280, 2400);
@@ -243,6 +301,7 @@ Future<void> _pumpChatPage(
                 createdAtMs: 0,
                 updatedAtMs: 0,
               ),
+              tagRepository: tagRepository,
               topicThreadRepository: topicThreadRepository,
             ),
           ),
@@ -252,6 +311,23 @@ Future<void> _pumpChatPage(
   );
 
   await tester.pumpAndSettle();
+}
+
+Tag _tag({
+  required String id,
+  required String name,
+  String? systemKey,
+  bool isSystem = false,
+}) {
+  return Tag(
+    id: id,
+    name: name,
+    systemKey: systemKey,
+    isSystem: isSystem,
+    color: null,
+    createdAtMs: PlatformInt64Util.from(0),
+    updatedAtMs: PlatformInt64Util.from(0),
+  );
 }
 
 Future<void> _openMessageTopicThreadPicker(
@@ -423,5 +499,37 @@ final class _FakeTopicThreadRepository extends TopicThreadRepository {
     }
 
     return dedup;
+  }
+}
+
+final class _FakeTagRepository extends TagRepository {
+  _FakeTagRepository({
+    required List<Tag> tags,
+    required this.messageIdsByTagId,
+  }) : _tags = List<Tag>.from(tags);
+
+  final List<Tag> _tags;
+  final Map<String, List<String>> messageIdsByTagId;
+
+  @override
+  Future<List<Tag>> listTags(Uint8List key) async => List<Tag>.from(_tags);
+
+  @override
+  Future<List<String>> listMessageIdsByTagIds(
+    Uint8List key,
+    String conversationId,
+    List<String> tagIds,
+  ) async {
+    final out = <String>[];
+    final seen = <String>{};
+    for (final tagId in tagIds) {
+      final ids = messageIdsByTagId[tagId] ?? const <String>[];
+      for (final id in ids) {
+        if (seen.add(id)) {
+          out.add(id);
+        }
+      }
+    }
+    return out;
   }
 }

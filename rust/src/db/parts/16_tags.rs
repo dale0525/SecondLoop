@@ -131,104 +131,6 @@ fn map_to_system_key(raw: &str) -> Option<&'static str> {
     None
 }
 
-fn normalize_tag_merge_key(raw: &str) -> String {
-    normalize_tag_name(raw)
-        .chars()
-        .filter(|ch| ch.is_alphanumeric())
-        .collect::<String>()
-}
-
-fn load_tag_usage_counts(conn: &Connection) -> Result<std::collections::BTreeMap<String, i64>> {
-    let mut stmt = conn.prepare(
-        r#"SELECT tag_id, COUNT(*)
-           FROM message_tags
-           GROUP BY tag_id"#,
-    )?;
-    let mut rows = stmt.query([])?;
-    let mut out = std::collections::BTreeMap::<String, i64>::new();
-    while let Some(row) = rows.next()? {
-        let tag_id: String = row.get(0)?;
-        let usage_count: i64 = row.get(1)?;
-        out.insert(tag_id, usage_count);
-    }
-    Ok(out)
-}
-
-fn choose_merge_direction<'a>(
-    left: &'a Tag,
-    right: &'a Tag,
-    usage_counts: &std::collections::BTreeMap<String, i64>,
-) -> (&'a Tag, &'a Tag, i64, i64) {
-    let left_usage = usage_counts.get(&left.id).copied().unwrap_or(0);
-    let right_usage = usage_counts.get(&right.id).copied().unwrap_or(0);
-
-    if left.is_system && !right.is_system {
-        return (right, left, right_usage, left_usage);
-    }
-    if right.is_system && !left.is_system {
-        return (left, right, left_usage, right_usage);
-    }
-
-    if left_usage < right_usage {
-        return (left, right, left_usage, right_usage);
-    }
-    if right_usage < left_usage {
-        return (right, left, right_usage, left_usage);
-    }
-
-    if left.created_at_ms > right.created_at_ms {
-        return (left, right, left_usage, right_usage);
-    }
-    if right.created_at_ms > left.created_at_ms {
-        return (right, left, right_usage, left_usage);
-    }
-
-    if left.id > right.id {
-        return (left, right, left_usage, right_usage);
-    }
-
-    (right, left, right_usage, left_usage)
-}
-
-fn push_merge_candidate(
-    best_by_source: &mut std::collections::BTreeMap<String, TagMergeSuggestion>,
-    source: &Tag,
-    target: &Tag,
-    reason: &str,
-    score: f64,
-    source_usage_count: i64,
-    target_usage_count: i64,
-) {
-    if source.is_system || source.id == target.id || source_usage_count <= 0 {
-        return;
-    }
-
-    let candidate = TagMergeSuggestion {
-        source_tag: source.clone(),
-        target_tag: target.clone(),
-        reason: reason.to_string(),
-        score,
-        source_usage_count,
-        target_usage_count,
-    };
-
-    let replace = match best_by_source.get(&source.id) {
-        None => true,
-        Some(existing) => {
-            score > existing.score
-                || (score == existing.score
-                    && target_usage_count > existing.target_usage_count)
-                || (score == existing.score
-                    && target_usage_count == existing.target_usage_count
-                    && target.id < existing.target_tag.id)
-        }
-    };
-
-    if replace {
-        best_by_source.insert(source.id.clone(), candidate);
-    }
-}
-
 type TagRow = (String, Vec<u8>, Option<String>, i64, Option<String>, i64, i64);
 
 fn decrypt_tag_name(db_key: &[u8; 32], tag_id: &str, name_blob: &[u8]) -> Result<String> {
@@ -524,6 +426,7 @@ pub fn list_tag_merge_suggestions(
     }
 
     let mut out = best_by_source.into_values().collect::<Vec<_>>();
+    apply_tag_merge_feedback_scores(conn, &mut out)?;
     out.sort_by(|left, right| {
         right
             .score
@@ -832,90 +735,6 @@ pub fn set_message_tags(
     }
 
     list_message_tags(conn, db_key, message_id)
-}
-
-fn push_unique_tag(out: &mut Vec<String>, seen: &mut std::collections::HashSet<String>, value: &str) {
-    let normalized = normalize_tag_name(value);
-    if normalized.is_empty() {
-        return;
-    }
-
-    let final_value = map_to_system_key(&normalized)
-        .map(std::string::ToString::to_string)
-        .unwrap_or(normalized);
-
-    if seen.insert(final_value.clone()) {
-        out.push(final_value);
-    }
-}
-
-fn collect_suggested_tag_values(
-    value: &serde_json::Value,
-    out: &mut Vec<String>,
-    seen: &mut std::collections::HashSet<String>,
-) {
-    match value {
-        serde_json::Value::Array(items) => {
-            for item in items {
-                if let Some(tag) = item.as_str() {
-                    push_unique_tag(out, seen, tag);
-                }
-            }
-        }
-        serde_json::Value::String(tag) => push_unique_tag(out, seen, tag),
-        _ => {}
-    }
-}
-
-pub fn list_message_suggested_tags(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    message_id: &str,
-) -> Result<Vec<String>> {
-    let mut stmt = conn.prepare(
-        r#"SELECT ma.attachment_sha256, aa.lang, aa.payload
-           FROM message_attachments ma
-           JOIN attachment_annotations aa ON aa.attachment_sha256 = ma.attachment_sha256
-           WHERE ma.message_id = ?1
-             AND aa.status = 'ok'
-             AND aa.payload IS NOT NULL
-           ORDER BY ma.created_at ASC, aa.attachment_sha256 ASC"#,
-    )?;
-    let mut rows = stmt.query(params![message_id])?;
-
-    let mut out = Vec::<String>::new();
-    let mut seen = std::collections::HashSet::<String>::new();
-
-    while let Some(row) = rows.next()? {
-        let attachment_sha256: String = row.get(0)?;
-        let lang: String = row.get(1)?;
-        let payload_blob: Vec<u8> = row.get(2)?;
-        let aad = format!("attachment.annotation:{attachment_sha256}:{lang}");
-        let payload_json = match decrypt_bytes(db_key, &payload_blob, aad.as_bytes()) {
-            Ok(v) => Some(v),
-            Err(_) => None,
-        };
-
-        let payload: Option<serde_json::Value> = payload_json
-            .as_deref()
-            .and_then(|bytes| serde_json::from_slice(bytes).ok());
-
-        if let Some(payload) = payload {
-            if let Some(tag_value) = payload.get("tag") {
-                collect_suggested_tag_values(tag_value, &mut out, &mut seen);
-            }
-            if let Some(tags_value) = payload.get("tags") {
-                collect_suggested_tag_values(tags_value, &mut out, &mut seen);
-            }
-        }
-
-        if out.len() >= MAX_SUGGESTED_TAGS_PER_MESSAGE {
-            break;
-        }
-    }
-
-    out.truncate(MAX_SUGGESTED_TAGS_PER_MESSAGE);
-    Ok(out)
 }
 
 fn normalize_non_empty_tag_ids(tag_ids: &[String]) -> Vec<String> {

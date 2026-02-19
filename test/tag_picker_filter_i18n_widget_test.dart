@@ -64,6 +64,7 @@ class _FakeTagRepository extends TagRepository {
   List<String>? lastSetTagIds;
   String? lastMergeSourceTagId;
   String? lastMergeTargetTagId;
+  final List<String> feedbackRecords = <String>[];
 
   @override
   Future<List<Tag>> listTags(Uint8List key) async => List<Tag>.from(_tags);
@@ -102,6 +103,19 @@ class _FakeTagRepository extends TagRepository {
           item.sourceTag.id == sourceTagId && item.targetTag.id == targetTagId,
     );
     return 2;
+  }
+
+  @override
+  Future<void> recordTagMergeFeedback(
+    Uint8List key, {
+    required String sourceTagId,
+    required String targetTagId,
+    required String reason,
+    required TagMergeFeedbackAction action,
+  }) async {
+    feedbackRecords.add(
+      '${action.wireValue}:$sourceTagId:$targetTagId:$reason',
+    );
   }
 
   @override
@@ -370,7 +384,98 @@ void main() {
 
     expect(repository.lastMergeSourceTagId, 'custom.weekly_review_alias');
     expect(repository.lastMergeTargetTagId, 'custom.weekly_review');
+    expect(
+      repository.feedbackRecords,
+      contains(
+        'accept:custom.weekly_review_alias:custom.weekly_review:name_compact_match',
+      ),
+    );
     expect(find.text('Merged 2 messages'), findsOneWidget);
+  });
+
+  testWidgets('message tag picker can dismiss and defer merge suggestion',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.en);
+
+    final aliasA = _tag(id: 'custom.alias_a', name: 'weekly-review-a');
+    final canonical = _tag(id: 'custom.canonical', name: 'Weekly Review');
+    final aliasB = _tag(id: 'custom.alias_b', name: 'weekly-review-b');
+
+    final repository = _FakeTagRepository(
+      tags: <Tag>[canonical, aliasA, aliasB],
+      mergeSuggestions: <TagMergeSuggestion>[
+        _mergeSuggestion(
+          sourceTag: aliasA,
+          targetTag: canonical,
+          reason: 'name_compact_match',
+        ),
+        _mergeSuggestion(
+          sourceTag: aliasB,
+          targetTag: canonical,
+          reason: 'name_contains',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        locale: const Locale('en'),
+        child: Builder(
+          builder: (context) {
+            return ElevatedButton(
+              key: const ValueKey('open_tag_picker_feedback'),
+              onPressed: () async {
+                await showMessageTagPicker(
+                  context: context,
+                  sessionKey: Uint8List.fromList(sessionKey),
+                  messageId: 'm1',
+                  repository: repository,
+                );
+              },
+              child: const Text('open'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open_tag_picker_feedback')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'tag_picker_merge_dismiss_custom.alias_a_custom.canonical',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge suggestion dismissed'), findsOneWidget);
+    expect(
+      repository.feedbackRecords,
+      contains('dismiss:custom.alias_a:custom.canonical:name_compact_match'),
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+            'tag_picker_merge_later_custom.alias_b_custom.canonical'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey(
+            'tag_picker_merge_later_custom.alias_b_custom.canonical'),
+      ),
+      findsNothing,
+    );
+    expect(
+      repository.feedbackRecords,
+      contains('later:custom.alias_b:custom.canonical:name_contains'),
+    );
   });
 
   testWidgets('message tag picker follows en locale and localizes system tags',

@@ -58,6 +58,21 @@ Future<int> dbMergeTags(
         sourceTagId: sourceTagId,
         targetTagId: targetTagId);
 
+Future<void> dbRecordTagMergeFeedback(
+        {required String appDir,
+        required List<int> key,
+        required String sourceTagId,
+        required String targetTagId,
+        required String reason,
+        required String action}) =>
+    RustLib.instance.api.crateApiTagsDbRecordTagMergeFeedback(
+        appDir: appDir,
+        key: key,
+        sourceTagId: sourceTagId,
+        targetTagId: targetTagId,
+        reason: reason,
+        action: action);
+
 Future<List<String>> dbListMessageIdsByTagIds(
         {required String appDir,
         required List<int> key,
