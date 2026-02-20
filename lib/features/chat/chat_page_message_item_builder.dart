@@ -990,6 +990,18 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                           ),
                         );
                       },
+                      onOpenLocalCapabilityDownload: () async {
+                        await _pushRouteFromChat(
+                          MaterialPageRoute(
+                            builder: (_) => const AiSettingsPage(
+                              focusSection:
+                                  AiSettingsSection.mediaUnderstanding,
+                              highlightFocus: true,
+                              focusMediaLocalCapabilityCard: true,
+                            ),
+                          ),
+                        );
+                      },
                       onRetry: job.status == 'failed' ? retry : null,
                       onInstallSpeechPack: job.status == 'failed'
                           ? () async {

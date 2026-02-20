@@ -26,6 +26,7 @@ final class FileSystemAudioTranscribeWhisperModelStore
   FileSystemAudioTranscribeWhisperModelStore({
     this.appDirProvider = getNativeAppDir,
     this.whisperBaseUrl = kDefaultAudioTranscribeWhisperBaseUrl,
+    this.supportsRuntimeDownloadResolver,
     List<Duration>? retryDelays,
     AudioWhisperModelDownloadFile? downloadFile,
   })  : retryDelays = retryDelays ??
@@ -38,12 +39,21 @@ final class FileSystemAudioTranscribeWhisperModelStore
 
   final Future<String> Function() appDirProvider;
   final String whisperBaseUrl;
+  final bool Function()? supportsRuntimeDownloadResolver;
   final List<Duration> retryDelays;
   final AudioWhisperModelDownloadFile _downloadFile;
 
   @override
   bool get supportsRuntimeDownload {
-    return Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+    final resolver = supportsRuntimeDownloadResolver;
+    if (resolver != null) {
+      return resolver();
+    }
+    return Platform.isLinux ||
+        Platform.isMacOS ||
+        Platform.isWindows ||
+        Platform.isAndroid ||
+        Platform.isIOS;
   }
 
   @override

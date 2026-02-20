@@ -34,11 +34,13 @@ class AiSettingsPage extends StatefulWidget {
   const AiSettingsPage({
     this.focusSection,
     this.highlightFocus = false,
+    this.focusMediaLocalCapabilityCard = false,
     super.key,
   });
 
   final AiSettingsSection? focusSection;
   final bool highlightFocus;
+  final bool focusMediaLocalCapabilityCard;
 
   @override
   State<AiSettingsPage> createState() => _AiSettingsPageState();

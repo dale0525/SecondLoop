@@ -34,11 +34,12 @@ Widget mediaAnnotationCapabilityCard({
   required String statusLabel,
   required List<Widget> actions,
   Key? key,
+  GlobalKey? anchorKey,
 }) {
   final tokens = SlTokens.of(context);
   final colorScheme = Theme.of(context).colorScheme;
 
-  return Container(
+  final card = Container(
     key: key,
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(16),
@@ -89,6 +90,8 @@ Widget mediaAnnotationCapabilityCard({
       ),
     ),
   );
+  if (anchorKey == null) return card;
+  return KeyedSubtree(key: anchorKey, child: card);
 }
 
 Widget mediaAnnotationRoutingGuideCard({

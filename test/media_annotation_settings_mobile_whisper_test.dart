@@ -105,15 +105,23 @@ final class _SpyAudioWhisperModelStore
     implements AudioTranscribeWhisperModelStore {
   _SpyAudioWhisperModelStore({
     required this.supportsRuntimeDownload,
+    this.initiallyAvailable = false,
+    this.availableAfterEnsure = true,
   });
 
   @override
   final bool supportsRuntimeDownload;
+  final bool initiallyAvailable;
+  final bool availableAfterEnsure;
 
   int ensureCalls = 0;
+  int availabilityChecks = 0;
 
   @override
-  Future<bool> isModelAvailable({required String model}) async => false;
+  Future<bool> isModelAvailable({required String model}) async {
+    availabilityChecks += 1;
+    return ensureCalls > 0 ? availableAfterEnsure : initiallyAvailable;
+  }
 
   @override
   Future<AudioWhisperModelEnsureResult> ensureModelAvailable({
@@ -275,6 +283,72 @@ void main() {
 
       expect(audioStore.ensureCalls, 1);
       expect(await AudioTranscribeWhisperModelPrefs.read(), 'small');
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.macOS,
+    }),
+  );
+
+  testWidgets(
+    'mobile platform shows local capability runtime card and supports manual download',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final audioStore = _SpyAudioWhisperModelStore(
+        supportsRuntimeDownload: true,
+        initiallyAvailable: false,
+        availableAfterEnsure: true,
+      );
+
+      await _pumpPage(
+        tester,
+        audioStore: audioStore,
+      );
+
+      final runtimeCard =
+          find.byKey(MediaAnnotationSettingsPage.localCapabilityCardKey);
+      final downloadButton = find.byKey(
+        const ValueKey(
+          'media_annotation_settings_audio_whisper_runtime_download_button',
+        ),
+      );
+
+      await tester.scrollUntilVisible(
+        downloadButton,
+        220,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(runtimeCard, findsOneWidget);
+      expect(downloadButton, findsOneWidget);
+
+      await tester.tap(downloadButton);
+      await tester.pumpAndSettle();
+
+      expect(audioStore.ensureCalls, 1);
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+    }),
+  );
+
+  testWidgets(
+    'desktop platform hides mobile local capability runtime card',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final audioStore = _SpyAudioWhisperModelStore(
+        supportsRuntimeDownload: true,
+      );
+
+      await _pumpPage(
+        tester,
+        audioStore: audioStore,
+      );
+
+      expect(
+        find.byKey(MediaAnnotationSettingsPage.localCapabilityCardKey),
+        findsNothing,
+      );
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.macOS,

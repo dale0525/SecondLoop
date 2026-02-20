@@ -85,6 +85,8 @@ import Vision
         switch call.method {
         case "transcodeToM4a":
           self.handleTranscodeToM4a(call: call, result: result)
+        case "decodeToWavPcm16Mono16k":
+          self.handleDecodeToWavPcm16Mono16k(call: call, result: result)
         default:
           result(FlutterMethodNotImplemented)
         }

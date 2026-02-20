@@ -4,6 +4,10 @@ const MethodChannel _nativeAudioTranscribeChannel = MethodChannel(
   'secondloop/audio_transcribe',
 );
 
+const MethodChannel _nativeAudioTranscodeChannel = MethodChannel(
+  'secondloop/audio_transcode',
+);
+
 final class FallbackAudioTranscribeClient implements AudioTranscribeClient {
   FallbackAudioTranscribeClient({
     required List<AudioTranscribeClient> chain,
@@ -443,11 +447,14 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     this.modelName = 'runtime-whisper-base',
     this.whisperModel = 'base',
     this.appDirProvider = getNativeAppDir,
+    AudioTranscribeLocalRuntimeAudioDecode? decodeAudioToWav,
     AudioTranscribeLocalRuntimeRequest? requestLocalRuntimeTranscribe,
     AudioTranscribeLocalWhisperRequest? requestLocalWhisperTranscribe,
   }) : _requestLocalRuntimeTranscribe = requestLocalRuntimeTranscribe ??
             _buildDefaultLocalRuntimeRequest(
               whisperModel: whisperModel,
+              decodeAudioToWav:
+                  decodeAudioToWav ?? _decodeAudioToWavForLocalRuntimeDefault,
               requestLocalWhisperTranscribe: requestLocalWhisperTranscribe ??
                   rust_audio_transcribe.audioTranscribeLocalWhisper,
             );
@@ -494,6 +501,7 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
 
   static AudioTranscribeLocalRuntimeRequest _buildDefaultLocalRuntimeRequest({
     required String whisperModel,
+    required AudioTranscribeLocalRuntimeAudioDecode decodeAudioToWav,
     required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
   }) {
     final normalizedModelName = _normalizeRuntimeWhisperModel(whisperModel);
@@ -509,6 +517,7 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
         lang: lang,
         mimeType: mimeType,
         audioBytes: audioBytes,
+        decodeAudioToWav: decodeAudioToWav,
         requestLocalWhisperTranscribe: requestLocalWhisperTranscribe,
       );
     };
@@ -535,63 +544,22 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     required String lang,
     required String mimeType,
     required Uint8List audioBytes,
+    required AudioTranscribeLocalRuntimeAudioDecode decodeAudioToWav,
     required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
   }) async {
-    if (kIsWeb ||
-        !(Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+    if (kIsWeb) {
       throw StateError('audio_transcribe_local_runtime_unavailable');
     }
 
-    Directory? tempDir;
     try {
-      final ffmpegPath =
-          await _resolveBundledFfmpegExecutablePathForAudioTranscribe();
-      if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
-        throw StateError(
-            'audio_transcribe_local_runtime_unavailable:ffmpeg_missing');
-      }
-
-      tempDir =
-          await Directory.systemTemp.createTemp('secondloop-local-whisper-');
-      final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
-        mimeType,
+      final trimmedMimeType = mimeType.trim();
+      final normalizedMimeType = trimmedMimeType.isEmpty
+          ? (sniffAudioMimeType(audioBytes) ?? '')
+          : trimmedMimeType;
+      final wavBytes = await decodeAudioToWav(
+        mimeType: normalizedMimeType,
+        audioBytes: audioBytes,
       );
-      final sourcePath = '${tempDir.path}/source.$ext';
-      final wavPath = '${tempDir.path}/input.wav';
-      final sourceFile = File(sourcePath);
-      final wavFile = File(wavPath);
-      await sourceFile.writeAsBytes(audioBytes, flush: true);
-
-      final ffmpegResult = await Process.run(
-        ffmpegPath,
-        <String>[
-          '-hide_banner',
-          '-loglevel',
-          'error',
-          '-y',
-          '-i',
-          sourcePath,
-          '-ac',
-          '1',
-          '-ar',
-          '16000',
-          '-c:a',
-          'pcm_s16le',
-          wavPath,
-        ],
-      );
-      if (ffmpegResult.exitCode != 0 || !await wavFile.exists()) {
-        final ffmpegError = [
-          ffmpegResult.stderr?.toString().trim() ?? '',
-          ffmpegResult.stdout?.toString().trim() ?? '',
-        ].where((v) => v.isNotEmpty).join(' | ');
-        final detail = ffmpegError.isEmpty
-            ? 'ffmpeg_exit_${ffmpegResult.exitCode}'
-            : ffmpegError;
-        throw StateError('audio_transcribe_local_runtime_failed:$detail');
-      }
-
-      final wavBytes = await wavFile.readAsBytes();
       if (wavBytes.isEmpty) {
         throw StateError('audio_transcribe_local_runtime_empty');
       }
@@ -603,6 +571,8 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
         lang: normalizedLang,
         wavBytes: wavBytes,
       );
+    } on StateError {
+      rethrow;
     } catch (error) {
       if (error is StateError) rethrow;
       final detail = error.toString().trim();
@@ -610,10 +580,150 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
         throw StateError('audio_transcribe_local_runtime_failed');
       }
       throw StateError('audio_transcribe_local_runtime_failed:$detail');
-    } finally {
-      if (tempDir != null && await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
+    }
+  }
+}
+
+Future<Uint8List> _decodeAudioToWavForLocalRuntimeDefault({
+  required String mimeType,
+  required Uint8List audioBytes,
+}) async {
+  final normalizedMimeType = mimeType.trim().toLowerCase();
+  final effectiveMimeType = normalizedMimeType.isEmpty
+      ? (sniffAudioMimeType(audioBytes) ?? '')
+      : normalizedMimeType;
+
+  if (Platform.isAndroid || Platform.isIOS) {
+    return _decodeAudioToWavWithNativeTranscode(
+      mimeType: effectiveMimeType,
+      audioBytes: audioBytes,
+    );
+  }
+
+  return _decodeAudioToWavWithBundledFfmpeg(
+    mimeType: effectiveMimeType,
+    audioBytes: audioBytes,
+  );
+}
+
+Future<Uint8List> _decodeAudioToWavWithNativeTranscode({
+  required String mimeType,
+  required Uint8List audioBytes,
+}) async {
+  Directory? tempDir;
+  try {
+    tempDir = await Directory.systemTemp
+        .createTemp('secondloop-local-whisper-native-');
+    final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
+      mimeType,
+    );
+    final sourcePath = '${tempDir.path}/source.$ext';
+    final wavPath = '${tempDir.path}/input.wav';
+    await File(sourcePath).writeAsBytes(audioBytes, flush: true);
+
+    final ok = await _nativeAudioTranscodeChannel.invokeMethod<bool>(
+      'decodeToWavPcm16Mono16k',
+      <String, Object?>{
+        'input_path': sourcePath,
+        'output_path': wavPath,
+      },
+    );
+    if (ok != true) {
+      throw StateError(
+        'audio_transcribe_local_runtime_unavailable:audio_decode_failed',
+      );
+    }
+
+    final wavFile = File(wavPath);
+    if (!await wavFile.exists()) {
+      throw StateError(
+        'audio_transcribe_local_runtime_unavailable:audio_decode_missing',
+      );
+    }
+
+    final wavBytes = await wavFile.readAsBytes();
+    if (wavBytes.isEmpty) {
+      throw StateError(
+        'audio_transcribe_local_runtime_unavailable:audio_decode_empty',
+      );
+    }
+    return wavBytes;
+  } on MissingPluginException {
+    throw StateError(
+      'audio_transcribe_local_runtime_unavailable:audio_decode_plugin_missing',
+    );
+  } on PlatformException catch (error) {
+    final detailParts = <String>[
+      error.code.trim(),
+      (error.message ?? '').trim(),
+    ].where((value) => value.isNotEmpty).toList(growable: false);
+    final detail =
+        detailParts.isEmpty ? 'audio_decode_failed' : detailParts.join(':');
+    throw StateError('audio_transcribe_local_runtime_unavailable:$detail');
+  } finally {
+    if (tempDir != null && await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  }
+}
+
+Future<Uint8List> _decodeAudioToWavWithBundledFfmpeg({
+  required String mimeType,
+  required Uint8List audioBytes,
+}) async {
+  final ffmpegPath =
+      await _resolveBundledFfmpegExecutablePathForAudioTranscribe();
+  if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
+    throw StateError(
+        'audio_transcribe_local_runtime_unavailable:ffmpeg_missing');
+  }
+
+  Directory? tempDir;
+  try {
+    tempDir =
+        await Directory.systemTemp.createTemp('secondloop-local-whisper-');
+    final ext = CloudGatewayWhisperAudioTranscribeClient._fileExtByMimeType(
+      mimeType,
+    );
+    final sourcePath = '${tempDir.path}/source.$ext';
+    final wavPath = '${tempDir.path}/input.wav';
+    final sourceFile = File(sourcePath);
+    final wavFile = File(wavPath);
+    await sourceFile.writeAsBytes(audioBytes, flush: true);
+
+    final ffmpegResult = await Process.run(
+      ffmpegPath,
+      <String>[
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        sourcePath,
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        '-c:a',
+        'pcm_s16le',
+        wavPath,
+      ],
+    );
+    if (ffmpegResult.exitCode != 0 || !await wavFile.exists()) {
+      final ffmpegError = [
+        ffmpegResult.stderr?.toString().trim() ?? '',
+        ffmpegResult.stdout?.toString().trim() ?? '',
+      ].where((v) => v.isNotEmpty).join(' | ');
+      final detail = ffmpegError.isEmpty
+          ? 'ffmpeg_exit_${ffmpegResult.exitCode}'
+          : ffmpegError;
+      throw StateError('audio_transcribe_local_runtime_failed:$detail');
+    }
+
+    return wavFile.readAsBytes();
+  } finally {
+    if (tempDir != null && await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
     }
   }
 }

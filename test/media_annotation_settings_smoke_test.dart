@@ -11,6 +11,7 @@ import 'package:secondloop/core/content_enrichment/content_enrichment_config_sto
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/content_enrichment/linux_ocr_model_store.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/core/ai/audio_transcribe_whisper_model_store.dart';
 import 'package:secondloop/core/ai/media_source_prefs.dart';
 import 'package:secondloop/core/media_annotation/media_annotation_config_store.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -76,6 +77,29 @@ final class _FakeContentEnrichmentConfigStore
     Uint8List key,
     StoragePolicyConfig config,
   ) async {}
+}
+
+final class _FakeAudioWhisperModelStore
+    implements AudioTranscribeWhisperModelStore {
+  const _FakeAudioWhisperModelStore();
+
+  @override
+  bool get supportsRuntimeDownload => false;
+
+  @override
+  Future<bool> isModelAvailable({required String model}) async => false;
+
+  @override
+  Future<AudioWhisperModelEnsureResult> ensureModelAvailable({
+    required String model,
+    void Function(AudioWhisperModelDownloadProgress progress)? onProgress,
+  }) async {
+    return AudioWhisperModelEnsureResult(
+      model: model,
+      status: AudioWhisperModelEnsureStatus.unsupported,
+      path: null,
+    );
+  }
 }
 
 final class _FakeLinuxOcrModelStore implements LinuxOcrModelStore {
@@ -210,6 +234,7 @@ Future<void> _pumpPage(
   required _FakeMediaAnnotationConfigStore store,
   required _FakeContentEnrichmentConfigStore contentStore,
   LinuxOcrModelStore? linuxOcrModelStore,
+  AudioTranscribeWhisperModelStore? audioWhisperModelStore,
   SubscriptionStatus subscriptionStatus = SubscriptionStatus.unknown,
   CloudAuthController? cloudAuthController,
   String cloudGatewayBaseUrl = 'https://gateway.test',
@@ -221,6 +246,8 @@ Future<void> _pumpPage(
     configStore: store,
     contentConfigStore: contentStore,
     linuxOcrModelStore: linuxOcrModelStore,
+    audioWhisperModelStore:
+        audioWhisperModelStore ?? const _FakeAudioWhisperModelStore(),
     embedded: embedded,
   );
   if (embedded) {

@@ -29,6 +29,7 @@ part 'media_annotation_settings_page_ocr.dart';
 part 'media_annotation_settings_page_linux_ocr.dart';
 part 'media_annotation_settings_page_embedded.dart';
 part 'media_annotation_settings_page_media_understanding.dart';
+part 'media_annotation_settings_page_local_capability.dart';
 
 class MediaAnnotationSettingsPage extends StatefulWidget {
   const MediaAnnotationSettingsPage({
@@ -38,6 +39,7 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
     this.linuxOcrModelStore,
     this.audioWhisperModelStore,
     this.embedded = false,
+    this.focusLocalCapabilityCard = false,
   });
 
   final MediaAnnotationConfigStore? configStore;
@@ -45,6 +47,7 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
   final LinuxOcrModelStore? linuxOcrModelStore;
   final AudioTranscribeWhisperModelStore? audioWhisperModelStore;
   final bool embedded;
+  final bool focusLocalCapabilityCard;
 
   static const embeddedRootKey =
       ValueKey('media_annotation_settings_embedded_root');
@@ -75,6 +78,8 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
       ValueKey('media_annotation_settings_use_secondloop_cloud_switch');
   static const linuxOcrModelTileKey =
       ValueKey('media_annotation_settings_linux_ocr_model_tile');
+  static const localCapabilityCardKey =
+      ValueKey('media_annotation_settings_local_capability_card');
   static const linuxOcrModelDownloadButtonKey =
       ValueKey('media_annotation_settings_linux_ocr_download_button');
   static const linuxOcrModelDeleteButtonKey =
@@ -124,6 +129,11 @@ class _MediaAnnotationSettingsPageState
   String? _audioWhisperModelDownloadingTarget;
   int _audioWhisperModelDownloadReceivedBytes = 0;
   int? _audioWhisperModelDownloadTotalBytes;
+  bool _audioWhisperRuntimeInstalled = false;
+  bool _audioWhisperRuntimeStatusReady = false;
+  Object? _audioWhisperRuntimeStatusError;
+  final GlobalKey _localCapabilityCardAnchorKey = GlobalKey();
+  bool _didRunLocalCapabilityCardFocus = false;
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
@@ -446,6 +456,7 @@ class _MediaAnnotationSettingsPageState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _scheduleInitialLocalCapabilityCardFocus();
     if (_didKickoffLoad) return;
     _didKickoffLoad = true;
     unawaited(_load());
@@ -490,6 +501,10 @@ class _MediaAnnotationSettingsPageState
           source: LinuxOcrModelSource.none,
         );
       }
+      var audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
+      bool audioWhisperRuntimeInstalled = false;
+      Object? audioWhisperRuntimeStatusError;
+      final store = _audioWhisperModelStore;
       List<LlmProfile>? profiles;
       if (backend != null) {
         try {
@@ -516,7 +531,6 @@ class _MediaAnnotationSettingsPageState
 
       var audioSourcePreference = MediaSourcePreference.auto;
       var ocrSourcePreference = MediaSourcePreference.auto;
-      var audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       try {
         audioSourcePreference = await MediaCapabilitySourcePrefs.readAudio();
         if (audioSourcePreference == MediaSourcePreference.local) {
@@ -536,6 +550,15 @@ class _MediaAnnotationSettingsPageState
         ocrSourcePreference = MediaSourcePreference.auto;
         audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       }
+      if (store.supportsRuntimeDownload) {
+        try {
+          audioWhisperRuntimeInstalled =
+              await store.isModelAvailable(model: audioWhisperModel);
+        } catch (e) {
+          audioWhisperRuntimeInstalled = false;
+          audioWhisperRuntimeStatusError = e;
+        }
+      }
       if (!mounted) return;
       setState(() {
         _config = config;
@@ -548,6 +571,9 @@ class _MediaAnnotationSettingsPageState
         _audioSourcePreference = audioSourcePreference;
         _ocrSourcePreference = ocrSourcePreference;
         _audioWhisperModel = audioWhisperModel;
+        _audioWhisperRuntimeInstalled = audioWhisperRuntimeInstalled;
+        _audioWhisperRuntimeStatusReady = true;
+        _audioWhisperRuntimeStatusError = audioWhisperRuntimeStatusError;
         _loadError = null;
       });
     } catch (e) {
@@ -556,6 +582,9 @@ class _MediaAnnotationSettingsPageState
         _loadError = e;
         _config = null;
         _contentConfig = null;
+        _audioWhisperRuntimeInstalled = false;
+        _audioWhisperRuntimeStatusReady = false;
+        _audioWhisperRuntimeStatusError = null;
       });
     }
   }
@@ -706,9 +735,19 @@ class _MediaAnnotationSettingsPageState
       }
 
       await AudioTranscribeWhisperModelPrefs.write(normalized);
+      final runtimeInstalled = await _safeIsAudioWhisperModelAvailable(
+        model: normalized,
+      );
 
       if (!mounted) return;
-      setState(() => _audioWhisperModel = normalized);
+      setState(() {
+        _audioWhisperModel = normalized;
+        if (runtimeInstalled != null) {
+          _audioWhisperRuntimeInstalled = runtimeInstalled;
+          _audioWhisperRuntimeStatusReady = true;
+          _audioWhisperRuntimeStatusError = null;
+        }
+      });
 
       if (ensureResult?.status == AudioWhisperModelEnsureStatus.downloaded) {
         final zh = Localizations.localeOf(context)

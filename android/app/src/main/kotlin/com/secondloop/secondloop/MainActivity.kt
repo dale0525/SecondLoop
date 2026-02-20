@@ -214,6 +214,7 @@ class MainActivity : FlutterFragmentActivity() {
         setMethodCallHandler { call, result ->
           when (call.method) {
             "transcodeToM4a" -> handleTranscodeToM4a(call, result)
+            "decodeToWavPcm16Mono16k" -> handleDecodeToWavPcm16Mono16k(call, result)
             else -> result.notImplemented()
           }
         }
@@ -476,6 +477,47 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     return if (out.isEmpty()) null else out
+  }
+
+  private fun handleDecodeToWavPcm16Mono16k(
+    call: MethodCall,
+    result: MethodChannel.Result,
+  ) {
+    val args = call.arguments as? Map<*, *>
+    val inputPath = (args?.get("input_path") as? String)?.trim().orEmpty()
+    val outputPath = (args?.get("output_path") as? String)?.trim().orEmpty()
+    if (inputPath.isEmpty() || outputPath.isEmpty()) {
+      result.success(false)
+      return
+    }
+
+    Thread {
+      val ok = try {
+        val inputFile = File(inputPath)
+        if (!inputFile.exists() || !inputFile.isFile) {
+          false
+        } else {
+          val wavBytes = nativeAudioTranscribeChannelHandler.decodeToWavPcm16Mono16k(inputFile)
+          if (wavBytes.isEmpty()) {
+            false
+          } else {
+            val outputFile = File(outputPath)
+            outputFile.parentFile?.mkdirs()
+            if (outputFile.exists()) {
+              outputFile.delete()
+            }
+            outputFile.writeBytes(wavBytes)
+            outputFile.exists() && outputFile.length() > 0
+          }
+        }
+      } catch (_: Throwable) {
+        false
+      }
+
+      runOnUiThread {
+        result.success(ok)
+      }
+    }.start()
   }
 
   private fun handleTranscodeToM4a(call: MethodCall, result: MethodChannel.Result) {

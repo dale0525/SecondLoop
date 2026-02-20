@@ -170,6 +170,63 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
     );
   }
 
+  Widget _buildAudioWhisperRuntimeTile() {
+    final zh = _isZhLocale(context);
+    final actionEnabled = !_busy && !_audioWhisperModelDownloading;
+
+    return mediaAnnotationCapabilityCard(
+      key: MediaAnnotationSettingsPage.localCapabilityCardKey,
+      anchorKey: _localCapabilityCardAnchorKey,
+      context: context,
+      title: _audioWhisperRuntimeCardTitle(context),
+      description: _audioWhisperRuntimeCardDescription(context),
+      statusLabel: _audioWhisperRuntimeStatusLabel(context),
+      actions: [
+        ListTile(
+          key: const ValueKey(
+            'media_annotation_settings_audio_whisper_runtime_status_tile',
+          ),
+          title: Text(zh ? '运行时状态' : 'Runtime status'),
+          subtitle: Text(_audioWhisperRuntimeStatusSubtitle(context)),
+          trailing: _audioWhisperModelDownloading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  _audioWhisperRuntimeInstalled
+                      ? Icons.check_circle
+                      : Icons.error_outline,
+                  size: 18,
+                ),
+        ),
+        if (_audioWhisperModelDownloading)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: LinearProgressIndicator(
+              key: ValueKey(
+                'media_annotation_settings_audio_whisper_runtime_download_progress',
+              ),
+              minHeight: 6,
+              borderRadius: BorderRadius.all(Radius.circular(999)),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: FilledButton.tonalIcon(
+            key: const ValueKey(
+              'media_annotation_settings_audio_whisper_runtime_download_button',
+            ),
+            onPressed: actionEnabled ? _downloadAudioWhisperRuntime : null,
+            icon: const Icon(Icons.download_rounded),
+            label: Text(zh ? '下载本地运行时' : 'Download local runtime'),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _pickAudioByokEngine(ContentEnrichmentConfig config) async {
     if (_busy) return;
     final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
@@ -495,14 +552,23 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                 ]),
               ],
               ...() {
+                final runtimeCard = _shouldShowWhisperRuntimeCard()
+                    ? _buildAudioWhisperRuntimeTile()
+                    : null;
                 final runtimeTile = _buildDesktopRuntimeHealthTile(context);
-                if (runtimeTile == null) {
+                if (runtimeCard == null && runtimeTile == null) {
                   return const <Widget>[];
                 }
-                return <Widget>[
-                  const SizedBox(height: 16),
-                  runtimeTile,
-                ];
+                final out = <Widget>[];
+                if (runtimeCard != null) {
+                  out.add(const SizedBox(height: 16));
+                  out.add(runtimeCard);
+                }
+                if (runtimeTile != null) {
+                  out.add(const SizedBox(height: 16));
+                  out.add(runtimeTile);
+                }
+                return out;
               }(),
             ],
           ];
