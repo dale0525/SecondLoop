@@ -211,7 +211,7 @@ extension _MediaAnnotationSettingsPageOcrExtension
       case 'tiny':
         return zh ? 'Tiny（最快）' : 'Tiny (Fastest)';
       case 'base':
-        return zh ? 'Base（默认）' : 'Base (Default)';
+        return zh ? 'Base' : 'Base';
       case 'small':
         return zh ? 'Small（更准）' : 'Small (Better quality)';
       case 'medium':
@@ -252,8 +252,64 @@ extension _MediaAnnotationSettingsPageOcrExtension
     }
 
     return zh
-        ? '用于 Whisper 转写路径。默认 Base，可按性能与精度手动调整。'
-        : 'Used for Whisper transcription path. Base by default.';
+        ? '用于 Whisper 转写路径。移动端默认 Tiny，桌面端默认 Base。'
+        : 'Used for Whisper transcription path. Tiny by default on mobile, Base on desktop.';
+  }
+
+  String _audioWhisperRuntimeCardTitle(BuildContext context) {
+    final zh = _isZhOcrLocale(context);
+    return zh ? '本地能力' : 'Local capability';
+  }
+
+  String _audioWhisperRuntimeCardDescription(BuildContext context) {
+    final zh = _isZhOcrLocale(context);
+    if (_supportsMobileWhisperRuntimeDownload()) {
+      return zh
+          ? '在移动端手动下载 Whisper 本地转写运行时。'
+          : 'Download Whisper runtime manually for mobile local transcription.';
+    }
+    return zh
+        ? '管理本地 Whisper 转写运行时。'
+        : 'Manage local Whisper runtime for transcription.';
+  }
+
+  String _audioWhisperRuntimeStatusLabel(BuildContext context) {
+    final zh = _isZhOcrLocale(context);
+    if (_audioWhisperModelDownloading) {
+      return zh ? '状态：下载中' : 'Status: downloading';
+    }
+    if (!_audioWhisperRuntimeStatusReady) {
+      return zh ? '状态：检查中' : 'Status: checking';
+    }
+    if (_audioWhisperRuntimeInstalled) {
+      return zh ? '状态：已安装' : 'Status: installed';
+    }
+    return zh ? '状态：未安装' : 'Status: missing';
+  }
+
+  String _audioWhisperRuntimeStatusSubtitle(BuildContext context) {
+    final zh = _isZhOcrLocale(context);
+    if (_audioWhisperModelDownloading) {
+      return _audioWhisperModelSubtitle(context);
+    }
+    if (!_audioWhisperRuntimeStatusReady) {
+      return zh
+          ? '正在检查本地 Whisper 运行时状态。'
+          : 'Checking local Whisper runtime status.';
+    }
+    final error = _audioWhisperRuntimeStatusError;
+    if (error != null) {
+      return zh ? '运行时状态读取失败：$error' : 'Failed to read runtime status: $error';
+    }
+    if (_audioWhisperRuntimeInstalled) {
+      final modelLabel = _audioWhisperModelLabel(context, _audioWhisperModel);
+      return zh
+          ? '已安装本地运行时（当前模型：$modelLabel）。'
+          : 'Runtime installed (current model: $modelLabel).';
+    }
+    return zh
+        ? '未检测到本地运行时。点击下载后可使用本地转写。'
+        : 'Local runtime missing. Download to enable local transcription.';
   }
 
   Future<void> _pickAudioWhisperModel() async {

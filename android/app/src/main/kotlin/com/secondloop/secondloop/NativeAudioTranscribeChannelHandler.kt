@@ -66,6 +66,19 @@ class NativeAudioTranscribeChannelHandler(
     }
   }
 
+  fun decodeToWavPcm16Mono16k(audioFile: File): ByteArray {
+    if (!audioFile.exists() || !audioFile.isFile) {
+      return ByteArray(0)
+    }
+
+    val pcmAudio = decodeAudioToPcm16Mono16k(audioFile)
+    if (pcmAudio.bytes.isEmpty()) {
+      return ByteArray(0)
+    }
+
+    return pcm16Mono16kToWav(pcmAudio.bytes)
+  }
+
   private fun handleNativeSttTranscribe(
     call: MethodCall,
     result: MethodChannel.Result,
@@ -658,6 +671,33 @@ class NativeAudioTranscribeChannelHandler(
         .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
       buffer.putShort(pcm.toShort())
     }
+
+    return buffer.array()
+  }
+
+  private fun pcm16Mono16kToWav(pcmBytes: ByteArray): ByteArray {
+    if (pcmBytes.isEmpty()) return ByteArray(0)
+
+    val dataLength = pcmBytes.size
+    val byteRate = kTargetSampleRate * kTargetChannelCount * 2
+    val blockAlign = kTargetChannelCount * 2
+    val buffer = ByteBuffer.allocate(44 + dataLength)
+      .order(ByteOrder.LITTLE_ENDIAN)
+
+    buffer.put("RIFF".toByteArray(Charsets.US_ASCII))
+    buffer.putInt(dataLength + 36)
+    buffer.put("WAVE".toByteArray(Charsets.US_ASCII))
+    buffer.put("fmt ".toByteArray(Charsets.US_ASCII))
+    buffer.putInt(16)
+    buffer.putShort(1.toShort())
+    buffer.putShort(kTargetChannelCount.toShort())
+    buffer.putInt(kTargetSampleRate)
+    buffer.putInt(byteRate)
+    buffer.putShort(blockAlign.toShort())
+    buffer.putShort(16.toShort())
+    buffer.put("data".toByteArray(Charsets.US_ASCII))
+    buffer.putInt(dataLength)
+    buffer.put(pcmBytes)
 
     return buffer.array()
   }

@@ -150,6 +150,10 @@ typedef AudioTranscribeWindowsNativeSttRequest = Future<String> Function({
   required String mimeType,
   required Uint8List audioBytes,
 });
+typedef AudioTranscribeLocalRuntimeAudioDecode = Future<Uint8List> Function({
+  required String mimeType,
+  required Uint8List audioBytes,
+});
 
 String normalizeAudioTranscribeEngine(String engine) {
   final normalized = engine.trim();
@@ -161,13 +165,17 @@ String normalizeAudioTranscribeEngine(String engine) {
 bool supportsPlatformLocalRuntimeAudioTranscribe() {
   if (kIsWeb) return false;
   return defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.windows;
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 }
 
 bool supportsPlatformLocalAudioTranscribe() {
   if (kIsWeb) return false;
   return defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.windows;
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 }
 
 bool supportsPlatformNativeSttAudioTranscribe() {

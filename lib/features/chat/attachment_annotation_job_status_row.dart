@@ -14,6 +14,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
     required this.annotateEnabled,
     required this.canAnnotateNow,
     this.onOpenSetup,
+    this.onOpenLocalCapabilityDownload,
     this.onRetry,
     this.onInstallSpeechPack,
     this.windowsSpeechRecognizerProbe,
@@ -24,6 +25,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
   final bool annotateEnabled;
   final bool canAnnotateNow;
   final Future<void> Function()? onOpenSetup;
+  final Future<void> Function()? onOpenLocalCapabilityDownload;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onInstallSpeechPack;
   final Future<bool> Function()? windowsSpeechRecognizerProbe;
@@ -60,6 +62,8 @@ class _AttachmentAnnotationJobStatusRowState
         oldWidget.job.modelName != widget.job.modelName ||
         oldWidget.job.lastError != widget.job.lastError ||
         oldWidget.onInstallSpeechPack != widget.onInstallSpeechPack ||
+        oldWidget.onOpenLocalCapabilityDownload !=
+            widget.onOpenLocalCapabilityDownload ||
         oldWidget.job.createdAtMs != widget.job.createdAtMs ||
         oldWidget.job.updatedAtMs != widget.job.updatedAtMs) {
       _scheduleTickers();
@@ -129,6 +133,15 @@ class _AttachmentAnnotationJobStatusRowState
     if (error.contains('native_stt')) return true;
     if (isWindowsNativeSttSpeechPackMissingError(error)) return true;
     return false;
+  }
+
+  bool _isAudioLocalRuntimeMissing(AttachmentAnnotationJob job) {
+    final error = (job.lastError ?? '').trim().toLowerCase();
+    if (error.isEmpty) return false;
+    if (!error.contains('audio_transcribe')) return false;
+    return error.contains('audio_transcribe_local_runtime_model_missing') ||
+        error.contains('audio_transcribe_local_runtime_unavailable') ||
+        error.contains('runtime_missing');
   }
 
   bool _shouldCheckWindowsSpeechRecognizer() {
@@ -241,6 +254,9 @@ class _AttachmentAnnotationJobStatusRowState
         .toLowerCase()
         .startsWith('zh');
 
+    final showMissingLocalRuntimeHint =
+        isFailed && _isAudioLocalRuntimeMissing(job);
+
     if (!widget.canAnnotateNow) {
       final actions = <Widget>[];
       final onOpen = widget.onOpenSetup;
@@ -298,30 +314,40 @@ class _AttachmentAnnotationJobStatusRowState
             (_isLikelyWindowsNativeSttFailure(job) &&
                 _windowsSpeechRecognizerInstalled == false));
 
-    final label = isPending
-        ? (isSlow
-            ? t.chat.semanticParseStatusSlow
-            : t.chat.semanticParseStatusRunning)
-        : (showSpeechPackInstallAction
-            ? (zh
-                ? '缺少语音识别语言包，请先安装后再重试。'
-                : 'Speech recognition language pack is missing.')
-            : t.chat.semanticParseStatusFailed);
+    final label = showMissingLocalRuntimeHint
+        ? (zh
+            ? '本地能力运行时缺失，需先下载后再转写。'
+            : 'Local capability runtime is missing. Download it to transcribe.')
+        : isPending
+            ? (isSlow
+                ? t.chat.semanticParseStatusSlow
+                : t.chat.semanticParseStatusRunning)
+            : (showSpeechPackInstallAction
+                ? (zh
+                    ? '缺少语音识别语言包，请先安装后再重试。'
+                    : 'Speech recognition language pack is missing.')
+                : t.chat.semanticParseStatusFailed);
 
-    final leading = isPending
-        ? SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.outline,
-            ),
-          )
-        : Icon(
-            Icons.error_outline_rounded,
+    final leading = showMissingLocalRuntimeHint
+        ? Icon(
+            Icons.download_for_offline_outlined,
             size: 14,
             color: colorScheme.error,
-          );
+          )
+        : isPending
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colorScheme.outline,
+                ),
+              )
+            : Icon(
+                Icons.error_outline_rounded,
+                size: 14,
+                color: colorScheme.error,
+              );
 
     final actions = <Widget>[];
     if (isFailed && widget.onRetry != null) {
@@ -346,6 +372,15 @@ class _AttachmentAnnotationJobStatusRowState
         TextButton(
           onPressed: () => unawaited(widget.onInstallSpeechPack!()),
           child: Text(zh ? '安装语音包' : 'Install speech pack'),
+        ),
+      );
+    }
+    if (showMissingLocalRuntimeHint &&
+        widget.onOpenLocalCapabilityDownload != null) {
+      actions.add(
+        TextButton(
+          onPressed: () => unawaited(widget.onOpenLocalCapabilityDownload!()),
+          child: Text(zh ? '下载本地能力' : 'Download runtime'),
         ),
       );
     }

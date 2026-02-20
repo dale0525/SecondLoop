@@ -163,4 +163,52 @@ void main() {
 
     expect(find.text('Details'), findsOneWidget);
   });
+
+  testWidgets(
+      'AttachmentAnnotationJobStatusRow shows runtime download action when local capability is missing',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var openDownloadCalls = 0;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'runtime-missing',
+      status: 'failed',
+      lang: 'en',
+      modelName: 'runtime-whisper-tiny',
+      attempts: 1,
+      nextRetryAtMs: null,
+      lastError: 'audio_transcribe_local_runtime_model_missing:tiny',
+      createdAtMs: now,
+      updatedAtMs: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: true,
+              onOpenLocalCapabilityDownload: () async {
+                openDownloadCalls += 1;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Download runtime'), findsOneWidget);
+    expect(
+      find.text(
+        'Local capability runtime is missing. Download it to transcribe.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Download runtime'));
+    await tester.pump();
+
+    expect(openDownloadCalls, 1);
+  });
 }

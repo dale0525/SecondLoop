@@ -27,17 +27,8 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
     final useWhisperEngine =
         normalizedEngine == 'whisper' || normalizedEngine == 'local_runtime';
     final supportsLocalRuntime = supportsPlatformLocalRuntimeAudioTranscribe();
-    final supportsNativeStt = supportsPlatformNativeSttAudioTranscribe();
-
-    final nativeSttChain = <AudioTranscribeClient>[
-      if (supportsNativeStt)
-        NativeSttAudioTranscribeClient(
-          modelName: 'mobile_native_stt',
-        ),
-    ];
 
     final localRuntimeChain = <AudioTranscribeClient>[
-      ...nativeSttChain,
       if (supportsLocalRuntime && useWhisperEngine)
         LocalRuntimeAudioTranscribeClient(
           modelName: 'runtime-whisper-$whisperModel',

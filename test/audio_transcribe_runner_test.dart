@@ -115,6 +115,12 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
 
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
+
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
   });
@@ -129,6 +135,12 @@ void main() {
     expect(supportsPlatformLocalAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    expect(supportsPlatformLocalAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    expect(supportsPlatformLocalAudioTranscribe(), isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     expect(supportsPlatformLocalAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
@@ -294,6 +306,44 @@ void main() {
     expect(client.engineName, 'local_runtime');
     expect(client.modelName, 'local-runtime');
     expect(response.transcriptFull, contains('hello world'));
+  });
+
+  test('local runtime client can decode with injected audio decoder', () async {
+    final client = LocalRuntimeAudioTranscribeClient(
+      modelName: 'runtime-whisper-tiny',
+      whisperModel: 'tiny',
+      appDirProvider: () async => '/tmp/secondloop-test',
+      decodeAudioToWav: ({
+        required mimeType,
+        required audioBytes,
+      }) async {
+        expect(mimeType, 'audio/mp4');
+        expect(audioBytes, isNotEmpty);
+        return Uint8List.fromList(const <int>[1, 2, 3]);
+      },
+      requestLocalWhisperTranscribe: ({
+        required appDir,
+        required modelName,
+        required lang,
+        required wavBytes,
+      }) async {
+        expect(appDir, '/tmp/secondloop-test');
+        expect(modelName, 'tiny');
+        expect(lang, 'zh');
+        expect(wavBytes, Uint8List.fromList(const <int>[1, 2, 3]));
+        return jsonEncode(<String, Object?>{'text': 'tiny runtime'});
+      },
+    );
+
+    final response = await client.transcribe(
+      lang: 'zh',
+      mimeType: 'audio/mp4',
+      audioBytes: Uint8List.fromList(const <int>[0x00, 0x00, 0x00, 0x18]),
+    );
+
+    expect(response.transcriptFull, 'tiny runtime');
+    expect(client.engineName, 'local_runtime');
+    expect(client.modelName, 'runtime-whisper-tiny');
   });
 
   test('local runtime client parses transcript payload', () async {

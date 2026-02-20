@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String kDefaultAudioTranscribeWhisperModel = 'base';
+const String kDefaultAudioTranscribeWhisperModelMobile = 'tiny';
 
 const List<String> audioTranscribeWhisperModelOptions = <String>[
   'tiny',
@@ -21,14 +23,23 @@ String normalizeAudioTranscribeWhisperModel(String model) {
   return kDefaultAudioTranscribeWhisperModel;
 }
 
+String defaultAudioTranscribeWhisperModelForCurrentPlatform() {
+  if (kIsWeb) return kDefaultAudioTranscribeWhisperModel;
+  if (defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS) {
+    return kDefaultAudioTranscribeWhisperModelMobile;
+  }
+  return kDefaultAudioTranscribeWhisperModel;
+}
+
 final class AudioTranscribeWhisperModelPrefs {
   static const _prefsKey =
       'media_capability_audio_transcribe_whisper_model_preference_v1';
 
   static Future<String> read() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw =
-        prefs.getString(_prefsKey) ?? kDefaultAudioTranscribeWhisperModel;
+    final raw = prefs.getString(_prefsKey) ??
+        defaultAudioTranscribeWhisperModelForCurrentPlatform();
     return normalizeAudioTranscribeWhisperModel(raw);
   }
 

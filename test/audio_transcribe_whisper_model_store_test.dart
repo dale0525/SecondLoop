@@ -130,5 +130,19 @@ void main() {
       expect(downloadCalls, 0);
       expect(await existing.length(), 32);
     });
+
+    test('supports runtime download resolver allows platform simulation', () {
+      final mobileStore = FileSystemAudioTranscribeWhisperModelStore(
+        appDirProvider: () async => '/tmp',
+        supportsRuntimeDownloadResolver: () => true,
+      );
+      expect(mobileStore.supportsRuntimeDownload, isTrue);
+
+      final unsupportedStore = FileSystemAudioTranscribeWhisperModelStore(
+        appDirProvider: () async => '/tmp',
+        supportsRuntimeDownloadResolver: () => false,
+      );
+      expect(unsupportedStore.supportsRuntimeDownload, isFalse);
+    });
   });
 }
