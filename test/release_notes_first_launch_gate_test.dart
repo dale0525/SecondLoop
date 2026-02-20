@@ -46,9 +46,37 @@ void main() {
     );
   }
 
-  testWidgets('shows release notes dialog when version changes',
+  testWidgets('does not show dialog on first launch of fresh install',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
+
+    final service = _FakeReleaseNotesService(
+      result: const ReleaseNotesFetchResult(),
+    );
+
+    await pumpGate(
+      tester,
+      service: service,
+      versionLoader: () async =>
+          const AppRuntimeVersion(version: '1.2.3', buildNumber: '45'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('release_notes_dialog')), findsNothing);
+    expect(service.fetchCalls, 0);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getString(ReleaseNotesFirstLaunchGate.lastShownVersionPrefsKey),
+      '1.2.3+45',
+    );
+  });
+
+  testWidgets('shows release notes dialog when version changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      ReleaseNotesFirstLaunchGate.lastShownVersionPrefsKey: '1.2.2+44',
+    });
 
     final service = _FakeReleaseNotesService(
       result: ReleaseNotesFetchResult(

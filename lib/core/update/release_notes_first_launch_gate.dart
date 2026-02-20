@@ -85,6 +85,13 @@ class _ReleaseNotesFirstLaunchGateState
     final lastShown = prefs.getString(
       ReleaseNotesFirstLaunchGate.lastShownVersionPrefsKey,
     );
+    if (lastShown == null) {
+      await prefs.setString(
+        ReleaseNotesFirstLaunchGate.lastShownVersionPrefsKey,
+        currentVersion,
+      );
+      return;
+    }
     if (lastShown == currentVersion) return;
     if (!mounted) return;
 
