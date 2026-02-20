@@ -12,10 +12,17 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+const _kReviewDayEndMinutesPrefsKey = 'actions.review.day_end_minutes_v1';
+const _kReviewLateDayEndMinutes = (23 * 60) + 59;
+
 void main() {
   testWidgets('Review banner hides review todos scheduled in the future',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(
+      const <String, Object>{
+        _kReviewDayEndMinutesPrefsKey: _kReviewLateDayEndMinutes,
+      },
+    );
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final backend = _ReviewBackend(
@@ -63,7 +70,11 @@ void main() {
   });
 
   testWidgets('Review banner shows only due review todos', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(
+      const <String, Object>{
+        _kReviewDayEndMinutesPrefsKey: _kReviewLateDayEndMinutes,
+      },
+    );
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final backend = _ReviewBackend(
