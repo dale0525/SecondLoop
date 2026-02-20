@@ -231,6 +231,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     final settings = await ActionsSettingsStore.load();
 
     final nowLocal = DateTime.now();
+    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
     late final List<Todo> todos;
     try {
       todos = await backend.listTodos(sessionKey);
@@ -244,6 +245,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       final nextMs = todo.nextReviewAtMs;
       final stage = todo.reviewStage;
       if (nextMs == null || stage == null) continue;
+      var effectiveNextReviewAtMs = nextMs;
 
       final scheduledLocal =
           DateTime.fromMillisecondsSinceEpoch(nextMs, isUtc: true).toLocal();
@@ -267,6 +269,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                 rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch,
             lastReviewAtMs: todo.lastReviewAtMs,
           );
+          effectiveNextReviewAtMs =
+              rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch;
           didMutate = true;
         } catch (_) {
           return 0;
@@ -275,6 +279,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
       if (todo.dueAtMs != null) continue;
       if (todo.status == 'done' || todo.status == 'dismissed') continue;
+      if (effectiveNextReviewAtMs > nowUtcMs) continue;
       pendingCount += 1;
     }
 

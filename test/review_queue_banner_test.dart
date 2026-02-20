@@ -13,7 +13,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Review banner shows pending (not-yet-due) review todos',
+  testWidgets('Review banner hides review todos scheduled in the future',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -30,6 +30,54 @@ void main() {
           updatedAtMs: 0,
           reviewStage: 0,
           nextReviewAtMs: nowUtcMs + const Duration(days: 1).inMilliseconds,
+          lastReviewAtMs: nowUtcMs,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              theme: ThemeData(splashFactory: InkRipple.splashFactory),
+              home: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.inbox_rounded), findsNothing);
+  });
+
+  testWidgets('Review banner shows only due review todos', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final backend = _ReviewBackend(
+      todos: [
+        Todo(
+          id: 'todo:1',
+          title: '周一做狗狗的口粮',
+          dueAtMs: null,
+          status: 'inbox',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: 0,
+          nextReviewAtMs: nowUtcMs - const Duration(minutes: 1).inMilliseconds,
           lastReviewAtMs: nowUtcMs,
         ),
       ],
