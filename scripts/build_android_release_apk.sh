@@ -13,9 +13,11 @@ assets_to_prune=(
 
 placeholder_files=(
   "assets/icon/tray_icon.png"
+  "assets/icon/tray_icon.ico"
 )
 
 placeholder_png_base64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ioAAAAASUVORK5CYII='
+placeholder_ico_base64='AAABAAEAEBAAAAAAIABWAAAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAQAAAAEAgGAAAAH/P/YQAAAB1JREFUeJxj/M/A8J+BAsBEieZRA0YNGDVgMBkAAFhtAh71zM+iAAAAAElFTkSuQmCC'
 
 moved_paths=()
 
@@ -79,7 +81,13 @@ for relative_path in "${placeholder_files[@]}"; do
   mv "${source_path}" "${backup_path}"
 
   mkdir -p "$(dirname "${source_path}")"
-  printf '%s' "${placeholder_png_base64}" | base64 --decode > "${source_path}"
+
+  placeholder_base64="${placeholder_png_base64}"
+  if [[ "${relative_path}" == *.ico ]]; then
+    placeholder_base64="${placeholder_ico_base64}"
+  fi
+
+  printf '%s' "${placeholder_base64}" | base64 --decode > "${source_path}"
 
   moved_paths+=("${relative_path}")
   echo "android-release-apk: replaced ${relative_path} with tiny placeholder"
