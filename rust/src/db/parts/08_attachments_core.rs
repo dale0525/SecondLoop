@@ -812,6 +812,14 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
     if attachment_payload_has_semantic_signal(payload) {
         enqueue_semantic_parse_jobs_for_attachment_messages(conn, attachment_sha256, now_ms)?;
     }
+
+    let queued_autofill =
+        enqueue_message_tag_autofill_jobs_for_attachment_messages(conn, attachment_sha256, now_ms)?;
+    if queued_autofill > 0 {
+        let limit = i64::from(queued_autofill).clamp(1, 32);
+        let _processed = process_pending_message_tag_autofill_jobs(conn, key, now_ms, limit)?;
+    }
+
     Ok(())
 }
 

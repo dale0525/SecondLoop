@@ -148,7 +148,8 @@ fn query_scope_matrix_covers_focus_time_and_include_exclude_tags() {
     let travel = db::upsert_tag(&conn, &key, "travel").expect("upsert travel tag");
     let personal = db::upsert_tag(&conn, &key, "personal").expect("upsert personal tag");
 
-    db::set_message_tags(&conn, &key, &m_main_old.id, &[work.id.clone()]).expect("tag main old");
+    db::set_message_tags(&conn, &key, &m_main_old.id, std::slice::from_ref(&work.id))
+        .expect("tag main old");
     db::set_message_tags(
         &conn,
         &key,
@@ -156,10 +157,20 @@ fn query_scope_matrix_covers_focus_time_and_include_exclude_tags() {
         &[work.id.clone(), travel.id.clone()],
     )
     .expect("tag main recent");
-    db::set_message_tags(&conn, &key, &m_main_other.id, &[personal.id.clone()])
-        .expect("tag main other");
-    db::set_message_tags(&conn, &key, &m_side_recent.id, &[work.id.clone()])
-        .expect("tag side recent");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &m_main_other.id,
+        std::slice::from_ref(&personal.id),
+    )
+    .expect("tag main other");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &m_side_recent.id,
+        std::slice::from_ref(&work.id),
+    )
+    .expect("tag side recent");
 
     let thread =
         db::create_topic_thread(&conn, &key, &main.id, Some("Main thread")).expect("create thread");

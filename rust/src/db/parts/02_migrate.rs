@@ -738,6 +738,46 @@ CREATE INDEX IF NOT EXISTS idx_tag_merge_feedback_reason
 PRAGMA user_version = 25;
 "#,
         )?;
+        user_version = 25;
+    }
+
+    if user_version < 26 {
+        // v26: message tag autofill shadow-mode jobs + event logs.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS message_tag_autofill_jobs (
+  message_id TEXT PRIMARY KEY,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_message_tag_autofill_jobs_status_due
+  ON message_tag_autofill_jobs(status, next_retry_at_ms, updated_at_ms);
+
+CREATE TABLE IF NOT EXISTS message_tag_autofill_events (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+  candidate_tag TEXT,
+  score REAL NOT NULL,
+  margin REAL NOT NULL,
+  source_count INTEGER NOT NULL,
+  decision TEXT NOT NULL,
+  applied INTEGER NOT NULL DEFAULT 0,
+  evidence_json TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  CHECK (applied IN (0, 1))
+);
+CREATE INDEX IF NOT EXISTS idx_message_tag_autofill_events_message
+  ON message_tag_autofill_events(message_id, created_at_ms DESC);
+PRAGMA user_version = 26;
+"#,
+        )?;
     }
 
     Ok(())
@@ -790,6 +830,8 @@ DELETE FROM semantic_parse_jobs;
 DELETE FROM topic_thread_messages;
 DELETE FROM topic_threads;
 DELETE FROM tag_merge_feedback;
+DELETE FROM message_tag_autofill_events;
+DELETE FROM message_tag_autofill_jobs;
 DELETE FROM message_tags;
 DELETE FROM message_attachments;
 DELETE FROM cloud_media_backup;

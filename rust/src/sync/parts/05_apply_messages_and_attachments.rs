@@ -47,8 +47,8 @@ fn apply_message_insert(
             if is_memory { 1 } else { 0 }
         ],
     );
-    match insert_result {
-        Ok(_) => {}
+    let inserted_message = match insert_result {
+        Ok(changed) => changed > 0,
         Err(e) if is_foreign_key_constraint(&e) => {
             ensure_placeholder_conversation_row(conn, db_key, conversation_id, created_at_ms)?;
             conn.execute(
@@ -67,10 +67,10 @@ fn apply_message_insert(
                     if is_memory { 1 } else { 0 },
                     if is_memory { 1 } else { 0 }
                 ],
-            )?;
+            )? > 0
         }
         Err(e) => return Err(e.into()),
-    }
+    };
 
     // Heuristic for legacy Ask AI flows: when an assistant message is marked non-memory, treat the
     // immediately preceding user message (same device/seq ordering) as non-memory too.
@@ -96,6 +96,12 @@ fn apply_message_insert(
            WHERE id = ?1"#,
         params![conversation_id, created_at_ms],
     )?;
+
+    if role == "user" && inserted_message {
+        let _ = crate::db::run_message_tag_autofill_for_message(
+            conn, db_key, message_id, "sync_message_insert", created_at_ms,
+        );
+    }
 
     Ok(())
 }
@@ -177,6 +183,7 @@ fn apply_message_set_v2(
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?;
+    let mut inserted_message = false;
 
     if let Some((existing_updated_at, existing_device_id, existing_seq, existing_is_memory_i64)) =
         existing
@@ -239,7 +246,7 @@ fn apply_message_set_v2(
             ],
         );
         match insert_result {
-            Ok(_) => {}
+            Ok(_) => inserted_message = true,
             Err(e) if is_foreign_key_constraint(&e) => {
                 ensure_placeholder_conversation_row(
                     conn,
@@ -265,6 +272,7 @@ fn apply_message_set_v2(
                         if is_memory { 1 } else { 0 }
                     ],
                 )?;
+                inserted_message = true;
             }
             Err(e) => return Err(e.into()),
         }
@@ -276,6 +284,12 @@ fn apply_message_set_v2(
            WHERE id = ?1"#,
         params![conversation_id.as_str(), updated_at_ms],
     )?;
+
+    if role == "user" && inserted_message {
+        let _ = crate::db::run_message_tag_autofill_for_message(
+            conn, db_key, message_id, "sync_message_set_insert", updated_at_ms,
+        );
+    }
 
     Ok(())
 }
@@ -847,6 +861,7 @@ WHERE id IN (
         params![attachment_sha256],
     )?;
 
+
     Ok(())
 }
 
@@ -967,6 +982,15 @@ WHERE id IN (
 "#,
         params![attachment_sha256],
     )?;
+
+    if let Ok(queued_autofill) = crate::db::enqueue_message_tag_autofill_jobs_for_attachment_messages(
+        conn, attachment_sha256, updated_at_ms,
+    ) {
+        if queued_autofill > 0 {
+            let limit = i64::from(queued_autofill).clamp(1, 32);
+            let _ = crate::db::process_pending_message_tag_autofill_jobs(conn, db_key, updated_at_ms, limit);
+        }
+    }
 
     Ok(())
 }
