@@ -1,71 +1,29 @@
 package com.secondloop.secondloop
 
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.ParcelFileDescriptor
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import androidx.core.content.ContextCompat
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.thread
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-private const val kNativeSttTimeoutMs = 90_000L
 private const val kTargetSampleRate = 16_000
 private const val kTargetChannelCount = 1
 
-private const val kExtraAudioSource = "android.speech.extra.AUDIO_SOURCE"
-private const val kExtraAudioSourceChannelCount =
-  "android.speech.extra.AUDIO_SOURCE_CHANNEL_COUNT"
-private const val kExtraAudioSourceEncoding =
-  "android.speech.extra.AUDIO_SOURCE_ENCODING"
-private const val kExtraAudioSourceSamplingRate =
-  "android.speech.extra.AUDIO_SOURCE_SAMPLING_RATE"
-private const val kExtraSegmentedSession =
-  "android.speech.extra.SEGMENTED_SESSION"
-
-private data class PcmAudio(
+private data class DecodedPcmAudio(
   val bytes: ByteArray,
   val durationMs: Int,
 )
 
-private class NativeSttException(
-  val code: String,
+private class AudioDecodeException(
   override val message: String,
 ) : RuntimeException(message)
 
-class NativeAudioTranscribeChannelHandler(
-  private val context: Context,
-) {
-  fun handle(call: MethodCall, result: MethodChannel.Result) {
-    when (call.method) {
-      "nativeSttTranscribe" -> handleNativeSttTranscribe(call, result)
-      else -> result.notImplemented()
-    }
-  }
-
+class NativeAudioTranscribeChannelHandler {
   fun decodeToWavPcm16Mono16k(audioFile: File): ByteArray {
     if (!audioFile.exists() || !audioFile.isFile) {
       return ByteArray(0)
@@ -79,329 +37,7 @@ class NativeAudioTranscribeChannelHandler(
     return pcm16Mono16kToWav(pcmAudio.bytes)
   }
 
-  private fun handleNativeSttTranscribe(
-    call: MethodCall,
-    result: MethodChannel.Result,
-  ) {
-    val args = call.arguments as? Map<*, *>
-    val filePath = (args?.get("file_path") as? String)?.trim().orEmpty()
-    if (filePath.isEmpty()) {
-      result.error("native_stt_invalid_args", "Missing file_path", null)
-      return
-    }
-
-    val file = File(filePath)
-    if (!file.exists() || !file.isFile) {
-      result.error("native_stt_file_missing", "Audio file does not exist", null)
-      return
-    }
-
-    val preferredLang = (args?.get("lang") as? String)?.trim().orEmpty()
-
-    Thread {
-      try {
-        val payload = runNativeSttTranscribe(file, preferredLang)
-        Handler(Looper.getMainLooper()).post {
-          result.success(payload)
-        }
-      } catch (error: NativeSttException) {
-        Handler(Looper.getMainLooper()).post {
-          result.error(error.code, error.message, null)
-        }
-      } catch (error: Throwable) {
-        val detail = error.message?.trim().orEmpty()
-        Handler(Looper.getMainLooper()).post {
-          result.error(
-            "native_stt_failed",
-            if (detail.isEmpty()) "speech_runtime_unavailable" else detail,
-            null,
-          )
-        }
-      }
-    }.start()
-  }
-
-  private fun runNativeSttTranscribe(
-    audioFile: File,
-    preferredLang: String,
-  ): Map<String, Any> {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-      throw NativeSttException(
-        "native_stt_unavailable",
-        "speech_runtime_unavailable",
-      )
-    }
-
-    if (ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.RECORD_AUDIO,
-      ) != PackageManager.PERMISSION_GRANTED
-    ) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_permission_denied",
-      )
-    }
-
-    if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_runtime_unavailable",
-      )
-    }
-
-    if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_offline_unavailable",
-      )
-    }
-
-    val pcmAudio = decodeAudioToPcm16Mono16k(audioFile)
-    if (pcmAudio.bytes.isEmpty()) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_transcript_empty",
-      )
-    }
-
-    return transcribePcmAudio(
-      pcmBytes = pcmAudio.bytes,
-      durationMs = pcmAudio.durationMs,
-      preferredLang = preferredLang,
-    )
-  }
-
-  private fun transcribePcmAudio(
-    pcmBytes: ByteArray,
-    durationMs: Int,
-    preferredLang: String,
-  ): Map<String, Any> {
-    val pipe = ParcelFileDescriptor.createPipe()
-    val readFd = pipe[0]
-    val writeFd = pipe[1]
-
-    var transcript: String? = null
-    var errorReason: String? = null
-    val segmentedTranscripts = mutableListOf<String>()
-    val segmentedSessionMode = AtomicBoolean(false)
-    val done = CountDownLatch(1)
-    val mainHandler = Handler(Looper.getMainLooper())
-
-    val listener = object : RecognitionListener {
-      override fun onReadyForSpeech(params: Bundle?) {}
-
-      override fun onBeginningOfSpeech() {}
-
-      override fun onRmsChanged(rmsdB: Float) {}
-
-      override fun onBufferReceived(buffer: ByteArray?) {}
-
-      override fun onEndOfSpeech() {}
-
-      override fun onError(error: Int) {
-        errorReason = normalizeRecognizerError(error)
-        done.countDown()
-      }
-
-      override fun onResults(results: Bundle?) {
-        transcript = extractTranscriptCandidate(results)
-        if (transcript.isNullOrEmpty()) {
-          errorReason = "speech_transcript_empty"
-        }
-        done.countDown()
-      }
-
-      override fun onSegmentResults(segmentResults: Bundle) {
-        segmentedSessionMode.set(true)
-
-        val segment = extractTranscriptCandidate(segmentResults) ?: return
-        if (segmentedTranscripts.isEmpty() || segmentedTranscripts.last() != segment) {
-          segmentedTranscripts.add(segment)
-        }
-      }
-
-      override fun onEndOfSegmentedSession() {
-        if (segmentedSessionMode.get()) {
-          transcript = segmentedTranscripts.joinToString(separator = " ").trim()
-          if (transcript.isNullOrEmpty()) {
-            errorReason = "speech_transcript_empty"
-          }
-        }
-        done.countDown()
-      }
-
-      override fun onPartialResults(partialResults: Bundle?) {}
-
-      override fun onEvent(eventType: Int, params: Bundle?) {}
-    }
-
-    val recognizerHolder = arrayOfNulls<SpeechRecognizer>(1)
-    mainHandler.post {
-      try {
-        val recognizer = createSpeechRecognizer()
-        recognizerHolder[0] = recognizer
-        recognizer.setRecognitionListener(listener)
-        recognizer.startListening(
-          buildSpeechRecognizerIntent(
-            preferredLang = preferredLang,
-            readFd = readFd,
-          ),
-        )
-      } catch (error: NativeSttException) {
-        errorReason = error.message
-        done.countDown()
-      } catch (_: Throwable) {
-        errorReason = "speech_runtime_unavailable"
-        done.countDown()
-      }
-    }
-
-    thread(name = "secondloop-native-stt-audio-writer") {
-      try {
-        FileOutputStream(writeFd.fileDescriptor).use { output ->
-          output.write(pcmBytes)
-          output.flush()
-        }
-      } catch (_: Throwable) {
-        if (errorReason == null) {
-          errorReason = "speech_runtime_unavailable"
-        }
-        done.countDown()
-      } finally {
-        try {
-          writeFd.close()
-        } catch (_: Throwable) {}
-      }
-    }
-
-    val completed = done.await(kNativeSttTimeoutMs, TimeUnit.MILLISECONDS)
-    mainHandler.post {
-      try {
-        recognizerHolder[0]?.cancel()
-      } catch (_: Throwable) {}
-      try {
-        recognizerHolder[0]?.destroy()
-      } catch (_: Throwable) {}
-      try {
-        readFd.close()
-      } catch (_: Throwable) {}
-    }
-
-    if (!completed) {
-      throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
-    }
-
-    val reason = errorReason
-    if (!reason.isNullOrEmpty()) {
-      throw NativeSttException("native_stt_failed", reason)
-    }
-
-    val text = transcript?.trim().orEmpty()
-    if (text.isEmpty()) {
-      throw NativeSttException("native_stt_failed", "speech_transcript_empty")
-    }
-
-    return mapOf(
-      "text" to text,
-      "duration_ms" to durationMs,
-    )
-  }
-
-  private fun buildSpeechRecognizerIntent(
-    preferredLang: String,
-    readFd: ParcelFileDescriptor,
-  ): Intent {
-    val normalizedLang = normalizePreferredLang(preferredLang)
-
-    return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-      putExtra(
-        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-      )
-      putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-      putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-      if (normalizedLang.isNotEmpty()) {
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, normalizedLang)
-      }
-
-      putExtra(kExtraAudioSource, readFd)
-      putExtra(kExtraAudioSourceChannelCount, kTargetChannelCount)
-      putExtra(kExtraAudioSourceEncoding, AudioFormat.ENCODING_PCM_16BIT)
-      putExtra(kExtraAudioSourceSamplingRate, kTargetSampleRate)
-      putExtra(kExtraSegmentedSession, kExtraAudioSource)
-    }
-  }
-
-  private fun extractTranscriptCandidate(results: Bundle?): String? {
-    val candidates =
-      results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-        ?: arrayListOf()
-    return candidates.firstOrNull { it.trim().isNotEmpty() }?.trim()
-  }
-
-  private fun createSpeechRecognizer(): SpeechRecognizer {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_offline_unavailable",
-      )
-    }
-
-    if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_offline_unavailable",
-      )
-    }
-
-    return try {
-      SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-    } catch (_: Throwable) {
-      throw NativeSttException(
-        "native_stt_failed",
-        "speech_offline_unavailable",
-      )
-    }
-  }
-
-  private fun normalizePreferredLang(lang: String): String {
-    val normalized = lang.trim().replace('_', '-')
-    if (normalized.isEmpty()) return ""
-
-    val lower = normalized.lowercase(Locale.US)
-    if (lower == "auto" || lower == "und" || lower == "unknown") {
-      return ""
-    }
-    return normalized
-  }
-
-  private fun normalizeRecognizerError(error: Int): String {
-    return when (error) {
-      SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "speech_permission_denied"
-      SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE,
-      SpeechRecognizer.ERROR_CANNOT_LISTEN_TO_DOWNLOAD_EVENTS,
-      -> "speech_offline_unavailable"
-
-      SpeechRecognizer.ERROR_AUDIO,
-      SpeechRecognizer.ERROR_CLIENT,
-      SpeechRecognizer.ERROR_NETWORK,
-      SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-      SpeechRecognizer.ERROR_NO_MATCH,
-      SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
-      SpeechRecognizer.ERROR_SERVER,
-      SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
-      SpeechRecognizer.ERROR_TOO_MANY_REQUESTS,
-      SpeechRecognizer.ERROR_CANNOT_CHECK_SUPPORT,
-      SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
-      SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
-      -> "speech_runtime_unavailable"
-
-      else -> "speech_runtime_unavailable"
-    }
-  }
-
-  private fun decodeAudioToPcm16Mono16k(audioFile: File): PcmAudio {
+  private fun decodeAudioToPcm16Mono16k(audioFile: File): DecodedPcmAudio {
     val extractor = MediaExtractor()
     val output = ByteArrayOutputStream()
 
@@ -414,13 +50,13 @@ class NativeAudioTranscribeChannelHandler(
       extractor.setDataSource(audioFile.absolutePath)
       val trackIndex = selectAudioTrack(extractor)
       if (trackIndex < 0) {
-        throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+        throw AudioDecodeException("audio_decode_no_audio_track")
       }
 
       extractor.selectTrack(trackIndex)
       val format = extractor.getTrackFormat(trackIndex)
       val mimeType = format.getString(MediaFormat.KEY_MIME)
-        ?: throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+        ?: throw AudioDecodeException("audio_decode_missing_mime")
 
       codec = MediaCodec.createDecoderByType(mimeType)
       codec.configure(format, null, null, 0)
@@ -435,7 +71,7 @@ class NativeAudioTranscribeChannelHandler(
           val inputBufferIndex = codec.dequeueInputBuffer(10_000)
           if (inputBufferIndex >= 0) {
             val inputBuffer = codec.getInputBuffer(inputBufferIndex)
-              ?: throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+              ?: throw AudioDecodeException("audio_decode_input_buffer_missing")
             val sampleSize = extractor.readSampleData(inputBuffer, 0)
             if (sampleSize < 0) {
               codec.queueInputBuffer(
@@ -496,10 +132,10 @@ class NativeAudioTranscribeChannelHandler(
           }
         }
       }
-    } catch (error: NativeSttException) {
-      throw error
+    } catch (_: AudioDecodeException) {
+      throw
     } catch (_: Throwable) {
-      throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+      throw AudioDecodeException("audio_decode_failed")
     } finally {
       try {
         codec?.stop()
@@ -517,7 +153,7 @@ class NativeAudioTranscribeChannelHandler(
 
     val decoded = output.toByteArray()
     if (decoded.isEmpty()) {
-      throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+      throw AudioDecodeException("audio_decode_empty")
     }
 
     val monoFloat = when (sourceEncoding) {
@@ -531,14 +167,11 @@ class NativeAudioTranscribeChannelHandler(
         sourceChannelCount,
       )
 
-      else -> throw NativeSttException(
-        "native_stt_failed",
-        "speech_runtime_unavailable",
-      )
+      else -> throw AudioDecodeException("audio_decode_pcm_encoding_unsupported")
     }
 
     if (monoFloat.isEmpty()) {
-      throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+      throw AudioDecodeException("audio_decode_pcm_empty")
     }
 
     val normalized = if (sourceSampleRate == kTargetSampleRate) {
@@ -548,7 +181,7 @@ class NativeAudioTranscribeChannelHandler(
     }
 
     if (normalized.isEmpty()) {
-      throw NativeSttException("native_stt_failed", "speech_runtime_unavailable")
+      throw AudioDecodeException("audio_decode_resample_empty")
     }
 
     val pcmBytes = monoFloatToPcm16(normalized)
@@ -556,7 +189,7 @@ class NativeAudioTranscribeChannelHandler(
       .toInt()
       .coerceAtLeast(1)
 
-    return PcmAudio(bytes = pcmBytes, durationMs = durationMs)
+    return DecodedPcmAudio(bytes = pcmBytes, durationMs = durationMs)
   }
 
   private fun selectAudioTrack(extractor: MediaExtractor): Int {

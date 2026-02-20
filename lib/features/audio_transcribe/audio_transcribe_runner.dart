@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
-import '../../core/content_enrichment/audio_transcribe_failure_reason.dart';
 import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
 
 part 'audio_transcribe_runner_clients.dart';
@@ -143,11 +142,6 @@ typedef AudioTranscribeLocalWhisperRequest = Future<String> Function({
   required String lang,
   required List<int> wavBytes,
 });
-typedef AudioTranscribeNativeSttRequest = Future<String> Function({
-  required String lang,
-  required String mimeType,
-  required Uint8List audioBytes,
-});
 typedef AudioTranscribeWindowsNativeSttRequest = Future<String> Function({
   required String lang,
   required String mimeType,
@@ -179,12 +173,6 @@ bool supportsPlatformLocalAudioTranscribe() {
       defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS;
-}
-
-bool supportsPlatformNativeSttAudioTranscribe() {
-  if (kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.android;
 }
 
 bool shouldEnableLocalRuntimeAudioFallback({
