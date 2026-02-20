@@ -14,7 +14,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('creates topic thread from message action and adds message',
+  testWidgets('starts topic focus from message action and filters messages',
       (tester) async {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
     final repository = _FakeTopicThreadRepository();
@@ -25,23 +25,26 @@ void main() {
       topicThreadRepository: repository,
     );
 
-    await _openMessageTopicThreadPicker(tester, messageId: 'm1');
-    await tester.tap(find.byKey(const ValueKey('message_topic_thread_create')));
-    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('chat_topic_thread_filter_button')),
+      findsNothing,
+    );
 
-    await tester.enterText(find.byType(TextField).last, 'Weekly focus');
-    await tester.tap(find.text('Save').last);
-    await tester.pumpAndSettle();
+    await _openMessageTopicThreadPicker(tester, messageId: 'm1');
 
     expect(repository.threads.length, 1);
     final created = repository.threads.single;
-    expect(created.title, 'Weekly focus');
+    expect(created.title, 'first');
     expect(repository.messageIdsForThread(created.id), <String>['m1']);
     expect(
         find.byKey(const ValueKey('topic_thread_active_chip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_bubble_m1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_bubble_m2')), findsNothing);
   });
 
-  testWidgets('filters message list by active topic thread', (tester) async {
+  testWidgets(
+      'activates existing topic thread when message already belongs to it',
+      (tester) async {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
     final repository = _FakeTopicThreadRepository(
       initialThreads: <TopicThread>[
@@ -54,7 +57,7 @@ void main() {
         ),
       ],
       initialMessageIdsByThreadId: <String, List<String>>{
-        'thread_work': <String>['m1'],
+        'thread_work': <String>['m2'],
       },
     );
 
@@ -64,16 +67,11 @@ void main() {
       topicThreadRepository: repository,
     );
 
-    await tester
-        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
-    await tester.pumpAndSettle();
+    await _openMessageTopicThreadPicker(tester, messageId: 'm2');
 
-    await tester
-        .tap(find.byKey(const ValueKey('topic_thread_filter_thread_work')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('message_bubble_m1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('message_bubble_m2')), findsNothing);
+    expect(repository.threads.length, 1);
+    expect(find.byKey(const ValueKey('message_bubble_m1')), findsNothing);
+    expect(find.byKey(const ValueKey('message_bubble_m2')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('topic_thread_active_chip')), findsOneWidget);
   });
@@ -116,6 +114,8 @@ void main() {
       tagRepository: tagRepository,
     );
 
+    await _openMessageTopicThreadPicker(tester, messageId: 'm1');
+
     await tester.tap(find.byKey(const ValueKey('chat_tag_filter_button')));
     await tester.pumpAndSettle();
     await tester
@@ -124,152 +124,8 @@ void main() {
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
-    await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('topic_thread_filter_thread_focus')));
-    await tester.pumpAndSettle();
-
     expect(find.byKey(const ValueKey('message_bubble_m2')), findsOneWidget);
     expect(find.byKey(const ValueKey('message_bubble_m1')), findsNothing);
-  });
-
-  testWidgets('toggles message membership in existing topic thread',
-      (tester) async {
-    SharedPreferences.setMockInitialValues(const <String, Object>{});
-    final repository = _FakeTopicThreadRepository(
-      initialThreads: <TopicThread>[
-        const TopicThread(
-          id: 'thread_life',
-          conversationId: 'main_stream',
-          title: 'Life',
-          createdAtMs: 1,
-          updatedAtMs: 2,
-        ),
-      ],
-      initialMessageIdsByThreadId: <String, List<String>>{
-        'thread_life': <String>['m1'],
-      },
-    );
-
-    await _pumpChatPage(
-      tester,
-      backend: _TopicThreadTestBackend(),
-      topicThreadRepository: repository,
-    );
-
-    await _openMessageTopicThreadPicker(tester, messageId: 'm1');
-    await tester
-        .tap(find.byKey(const ValueKey('message_topic_thread_thread_life')));
-    await tester.pumpAndSettle();
-    expect(repository.messageIdsForThread('thread_life'), isEmpty);
-
-    await _openMessageTopicThreadPicker(tester, messageId: 'm2');
-    await tester
-        .tap(find.byKey(const ValueKey('message_topic_thread_thread_life')));
-    await tester.pumpAndSettle();
-    expect(repository.messageIdsForThread('thread_life'), <String>['m2']);
-  });
-
-  testWidgets('renames topic thread from filter sheet', (tester) async {
-    SharedPreferences.setMockInitialValues(const <String, Object>{});
-    final repository = _FakeTopicThreadRepository(
-      initialThreads: <TopicThread>[
-        const TopicThread(
-          id: 'thread_work',
-          conversationId: 'main_stream',
-          title: 'Work Focus',
-          createdAtMs: 1,
-          updatedAtMs: 2,
-        ),
-      ],
-    );
-
-    await _pumpChatPage(
-      tester,
-      backend: _TopicThreadTestBackend(),
-      topicThreadRepository: repository,
-    );
-
-    await tester
-        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-        find.byKey(const ValueKey('topic_thread_filter_manage_thread_work')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(
-        const ValueKey('topic_thread_filter_manage_rename_thread_work'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).last, 'Renamed Focus');
-    await tester.tap(find.text('Save').last);
-    await tester.pumpAndSettle();
-
-    expect(repository.threadTitle('thread_work'), 'Renamed Focus');
-  });
-
-  testWidgets('deletes active topic thread and clears active filter',
-      (tester) async {
-    SharedPreferences.setMockInitialValues(const <String, Object>{});
-    final repository = _FakeTopicThreadRepository(
-      initialThreads: <TopicThread>[
-        const TopicThread(
-          id: 'thread_life',
-          conversationId: 'main_stream',
-          title: 'Life',
-          createdAtMs: 1,
-          updatedAtMs: 2,
-        ),
-      ],
-      initialMessageIdsByThreadId: <String, List<String>>{
-        'thread_life': <String>['m1'],
-      },
-    );
-
-    await _pumpChatPage(
-      tester,
-      backend: _TopicThreadTestBackend(),
-      topicThreadRepository: repository,
-    );
-
-    await tester
-        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
-    await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('topic_thread_filter_thread_life')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('topic_thread_active_chip')),
-      findsOneWidget,
-    );
-
-    await tester
-        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-        find.byKey(const ValueKey('topic_thread_filter_manage_thread_life')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(
-        const ValueKey('topic_thread_filter_manage_delete_thread_life'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('topic_thread_delete_confirm')));
-    await tester.pumpAndSettle();
-
-    expect(repository.threads, isEmpty);
-    expect(
-      find.byKey(const ValueKey('topic_thread_active_chip')),
-      findsNothing,
-    );
-    expect(find.byKey(const ValueKey('message_bubble_m1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('message_bubble_m2')), findsOneWidget);
   });
 }
 

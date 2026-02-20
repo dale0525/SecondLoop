@@ -74,30 +74,6 @@ extension _ChatPageStateBuild on _ChatPageState {
               ],
             ),
           ),
-          IconButton(
-            key: const ValueKey('chat_topic_thread_filter_button'),
-            tooltip: _topicThreadFilterTooltip(locale),
-            onPressed: () => unawaited(_openTopicThreadFilterSheet()),
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.forum_outlined),
-                if (_activeTopicThreadId != null)
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
           if (!isDesktopPlatform)
             IconButton(
               key: const ValueKey('chat_open_settings'),

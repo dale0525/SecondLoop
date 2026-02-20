@@ -14,7 +14,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('query scope matrix smoke: tag include/exclude + topic thread',
+  testWidgets('query scope matrix smoke: tag include/exclude + topic focus',
       (tester) async {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
 
@@ -68,12 +68,7 @@ void main() {
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('chat_topic_thread_filter_button')));
-    await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('topic_thread_filter_thread_focus')));
-    await tester.pumpAndSettle();
+    await _focusTopicFromMessage(tester, messageId: 'm2');
 
     expect(find.byKey(const ValueKey('message_bubble_m2')), findsOneWidget);
     expect(find.byKey(const ValueKey('message_bubble_m1')), findsNothing);
@@ -95,6 +90,17 @@ void main() {
     expect(find.byKey(const ValueKey('message_bubble_m2')), findsNothing);
     expect(find.byKey(const ValueKey('message_bubble_m3')), findsNothing);
   });
+}
+
+Future<void> _focusTopicFromMessage(
+  WidgetTester tester, {
+  required String messageId,
+}) async {
+  await tester.longPress(find.byKey(ValueKey('message_bubble_$messageId')));
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(const ValueKey('message_action_topic_thread')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpChatPage(
