@@ -66,6 +66,7 @@
       "title": "Needs confirmation",
       "banner": "$count items need confirmation",
       "empty": "No items to confirm",
+      "snoozedUntil": "Snoozed until $when",
       "inAppFallback": {
         "message": "$count items are waiting in your review queue",
         "open": "Open review queue",
@@ -73,7 +74,7 @@
       },
       "actions": {
         "schedule": "Schedule",
-        "snooze": "Snooze",
+        "snooze": "Tomorrow morning",
         "start": "Start",
         "done": "Done",
         "dismiss": "Dismiss"

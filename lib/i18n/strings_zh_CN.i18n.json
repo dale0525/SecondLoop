@@ -66,6 +66,7 @@
       "title": "待确认",
       "banner": "有 $count 条待确认事项",
       "empty": "没有需要确认的事项",
+      "snoozedUntil": "已延期到 $when",
       "inAppFallback": {
         "message": "有 $count 条事项正在等待你确认",
         "open": "打开待确认队列",
@@ -73,7 +74,7 @@
       },
       "actions": {
         "schedule": "安排时间",
-        "snooze": "稍后提醒",
+        "snooze": "明早提醒",
         "start": "开始",
         "done": "完成",
         "dismiss": "忽略"

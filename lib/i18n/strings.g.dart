@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1602 (801 per locale)
+/// Strings: 1604 (802 per locale)
 ///
-/// Built on 2026-02-19 at 10:22 UTC
+/// Built on 2026-02-20 at 02:51 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -690,6 +690,7 @@ class _StringsActionsReviewQueueEn {
   String get title => 'Needs confirmation';
   String banner({required Object count}) => '${count} items need confirmation';
   String get empty => 'No items to confirm';
+  String snoozedUntil({required Object when}) => 'Snoozed until ${when}';
   late final _StringsActionsReviewQueueInAppFallbackEn inAppFallback =
       _StringsActionsReviewQueueInAppFallbackEn._(_root);
   late final _StringsActionsReviewQueueActionsEn actions =
@@ -1883,7 +1884,7 @@ class _StringsActionsReviewQueueActionsEn {
 
   // Translations
   String get schedule => 'Schedule';
-  String get snooze => 'Snooze';
+  String get snooze => 'Tomorrow morning';
   String get start => 'Start';
   String get done => 'Done';
   String get dismiss => 'Dismiss';
@@ -4440,6 +4441,8 @@ class _StringsActionsReviewQueueZhCn extends _StringsActionsReviewQueueEn {
   @override
   String get empty => '没有需要确认的事项';
   @override
+  String snoozedUntil({required Object when}) => '已延期到 ${when}';
+  @override
   late final _StringsActionsReviewQueueInAppFallbackZhCn inAppFallback =
       _StringsActionsReviewQueueInAppFallbackZhCn._(_root);
   @override
@@ -6233,7 +6236,7 @@ class _StringsActionsReviewQueueActionsZhCn
   @override
   String get schedule => '安排时间';
   @override
-  String get snooze => '稍后提醒';
+  String get snooze => '明早提醒';
   @override
   String get start => '开始';
   @override
@@ -8936,6 +8939,8 @@ extension on Translations {
         return ({required Object count}) => '${count} items need confirmation';
       case 'actions.reviewQueue.empty':
         return 'No items to confirm';
+      case 'actions.reviewQueue.snoozedUntil':
+        return ({required Object when}) => 'Snoozed until ${when}';
       case 'actions.reviewQueue.inAppFallback.message':
         return ({required Object count}) =>
             '${count} items are waiting in your review queue';
@@ -8946,7 +8951,7 @@ extension on Translations {
       case 'actions.reviewQueue.actions.schedule':
         return 'Schedule';
       case 'actions.reviewQueue.actions.snooze':
-        return 'Snooze';
+        return 'Tomorrow morning';
       case 'actions.reviewQueue.actions.start':
         return 'Start';
       case 'actions.reviewQueue.actions.done':
@@ -10576,6 +10581,8 @@ extension on _StringsZhCn {
         return ({required Object count}) => '有 ${count} 条待确认事项';
       case 'actions.reviewQueue.empty':
         return '没有需要确认的事项';
+      case 'actions.reviewQueue.snoozedUntil':
+        return ({required Object when}) => '已延期到 ${when}';
       case 'actions.reviewQueue.inAppFallback.message':
         return ({required Object count}) => '有 ${count} 条事项正在等待你确认';
       case 'actions.reviewQueue.inAppFallback.open':
@@ -10585,7 +10592,7 @@ extension on _StringsZhCn {
       case 'actions.reviewQueue.actions.schedule':
         return '安排时间';
       case 'actions.reviewQueue.actions.snooze':
-        return '稍后提醒';
+        return '明早提醒';
       case 'actions.reviewQueue.actions.start':
         return '开始';
       case 'actions.reviewQueue.actions.done':

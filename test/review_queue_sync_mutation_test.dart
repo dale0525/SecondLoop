@@ -29,7 +29,7 @@ void main() {
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
           reviewStage: 0,
-          nextReviewAtMs: nowUtcMs + const Duration(hours: 1).inMilliseconds,
+          nextReviewAtMs: nowUtcMs - const Duration(hours: 1).inMilliseconds,
         ),
       ],
     );
@@ -81,7 +81,7 @@ void main() {
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
           reviewStage: 0,
-          nextReviewAtMs: nowUtcMs + const Duration(hours: 1).inMilliseconds,
+          nextReviewAtMs: nowUtcMs - const Duration(hours: 1).inMilliseconds,
         ),
       ],
     );
@@ -112,10 +112,15 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.snooze_rounded));
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsOneWidget);
+
     await tester.pumpAndSettle();
 
     expect(backend.upsertTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
+    expect(find.text('review this'), findsNothing);
   });
 }
 

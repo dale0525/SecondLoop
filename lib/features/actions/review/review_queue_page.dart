@@ -40,6 +40,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
     final settings = await ActionsSettingsStore.load();
 
     final nowLocal = DateTime.now();
+    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
     final todos = await backend.listTodos(sessionKey);
 
     var changed = false;
@@ -91,6 +92,7 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
         .where((t) =>
             t.reviewStage != null &&
             t.nextReviewAtMs != null &&
+            t.nextReviewAtMs! <= nowUtcMs &&
             t.status != _kTodoStatusDone &&
             t.status != _kTodoStatusDismissed &&
             t.dueAtMs == null)
@@ -160,8 +162,8 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final settings = await ActionsSettingsStore.load();
-    final nextLocal =
-        ReviewBackoff.initialNextReviewAt(DateTime.now(), settings);
+    final nowLocal = DateTime.now();
+    final nextLocal = ReviewBackoff.initialNextReviewAt(nowLocal, settings);
     await backend.upsertTodo(
       sessionKey,
       id: todo.id,
@@ -174,6 +176,22 @@ class _ReviewQueuePageState extends State<ReviewQueuePage> {
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
     );
     if (!mounted) return;
+    final localizations = MaterialLocalizations.of(context);
+    final scheduledText = '${localizations.formatShortDate(nextLocal)} '
+        '${localizations.formatTimeOfDay(
+      TimeOfDay.fromDateTime(nextLocal),
+      alwaysUse24HourFormat: MediaQuery.of(context).alwaysUse24HourFormat,
+    )}';
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text(
+            context.t.actions.reviewQueue.snoozedUntil(when: scheduledText),
+          ),
+        ),
+      );
     _notifyLocalMutation();
     await _refresh();
   }
