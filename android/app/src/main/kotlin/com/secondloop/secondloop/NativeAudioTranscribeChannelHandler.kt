@@ -132,8 +132,8 @@ class NativeAudioTranscribeChannelHandler {
           }
         }
       }
-    } catch (_: AudioDecodeException) {
-      throw
+    } catch (error: AudioDecodeException) {
+      throw error
     } catch (_: Throwable) {
       throw AudioDecodeException("audio_decode_failed")
     } finally {
