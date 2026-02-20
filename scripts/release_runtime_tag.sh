@@ -17,6 +17,7 @@ Options:
 
 Notes:
   - Requires current branch to be 'main' and up-to-date with <remote>/main.
+  - Pushing this tag triggers desktop + mobile runtime release assets.
   - Accepted input tag formats:
     - vX.Y.Z or vX.Y.Z.W (auto-prefixed to desktop-runtime-vX.Y.Z[.W])
     - desktop-runtime-vX.Y.Z or desktop-runtime-vX.Y.Z.W

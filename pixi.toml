@@ -37,7 +37,7 @@ bootstrap-shared-worktree-env = "bash scripts/bootstrap_shared_worktree_env.sh"
 
 # Release helpers (maintainers).
 # - release / release-app: auto-compute app tag with LLM and publish (triggers app release workflow)
-# - release-runtime: publish desktop runtime tag (triggers desktop runtime workflow)
+# - release-runtime: publish desktop runtime tag (triggers desktop + mobile runtime workflow)
 release = { cmd = "bash scripts/release_tag.sh", depends-on = ["bootstrap-shared-worktree-env"] }
 release-app = { cmd = "bash scripts/release_tag.sh", depends-on = ["bootstrap-shared-worktree-env"] }
 release-runtime = { cmd = "bash scripts/release_runtime_tag.sh", depends-on = ["bootstrap-shared-worktree-env"] }

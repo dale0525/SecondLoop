@@ -1,4 +1,4 @@
-name: Desktop Runtime Release
+name: Desktop + Mobile Runtime Release
 
 on:
   workflow_dispatch:
@@ -192,3 +192,59 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/runtime/*
+
+  build-mobile-runtime-tag:
+    if: startsWith(github.ref, 'refs/tags/desktop-runtime-v')
+    needs: build-runtime-tag
+    runs-on: ubuntu-latest
+    env:
+      MOBILE_RUNTIME_OUTPUT_DIR: dist/mobile-runtime
+      MOBILE_RUNTIME_WHISPER_MODELS: ${{ vars.MOBILE_RUNTIME_WHISPER_MODELS || 'tiny' }}
+      MOBILE_RUNTIME_WHISPER_BASE_URL: ${{ vars.MOBILE_RUNTIME_WHISPER_BASE_URL || 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare mobile runtime payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_mobile_runtime_payload.sh \
+            --output-dir "${MOBILE_RUNTIME_OUTPUT_DIR}" \
+            --whisper-models "${MOBILE_RUNTIME_WHISPER_MODELS}" \
+            --whisper-base-url "${MOBILE_RUNTIME_WHISPER_BASE_URL}"
+
+      - name: Build mobile runtime archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_version="${GITHUB_REF_NAME#desktop-runtime-}"
+          mkdir -p dist/runtime
+          archive_name="mobile-runtime-whisper-${runtime_version}.tar.gz"
+          tar -czf "dist/runtime/${archive_name}" -C "${MOBILE_RUNTIME_OUTPUT_DIR}" .
+          bash scripts/split_release_assets.sh \
+            --input-file "dist/runtime/${archive_name}" \
+            --output-dir dist/runtime
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            (
+              cd "${MOBILE_RUNTIME_OUTPUT_DIR}"
+              sha256sum whisper/*.bin
+            ) > "dist/runtime/mobile-runtime-whisper-models-${runtime_version}.sha256"
+          else
+            (
+              cd "${MOBILE_RUNTIME_OUTPUT_DIR}"
+              shasum -a 256 whisper/*.bin
+            ) > "dist/runtime/mobile-runtime-whisper-models-${runtime_version}.sha256"
+          fi
+
+      - name: Upload mobile runtime artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-runtime
+          path: dist/runtime/*
+
+      - name: Publish mobile runtime GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/runtime/*
+
