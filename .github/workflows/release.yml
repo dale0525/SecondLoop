@@ -131,8 +131,7 @@ jobs:
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
-          flutter build apk --release "${build_args[@]}" "${defines[@]}"
-          flutter build appbundle --release "${build_args[@]}" "${defines[@]}"
+          bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
         run: |
@@ -142,11 +141,10 @@ jobs:
             safe_ref_name="run-${GITHUB_RUN_ID}"
           fi
           cp build/app/outputs/flutter-apk/app-release.apk "dist/SecondLoop-android-${safe_ref_name}.apk"
-          cp build/app/outputs/bundle/release/app-release.aab "dist/SecondLoop-android-${safe_ref_name}.aab"
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: dist/*.a*
+          path: dist/*.apk
 
   windows:
     needs: preflight
@@ -607,7 +605,6 @@ jobs:
           body_path: dist/release-notes.md
           files: |
             dist/*.apk
-            dist/*.aab
             dist/*.dmg
             dist/*.dmg.sha256
             dist/*.msi
