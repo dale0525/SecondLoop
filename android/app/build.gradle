@@ -54,7 +54,16 @@ android {
     }
 
     sourceSets {
-        main.java.srcDirs += 'src/main/kotlin'
+        main {
+            java.srcDirs += 'src/main/kotlin'
+            jniLibs.srcDirs += ["${android.ndkDirectory}/sources/cxx-stl/llvm-libc++/libs"]
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            pickFirsts += ['**/libc++_shared.so']
+        }
     }
 
     defaultConfig {
