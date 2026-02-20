@@ -521,8 +521,11 @@ class MainActivity : FlutterFragmentActivity() {
       )
       val inputChannelCount = inputFormat.getIntegerOrDefault(MediaFormat.KEY_CHANNEL_COUNT, 2)
 
-      val targetSampleRate = maxOf(8000, if (sampleRateHz > 0) sampleRateHz else inputSampleRate)
-      val targetChannelCount = if (mono) 1 else maxOf(1, inputChannelCount)
+      // Keep encoder PCM shape aligned with decoder output.
+      // This pipeline does not perform PCM resample/remix before encoding, so forcing
+      // sample rate/channel changes here will stretch audio duration and corrupt transcript quality.
+      val targetSampleRate = inputSampleRate
+      val targetChannelCount = maxOf(1, inputChannelCount)
 
       decoder = MediaCodec.createDecoderByType(inputMime)
       decoder.configure(inputFormat, null, null, 0)
