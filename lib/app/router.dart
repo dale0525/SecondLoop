@@ -89,6 +89,7 @@ class _AppShellState extends State<AppShell> {
             : const _MainStreamTab(isActive: true);
 
         return Scaffold(
+          resizeToAvoidBottomInset: false,
           body: useCollapsedShell
               ? const SizedBox.shrink()
               : useRail
