@@ -103,11 +103,13 @@ extension _ChatPageStateBuild on _ChatPageState {
               key: const ValueKey('chat_open_settings'),
               tooltip: context.t.app.tabs.settings,
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => Scaffold(
-                      appBar: AppBar(title: Text(context.t.settings.title)),
-                      body: const SettingsPage(),
+                unawaited(
+                  _pushRouteFromChat(
+                    MaterialPageRoute(
+                      builder: (context) => Scaffold(
+                        appBar: AppBar(title: Text(context.t.settings.title)),
+                        body: const SettingsPage(),
+                      ),
                     ),
                   ),
                 );
@@ -133,7 +135,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                   previewTodos: summary.previewTodos,
                   collapseSignal: _todoAgendaBannerCollapseSignal,
                   onViewAll: () async {
-                    await Navigator.of(context).push(
+                    await _pushRouteFromChat(
                       MaterialPageRoute(
                         builder: (context) => const TodoAgendaPage(),
                       ),
@@ -152,7 +154,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                 return ReviewQueueBanner(
                   count: count,
                   onTap: () async {
-                    await Navigator.of(context).push(
+                    await _pushRouteFromChat(
                       MaterialPageRoute(
                         builder: (context) => const ReviewQueuePage(),
                       ),

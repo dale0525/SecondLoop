@@ -369,8 +369,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       }
     }
 
-    return showModalBottomSheet<_AudioRecordingSheetAction>(
-      context: context,
+    return _showModalBottomSheetFromChat<_AudioRecordingSheetAction>(
       showDragHandle: true,
       isDismissible: false,
       enableDrag: false,

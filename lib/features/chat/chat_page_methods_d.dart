@@ -186,8 +186,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
       return ranked;
     });
 
-    return showModalBottomSheet<String>(
-      context: context,
+    return _showModalBottomSheetFromChat<String>(
       builder: (context) {
         var query = '';
         return StatefulBuilder(
@@ -340,8 +339,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     required String defaultActionStatus,
     required bool allowAsyncRerank,
   }) async {
-    return showModalBottomSheet<String>(
-      context: context,
+    return _showModalBottomSheetFromChat<String>(
       builder: (sheetContext) {
         final statusLabel = _todoStatusLabel(sheetContext, defaultActionStatus);
         final subscriptionStatus =
@@ -561,8 +559,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     required String title,
     required LocalTimeResolution? timeResolution,
   }) async {
-    return showModalBottomSheet<DateTime>(
-      context: context,
+    return _showModalBottomSheetFromChat<DateTime>(
       showDragHandle: true,
       builder: (context) {
         return SafeArea(

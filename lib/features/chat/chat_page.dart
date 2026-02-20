@@ -108,6 +108,7 @@ part 'chat_page_methods_k_tags.dart';
 part 'chat_page_methods_l_ask_scope.dart';
 part 'chat_page_methods_m_ask_scope_empty_card.dart';
 part 'chat_page_methods_n_topic_threads.dart';
+part 'chat_page_methods_o_focus_routing.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
