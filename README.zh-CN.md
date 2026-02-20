@@ -21,13 +21,13 @@
 
 SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Second Brain”，帮你更快地 **捕获**、**记住**、并 **执行** —— 而不是让你管理一堆文件夹和标签页。
 
-它的核心心智模型是 **一条时间轴（Main Stream）** + 一个轻量的 **Focus 语境条**：需要时再收窄上下文，而不是频繁创建/切换会话。
+它的核心心智模型是 **一条时间轴（Main Stream）**：先记录，再在需要时提问。
 
 ## ⭐ 亮点
 
 - 🧠 **长期记忆，本地优先**：默认加密存储在你的设备上。
 - 🧲 **Ask AI 更贴合你的内容**：基于你的笔记与记录给出回答，并支持流式输出。
-- 🗂️ **Focus 代替会话管理**：按时间/标签收窄语境，不需要维护一堆聊天线程。
+- 🗂️ **需要时再筛选**：按标签快速收窄查看范围，不需要维护一堆聊天线程。
 - 📥 **随手收集**：移动端分享入口 + 桌面端全局快捷键，想到就记。
 - 🔐 **隐私优先**：加密 Vault，数据放哪里由你决定。
 - 🌍 **跨平台一致体验**：移动端和桌面端都可使用。
@@ -37,16 +37,16 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 | AI 功能 | 本地（设备侧） | BYOK（自带 API Key） | Pro 订阅（SecondLoop Cloud） | 说明 |
 | --- | --- | --- | --- | --- |
-| 图片注释 | ⚠️ OCR 回退能力 | ✅ OpenAI-compatible 多模态 | ✅ 托管云端多模态 | 本地模式会先提取可见文字，再基于 OCR 信号生成轻量描述。 |
-| OCR（图片/PDF/文档） | ✅ 原生 + 桌面 runtime OCR | ✅ BYOK 多模态 OCR | ✅ 云端 OCR（计入 Ask AI 用量） | 可在 AI 设置中按能力分别配置 OCR 来源。 |
-| 语音识别（音频转写） | ⚠️ 支持平台上的本地 runtime | ✅ BYOK Whisper/多模态 | ✅ 云端 Whisper 网关 | 本地回退是否可用取决于平台与 runtime 状态。 |
-| Embedding 索引 | ✅ 本地 embedding 索引 | ✅ BYOK embedding profile | ✅ 云端 embeddings | 后台会增量处理待索引内容。 |
-| Ask AI | ❌（CE 暂无完全离线 LLM 路由） | ✅ | ✅ | Ask AI 路由遵循你的来源偏好与当前可用性。 |
-| 语义识别（意图/时间窗） | ❌ | ✅ | ✅ | 自动动作与语义识别走 BYOK 或 Cloud 模型路由。 |
-| Embedding 搜索 | ✅ 本地向量检索 | ✅ BYOK embedding 检索 | ✅ 云端 embedding 检索 | 按配置可在不同路由间回退。 |
+| 图片注释 | ⚠️ 基础设备侧描述 | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 网络 AI 不可用时，仍可基于图片可见文字给出轻量描述。 |
+| OCR（图片/PDF/文档） | ✅ 设备侧文字识别 | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 适用于图片与支持的文档类型。 |
+| 语音识别（音频转写） | ⚠️ 支持设备可用 | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 离线时会优先使用本地可用的转写能力。 |
+| Embedding 索引 | ✅ 本地记忆索引 | ✅ 使用你自己的 embedding API | ✅ SecondLoop Cloud 内置 | 新内容会在后台持续建立索引。 |
+| Ask AI | ❌ | ✅ 使用你自己的对话模型 API | ✅ SecondLoop Cloud 内置 | 路由会按你的来源偏好和当前可用性自动选择。 |
+| 语义识别（意图/时间窗） | ❌ | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 用于智能理解与自动动作能力。 |
+| Embedding 搜索 | ✅ 本地语义检索 | ✅ 使用你自己的 embedding API | ✅ SecondLoop Cloud 内置 | 会在可用路由间自动回退。 |
 
 - `本地` 表示 iOS / Android / macOS / Windows / Linux 客户端内的设备侧处理。
-- `BYOK` 表示你在设置中配置自己的模型服务与 API Key。
+- `BYOK` 表示你在设置中连接自己的模型服务与 API Key。
 - `Pro` 表示账号具备 SecondLoop Pro 权益且已登录云端账号。
 - 本仓库仍在快速迭代中，正式发布前能力细节可能继续调整。
 
@@ -61,7 +61,7 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 ### 快速上手
 
 1) **创建 Vault（首次启动）**
-   你会设置主密码；本地数据会以加密方式落盘。
+   本地数据默认加密；首次需要锁定/解锁 Vault 时，会要求你输入主密码。
 
 2) **捕获（Send）**
    在聊天输入框随手记录想法/链接，或：
@@ -71,8 +71,6 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 3) **提问（Ask AI）**
    需要答案时再点 **Ask AI**：SecondLoop 会结合与你问题相关的记忆，只上传必要内容来获得回答。
 
-4) **用 Focus 控制语境**
-   切换 Focus（如“全部记忆 / 最近 7 天 / 工作”等）来控制 Ask AI 的检索范围。
 
 ### 隐私说明（哪些会上传）
 
