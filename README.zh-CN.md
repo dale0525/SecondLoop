@@ -32,6 +32,24 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 - 🔐 **隐私优先**：加密 Vault，数据放哪里由你决定。
 - 🌍 **跨平台一致体验**：移动端和桌面端都可使用。
 
+
+## 🤖 AI 功能能力矩阵（本地 / BYOK / Pro）
+
+| AI 功能 | 本地（设备侧） | BYOK（自带 API Key） | Pro 订阅（SecondLoop Cloud） | 说明 |
+| --- | --- | --- | --- | --- |
+| 图片注释 | ⚠️ OCR 回退能力 | ✅ OpenAI-compatible 多模态 | ✅ 托管云端多模态 | 本地模式会先提取可见文字，再基于 OCR 信号生成轻量描述。 |
+| OCR（图片/PDF/文档） | ✅ 原生 + 桌面 runtime OCR | ✅ BYOK 多模态 OCR | ✅ 云端 OCR（计入 Ask AI 用量） | 可在 AI 设置中按能力分别配置 OCR 来源。 |
+| 语音识别（音频转写） | ⚠️ 支持平台上的本地 runtime | ✅ BYOK Whisper/多模态 | ✅ 云端 Whisper 网关 | 本地回退是否可用取决于平台与 runtime 状态。 |
+| Embedding 索引 | ✅ 本地 embedding 索引 | ✅ BYOK embedding profile | ✅ 云端 embeddings | 后台会增量处理待索引内容。 |
+| Ask AI | ❌（CE 暂无完全离线 LLM 路由） | ✅ | ✅ | Ask AI 路由遵循你的来源偏好与当前可用性。 |
+| 语义识别（意图/时间窗） | ❌ | ✅ | ✅ | 自动动作与语义识别走 BYOK 或 Cloud 模型路由。 |
+| Embedding 搜索 | ✅ 本地向量检索 | ✅ BYOK embedding 检索 | ✅ 云端 embedding 检索 | 按配置可在不同路由间回退。 |
+
+- `本地` 表示 iOS / Android / macOS / Windows / Linux 客户端内的设备侧处理。
+- `BYOK` 表示你在设置中配置自己的模型服务与 API Key。
+- `Pro` 表示账号具备 SecondLoop Pro 权益且已登录云端账号。
+- 本仓库仍在快速迭代中，正式发布前能力细节可能继续调整。
+
 ## 🚀 用法
 
 ### 获取方式

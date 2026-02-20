@@ -32,6 +32,23 @@ The core mental model is **One Timeline** (a single “Main Stream”), plus a l
 - 🔐 **Privacy by design**: encrypted vault and clear control over where your data lives.
 - 🌍 **Cross-platform**: one app experience across mobile and desktop.
 
+## 🤖 AI Capability Matrix (Local / BYOK / Pro)
+
+| AI capability | Local (on-device) | BYOK (your API key) | Pro subscription (SecondLoop Cloud) | Notes |
+| --- | --- | --- | --- | --- |
+| Image annotation | ⚠️ OCR fallback | ✅ OpenAI-compatible multimodal | ✅ Managed cloud multimodal | Local mode extracts visible text first, then builds lightweight captions from OCR signals. |
+| OCR (image/PDF/doc) | ✅ Native + desktop runtime OCR | ✅ Multimodal OCR via BYOK profile | ✅ Cloud OCR (usage counted under Ask AI) | OCR source can be configured per capability in AI settings. |
+| Speech recognition (audio transcription) | ⚠️ Local runtime on supported native platforms | ✅ BYOK Whisper/multimodal | ✅ Cloud Whisper gateway | Local fallback availability depends on platform/runtime state. |
+| Embedding indexing | ✅ Local embedding index | ✅ BYOK embedding profile | ✅ Cloud embeddings | Pending items are indexed incrementally in the background. |
+| Ask AI | ❌ (no fully local LLM route in CE) | ✅ | ✅ | Ask AI routing follows your source preference and current availability. |
+| Semantic parsing (intent/time-window understanding) | ❌ | ✅ | ✅ | Auto-actions and intent parsing use BYOK or Cloud model routes. |
+| Embedding search | ✅ Local vector search | ✅ BYOK embedding query | ✅ Cloud embedding query | Search can fall back across routes when configured. |
+
+- `Local` means native on-device processing in iOS / Android / macOS / Windows / Linux clients.
+- `BYOK` means you configure your own model provider/API keys in settings.
+- `Pro` means an active SecondLoop Pro entitlement with signed-in cloud account.
+- This repository is still work in progress; capabilities may evolve before public launch.
+
 ## 🚀 Usage
 
 ### Availability
