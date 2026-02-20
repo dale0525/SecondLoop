@@ -189,6 +189,16 @@ pub fn list_message_suggested_tags(
         }
     }
 
+    if out.len() < MAX_SUGGESTED_TAGS_PER_MESSAGE {
+        let autofill = list_message_tag_autofill_suggested_tags(conn, message_id, 20)?;
+        for candidate in autofill {
+            push_unique_tag(&mut out, &mut seen, &candidate);
+            if out.len() >= MAX_SUGGESTED_TAGS_PER_MESSAGE {
+                break;
+            }
+        }
+    }
+
     out.truncate(MAX_SUGGESTED_TAGS_PER_MESSAGE);
     Ok(out)
 }

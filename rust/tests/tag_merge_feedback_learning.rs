@@ -34,8 +34,13 @@ fn tag_merge_feedback_adjusts_suggestion_scores() {
             &format!("canonical message {index}"),
         )
         .expect("insert canonical message");
-        db::set_message_tags(&conn, &key, &message.id, &[canonical.id.clone()])
-            .expect("set canonical tag");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &message.id,
+            std::slice::from_ref(&canonical.id),
+        )
+        .expect("set canonical tag");
     }
 
     let compact_message = db::insert_message(
@@ -50,7 +55,7 @@ fn tag_merge_feedback_adjusts_suggestion_scores() {
         &conn,
         &key,
         &compact_message.id,
-        &[alias_compact.id.clone()],
+        std::slice::from_ref(&alias_compact.id),
     )
     .expect("set compact alias tag");
 
@@ -66,7 +71,7 @@ fn tag_merge_feedback_adjusts_suggestion_scores() {
         &conn,
         &key,
         &contains_message.id,
-        &[alias_contains.id.clone()],
+        std::slice::from_ref(&alias_contains.id),
     )
     .expect("set contains alias tag");
 

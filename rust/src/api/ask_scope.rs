@@ -618,14 +618,16 @@ mod tests {
             .expect("set thread messages");
 
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m1.id, &[work.id.clone()]).expect("set m1 tags");
-        db::set_message_tags(&conn, &key, &m2.id, &[work.id.clone()]).expect("set m2 tags");
+        db::set_message_tags(&conn, &key, &m1.id, std::slice::from_ref(&work.id))
+            .expect("set m1 tags");
+        db::set_message_tags(&conn, &key, &m2.id, std::slice::from_ref(&work.id))
+            .expect("set m2 tags");
 
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
             &conversation.id,
-            &[work.id.clone()],
+            std::slice::from_ref(&work.id),
             &[],
             10,
             None,
@@ -677,16 +679,21 @@ mod tests {
         .expect("set in_window_other time");
 
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &old_work.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &old_work.id, std::slice::from_ref(&work.id))
             .expect("set old_work tags");
-        db::set_message_tags(&conn, &key, &in_window_work.id, &[work.id.clone()])
-            .expect("set in_window_work tags");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &in_window_work.id,
+            std::slice::from_ref(&work.id),
+        )
+        .expect("set in_window_work tags");
 
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
             &conversation.id,
-            &[work.id.clone()],
+            std::slice::from_ref(&work.id),
             &[],
             10,
             Some(TimeScope {
@@ -825,18 +832,23 @@ mod tests {
         .expect("set topic thread messages");
 
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m_match.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &m_match.id, std::slice::from_ref(&work.id))
             .expect("set m_match tags");
-        db::set_message_tags(&conn, &key, &m_out_time.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &m_out_time.id, std::slice::from_ref(&work.id))
             .expect("set m_out_time tags");
-        db::set_message_tags(&conn, &key, &m_out_thread.id, &[work.id.clone()])
-            .expect("set m_out_thread tags");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &m_out_thread.id,
+            std::slice::from_ref(&work.id),
+        )
+        .expect("set m_out_thread tags");
 
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
             &conversation.id,
-            &[work.id.clone()],
+            std::slice::from_ref(&work.id),
             &[],
             10,
             Some(TimeScope {
@@ -896,18 +908,23 @@ mod tests {
 
         let thread = db::create_topic_thread(&conn, &key, &conversation.id, Some("weekly"))
             .expect("create thread");
-        db::set_topic_thread_message_ids(&conn, &key, &thread.id, &[m_thread_only.id.clone()])
-            .expect("set topic thread messages");
+        db::set_topic_thread_message_ids(
+            &conn,
+            &key,
+            &thread.id,
+            std::slice::from_ref(&m_thread_only.id),
+        )
+        .expect("set topic thread messages");
 
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m_tag_only.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &m_tag_only.id, std::slice::from_ref(&work.id))
             .expect("set m_tag_only tags");
 
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
             &conversation.id,
-            &[work.id.clone()],
+            std::slice::from_ref(&work.id),
             &[],
             10,
             Some(TimeScope {
@@ -943,16 +960,16 @@ mod tests {
                 .expect("insert side_work");
 
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &main_work.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &main_work.id, std::slice::from_ref(&work.id))
             .expect("set main_work tags");
-        db::set_message_tags(&conn, &key, &side_work.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &side_work.id, std::slice::from_ref(&work.id))
             .expect("set side_work tags");
 
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
             &conversation_main.id,
-            &[work.id.clone()],
+            std::slice::from_ref(&work.id),
             &[],
             10,
             None,
@@ -988,14 +1005,15 @@ mod tests {
                 .expect("insert m_personal");
 
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m_work.id, &[work.id.clone()]).expect("set m_work tags");
+        db::set_message_tags(&conn, &key, &m_work.id, std::slice::from_ref(&work.id))
+            .expect("set m_work tags");
 
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
             &conversation.id,
             &[],
-            &[work.id.clone()],
+            std::slice::from_ref(&work.id),
             10,
             None,
             None,
@@ -1028,7 +1046,7 @@ mod tests {
         let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
         let social = db::upsert_tag(&conn, &key, "social").expect("upsert social tag");
 
-        db::set_message_tags(&conn, &key, &m_work_only.id, &[work.id.clone()])
+        db::set_message_tags(&conn, &key, &m_work_only.id, std::slice::from_ref(&work.id))
             .expect("set m_work_only tags");
         db::set_message_tags(
             &conn,
@@ -1042,8 +1060,8 @@ mod tests {
             &conn,
             &key,
             &conversation.id,
-            &[work.id.clone()],
-            &[social.id.clone()],
+            std::slice::from_ref(&work.id),
+            std::slice::from_ref(&social.id),
             10,
             None,
             None,

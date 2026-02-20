@@ -18,8 +18,13 @@ fn tag_merge_suggestion_can_be_applied_to_reassign_messages() {
     let primary = db::upsert_tag(&conn, &key, "Weekly Review").expect("upsert primary");
     let alias = db::upsert_tag(&conn, &key, "weekly-review").expect("upsert alias");
 
-    db::set_message_tags(&conn, &key, &message_a.id, &[primary.id.clone()])
-        .expect("set message_a tags");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &message_a.id,
+        std::slice::from_ref(&primary.id),
+    )
+    .expect("set message_a tags");
     db::set_message_tags(
         &conn,
         &key,
@@ -74,8 +79,13 @@ fn merge_tags_rejects_system_source_tag() {
     assert!(system_work.is_system);
     let custom = db::upsert_tag(&conn, &key, "Project Alpha").expect("upsert custom");
 
-    db::set_message_tags(&conn, &key, &message.id, &[system_work.id.clone()])
-        .expect("set message tags");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &message.id,
+        std::slice::from_ref(&system_work.id),
+    )
+    .expect("set message tags");
 
     let err = db::merge_tags(&conn, &key, &system_work.id, &custom.id)
         .expect_err("system source should be rejected");

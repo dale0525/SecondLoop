@@ -201,6 +201,10 @@ fn insert_message_with_is_memory(
     });
     insert_oplog(conn, key, &op)?;
 
+    if role == "user" {
+        run_message_tag_autofill_for_message(conn, key, &id, "message_insert", now)?;
+    }
+
     Ok(Message {
         id,
         conversation_id: conversation_id.to_string(),

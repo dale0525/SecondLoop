@@ -39,9 +39,12 @@ fn tags_roundtrip_and_sync_between_devices() {
     .expect("set message tags");
     assert_eq!(applied.len(), 2);
 
-    let matched_ids =
-        db::list_message_ids_by_tag_ids(&conn_a, &conversation.id, &[work_tag.id.clone()])
-            .expect("list ids by tag");
+    let matched_ids = db::list_message_ids_by_tag_ids(
+        &conn_a,
+        &conversation.id,
+        std::slice::from_ref(&work_tag.id),
+    )
+    .expect("list ids by tag");
     assert_eq!(matched_ids, vec![message.id.clone()]);
 
     let attachment = db::insert_attachment(&conn_a, &key_a, &app_dir_a, b"abc", "image/png")
@@ -113,7 +116,13 @@ fn merged_custom_tag_is_deleted_and_synced() {
     let canonical = db::upsert_tag(&conn_a, &key_a, "Weekly Review").expect("upsert canonical");
     let alias = db::upsert_tag(&conn_a, &key_a, "weekly-review").expect("upsert alias");
 
-    db::set_message_tags(&conn_a, &key_a, &message.id, &[alias.id.clone()]).expect("set alias tag");
+    db::set_message_tags(
+        &conn_a,
+        &key_a,
+        &message.id,
+        std::slice::from_ref(&alias.id),
+    )
+    .expect("set alias tag");
 
     let updated = db::merge_tags(&conn_a, &key_a, &alias.id, &canonical.id).expect("merge tags");
     assert_eq!(updated, 1);

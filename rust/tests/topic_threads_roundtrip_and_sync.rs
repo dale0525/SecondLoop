@@ -98,8 +98,13 @@ fn topic_thread_rename_and_delete_sync_between_devices() {
 
     let thread = db::create_topic_thread(&conn_a, &key_a, &conversation.id, Some("Initial"))
         .expect("create thread");
-    db::set_topic_thread_message_ids(&conn_a, &key_a, &thread.id, &[message.id.clone()])
-        .expect("set ids");
+    db::set_topic_thread_message_ids(
+        &conn_a,
+        &key_a,
+        &thread.id,
+        std::slice::from_ref(&message.id),
+    )
+    .expect("set ids");
 
     let renamed = db::update_topic_thread_title(&conn_a, &key_a, &thread.id, Some("Renamed title"))
         .expect("rename thread");
