@@ -8,6 +8,8 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIXI_TOML = REPO_ROOT / "pixi.toml"
 ANDROID_RUN_SCRIPT = REPO_ROOT / "scripts/run_android_with_auto_emulator.sh"
+RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
+SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -60,6 +62,37 @@ class PixiAndroidTasksTests(unittest.TestCase):
 
         self.assertIn("first_android_device_serial", script)
         self.assertIn('run -d "$device_serial"', script)
+
+    def test_run_with_android_env_unsets_host_toolchain_vars(self) -> None:
+        script = RUN_WITH_ANDROID_ENV_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("for polluted_var in", script)
+        self.assertIn("CMAKE_ARGS", script)
+        self.assertIn("SDKROOT", script)
+        self.assertIn('unset "$polluted_var"', script)
+
+    def test_run_with_android_env_exports_ndk_toolchain_for_cmake(self) -> None:
+        script = RUN_WITH_ANDROID_ENV_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("ANDROID_NDK_ROOT", script)
+        self.assertIn("CMAKE_TOOLCHAIN_FILE", script)
+        self.assertIn("android.toolchain.cmake", script)
+        self.assertIn("CMAKE_GENERATOR", script)
+        self.assertIn("Ninja", script)
+
+    def test_setup_rustup_prefetches_android_cargo_dependencies(self) -> None:
+        script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('cargo fetch --manifest-path "$ROOT_DIR/rust/Cargo.toml"', script)
+        self.assertIn('--target armv7-linux-androideabi', script)
+        self.assertIn('--target aarch64-linux-android', script)
+
+    def test_setup_rustup_patches_whisper_rs_sys_cross_compile_link_logic(self) -> None:
+        script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('whisper-rs-sys-0.14.1/build.rs', script)
+        self.assertIn('target.contains("apple-darwin")', script)
+        self.assertIn('cfg!(feature = "openblas")', script)
 
 
 if __name__ == "__main__":

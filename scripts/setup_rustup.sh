@@ -2,11 +2,102 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WHISPER_PATCH_APPLIED=0
 
 resolve_rust_toolchain() {
   local toolchain_file="$ROOT_DIR/rust-toolchain.toml"
   if [[ -f "$toolchain_file" ]]; then
     awk -F'"' '/^channel[[:space:]]*=/ {print $2; exit}' "$toolchain_file"
+  fi
+}
+
+prefetch_android_cargo_dependencies() {
+  local toolchain="$1"
+
+  if ! rustup run "$toolchain" cargo fetch --manifest-path "$ROOT_DIR/rust/Cargo.toml" \
+    --target aarch64-linux-android \
+    --target armv7-linux-androideabi \
+    --target i686-linux-android \
+    --target x86_64-linux-android >/dev/null 2>&1
+  then
+    echo "setup-rustup: warning: cargo fetch failed; continuing without prefetch" >&2
+  fi
+}
+
+patch_whisper_rs_sys_build_script() {
+  local registry_root="$CARGO_HOME/registry/src"
+  if [[ ! -d "$registry_root" ]]; then
+    return 0
+  fi
+
+  local build_rs_files=()
+  while IFS= read -r -d '' file; do
+    build_rs_files+=("$file")
+  done < <(find "$registry_root" -type f -path '*/whisper-rs-sys-0.14.1/build.rs' -print0 2>/dev/null)
+
+  if [[ ${#build_rs_files[@]} -eq 0 ]]; then
+    echo "setup-rustup: whisper-rs-sys-0.14.1/build.rs not found in cargo registry" >&2
+    return 0
+  fi
+
+  local build_rs
+  local patched_count=0
+  local already_count=0
+  for build_rs in "${build_rs_files[@]}"; do
+    local patch_state
+    patch_state="$(python3 - "$build_rs" <<'PY_PATCH_WHISPER_RS_SYS'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding='utf-8')
+needle = 'if cfg!(target_os = "macos") || cfg!(feature = "openblas") {'
+replacement = 'if target.contains("apple-darwin") || cfg!(feature = "openblas") {'
+
+if replacement in text:
+    print('already')
+elif needle in text:
+    path.write_text(text.replace(needle, replacement, 1), encoding='utf-8')
+    print('patched')
+else:
+    print('unexpected')
+PY_PATCH_WHISPER_RS_SYS
+)"
+
+    case "$patch_state" in
+      patched)
+        patched_count=$((patched_count + 1))
+        WHISPER_PATCH_APPLIED=1
+        echo "setup-rustup: patched whisper-rs-sys for Android cross-compile (${build_rs})"
+        ;;
+      already)
+        already_count=$((already_count + 1))
+        ;;
+      *)
+        echo "setup-rustup: warning: unexpected whisper-rs-sys build.rs content (${build_rs})" >&2
+        ;;
+    esac
+  done
+
+  if [[ "$patched_count" -eq 0 && "$already_count" -gt 0 ]]; then
+    echo "setup-rustup: whisper-rs-sys patch already applied"
+  fi
+}
+
+purge_stale_whisper_rs_sys_build_cache() {
+  local build_root="$ROOT_DIR/build/secondloop_rust/build"
+  if [[ ! -d "$build_root" ]]; then
+    return 0
+  fi
+
+  local removed=0
+  while IFS= read -r -d '' cache_dir; do
+    rm -rf "$cache_dir"
+    removed=$((removed + 1))
+  done < <(find "$build_root" -type d -name 'whisper-rs-sys-*' -print0 2>/dev/null)
+
+  if [[ "$removed" -gt 0 ]]; then
+    echo "setup-rustup: cleared stale whisper-rs-sys build cache entries: ${removed}"
   fi
 }
 
@@ -89,5 +180,11 @@ rustup target add --toolchain "$rust_toolchain" \
   armv7-linux-androideabi \
   i686-linux-android \
   x86_64-linux-android
+
+prefetch_android_cargo_dependencies "$rust_toolchain"
+patch_whisper_rs_sys_build_script
+if [[ "$WHISPER_PATCH_APPLIED" -eq 1 ]]; then
+  purge_stale_whisper_rs_sys_build_cache
+fi
 
 echo "rustup ready: $(command -v rustup)"
