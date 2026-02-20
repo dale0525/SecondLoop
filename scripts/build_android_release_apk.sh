@@ -11,6 +11,12 @@ assets_to_prune=(
   "assets/bin/ffmpeg/windows"
 )
 
+placeholder_files=(
+  "assets/icon/tray_icon.png"
+)
+
+placeholder_png_base64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ioAAAAASUVORK5CYII='
+
 moved_paths=()
 
 restore_assets() {
@@ -59,6 +65,24 @@ for relative_path in "${assets_to_prune[@]}"; do
 
   moved_paths+=("${relative_path}")
   echo "android-release-apk: pruned ${relative_path}"
+done
+
+for relative_path in "${placeholder_files[@]}"; do
+  source_path="${repo_root}/${relative_path}"
+  backup_path="${backup_root}/${relative_path}"
+
+  if [[ ! -e "${source_path}" && ! -L "${source_path}" ]]; then
+    continue
+  fi
+
+  mkdir -p "$(dirname "${backup_path}")"
+  mv "${source_path}" "${backup_path}"
+
+  mkdir -p "$(dirname "${source_path}")"
+  printf '%s' "${placeholder_png_base64}" | base64 --decode > "${source_path}"
+
+  moved_paths+=("${relative_path}")
+  echo "android-release-apk: replaced ${relative_path} with tiny placeholder"
 done
 
 bash "${repo_root}/scripts/flutter_with_defines.sh" \
