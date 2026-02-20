@@ -450,20 +450,24 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     AudioTranscribeLocalRuntimeAudioDecode? decodeAudioToWav,
     AudioTranscribeLocalRuntimeRequest? requestLocalRuntimeTranscribe,
     AudioTranscribeLocalWhisperRequest? requestLocalWhisperTranscribe,
-  }) : _requestLocalRuntimeTranscribe = requestLocalRuntimeTranscribe ??
+    AudioTranscribeNativeSttRequest? requestNativeSttTranscribe,
+  })  : _requestLocalRuntimeTranscribe = requestLocalRuntimeTranscribe ??
             _buildDefaultLocalRuntimeRequest(
               whisperModel: whisperModel,
               decodeAudioToWav:
                   decodeAudioToWav ?? _decodeAudioToWavForLocalRuntimeDefault,
               requestLocalWhisperTranscribe: requestLocalWhisperTranscribe ??
                   rust_audio_transcribe.audioTranscribeLocalWhisper,
-            );
+            ),
+        _requestNativeSttTranscribe = requestNativeSttTranscribe ??
+            NativeSttAudioTranscribeClient._requestNativeSttDefault;
 
   @override
   final String modelName;
   final String whisperModel;
   final Future<String> Function() appDirProvider;
   final AudioTranscribeLocalRuntimeRequest _requestLocalRuntimeTranscribe;
+  final AudioTranscribeNativeSttRequest _requestNativeSttTranscribe;
 
   @override
   String get engineName => 'local_runtime';
@@ -479,12 +483,25 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     }
 
     final appDir = await appDirProvider();
-    final raw = await _requestLocalRuntimeTranscribe(
-      appDir: appDir,
-      lang: lang,
-      mimeType: mimeType,
-      audioBytes: audioBytes,
-    );
+    late final String raw;
+    try {
+      raw = await _requestLocalRuntimeTranscribe(
+        appDir: appDir,
+        lang: lang,
+        mimeType: mimeType,
+        audioBytes: audioBytes,
+      );
+    } catch (error) {
+      if (_shouldFallbackToNativeStt(error)) {
+        raw = await _requestNativeSttTranscribe(
+          lang: lang,
+          mimeType: mimeType,
+          audioBytes: audioBytes,
+        );
+      } else {
+        rethrow;
+      }
+    }
 
     final map = _decodeAudioTranscribeResponseMap(raw);
     final transcript = extractAudioTranscriptText(map);
@@ -497,6 +514,20 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
       transcriptFull: transcript,
       segments: segments,
     );
+  }
+
+  bool _shouldFallbackToNativeStt(Object error) {
+    if (kIsWeb) return false;
+    final isMobileRuntime = defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        Platform.isAndroid ||
+        Platform.isIOS;
+    if (!isMobileRuntime) return false;
+
+    final detail = error.toString().trim().toLowerCase();
+    if (detail.isEmpty) return false;
+    if (!detail.contains('audio_transcribe_local_runtime')) return false;
+    return detail.contains('unsupported_platform');
   }
 
   static AudioTranscribeLocalRuntimeRequest _buildDefaultLocalRuntimeRequest({

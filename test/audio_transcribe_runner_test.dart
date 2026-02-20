@@ -385,6 +385,56 @@ void main() {
     expect(result.segments.last.tMs, 700);
   });
 
+  test('local runtime client falls back to native stt on android', () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    var nativeSttCalls = 0;
+    final client = LocalRuntimeAudioTranscribeClient(
+      modelName: 'runtime-whisper-base',
+      appDirProvider: () async => '/tmp/secondloop-test',
+      decodeAudioToWav: ({
+        required mimeType,
+        required audioBytes,
+      }) async {
+        return Uint8List.fromList(const <int>[1, 2, 3]);
+      },
+      requestLocalWhisperTranscribe: ({
+        required appDir,
+        required modelName,
+        required lang,
+        required wavBytes,
+      }) async {
+        throw StateError(
+          'AnyhowException(audio_transcribe_local_runtime_unsupported_platform)',
+        );
+      },
+      requestNativeSttTranscribe: ({
+        required lang,
+        required mimeType,
+        required audioBytes,
+      }) async {
+        nativeSttCalls += 1;
+        expect(lang, 'zh');
+        expect(mimeType, 'audio/mp4');
+        expect(audioBytes, isNotEmpty);
+        return jsonEncode(<String, Object?>{'text': 'fallback native stt'});
+      },
+    );
+
+    final response = await client.transcribe(
+      lang: 'zh',
+      mimeType: 'audio/mp4',
+      audioBytes: Uint8List.fromList(const <int>[0x00, 0x00, 0x00, 0x18]),
+    );
+
+    expect(nativeSttCalls, 1);
+    expect(response.transcriptFull, 'fallback native stt');
+  });
+
   test('fallback client can recover from local runtime with native stt',
       () async {
     final local = LocalRuntimeAudioTranscribeClient(
@@ -543,6 +593,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 1);
+    expect(result.failed, 0);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(client.lastMimeType, 'audio/mpeg');
 
@@ -584,6 +636,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 0);
+    expect(result.didMutateAny, isFalse);
     expect(client.calls, 0);
     expect(store.okPayloadBySha, isEmpty);
     expect(store.failedBySha, isEmpty);
@@ -614,6 +668,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 1);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(store.failedBySha['c1'], contains('transcribe_failed'));
     expect(store.failedAttemptsBySha['c1'], 2);
@@ -649,6 +705,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 1);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(
       store.failedNextRetryBySha['d1'],
@@ -690,6 +748,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 1);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(
       store.failedNextRetryBySha['d2'],

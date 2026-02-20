@@ -95,10 +95,13 @@ abstract class AudioTranscribeClient {
 final class AudioTranscribeRunResult {
   const AudioTranscribeRunResult({
     required this.processed,
+    this.failed = 0,
   });
 
   final int processed;
+  final int failed;
   bool get didEnrichAny => processed > 0;
+  bool get didMutateAny => processed > 0 || failed > 0;
 }
 
 typedef AudioTranscribeNowMs = int Function();
@@ -290,9 +293,15 @@ final class AudioTranscribeRunner {
   Future<AudioTranscribeRunResult> runOnce({int limit = 5}) async {
     final nowMs = _nowMs();
     final due = await store.listDueJobs(nowMs: nowMs, limit: limit);
-    if (due.isEmpty) return const AudioTranscribeRunResult(processed: 0);
+    if (due.isEmpty) {
+      return const AudioTranscribeRunResult(
+        processed: 0,
+        failed: 0,
+      );
+    }
 
     var processed = 0;
+    var failed = 0;
     for (final job in due) {
       if (job.status == 'ok') continue;
       try {
@@ -335,10 +344,14 @@ final class AudioTranscribeRunner {
           nextRetryAtMs: nextRetryAtMs,
           nowMs: nowMs,
         );
+        failed += 1;
       }
     }
 
-    return AudioTranscribeRunResult(processed: processed);
+    return AudioTranscribeRunResult(
+      processed: processed,
+      failed: failed,
+    );
   }
 
   static int _backoffMs(int attempts) {
