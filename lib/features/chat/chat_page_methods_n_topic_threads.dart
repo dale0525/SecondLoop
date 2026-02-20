@@ -119,8 +119,7 @@ extension _ChatPageStateMethodsNTopicThreads on _ChatPageState {
     );
     if (!mounted) return;
 
-    final selected = await showModalBottomSheet<String>(
-      context: context,
+    final selected = await _showModalBottomSheetFromChat<String>(
       builder: (context) {
         final createLabel = _topicThreadCreateLabel(locale);
         final clearLabel = _topicThreadClearFilterLabel(locale);
@@ -275,8 +274,7 @@ extension _ChatPageStateMethodsNTopicThreads on _ChatPageState {
     final locale = Localizations.localeOf(context);
     var draftTitle = initialTitle?.trim() ?? '';
 
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await _showDialogFromChat<bool>(
       builder: (context) {
         final fieldLabel = _topicThreadTitleFieldLabel(locale);
         return AlertDialog(
@@ -360,8 +358,7 @@ extension _ChatPageStateMethodsNTopicThreads on _ChatPageState {
     final body = _topicThreadDeleteDialogBody(locale);
     final confirmLabel = _topicThreadDeleteConfirmLabel(locale);
 
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await _showDialogFromChat<bool>(
       builder: (context) {
         return AlertDialog(
           title: Text(title),
@@ -478,8 +475,7 @@ extension _ChatPageStateMethodsNTopicThreads on _ChatPageState {
     }
     if (!mounted) return;
 
-    final selected = await showModalBottomSheet<String>(
-      context: context,
+    final selected = await _showModalBottomSheetFromChat<String>(
       builder: (context) {
         final createLabel = _topicThreadCreateLabel(locale);
         final addLabel = _topicThreadAddMessageLabel(locale);

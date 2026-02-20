@@ -11,8 +11,7 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
       String initialText,
     ) {
       var draft = initialText;
-      return showDialog<({String content, bool openMarkdown})>(
-        context: context,
+      return _showDialogFromChat<({String content, bool openMarkdown})>(
         builder: (dialogContext) => AlertDialog(
           title: Text(context.t.chat.editMessageTitle),
           content: SizedBox(

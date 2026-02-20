@@ -637,8 +637,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       return;
     }
 
-    await showModalBottomSheet<void>(
-      context: context,
+    await _showModalBottomSheetFromChat<void>(
       showDragHandle: true,
       builder: (sheetContext) {
         return SafeArea(

@@ -180,6 +180,7 @@ class _AttachmentAnnotationJobStatusRowState
         .languageCode
         .toLowerCase()
         .startsWith('zh');
+    FocusManager.instance.primaryFocus?.unfocus();
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {

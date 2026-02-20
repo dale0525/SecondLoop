@@ -572,8 +572,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     if (!mounted) return false;
 
     var dontShowAgain = false;
-    final approved = await showDialog<bool>(
-      context: context,
+    final approved = await _showDialogFromChat<bool>(
       builder: (context) {
         final t = context.t;
         return StatefulBuilder(
@@ -638,8 +637,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     if (!mounted) return false;
 
     var dontShowAgain = true;
-    final approved = await showDialog<bool>(
-      context: context,
+    final approved = await _showDialogFromChat<bool>(
       builder: (context) {
         final t = context.t;
         return StatefulBuilder(

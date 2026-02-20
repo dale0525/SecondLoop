@@ -6,53 +6,6 @@ final RegExp _kCloudDetachedRequestIdPattern = RegExp(
 );
 
 extension _ChatPageStateMethodsA on _ChatPageState {
-  bool _isTransientPendingMessage(Message message) =>
-      message.id.startsWith('pending_') && message.id != _kFailedAskMessageId;
-
-  void _unfocusBeforeRoutePush() {
-    if (_isDesktopPlatform) return;
-    _inputFocusNode.unfocus();
-    FocusScope.of(context).unfocus();
-    FocusManager.instance.primaryFocus?.unfocus();
-  }
-
-  Future<T?> _pushRouteFromChat<T>(Route<T> route) {
-    _unfocusBeforeRoutePush();
-    return Navigator.of(context).push(route);
-  }
-
-  Future<void> _loadEmbeddingsDataConsentPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) return;
-
-    final value = prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
-    if (!mounted) return;
-    _setState(() => _cloudEmbeddingsConsented = value);
-  }
-
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    final atBottom = position.pixels <= _kBottomThresholdPx;
-    final shouldRefreshOnReturnToBottom =
-        atBottom && !_isAtBottom && _hasUnseenNewMessages;
-    if (atBottom != _isAtBottom) {
-      _setState(() {
-        _isAtBottom = atBottom;
-        if (atBottom) _hasUnseenNewMessages = false;
-      });
-      if (shouldRefreshOnReturnToBottom) {
-        _refresh();
-      }
-    }
-
-    if (!_usePagination) return;
-
-    final remaining = position.maxScrollExtent - position.pixels;
-    if (remaining > _kLoadMoreThresholdPx) return;
-    unawaited(_loadOlderMessages());
-  }
-
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
     if (identical(engine, _syncEngine)) return;
@@ -90,8 +43,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (_isTransientPendingMessage(message)) return;
     final isFailedAskMessage = message.id == _kFailedAskMessageId;
     if (isFailedAskMessage) {
-      final action = await showModalBottomSheet<_MessageAction>(
-        context: context,
+      final action = await _showModalBottomSheetFromChat<_MessageAction>(
         builder: (context) {
           final tokens = SlTokens.of(context);
           final colorScheme = Theme.of(context).colorScheme;
@@ -132,8 +84,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return value;
     });
 
-    final action = await showModalBottomSheet<_MessageAction>(
-      context: context,
+    final action = await _showModalBottomSheetFromChat<_MessageAction>(
       isScrollControlled: true,
       builder: (context) {
         final tokens = SlTokens.of(context);
@@ -405,7 +356,9 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         selection: TextSelection.collapsed(offset: updatedText.length),
         composing: TextRange.empty,
       );
-      _inputFocusNode.requestFocus();
+      if (_isDesktopPlatform) {
+        _inputFocusNode.requestFocus();
+      }
       return;
     }
 
@@ -426,8 +379,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (isFailedAskMessage) {
       final overlay =
           Overlay.of(context).context.findRenderObject() as RenderBox;
-      final action = await showMenu<_MessageAction>(
-        context: context,
+      final action = await _showMenuFromChat<_MessageAction>(
         position: RelativeRect.fromRect(
           Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
           Offset.zero & overlay.size,
@@ -454,8 +406,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (!mounted) return;
 
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final action = await showMenu<_MessageAction>(
-      context: context,
+    final action = await _showMenuFromChat<_MessageAction>(
       position: RelativeRect.fromRect(
         Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
         Offset.zero & overlay.size,
@@ -715,8 +666,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (linkedTodo.sourceEntryId != message.id) return;
     if (!mounted) return;
 
-    final shouldConvert = await showDialog<bool>(
-      context: context,
+    final shouldConvert = await _showDialogFromChat<bool>(
       builder: (context) {
         return AlertDialog(
           title:

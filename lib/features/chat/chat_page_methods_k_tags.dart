@@ -10,6 +10,7 @@ extension _ChatPageStateMethodsKTags on _ChatPageState {
   }
 
   Future<void> _openTagFilterSheet() async {
+    _unfocusBeforeRoutePush();
     final sessionKey = SessionScope.of(context).sessionKey;
     final selection = await showTagFilterSheetWithModes(
       context: context,
@@ -50,6 +51,7 @@ extension _ChatPageStateMethodsKTags on _ChatPageState {
   }
 
   Future<void> _openMessageTagPicker(Message message) async {
+    _unfocusBeforeRoutePush();
     final sessionKey = SessionScope.of(context).sessionKey;
     final changed = await showMessageTagPicker(
       context: context,
