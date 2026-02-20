@@ -32,6 +32,7 @@ import java.io.FileOutputStream
 import kotlin.math.abs
 
 private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
+private const val kPendingSharesChangedMethod = "pendingSharesChanged"
 
 class MainActivity : FlutterFragmentActivity() {
   private val pendingShares = mutableListOf<Map<String, String>>()
@@ -229,10 +230,19 @@ class MainActivity : FlutterFragmentActivity() {
       payload["filename"] = filename
     }
     pendingShares.add(payload)
+    notifyPendingSharesChanged()
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_TYPE)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_CONTENT)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_MIME_TYPE)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_FILENAME)
+  }
+
+  private fun notifyPendingSharesChanged() {
+    try {
+      shareChannel?.invokeMethod(kPendingSharesChangedMethod, null)
+    } catch (_: Throwable) {
+      // ignore
+    }
   }
 
   private fun fetchAndReturnLocation(result: MethodChannel.Result) {
