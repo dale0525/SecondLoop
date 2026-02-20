@@ -29,26 +29,23 @@ import java.util.Locale
 import java.util.TimeZone
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.abs
+
+private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
 
 class MainActivity : FlutterFragmentActivity() {
-  private data class PendingNativeSttRequest(
-    val arguments: Any?,
-    val result: MethodChannel.Result,
-  )
-
   private val pendingShares = mutableListOf<Map<String, String>>()
   private var shareChannel: MethodChannel? = null
   private var exifChannel: MethodChannel? = null
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
-  private var audioTranscribeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
   }
   private val nativeAudioTranscribeChannelHandler by lazy {
-    NativeAudioTranscribeChannelHandler(context = this)
+    NativeAudioTranscribeChannelHandler()
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -73,30 +70,6 @@ class MainActivity : FlutterFragmentActivity() {
       }
 
       fetchAndReturnLocation(result)
-    }
-
-  private var pendingNativeSttRequest: PendingNativeSttRequest? = null
-  private val requestRecordAudioPermissionLauncher =
-    registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-      val pending = pendingNativeSttRequest
-      pendingNativeSttRequest = null
-      if (pending == null) {
-        return@registerForActivityResult
-      }
-
-      if (!granted) {
-        pending.result.error(
-          "native_stt_failed",
-          "speech_permission_denied",
-          null,
-        )
-        return@registerForActivityResult
-      }
-
-      nativeAudioTranscribeChannelHandler.handle(
-        MethodCall("nativeSttTranscribe", pending.arguments),
-        pending.result,
-      )
     }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -220,16 +193,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
       }
 
-    audioTranscribeChannel =
-      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/audio_transcribe").apply {
-        setMethodCallHandler { call, result ->
-          when (call.method) {
-            "nativeSttTranscribe" -> handleNativeSttTranscribeCall(call, result)
-            else -> nativeAudioTranscribeChannelHandler.handle(call, result)
-          }
-        }
-      }
-
     ocrChannel =
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/ocr").apply {
         setMethodCallHandler { call, result ->
@@ -247,39 +210,6 @@ class MainActivity : FlutterFragmentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     handleShareIntent(intent)
-  }
-
-
-  private fun handleNativeSttTranscribeCall(
-    call: MethodCall,
-    result: MethodChannel.Result,
-  ) {
-    if (hasRecordAudioPermission()) {
-      nativeAudioTranscribeChannelHandler.handle(call, result)
-      return
-    }
-
-    if (pendingNativeSttRequest != null) {
-      result.error(
-        "native_stt_failed",
-        "speech_permission_not_determined",
-        null,
-      )
-      return
-    }
-
-    pendingNativeSttRequest = PendingNativeSttRequest(
-      arguments = call.arguments,
-      result = result,
-    )
-    requestRecordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-  }
-
-  private fun hasRecordAudioPermission(): Boolean {
-    return ContextCompat.checkSelfPermission(
-      this,
-      Manifest.permission.RECORD_AUDIO,
-    ) == PackageManager.PERMISSION_GRANTED
   }
 
   private fun handleShareIntent(intent: Intent?) {
@@ -574,15 +504,7 @@ class MainActivity : FlutterFragmentActivity() {
       extractor = MediaExtractor()
       extractor.setDataSource(inputPath)
 
-      var audioTrackIndex = -1
-      for (i in 0 until extractor.trackCount) {
-        val format = extractor.getTrackFormat(i)
-        val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
-        if (mime.startsWith("audio/")) {
-          audioTrackIndex = i
-          break
-        }
-      }
+      val audioTrackIndex = selectFirstAudioTrack(extractor)
       if (audioTrackIndex < 0) return false
       extractor.selectTrack(audioTrackIndex)
 
@@ -594,8 +516,11 @@ class MainActivity : FlutterFragmentActivity() {
       )
       val inputChannelCount = inputFormat.getIntegerOrDefault(MediaFormat.KEY_CHANNEL_COUNT, 2)
 
-      val targetSampleRate = maxOf(8000, if (sampleRateHz > 0) sampleRateHz else inputSampleRate)
-      val targetChannelCount = if (mono) 1 else maxOf(1, inputChannelCount)
+      // Keep encoder PCM shape aligned with decoder output.
+      // This pipeline does not perform PCM resample/remix before encoding, so forcing
+      // sample rate/channel changes here will stretch audio duration and corrupt transcript quality.
+      val targetSampleRate = inputSampleRate
+      val targetChannelCount = maxOf(1, inputChannelCount)
 
       decoder = MediaCodec.createDecoderByType(inputMime)
       decoder.configure(inputFormat, null, null, 0)
@@ -742,7 +667,13 @@ class MainActivity : FlutterFragmentActivity() {
         }
       }
 
-      return outputFile.exists() && outputFile.length() > 0
+      if (!outputFile.exists() || outputFile.length() <= 0) {
+        return false
+      }
+      if (!isAudioDurationDriftAcceptable(inputPath, outputPath)) {
+        return false
+      }
+      return true
     } catch (_: Throwable) {
       return false
     } finally {
@@ -772,6 +703,70 @@ class MainActivity : FlutterFragmentActivity() {
     }
   }
 
+  private fun isAudioDurationDriftAcceptable(
+    inputPath: String,
+    outputPath: String,
+  ): Boolean {
+    val inputDurationUs = readAudioDurationUs(inputPath) ?: return true
+    val outputDurationUs = readAudioDurationUs(outputPath) ?: return true
+    if (inputDurationUs <= 0L || outputDurationUs <= 0L) {
+      return true
+    }
+
+    val driftRatio = abs(outputDurationUs - inputDurationUs).toDouble() /
+      inputDurationUs.toDouble()
+    return driftRatio <= kAudioTranscodeDurationDriftToleranceRatio
+  }
+
+  private fun readAudioDurationUs(path: String): Long? {
+    val extractor = MediaExtractor()
+    try {
+      extractor.setDataSource(path)
+      val audioTrackIndex = selectFirstAudioTrack(extractor)
+      if (audioTrackIndex < 0) {
+        return null
+      }
+
+      val format = extractor.getTrackFormat(audioTrackIndex)
+      val durationFromFormatUs = format.getLongOrDefault(MediaFormat.KEY_DURATION, -1L)
+      if (durationFromFormatUs > 0L) {
+        return durationFromFormatUs
+      }
+
+      extractor.selectTrack(audioTrackIndex)
+      var lastSampleTimeUs = -1L
+      while (true) {
+        val sampleTimeUs = extractor.sampleTime
+        if (sampleTimeUs < 0L) {
+          break
+        }
+        lastSampleTimeUs = sampleTimeUs
+        if (!extractor.advance()) {
+          break
+        }
+      }
+
+      return if (lastSampleTimeUs > 0L) lastSampleTimeUs else null
+    } catch (_: Throwable) {
+      return null
+    } finally {
+      try {
+        extractor.release()
+      } catch (_: Throwable) {}
+    }
+  }
+
+  private fun selectFirstAudioTrack(extractor: MediaExtractor): Int {
+    for (index in 0 until extractor.trackCount) {
+      val format = extractor.getTrackFormat(index)
+      val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+      if (mime.startsWith("audio/")) {
+        return index
+      }
+    }
+    return -1
+  }
+
   private fun readExif(path: String): ExifInterface? {
     return if (path.startsWith("content://")) {
       val input = contentResolver.openInputStream(Uri.parse(path)) ?: return null
@@ -799,6 +794,14 @@ class MainActivity : FlutterFragmentActivity() {
 private fun MediaFormat.getIntegerOrDefault(key: String, fallback: Int): Int {
   return try {
     if (containsKey(key)) getInteger(key) else fallback
+  } catch (_: Throwable) {
+    fallback
+  }
+}
+
+private fun MediaFormat.getLongOrDefault(key: String, fallback: Long): Long {
+  return try {
+    if (containsKey(key)) getLong(key) else fallback
   } catch (_: Throwable) {
     fallback
   }

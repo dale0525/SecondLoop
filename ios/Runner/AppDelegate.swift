@@ -92,10 +92,6 @@ import Vision
         }
       }
 
-      configureAudioTranscribeChannel(
-        binaryMessenger: controller.binaryMessenger
-      )
-
       let ocrChannel = FlutterMethodChannel(
         name: "secondloop/ocr",
         binaryMessenger: controller.binaryMessenger

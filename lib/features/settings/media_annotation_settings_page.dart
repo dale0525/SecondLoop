@@ -134,6 +134,8 @@ class _MediaAnnotationSettingsPageState
   Object? _audioWhisperRuntimeStatusError;
   final GlobalKey _localCapabilityCardAnchorKey = GlobalKey();
   bool _didRunLocalCapabilityCardFocus = false;
+  bool _highlightLocalCapabilityCard = false;
+  Timer? _clearLocalCapabilityCardHighlightTimer;
 
   MediaAnnotationConfigStore get _store =>
       widget.configStore ?? const RustMediaAnnotationConfigStore();
@@ -451,6 +453,12 @@ class _MediaAnnotationSettingsPageState
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _clearLocalCapabilityCardHighlightTimer?.cancel();
+    super.dispose();
   }
 
   @override

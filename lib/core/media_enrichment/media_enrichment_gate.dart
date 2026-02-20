@@ -593,6 +593,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       }
 
       var processedAudioTranscripts = 0;
+      var mutatedAudioTranscribeJobs = false;
       if (audioTranscribeEnabled) {
         final network = await getNetwork();
         final audioRequiresWifi = contentRequiresWifi || audioWifiOnly;
@@ -611,8 +612,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             store: store,
             client: client,
           );
-          final result = await runner.runOnce(limit: 5);
-          processedAudioTranscripts = result.processed;
+          final audioResult = await runner.runOnce(limit: 5);
+          processedAudioTranscripts = audioResult.processed;
+          mutatedAudioTranscribeJobs = audioResult.didMutateAny;
         }
       }
 
@@ -706,7 +708,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           processedAutoVideoOcr > 0 ||
           processedAudioTranscripts > 0 ||
           result.didEnrichAny;
-      if (didEnrichAny) {
+      final didMutateAny = didEnrichAny || mutatedAudioTranscribeJobs;
+      if (didMutateAny) {
         syncEngine?.notifyExternalChange();
       }
 

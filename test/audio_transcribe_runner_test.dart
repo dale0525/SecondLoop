@@ -147,22 +147,6 @@ void main() {
     expect(supportsPlatformLocalAudioTranscribe(), isFalse);
   });
 
-  test('supports platform native stt audio transcribe on iOS and Android', () {
-    final previous = debugDefaultTargetPlatformOverride;
-    addTearDown(() {
-      debugDefaultTargetPlatformOverride = previous;
-    });
-
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    expect(supportsPlatformNativeSttAudioTranscribe(), isTrue);
-
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    expect(supportsPlatformNativeSttAudioTranscribe(), isTrue);
-
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    expect(supportsPlatformNativeSttAudioTranscribe(), isFalse);
-  });
-
   test(
       'selectPlatformLocalRuntimeAudioTranscribeRequest uses windows native stt when windows host',
       () async {
@@ -385,58 +369,6 @@ void main() {
     expect(result.segments.last.tMs, 700);
   });
 
-  test('fallback client can recover from local runtime with native stt',
-      () async {
-    final local = LocalRuntimeAudioTranscribeClient(
-      modelName: 'local-runtime',
-      appDirProvider: () async => '/tmp/secondloop-test',
-      requestLocalRuntimeTranscribe: ({
-        required appDir,
-        required lang,
-        required mimeType,
-        required audioBytes,
-      }) async {
-        throw StateError('audio_transcribe_local_runtime_unavailable');
-      },
-    );
-    final native = NativeSttAudioTranscribeClient(
-      modelName: 'macos_native_stt',
-      requestNativeSttTranscribe: ({
-        required lang,
-        required mimeType,
-        required audioBytes,
-      }) async {
-        expect(lang, 'en');
-        expect(mimeType, 'audio/mpeg');
-        expect(audioBytes, isNotEmpty);
-        return jsonEncode({
-          'text': 'native stt transcript',
-          'duration': 1.2,
-          'segments': [
-            {'t_ms': 0, 'text': 'native'},
-            {'t_ms': 500, 'text': 'stt transcript'},
-          ],
-        });
-      },
-    );
-
-    final client = FallbackAudioTranscribeClient(
-      chain: [local, native],
-    );
-
-    final response = await client.transcribe(
-      lang: 'en',
-      mimeType: 'audio/mpeg',
-      audioBytes: Uint8List.fromList(const <int>[0x49, 0x44, 0x33]),
-    );
-
-    expect(client.engineName, 'native_stt');
-    expect(client.modelName, 'macos_native_stt');
-    expect(response.transcriptFull, 'native stt transcript');
-    expect(response.durationMs, 1200);
-    expect(response.segments.length, 2);
-  });
-
   test('windows native stt client parses payload response', () async {
     final client = WindowsNativeSttAudioTranscribeClient(
       modelName: 'windows_native_stt',
@@ -543,6 +475,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 1);
+    expect(result.failed, 0);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(client.lastMimeType, 'audio/mpeg');
 
@@ -584,6 +518,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 0);
+    expect(result.didMutateAny, isFalse);
     expect(client.calls, 0);
     expect(store.okPayloadBySha, isEmpty);
     expect(store.failedBySha, isEmpty);
@@ -614,6 +550,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 1);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(store.failedBySha['c1'], contains('transcribe_failed'));
     expect(store.failedAttemptsBySha['c1'], 2);
@@ -649,6 +587,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 1);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(
       store.failedNextRetryBySha['d1'],
@@ -690,6 +630,8 @@ void main() {
 
     final result = await runner.runOnce(limit: 5);
     expect(result.processed, 0);
+    expect(result.failed, 1);
+    expect(result.didMutateAny, isTrue);
     expect(client.calls, 1);
     expect(
       store.failedNextRetryBySha['d2'],
