@@ -29,6 +29,9 @@ import java.util.Locale
 import java.util.TimeZone
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.abs
+
+private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
 
 class MainActivity : FlutterFragmentActivity() {
   private val pendingShares = mutableListOf<Map<String, String>>()
@@ -501,15 +504,7 @@ class MainActivity : FlutterFragmentActivity() {
       extractor = MediaExtractor()
       extractor.setDataSource(inputPath)
 
-      var audioTrackIndex = -1
-      for (i in 0 until extractor.trackCount) {
-        val format = extractor.getTrackFormat(i)
-        val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
-        if (mime.startsWith("audio/")) {
-          audioTrackIndex = i
-          break
-        }
-      }
+      val audioTrackIndex = selectFirstAudioTrack(extractor)
       if (audioTrackIndex < 0) return false
       extractor.selectTrack(audioTrackIndex)
 
@@ -672,7 +667,13 @@ class MainActivity : FlutterFragmentActivity() {
         }
       }
 
-      return outputFile.exists() && outputFile.length() > 0
+      if (!outputFile.exists() || outputFile.length() <= 0) {
+        return false
+      }
+      if (!isAudioDurationDriftAcceptable(inputPath, outputPath)) {
+        return false
+      }
+      return true
     } catch (_: Throwable) {
       return false
     } finally {
@@ -702,6 +703,70 @@ class MainActivity : FlutterFragmentActivity() {
     }
   }
 
+  private fun isAudioDurationDriftAcceptable(
+    inputPath: String,
+    outputPath: String,
+  ): Boolean {
+    val inputDurationUs = readAudioDurationUs(inputPath) ?: return true
+    val outputDurationUs = readAudioDurationUs(outputPath) ?: return true
+    if (inputDurationUs <= 0L || outputDurationUs <= 0L) {
+      return true
+    }
+
+    val driftRatio = abs(outputDurationUs - inputDurationUs).toDouble() /
+      inputDurationUs.toDouble()
+    return driftRatio <= kAudioTranscodeDurationDriftToleranceRatio
+  }
+
+  private fun readAudioDurationUs(path: String): Long? {
+    val extractor = MediaExtractor()
+    try {
+      extractor.setDataSource(path)
+      val audioTrackIndex = selectFirstAudioTrack(extractor)
+      if (audioTrackIndex < 0) {
+        return null
+      }
+
+      val format = extractor.getTrackFormat(audioTrackIndex)
+      val durationFromFormatUs = format.getLongOrDefault(MediaFormat.KEY_DURATION, -1L)
+      if (durationFromFormatUs > 0L) {
+        return durationFromFormatUs
+      }
+
+      extractor.selectTrack(audioTrackIndex)
+      var lastSampleTimeUs = -1L
+      while (true) {
+        val sampleTimeUs = extractor.sampleTime
+        if (sampleTimeUs < 0L) {
+          break
+        }
+        lastSampleTimeUs = sampleTimeUs
+        if (!extractor.advance()) {
+          break
+        }
+      }
+
+      return if (lastSampleTimeUs > 0L) lastSampleTimeUs else null
+    } catch (_: Throwable) {
+      return null
+    } finally {
+      try {
+        extractor.release()
+      } catch (_: Throwable) {}
+    }
+  }
+
+  private fun selectFirstAudioTrack(extractor: MediaExtractor): Int {
+    for (index in 0 until extractor.trackCount) {
+      val format = extractor.getTrackFormat(index)
+      val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+      if (mime.startsWith("audio/")) {
+        return index
+      }
+    }
+    return -1
+  }
+
   private fun readExif(path: String): ExifInterface? {
     return if (path.startsWith("content://")) {
       val input = contentResolver.openInputStream(Uri.parse(path)) ?: return null
@@ -729,6 +794,14 @@ class MainActivity : FlutterFragmentActivity() {
 private fun MediaFormat.getIntegerOrDefault(key: String, fallback: Int): Int {
   return try {
     if (containsKey(key)) getInteger(key) else fallback
+  } catch (_: Throwable) {
+    fallback
+  }
+}
+
+private fun MediaFormat.getLongOrDefault(key: String, fallback: Long): Long {
+  return try {
+    if (containsKey(key)) getLong(key) else fallback
   } catch (_: Throwable) {
     fallback
   }

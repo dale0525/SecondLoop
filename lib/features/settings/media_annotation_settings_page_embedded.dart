@@ -181,6 +181,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
       title: _audioWhisperRuntimeCardTitle(context),
       description: _audioWhisperRuntimeCardDescription(context),
       statusLabel: _audioWhisperRuntimeStatusLabel(context),
+      highlighted: _highlightLocalCapabilityCard,
       actions: [
         ListTile(
           key: const ValueKey(

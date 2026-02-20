@@ -35,22 +35,43 @@ Widget mediaAnnotationCapabilityCard({
   required List<Widget> actions,
   Key? key,
   GlobalKey? anchorKey,
+  bool highlighted = false,
 }) {
   final tokens = SlTokens.of(context);
   final colorScheme = Theme.of(context).colorScheme;
+  final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ??
+      WidgetsBinding
+          .instance.platformDispatcher.accessibilityFeatures.disableAnimations;
+  final borderColor = highlighted ? colorScheme.primary : tokens.borderSubtle;
+  final backgroundColor = highlighted
+      ? colorScheme.primaryContainer.withOpacity(0.28)
+      : colorScheme.surface;
 
-  final card = Container(
+  final card = AnimatedContainer(
     key: key,
+    duration:
+        disableAnimations ? Duration.zero : const Duration(milliseconds: 300),
+    curve: Curves.easeOutCubic,
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: tokens.borderSubtle),
+      border: Border.all(color: borderColor),
+      boxShadow: highlighted
+          ? [
+              BoxShadow(
+                color: colorScheme.primary.withOpacity(0.18),
+                blurRadius: 20,
+                spreadRadius: 1,
+                offset: const Offset(0, 8),
+              ),
+            ]
+          : null,
     ),
     child: ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: SlSurface(
         padding: EdgeInsets.zero,
         child: ColoredBox(
-          color: colorScheme.surface,
+          color: backgroundColor,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

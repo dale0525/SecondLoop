@@ -34,6 +34,21 @@ extension _MediaAnnotationSettingsPageLocalCapabilityExtension
           disableAnimations ? Duration.zero : const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
     );
+    if (!mounted) return;
+    _activateLocalCapabilityCardHighlight(disableAnimations: disableAnimations);
+  }
+
+  void _activateLocalCapabilityCardHighlight(
+      {required bool disableAnimations}) {
+    _clearLocalCapabilityCardHighlightTimer?.cancel();
+    _mutateState(() => _highlightLocalCapabilityCard = true);
+    if (disableAnimations) return;
+
+    _clearLocalCapabilityCardHighlightTimer =
+        Timer(const Duration(milliseconds: 1400), () {
+      if (!mounted || !_highlightLocalCapabilityCard) return;
+      _mutateState(() => _highlightLocalCapabilityCard = false);
+    });
   }
 
   bool _supportsMobileWhisperRuntimeDownload() {

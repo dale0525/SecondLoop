@@ -20,6 +20,14 @@ void main() {
       );
       expect(content,
           isNot(contains('if (mono) 1 else maxOf(1, inputChannelCount)')));
+      expect(
+          content,
+          contains(
+              'private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08'));
+      expect(
+          content,
+          contains(
+              'if (!isAudioDurationDriftAcceptable(inputPath, outputPath)) {'));
     },
   );
 }
