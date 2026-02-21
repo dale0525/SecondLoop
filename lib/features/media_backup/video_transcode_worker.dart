@@ -505,14 +505,41 @@ final class VideoTranscodeWorker {
         videoBytes,
         sourceMimeType: sourceMimeType,
       );
-      if (result.hasAnyPosterOrKeyframe) {
-        return result;
+      final normalized = _ensurePosterBackedKeyframe(result);
+      if (normalized.hasAnyPosterOrKeyframe) {
+        return normalized;
       }
     } catch (_) {
       // Ignore native fallback errors.
     }
 
     return _kEmptyVideoPreviewExtractResult;
+  }
+
+  static VideoPreviewExtractResult _ensurePosterBackedKeyframe(
+    VideoPreviewExtractResult result,
+  ) {
+    final posterBytes = result.posterBytes;
+    if (posterBytes == null || posterBytes.isEmpty) {
+      return result;
+    }
+    if (result.keyframes.isNotEmpty) {
+      return result;
+    }
+
+    return VideoPreviewExtractResult(
+      posterBytes: posterBytes,
+      posterMimeType: result.posterMimeType,
+      keyframes: List<VideoPreviewFrame>.unmodifiable([
+        VideoPreviewFrame(
+          index: 0,
+          bytes: posterBytes,
+          mimeType: result.posterMimeType,
+          tMs: 0,
+          kind: 'scene',
+        ),
+      ]),
+    );
   }
 
   static Future<VideoPreviewExtractResult>

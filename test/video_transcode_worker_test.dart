@@ -532,7 +532,11 @@ void main() {
 
     expect(result.posterBytes, Uint8List.fromList(const <int>[9, 8, 7]));
     expect(result.posterMimeType, 'image/jpeg');
-    expect(result.keyframes, isEmpty);
+    expect(result.keyframes.length, 1);
+    expect(
+        result.keyframes.first.bytes, Uint8List.fromList(const <int>[9, 8, 7]));
+    expect(result.keyframes.first.tMs, 0);
+    expect(result.keyframes.first.kind, 'scene');
     expect(result.hasAnyPosterOrKeyframe, isTrue);
   });
 

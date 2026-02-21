@@ -379,7 +379,10 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 
             String? audioSha256;
             String? audioMimeType;
-            if (useLocalAudioTranscode) {
+            final shouldExtractVideoAudio = useLocalAudioTranscode ||
+                defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS;
+            if (shouldExtractVideoAudio) {
               final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
                 bytes,
                 sourceMimeType: normalizedMimeType,

@@ -447,7 +447,10 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
 
           String? audioSha256;
           String? audioMimeType;
-          if (useLocalAudioTranscode) {
+          final shouldExtractVideoAudio = useLocalAudioTranscode ||
+              defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS;
+          if (shouldExtractVideoAudio) {
             final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
               rawBytes,
               sourceMimeType: normalizedMimeType,
