@@ -7,6 +7,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.CancellationSignal
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -17,6 +18,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.media.MediaMetadataRetriever
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
@@ -41,6 +43,7 @@ class MainActivity : FlutterFragmentActivity() {
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
+  private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
@@ -189,6 +192,16 @@ class MainActivity : FlutterFragmentActivity() {
           when (call.method) {
             "transcodeToM4a" -> handleTranscodeToM4a(call, result)
             "decodeToWavPcm16Mono16k" -> handleDecodeToWavPcm16Mono16k(call, result)
+            else -> result.notImplemented()
+          }
+        }
+      }
+
+    videoTranscodeChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/video_transcode").apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "extractPreviewPosterJpeg" -> handleExtractPreviewPosterJpeg(call, result)
             else -> result.notImplemented()
           }
         }
@@ -458,6 +471,69 @@ class MainActivity : FlutterFragmentActivity() {
         result.success(ok)
       }
     }.start()
+  }
+
+  private fun handleExtractPreviewPosterJpeg(call: MethodCall, result: MethodChannel.Result) {
+    val args = call.arguments as? Map<*, *>
+    val inputPath = (args?.get("input_path") as? String)?.trim().orEmpty()
+    val outputPath = (args?.get("output_path") as? String)?.trim().orEmpty()
+    if (inputPath.isEmpty() || outputPath.isEmpty()) {
+      result.success(false)
+      return
+    }
+
+    Thread {
+      val ok = try {
+        extractPreviewPosterJpeg(inputPath = inputPath, outputPath = outputPath)
+      } catch (_: Throwable) {
+        false
+      }
+      runOnUiThread {
+        result.success(ok)
+      }
+    }.start()
+  }
+
+  private fun extractPreviewPosterJpeg(inputPath: String, outputPath: String): Boolean {
+    val inputFile = File(inputPath)
+    if (!inputFile.exists() || !inputFile.isFile) return false
+
+    val outputFile = File(outputPath)
+    outputFile.parentFile?.mkdirs()
+    if (outputFile.exists()) {
+      outputFile.delete()
+    }
+
+    var retriever: MediaMetadataRetriever? = null
+    var bitmap: Bitmap? = null
+    try {
+      retriever = MediaMetadataRetriever()
+      retriever.setDataSource(inputPath)
+      bitmap = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+      val frame = bitmap ?: return false
+
+      FileOutputStream(outputFile).use { output ->
+        if (!frame.compress(Bitmap.CompressFormat.JPEG, 82, output)) {
+          return false
+        }
+        output.flush()
+      }
+
+      return outputFile.exists() && outputFile.length() > 0
+    } catch (_: Throwable) {
+      return false
+    } finally {
+      try {
+        bitmap?.recycle()
+      } catch (_: Throwable) {
+        // ignore
+      }
+      try {
+        retriever?.release()
+      } catch (_: Throwable) {
+        // ignore
+      }
+    }
   }
 
   private fun handleTranscodeToM4a(call: MethodCall, result: MethodChannel.Result) {

@@ -109,17 +109,31 @@ final class VideoPreviewExtractResult {
       (posterBytes != null && posterBytes!.isNotEmpty) || keyframes.isNotEmpty;
 }
 
+const VideoPreviewExtractResult _kEmptyVideoPreviewExtractResult =
+    VideoPreviewExtractResult(
+  posterBytes: null,
+  posterMimeType: 'image/jpeg',
+  keyframes: <VideoPreviewFrame>[],
+);
+
 typedef VideoTranscodeCommandRunner = Future<ProcessResult> Function(
   String executable,
   List<String> arguments,
 );
 
 typedef VideoFfmpegExecutableResolver = Future<String?> Function();
+typedef VideoNativePreviewExtractor = Future<VideoPreviewExtractResult>
+    Function(
+  Uint8List videoBytes, {
+  required String sourceMimeType,
+});
 
 final class VideoTranscodeWorker {
   static const String targetMimeType = 'video/mp4';
   static const int _defaultMaxSegmentDurationSeconds = 20 * 60;
   static const int _defaultMaxSegmentBytes = 50 * 1024 * 1024;
+  static const MethodChannel _videoTranscodeChannel =
+      MethodChannel('secondloop/video_transcode');
 
   static String? _cachedBundledFfmpegExecutablePath;
 
@@ -281,14 +295,11 @@ final class VideoTranscodeWorker {
     String keyframeKind = 'scene',
     VideoTranscodeCommandRunner? commandRunner,
     VideoFfmpegExecutableResolver? ffmpegExecutableResolver,
+    VideoNativePreviewExtractor? nativePreviewExtractor,
   }) async {
     final normalizedMime = sourceMimeType.trim().toLowerCase();
     if (videoBytes.isEmpty || !normalizedMime.startsWith('video/')) {
-      return const VideoPreviewExtractResult(
-        posterBytes: null,
-        posterMimeType: 'image/jpeg',
-        keyframes: <VideoPreviewFrame>[],
-      );
+      return _kEmptyVideoPreviewExtractResult;
     }
 
     final run = commandRunner ?? Process.run;
@@ -297,10 +308,10 @@ final class VideoTranscodeWorker {
         _resolveBundledFfmpegExecutablePath;
     final ffmpegPath = await ffmpegResolver();
     if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
-      return const VideoPreviewExtractResult(
-        posterBytes: null,
-        posterMimeType: 'image/jpeg',
-        keyframes: <VideoPreviewFrame>[],
+      return _extractPreviewWithNativePlatformApi(
+        videoBytes,
+        sourceMimeType: normalizedMime,
+        nativePreviewExtractor: nativePreviewExtractor,
       );
     }
 
@@ -462,11 +473,102 @@ final class VideoTranscodeWorker {
         keyframes: List<VideoPreviewFrame>.unmodifiable(keyframes),
       );
     } catch (_) {
-      return const VideoPreviewExtractResult(
-        posterBytes: null,
-        posterMimeType: 'image/jpeg',
-        keyframes: <VideoPreviewFrame>[],
+      final nativeFallback = await _extractPreviewWithNativePlatformApi(
+        videoBytes,
+        sourceMimeType: normalizedMime,
+        nativePreviewExtractor: nativePreviewExtractor,
       );
+      if (nativeFallback.hasAnyPosterOrKeyframe) {
+        return nativeFallback;
+      }
+      return _kEmptyVideoPreviewExtractResult;
+    } finally {
+      if (tempDir != null) {
+        try {
+          await tempDir.delete(recursive: true);
+        } catch (_) {
+          // Ignore temp cleanup failures.
+        }
+      }
+    }
+  }
+
+  static Future<VideoPreviewExtractResult> _extractPreviewWithNativePlatformApi(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+    VideoNativePreviewExtractor? nativePreviewExtractor,
+  }) async {
+    final extractor =
+        nativePreviewExtractor ?? _extractPreviewWithNativePlatformChannel;
+    try {
+      final result = await extractor(
+        videoBytes,
+        sourceMimeType: sourceMimeType,
+      );
+      if (result.hasAnyPosterOrKeyframe) {
+        return result;
+      }
+    } catch (_) {
+      // Ignore native fallback errors.
+    }
+
+    return _kEmptyVideoPreviewExtractResult;
+  }
+
+  static Future<VideoPreviewExtractResult>
+      _extractPreviewWithNativePlatformChannel(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+  }) async {
+    if (kIsWeb) {
+      return _kEmptyVideoPreviewExtractResult;
+    }
+    if (!(Platform.isAndroid || Platform.isIOS)) {
+      return _kEmptyVideoPreviewExtractResult;
+    }
+
+    Directory? tempDir;
+    try {
+      tempDir = await Directory.systemTemp.createTemp(
+        'secondloop_video_preview_native_',
+      );
+      final sourceExt = _extensionForMimeType(sourceMimeType);
+      final inputPath = '${tempDir.path}/input.$sourceExt';
+      final outputPath = '${tempDir.path}/poster.jpg';
+      await File(inputPath).writeAsBytes(videoBytes, flush: true);
+
+      final ok = await _videoTranscodeChannel.invokeMethod<bool>(
+        'extractPreviewPosterJpeg',
+        <String, Object?>{
+          'input_path': inputPath,
+          'output_path': outputPath,
+        },
+      );
+      if (ok != true) {
+        return _kEmptyVideoPreviewExtractResult;
+      }
+
+      final outputFile = File(outputPath);
+      if (!await outputFile.exists()) {
+        return _kEmptyVideoPreviewExtractResult;
+      }
+
+      final posterBytes = await outputFile.readAsBytes();
+      if (posterBytes.isEmpty) {
+        return _kEmptyVideoPreviewExtractResult;
+      }
+
+      return VideoPreviewExtractResult(
+        posterBytes: posterBytes,
+        posterMimeType: 'image/jpeg',
+        keyframes: const <VideoPreviewFrame>[],
+      );
+    } on MissingPluginException {
+      return _kEmptyVideoPreviewExtractResult;
+    } on PlatformException {
+      return _kEmptyVideoPreviewExtractResult;
+    } catch (_) {
+      return _kEmptyVideoPreviewExtractResult;
     } finally {
       if (tempDir != null) {
         try {

@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import UIKit
 
 extension AppDelegate {
   func handleTranscodeToM4a(call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -32,6 +33,29 @@ extension AppDelegate {
     }
   }
 
+  func handleExtractPreviewPosterJpeg(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let inputPathRaw = args["input_path"] as? String,
+          let outputPathRaw = args["output_path"] as? String else {
+      result(false)
+      return
+    }
+
+    let inputPath = inputPathRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let outputPath = outputPathRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if inputPath.isEmpty || outputPath.isEmpty {
+      result(false)
+      return
+    }
+
+    extractPreviewPosterJpeg(
+      inputPath: inputPath,
+      outputPath: outputPath
+    ) { ok in
+      result(ok)
+    }
+  }
+
   func handleDecodeToWavPcm16Mono16k(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let inputPathRaw = args["input_path"] as? String,
@@ -52,6 +76,75 @@ extension AppDelegate {
       outputPath: outputPath
     ) { ok in
       result(ok)
+    }
+  }
+
+  private func extractPreviewPosterJpeg(
+    inputPath: String,
+    outputPath: String,
+    completion: @escaping (Bool) -> Void
+  ) {
+    let inputUrl = URL(fileURLWithPath: inputPath)
+    let outputUrl = URL(fileURLWithPath: outputPath)
+    let outputDir = outputUrl.deletingLastPathComponent()
+
+    do {
+      try FileManager.default.createDirectory(
+        at: outputDir,
+        withIntermediateDirectories: true
+      )
+      if FileManager.default.fileExists(atPath: outputPath) {
+        try FileManager.default.removeItem(at: outputUrl)
+      }
+    } catch {
+      completion(false)
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let asset = AVAsset(url: inputUrl)
+      guard asset.tracks(withMediaType: .video).isEmpty == false else {
+        DispatchQueue.main.async {
+          completion(false)
+        }
+        return
+      }
+
+      let generator = AVAssetImageGenerator(asset: asset)
+      generator.appliesPreferredTrackTransform = true
+      generator.requestedTimeToleranceBefore = .zero
+      generator.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 30)
+
+      let cgImage: CGImage
+      do {
+        cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+      } catch {
+        DispatchQueue.main.async {
+          completion(false)
+        }
+        return
+      }
+
+      let image = UIImage(cgImage: cgImage)
+      guard let jpegData = image.jpegData(compressionQuality: 0.82),
+            jpegData.isEmpty == false else {
+        DispatchQueue.main.async {
+          completion(false)
+        }
+        return
+      }
+
+      let ok: Bool
+      do {
+        try jpegData.write(to: outputUrl, options: .atomic)
+        ok = FileManager.default.fileExists(atPath: outputPath)
+      } catch {
+        ok = false
+      }
+
+      DispatchQueue.main.async {
+        completion(ok)
+      }
     }
   }
 

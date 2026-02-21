@@ -512,6 +512,30 @@ void main() {
     expect(result.keyframes[2].bytes, richerRepeatFrame);
   });
 
+  test(
+      'VideoTranscodeWorker preview extraction falls back to native extractor when ffmpeg is unavailable',
+      () async {
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => null,
+      nativePreviewExtractor: (videoBytes, {required sourceMimeType}) async {
+        expect(sourceMimeType, 'video/mp4');
+        expect(videoBytes, Uint8List.fromList(const <int>[1, 2, 3]));
+        return VideoPreviewExtractResult(
+          posterBytes: Uint8List.fromList(<int>[9, 8, 7]),
+          posterMimeType: 'image/jpeg',
+          keyframes: <VideoPreviewFrame>[],
+        );
+      },
+    );
+
+    expect(result.posterBytes, Uint8List.fromList(const <int>[9, 8, 7]));
+    expect(result.posterMimeType, 'image/jpeg');
+    expect(result.keyframes, isEmpty);
+    expect(result.hasAnyPosterOrKeyframe, isTrue);
+  });
+
   test('VideoTranscodeWorker preview extraction returns empty without ffmpeg',
       () async {
     final result = await VideoTranscodeWorker.extractPreviewFrames(

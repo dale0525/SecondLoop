@@ -92,6 +92,24 @@ import Vision
         }
       }
 
+      let videoTranscodeChannel = FlutterMethodChannel(
+        name: "secondloop/video_transcode",
+        binaryMessenger: controller.binaryMessenger
+      )
+      videoTranscodeChannel.setMethodCallHandler { [weak self] call, result in
+        guard let self = self else {
+          result(false)
+          return
+        }
+
+        switch call.method {
+        case "extractPreviewPosterJpeg":
+          self.handleExtractPreviewPosterJpeg(call: call, result: result)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+
       let ocrChannel = FlutterMethodChannel(
         name: "secondloop/ocr",
         binaryMessenger: controller.binaryMessenger
