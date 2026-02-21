@@ -290,7 +290,10 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     String attachmentSha256, {
     required String mimeType,
   }) async {
-    if (!mimeType.trim().toLowerCase().startsWith('audio/')) {
+    final normalizedMimeType = mimeType.trim().toLowerCase();
+    final canTranscribe = normalizedMimeType.startsWith('audio/') ||
+        normalizedMimeType.startsWith('video/');
+    if (!canTranscribe) {
       return;
     }
 
@@ -510,8 +513,18 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
               );
             }
           }
-          audioSha256 ??= primaryVideo.sha256;
-          audioMimeType ??= primaryVideo.mimeType;
+          if (audioSha256 == null) {
+            audioSha256 = primaryVideo.sha256;
+            audioMimeType = primaryVideo.mimeType;
+            unawaited(
+              _maybeEnqueueAudioTranscribeEnrichment(
+                backend,
+                sessionKey,
+                primaryVideo.sha256,
+                mimeType: primaryVideo.mimeType,
+              ).catchError((_) {}),
+            );
+          }
 
           final manifest = jsonEncode({
             ...buildVideoManifestPayload(

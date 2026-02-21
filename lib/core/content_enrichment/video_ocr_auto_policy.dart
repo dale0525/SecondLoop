@@ -104,6 +104,21 @@ VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
     return '';
   }
 
+  if (linkedAudioPayload != null) {
+    final linkedFull = read(linkedAudioPayload, 'transcript_full');
+    final linkedExcerptRaw = read(linkedAudioPayload, 'transcript_excerpt');
+    final linkedExcerpt = linkedExcerptRaw.isNotEmpty
+        ? linkedExcerptRaw
+        : _truncateUtf8(linkedFull, 8 * 1024);
+    if (linkedFull.isNotEmpty || linkedExcerpt.isNotEmpty) {
+      return VideoManifestTranscriptSeed(
+        transcriptFull: linkedFull,
+        transcriptExcerpt: linkedExcerpt,
+        shouldDeferForLinkedAudio: false,
+      );
+    }
+  }
+
   final linkedVideoShas = <String>{
     readFirstNonEmpty(const <String>['video_sha256', 'videoSha256']),
     readFirstNonEmpty(const <String>[
@@ -144,15 +159,9 @@ VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
     );
   }
 
-  final linkedFull = read(linkedAudioPayload, 'transcript_full');
-  final linkedExcerptRaw = read(linkedAudioPayload, 'transcript_excerpt');
-  final linkedExcerpt = linkedExcerptRaw.isNotEmpty
-      ? linkedExcerptRaw
-      : _truncateUtf8(linkedFull, 8 * 1024);
-
-  return VideoManifestTranscriptSeed(
-    transcriptFull: linkedFull,
-    transcriptExcerpt: linkedExcerpt,
+  return const VideoManifestTranscriptSeed(
+    transcriptFull: '',
+    transcriptExcerpt: '',
     shouldDeferForLinkedAudio: false,
   );
 }

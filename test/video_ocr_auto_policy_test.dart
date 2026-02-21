@@ -151,6 +151,24 @@ void main() {
   });
 
   test(
+      'resolveVideoManifestTranscriptSeed uses linked transcript even when linked sha equals manifest video sha',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{
+        'video_sha256': 'sha-video-proxy',
+      },
+      audioSha256: 'sha-video-proxy',
+      linkedAudioPayload: const <String, Object?>{
+        'transcript_full': 'Linked transcript full body',
+      },
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, 'Linked transcript full body');
+    expect(result.transcriptExcerpt, 'Linked transcript full body');
+  });
+
+  test(
       'resolveVideoManifestTranscriptSeed defers when linked audio transcript is missing',
       () {
     final result = resolveVideoManifestTranscriptSeed(

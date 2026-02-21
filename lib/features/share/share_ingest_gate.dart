@@ -158,7 +158,10 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     String attachmentSha256, {
     required String mimeType,
   }) async {
-    if (!looksLikeAudioMimeType(mimeType)) return;
+    final normalizedMimeType = mimeType.trim().toLowerCase();
+    final canTranscribe = looksLikeAudioMimeType(normalizedMimeType) ||
+        normalizedMimeType.startsWith('video/');
+    if (!canTranscribe) return;
 
     ContentEnrichmentConfig? config;
     try {
@@ -412,8 +415,18 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                 );
               }
             }
-            audioSha256 ??= primaryVideo.sha256;
-            audioMimeType ??= primaryVideo.mimeType;
+            if (audioSha256 == null) {
+              audioSha256 = primaryVideo.sha256;
+              audioMimeType = primaryVideo.mimeType;
+              unawaited(
+                _maybeEnqueueAudioTranscribeEnrichment(
+                  backend,
+                  sessionKey,
+                  primaryVideo.sha256,
+                  mimeType: primaryVideo.mimeType,
+                ).catchError((_) {}),
+              );
+            }
 
             final manifest = jsonEncode({
               ...buildVideoManifestPayload(
