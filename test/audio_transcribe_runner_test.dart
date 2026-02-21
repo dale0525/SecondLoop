@@ -102,7 +102,7 @@ final class _MemClient implements AudioTranscribeClient {
 }
 
 void main() {
-  test('supports platform local runtime audio transcribe on macOS and Windows',
+  test('supports platform local runtime audio transcribe on desktop and mobile',
       () {
     final previous = debugDefaultTargetPlatformOverride;
     addTearDown(() {
@@ -125,7 +125,7 @@ void main() {
     expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
   });
 
-  test('supports platform local audio transcribe on macOS and Windows', () {
+  test('supports platform local audio transcribe on desktop and mobile', () {
     final previous = debugDefaultTargetPlatformOverride;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = previous;

@@ -379,34 +379,38 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 
             String? audioSha256;
             String? audioMimeType;
-            final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
-              bytes,
-              sourceMimeType: normalizedMimeType,
-            );
-            if (audioProxy.didTranscode &&
-                audioProxy.bytes.isNotEmpty &&
-                looksLikeAudioMimeType(audioProxy.mimeType)) {
-              final audioAttachment = await backend.insertAttachment(
-                sessionKey,
-                bytes: audioProxy.bytes,
-                mimeType: audioProxy.mimeType,
+            if (useLocalAudioTranscode) {
+              final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+                bytes,
+                sourceMimeType: normalizedMimeType,
               );
-              audioSha256 = audioAttachment.sha256;
-              audioMimeType = audioAttachment.mimeType;
-              unawaited(_maybeEnqueueCloudMediaBackup(
-                backend,
-                sessionKey,
-                audioAttachment.sha256,
-              ));
-              unawaited(
-                _maybeEnqueueAudioTranscribeEnrichment(
+              if (audioProxy.didTranscode &&
+                  audioProxy.bytes.isNotEmpty &&
+                  looksLikeAudioMimeType(audioProxy.mimeType)) {
+                final audioAttachment = await backend.insertAttachment(
+                  sessionKey,
+                  bytes: audioProxy.bytes,
+                  mimeType: audioProxy.mimeType,
+                );
+                audioSha256 = audioAttachment.sha256;
+                audioMimeType = audioAttachment.mimeType;
+                unawaited(_maybeEnqueueCloudMediaBackup(
                   backend,
                   sessionKey,
                   audioAttachment.sha256,
-                  mimeType: audioAttachment.mimeType,
-                ).catchError((_) {}),
-              );
+                ));
+                unawaited(
+                  _maybeEnqueueAudioTranscribeEnrichment(
+                    backend,
+                    sessionKey,
+                    audioAttachment.sha256,
+                    mimeType: audioAttachment.mimeType,
+                  ).catchError((_) {}),
+                );
+              }
             }
+            audioSha256 ??= primaryVideo.sha256;
+            audioMimeType ??= primaryVideo.mimeType;
 
             final manifest = jsonEncode({
               ...buildVideoManifestPayload(
