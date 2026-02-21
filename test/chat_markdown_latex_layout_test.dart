@@ -39,4 +39,64 @@ void main() {
     final constrained = scroll.child! as ConstrainedBox;
     expect(constrained.constraints.maxWidth.isFinite, isTrue);
   });
+
+  testWidgets('Latex block remains stable under large text scale',
+      (tester) async {
+    final previewTheme =
+        resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, ThemeData());
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: ChatMarkdownLatexBlock(
+                  expression:
+                      r'\begin{aligned}\frac{a_1x+b_1}{c_1x+d_1} + \frac{a_2x+b_2}{c_2x+d_2} + \frac{a_3x+b_3}{c_3x+d_3}\\\sum_{i=1}^{n}\frac{p_i}{q_i+r_i}\end{aligned}',
+                  previewTheme: previewTheme,
+                  exportRenderMode: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('Latex inline remains stable under large text scale',
+      (tester) async {
+    final previewTheme =
+        resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, ThemeData());
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 180,
+                child: ChatMarkdownLatexInline(
+                  expression: r'\frac{a_1x+b_1}{c_1x+d_1}',
+                  previewTheme: previewTheme,
+                  exportRenderMode: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
 }

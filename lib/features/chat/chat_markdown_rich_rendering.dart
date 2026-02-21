@@ -60,7 +60,6 @@ class ChatMarkdownLatexInline extends StatelessWidget {
     final style = (DefaultTextStyle.of(context).style).copyWith(
       color: previewTheme.textColor,
       fontSize: exportRenderMode ? 13 : null,
-      height: 1.3,
     );
 
     return DecoratedBox(
@@ -100,7 +99,6 @@ class ChatMarkdownLatexBlock extends StatelessWidget {
     final style = (DefaultTextStyle.of(context).style).copyWith(
       color: previewTheme.textColor,
       fontSize: exportRenderMode ? 14 : 15,
-      height: 1.35,
     );
 
     return Container(
