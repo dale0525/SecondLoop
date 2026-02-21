@@ -14,7 +14,7 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
         .expect("init master password");
     let conn = db::open(&app_dir).expect("open db");
 
-    let conv = db::get_or_create_main_stream_conversation(&conn, &key).expect("main stream");
+    let conv = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
     db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert message");
 
     db::create_llm_profile(

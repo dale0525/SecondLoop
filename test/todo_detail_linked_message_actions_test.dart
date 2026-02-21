@@ -440,7 +440,7 @@ final class _Backend extends TestAppBackend {
           initialMessages: [
             Message(
               id: 'm1',
-              conversationId: 'main_stream',
+              conversationId: 'loop_home',
               role: 'user',
               content: messageContent,
               createdAtMs: 0,
@@ -558,7 +558,7 @@ final class _RelinkBackend extends TestAppBackend {
           initialMessages: const [
             Message(
               id: 'm1',
-              conversationId: 'main_stream',
+              conversationId: 'loop_home',
               role: 'user',
               content: 'before',
               createdAtMs: 0,
@@ -685,7 +685,7 @@ final class _DeleteLinkedMessageBackend extends TestAppBackend {
           initialMessages: const [
             Message(
               id: 'm1',
-              conversationId: 'main_stream',
+              conversationId: 'loop_home',
               role: 'user',
               content: 'before',
               createdAtMs: 0,

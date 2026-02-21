@@ -28,7 +28,7 @@ fn purge_message_attachments_cleans_enrichment_and_backup_jobs() {
     let conn = open(&app_dir).expect("open");
     let key = [9u8; 32];
 
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let message = insert_message(&conn, &key, &conversation.id, "user", "pdf").expect("message");
     let attachment = insert_attachment(&conn, &key, &app_dir, b"%PDF-1.7", "application/pdf")
         .expect("insert attachment");

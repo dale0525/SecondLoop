@@ -52,7 +52,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -121,7 +121,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -185,7 +185,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -241,7 +241,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -310,7 +310,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -372,7 +372,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -448,7 +448,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -508,7 +508,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -556,7 +556,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -638,7 +638,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Chat',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -713,7 +713,7 @@ void main() {
                   child: const ChatPage(
                     conversation: Conversation(
                       id: 'c1',
-                      title: 'Chat',
+                      title: 'Loop',
                       createdAtMs: 0,
                       updatedAtMs: 0,
                     ),
@@ -792,7 +792,7 @@ void main() {
                   child: const ChatPage(
                     conversation: Conversation(
                       id: 'c1',
-                      title: 'Chat',
+                      title: 'Loop',
                       createdAtMs: 0,
                       updatedAtMs: 0,
                     ),

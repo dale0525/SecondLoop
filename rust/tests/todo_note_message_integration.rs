@@ -11,7 +11,7 @@ fn append_todo_note_uses_source_message_timestamp_for_created_at_ms() {
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
 
-    let convo = db::get_or_create_main_stream_conversation(&conn, &key).expect("main stream");
+    let convo = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
     let msg = db::insert_message(&conn, &key, &convo.id, "user", "hello").expect("msg");
     let msg_id = msg.id.clone();
 

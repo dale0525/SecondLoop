@@ -18,7 +18,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'assistant',
           content: '## 鲤鱼说英语\n服务号：鲤鱼说英语\n\n    视频号：鲤鱼说英语',
           createdAtMs: 0,
@@ -41,8 +41,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),

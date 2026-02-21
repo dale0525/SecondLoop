@@ -165,7 +165,7 @@ fn attachment_annotation_requeues_semantic_parse_for_linked_user_message() {
     let conn = open(&app_dir).expect("open");
 
     let key = [3u8; 32];
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let long_content = "A".repeat(150);
     let message = insert_message(&conn, &key, &conversation.id, "user", &long_content)
         .expect("insert message");
@@ -204,7 +204,7 @@ fn attachment_annotation_running_payload_does_not_requeue_semantic_parse() {
     let conn = open(&app_dir).expect("open");
 
     let key = [4u8; 32];
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let message = insert_message(
         &conn,
         &key,

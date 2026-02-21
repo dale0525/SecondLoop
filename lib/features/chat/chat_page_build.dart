@@ -10,8 +10,8 @@ extension _ChatPageStateBuild on _ChatPageState {
         useCompactComposer ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
     final isMobileKeyboardVisible =
         useCompactComposer && keyboardInsetBottom > 0;
-    final title = widget.conversation.id == 'main_stream'
-        ? context.t.chat.mainStreamTitle
+    final title = widget.conversation.id == 'loop_home'
+        ? context.t.chat.loopTitle
         : widget.conversation.title;
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =
@@ -78,7 +78,6 @@ extension _ChatPageStateBuild on _ChatPageState {
       body: Column(
         children: [
           _buildSelectedTagFilterBar(),
-          _buildActiveTopicThreadBar(),
           if (!isMobileKeyboardVisible) ...[
             FutureBuilder<_TodoAgendaSummary>(
               future: _agendaFuture,

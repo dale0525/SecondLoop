@@ -9,7 +9,7 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Boots directly into Main Stream with saved session key',
+  testWidgets('Boots directly into Loop with saved session key',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _AutoUnlockedBackend();
@@ -18,7 +18,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Main Stream'), findsWidgets);
+    expect(find.text('Loop'), findsWidgets);
     expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
   });
 }
@@ -27,8 +27,8 @@ final class _AutoUnlockedBackend extends AppBackend {
   Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
 
   static const _mainStream = Conversation(
-    id: 'main_stream',
-    title: 'Main Stream',
+    id: 'loop_home',
+    title: 'Loop',
     createdAtMs: 0,
     updatedAtMs: 0,
   );
@@ -80,7 +80,7 @@ final class _AutoUnlockedBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       _mainStream;
 
   @override

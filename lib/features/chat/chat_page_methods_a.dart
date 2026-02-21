@@ -174,14 +174,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
                           onTap: () =>
                               Navigator.of(context).pop(_MessageAction.tags),
                         ),
-                        ListTile(
-                          key: const ValueKey('message_action_topic_thread'),
-                          leading: const Icon(Icons.forum_outlined),
-                          title: Text(_topicThreadActionLabel(
-                              Localizations.localeOf(context))),
-                          onTap: () => Navigator.of(context)
-                              .pop(_MessageAction.topicThread),
-                        ),
                         if (showLinkTodo)
                           ListTile(
                             key: const ValueKey('message_action_link_todo'),
@@ -230,9 +222,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         break;
       case _MessageAction.tags:
         await _openMessageTagPicker(message);
-        break;
-      case _MessageAction.topicThread:
-        await _openMessageTopicThreadPicker(message);
         break;
       case _MessageAction.linkTodo:
         await _linkMessageToTodo(message);
@@ -448,11 +437,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
             context.t.chat.tagPicker.tagActionLabel,
           ),
         ),
-        PopupMenuItem<_MessageAction>(
-          key: const ValueKey('message_context_topic_thread'),
-          value: _MessageAction.topicThread,
-          child: Text(_topicThreadActionLabel(Localizations.localeOf(context))),
-        ),
         if (linkedTodo == null)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_link_todo'),
@@ -492,9 +476,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         break;
       case _MessageAction.tags:
         await _openMessageTagPicker(message);
-        break;
-      case _MessageAction.topicThread:
-        await _openMessageTopicThreadPicker(message);
         break;
       case _MessageAction.linkTodo:
         await _linkMessageToTodo(message);

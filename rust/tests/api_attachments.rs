@@ -6,9 +6,8 @@ fn api_can_link_list_and_read_attachments() {
     let app_dir = tmp.path().to_string_lossy().to_string();
 
     let key = vec![7u8; 32];
-    let conversation =
-        core::db_get_or_create_main_stream_conversation(app_dir.clone(), key.clone())
-            .expect("get main stream conversation");
+    let conversation = core::db_get_or_create_loop_home_conversation(app_dir.clone(), key.clone())
+        .expect("get loop home conversation");
     let message = core::db_insert_message(
         app_dir.clone(),
         key.clone(),

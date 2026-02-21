@@ -170,8 +170,7 @@ final class ShareIngest {
           }
           try {
             conversationId ??=
-                (await backend.getOrCreateMainStreamConversation(sessionKey))
-                    .id;
+                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
             await backend.insertMessage(
               sessionKey,
               conversationId,
@@ -202,8 +201,7 @@ final class ShareIngest {
             }
 
             conversationId ??=
-                (await backend.getOrCreateMainStreamConversation(sessionKey))
-                    .id;
+                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,
@@ -261,8 +259,7 @@ final class ShareIngest {
               continue;
             }
             conversationId ??=
-                (await backend.getOrCreateMainStreamConversation(sessionKey))
-                    .id;
+                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,
@@ -318,8 +315,7 @@ final class ShareIngest {
             }
 
             conversationId ??=
-                (await backend.getOrCreateMainStreamConversation(sessionKey))
-                    .id;
+                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,

@@ -16,7 +16,7 @@ fn sync_pull_todo_delete_removes_todo_and_deletes_linked_messages() {
         auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
     let conn_b = db::open(&app_dir_b).expect("open B db");
 
-    let convo = db::get_or_create_main_stream_conversation(&conn_b, &key_b).expect("main stream");
+    let convo = db::get_or_create_loop_home_conversation(&conn_b, &key_b).expect("loop home");
     let source_msg =
         db::insert_message(&conn_b, &key_b, &convo.id, "user", "source").expect("source message");
     let note_msg =

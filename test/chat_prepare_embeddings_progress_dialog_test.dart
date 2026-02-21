@@ -27,8 +27,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -95,10 +95,10 @@ final class _SlowPrepareBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       const Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

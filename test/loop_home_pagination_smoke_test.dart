@@ -11,7 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Main stream paginates older messages', (tester) async {
+  testWidgets('Loop home paginates older messages', (tester) async {
     final backend = PagingBackend(messageCount: 65);
 
     await tester.pumpWidget(
@@ -24,8 +24,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -64,7 +64,7 @@ class PagingBackend extends AppBackend {
           messageCount,
           (i) => Message(
             id: 'm${i + 1}',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: 'm${i + 1}',
             createdAtMs: i + 1,
@@ -111,8 +111,8 @@ class PagingBackend extends AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async =>
       const <Conversation>[
         Conversation(
-          id: 'main_stream',
-          title: 'Main Stream',
+          id: 'loop_home',
+          title: 'Loop',
           createdAtMs: 0,
           updatedAtMs: 0,
         ),
@@ -123,10 +123,10 @@ class PagingBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       const Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

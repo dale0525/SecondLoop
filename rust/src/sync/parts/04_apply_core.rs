@@ -9,11 +9,6 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "tag.upsert.v2" => apply_tag_upsert(conn, db_key, &op["payload"]),
         "tag.delete.v1" => apply_tag_delete(conn, &op["payload"]),
         "message.tag_set.v1" => apply_message_tag_set(conn, db_key, &op["payload"]),
-        "topic_thread.upsert.v1" => apply_topic_thread_upsert(conn, db_key, &op["payload"]),
-        "topic_thread.message_set.v1" => {
-            apply_topic_thread_message_set(conn, db_key, &op["payload"])
-        }
-        "topic_thread.delete.v1" => apply_topic_thread_delete(conn, &op["payload"]),
         "attachment.upsert.v1" => apply_attachment_upsert(conn, db_key, &op["payload"]),
         "attachment.delete.v1" => apply_attachment_delete(conn, db_key, op),
         "attachment.exif.upsert.v1" => apply_attachment_exif_upsert(conn, db_key, &op["payload"]),

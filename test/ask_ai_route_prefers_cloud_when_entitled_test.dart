@@ -66,7 +66,7 @@ final class _ByokBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override
