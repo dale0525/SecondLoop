@@ -780,6 +780,45 @@ PRAGMA user_version = 26;
         )?;
     }
 
+    if user_version < 27 {
+        // v27: attachment text chunk index metadata (local-only derived index).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_text_chunks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attachment_sha256 TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  text_len INTEGER NOT NULL,
+  needs_embedding INTEGER NOT NULL DEFAULT 1,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  UNIQUE(attachment_sha256, kind, chunk_index),
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_chunks_attachment
+  ON attachment_text_chunks(attachment_sha256, kind, chunk_index);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_chunks_updated_at_ms
+  ON attachment_text_chunks(updated_at_ms);
+
+CREATE TABLE IF NOT EXISTS attachment_chunk_index_state (
+  attachment_sha256 TEXT PRIMARY KEY,
+  source_kind TEXT NOT NULL,
+  source_fingerprint TEXT NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_chunk_index_state_updated_at_ms
+  ON attachment_chunk_index_state(updated_at_ms);
+
+PRAGMA user_version = 27;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -840,6 +879,8 @@ DELETE FROM attachment_exif;
 DELETE FROM attachment_metadata;
 DELETE FROM attachment_places;
 DELETE FROM attachment_annotations;
+DELETE FROM attachment_chunk_index_state;
+DELETE FROM attachment_text_chunks;
 DELETE FROM attachment_deletions;
 DELETE FROM attachments;
 DELETE FROM messages;

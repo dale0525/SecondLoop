@@ -316,6 +316,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       selectable: false,
       softLineBreak: true,
       styleSheet: slMarkdownStyleSheet(context),
+      onTapLink: (text, href, title) =>
+          unawaited(_handleMessageMarkdownTapLink(href)),
     );
     if (!isDesktopPlatform) return markdown;
 
