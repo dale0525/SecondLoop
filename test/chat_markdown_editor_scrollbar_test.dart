@@ -300,4 +300,54 @@ $$\int_0^1 x^2 \mathrm{d}x$$''',
       <TargetPlatform>{TargetPlatform.macOS},
     ),
   );
+
+  testWidgets(
+    'Preview renders multiline LaTeX matrix blocks with inline delimiters',
+    (tester) async {
+      await pumpEditor(
+        tester,
+        size: const Size(1024, 700),
+        initialText: r'''$$\mathbf{T}(t)=\begin{bmatrix}
+
+1 & 0 & 0 & t_x\\
+
+0 & 1 & 0 & t_y\\
+
+0 & 0 & 1 & t_z\\
+
+0 & 0 & 0 & 1
+
+\end{bmatrix}$$''',
+      );
+
+      expect(
+        find.byType(ChatMarkdownLatexBlock),
+        findsOneWidget,
+      );
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Preview renders custom note tag blocks as note widgets',
+    (tester) async {
+      await pumpEditor(
+        tester,
+        size: const Size(1024, 700),
+        initialText: r'''{% note default %}
+这是说明块
+{% endnote %}''',
+      );
+
+      expect(
+        find.byType(ChatMarkdownNoteBlock),
+        findsOneWidget,
+      );
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
 }

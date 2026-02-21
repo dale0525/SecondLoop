@@ -7,6 +7,7 @@ import 'chat_markdown_theme_presets.dart';
 
 List<md.BlockSyntax> buildChatMarkdownBlockSyntaxes() {
   return const <md.BlockSyntax>[
+    _NoteBlockSyntax(),
     _LatexBlockSyntax(),
     _MarkmapBlockSyntax(),
   ];
@@ -32,6 +33,10 @@ Map<String, MarkdownElementBuilder> buildChatMarkdownElementBuilders({
       exportRenderMode: exportRenderMode,
     ),
     'markmap': _MarkmapBlockBuilder(
+      previewTheme: previewTheme,
+      exportRenderMode: exportRenderMode,
+    ),
+    'note-block': _NoteBlockBuilder(
       previewTheme: previewTheme,
       exportRenderMode: exportRenderMode,
     ),
@@ -180,6 +185,132 @@ class ChatMarkdownMarkmap extends StatelessWidget {
   }
 }
 
+class ChatMarkdownNoteBlock extends StatelessWidget {
+  const ChatMarkdownNoteBlock({
+    required this.noteType,
+    required this.body,
+    required this.previewTheme,
+    required this.exportRenderMode,
+    super.key,
+  });
+
+  final String noteType;
+  final String body;
+  final ChatMarkdownPreviewTheme previewTheme;
+  final bool exportRenderMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _notePalette(previewTheme, noteType);
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: previewTheme.textColor,
+              height: 1.58,
+              fontSize: exportRenderMode ? 12.8 : null,
+            ) ??
+        TextStyle(
+          color: previewTheme.textColor,
+          height: 1.58,
+          fontSize: exportRenderMode ? 12.8 : 14,
+        );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.fromLTRB(
+        exportRenderMode ? 10 : 12,
+        exportRenderMode ? 10 : 12,
+        exportRenderMode ? 12 : 14,
+        exportRenderMode ? 10 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: palette.background,
+        borderRadius: BorderRadius.circular(exportRenderMode ? 10 : 12),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            margin: const EdgeInsets.only(top: 2, right: 10),
+            decoration: BoxDecoration(
+              color: palette.accent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          Expanded(child: Text(body, style: textStyle)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotePalette {
+  const _NotePalette({
+    required this.background,
+    required this.border,
+    required this.accent,
+  });
+
+  final Color background;
+  final Color border;
+  final Color accent;
+}
+
+_NotePalette _notePalette(ChatMarkdownPreviewTheme theme, String noteType) {
+  final normalized = noteType.trim().toLowerCase();
+
+  switch (normalized) {
+    case 'success':
+    case 'tip':
+      return _NotePalette(
+        background: Color.alphaBlend(
+          const Color(0xFF2AAE67).withOpacity(0.16),
+          theme.panelColor,
+        ),
+        border: const Color(0xFF2AAE67).withOpacity(0.56),
+        accent: const Color(0xFF2AAE67),
+      );
+    case 'warning':
+    case 'warn':
+      return _NotePalette(
+        background: Color.alphaBlend(
+          const Color(0xFFC78A1E).withOpacity(0.16),
+          theme.panelColor,
+        ),
+        border: const Color(0xFFC78A1E).withOpacity(0.56),
+        accent: const Color(0xFFC78A1E),
+      );
+    case 'danger':
+    case 'error':
+      return _NotePalette(
+        background: Color.alphaBlend(
+          const Color(0xFFC94444).withOpacity(0.16),
+          theme.panelColor,
+        ),
+        border: const Color(0xFFC94444).withOpacity(0.56),
+        accent: const Color(0xFFC94444),
+      );
+    case 'info':
+      return _NotePalette(
+        background: Color.alphaBlend(
+          const Color(0xFF3478C8).withOpacity(0.16),
+          theme.panelColor,
+        ),
+        border: const Color(0xFF3478C8).withOpacity(0.56),
+        accent: const Color(0xFF3478C8),
+      );
+    default:
+      return _NotePalette(
+        background: Color.alphaBlend(
+          theme.quoteBackground.withOpacity(0.72),
+          theme.panelColor,
+        ),
+        border: theme.borderColor.withOpacity(0.72),
+        accent: theme.quoteBorder,
+      );
+  }
+}
+
 class _LatexInlineSyntax extends md.InlineSyntax {
   _LatexInlineSyntax()
       : super(
@@ -202,41 +333,92 @@ class _LatexInlineSyntax extends md.InlineSyntax {
   }
 }
 
-class _LatexBlockSyntax extends md.BlockSyntax {
-  const _LatexBlockSyntax();
+class _NoteBlockSyntax extends md.BlockSyntax {
+  const _NoteBlockSyntax();
 
-  static final RegExp _singleLinePattern = RegExp(r'^\s*\$\$(.+?)\$\$\s*$');
-  static final RegExp _delimiterOnlyPattern = RegExp(r'^\s*\$\$\s*$');
+  static final RegExp _openingPattern = RegExp(
+    r'^\s*\{%\s*note(?:\s+([^\s%]+))?.*?%\}\s*$',
+    caseSensitive: false,
+  );
+  static final RegExp _closingPattern = RegExp(
+    r'^\s*\{%\s*endnote\s*%\}\s*$',
+    caseSensitive: false,
+  );
 
   @override
-  RegExp get pattern => RegExp(r'^\s*\$\$');
+  RegExp get pattern => _openingPattern;
 
   @override
   md.Node? parse(md.BlockParser parser) {
-    final current = parser.current.content;
+    final opening = _openingPattern.firstMatch(parser.current.content);
+    if (opening == null) return null;
 
-    final singleLine = _singleLinePattern.firstMatch(current);
-    if (singleLine != null) {
-      final formula = (singleLine.group(1) ?? '').trim();
-      parser.advance();
-      if (formula.isEmpty) return null;
-      return md.Element.empty('latex-block')
-        ..attributes['data-latex'] = formula;
-    }
-
-    if (!_delimiterOnlyPattern.hasMatch(current)) {
-      return null;
-    }
-
+    final noteType = (opening.group(1) ?? 'default').trim().toLowerCase();
     parser.advance();
 
     final lines = <String>[];
     while (!parser.isDone) {
       final line = parser.current.content;
-      if (_delimiterOnlyPattern.hasMatch(line)) {
+      if (_closingPattern.hasMatch(line)) {
         parser.advance();
         break;
       }
+      lines.add(line);
+      parser.advance();
+    }
+
+    final body = lines.join('\n').trim();
+    if (body.isEmpty) return null;
+
+    return md.Element.empty('note-block')
+      ..attributes['data-note-type'] = noteType
+      ..attributes['data-note-body'] = body;
+  }
+}
+
+class _LatexBlockSyntax extends md.BlockSyntax {
+  const _LatexBlockSyntax();
+
+  static final RegExp _openingPattern = RegExp(r'^\s*\$\$(.*)$');
+  static final RegExp _closingPattern = RegExp(r'^(.*?)(?<!\\)\$\$\s*$');
+
+  @override
+  RegExp get pattern => _openingPattern;
+
+  @override
+  md.Node? parse(md.BlockParser parser) {
+    final opening = _openingPattern.firstMatch(parser.current.content);
+    if (opening == null) return null;
+
+    final lines = <String>[];
+    final leadingContent = opening.group(1) ?? '';
+    if (leadingContent.trim().isNotEmpty) {
+      final inlineClose = _closingPattern.firstMatch(leadingContent);
+      if (inlineClose != null) {
+        final singleLine = (inlineClose.group(1) ?? '').trim();
+        parser.advance();
+        if (singleLine.isEmpty) return null;
+        return md.Element.empty('latex-block')
+          ..attributes['data-latex'] = singleLine;
+      }
+
+      lines.add(leadingContent);
+    }
+
+    parser.advance();
+
+    while (!parser.isDone) {
+      final line = parser.current.content;
+      final closing = _closingPattern.firstMatch(line);
+      if (closing != null) {
+        final beforeClosing = closing.group(1) ?? '';
+        if (beforeClosing.trim().isNotEmpty) {
+          lines.add(beforeClosing);
+        }
+        parser.advance();
+        break;
+      }
+
       lines.add(line);
       parser.advance();
     }
@@ -381,6 +563,42 @@ class _LatexFormula extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _NoteBlockBuilder extends MarkdownElementBuilder {
+  _NoteBlockBuilder({
+    required this.previewTheme,
+    required this.exportRenderMode,
+  });
+
+  final ChatMarkdownPreviewTheme previewTheme;
+  final bool exportRenderMode;
+
+  @override
+  bool isBlockElement() => true;
+
+  @override
+  Widget? visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final body =
+        (element.attributes['data-note-body'] ?? element.textContent).trim();
+    if (body.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final noteType = (element.attributes['data-note-type'] ?? 'default').trim();
+
+    return ChatMarkdownNoteBlock(
+      noteType: noteType,
+      body: body,
+      previewTheme: previewTheme,
+      exportRenderMode: exportRenderMode,
     );
   }
 }
