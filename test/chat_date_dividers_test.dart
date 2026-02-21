@@ -20,7 +20,7 @@ void main() {
       initialMessages: [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Old',
           createdAtMs: jan27,
@@ -28,7 +28,7 @@ void main() {
         ),
         Message(
           id: 'm2',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'New',
           createdAtMs: jan28,
@@ -47,8 +47,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),

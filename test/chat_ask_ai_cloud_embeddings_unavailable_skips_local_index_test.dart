@@ -48,8 +48,8 @@ void main() {
                   backend: backend,
                   child: const ChatPage(
                     conversation: Conversation(
-                      id: 'chat_home',
-                      title: 'Chat',
+                      id: 'loop_home',
+                      title: 'Loop',
                       createdAtMs: 0,
                       updatedAtMs: 0,
                     ),

@@ -7,8 +7,8 @@ fn attachments_list_and_read_roundtrip() {
     let conn = db::open(app_dir).expect("open db");
 
     let key = [7u8; 32];
-    let conversation = db::get_or_create_main_stream_conversation(&conn, &key)
-        .expect("get main stream conversation");
+    let conversation =
+        db::get_or_create_loop_home_conversation(&conn, &key).expect("get loop home conversation");
     let message =
         db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
 

@@ -9,7 +9,7 @@ fn delete_todo_and_associated_messages_deletes_source_entry_and_activity_message
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
 
-    let convo = db::get_or_create_main_stream_conversation(&conn, &key).expect("main stream");
+    let convo = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
     let source_msg =
         db::insert_message(&conn, &key, &convo.id, "user", "source").expect("source msg");
     let note_msg = db::insert_message(&conn, &key, &convo.id, "user", "note").expect("note msg");

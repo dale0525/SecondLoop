@@ -201,7 +201,7 @@ class _FakeBackend extends AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async => const [];
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       createConversation(key, 'Chat');
 
   @override

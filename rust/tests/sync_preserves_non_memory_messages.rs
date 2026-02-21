@@ -47,7 +47,7 @@ fn sync_preserves_non_memory_messages() {
         auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
     let conn_a = db::open(&app_dir_a).expect("open A db");
     let conversation =
-        db::get_or_create_main_stream_conversation(&conn_a, &key_a).expect("main stream");
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("loop home");
 
     let provider = OkProvider;
     let ask = rag::ask_ai_with_provider(

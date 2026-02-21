@@ -260,9 +260,9 @@ class NativeAppBackend
   }
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async {
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetOrCreateMainStreamConversation(
+    return rust_core.dbGetOrCreateLoopHomeConversation(
         appDir: appDir, key: key);
   }
 

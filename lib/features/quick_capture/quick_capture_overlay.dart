@@ -147,7 +147,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
       final conversation =
-          await backend.getOrCreateMainStreamConversation(sessionKey);
+          await backend.getOrCreateLoopHomeConversation(sessionKey);
 
       final message = await backend.insertMessage(
         sessionKey,

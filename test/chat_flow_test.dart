@@ -14,7 +14,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('First launch -> main stream -> send message', (tester) async {
+  testWidgets('First launch -> loop home -> send message', (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
     final backend = MemoryBackend();
 
@@ -47,7 +47,7 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
+                  id: 'loop_home',
                   title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
@@ -97,7 +97,7 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
+                  id: 'loop_home',
                   title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
@@ -135,7 +135,7 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
+                  id: 'loop_home',
                   title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
@@ -157,7 +157,7 @@ void main() {
     final field =
         tester.widget<TextField>(find.byKey(MemoryBackend.kChatInput));
     expect(field.controller!.text, contains('\n'));
-    expect(backend._messages['chat_home'], isEmpty);
+    expect(backend._messages['loop_home'], isEmpty);
   });
 
   testWidgets('Chat input Ctrl+Enter sends message', (tester) async {
@@ -174,7 +174,7 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
+                  id: 'loop_home',
                   title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
@@ -207,13 +207,13 @@ class MemoryBackend extends AppBackend {
 
   final List<Conversation> _conversations = [
     const Conversation(
-      id: 'chat_home',
+      id: 'loop_home',
       title: 'Loop',
       createdAtMs: 0,
       updatedAtMs: 0,
     ),
   ];
-  final Map<String, List<Message>> _messages = {'chat_home': []};
+  final Map<String, List<Message>> _messages = {'loop_home': []};
 
   @override
   Future<void> init() async {}
@@ -261,7 +261,7 @@ class MemoryBackend extends AppBackend {
       List<Conversation>.from(_conversations);
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       _conversations.first;
 
   @override

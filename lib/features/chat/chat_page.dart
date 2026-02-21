@@ -413,7 +413,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  bool get _usePagination => widget.conversation.id == 'chat_home';
+  bool get _usePagination => widget.conversation.id == 'loop_home';
   bool get _isDesktopPlatform =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||

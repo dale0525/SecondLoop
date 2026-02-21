@@ -17,7 +17,7 @@ void main() {
       initialMessages: [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: longContent,
           createdAtMs: 0,

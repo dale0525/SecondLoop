@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 44284960;
+  int get rustContentHash => -849116207;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -345,7 +345,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<String> crateApiCoreDbGetOrCreateDeviceId({required String appDir});
 
-  Future<Conversation> crateApiCoreDbGetOrCreateMainStreamConversation(
+  Future<Conversation> crateApiCoreDbGetOrCreateLoopHomeConversation(
       {required String appDir, required List<int> key});
 
   Future<String?> crateApiCoreDbGetTodoRecurrenceRuleJson(
@@ -2793,7 +2793,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<Conversation> crateApiCoreDbGetOrCreateMainStreamConversation(
+  Future<Conversation> crateApiCoreDbGetOrCreateLoopHomeConversation(
       {required String appDir, required List<int> key}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -2807,15 +2807,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_conversation,
         decodeErrorData: sse_decode_AnyhowException,
       ),
-      constMeta: kCrateApiCoreDbGetOrCreateMainStreamConversationConstMeta,
+      constMeta: kCrateApiCoreDbGetOrCreateLoopHomeConversationConstMeta,
       argValues: [appDir, key],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiCoreDbGetOrCreateMainStreamConversationConstMeta =>
+  TaskConstMeta get kCrateApiCoreDbGetOrCreateLoopHomeConversationConstMeta =>
       const TaskConstMeta(
-        debugName: "db_get_or_create_main_stream_conversation",
+        debugName: "db_get_or_create_loop_home_conversation",
         argNames: ["appDir", "key"],
       );
 

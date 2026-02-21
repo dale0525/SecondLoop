@@ -17,7 +17,7 @@ void main() {
       80,
       (i) => Message(
         id: 'm${i + 1}',
-        conversationId: 'chat_home',
+        conversationId: 'loop_home',
         role: 'user',
         content: 'm${i + 1}',
         createdAtMs: i + 1,
@@ -36,8 +36,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),

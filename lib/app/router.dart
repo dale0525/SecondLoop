@@ -170,7 +170,7 @@ final class _ChatTabState extends State<_ChatTab> {
   Future<Conversation> _load() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.getOrCreateMainStreamConversation(sessionKey);
+    return backend.getOrCreateLoopHomeConversation(sessionKey);
   }
 
   @override
@@ -199,7 +199,8 @@ final class _ChatTabState extends State<_ChatTab> {
         final conversation = snapshot.data;
         if (conversation == null) {
           return Scaffold(
-            body: Center(child: Text(context.t.errors.missingMainStream)),
+            body: Center(
+                child: Text(context.t.errors.missingLoopHomeConversation)),
           );
         }
         return ChatPage(

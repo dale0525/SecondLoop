@@ -20,7 +20,7 @@ void main() {
       messages: const [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Photo',
           createdAtMs: 0,
@@ -53,8 +53,8 @@ void main() {
             child: const MaterialApp(
               home: ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -78,7 +78,7 @@ void main() {
       messages: const [
         Message(
           id: 'm_tap',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Tap me',
           createdAtMs: 0,
@@ -111,8 +111,8 @@ void main() {
             child: const MaterialApp(
               home: ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -137,7 +137,7 @@ void main() {
       messages: const [
         Message(
           id: 'm2',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Video',
           createdAtMs: 0,
@@ -188,8 +188,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -216,7 +216,7 @@ void main() {
       messages: const [
         Message(
           id: 'm3',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Video v4',
           createdAtMs: 0,
@@ -267,8 +267,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -355,7 +355,7 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) =>
       throw UnimplementedError();
 
   @override

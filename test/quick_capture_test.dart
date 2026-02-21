@@ -46,7 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.insertedMessages, hasLength(1));
-    expect(backend.insertedMessages.single.conversationId, 'chat_home');
+    expect(backend.insertedMessages.single.conversationId, 'loop_home');
     expect(backend.insertedMessages.single.role, 'user');
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
@@ -158,8 +158,8 @@ final class _UnlockedBackend extends AppBackend {
 
   final List<Conversation> _conversations = [
     const Conversation(
-      id: 'chat_home',
-      title: 'Chat',
+      id: 'loop_home',
+      title: 'Loop',
       createdAtMs: 0,
       updatedAtMs: 0,
     ),
@@ -202,7 +202,7 @@ final class _UnlockedBackend extends AppBackend {
       List<Conversation>.from(_conversations);
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       _conversations.single;
 
   @override

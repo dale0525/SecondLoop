@@ -13,7 +13,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('First launch goes directly to main stream',
+  testWidgets('First launch goes directly to loop home',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -102,7 +102,7 @@ class FakeBackend extends AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async => const [];
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       createConversation(key, 'Loop');
 
   @override

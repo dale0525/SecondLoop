@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 44284960;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -849116207;
 
 // Section: executor
 
@@ -1749,7 +1749,7 @@ fn wire__crate__api__core__db_get_or_create_device_id_impl(
         },
     )
 }
-fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+fn wire__crate__api__core__db_get_or_create_loop_home_conversation_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1757,7 +1757,7 @@ fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_get_or_create_main_stream_conversation",
+            debug_name: "db_get_or_create_loop_home_conversation",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1776,10 +1776,7 @@ fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
-                    crate::api::core::db_get_or_create_main_stream_conversation(
-                        api_app_dir,
-                        api_key,
-                    )
+                    crate::api::core::db_get_or_create_loop_home_conversation(api_app_dir, api_key)
                 })())
             }
         },
@@ -8125,7 +8122,7 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+        43 => wire__crate__api__core__db_get_or_create_loop_home_conversation_impl(
             port,
             ptr,
             rust_vec_len,

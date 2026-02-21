@@ -163,10 +163,10 @@ final class _NoLlmProfileBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       const Conversation(
-        id: 'chat_home',
-        title: 'Chat',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

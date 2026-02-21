@@ -42,8 +42,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'chat_home',
-                    title: 'Chat',
+                    id: 'loop_home',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -118,10 +118,10 @@ final class _CloudFallbackBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       const Conversation(
-        id: 'chat_home',
-        title: 'Chat',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

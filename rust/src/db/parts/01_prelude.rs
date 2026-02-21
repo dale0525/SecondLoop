@@ -14,7 +14,7 @@ use crate::embedding::Embedder;
 use crate::vector;
 
 const DEFAULT_EMBEDDING_DIM: usize = crate::embedding::DEFAULT_EMBED_DIM;
-const MAIN_STREAM_CONVERSATION_ID: &str = "chat_home";
+const LOOP_HOME_CONVERSATION_ID: &str = "loop_home";
 const KV_ACTIVE_EMBEDDING_MODEL_NAME: &str = "embedding.active_model_name";
 const KV_ACTIVE_EMBEDDING_DIM: &str = "embedding.active_dim";
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_BASE_URL: &str = "embedding.cloud_gateway.embeddings.base_url";

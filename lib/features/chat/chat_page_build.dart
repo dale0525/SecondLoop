@@ -10,8 +10,8 @@ extension _ChatPageStateBuild on _ChatPageState {
         useCompactComposer ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
     final isMobileKeyboardVisible =
         useCompactComposer && keyboardInsetBottom > 0;
-    final title = widget.conversation.id == 'chat_home'
-        ? context.t.chat.mainStreamTitle
+    final title = widget.conversation.id == 'loop_home'
+        ? context.t.chat.loopTitle
         : widget.conversation.title;
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =

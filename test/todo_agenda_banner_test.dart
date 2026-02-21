@@ -64,8 +64,8 @@ void main() {
               ),
               home: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -152,8 +152,8 @@ void main() {
               ),
               home: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -225,8 +225,8 @@ void main() {
               ),
               home: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -298,8 +298,8 @@ void main() {
               ),
               home: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -376,10 +376,10 @@ final class _AgendaBackend extends AppBackend {
       Conversation(id: 'c1', title: title, createdAtMs: 0, updatedAtMs: 0);
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       const Conversation(
-        id: 'chat_home',
-        title: 'Chat',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

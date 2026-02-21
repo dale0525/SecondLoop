@@ -17,7 +17,7 @@ void main() {
       messages: const [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -58,7 +58,7 @@ void main() {
       messages: const [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -129,8 +129,8 @@ Widget _wrapChat({required AppBackend backend}) {
           lock: () {},
           child: const ChatPage(
             conversation: Conversation(
-              id: 'chat_home',
-              title: 'Chat',
+              id: 'loop_home',
+              title: 'Loop',
               createdAtMs: 0,
               updatedAtMs: 0,
             ),
@@ -192,7 +192,7 @@ final class _Backend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override

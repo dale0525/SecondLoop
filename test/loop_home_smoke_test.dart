@@ -27,7 +27,7 @@ final class _AutoUnlockedBackend extends AppBackend {
   Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
 
   static const _mainStream = Conversation(
-    id: 'chat_home',
+    id: 'loop_home',
     title: 'Loop',
     createdAtMs: 0,
     updatedAtMs: 0,
@@ -80,7 +80,7 @@ final class _AutoUnlockedBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       _mainStream;
 
   @override

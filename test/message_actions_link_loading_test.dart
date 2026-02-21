@@ -38,7 +38,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'follow up on this',
           createdAtMs: 0,
@@ -116,7 +116,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm1',
-          conversationId: 'chat_home',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'follow up on this',
           createdAtMs: 0,
@@ -181,8 +181,8 @@ Widget _wrapChatWithCloud({required AppBackend backend}) {
               backend: backend,
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'chat_home',
-                  title: 'Chat',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
