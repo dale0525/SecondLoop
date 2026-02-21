@@ -71,6 +71,42 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Latex inline uses finite width constraints in horizontal scroll',
+      (tester) async {
+    final previewTheme =
+        resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, ThemeData());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 260,
+              child: ChatMarkdownLatexInline(
+                expression:
+                    r'\frac{a_1}{b_1}+\frac{a_2}{b_2}+\frac{a_3}{b_3}+\frac{a_4}{b_4}',
+                previewTheme: previewTheme,
+                exportRenderMode: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final scroll = tester.widget<SingleChildScrollView>(
+      find.descendant(
+        of: find.byType(ChatMarkdownLatexInline),
+        matching: find.byType(SingleChildScrollView),
+      ),
+    );
+
+    expect(scroll.child, isA<ConstrainedBox>());
+    final constrained = scroll.child! as ConstrainedBox;
+    expect(constrained.constraints.maxWidth.isFinite, isTrue);
+  });
+
   testWidgets('Latex inline remains stable under large text scale',
       (tester) async {
     final previewTheme =
@@ -136,9 +172,55 @@ $$\mathbf{P}_o=\mathbf{S}(\mathbf{s})\mathbf{T}(\mathbf{t})\\
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
+            body: SingleChildScrollView(
+              child: Center(
+                child: SizedBox(
+                  width: 360,
+                  child: MarkdownBody(
+                    data: markdown,
+                    selectable: true,
+                    softLineBreak: true,
+                    styleSheet: previewTheme.buildStyleSheet(theme),
+                    blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                    inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                    builders: buildChatMarkdownElementBuilders(
+                      previewTheme: previewTheme,
+                      exportRenderMode: false,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexBlock), findsOneWidget);
+      expect(find.byType(ChatMarkdownLatexInline), findsNWidgets(3));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Markdown preview keeps long inline fractions stable in narrow layout',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown =
+          r'Long inline formula: $\frac{a_1}{b_1}+\frac{a_2}{b_2}+\frac{a_3}{b_3}+\frac{a_4}{b_4}+\frac{a_5}{b_5}+\frac{a_6}{b_6}+\frac{a_7}{b_7}+\frac{a_8}{b_8}$ end.';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
             body: Center(
               child: SizedBox(
-                width: 360,
+                width: 300,
                 child: MarkdownBody(
                   data: markdown,
                   selectable: true,
@@ -159,8 +241,7 @@ $$\mathbf{P}_o=\mathbf{S}(\mathbf{s})\mathbf{T}(\mathbf{t})\\
 
       await tester.pumpAndSettle();
 
-      expect(find.byType(ChatMarkdownLatexBlock), findsOneWidget);
-      expect(find.byType(ChatMarkdownLatexInline), findsNWidgets(3));
+      expect(find.byType(ChatMarkdownLatexInline), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

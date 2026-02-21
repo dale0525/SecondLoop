@@ -3,10 +3,10 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-const double _kDefaultTargetPreviewPixelWidth = 2400;
+const double _kDefaultTargetPreviewPixelWidth = 3200;
 const double _kMinPreviewPixelRatio = 2.0;
 const double _kMaxPreviewPixelRatio = 6.0;
-const double _kMaxPreviewRasterDimension = 12000;
+const double _kMaxPreviewRasterDimension = 16000;
 const int _kPaginationSearchWindowRows = 140;
 const double _kPaginationMinFillRatio = 0.72;
 const double _kPaginationMaxStretchRatio = 1.18;

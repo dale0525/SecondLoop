@@ -20,7 +20,17 @@ void main() {
       devicePixelRatio: 3,
     );
 
-    expect(ratio, lessThanOrEqualTo(1.35));
+    expect(ratio, lessThanOrEqualTo(1.8));
+  });
+
+  test('Export pixel ratio keeps long previews readable in PDF', () {
+    final ratio = resolveMarkdownPreviewExportPixelRatio(
+      logicalWidth: 960,
+      logicalHeight: 7000,
+      devicePixelRatio: 2,
+    );
+
+    expect(ratio, greaterThanOrEqualTo(2.2));
   });
 
   test('Preview PDF pagination avoids splitting dense formula regions', () {
