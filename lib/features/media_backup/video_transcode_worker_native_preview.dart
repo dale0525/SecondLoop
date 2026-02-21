@@ -12,7 +12,9 @@ Future<VideoPreviewExtractResult> _extractPreviewWithNativePlatformApiInternal(
       videoBytes,
       sourceMimeType: sourceMimeType,
     );
-    final normalized = _ensurePosterBackedKeyframeInternal(result);
+    final normalized = _ensurePosterBackedKeyframeInternal(
+      _normalizeNativePreviewFramesInternal(result),
+    );
     if (normalized.hasAnyPosterOrKeyframe) {
       return normalized;
     }
@@ -21,6 +23,82 @@ Future<VideoPreviewExtractResult> _extractPreviewWithNativePlatformApiInternal(
   }
 
   return _kEmptyVideoPreviewExtractResult;
+}
+
+VideoPreviewExtractResult _normalizeNativePreviewFramesInternal(
+  VideoPreviewExtractResult result,
+) {
+  final originalFrames = result.keyframes;
+  if (originalFrames.length <= 1) {
+    return result;
+  }
+
+  final acceptedFrames = <VideoPreviewFrame>[];
+  final acceptedSignatures = <({int hash, double darkRatio})?>[];
+  final seenFrameBytes = <String>{};
+
+  for (final frame in originalFrames) {
+    final frameBytes = frame.bytes;
+    if (frameBytes.isEmpty) {
+      continue;
+    }
+
+    final bytesSignature = base64.encode(frameBytes);
+    if (!seenFrameBytes.add(bytesSignature)) {
+      continue;
+    }
+
+    final visualSignature =
+        VideoTranscodeWorker._buildFrameVisualSignature(frameBytes);
+    if (acceptedFrames.isNotEmpty && visualSignature != null) {
+      final previousSignature = acceptedSignatures.last;
+      if (previousSignature != null &&
+          VideoTranscodeWorker._areFramesNearDuplicate(
+            previousSignature,
+            visualSignature,
+          )) {
+        if (VideoTranscodeWorker._shouldPreferRicherFrame(
+          previousSignature,
+          visualSignature,
+        )) {
+          acceptedFrames[acceptedFrames.length - 1] = frame;
+          acceptedSignatures[acceptedSignatures.length - 1] = visualSignature;
+        }
+        continue;
+      }
+
+      final globalDuplicateIndex =
+          VideoTranscodeWorker._findNearDuplicateFrameIndex(
+        acceptedSignatures,
+        visualSignature,
+        maxIndexExclusive: acceptedSignatures.length - 1,
+        matcher: VideoTranscodeWorker._areFramesGlobalDuplicate,
+      );
+      if (globalDuplicateIndex != null) {
+        continue;
+      }
+    }
+
+    acceptedFrames.add(frame);
+    acceptedSignatures.add(visualSignature);
+  }
+
+  final normalizedFrames = List<VideoPreviewFrame>.unmodifiable([
+    for (var i = 0; i < acceptedFrames.length; i++)
+      VideoPreviewFrame(
+        index: i,
+        bytes: acceptedFrames[i].bytes,
+        mimeType: acceptedFrames[i].mimeType,
+        tMs: acceptedFrames[i].tMs,
+        kind: acceptedFrames[i].kind,
+      ),
+  ]);
+
+  return VideoPreviewExtractResult(
+    posterBytes: result.posterBytes,
+    posterMimeType: result.posterMimeType,
+    keyframes: normalizedFrames,
+  );
 }
 
 VideoPreviewExtractResult _ensurePosterBackedKeyframeInternal(

@@ -513,6 +513,47 @@ void main() {
   });
 
   test(
+      'VideoTranscodeWorker native preview deduplicates incremental slide frames',
+      () async {
+    final earlyFrameBytes = _buildSlideFrameBytes(hasExtraBullet: false);
+    final lateFrameBytes = _buildSlideFrameBytes(hasExtraBullet: true);
+
+    final result = await VideoTranscodeWorker.extractPreviewFrames(
+      Uint8List.fromList(const <int>[1, 2, 3, 4]),
+      sourceMimeType: 'video/mp4',
+      ffmpegExecutableResolver: () async => null,
+      nativePreviewExtractor: (videoBytes, {required sourceMimeType}) async {
+        expect(sourceMimeType, 'video/mp4');
+        expect(videoBytes, Uint8List.fromList(const <int>[1, 2, 3, 4]));
+        return VideoPreviewExtractResult(
+          posterBytes: Uint8List.fromList(const <int>[9, 9, 9]),
+          posterMimeType: 'image/jpeg',
+          keyframes: <VideoPreviewFrame>[
+            VideoPreviewFrame(
+              index: 0,
+              bytes: earlyFrameBytes,
+              mimeType: 'image/jpeg',
+              tMs: 0,
+              kind: 'scene',
+            ),
+            VideoPreviewFrame(
+              index: 1,
+              bytes: lateFrameBytes,
+              mimeType: 'image/jpeg',
+              tMs: 4000,
+              kind: 'scene',
+            ),
+          ],
+        );
+      },
+    );
+
+    expect(result.keyframes.length, 1);
+    expect(result.keyframes.first.bytes, lateFrameBytes);
+    expect(result.keyframes.first.tMs, 4000);
+  });
+
+  test(
       'VideoTranscodeWorker preview extraction falls back to native extractor when ffmpeg is unavailable',
       () async {
     final result = await VideoTranscodeWorker.extractPreviewFrames(
