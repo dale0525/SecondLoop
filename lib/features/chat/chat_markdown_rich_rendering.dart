@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
@@ -17,6 +19,9 @@ List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes() {
     _LatexInlineSyntax(),
   ];
 }
+
+const double _kLatexBlockMinLayoutWidth = 220;
+const double _kLatexBlockMaxLayoutWidth = 4096;
 
 Map<String, MarkdownElementBuilder> buildChatMarkdownElementBuilders({
   required ChatMarkdownPreviewTheme previewTheme,
@@ -109,14 +114,35 @@ class ChatMarkdownLatexBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(exportRenderMode ? 10 : 12),
         border: Border.all(color: previewTheme.borderColor.withOpacity(0.92)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: _LatexFormula(
-          expression: expression,
-          textStyle: style,
-          blockMode: true,
-          fallbackColor: previewTheme.mutedTextColor,
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          final minFormulaWidth =
+              math.max(_kLatexBlockMinLayoutWidth, availableWidth);
+          final maxFormulaWidth =
+              math.max(minFormulaWidth, _kLatexBlockMaxLayoutWidth);
+
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: minFormulaWidth,
+                maxWidth: maxFormulaWidth,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _LatexFormula(
+                  expression: expression,
+                  textStyle: style,
+                  blockMode: true,
+                  fallbackColor: previewTheme.mutedTextColor,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
