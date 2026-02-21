@@ -62,6 +62,7 @@ final class VideoManifestTranscriptSeed {
 VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
   required Map<String, Object?> runningPayload,
   required String? audioSha256,
+  String? audioMimeType,
   required Map<String, Object?>? linkedAudioPayload,
   bool allowDeferForMissingLinkedAudio = true,
 }) {
@@ -88,6 +89,46 @@ VideoManifestTranscriptSeed resolveVideoManifestTranscriptSeed({
 
   final normalizedAudioSha = (audioSha256 ?? '').trim();
   if (normalizedAudioSha.isEmpty) {
+    return const VideoManifestTranscriptSeed(
+      transcriptFull: '',
+      transcriptExcerpt: '',
+      shouldDeferForLinkedAudio: false,
+    );
+  }
+
+  String readFirstNonEmpty(List<String> keys) {
+    for (final key in keys) {
+      final value = read(runningPayload, key);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  final linkedVideoShas = <String>{
+    readFirstNonEmpty(const <String>['video_sha256', 'videoSha256']),
+    readFirstNonEmpty(const <String>[
+      'video_proxy_sha256',
+      'videoProxySha256',
+    ]),
+    readFirstNonEmpty(const <String>['original_sha256', 'originalSha256']),
+  }..removeWhere((value) => value.isEmpty);
+  if (linkedVideoShas.contains(normalizedAudioSha)) {
+    return const VideoManifestTranscriptSeed(
+      transcriptFull: '',
+      transcriptExcerpt: '',
+      shouldDeferForLinkedAudio: false,
+    );
+  }
+
+  final normalizedAudioMimeType = ((audioMimeType ??
+              runningPayload['audio_mime_type']?.toString() ??
+              runningPayload['audioMimeType']?.toString() ??
+              '')
+          .trim())
+      .toLowerCase();
+  final shouldWaitForLinkedTranscript = normalizedAudioMimeType.isEmpty ||
+      normalizedAudioMimeType.startsWith('audio/');
+  if (!shouldWaitForLinkedTranscript) {
     return const VideoManifestTranscriptSeed(
       transcriptFull: '',
       transcriptExcerpt: '',
