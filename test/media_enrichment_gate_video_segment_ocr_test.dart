@@ -323,4 +323,68 @@ void main() {
       expect(viewerInsight.processedSegmentCount, 2);
     },
   );
+
+  test(
+    'buildVideoManifestTranscriptBackfillPayload merges transcript into readable and stale detail fields',
+    () {
+      final payload = buildVideoManifestTranscriptBackfillPayload(
+        currentPayload: <String, Object?>{
+          'schema': 'secondloop.video_extract.v1',
+          'ocr_engine': 'android_mlkit',
+          'ocr_text_full': 'OCR full',
+          'ocr_text_excerpt': 'OCR excerpt',
+          'readable_text_full': 'OCR full',
+          'readable_text_excerpt': 'OCR excerpt',
+          'video_description_full': 'OCR full',
+          'video_description_excerpt': 'OCR excerpt',
+          'video_summary': 'OCR excerpt',
+        },
+        transcriptFull: 'Transcript full',
+        transcriptExcerpt: 'Transcript excerpt',
+      );
+
+      expect(payload, isNotNull);
+      expect(payload!['transcript_full'], 'Transcript full');
+      expect(payload['transcript_excerpt'], 'Transcript excerpt');
+      expect(payload['readable_text_full'], 'Transcript full\n\nOCR full');
+      expect(
+        payload['readable_text_excerpt'],
+        'Transcript excerpt\n\nOCR excerpt',
+      );
+      expect(
+        payload['video_description_full'],
+        'Transcript full\n\nOCR full',
+      );
+      expect(
+        payload['video_description_excerpt'],
+        'Transcript excerpt\n\nOCR excerpt',
+      );
+      expect(payload['video_summary'], 'Transcript excerpt OCR excerpt');
+    },
+  );
+
+  test(
+    'buildVideoManifestTranscriptBackfillPayload returns null when transcript already backfilled',
+    () {
+      final payload = buildVideoManifestTranscriptBackfillPayload(
+        currentPayload: <String, Object?>{
+          'schema': 'secondloop.video_extract.v1',
+          'ocr_engine': 'android_mlkit',
+          'ocr_text_full': 'OCR full',
+          'ocr_text_excerpt': 'OCR excerpt',
+          'transcript_full': 'Transcript full',
+          'transcript_excerpt': 'Transcript excerpt',
+          'readable_text_full': 'Transcript full\n\nOCR full',
+          'readable_text_excerpt': 'Transcript excerpt\n\nOCR excerpt',
+          'video_description_full': 'Transcript full\n\nOCR full',
+          'video_description_excerpt': 'Transcript excerpt\n\nOCR excerpt',
+          'video_summary': 'Transcript excerpt OCR excerpt',
+        },
+        transcriptFull: 'Transcript full',
+        transcriptExcerpt: 'Transcript excerpt',
+      );
+
+      expect(payload, isNull);
+    },
+  );
 }

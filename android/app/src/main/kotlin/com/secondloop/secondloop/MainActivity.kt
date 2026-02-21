@@ -28,7 +28,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.io.File
-import java.io.FileOutputStream
 import kotlin.math.abs
 
 private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
@@ -41,6 +40,7 @@ class MainActivity : FlutterFragmentActivity() {
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
+  private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
@@ -189,6 +189,17 @@ class MainActivity : FlutterFragmentActivity() {
           when (call.method) {
             "transcodeToM4a" -> handleTranscodeToM4a(call, result)
             "decodeToWavPcm16Mono16k" -> handleDecodeToWavPcm16Mono16k(call, result)
+            else -> result.notImplemented()
+          }
+        }
+      }
+
+    videoTranscodeChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/video_transcode").apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "extractPreviewPosterJpeg" -> handleExtractPreviewPosterJpeg(call, result)
+            "extractPreviewFramesJpeg" -> handleExtractPreviewFramesJpeg(call, result)
             else -> result.notImplemented()
           }
         }

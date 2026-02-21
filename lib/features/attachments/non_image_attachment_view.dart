@@ -655,7 +655,10 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         return context.t.sync.progressDialog.preparing;
       }
       if (supportsOcr && showNeedsOcrState) {
-        return context.t.attachments.content.needsOcrSubtitle;
+        if (isPdf) {
+          return context.t.attachments.content.needsOcrSubtitle;
+        }
+        return context.t.sync.progressDialog.preparing;
       }
       return '';
     }();

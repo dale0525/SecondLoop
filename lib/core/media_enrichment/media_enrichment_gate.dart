@@ -40,6 +40,7 @@ part 'media_enrichment_gate_clients.dart';
 part 'media_enrichment_gate_audio_transcribe.dart';
 part 'media_enrichment_gate_auto_ocr.dart';
 part 'media_enrichment_gate_auto_ocr_helpers.dart';
+part 'media_enrichment_gate_video_transcript_backfill.dart';
 
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});
@@ -618,6 +619,19 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         }
       }
 
+      var processedVideoTranscriptBackfill = 0;
+      if (videoExtractEnabled) {
+        try {
+          processedVideoTranscriptBackfill =
+              await _backfillVideoManifestTranscriptForRecentAttachments(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+          );
+        } catch (_) {
+          processedVideoTranscriptBackfill = 0;
+        }
+      }
+
       var processedAutoVideoOcr = 0;
       if (videoExtractEnabled) {
         try {
@@ -705,6 +719,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           processedDocs > 0 ||
           processedAutoPdfOcr > 0 ||
           processedAutoDocxOcr > 0 ||
+          processedVideoTranscriptBackfill > 0 ||
           processedAutoVideoOcr > 0 ||
           processedAudioTranscripts > 0 ||
           result.didEnrichAny;

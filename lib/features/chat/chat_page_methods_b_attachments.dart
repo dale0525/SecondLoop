@@ -284,6 +284,43 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     });
   }
 
+  Future<void> _maybeEnqueueAudioTranscribeEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256, {
+    required String mimeType,
+  }) async {
+    final normalizedMimeType = mimeType.trim().toLowerCase();
+    final canTranscribe = normalizedMimeType.startsWith('audio/') ||
+        normalizedMimeType.startsWith('video/');
+    if (!canTranscribe) {
+      return;
+    }
+
+    ContentEnrichmentConfig? contentConfig;
+    try {
+      contentConfig = await const RustContentEnrichmentConfigStore()
+          .readContentEnrichment(sessionKey);
+    } catch (_) {
+      contentConfig = null;
+    }
+
+    if (!(contentConfig?.audioTranscribeEnabled ?? true)) {
+      return;
+    }
+
+    try {
+      await backend.enqueueAttachmentAnnotation(
+        sessionKey,
+        attachmentSha256: attachmentSha256,
+        lang: 'und',
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
   Future<String?> _sendFileAttachment(
     Uint8List rawBytes,
     String mimeType, {
@@ -447,7 +484,10 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
 
           String? audioSha256;
           String? audioMimeType;
-          if (useLocalAudioTranscode) {
+          final shouldExtractVideoAudio = useLocalAudioTranscode ||
+              defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS;
+          if (shouldExtractVideoAudio) {
             final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
               rawBytes,
               sourceMimeType: normalizedMimeType,
@@ -463,10 +503,28 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
               audioSha256 = audioAttachment.sha256;
               audioMimeType = audioAttachment.mimeType;
               backupShas.add(audioAttachment.sha256);
+              unawaited(
+                _maybeEnqueueAudioTranscribeEnrichment(
+                  backend,
+                  sessionKey,
+                  audioAttachment.sha256,
+                  mimeType: audioAttachment.mimeType,
+                ).catchError((_) {}),
+              );
             }
           }
-          audioSha256 ??= primaryVideo.sha256;
-          audioMimeType ??= primaryVideo.mimeType;
+          if (audioSha256 == null) {
+            audioSha256 = primaryVideo.sha256;
+            audioMimeType = primaryVideo.mimeType;
+            unawaited(
+              _maybeEnqueueAudioTranscribeEnrichment(
+                backend,
+                sessionKey,
+                primaryVideo.sha256,
+                mimeType: primaryVideo.mimeType,
+              ).catchError((_) {}),
+            );
+          }
 
           final manifest = jsonEncode({
             ...buildVideoManifestPayload(
