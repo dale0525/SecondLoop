@@ -834,6 +834,8 @@
       "exportMenu": "Export preview",
       "exportPng": "Export as PNG",
       "exportPdf": "Export as PDF",
+      "exportCopyClipboard": "Copy to Clipboard",
+      "exportCopied": "Copied to clipboard",
       "exportDone": "Exported as $format",
       "exportSavedPath": "Saved to $path",
       "exportFailed": "Export failed: $error",

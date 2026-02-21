@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1604 (802 per locale)
+/// Strings: 1608 (804 per locale)
 ///
-/// Built on 2026-02-20 at 02:51 UTC
+/// Built on 2026-02-21 at 09:04 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1374,6 +1374,8 @@ class _StringsChatMarkdownEditorEn {
   String get exportMenu => 'Export preview';
   String get exportPng => 'Export as PNG';
   String get exportPdf => 'Export as PDF';
+  String get exportCopyClipboard => 'Copy to Clipboard';
+  String get exportCopied => 'Copied to clipboard';
   String exportDone({required Object format}) => 'Exported as ${format}';
   String exportSavedPath({required Object path}) => 'Saved to ${path}';
   String exportFailed({required Object error}) => 'Export failed: ${error}';
@@ -5470,6 +5472,10 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   String get exportPng => '导出为 PNG';
   @override
   String get exportPdf => '导出为 PDF';
+  @override
+  String get exportCopyClipboard => '复制到剪贴板';
+  @override
+  String get exportCopied => '已复制到剪贴板';
   @override
   String exportDone({required Object format}) => '已导出为 ${format}';
   @override
@@ -9881,6 +9887,10 @@ extension on Translations {
         return 'Export as PNG';
       case 'chat.markdownEditor.exportPdf':
         return 'Export as PDF';
+      case 'chat.markdownEditor.exportCopyClipboard':
+        return 'Copy to Clipboard';
+      case 'chat.markdownEditor.exportCopied':
+        return 'Copied to clipboard';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => 'Exported as ${format}';
       case 'chat.markdownEditor.exportSavedPath':
@@ -11517,6 +11527,10 @@ extension on _StringsZhCn {
         return '导出为 PNG';
       case 'chat.markdownEditor.exportPdf':
         return '导出为 PDF';
+      case 'chat.markdownEditor.exportCopyClipboard':
+        return '复制到剪贴板';
+      case 'chat.markdownEditor.exportCopied':
+        return '已复制到剪贴板';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => '已导出为 ${format}';
       case 'chat.markdownEditor.exportSavedPath':

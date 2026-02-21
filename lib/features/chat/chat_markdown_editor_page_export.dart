@@ -1,7 +1,7 @@
 part of 'chat_markdown_editor_page.dart';
 
-const double _kPdfPageMarginHorizontal = 56;
-const double _kPdfPageMarginVertical = 64;
+const double _kPdfPageMarginHorizontal = 0;
+const double _kPdfPageMarginVertical = 0;
 
 final RegExp _kPdfHeadingPattern = RegExp(
   r'^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$',
@@ -31,7 +31,21 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   ChatMarkdownThemePreset get _themePreset;
   bool _isWideLayout(BuildContext context);
 
-  Future<void> _export(_MarkdownExportFormat format) async {
+  Future<void> _handleExportAction(_MarkdownExportAction action) async {
+    switch (action) {
+      case _MarkdownExportAction.png:
+        await _exportFile(_MarkdownExportFormat.png);
+        return;
+      case _MarkdownExportAction.pdf:
+        await _exportFile(_MarkdownExportFormat.pdf);
+        return;
+      case _MarkdownExportAction.copyToClipboard:
+        await _copyToClipboard();
+        return;
+    }
+  }
+
+  Future<void> _exportFile(_MarkdownExportFormat format) async {
     if (_exporting) return;
     setState(() => _exporting = true);
 
@@ -40,9 +54,13 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         _MarkdownExportFormat.png => await _capturePreviewAsPngBytes(),
         _MarkdownExportFormat.pdf => await _buildPdfBytes(),
       };
-      final file = await _materializeExportFile(format, bytes);
+      final file = await _materializeMarkdownExportFile(
+        format: format,
+        bytes: bytes,
+        sourceMarkdown: _controller.text,
+      );
 
-      if (_shouldShareExportedFile()) {
+      if (_shouldShareMarkdownExportedFile()) {
         await Share.shareXFiles(
           <XFile>[
             XFile(
@@ -63,6 +81,61 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(doneMessage),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t.chat.markdownEditor.exportFailed(error: '$error'),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
+    }
+  }
+
+  Future<void> _copyToClipboard() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+
+    try {
+      final previewTheme =
+          resolveChatMarkdownTheme(_themePreset, Theme.of(context));
+      final plainText = buildChatMarkdownClipboardPlainText(
+        _controller.text,
+        emptyFallback: context.t.chat.markdownEditor.emptyPreview,
+      );
+      final html = buildChatMarkdownClipboardHtml(
+        markdown: _controller.text,
+        theme: previewTheme,
+        emptyFallback: context.t.chat.markdownEditor.emptyPreview,
+      );
+
+      try {
+        final clipboard = SystemClipboard.instance;
+        if (clipboard != null) {
+          final item = DataWriterItem();
+          item.add(Formats.htmlText(html));
+          item.add(Formats.plainText(plainText));
+          await clipboard.write(<DataWriterItem>[item]);
+        } else {
+          await Clipboard.setData(ClipboardData(text: plainText));
+        }
+      } catch (_) {
+        await Clipboard.setData(ClipboardData(text: plainText));
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.markdownEditor.exportCopied),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -187,10 +260,11 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     document.pageSettings.setMargins(0);
 
     const pageSize = PdfPageSize.a4;
-    const contentLeft = _kPdfPageMarginHorizontal;
-    const contentTop = _kPdfPageMarginVertical;
-    final contentWidth = pageSize.width - (_kPdfPageMarginHorizontal * 2);
-    final contentHeight = pageSize.height - (_kPdfPageMarginVertical * 2);
+    final contentBounds = buildPdfPreviewContentRect(
+      Size(pageSize.width, pageSize.height),
+    );
+    final contentWidth = contentBounds.width;
+    final contentHeight = contentBounds.height;
     final scaledHeight = sourceHeight * (contentWidth / sourceWidth);
 
     for (var offset = 0.0;
@@ -201,14 +275,17 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       final state = graphics.save();
 
       graphics.setClip(
-        bounds:
-            Rect.fromLTWH(contentLeft, contentTop, contentWidth, contentHeight),
+        bounds: contentBounds,
         mode: PdfFillMode.winding,
       );
       graphics.drawImage(
         bitmap,
         Rect.fromLTWH(
-            contentLeft, contentTop - offset, contentWidth, scaledHeight),
+          contentBounds.left,
+          contentBounds.top - offset,
+          contentBounds.width,
+          scaledHeight,
+        ),
       );
       graphics.restore(state);
     }
@@ -216,70 +293,6 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     final bytes = await document.save();
     document.dispose();
     return Uint8List.fromList(bytes);
-  }
-
-  Future<File> _materializeExportFile(
-    _MarkdownExportFormat format,
-    Uint8List bytes,
-  ) async {
-    final dir = await _resolveExportDirectory();
-    final extension = format == _MarkdownExportFormat.png ? 'png' : 'pdf';
-    final stem = deriveMarkdownExportFilenameStem(_controller.text);
-
-    var file = File('${dir.path}/$stem.$extension');
-    var duplicateIndex = 2;
-    while (await file.exists()) {
-      file = File('${dir.path}/$stem-$duplicateIndex.$extension');
-      duplicateIndex += 1;
-    }
-
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
-  }
-
-  Future<Directory> _resolveExportDirectory() async {
-    final fallbackDownloads = _fallbackDownloadsDirectory();
-    if (fallbackDownloads != null) {
-      try {
-        await fallbackDownloads.create(recursive: true);
-        return fallbackDownloads;
-      } catch (_) {
-        // Ignore and fallback to other directories.
-      }
-    }
-
-    try {
-      final downloads = await getDownloadsDirectory();
-      if (downloads != null) {
-        await downloads.create(recursive: true);
-        return downloads;
-      }
-    } catch (_) {
-      // Ignore and fallback to app documents.
-    }
-
-    final documents = await getApplicationDocumentsDirectory();
-    await documents.create(recursive: true);
-    return documents;
-  }
-
-  Directory? _fallbackDownloadsDirectory() {
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      return Directory('$home/Downloads');
-    }
-
-    final userProfile = Platform.environment['USERPROFILE'];
-    if (userProfile != null && userProfile.isNotEmpty) {
-      return Directory('$userProfile/Downloads');
-    }
-
-    return null;
-  }
-
-  bool _shouldShareExportedFile() {
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
   }
 }
 

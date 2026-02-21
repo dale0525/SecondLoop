@@ -834,6 +834,8 @@
       "exportMenu": "导出预览",
       "exportPng": "导出为 PNG",
       "exportPdf": "导出为 PDF",
+      "exportCopyClipboard": "复制到剪贴板",
+      "exportCopied": "已复制到剪贴板",
       "exportDone": "已导出为 $format",
       "exportSavedPath": "已保存到：$path",
       "exportFailed": "导出失败：$error",
