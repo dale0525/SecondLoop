@@ -334,4 +334,64 @@ $$\mathbf{P}_o=\mathbf{S}(\mathbf{s})\mathbf{T}(\mathbf{t})\\
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'Markdown preview renders long rotation-matrix latex block',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown = r'''有：
+
+$$\mathbf{u}=\begin{bmatrix}
+r\cos(\theta + \phi )\\ 
+r\sin(\theta + \phi )
+\end{bmatrix}=\begin{bmatrix}
+r(\cos\theta \cos\phi -\sin\theta \sin\phi)\\ 
+r(\sin\theta \cos\phi -\cos\theta \sin\phi)
+\end{bmatrix}\\
+=\underbrace{\begin{bmatrix}
+\cos\phi& -\sin\phi\\ 
+\sin\phi & \cos\phi
+\end{bmatrix}}_{\mathbf{R}(\phi)}\underbrace{\begin{bmatrix}
+r\cos\theta\\ 
+r\sin\theta
+\end{bmatrix}}_{\mathbf{v}}=\mathbf{R}(\phi)\mathbf{v}$$''';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Center(
+                child: SizedBox(
+                  width: 360,
+                  child: MarkdownBody(
+                    data: markdown,
+                    selectable: true,
+                    softLineBreak: true,
+                    styleSheet: previewTheme.buildStyleSheet(theme),
+                    blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                    inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                    builders: buildChatMarkdownElementBuilders(
+                      previewTheme: previewTheme,
+                      exportRenderMode: false,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexBlock), findsOneWidget);
+      expect(find.textContaining('\\underbrace'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

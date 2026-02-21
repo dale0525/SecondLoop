@@ -88,7 +88,7 @@ class ChatMarkdownLatexInline extends StatelessWidget {
                 child: _LatexFormula(
                   expression: expression,
                   textStyle: style,
-                  blockMode: true,
+                  blockMode: false,
                   fallbackColor: previewTheme.mutedTextColor,
                 ),
               ),
@@ -418,8 +418,11 @@ class _LatexFormula extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveExpression =
+        _normalizeLatexExpression(expression, blockMode: blockMode);
+
     return Math.tex(
-      expression,
+      effectiveExpression,
       mathStyle: blockMode ? MathStyle.display : MathStyle.text,
       textScaleFactor: 1.0,
       textStyle: textStyle,
@@ -434,6 +437,29 @@ class _LatexFormula extends StatelessWidget {
       },
     );
   }
+}
+
+String _normalizeLatexExpression(
+  String expression, {
+  required bool blockMode,
+}) {
+  final normalized = expression.trim();
+  if (!blockMode) {
+    return normalized;
+  }
+
+  if (!normalized.contains(r'\\')) {
+    return normalized;
+  }
+
+  final hasMultilineEnvironment = RegExp(
+    r'\begin\{(?:aligned|align|align\*|array|cases|split|gather|gathered|multline|multline\*|eqnarray)\}',
+  ).hasMatch(normalized);
+  if (hasMultilineEnvironment) {
+    return normalized;
+  }
+
+  return r'\begin{aligned}' + normalized + r'\end{aligned}';
 }
 
 class _MarkmapBlockBuilder extends MarkdownElementBuilder {
