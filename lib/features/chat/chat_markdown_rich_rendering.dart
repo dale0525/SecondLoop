@@ -420,10 +420,14 @@ class _LatexFormula extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveExpression =
         _normalizeLatexExpression(expression, blockMode: blockMode);
+    final effectiveMathStyle = _resolveLatexMathStyle(
+      effectiveExpression,
+      blockMode: blockMode,
+    );
 
     return Math.tex(
       effectiveExpression,
-      mathStyle: blockMode ? MathStyle.display : MathStyle.text,
+      mathStyle: effectiveMathStyle,
       textScaleFactor: 1.0,
       textStyle: textStyle,
       onErrorFallback: (error) {
@@ -437,6 +441,24 @@ class _LatexFormula extends StatelessWidget {
       },
     );
   }
+}
+
+MathStyle _resolveLatexMathStyle(
+  String expression, {
+  required bool blockMode,
+}) {
+  if (blockMode) {
+    return MathStyle.display;
+  }
+
+  final hasInlineMatrixEnvironment = RegExp(
+    r'\\begin\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|array)\}',
+  ).hasMatch(expression);
+  if (hasInlineMatrixEnvironment) {
+    return MathStyle.display;
+  }
+
+  return MathStyle.text;
 }
 
 String _normalizeLatexExpression(

@@ -446,4 +446,47 @@ r\sin\theta
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'Markdown preview keeps inline matrix determinants stable',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown =
+          r'则$x=\frac{det(\begin{bmatrix}1 & b\\ 2 & d\end{bmatrix})}{det(\mathbf{A})},y=\frac{det(\begin{bmatrix}a & 1\\ c & 2\end{bmatrix})}{det(\mathbf{A})}$';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 340,
+                child: MarkdownBody(
+                  data: markdown,
+                  selectable: true,
+                  softLineBreak: true,
+                  styleSheet: previewTheme.buildStyleSheet(theme),
+                  blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                  inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                  builders: buildChatMarkdownElementBuilders(
+                    previewTheme: previewTheme,
+                    exportRenderMode: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexInline), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
