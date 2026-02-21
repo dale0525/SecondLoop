@@ -115,6 +115,12 @@ final class ShareIngest {
     await prefs.setStringList(_queueKey, next);
   }
 
+  static Future<bool> hasPendingPayloads() async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(_queueKey);
+    return current != null && current.isNotEmpty;
+  }
+
   static Future<int> drainQueue(
     AppBackend backend,
     Uint8List sessionKey, {

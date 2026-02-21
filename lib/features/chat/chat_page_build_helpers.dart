@@ -168,6 +168,45 @@ Widget _buildComposerInlineButton(
 }
 
 extension _ChatPageStateComposerUi on _ChatPageState {
+  Widget _buildAttachmentSendFeedbackBanner(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Semantics(
+      liveRegion: true,
+      label: context.t.sync.progressDialog.uploadingMedia,
+      child: SlSurface(
+        key: const ValueKey('chat_attachment_send_feedback'),
+        color: colorScheme.secondaryContainer.withOpacity(0.42),
+        borderColor: tokens.borderSubtle,
+        borderRadius: BorderRadius.circular(tokens.radiusLg),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.1,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                context.t.sync.progressDialog.uploadingMedia,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompactAttachButton(
     BuildContext context, {
     bool includeLeadingPadding = true,
