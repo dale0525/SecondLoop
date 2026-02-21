@@ -20,6 +20,7 @@ void main() {
     await tester.pumpWidget(MyApp(backend: backend));
     await tester.pumpAndSettle();
 
+    expect(find.text('记录'), findsWidgets);
     expect(find.text('设置'), findsWidgets);
   });
 }

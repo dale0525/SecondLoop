@@ -2,7 +2,7 @@
   "app": {
     "title": "SecondLoop",
     "tabs": {
-      "main": "聊天",
+      "main": "记录",
       "settings": "设置"
     }
   },
@@ -53,7 +53,7 @@
     "loadFailed": "加载失败：$error",
     "saveFailed": "保存失败：$error",
     "lockGateError": "锁定流程错误：$error",
-    "missingMainStream": "缺少聊天会话"
+    "missingMainStream": "缺少记录会话"
   },
   "actions": {
     "capture": {
@@ -778,7 +778,7 @@
     "unlocking": "正在解锁…"
   },
   "chat": {
-    "mainStreamTitle": "聊天",
+    "mainStreamTitle": "记录",
     "attachTooltip": "添加附件",
     "attachPickMedia": "选择媒体文件",
     "attachTakePhoto": "拍照",
