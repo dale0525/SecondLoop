@@ -331,7 +331,7 @@ $$\int_0^1 x^2 \mathrm{d}x$$''',
   );
 
   testWidgets(
-    'Preview renders custom note tag blocks as note widgets',
+    'Preview accepts Hexo note tags without custom rendering',
     (tester) async {
       await pumpEditor(
         tester,
@@ -342,9 +342,10 @@ $$\int_0^1 x^2 \mathrm{d}x$$''',
       );
 
       expect(
-        find.byType(ChatMarkdownNoteBlock),
+        find.byKey(const ValueKey('chat_markdown_editor_preview')),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
     },
     variant: const TargetPlatformVariant(
       <TargetPlatform>{TargetPlatform.macOS},
