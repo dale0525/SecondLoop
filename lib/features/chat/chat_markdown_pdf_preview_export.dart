@@ -3,13 +3,16 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-const double _kDefaultTargetPreviewPixelWidth = 3200;
+const double _kDefaultTargetPreviewPixelWidth = 4600;
 const double _kMinPreviewPixelRatio = 2.0;
-const double _kMaxPreviewPixelRatio = 6.0;
-const double _kMaxPreviewRasterDimension = 16000;
-const int _kPaginationSearchWindowRows = 140;
+const double _kMaxPreviewPixelRatio = 8.0;
+const double _kMaxPreviewRasterDimension = 24000;
+const int _kPaginationSearchWindowRows = 180;
+const int _kPaginationWhitespaceBandRadius = 3;
 const double _kPaginationMinFillRatio = 0.72;
-const double _kPaginationMaxStretchRatio = 1.18;
+const double _kPaginationMaxStretchRatio = 1.2;
+const double _kPaginationWhitespaceRowScore = 12;
+const double _kPaginationWhitespaceBandScore = 18;
 
 bool shouldUsePreviewBasedPdfRender(String markdown) {
   return true;
@@ -108,26 +111,80 @@ List<double> computeMarkdownPreviewPdfPageOffsets({
     var nextBreakPx = targetBreakPx;
 
     if (searchEnd > searchStart) {
-      var bestRow = targetBreakPx.round().clamp(searchStart, searchEnd);
-      var bestScore = double.infinity;
-      var bestDistance = double.infinity;
+      final bandScoreCache = <int, double>{};
+      final whitespaceCandidates = <({
+        int row,
+        double rowScore,
+        double bandScore,
+        double distance,
+      })>[];
+
+      var bestFallbackRow = targetBreakPx.round().clamp(searchStart, searchEnd);
+      var bestFallbackBandScore = double.infinity;
+      var bestFallbackRowScore = double.infinity;
+      var bestFallbackDistance = double.infinity;
 
       for (var row = searchStart; row <= searchEnd; row += 1) {
-        final score = rowScoreCache.putIfAbsent(
+        final rowScore = rowScoreCache.putIfAbsent(
           row,
           () => _rowInkScore(decoded, row: row, background: background),
         );
+        final bandScore = bandScoreCache.putIfAbsent(
+          row,
+          () => _rowBandInkScore(
+            decoded,
+            row: row,
+            background: background,
+            radius: _kPaginationWhitespaceBandRadius,
+            rowScoreCache: rowScoreCache,
+          ),
+        );
         final distance = (row - targetBreakPx).abs();
 
-        if (score < bestScore - 0.25 ||
-            ((score - bestScore).abs() <= 0.25 && distance < bestDistance)) {
-          bestScore = score;
-          bestDistance = distance;
-          bestRow = row;
+        final isWhitespaceCandidate =
+            rowScore <= _kPaginationWhitespaceRowScore &&
+                bandScore <= _kPaginationWhitespaceBandScore;
+        if (isWhitespaceCandidate) {
+          whitespaceCandidates.add((
+            row: row,
+            rowScore: rowScore,
+            bandScore: bandScore,
+            distance: distance,
+          ));
+          continue;
+        }
+
+        if (bandScore < bestFallbackBandScore - 0.2 ||
+            ((bandScore - bestFallbackBandScore).abs() <= 0.2 &&
+                rowScore < bestFallbackRowScore - 0.2) ||
+            ((bandScore - bestFallbackBandScore).abs() <= 0.2 &&
+                (rowScore - bestFallbackRowScore).abs() <= 0.2 &&
+                distance < bestFallbackDistance)) {
+          bestFallbackBandScore = bandScore;
+          bestFallbackRowScore = rowScore;
+          bestFallbackDistance = distance;
+          bestFallbackRow = row;
         }
       }
 
-      nextBreakPx = bestRow.toDouble();
+      if (whitespaceCandidates.isNotEmpty) {
+        whitespaceCandidates.sort((a, b) {
+          final distanceCompare = a.distance.compareTo(b.distance);
+          if (distanceCompare != 0) {
+            return distanceCompare;
+          }
+
+          final bandCompare = a.bandScore.compareTo(b.bandScore);
+          if (bandCompare != 0) {
+            return bandCompare;
+          }
+
+          return a.rowScore.compareTo(b.rowScore);
+        });
+        nextBreakPx = whitespaceCandidates.first.row.toDouble();
+      } else {
+        nextBreakPx = bestFallbackRow.toDouble();
+      }
     }
 
     if (nextBreakPx <= currentOffsetPx + 1) {
@@ -189,6 +246,36 @@ List<double> _buildLinearPageOffsets({
     g: g / samples.length,
     b: b / samples.length,
   );
+}
+
+double _rowBandInkScore(
+  img.Image image, {
+  required int row,
+  required ({double r, double g, double b}) background,
+  required int radius,
+  required Map<int, double> rowScoreCache,
+}) {
+  final start = math.max(0, row - radius);
+  final end = math.min(image.height - 1, row + radius);
+  if (start > end) {
+    return 0;
+  }
+
+  var sum = 0.0;
+  var count = 0;
+  for (var cursor = start; cursor <= end; cursor += 1) {
+    final score = rowScoreCache.putIfAbsent(
+      cursor,
+      () => _rowInkScore(image, row: cursor, background: background),
+    );
+    sum += score;
+    count += 1;
+  }
+
+  if (count == 0) {
+    return 0;
+  }
+  return sum / count;
 }
 
 double _rowInkScore(

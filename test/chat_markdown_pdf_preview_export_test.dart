@@ -8,6 +8,7 @@ void main() {
 
     expect(shouldUsePreviewBasedPdfRender(plainMarkdown), isTrue);
   });
+
   test('Export pixel ratio scales up narrow previews for better quality', () {
     final ratio = resolveMarkdownPreviewExportPixelRatio(
       logicalWidth: 420,
@@ -25,7 +26,7 @@ void main() {
       devicePixelRatio: 3,
     );
 
-    expect(ratio, lessThanOrEqualTo(1.8));
+    expect(ratio, lessThanOrEqualTo(2.7));
   });
 
   test('Export pixel ratio keeps long previews readable in PDF', () {
@@ -35,7 +36,17 @@ void main() {
       devicePixelRatio: 2,
     );
 
-    expect(ratio, greaterThanOrEqualTo(2.2));
+    expect(ratio, greaterThanOrEqualTo(3.3));
+  });
+
+  test('Export pixel ratio keeps very tall previews readable enough', () {
+    final ratio = resolveMarkdownPreviewExportPixelRatio(
+      logicalWidth: 980,
+      logicalHeight: 16000,
+      devicePixelRatio: 2,
+    );
+
+    expect(ratio, greaterThanOrEqualTo(1.4));
   });
 
   test('Preview PDF pagination avoids splitting dense formula regions', () {
@@ -56,6 +67,37 @@ void main() {
 
     expect(offsets.length, greaterThan(1));
     expect(offsets[1], isNot(inInclusiveRange(170.0, 250.0)));
+  });
+
+  test(
+      'Preview PDF pagination avoids isolated low-ink rows inside dense blocks',
+      () {
+    final image = img.Image(width: 160, height: 520);
+
+    _fill(image, r: 245, g: 245, b: 245);
+
+    for (var y = 0; y < image.height; y += 1) {
+      for (var x = 6; x < image.width - 6; x += 16) {
+        image.setPixelRgb(x, y, 220, 220, 220);
+      }
+    }
+
+    _drawBlock(image, top: 170, bottom: 250);
+
+    for (var x = 0; x < image.width; x += 1) {
+      image.setPixelRgb(x, 230, 245, 245, 245);
+    }
+
+    final offsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: img.encodePng(image),
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 250,
+    );
+
+    expect(offsets.length, greaterThan(1));
+    expect(offsets[1], greaterThanOrEqualTo(248.0));
   });
 }
 
