@@ -162,13 +162,17 @@ String normalizeAudioTranscribeEngine(String engine) {
 bool supportsPlatformLocalRuntimeAudioTranscribe() {
   if (kIsWeb) return false;
   return defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.windows;
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 }
 
 bool supportsPlatformLocalAudioTranscribe() {
   if (kIsWeb) return false;
   return defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.windows;
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 }
 
 bool shouldEnableLocalRuntimeAudioFallback({

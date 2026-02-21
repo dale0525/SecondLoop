@@ -102,7 +102,8 @@ final class _MemClient implements AudioTranscribeClient {
 }
 
 void main() {
-  test('supports platform local runtime audio transcribe on desktop only', () {
+  test('supports platform local runtime audio transcribe on desktop and mobile',
+      () {
     final previous = debugDefaultTargetPlatformOverride;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = previous;
@@ -115,16 +116,16 @@ void main() {
     expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
+    expect(supportsPlatformLocalRuntimeAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     expect(supportsPlatformLocalRuntimeAudioTranscribe(), isFalse);
   });
 
-  test('supports platform local audio transcribe on desktop only', () {
+  test('supports platform local audio transcribe on desktop and mobile', () {
     final previous = debugDefaultTargetPlatformOverride;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = previous;
@@ -137,10 +138,10 @@ void main() {
     expect(supportsPlatformLocalAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    expect(supportsPlatformLocalAudioTranscribe(), isFalse);
+    expect(supportsPlatformLocalAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    expect(supportsPlatformLocalAudioTranscribe(), isFalse);
+    expect(supportsPlatformLocalAudioTranscribe(), isTrue);
 
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     expect(supportsPlatformLocalAudioTranscribe(), isFalse);
