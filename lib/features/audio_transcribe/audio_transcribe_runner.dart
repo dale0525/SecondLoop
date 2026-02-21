@@ -22,6 +22,7 @@ final class AudioTranscribeJob {
     required this.status,
     required this.attempts,
     required this.nextRetryAtMs,
+    this.mimeTypeHint = '',
   });
 
   final String attachmentSha256;
@@ -29,6 +30,7 @@ final class AudioTranscribeJob {
   final String status;
   final int attempts;
   final int? nextRetryAtMs;
+  final String mimeTypeHint;
 }
 
 abstract class AudioTranscribeStore {
@@ -264,6 +266,40 @@ String? sniffAudioMimeType(Uint8List bytes) {
     return 'audio/mp4';
   }
 
+  if (bytes.lengthInBytes >= 4 &&
+      bytes[0] == 0x1A &&
+      bytes[1] == 0x45 &&
+      bytes[2] == 0xDF &&
+      bytes[3] == 0xA3) {
+    final probeLen = bytes.lengthInBytes < 96 ? bytes.lengthInBytes : 96;
+    final probe = utf8.decode(
+      bytes.sublist(0, probeLen),
+      allowMalformed: true,
+    );
+    if (probe.toLowerCase().contains('webm')) {
+      return 'video/webm';
+    }
+    return 'video/x-matroska';
+  }
+
+  return null;
+}
+
+String? resolveAudioTranscribeMimeType({
+  required Uint8List bytes,
+  required String mimeTypeHint,
+}) {
+  final sniffedMimeType = sniffAudioMimeType(bytes);
+  if (sniffedMimeType != null && sniffedMimeType.trim().isNotEmpty) {
+    return sniffedMimeType;
+  }
+
+  final normalizedHint = mimeTypeHint.trim().toLowerCase();
+  if (normalizedHint.startsWith('audio/') ||
+      normalizedHint.startsWith('video/')) {
+    return normalizedHint;
+  }
+
   return null;
 }
 
@@ -296,7 +332,10 @@ final class AudioTranscribeRunner {
         final bytes = await store.readAttachmentBytes(
           attachmentSha256: job.attachmentSha256,
         );
-        final mimeType = sniffAudioMimeType(bytes);
+        final mimeType = resolveAudioTranscribeMimeType(
+          bytes: bytes,
+          mimeTypeHint: job.mimeTypeHint,
+        );
         if (mimeType == null) continue;
 
         final response = await client.transcribe(
@@ -421,6 +460,23 @@ final class BackendAudioTranscribeStore implements AudioTranscribeStore {
       nowMs: nowMs,
       limit: limit,
     );
+    if (rows.isEmpty) return const <AudioTranscribeJob>[];
+
+    final mimeTypeBySha = <String, String>{};
+    try {
+      final recent = await backend.listRecentAttachments(
+        _sessionKey,
+        limit: limit.clamp(20, 120) * 8,
+      );
+      for (final attachment in recent) {
+        final sha = attachment.sha256.trim();
+        if (sha.isEmpty || mimeTypeBySha.containsKey(sha)) continue;
+        mimeTypeBySha[sha] = attachment.mimeType.trim().toLowerCase();
+      }
+    } catch (_) {
+      // Best-effort hint loading.
+    }
+
     return rows
         .map(
           (r) => AudioTranscribeJob(
@@ -429,6 +485,7 @@ final class BackendAudioTranscribeStore implements AudioTranscribeStore {
             status: r.status,
             attempts: r.attempts,
             nextRetryAtMs: r.nextRetryAtMs,
+            mimeTypeHint: mimeTypeBySha[r.attachmentSha256] ?? '',
           ),
         )
         .toList(growable: false);

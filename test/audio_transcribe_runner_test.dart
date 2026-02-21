@@ -494,6 +494,51 @@ void main() {
     expect((segments.first as Map)['t_ms'], 0);
   });
 
+  test('sniffAudioMimeType detects webm and matroska containers', () {
+    final webm = Uint8List.fromList(
+      <int>[0x1A, 0x45, 0xDF, 0xA3, ...'webm'.codeUnits],
+    );
+    final matroska = Uint8List.fromList(
+      const <int>[0x1A, 0x45, 0xDF, 0xA3, 0x42, 0x82, 0x84],
+    );
+
+    expect(sniffAudioMimeType(webm), 'video/webm');
+    expect(sniffAudioMimeType(matroska), 'video/x-matroska');
+  });
+
+  test('runner falls back to mime type hints when sniffing is unavailable',
+      () async {
+    final store = _MemStore(
+      jobs: const [
+        AudioTranscribeJob(
+          attachmentSha256: 'hinted-video',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          mimeTypeHint: 'video/webm',
+        ),
+      ],
+      bytesBySha: {
+        'hinted-video': Uint8List.fromList(
+          const <int>[0x00, 0x11, 0x22, 0x33, 0x44],
+        ),
+      },
+    );
+    final client = _MemClient(engineName: 'whisper', modelName: 'whisper-1');
+    final runner = AudioTranscribeRunner(
+      store: store,
+      client: client,
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce(limit: 5);
+    expect(result.processed, 1);
+    expect(result.failed, 0);
+    expect(client.calls, 1);
+    expect(client.lastMimeType, 'video/webm');
+  });
+
   test('runner skips non-audio attachments', () async {
     final store = _MemStore(
       jobs: const [

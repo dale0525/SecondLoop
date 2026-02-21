@@ -150,7 +150,19 @@ final class CloudGatewayWhisperAudioTranscribeClient
     final normalized = mimeType.trim().toLowerCase();
     switch (normalized) {
       case 'audio/mp4':
+      case 'audio/m4a':
+      case 'audio/x-m4a':
         return 'm4a';
+      case 'video/mp4':
+        return 'mp4';
+      case 'video/quicktime':
+        return 'mov';
+      case 'video/webm':
+      case 'audio/webm':
+        return 'webm';
+      case 'video/x-matroska':
+      case 'audio/x-matroska':
+        return 'mkv';
       case 'audio/mpeg':
         return 'mp3';
       case 'audio/wav':
