@@ -394,4 +394,56 @@ r\sin\theta
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'Markdown preview renders tiny rotation matrix block',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown = r'''$$\tiny{
+\mathbf{R}=\\
+\begin{bmatrix}
+\cos \phi+(1-\cos \phi)r_x^2 & (1-\cos \phi)r_xr_y-r_z\sin \phi & (1-\cos \phi)r_xr_z+r_y\sin \phi\\
+(1-\cos \phi)r_xr_y+r_z\sin \phi & \cos \phi+(1-\cos \phi)r_y^2 & (1-\cos \phi)r_yr_z-r_x\sin \phi\\
+(1-\cos \phi)r_xr_z-r_y\sin \phi & (1-\cos \phi)r_yr_z+r_x\sin \phi & \cos \phi+(1-\cos \phi)r_z^2
+\end{bmatrix}
+}$$''';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Center(
+                child: SizedBox(
+                  width: 360,
+                  child: MarkdownBody(
+                    data: markdown,
+                    selectable: true,
+                    softLineBreak: true,
+                    styleSheet: previewTheme.buildStyleSheet(theme),
+                    blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                    inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                    builders: buildChatMarkdownElementBuilders(
+                      previewTheme: previewTheme,
+                      exportRenderMode: false,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexBlock), findsOneWidget);
+      expect(find.textContaining('\\tiny{'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

@@ -444,8 +444,17 @@ String _normalizeLatexExpression(
   required bool blockMode,
 }) {
   final normalized = expression.trim();
-  if (!blockMode) {
+  if (normalized.isEmpty || !blockMode) {
     return normalized;
+  }
+
+  final sizeWrapper = _extractLatexSizeWrapper(normalized);
+  if (sizeWrapper != null) {
+    final normalizedInner = _normalizeLatexExpression(
+      sizeWrapper.content,
+      blockMode: true,
+    );
+    return '{\\${sizeWrapper.command} $normalizedInner}';
   }
 
   if (!normalized.contains(r'\\')) {
@@ -453,13 +462,71 @@ String _normalizeLatexExpression(
   }
 
   final hasMultilineEnvironment = RegExp(
-    r'\begin\{(?:aligned|align|align\*|array|cases|split|gather|gathered|multline|multline\*|eqnarray)\}',
+    r'\\begin\{(?:aligned|align|align\*|array|cases|split|gather|gathered|multline|multline\*|eqnarray)\}',
   ).hasMatch(normalized);
   if (hasMultilineEnvironment) {
     return normalized;
   }
 
   return r'\begin{aligned}' + normalized + r'\end{aligned}';
+}
+
+({String command, String content})? _extractLatexSizeWrapper(
+    String expression) {
+  final commandMatch = RegExp(
+    r'^\\(tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)\s*',
+  ).firstMatch(expression);
+  if (commandMatch == null) {
+    return null;
+  }
+
+  final openingBraceIndex = commandMatch.end;
+  if (openingBraceIndex >= expression.length ||
+      expression[openingBraceIndex] != '{') {
+    return null;
+  }
+
+  var depth = 0;
+  var closingBraceIndex = -1;
+  for (var i = openingBraceIndex; i < expression.length; i++) {
+    final char = expression[i];
+    if (char == '{' && !_isEscapedLatexChar(expression, i)) {
+      depth++;
+      continue;
+    }
+    if (char == '}' && !_isEscapedLatexChar(expression, i)) {
+      depth--;
+      if (depth == 0) {
+        closingBraceIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (closingBraceIndex < 0) {
+    return null;
+  }
+
+  final trailing = expression.substring(closingBraceIndex + 1).trim();
+  if (trailing.isNotEmpty) {
+    return null;
+  }
+
+  return (
+    command: commandMatch.group(1)!,
+    content: expression.substring(openingBraceIndex + 1, closingBraceIndex),
+  );
+}
+
+bool _isEscapedLatexChar(String expression, int index) {
+  var backslashCount = 0;
+  for (var cursor = index - 1; cursor >= 0; cursor--) {
+    if (expression[cursor] != '\\') {
+      break;
+    }
+    backslashCount++;
+  }
+  return backslashCount.isOdd;
 }
 
 class _MarkmapBlockBuilder extends MarkdownElementBuilder {
