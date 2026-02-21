@@ -11,10 +11,10 @@ fn primary_chat_conversation_id_is_stable_and_deterministic() {
         .expect("init master password");
     let conn = db::open(&app_dir).expect("open db");
 
-    let conv1 = db::get_or_create_main_stream_conversation(&conn, &key).expect("get chat");
+    let conv1 = db::get_or_create_main_stream_conversation(&conn, &key).expect("get loop");
     assert_eq!(conv1.id, "chat_home");
-    assert_eq!(conv1.title, "Chat");
+    assert_eq!(conv1.title, "Loop");
 
-    let conv2 = db::get_or_create_main_stream_conversation(&conn, &key).expect("get chat again");
+    let conv2 = db::get_or_create_main_stream_conversation(&conn, &key).expect("get loop again");
     assert_eq!(conv2.id, "chat_home");
 }

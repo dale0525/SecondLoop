@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1570 (785 per locale)
 ///
-/// Built on 2026-02-21 at 09:15 UTC
+/// Built on 2026-02-21 at 09:25 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -241,7 +241,7 @@ class _StringsErrorsEn {
   String loadFailed({required Object error}) => 'Load failed: ${error}';
   String saveFailed({required Object error}) => 'Save failed: ${error}';
   String lockGateError({required Object error}) => 'LockGate error: ${error}';
-  String get missingMainStream => 'Missing chat conversation';
+  String get missingMainStream => 'Missing Loop conversation';
 }
 
 // Path: actions
@@ -372,7 +372,7 @@ class _StringsChatEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get mainStreamTitle => 'Chat';
+  String get mainStreamTitle => 'Loop';
   String get attachTooltip => 'Add attachment';
   String get attachPickMedia => 'Choose media';
   String get attachTakePhoto => 'Take photo';
@@ -600,7 +600,7 @@ class _StringsAppTabsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get main => 'Chat';
+  String get main => 'Loop';
   String get settings => 'Settings';
 }
 
@@ -8739,7 +8739,7 @@ extension on Translations {
       case 'app.title':
         return 'SecondLoop';
       case 'app.tabs.main':
-        return 'Chat';
+        return 'Loop';
       case 'app.tabs.settings':
         return 'Settings';
       case 'common.actions.cancel':
@@ -8819,7 +8819,7 @@ extension on Translations {
       case 'errors.lockGateError':
         return ({required Object error}) => 'LockGate error: ${error}';
       case 'errors.missingMainStream':
-        return 'Missing chat conversation';
+        return 'Missing Loop conversation';
       case 'actions.capture.title':
         return 'Turn this into a reminder?';
       case 'actions.capture.pickTime':
@@ -9679,7 +9679,7 @@ extension on Translations {
       case 'lock.unlocking':
         return 'Unlocking…';
       case 'chat.mainStreamTitle':
-        return 'Chat';
+        return 'Loop';
       case 'chat.attachTooltip':
         return 'Add attachment';
       case 'chat.attachPickMedia':

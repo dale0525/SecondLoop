@@ -22,7 +22,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Chat'), findsWidgets);
+    expect(find.text('Loop'), findsWidgets);
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
     await tester.pump();
@@ -48,7 +48,7 @@ void main() {
               child: const ChatPage(
                 conversation: Conversation(
                   id: 'chat_home',
-                  title: 'Chat',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -98,7 +98,7 @@ void main() {
               child: const ChatPage(
                 conversation: Conversation(
                   id: 'chat_home',
-                  title: 'Chat',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -136,7 +136,7 @@ void main() {
               child: const ChatPage(
                 conversation: Conversation(
                   id: 'chat_home',
-                  title: 'Chat',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -175,7 +175,7 @@ void main() {
               child: const ChatPage(
                 conversation: Conversation(
                   id: 'chat_home',
-                  title: 'Chat',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -208,7 +208,7 @@ class MemoryBackend extends AppBackend {
   final List<Conversation> _conversations = [
     const Conversation(
       id: 'chat_home',
-      title: 'Chat',
+      title: 'Loop',
       createdAtMs: 0,
       updatedAtMs: 0,
     ),
