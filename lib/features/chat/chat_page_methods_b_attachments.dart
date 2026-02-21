@@ -447,22 +447,26 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
 
           String? audioSha256;
           String? audioMimeType;
-          final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
-            rawBytes,
-            sourceMimeType: normalizedMimeType,
-          );
-          if (audioProxy.didTranscode &&
-              audioProxy.bytes.isNotEmpty &&
-              audioProxy.mimeType.trim().toLowerCase().startsWith('audio/')) {
-            final audioAttachment = await backend.insertAttachment(
-              sessionKey,
-              bytes: audioProxy.bytes,
-              mimeType: audioProxy.mimeType,
+          if (useLocalAudioTranscode) {
+            final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+              rawBytes,
+              sourceMimeType: normalizedMimeType,
             );
-            audioSha256 = audioAttachment.sha256;
-            audioMimeType = audioAttachment.mimeType;
-            backupShas.add(audioAttachment.sha256);
+            if (audioProxy.didTranscode &&
+                audioProxy.bytes.isNotEmpty &&
+                audioProxy.mimeType.trim().toLowerCase().startsWith('audio/')) {
+              final audioAttachment = await backend.insertAttachment(
+                sessionKey,
+                bytes: audioProxy.bytes,
+                mimeType: audioProxy.mimeType,
+              );
+              audioSha256 = audioAttachment.sha256;
+              audioMimeType = audioAttachment.mimeType;
+              backupShas.add(audioAttachment.sha256);
+            }
           }
+          audioSha256 ??= primaryVideo.sha256;
+          audioMimeType ??= primaryVideo.mimeType;
 
           final manifest = jsonEncode({
             ...buildVideoManifestPayload(

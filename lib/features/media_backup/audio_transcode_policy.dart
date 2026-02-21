@@ -1,9 +1,19 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/ai/ai_routing.dart';
 
 bool shouldUseLocalAudioTranscode({
   required SubscriptionStatus subscriptionStatus,
 }) {
-  // Audio proxy is required for Pro cloud ingress, so we keep local transcode
-  // enabled for all tiers as best effort before upload.
+  if (kIsWeb) return true;
+
+  final platform = defaultTargetPlatform;
+  final isMobile =
+      platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  if (isMobile) {
+    return false;
+  }
+
+  // Keep local transcode enabled on desktop as best effort for cloud ingress.
   return true;
 }
