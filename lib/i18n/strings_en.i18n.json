@@ -907,27 +907,6 @@
     "semanticParseStatusUpdatedGeneric": "Updated task",
     "semanticParseStatusUndone": "Undid auto action",
     "askAiRecoveredDetached": "Recovered the completed cloud answer.",
-    "topicThread": {
-      "filterTooltip": "Topic thread filter",
-      "actionLabel": "Topic thread",
-      "create": "Create topic thread",
-      "clearFilter": "Clear topic thread filter",
-      "clear": "Clear thread",
-      "manage": "Manage thread",
-      "rename": "Rename thread",
-      "delete": "Delete thread",
-      "deleteDialog": {
-        "title": "Delete topic thread?",
-        "message": "Deleting removes this thread and its message memberships.",
-        "confirm": "Delete"
-      },
-      "addMessage": "Add this message",
-      "removeMessage": "Remove this message",
-      "createDialogTitle": "Create topic thread",
-      "renameDialogTitle": "Rename topic thread",
-      "titleFieldLabel": "Thread title (optional)",
-      "untitled": "Untitled topic thread"
-    },
     "tagFilter": {
       "tooltip": "Tag filter",
       "clearFilter": "Clear tag filter",

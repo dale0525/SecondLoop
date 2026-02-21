@@ -71,15 +71,6 @@ pub struct TagMergeSuggestion {
 }
 
 #[derive(Clone, Debug)]
-pub struct TopicThread {
-    pub id: String,
-    pub conversation_id: String,
-    pub title: Option<String>,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
-}
-
-#[derive(Clone, Debug)]
 pub struct SimilarMessage {
     pub message: Message,
     pub distance: f64,

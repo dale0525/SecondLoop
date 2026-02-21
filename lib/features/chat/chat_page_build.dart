@@ -78,7 +78,6 @@ extension _ChatPageStateBuild on _ChatPageState {
       body: Column(
         children: [
           _buildSelectedTagFilterBar(),
-          _buildActiveTopicThreadBar(),
           if (!isMobileKeyboardVisible) ...[
             FutureBuilder<_TodoAgendaSummary>(
               future: _agendaFuture,

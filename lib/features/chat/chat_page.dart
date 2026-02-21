@@ -78,7 +78,6 @@ import '../tags/tag_filter_sheet.dart';
 import '../tags/tag_localization.dart';
 import '../tags/tag_picker.dart';
 import '../tags/tag_repository.dart';
-import '../topic_threads/topic_thread_repository.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
@@ -106,7 +105,6 @@ part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_methods_k_tags.dart';
 part 'chat_page_methods_l_ask_scope.dart';
 part 'chat_page_methods_m_ask_scope_empty_card.dart';
-part 'chat_page_methods_n_topic_threads.dart';
 part 'chat_page_methods_o_focus_routing.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
@@ -325,14 +323,12 @@ class ChatPage extends StatefulWidget {
     required this.conversation,
     this.isTabActive = true,
     this.tagRepository = const TagRepository(),
-    this.topicThreadRepository = const TopicThreadRepository(),
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
   final TagRepository tagRepository;
-  final TopicThreadRepository topicThreadRepository;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -356,8 +352,6 @@ class _ChatPageState extends State<ChatPage> {
   final Map<String, _AttachmentEnrichment> _attachmentEnrichmentCacheBySha256 =
       <String, _AttachmentEnrichment>{};
   TagRepository get _tagRepository => widget.tagRepository;
-  TopicThreadRepository get _topicThreadRepository =>
-      widget.topicThreadRepository;
   final Set<String> _selectedTagFilterIds = <String>{};
   final Map<String, Tag> _selectedTagFilterTagById = <String, Tag>{};
   final Set<String> _selectedTagExcludeIds = <String>{};
@@ -375,8 +369,6 @@ class _ChatPageState extends State<ChatPage> {
   bool _desktopDropActive = false;
   bool _recordingAudio = false;
   bool _thisThreadOnly = false;
-  String? _activeTopicThreadId;
-  TopicThread? _activeTopicThread;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
   bool _composerAskAiRouteLoading = true;
@@ -669,7 +661,6 @@ enum _MessageAction {
   openTodo,
   edit,
   tags,
-  topicThread,
   linkTodo,
   delete,
 }

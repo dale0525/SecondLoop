@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1604 (802 per locale)
+/// Strings: 1570 (785 per locale)
 ///
-/// Built on 2026-02-20 at 02:51 UTC
+/// Built on 2026-02-21 at 08:08 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -428,8 +428,6 @@ class _StringsChatEn {
   String get semanticParseStatusUpdatedGeneric => 'Updated task';
   String get semanticParseStatusUndone => 'Undid auto action';
   String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
-  late final _StringsChatTopicThreadEn topicThread =
-      _StringsChatTopicThreadEn._(_root);
   late final _StringsChatTagFilterEn tagFilter =
       _StringsChatTagFilterEn._(_root);
   late final _StringsChatTagPickerEn tagPicker =
@@ -1451,31 +1449,6 @@ class _StringsChatEmbeddingsConsentEn {
   String get dontShowAgain => 'Remember my choice';
   late final _StringsChatEmbeddingsConsentActionsEn actions =
       _StringsChatEmbeddingsConsentActionsEn._(_root);
-}
-
-// Path: chat.topicThread
-class _StringsChatTopicThreadEn {
-  _StringsChatTopicThreadEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get filterTooltip => 'Topic thread filter';
-  String get actionLabel => 'Topic thread';
-  String get create => 'Create topic thread';
-  String get clearFilter => 'Clear topic thread filter';
-  String get clear => 'Clear thread';
-  String get manage => 'Manage thread';
-  String get rename => 'Rename thread';
-  String get delete => 'Delete thread';
-  late final _StringsChatTopicThreadDeleteDialogEn deleteDialog =
-      _StringsChatTopicThreadDeleteDialogEn._(_root);
-  String get addMessage => 'Add this message';
-  String get removeMessage => 'Remove this message';
-  String get createDialogTitle => 'Create topic thread';
-  String get renameDialogTitle => 'Rename topic thread';
-  String get titleFieldLabel => 'Thread title (optional)';
-  String get untitled => 'Untitled topic thread';
 }
 
 // Path: chat.tagFilter
@@ -2701,19 +2674,6 @@ class _StringsChatEmbeddingsConsentActionsEn {
   // Translations
   String get useLocal => 'Use local';
   String get enableCloud => 'Enable cloud embeddings';
-}
-
-// Path: chat.topicThread.deleteDialog
-class _StringsChatTopicThreadDeleteDialogEn {
-  _StringsChatTopicThreadDeleteDialogEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'Delete topic thread?';
-  String get message =>
-      'Deleting removes this thread and its message memberships.';
-  String get confirm => 'Delete';
 }
 
 // Path: chat.tagFilter.sheet
@@ -4029,9 +3989,6 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusUndone => '已撤销自动动作';
   @override
   String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
-  @override
-  late final _StringsChatTopicThreadZhCn topicThread =
-      _StringsChatTopicThreadZhCn._(_root);
   @override
   late final _StringsChatTagFilterZhCn tagFilter =
       _StringsChatTagFilterZhCn._(_root);
@@ -5583,49 +5540,6 @@ class _StringsChatEmbeddingsConsentZhCn
   @override
   late final _StringsChatEmbeddingsConsentActionsZhCn actions =
       _StringsChatEmbeddingsConsentActionsZhCn._(_root);
-}
-
-// Path: chat.topicThread
-class _StringsChatTopicThreadZhCn extends _StringsChatTopicThreadEn {
-  _StringsChatTopicThreadZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get filterTooltip => '主题线程筛选';
-  @override
-  String get actionLabel => '主题线程';
-  @override
-  String get create => '新建主题线程';
-  @override
-  String get clearFilter => '清除线程筛选';
-  @override
-  String get clear => '清除线程';
-  @override
-  String get manage => '管理线程';
-  @override
-  String get rename => '重命名线程';
-  @override
-  String get delete => '删除线程';
-  @override
-  late final _StringsChatTopicThreadDeleteDialogZhCn deleteDialog =
-      _StringsChatTopicThreadDeleteDialogZhCn._(_root);
-  @override
-  String get addMessage => '加入此消息';
-  @override
-  String get removeMessage => '移除此消息';
-  @override
-  String get createDialogTitle => '新建主题线程';
-  @override
-  String get renameDialogTitle => '重命名主题线程';
-  @override
-  String get titleFieldLabel => '线程标题（可选）';
-  @override
-  String get untitled => '未命名主题线程';
 }
 
 // Path: chat.tagFilter
@@ -7474,25 +7388,6 @@ class _StringsChatEmbeddingsConsentActionsZhCn
   String get useLocal => '使用本地';
   @override
   String get enableCloud => '开启云端向量';
-}
-
-// Path: chat.topicThread.deleteDialog
-class _StringsChatTopicThreadDeleteDialogZhCn
-    extends _StringsChatTopicThreadDeleteDialogEn {
-  _StringsChatTopicThreadDeleteDialogZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => '删除主题线程？';
-  @override
-  String get message => '删除后将移除该线程及其消息归属，且无法撤销。';
-  @override
-  String get confirm => '删除';
 }
 
 // Path: chat.tagFilter.sheet
@@ -9986,40 +9881,6 @@ extension on Translations {
         return 'Undid auto action';
       case 'chat.askAiRecoveredDetached':
         return 'Recovered the completed cloud answer.';
-      case 'chat.topicThread.filterTooltip':
-        return 'Topic thread filter';
-      case 'chat.topicThread.actionLabel':
-        return 'Topic thread';
-      case 'chat.topicThread.create':
-        return 'Create topic thread';
-      case 'chat.topicThread.clearFilter':
-        return 'Clear topic thread filter';
-      case 'chat.topicThread.clear':
-        return 'Clear thread';
-      case 'chat.topicThread.manage':
-        return 'Manage thread';
-      case 'chat.topicThread.rename':
-        return 'Rename thread';
-      case 'chat.topicThread.delete':
-        return 'Delete thread';
-      case 'chat.topicThread.deleteDialog.title':
-        return 'Delete topic thread?';
-      case 'chat.topicThread.deleteDialog.message':
-        return 'Deleting removes this thread and its message memberships.';
-      case 'chat.topicThread.deleteDialog.confirm':
-        return 'Delete';
-      case 'chat.topicThread.addMessage':
-        return 'Add this message';
-      case 'chat.topicThread.removeMessage':
-        return 'Remove this message';
-      case 'chat.topicThread.createDialogTitle':
-        return 'Create topic thread';
-      case 'chat.topicThread.renameDialogTitle':
-        return 'Rename topic thread';
-      case 'chat.topicThread.titleFieldLabel':
-        return 'Thread title (optional)';
-      case 'chat.topicThread.untitled':
-        return 'Untitled topic thread';
       case 'chat.tagFilter.tooltip':
         return 'Tag filter';
       case 'chat.tagFilter.clearFilter':
@@ -11622,40 +11483,6 @@ extension on _StringsZhCn {
         return '已撤销自动动作';
       case 'chat.askAiRecoveredDetached':
         return '已恢复已完成的云端回答。';
-      case 'chat.topicThread.filterTooltip':
-        return '主题线程筛选';
-      case 'chat.topicThread.actionLabel':
-        return '主题线程';
-      case 'chat.topicThread.create':
-        return '新建主题线程';
-      case 'chat.topicThread.clearFilter':
-        return '清除线程筛选';
-      case 'chat.topicThread.clear':
-        return '清除线程';
-      case 'chat.topicThread.manage':
-        return '管理线程';
-      case 'chat.topicThread.rename':
-        return '重命名线程';
-      case 'chat.topicThread.delete':
-        return '删除线程';
-      case 'chat.topicThread.deleteDialog.title':
-        return '删除主题线程？';
-      case 'chat.topicThread.deleteDialog.message':
-        return '删除后将移除该线程及其消息归属，且无法撤销。';
-      case 'chat.topicThread.deleteDialog.confirm':
-        return '删除';
-      case 'chat.topicThread.addMessage':
-        return '加入此消息';
-      case 'chat.topicThread.removeMessage':
-        return '移除此消息';
-      case 'chat.topicThread.createDialogTitle':
-        return '新建主题线程';
-      case 'chat.topicThread.renameDialogTitle':
-        return '重命名主题线程';
-      case 'chat.topicThread.titleFieldLabel':
-        return '线程标题（可选）';
-      case 'chat.topicThread.untitled':
-        return '未命名主题线程';
       case 'chat.tagFilter.tooltip':
         return '标签筛选';
       case 'chat.tagFilter.clearFilter':

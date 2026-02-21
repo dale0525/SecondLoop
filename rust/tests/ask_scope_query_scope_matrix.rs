@@ -7,7 +7,6 @@ use secondloop_rust::db;
 enum FocusScope {
     Conversation,
     All,
-    TopicThread(String),
 }
 
 #[derive(Clone, Debug)]
@@ -54,7 +53,6 @@ fn list_base_message_ids(
             }
             Ok(out)
         }
-        FocusScope::TopicThread(thread_id) => db::list_topic_thread_message_ids(conn, thread_id),
     }
 }
 
@@ -172,16 +170,6 @@ fn query_scope_matrix_covers_focus_time_and_include_exclude_tags() {
     )
     .expect("tag side recent");
 
-    let thread =
-        db::create_topic_thread(&conn, &key, &main.id, Some("Main thread")).expect("create thread");
-    db::set_topic_thread_message_ids(
-        &conn,
-        &key,
-        &thread.id,
-        &[m_main_recent.id.clone(), m_main_other.id.clone()],
-    )
-    .expect("set thread messages");
-
     let week_scope = (base - 7 * 24 * 60 * 60 * 1000, base);
 
     let matrix = vec![
@@ -230,22 +218,11 @@ fn query_scope_matrix_covers_focus_time_and_include_exclude_tags() {
             vec![m_side_recent.id.clone(), m_main_recent.id.clone()],
         ),
         (
-            "topic thread include work in week",
+            "conversation include work exclude travel in week",
             QueryScope {
-                focus: FocusScope::TopicThread(thread.id.clone()),
+                focus: FocusScope::Conversation,
                 start_ms: Some(week_scope.0),
                 end_ms: Some(week_scope.1),
-                include_tag_ids: vec![work.id.clone()],
-                exclude_tag_ids: vec![],
-            },
-            vec![m_main_recent.id.clone()],
-        ),
-        (
-            "topic thread include work exclude travel",
-            QueryScope {
-                focus: FocusScope::TopicThread(thread.id.clone()),
-                start_ms: None,
-                end_ms: None,
                 include_tag_ids: vec![work.id],
                 exclude_tag_ids: vec![travel.id],
             },

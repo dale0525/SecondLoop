@@ -14,7 +14,6 @@ import 'api/media_annotation.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
-import 'api/topic_threads.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -71,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 1880590734;
+  int get rustContentHash => 44284960;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -93,7 +92,6 @@ abstract class RustLibApi extends BaseApi {
       PlatformInt64? timeEndMs,
       required List<String> includeTagIds,
       required List<String> excludeTagIds,
-      String? topicThreadId,
       required bool strictMode,
       required String localeLanguage,
       required String gatewayBaseUrl,
@@ -111,7 +109,6 @@ abstract class RustLibApi extends BaseApi {
       PlatformInt64? timeEndMs,
       required List<String> includeTagIds,
       required List<String> excludeTagIds,
-      String? topicThreadId,
       required bool strictMode,
       required String localeLanguage,
       required String localDay});
@@ -1169,39 +1166,6 @@ abstract class RustLibApi extends BaseApi {
 
   Future<Tag> crateApiTagsDbUpsertTag(
       {required String appDir, required List<int> key, required String name});
-
-  Future<TopicThread> crateApiTopicThreadsDbCreateTopicThread(
-      {required String appDir,
-      required List<int> key,
-      required String conversationId,
-      String? title});
-
-  Future<bool> crateApiTopicThreadsDbDeleteTopicThread(
-      {required String appDir,
-      required List<int> key,
-      required String threadId});
-
-  Future<List<String>> crateApiTopicThreadsDbListTopicThreadMessageIds(
-      {required String appDir,
-      required List<int> key,
-      required String threadId});
-
-  Future<List<TopicThread>> crateApiTopicThreadsDbListTopicThreads(
-      {required String appDir,
-      required List<int> key,
-      required String conversationId});
-
-  Future<List<String>> crateApiTopicThreadsDbSetTopicThreadMessageIds(
-      {required String appDir,
-      required List<int> key,
-      required String threadId,
-      required List<String> messageIds});
-
-  Future<TopicThread> crateApiTopicThreadsDbUpdateTopicThreadTitle(
-      {required String appDir,
-      required List<int> key,
-      required String threadId,
-      String? title});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -1224,7 +1188,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       PlatformInt64? timeEndMs,
       required List<String> includeTagIds,
       required List<String> excludeTagIds,
-      String? topicThreadId,
       required bool strictMode,
       required String localeLanguage,
       required String gatewayBaseUrl,
@@ -1244,7 +1207,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(timeEndMs, serializer);
         sse_encode_list_String(includeTagIds, serializer);
         sse_encode_list_String(excludeTagIds, serializer);
-        sse_encode_opt_String(topicThreadId, serializer);
         sse_encode_bool(strictMode, serializer);
         sse_encode_String(localeLanguage, serializer);
         sse_encode_String(gatewayBaseUrl, serializer);
@@ -1270,7 +1232,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         timeEndMs,
         includeTagIds,
         excludeTagIds,
-        topicThreadId,
         strictMode,
         localeLanguage,
         gatewayBaseUrl,
@@ -1298,7 +1259,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               "timeEndMs",
               "includeTagIds",
               "excludeTagIds",
-              "topicThreadId",
               "strictMode",
               "localeLanguage",
               "gatewayBaseUrl",
@@ -1320,7 +1280,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       PlatformInt64? timeEndMs,
       required List<String> includeTagIds,
       required List<String> excludeTagIds,
-      String? topicThreadId,
       required bool strictMode,
       required String localeLanguage,
       required String localDay}) {
@@ -1338,7 +1297,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(timeEndMs, serializer);
         sse_encode_list_String(includeTagIds, serializer);
         sse_encode_list_String(excludeTagIds, serializer);
-        sse_encode_opt_String(topicThreadId, serializer);
         sse_encode_bool(strictMode, serializer);
         sse_encode_String(localeLanguage, serializer);
         sse_encode_String(localDay, serializer);
@@ -1362,7 +1320,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         timeEndMs,
         includeTagIds,
         excludeTagIds,
-        topicThreadId,
         strictMode,
         localeLanguage,
         localDay,
@@ -1387,7 +1344,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "timeEndMs",
           "includeTagIds",
           "excludeTagIds",
-          "topicThreadId",
           "strictMode",
           "localeLanguage",
           "localDay",
@@ -7738,192 +7694,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: ["appDir", "key", "name"],
       );
 
-  @override
-  Future<TopicThread> crateApiTopicThreadsDbCreateTopicThread(
-      {required String appDir,
-      required List<int> key,
-      required String conversationId,
-      String? title}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(conversationId, serializer);
-        sse_encode_opt_String(title, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 168, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_topic_thread,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiTopicThreadsDbCreateTopicThreadConstMeta,
-      argValues: [appDir, key, conversationId, title],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiTopicThreadsDbCreateTopicThreadConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_create_topic_thread",
-        argNames: ["appDir", "key", "conversationId", "title"],
-      );
-
-  @override
-  Future<bool> crateApiTopicThreadsDbDeleteTopicThread(
-      {required String appDir,
-      required List<int> key,
-      required String threadId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(threadId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 169, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_bool,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiTopicThreadsDbDeleteTopicThreadConstMeta,
-      argValues: [appDir, key, threadId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiTopicThreadsDbDeleteTopicThreadConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_delete_topic_thread",
-        argNames: ["appDir", "key", "threadId"],
-      );
-
-  @override
-  Future<List<String>> crateApiTopicThreadsDbListTopicThreadMessageIds(
-      {required String appDir,
-      required List<int> key,
-      required String threadId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(threadId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 170, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_list_String,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiTopicThreadsDbListTopicThreadMessageIdsConstMeta,
-      argValues: [appDir, key, threadId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiTopicThreadsDbListTopicThreadMessageIdsConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_list_topic_thread_message_ids",
-        argNames: ["appDir", "key", "threadId"],
-      );
-
-  @override
-  Future<List<TopicThread>> crateApiTopicThreadsDbListTopicThreads(
-      {required String appDir,
-      required List<int> key,
-      required String conversationId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(conversationId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 171, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_list_topic_thread,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiTopicThreadsDbListTopicThreadsConstMeta,
-      argValues: [appDir, key, conversationId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiTopicThreadsDbListTopicThreadsConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_list_topic_threads",
-        argNames: ["appDir", "key", "conversationId"],
-      );
-
-  @override
-  Future<List<String>> crateApiTopicThreadsDbSetTopicThreadMessageIds(
-      {required String appDir,
-      required List<int> key,
-      required String threadId,
-      required List<String> messageIds}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(threadId, serializer);
-        sse_encode_list_String(messageIds, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 172, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_list_String,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiTopicThreadsDbSetTopicThreadMessageIdsConstMeta,
-      argValues: [appDir, key, threadId, messageIds],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiTopicThreadsDbSetTopicThreadMessageIdsConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_set_topic_thread_message_ids",
-        argNames: ["appDir", "key", "threadId", "messageIds"],
-      );
-
-  @override
-  Future<TopicThread> crateApiTopicThreadsDbUpdateTopicThreadTitle(
-      {required String appDir,
-      required List<int> key,
-      required String threadId,
-      String? title}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(threadId, serializer);
-        sse_encode_opt_String(title, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 173, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_topic_thread,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiTopicThreadsDbUpdateTopicThreadTitleConstMeta,
-      argValues: [appDir, key, threadId, title],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiTopicThreadsDbUpdateTopicThreadTitleConstMeta =>
-      const TaskConstMeta(
-        debugName: "db_update_topic_thread_title",
-        argNames: ["appDir", "key", "threadId", "title"],
-      );
-
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8357,12 +8127,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<TopicThread> dco_decode_list_topic_thread(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_topic_thread).toList();
-  }
-
-  @protected
   LlmProfile dco_decode_llm_profile(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -8627,21 +8391,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       title: dco_decode_String(arr[1]),
       status: dco_decode_String(arr[2]),
       dueLocalIso: dco_decode_opt_String(arr[3]),
-    );
-  }
-
-  @protected
-  TopicThread dco_decode_topic_thread(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return TopicThread(
-      id: dco_decode_String(arr[0]),
-      conversationId: dco_decode_String(arr[1]),
-      title: dco_decode_opt_String(arr[2]),
-      createdAtMs: dco_decode_i_64(arr[3]),
-      updatedAtMs: dco_decode_i_64(arr[4]),
     );
   }
 
@@ -9279,18 +9028,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<TopicThread> sse_decode_list_topic_thread(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <TopicThread>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_topic_thread(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -9617,22 +9354,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         title: var_title,
         status: var_status,
         dueLocalIso: var_dueLocalIso);
-  }
-
-  @protected
-  TopicThread sse_decode_topic_thread(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_String(deserializer);
-    var var_conversationId = sse_decode_String(deserializer);
-    var var_title = sse_decode_opt_String(deserializer);
-    var var_createdAtMs = sse_decode_i_64(deserializer);
-    var var_updatedAtMs = sse_decode_i_64(deserializer);
-    return TopicThread(
-        id: var_id,
-        conversationId: var_conversationId,
-        title: var_title,
-        createdAtMs: var_createdAtMs,
-        updatedAtMs: var_updatedAtMs);
   }
 
   @protected
@@ -10121,16 +9842,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_topic_thread(
-      List<TopicThread> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_topic_thread(item, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
@@ -10357,16 +10068,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.title, serializer);
     sse_encode_String(self.status, serializer);
     sse_encode_opt_String(self.dueLocalIso, serializer);
-  }
-
-  @protected
-  void sse_encode_topic_thread(TopicThread self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.id, serializer);
-    sse_encode_String(self.conversationId, serializer);
-    sse_encode_opt_String(self.title, serializer);
-    sse_encode_i_64(self.createdAtMs, serializer);
-    sse_encode_i_64(self.updatedAtMs, serializer);
   }
 
   @protected
