@@ -3,6 +3,11 @@ import 'package:image/image.dart' as img;
 import 'package:secondloop/features/chat/chat_markdown_pdf_preview_export.dart';
 
 void main() {
+  test('Preview-based PDF render is enabled for plain markdown too', () {
+    const plainMarkdown = '# Title\n\nRegular paragraph with **bold** text.';
+
+    expect(shouldUsePreviewBasedPdfRender(plainMarkdown), isTrue);
+  });
   test('Export pixel ratio scales up narrow previews for better quality', () {
     final ratio = resolveMarkdownPreviewExportPixelRatio(
       logicalWidth: 420,

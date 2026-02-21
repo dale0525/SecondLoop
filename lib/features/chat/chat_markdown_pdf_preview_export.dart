@@ -12,14 +12,7 @@ const double _kPaginationMinFillRatio = 0.72;
 const double _kPaginationMaxStretchRatio = 1.18;
 
 bool shouldUsePreviewBasedPdfRender(String markdown) {
-  const markmapFence = r'(^|\n)\s*```(?:markmap|mindmap)\b';
-  final hasMarkmap = RegExp(markmapFence, multiLine: true).hasMatch(markdown);
-  if (hasMarkmap) return true;
-
-  final hasBlockLatex = RegExp(r'(^|\n)\s*\$\$').hasMatch(markdown);
-  if (hasBlockLatex) return true;
-
-  return RegExp(r'(?<!\\)\$(?!\$)[^\n$]+(?<!\\)\$(?!\$)').hasMatch(markdown);
+  return true;
 }
 
 double resolveMarkdownPreviewExportPixelRatio({

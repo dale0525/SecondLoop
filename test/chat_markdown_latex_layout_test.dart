@@ -137,6 +137,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Latex inline width hugs compact formulas in export mode',
+      (tester) async {
+    final previewTheme =
+        resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, ThemeData());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 520,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('A'),
+                  ChatMarkdownLatexInline(
+                    expression: r'x+y',
+                    previewTheme: previewTheme,
+                    exportRenderMode: true,
+                  ),
+                  const Text('B'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final inlineSize = tester.getSize(find.byType(ChatMarkdownLatexInline));
+    expect(inlineSize.width, lessThan(120));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'Markdown preview renders projection-matrix latex without layout exceptions',
     (tester) async {

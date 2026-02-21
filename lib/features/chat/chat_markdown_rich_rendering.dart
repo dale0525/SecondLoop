@@ -85,6 +85,7 @@ class ChatMarkdownLatexInline extends StatelessWidget {
               ),
               child: Align(
                 alignment: Alignment.centerLeft,
+                widthFactor: 1,
                 child: _LatexFormula(
                   expression: expression,
                   textStyle: style,
