@@ -245,4 +245,93 @@ $$\mathbf{P}_o=\mathbf{S}(\mathbf{s})\mathbf{T}(\mathbf{t})\\
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'Markdown preview keeps inline fractions stable at large accessibility scale',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown =
+          r'Accessibility formula: $\frac{a_1x+b_1}{c_1x+d_1}+\frac{a_2x+b_2}{c_2x+d_2}+\frac{a_3x+b_3}{c_3x+d_3}$ end.';
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 320,
+                  child: MarkdownBody(
+                    data: markdown,
+                    selectable: true,
+                    softLineBreak: true,
+                    styleSheet: previewTheme.buildStyleSheet(theme),
+                    blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                    inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                    builders: buildChatMarkdownElementBuilders(
+                      previewTheme: previewTheme,
+                      exportRenderMode: false,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexInline), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Export-mode markdown keeps inline fractions stable',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown =
+          r'Export formula: $\frac{a_1x+b_1}{c_1x+d_1}+\frac{a_2x+b_2}{c_2x+d_2}+\frac{a_3x+b_3}{c_3x+d_3}$ end.';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: MarkdownBody(
+                  data: markdown,
+                  selectable: false,
+                  softLineBreak: true,
+                  styleSheet: previewTheme.buildExportStyleSheet(theme),
+                  blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                  inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                  builders: buildChatMarkdownElementBuilders(
+                    previewTheme: previewTheme,
+                    exportRenderMode: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexInline), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

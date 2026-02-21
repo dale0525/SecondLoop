@@ -88,7 +88,7 @@ class ChatMarkdownLatexInline extends StatelessWidget {
                 child: _LatexFormula(
                   expression: expression,
                   textStyle: style,
-                  blockMode: false,
+                  blockMode: true,
                   fallbackColor: previewTheme.mutedTextColor,
                 ),
               ),
@@ -421,6 +421,7 @@ class _LatexFormula extends StatelessWidget {
     return Math.tex(
       expression,
       mathStyle: blockMode ? MathStyle.display : MathStyle.text,
+      textScaleFactor: 1.0,
       textStyle: textStyle,
       onErrorFallback: (error) {
         return Text(
