@@ -382,6 +382,16 @@ extension _ChatPageStateBuild on _ChatPageState {
               ),
             ),
           _buildAskScopeEmptyCard(),
+          if (_showAttachmentSendFeedback)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: _buildAttachmentSendFeedbackBanner(context),
+                ),
+              ),
+            ),
           AnimatedPadding(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,

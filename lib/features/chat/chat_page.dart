@@ -369,6 +369,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isAtBottom = true;
   bool _hasUnseenNewMessages = false;
   bool _sending = false;
+  bool _showAttachmentSendFeedback = false;
   bool _asking = false;
   bool _stopRequested = false;
   bool _desktopDropActive = false;

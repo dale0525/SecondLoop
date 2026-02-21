@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
@@ -16,6 +16,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../media_backup/audio_transcode_policy.dart';
@@ -44,6 +45,7 @@ final class ShareIngestGate extends StatefulWidget {
 final class _ShareIngestGateState extends State<ShareIngestGate>
     with WidgetsBindingObserver {
   bool _draining = false;
+  bool _showDrainFeedback = false;
   Object? _backendIdentity;
   Uint8List? _sessionKey;
   StreamSubscription<void>? _drainSubscription;
@@ -95,6 +97,12 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  void _setDrainFeedbackVisible(bool visible) {
+    if (!mounted) return;
+    if (_showDrainFeedback == visible) return;
+    setState(() => _showDrainFeedback = visible);
   }
 
   Future<void> _maybeEnqueueCloudMediaBackup(
@@ -173,13 +181,18 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     if (_draining) return;
     _draining = true;
 
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final lang = Localizations.localeOf(context).toLanguageTag();
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+
+    var feedbackVisible = false;
     try {
-      final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
-      final syncEngine = SyncEngineScope.maybeOf(context);
-      final lang = Localizations.localeOf(context).toLanguageTag();
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
+      feedbackVisible = await ShareIngest.hasPendingPayloads();
+      if (!feedbackVisible) return;
+      _setDrainFeedbackVisible(true);
       final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
         subscriptionStatus: subscriptionStatus,
       );
@@ -530,11 +543,92 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       );
     } finally {
       _draining = false;
+      if (feedbackVisible) {
+        _setDrainFeedbackVisible(false);
+      }
     }
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        IgnorePointer(
+          ignoring: !_showDrainFeedback,
+          child: SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: !_showDrainFeedback
+                      ? const SizedBox.shrink()
+                      : ConstrainedBox(
+                          key: const ValueKey('share_ingest_feedback'),
+                          constraints: const BoxConstraints(maxWidth: 460),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.shadow.withOpacity(0.14),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      context.t.sync.progressDialog.preparing,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurface,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
