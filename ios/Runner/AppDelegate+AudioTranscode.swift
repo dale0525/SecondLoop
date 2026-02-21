@@ -56,6 +56,35 @@ extension AppDelegate {
     }
   }
 
+
+  func handleExtractPreviewFramesJpeg(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let inputPathRaw = args["input_path"] as? String,
+          let outputDirRaw = args["output_dir"] as? String else {
+      result(nil)
+      return
+    }
+
+    let inputPath = inputPathRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let outputDirPath = outputDirRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if inputPath.isEmpty || outputDirPath.isEmpty {
+      result(nil)
+      return
+    }
+
+    let maxKeyframes = max(1, min(48, args["max_keyframes"] as? Int ?? 24))
+    let frameIntervalSeconds = max(1, min(600, args["frame_interval_seconds"] as? Int ?? 8))
+
+    extractPreviewFramesJpeg(
+      inputPath: inputPath,
+      outputDirPath: outputDirPath,
+      maxKeyframes: maxKeyframes,
+      frameIntervalSeconds: frameIntervalSeconds
+    ) { payload in
+      result(payload)
+    }
+  }
+
   func handleDecodeToWavPcm16Mono16k(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let inputPathRaw = args["input_path"] as? String,
@@ -112,8 +141,8 @@ extension AppDelegate {
 
       let generator = AVAssetImageGenerator(asset: asset)
       generator.appliesPreferredTrackTransform = true
-      generator.requestedTimeToleranceBefore = .zero
-      generator.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 30)
+      generator.requestedTimeToleranceBefore = CMTime.positiveInfinity
+      generator.requestedTimeToleranceAfter = CMTime.positiveInfinity
 
       let cgImage: CGImage
       do {
@@ -145,6 +174,146 @@ extension AppDelegate {
       DispatchQueue.main.async {
         completion(ok)
       }
+    }
+  }
+
+
+  private func extractPreviewFramesJpeg(
+    inputPath: String,
+    outputDirPath: String,
+    maxKeyframes: Int,
+    frameIntervalSeconds: Int,
+    completion: @escaping ([String: Any]?) -> Void
+  ) {
+    let inputUrl = URL(fileURLWithPath: inputPath)
+    let outputDirUrl = URL(fileURLWithPath: outputDirPath, isDirectory: true)
+
+    do {
+      try FileManager.default.createDirectory(
+        at: outputDirUrl,
+        withIntermediateDirectories: true
+      )
+    } catch {
+      completion(nil)
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let asset = AVAsset(url: inputUrl)
+      guard asset.tracks(withMediaType: .video).isEmpty == false else {
+        DispatchQueue.main.async {
+          completion(nil)
+        }
+        return
+      }
+
+      let generator = AVAssetImageGenerator(asset: asset)
+      generator.appliesPreferredTrackTransform = true
+      generator.requestedTimeToleranceBefore = CMTime.positiveInfinity
+      generator.requestedTimeToleranceAfter = CMTime.positiveInfinity
+
+      let durationSeconds = CMTimeGetSeconds(asset.duration)
+      let durationMs = durationSeconds.isFinite
+        ? max(0, Int((durationSeconds * 1000.0).rounded()))
+        : 0
+      let intervalMs = max(1, frameIntervalSeconds) * 1000
+
+      let posterPath = outputDirUrl
+        .appendingPathComponent("poster.jpg")
+        .path
+      let posterOk = self.writePreviewFrameAsJpeg(
+        generator: generator,
+        timeMs: 0,
+        outputPath: posterPath
+      )
+
+      var keyframes = [[String: Any]]()
+      var seenHashes = Set<Int>()
+      var timeMs = 0
+      let maxDurationMs = durationMs > 0 ? durationMs : intervalMs * maxKeyframes
+
+      while keyframes.count < maxKeyframes && timeMs <= maxDurationMs {
+        let filename = String(format: "keyframe_%03d.jpg", keyframes.count)
+        let outputPath = outputDirUrl.appendingPathComponent(filename).path
+        if self.writePreviewFrameAsJpeg(
+          generator: generator,
+          timeMs: timeMs,
+          outputPath: outputPath
+        ) {
+          let frameUrl = URL(fileURLWithPath: outputPath)
+          let data = try? Data(contentsOf: frameUrl)
+          if let frameData = data, frameData.isEmpty == false {
+            let hash = frameData.hashValue
+            if seenHashes.insert(hash).inserted {
+              keyframes.append([
+                "path": outputPath,
+                "t_ms": timeMs,
+              ])
+            } else {
+              try? FileManager.default.removeItem(at: frameUrl)
+            }
+          }
+        }
+        timeMs += intervalMs
+      }
+
+      if keyframes.isEmpty && posterOk {
+        keyframes.append([
+          "path": posterPath,
+          "t_ms": 0,
+        ])
+      }
+
+      let payload: [String: Any] = [
+        "poster_path": posterOk ? posterPath : NSNull(),
+        "keyframes": keyframes,
+      ]
+      DispatchQueue.main.async {
+        completion(payload)
+      }
+    }
+  }
+
+  private func writePreviewFrameAsJpeg(
+    generator: AVAssetImageGenerator,
+    timeMs: Int,
+    outputPath: String
+  ) -> Bool {
+    let outputUrl = URL(fileURLWithPath: outputPath)
+    let outputDir = outputUrl.deletingLastPathComponent()
+    do {
+      try FileManager.default.createDirectory(
+        at: outputDir,
+        withIntermediateDirectories: true
+      )
+      if FileManager.default.fileExists(atPath: outputPath) {
+        try FileManager.default.removeItem(at: outputUrl)
+      }
+    } catch {
+      return false
+    }
+
+    let safeTimeMs = max(0, timeMs)
+    let time = CMTime(value: Int64(safeTimeMs), timescale: 1000)
+
+    let cgImage: CGImage
+    do {
+      cgImage = try generator.copyCGImage(at: time, actualTime: nil)
+    } catch {
+      return false
+    }
+
+    let image = UIImage(cgImage: cgImage)
+    guard let jpegData = image.jpegData(compressionQuality: 0.82),
+          jpegData.isEmpty == false else {
+      return false
+    }
+
+    do {
+      try jpegData.write(to: outputUrl, options: .atomic)
+      return FileManager.default.fileExists(atPath: outputPath)
+    } catch {
+      return false
     }
   }
 

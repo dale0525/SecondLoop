@@ -105,6 +105,8 @@ import Vision
         switch call.method {
         case "extractPreviewPosterJpeg":
           self.handleExtractPreviewPosterJpeg(call: call, result: result)
+        case "extractPreviewFramesJpeg":
+          self.handleExtractPreviewFramesJpeg(call: call, result: result)
         default:
           result(FlutterMethodNotImplemented)
         }

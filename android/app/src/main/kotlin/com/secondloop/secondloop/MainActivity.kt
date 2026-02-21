@@ -7,7 +7,6 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.CancellationSignal
-import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,7 +17,6 @@ import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import android.media.MediaMetadataRetriever
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
@@ -30,7 +28,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.io.File
-import java.io.FileOutputStream
 import kotlin.math.abs
 
 private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
@@ -202,6 +199,7 @@ class MainActivity : FlutterFragmentActivity() {
         setMethodCallHandler { call, result ->
           when (call.method) {
             "extractPreviewPosterJpeg" -> handleExtractPreviewPosterJpeg(call, result)
+            "extractPreviewFramesJpeg" -> handleExtractPreviewFramesJpeg(call, result)
             else -> result.notImplemented()
           }
         }
@@ -471,69 +469,6 @@ class MainActivity : FlutterFragmentActivity() {
         result.success(ok)
       }
     }.start()
-  }
-
-  private fun handleExtractPreviewPosterJpeg(call: MethodCall, result: MethodChannel.Result) {
-    val args = call.arguments as? Map<*, *>
-    val inputPath = (args?.get("input_path") as? String)?.trim().orEmpty()
-    val outputPath = (args?.get("output_path") as? String)?.trim().orEmpty()
-    if (inputPath.isEmpty() || outputPath.isEmpty()) {
-      result.success(false)
-      return
-    }
-
-    Thread {
-      val ok = try {
-        extractPreviewPosterJpeg(inputPath = inputPath, outputPath = outputPath)
-      } catch (_: Throwable) {
-        false
-      }
-      runOnUiThread {
-        result.success(ok)
-      }
-    }.start()
-  }
-
-  private fun extractPreviewPosterJpeg(inputPath: String, outputPath: String): Boolean {
-    val inputFile = File(inputPath)
-    if (!inputFile.exists() || !inputFile.isFile) return false
-
-    val outputFile = File(outputPath)
-    outputFile.parentFile?.mkdirs()
-    if (outputFile.exists()) {
-      outputFile.delete()
-    }
-
-    var retriever: MediaMetadataRetriever? = null
-    var bitmap: Bitmap? = null
-    try {
-      retriever = MediaMetadataRetriever()
-      retriever.setDataSource(inputPath)
-      bitmap = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-      val frame = bitmap ?: return false
-
-      FileOutputStream(outputFile).use { output ->
-        if (!frame.compress(Bitmap.CompressFormat.JPEG, 82, output)) {
-          return false
-        }
-        output.flush()
-      }
-
-      return outputFile.exists() && outputFile.length() > 0
-    } catch (_: Throwable) {
-      return false
-    } finally {
-      try {
-        bitmap?.recycle()
-      } catch (_: Throwable) {
-        // ignore
-      }
-      try {
-        retriever?.release()
-      } catch (_: Throwable) {
-        // ignore
-      }
-    }
   }
 
   private fun handleTranscodeToM4a(call: MethodCall, result: MethodChannel.Result) {

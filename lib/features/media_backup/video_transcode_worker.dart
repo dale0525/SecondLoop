@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
+part 'video_transcode_worker_native_preview.dart';
+
 final class VideoTranscodeSegment {
   const VideoTranscodeSegment({
     required this.index,
@@ -497,48 +499,11 @@ final class VideoTranscodeWorker {
     Uint8List videoBytes, {
     required String sourceMimeType,
     VideoNativePreviewExtractor? nativePreviewExtractor,
-  }) async {
-    final extractor =
-        nativePreviewExtractor ?? _extractPreviewWithNativePlatformChannel;
-    try {
-      final result = await extractor(
-        videoBytes,
-        sourceMimeType: sourceMimeType,
-      );
-      final normalized = _ensurePosterBackedKeyframe(result);
-      if (normalized.hasAnyPosterOrKeyframe) {
-        return normalized;
-      }
-    } catch (_) {
-      // Ignore native fallback errors.
-    }
-
-    return _kEmptyVideoPreviewExtractResult;
-  }
-
-  static VideoPreviewExtractResult _ensurePosterBackedKeyframe(
-    VideoPreviewExtractResult result,
-  ) {
-    final posterBytes = result.posterBytes;
-    if (posterBytes == null || posterBytes.isEmpty) {
-      return result;
-    }
-    if (result.keyframes.isNotEmpty) {
-      return result;
-    }
-
-    return VideoPreviewExtractResult(
-      posterBytes: posterBytes,
-      posterMimeType: result.posterMimeType,
-      keyframes: List<VideoPreviewFrame>.unmodifiable([
-        VideoPreviewFrame(
-          index: 0,
-          bytes: posterBytes,
-          mimeType: result.posterMimeType,
-          tMs: 0,
-          kind: 'scene',
-        ),
-      ]),
+  }) {
+    return _extractPreviewWithNativePlatformApiInternal(
+      videoBytes,
+      sourceMimeType: sourceMimeType,
+      nativePreviewExtractor: nativePreviewExtractor,
     );
   }
 
@@ -546,65 +511,11 @@ final class VideoTranscodeWorker {
       _extractPreviewWithNativePlatformChannel(
     Uint8List videoBytes, {
     required String sourceMimeType,
-  }) async {
-    if (kIsWeb) {
-      return _kEmptyVideoPreviewExtractResult;
-    }
-    if (!(Platform.isAndroid || Platform.isIOS)) {
-      return _kEmptyVideoPreviewExtractResult;
-    }
-
-    Directory? tempDir;
-    try {
-      tempDir = await Directory.systemTemp.createTemp(
-        'secondloop_video_preview_native_',
-      );
-      final sourceExt = _extensionForMimeType(sourceMimeType);
-      final inputPath = '${tempDir.path}/input.$sourceExt';
-      final outputPath = '${tempDir.path}/poster.jpg';
-      await File(inputPath).writeAsBytes(videoBytes, flush: true);
-
-      final ok = await _videoTranscodeChannel.invokeMethod<bool>(
-        'extractPreviewPosterJpeg',
-        <String, Object?>{
-          'input_path': inputPath,
-          'output_path': outputPath,
-        },
-      );
-      if (ok != true) {
-        return _kEmptyVideoPreviewExtractResult;
-      }
-
-      final outputFile = File(outputPath);
-      if (!await outputFile.exists()) {
-        return _kEmptyVideoPreviewExtractResult;
-      }
-
-      final posterBytes = await outputFile.readAsBytes();
-      if (posterBytes.isEmpty) {
-        return _kEmptyVideoPreviewExtractResult;
-      }
-
-      return VideoPreviewExtractResult(
-        posterBytes: posterBytes,
-        posterMimeType: 'image/jpeg',
-        keyframes: const <VideoPreviewFrame>[],
-      );
-    } on MissingPluginException {
-      return _kEmptyVideoPreviewExtractResult;
-    } on PlatformException {
-      return _kEmptyVideoPreviewExtractResult;
-    } catch (_) {
-      return _kEmptyVideoPreviewExtractResult;
-    } finally {
-      if (tempDir != null) {
-        try {
-          await tempDir.delete(recursive: true);
-        } catch (_) {
-          // Ignore temp cleanup failures.
-        }
-      }
-    }
+  }) {
+    return _extractPreviewWithNativePlatformChannelInternal(
+      videoBytes,
+      sourceMimeType: sourceMimeType,
+    );
   }
 
   static VideoTranscodeResult _fallback(Uint8List bytes, String mimeType) {
