@@ -21,6 +21,7 @@ import 'chat_markdown_clipboard_export.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
 import 'chat_markdown_pdf_export_layout.dart';
+import 'chat_markdown_pdf_preview_export.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';

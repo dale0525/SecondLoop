@@ -177,9 +177,12 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       }
 
       final renderObject = await _waitForPreviewRenderBoundary();
-      final pixelRatio = ui
-          .PlatformDispatcher.instance.views.first.devicePixelRatio
-          .clamp(1.0, 3.0);
+      final pixelRatio = resolveMarkdownPreviewExportPixelRatio(
+        logicalWidth: renderObject.size.width,
+        logicalHeight: renderObject.size.height,
+        devicePixelRatio:
+            ui.PlatformDispatcher.instance.views.first.devicePixelRatio,
+      );
 
       final image = await renderObject.toImage(pixelRatio: pixelRatio);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -220,7 +223,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   Future<Uint8List> _buildPdfBytes() async {
     final normalized = sanitizeChatMarkdown(_controller.text);
 
-    if (_requiresPreviewBasedPdfRender(normalized)) {
+    if (shouldUsePreviewBasedPdfRender(normalized)) {
       final previewPng = await _capturePreviewAsPngBytes();
       return _buildPdfFromPreviewImage(previewPng);
     }
@@ -233,17 +236,6 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       blocks: blocks,
       emptyFallback: context.t.chat.markdownEditor.emptyPreview,
     );
-  }
-
-  bool _requiresPreviewBasedPdfRender(String markdown) {
-    const markmapFence = r'(^|\n)\s*```(?:markmap|mindmap)\b';
-    final hasMarkmap = RegExp(markmapFence, multiLine: true).hasMatch(markdown);
-    if (hasMarkmap) return true;
-
-    final hasBlockLatex = RegExp(r'(^|\n)\s*\$\$').hasMatch(markdown);
-    if (hasBlockLatex) return true;
-
-    return RegExp(r'(?<!\\)\$(?!\$)[^\n$]+(?<!\\)\$(?!\$)').hasMatch(markdown);
   }
 
   Future<Uint8List> _buildPdfFromPreviewImage(Uint8List pngBytes) async {
@@ -266,10 +258,15 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     final contentWidth = contentBounds.width;
     final contentHeight = contentBounds.height;
     final scaledHeight = sourceHeight * (contentWidth / sourceWidth);
+    final pageOffsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: pngBytes,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      contentWidth: contentWidth,
+      contentHeight: contentHeight,
+    );
 
-    for (var offset = 0.0;
-        offset < scaledHeight || (offset == 0 && scaledHeight == 0);
-        offset += contentHeight) {
+    for (final offset in pageOffsets) {
       final page = document.pages.add();
       final graphics = page.graphics;
       final state = graphics.save();
