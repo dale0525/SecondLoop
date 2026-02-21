@@ -279,6 +279,40 @@ fn parse_audio_transcript_payload(payload_json: &str) -> Result<(String, String)
     Ok((normalized_full, normalized_excerpt))
 }
 
+fn should_wait_for_linked_audio_transcript(manifest: &ParsedVideoManifestPayload) -> bool {
+    let Some(audio_sha256) = manifest.audio_sha256.as_deref() else {
+        return false;
+    };
+    let normalized_audio_sha256 = audio_sha256.trim();
+    if normalized_audio_sha256.is_empty() {
+        return false;
+    }
+
+    if manifest
+        .video_sha256
+        .trim()
+        .eq_ignore_ascii_case(normalized_audio_sha256)
+    {
+        return false;
+    }
+
+    if manifest.segments.iter().any(|segment| {
+        segment
+            .sha256
+            .trim()
+            .eq_ignore_ascii_case(normalized_audio_sha256)
+    }) {
+        return false;
+    }
+
+    let normalized_audio_mime_type = manifest
+        .audio_mime_type
+        .as_deref()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    normalized_audio_mime_type.is_empty() || normalized_audio_mime_type.starts_with("audio/")
+}
+
 fn list_due_attachment_annotations_filtered(
     conn: &Connection,
     now_ms: i64,
@@ -565,15 +599,18 @@ pub fn process_pending_document_extractions(
 
                 let mut transcript_full = String::new();
                 let mut transcript_excerpt = String::new();
+                let should_wait_for_audio_transcript =
+                    should_wait_for_linked_audio_transcript(&manifest);
                 if let Some(audio_sha256) = manifest.audio_sha256.as_deref() {
                     let transcript_payload_json =
                         read_attachment_annotation_payload_json(conn, key, audio_sha256)?;
 
                     if let Some(payload_json) = transcript_payload_json {
-                        let (full, excerpt) = parse_audio_transcript_payload(&payload_json)?;
-                        transcript_full = full;
-                        transcript_excerpt = excerpt;
-                    } else if cfg.audio_transcribe_enabled {
+                        if let Ok((full, excerpt)) = parse_audio_transcript_payload(&payload_json) {
+                            transcript_full = full;
+                            transcript_excerpt = excerpt;
+                        }
+                    } else if should_wait_for_audio_transcript && cfg.audio_transcribe_enabled {
                         enqueue_attachment_annotation(conn, audio_sha256, "und", now)?;
                         enqueue_attachment_annotation(
                             conn,
