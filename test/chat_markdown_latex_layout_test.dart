@@ -489,4 +489,52 @@ r\sin\theta
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'Markdown preview keeps multiple inline matrix formulas stable in paragraph',
+    (tester) async {
+      final theme = ThemeData(
+        textTheme: const TextTheme(bodyMedium: TextStyle(fontSize: 14)),
+      );
+      final previewTheme =
+          resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
+      const markdown =
+          r'矩阵求解：$x=\frac{det(\begin{bmatrix}1 & b\\ 2 & d\end{bmatrix})}{det(\mathbf{A})}$，并且$y=\frac{det(\begin{bmatrix}a & 1\\ c & 2\end{bmatrix})}{det(\mathbf{A})}$，最后有$z=x+y$，可继续代入后续推导。';
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.4)),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 280,
+                  child: MarkdownBody(
+                    data: markdown,
+                    selectable: false,
+                    softLineBreak: true,
+                    styleSheet: previewTheme.buildExportStyleSheet(theme),
+                    blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+                    inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+                    builders: buildChatMarkdownElementBuilders(
+                      previewTheme: previewTheme,
+                      exportRenderMode: true,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatMarkdownLatexInline), findsNWidgets(3));
+      expect(find.textContaining('矩阵求解'), findsOneWidget);
+      expect(find.textContaining('后续推导'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
