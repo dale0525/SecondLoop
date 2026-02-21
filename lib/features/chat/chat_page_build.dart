@@ -21,25 +21,6 @@ extension _ChatPageStateBuild on _ChatPageState {
       appBar: AppBar(
         title: Text(title),
         actions: [
-          PopupMenuButton<bool>(
-            initialValue: _thisThreadOnly,
-            onSelected: (value) => _setState(() => _thisThreadOnly = value),
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: false,
-                child: Text(context.t.chat.focus.allMemories),
-              ),
-              PopupMenuItem(
-                value: true,
-                child: Text(context.t.chat.focus.thisThread),
-              ),
-            ],
-            tooltip: context.t.chat.focus.tooltip,
-            child: const SlIconButtonFrame(
-              key: ValueKey('chat_filter_menu'),
-              icon: Icons.filter_alt_rounded,
-            ),
-          ),
           IconButton(
             key: const ValueKey('chat_tag_filter_button'),
             tooltip: _tagFilterTooltip(locale),

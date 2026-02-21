@@ -42,7 +42,6 @@ import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/db.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_focus_ring.dart';
-import '../../ui/sl_icon_button_frame.dart';
 import '../../ui/sl_icon_button.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
 import '../../ui/sl_markdown_style.dart';

@@ -117,7 +117,7 @@ void main() {
     tester.view.physicalSize = const Size(900, 700);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('chat_filter_menu')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
   });
 
   testWidgets('Quick capture shows capture sheet for time phrases',
