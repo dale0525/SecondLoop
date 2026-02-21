@@ -7,6 +7,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import kotlin.math.ceil
 
 fun MainActivity.handleExtractPreviewPosterJpeg(
   call: MethodCall,
@@ -86,14 +87,21 @@ private fun extractPreviewFramesJpeg(
         ?.toLongOrNull()
         ?.coerceAtLeast(0L)
         ?: 0L
-    val intervalMs = frameIntervalSeconds.toLong() * 1000L
+    val baseIntervalMs = frameIntervalSeconds.toLong() * 1000L
+    val adaptiveIntervalMs = if (durationMs > 0L && maxKeyframes > 0) {
+      val spreadInterval = ceil(durationMs.toDouble() / maxKeyframes.toDouble()).toLong()
+        .coerceAtLeast(1000L)
+      maxOf(baseIntervalMs, spreadInterval)
+    } else {
+      baseIntervalMs
+    }
     val posterPath = "${outputDir.absolutePath}/poster.jpg"
     val posterOk = writeFrameAsJpeg(retriever, 0L, posterPath)
 
     val keyframes = mutableListOf<Map<String, Any>>()
     val seenHashes = mutableSetOf<Int>()
     var tMs = 0L
-    val maxDurationMs = if (durationMs > 0L) durationMs else intervalMs * maxKeyframes
+    val maxDurationMs = if (durationMs > 0L) durationMs else adaptiveIntervalMs * maxKeyframes
     while (keyframes.size < maxKeyframes && tMs <= maxDurationMs) {
       val outputPath =
         "${outputDir.absolutePath}/keyframe_${String.format(Locale.US, "%03d", keyframes.size)}.jpg"
@@ -114,8 +122,8 @@ private fun extractPreviewFramesJpeg(
           }
         }
       }
-      if (intervalMs <= 0L) break
-      tMs += intervalMs
+      if (adaptiveIntervalMs <= 0L) break
+      tMs += adaptiveIntervalMs
     }
 
     if (keyframes.isEmpty() && posterOk) {

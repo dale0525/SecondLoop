@@ -304,6 +304,14 @@ final class VideoTranscodeWorker {
       return _kEmptyVideoPreviewExtractResult;
     }
 
+    final hasCustomMaxKeyframes = maxKeyframes != null;
+    final safeMaxKeyframes = (maxKeyframes ?? 24).clamp(1, 48);
+    final safeInterval = frameIntervalSeconds.clamp(1, 600);
+    final fallbackMaxKeyframes = hasCustomMaxKeyframes ? safeMaxKeyframes : 48;
+    final normalizedKind = keyframeKind.trim().isEmpty
+        ? 'scene'
+        : keyframeKind.trim().toLowerCase();
+
     final run = commandRunner ?? Process.run;
     final ffmpegResolver = ffmpegExecutableResolver ??
         debugFfmpegExecutableResolver ??
@@ -313,16 +321,11 @@ final class VideoTranscodeWorker {
       return _extractPreviewWithNativePlatformApi(
         videoBytes,
         sourceMimeType: normalizedMime,
+        maxKeyframes: fallbackMaxKeyframes,
+        frameIntervalSeconds: safeInterval,
         nativePreviewExtractor: nativePreviewExtractor,
       );
     }
-
-    final hasCustomMaxKeyframes = maxKeyframes != null;
-    final safeMaxKeyframes = (maxKeyframes ?? 24).clamp(1, 48);
-    final safeInterval = frameIntervalSeconds.clamp(1, 600);
-    final normalizedKind = keyframeKind.trim().isEmpty
-        ? 'scene'
-        : keyframeKind.trim().toLowerCase();
 
     Directory? tempDir;
     try {
@@ -478,6 +481,8 @@ final class VideoTranscodeWorker {
       final nativeFallback = await _extractPreviewWithNativePlatformApi(
         videoBytes,
         sourceMimeType: normalizedMime,
+        maxKeyframes: fallbackMaxKeyframes,
+        frameIntervalSeconds: safeInterval,
         nativePreviewExtractor: nativePreviewExtractor,
       );
       if (nativeFallback.hasAnyPosterOrKeyframe) {
@@ -498,11 +503,15 @@ final class VideoTranscodeWorker {
   static Future<VideoPreviewExtractResult> _extractPreviewWithNativePlatformApi(
     Uint8List videoBytes, {
     required String sourceMimeType,
+    required int maxKeyframes,
+    required int frameIntervalSeconds,
     VideoNativePreviewExtractor? nativePreviewExtractor,
   }) {
     return _extractPreviewWithNativePlatformApiInternal(
       videoBytes,
       sourceMimeType: sourceMimeType,
+      maxKeyframes: maxKeyframes,
+      frameIntervalSeconds: frameIntervalSeconds,
       nativePreviewExtractor: nativePreviewExtractor,
     );
   }
@@ -511,10 +520,14 @@ final class VideoTranscodeWorker {
       _extractPreviewWithNativePlatformChannel(
     Uint8List videoBytes, {
     required String sourceMimeType,
+    required int maxKeyframes,
+    required int frameIntervalSeconds,
   }) {
     return _extractPreviewWithNativePlatformChannelInternal(
       videoBytes,
       sourceMimeType: sourceMimeType,
+      maxKeyframes: maxKeyframes,
+      frameIntervalSeconds: frameIntervalSeconds,
     );
   }
 

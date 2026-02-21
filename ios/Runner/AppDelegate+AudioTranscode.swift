@@ -216,7 +216,17 @@ extension AppDelegate {
       let durationMs = durationSeconds.isFinite
         ? max(0, Int((durationSeconds * 1000.0).rounded()))
         : 0
-      let intervalMs = max(1, frameIntervalSeconds) * 1000
+      let baseIntervalMs = max(1, frameIntervalSeconds) * 1000
+      let adaptiveIntervalMs: Int
+      if durationMs > 0 && maxKeyframes > 0 {
+        let spreadInterval = max(
+          1000,
+          Int(ceil(Double(durationMs) / Double(maxKeyframes)))
+        )
+        adaptiveIntervalMs = max(baseIntervalMs, spreadInterval)
+      } else {
+        adaptiveIntervalMs = baseIntervalMs
+      }
 
       let posterPath = outputDirUrl
         .appendingPathComponent("poster.jpg")
@@ -230,7 +240,7 @@ extension AppDelegate {
       var keyframes = [[String: Any]]()
       var seenHashes = Set<Int>()
       var timeMs = 0
-      let maxDurationMs = durationMs > 0 ? durationMs : intervalMs * maxKeyframes
+      let maxDurationMs = durationMs > 0 ? durationMs : adaptiveIntervalMs * maxKeyframes
 
       while keyframes.count < maxKeyframes && timeMs <= maxDurationMs {
         let filename = String(format: "keyframe_%03d.jpg", keyframes.count)
@@ -254,7 +264,7 @@ extension AppDelegate {
             }
           }
         }
-        timeMs += intervalMs
+        timeMs += adaptiveIntervalMs
       }
 
       if keyframes.isEmpty && posterOk {

@@ -3,15 +3,22 @@ part of 'video_transcode_worker.dart';
 Future<VideoPreviewExtractResult> _extractPreviewWithNativePlatformApiInternal(
   Uint8List videoBytes, {
   required String sourceMimeType,
+  required int maxKeyframes,
+  required int frameIntervalSeconds,
   VideoNativePreviewExtractor? nativePreviewExtractor,
 }) async {
-  final extractor = nativePreviewExtractor ??
-      VideoTranscodeWorker._extractPreviewWithNativePlatformChannel;
   try {
-    final result = await extractor(
-      videoBytes,
-      sourceMimeType: sourceMimeType,
-    );
+    final result = nativePreviewExtractor == null
+        ? await VideoTranscodeWorker._extractPreviewWithNativePlatformChannel(
+            videoBytes,
+            sourceMimeType: sourceMimeType,
+            maxKeyframes: maxKeyframes,
+            frameIntervalSeconds: frameIntervalSeconds,
+          )
+        : await nativePreviewExtractor(
+            videoBytes,
+            sourceMimeType: sourceMimeType,
+          );
     final normalized = _ensurePosterBackedKeyframeInternal(
       _normalizeNativePreviewFramesInternal(result),
     );
@@ -131,6 +138,8 @@ Future<VideoPreviewExtractResult>
     _extractPreviewWithNativePlatformChannelInternal(
   Uint8List videoBytes, {
   required String sourceMimeType,
+  required int maxKeyframes,
+  required int frameIntervalSeconds,
 }) async {
   if (kIsWeb) {
     return _kEmptyVideoPreviewExtractResult;
@@ -158,8 +167,8 @@ Future<VideoPreviewExtractResult>
       <String, Object?>{
         'input_path': inputPath,
         'output_dir': outputDirPath,
-        'max_keyframes': 24,
-        'frame_interval_seconds': 8,
+        'max_keyframes': maxKeyframes.clamp(1, 48),
+        'frame_interval_seconds': frameIntervalSeconds.clamp(1, 600),
       },
     );
 
