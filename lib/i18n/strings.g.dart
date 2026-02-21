@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1570 (785 per locale)
 ///
-/// Built on 2026-02-21 at 08:08 UTC
+/// Built on 2026-02-21 at 08:50 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -241,7 +241,7 @@ class _StringsErrorsEn {
   String loadFailed({required Object error}) => 'Load failed: ${error}';
   String saveFailed({required Object error}) => 'Save failed: ${error}';
   String lockGateError({required Object error}) => 'LockGate error: ${error}';
-  String get missingMainStream => 'Missing Main Stream';
+  String get missingMainStream => 'Missing chat conversation';
 }
 
 // Path: actions
@@ -372,7 +372,7 @@ class _StringsChatEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get mainStreamTitle => 'Main Stream';
+  String get mainStreamTitle => 'Chat';
   String get attachTooltip => 'Add attachment';
   String get attachPickMedia => 'Choose media';
   String get attachTakePhoto => 'Take photo';
@@ -600,7 +600,7 @@ class _StringsAppTabsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get main => 'Main';
+  String get main => 'Chat';
   String get settings => 'Settings';
 }
 
@@ -3698,7 +3698,7 @@ class _StringsErrorsZhCn extends _StringsErrorsEn {
   @override
   String lockGateError({required Object error}) => '锁定流程错误：${error}';
   @override
-  String get missingMainStream => '缺少主线对话';
+  String get missingMainStream => '缺少聊天会话';
 }
 
 // Path: actions
@@ -3894,7 +3894,7 @@ class _StringsChatZhCn extends _StringsChatEn {
 
   // Translations
   @override
-  String get mainStreamTitle => '主线';
+  String get mainStreamTitle => '聊天';
   @override
   String get attachTooltip => '添加附件';
   @override
@@ -4252,7 +4252,7 @@ class _StringsAppTabsZhCn extends _StringsAppTabsEn {
 
   // Translations
   @override
-  String get main => '主线';
+  String get main => '聊天';
   @override
   String get settings => '设置';
 }
@@ -8739,7 +8739,7 @@ extension on Translations {
       case 'app.title':
         return 'SecondLoop';
       case 'app.tabs.main':
-        return 'Main';
+        return 'Chat';
       case 'app.tabs.settings':
         return 'Settings';
       case 'common.actions.cancel':
@@ -8819,7 +8819,7 @@ extension on Translations {
       case 'errors.lockGateError':
         return ({required Object error}) => 'LockGate error: ${error}';
       case 'errors.missingMainStream':
-        return 'Missing Main Stream';
+        return 'Missing chat conversation';
       case 'actions.capture.title':
         return 'Turn this into a reminder?';
       case 'actions.capture.pickTime':
@@ -9679,7 +9679,7 @@ extension on Translations {
       case 'lock.unlocking':
         return 'Unlocking…';
       case 'chat.mainStreamTitle':
-        return 'Main Stream';
+        return 'Chat';
       case 'chat.attachTooltip':
         return 'Add attachment';
       case 'chat.attachPickMedia':
@@ -10347,7 +10347,7 @@ extension on _StringsZhCn {
       case 'app.title':
         return 'SecondLoop';
       case 'app.tabs.main':
-        return '主线';
+        return '聊天';
       case 'app.tabs.settings':
         return '设置';
       case 'common.actions.cancel':
@@ -10427,7 +10427,7 @@ extension on _StringsZhCn {
       case 'errors.lockGateError':
         return ({required Object error}) => '锁定流程错误：${error}';
       case 'errors.missingMainStream':
-        return '缺少主线对话';
+        return '缺少聊天会话';
       case 'actions.capture.title':
         return '要把它变成提醒吗？';
       case 'actions.capture.pickTime':
@@ -11281,7 +11281,7 @@ extension on _StringsZhCn {
       case 'lock.unlocking':
         return '正在解锁…';
       case 'chat.mainStreamTitle':
-        return '主线';
+        return '聊天';
       case 'chat.attachTooltip':
         return '添加附件';
       case 'chat.attachPickMedia':

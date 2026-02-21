@@ -9,8 +9,7 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Quick capture inserts into Main Stream and hides',
-      (tester) async {
+  testWidgets('Quick capture inserts into Chat and hides', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -47,7 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.insertedMessages, hasLength(1));
-    expect(backend.insertedMessages.single.conversationId, 'main_stream');
+    expect(backend.insertedMessages.single.conversationId, 'chat_home');
     expect(backend.insertedMessages.single.role, 'user');
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
@@ -72,11 +71,10 @@ void main() {
 
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
-    expect(controller.consumeOpenMainStreamRequest(), isFalse);
+    expect(controller.consumeOpenChatRequest(), isFalse);
   });
 
-  testWidgets(
-      'Quick capture opens Main Stream after window leaves compact size',
+  testWidgets('Quick capture opens Chat after window leaves compact size',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _UnlockedBackend();
@@ -109,7 +107,7 @@ void main() {
     tester.view.physicalSize = const Size(900, 120);
     await tester.pump();
 
-    controller.hide(openMainStream: true);
+    controller.hide(openChat: true);
     await tester.pump();
 
     expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
@@ -160,8 +158,8 @@ final class _UnlockedBackend extends AppBackend {
 
   final List<Conversation> _conversations = [
     const Conversation(
-      id: 'main_stream',
-      title: 'Main Stream',
+      id: 'chat_home',
+      title: 'Chat',
       createdAtMs: 0,
       updatedAtMs: 0,
     ),

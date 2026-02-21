@@ -88,8 +88,8 @@ final class _Backend extends AppBackend {
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       const Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
+        id: 'chat_home',
+        title: 'Chat',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

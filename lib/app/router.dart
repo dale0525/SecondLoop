@@ -13,7 +13,7 @@ import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
 
 enum AppTab {
-  mainStream(Icons.chat_bubble_outline, Icons.chat_bubble),
+  chat(Icons.chat_bubble_outline, Icons.chat_bubble),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
@@ -22,7 +22,7 @@ enum AppTab {
   final IconData selectedIcon;
 
   String label(BuildContext context) => switch (this) {
-        AppTab.mainStream => context.t.app.tabs.main,
+        AppTab.chat => context.t.app.tabs.main,
         AppTab.settings => context.t.app.tabs.settings,
       };
 }
@@ -56,8 +56,8 @@ class _AppShellState extends State<AppShell> {
     final controller = _quickCaptureController;
     if (controller == null) return;
 
-    final shouldOpenMainStream = controller.consumeOpenMainStreamRequest();
-    if (!shouldOpenMainStream || _selectedIndex == 0 || !mounted) {
+    final shouldOpenChat = controller.consumeOpenChatRequest();
+    if (!shouldOpenChat || _selectedIndex == 0 || !mounted) {
       return;
     }
 
@@ -82,11 +82,11 @@ class _AppShellState extends State<AppShell> {
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
-                  _MainStreamTab(isActive: _selectedIndex == 0),
+                  _ChatTab(isActive: _selectedIndex == 0),
                   const _SettingsTab(),
                 ],
               )
-            : const _MainStreamTab(isActive: true);
+            : const _ChatTab(isActive: true);
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
@@ -155,16 +155,16 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-final class _MainStreamTab extends StatefulWidget {
-  const _MainStreamTab({required this.isActive});
+final class _ChatTab extends StatefulWidget {
+  const _ChatTab({required this.isActive});
 
   final bool isActive;
 
   @override
-  State<_MainStreamTab> createState() => _MainStreamTabState();
+  State<_ChatTab> createState() => _ChatTabState();
 }
 
-final class _MainStreamTabState extends State<_MainStreamTab> {
+final class _ChatTabState extends State<_ChatTab> {
   Future<Conversation>? _conversationFuture;
 
   Future<Conversation> _load() async {

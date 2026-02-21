@@ -22,7 +22,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Main Stream'), findsWidgets);
+    expect(find.text('Chat'), findsWidgets);
 
     await tester.enterText(find.byKey(MemoryBackend.kChatInput), 'hello');
     await tester.pump();
@@ -47,8 +47,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -97,8 +97,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -135,8 +135,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -157,7 +157,7 @@ void main() {
     final field =
         tester.widget<TextField>(find.byKey(MemoryBackend.kChatInput));
     expect(field.controller!.text, contains('\n'));
-    expect(backend._messages['main_stream'], isEmpty);
+    expect(backend._messages['chat_home'], isEmpty);
   });
 
   testWidgets('Chat input Ctrl+Enter sends message', (tester) async {
@@ -174,8 +174,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -207,13 +207,13 @@ class MemoryBackend extends AppBackend {
 
   final List<Conversation> _conversations = [
     const Conversation(
-      id: 'main_stream',
-      title: 'Main Stream',
+      id: 'chat_home',
+      title: 'Chat',
       createdAtMs: 0,
       updatedAtMs: 0,
     ),
   ];
-  final Map<String, List<Message>> _messages = {'main_stream': []};
+  final Map<String, List<Message>> _messages = {'chat_home': []};
 
   @override
   Future<void> init() async {}

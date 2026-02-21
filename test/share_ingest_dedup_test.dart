@@ -27,8 +27,8 @@ final class _CaptureBackend extends AppBackend {
   final List<String> insertedContents = <String>[];
 
   static const _mainStream = Conversation(
-    id: 'main_stream',
-    title: 'Main Stream',
+    id: 'chat_home',
+    title: 'Chat',
     createdAtMs: 0,
     updatedAtMs: 0,
   );

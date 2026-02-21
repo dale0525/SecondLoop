@@ -58,7 +58,7 @@ pub fn get_or_create_main_stream_conversation(
     }
 
     let now = now_ms();
-    let title = "Main Stream";
+    let title = "Chat";
 
     let title_blob = encrypt_bytes(key, title.as_bytes(), b"conversation.title")?;
     conn.execute(

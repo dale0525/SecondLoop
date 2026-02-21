@@ -18,7 +18,7 @@ void main() {
       initialMessages: const <Message>[
         Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'chat_home',
           role: 'user',
           content: 'line 1\nline 2',
           createdAtMs: 1,
@@ -37,8 +37,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),

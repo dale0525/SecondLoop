@@ -32,7 +32,7 @@ void main() {
       messages: [
         Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'chat_home',
           role: 'user',
           content: longText.toString(),
           createdAtMs: 0,
@@ -68,8 +68,8 @@ Widget _wrapChat({required AppBackend backend}) {
           lock: () {},
           child: const ChatPage(
             conversation: Conversation(
-              id: 'main_stream',
-              title: 'Main Stream',
+              id: 'chat_home',
+              title: 'Chat',
               createdAtMs: 0,
               updatedAtMs: 0,
             ),

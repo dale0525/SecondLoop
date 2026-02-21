@@ -27,8 +27,8 @@ void main() {
     engine.start();
 
     const conversation = Conversation(
-      id: 'main_stream',
-      title: 'Main Stream',
+      id: 'chat_home',
+      title: 'Chat',
       createdAtMs: 0,
       updatedAtMs: 0,
     );
@@ -86,7 +86,7 @@ final class _SyncingRunner implements SyncRunner {
     backend.addRemoteMessage(
       const Message(
         id: 'm1',
-        conversationId: 'main_stream',
+        conversationId: 'chat_home',
         role: 'user',
         content: 'hello from device A',
         createdAtMs: 0,

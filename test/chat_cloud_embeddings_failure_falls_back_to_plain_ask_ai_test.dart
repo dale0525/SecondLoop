@@ -43,8 +43,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
+                    id: 'chat_home',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),

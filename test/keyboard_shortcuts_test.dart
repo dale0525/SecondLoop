@@ -51,8 +51,8 @@ final class _AutoUnlockedBackend extends AppBackend {
   Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
 
   static const _mainStream = Conversation(
-    id: 'main_stream',
-    title: 'Main Stream',
+    id: 'chat_home',
+    title: 'Chat',
     createdAtMs: 0,
     updatedAtMs: 0,
   );

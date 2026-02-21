@@ -24,8 +24,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -64,7 +64,7 @@ class PagingBackend extends AppBackend {
           messageCount,
           (i) => Message(
             id: 'm${i + 1}',
-            conversationId: 'main_stream',
+            conversationId: 'chat_home',
             role: 'user',
             content: 'm${i + 1}',
             createdAtMs: i + 1,
@@ -111,8 +111,8 @@ class PagingBackend extends AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async =>
       const <Conversation>[
         Conversation(
-          id: 'main_stream',
-          title: 'Main Stream',
+          id: 'chat_home',
+          title: 'Chat',
           createdAtMs: 0,
           updatedAtMs: 0,
         ),
@@ -125,8 +125,8 @@ class PagingBackend extends AppBackend {
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       const Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
+        id: 'chat_home',
+        title: 'Chat',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

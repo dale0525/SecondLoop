@@ -20,7 +20,7 @@ void main() {
       messages: const [
         Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'chat_home',
           role: 'user',
           content: 'Photo',
           createdAtMs: 0,
@@ -53,8 +53,8 @@ void main() {
             child: const MaterialApp(
               home: ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -78,7 +78,7 @@ void main() {
       messages: const [
         Message(
           id: 'm_tap',
-          conversationId: 'main_stream',
+          conversationId: 'chat_home',
           role: 'user',
           content: 'Tap me',
           createdAtMs: 0,
@@ -111,8 +111,8 @@ void main() {
             child: const MaterialApp(
               home: ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -137,7 +137,7 @@ void main() {
       messages: const [
         Message(
           id: 'm2',
-          conversationId: 'main_stream',
+          conversationId: 'chat_home',
           role: 'user',
           content: 'Video',
           createdAtMs: 0,
@@ -188,8 +188,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -216,7 +216,7 @@ void main() {
       messages: const [
         Message(
           id: 'm3',
-          conversationId: 'main_stream',
+          conversationId: 'chat_home',
           role: 'user',
           content: 'Video v4',
           createdAtMs: 0,
@@ -267,8 +267,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'chat_home',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),

@@ -202,7 +202,7 @@ class _FakeBackend extends AppBackend {
 
   @override
   Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      createConversation(key, 'Main Stream');
+      createConversation(key, 'Chat');
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>

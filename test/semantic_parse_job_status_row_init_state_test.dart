@@ -16,7 +16,7 @@ void main() {
     (WidgetTester tester) async {
       const message = Message(
         id: 'm1',
-        conversationId: 'main_stream',
+        conversationId: 'chat_home',
         role: 'user',
         content: 'Hello',
         createdAtMs: 0,

@@ -23,7 +23,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm1',
-            conversationId: 'main_stream',
+            conversationId: 'chat_home',
             role: 'user',
             content: 'Review this document',
             createdAtMs: 1,
@@ -72,7 +72,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm1',
-            conversationId: 'main_stream',
+            conversationId: 'chat_home',
             role: 'user',
             content: 'Review this document',
             createdAtMs: 1,
@@ -118,7 +118,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm1',
-            conversationId: 'main_stream',
+            conversationId: 'chat_home',
             role: 'user',
             content: 'Review this document',
             createdAtMs: 1,
@@ -169,7 +169,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm1',
-            conversationId: 'main_stream',
+            conversationId: 'chat_home',
             role: 'user',
             content: 'Plain text only',
             createdAtMs: 1,
@@ -207,8 +207,8 @@ Future<void> _pumpChatPage(WidgetTester tester, AppBackend backend) async {
             lock: () {},
             child: const ChatPage(
               conversation: Conversation(
-                id: 'main_stream',
-                title: 'Main Stream',
+                id: 'chat_home',
+                title: 'Chat',
                 createdAtMs: 0,
                 updatedAtMs: 0,
               ),
