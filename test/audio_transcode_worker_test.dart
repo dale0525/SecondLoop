@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -97,6 +98,32 @@ void main() {
     expect(result.didTranscode, isTrue);
     expect(result.mimeType, 'audio/mp4');
     expect(result.bytes, transcoded);
+  });
+
+  test('AudioTranscodeWorker stops retrying when transcode call times out',
+      () async {
+    final original = Uint8List.fromList(List<int>.filled(64, 9));
+    var attempts = 0;
+
+    final result = await AudioTranscodeWorker.transcodeToM4aProxy(
+      original,
+      sourceMimeType: 'audio/wav',
+      transcode: (
+        bytes, {
+        required sourceMimeType,
+        required targetSampleRateHz,
+        required targetBitrateKbps,
+        required mono,
+      }) async {
+        attempts += 1;
+        throw TimeoutException('native transcode timed out');
+      },
+    );
+
+    expect(attempts, 1);
+    expect(result.didTranscode, isFalse);
+    expect(result.mimeType, 'audio/wav');
+    expect(result.bytes, original);
   });
 
   test('AudioTranscodeWorker normalizes audio MIME aliases on fallback',

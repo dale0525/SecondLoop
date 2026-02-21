@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -43,6 +44,7 @@ final class AudioTranscodeWorker {
   static const int _targetSampleRateHz = 24000;
   static const int _targetBitrateKbps = 48;
   static const int _maxLocalTranscodeAttempts = 3;
+  static const Duration _nativeTranscodeTimeout = Duration(seconds: 30);
   static const MethodChannel _audioTranscodeChannel =
       MethodChannel('secondloop/audio_transcode');
   static String? _cachedBundledFfmpegExecutablePath;
@@ -164,6 +166,8 @@ final class AudioTranscodeWorker {
           mono: true,
         );
         if (bytes.isNotEmpty) return bytes;
+      } on TimeoutException {
+        break;
       } catch (_) {
         // Ignore and retry below.
       }
@@ -343,7 +347,7 @@ final class AudioTranscodeWorker {
         'sample_rate_hz': targetSampleRateHz,
         'bitrate_kbps': targetBitrateKbps,
         'mono': mono,
-      });
+      }).timeout(_nativeTranscodeTimeout);
       if (ok != true) return Uint8List(0);
 
       final outputFile = File(outputPath);
@@ -351,6 +355,8 @@ final class AudioTranscodeWorker {
       final out = await outputFile.readAsBytes();
       if (out.isEmpty) return Uint8List(0);
       return out;
+    } on TimeoutException {
+      rethrow;
     } catch (_) {
       return Uint8List(0);
     } finally {
