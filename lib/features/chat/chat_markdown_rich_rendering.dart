@@ -22,6 +22,7 @@ List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes() {
 
 const double _kLatexBlockMinLayoutWidth = 220;
 const double _kLatexBlockMaxLayoutWidth = 4096;
+const double _kLatexInlineMaxViewportWidth = 420;
 
 Map<String, MarkdownElementBuilder> buildChatMarkdownElementBuilders({
   required ChatMarkdownPreviewTheme previewTheme,
@@ -60,6 +61,7 @@ class ChatMarkdownLatexInline extends StatelessWidget {
     final style = (DefaultTextStyle.of(context).style).copyWith(
       color: previewTheme.textColor,
       fontSize: exportRenderMode ? 13 : null,
+      height: 1.0,
     );
 
     return DecoratedBox(
@@ -71,11 +73,20 @@ class ChatMarkdownLatexInline extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: _LatexFormula(
-          expression: expression,
-          textStyle: style,
-          blockMode: false,
-          fallbackColor: previewTheme.mutedTextColor,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: _kLatexInlineMaxViewportWidth,
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            primary: false,
+            child: _LatexFormula(
+              expression: expression,
+              textStyle: style,
+              blockMode: false,
+              fallbackColor: previewTheme.mutedTextColor,
+            ),
+          ),
         ),
       ),
     );
@@ -99,6 +110,7 @@ class ChatMarkdownLatexBlock extends StatelessWidget {
     final style = (DefaultTextStyle.of(context).style).copyWith(
       color: previewTheme.textColor,
       fontSize: exportRenderMode ? 14 : 15,
+      height: 1.0,
     );
 
     return Container(
