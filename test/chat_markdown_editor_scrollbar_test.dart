@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/chat/chat_markdown_editor_page.dart';
+import 'package:secondloop/features/chat/chat_markdown_rich_rendering.dart';
 
 import 'test_i18n.dart';
 
@@ -252,6 +253,102 @@ void main() {
     },
     variant: const TargetPlatformVariant(
       <TargetPlatform>{TargetPlatform.android},
+    ),
+  );
+
+  testWidgets(
+    'Preview renders LaTeX formulas with dedicated widgets',
+    (tester) async {
+      await pumpEditor(
+        tester,
+        size: const Size(1024, 700),
+        initialText: r'''Euler identity: $e^{i\pi}+1=0$
+
+$$\int_0^1 x^2 \mathrm{d}x$$''',
+      );
+
+      expect(
+        find.byType(ChatMarkdownLatexInline),
+        findsOneWidget,
+      );
+      expect(
+        find.byType(ChatMarkdownLatexBlock),
+        findsOneWidget,
+      );
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Preview renders markmap fenced blocks as diagrams',
+    (tester) async {
+      await pumpEditor(
+        tester,
+        size: const Size(1024, 700),
+        initialText:
+            '```markmap\n# Product\n## Mobile\n### Chat\n## Desktop\n```',
+      );
+
+      expect(
+        find.byType(ChatMarkdownMarkmap),
+        findsOneWidget,
+      );
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Preview renders multiline LaTeX matrix blocks with inline delimiters',
+    (tester) async {
+      await pumpEditor(
+        tester,
+        size: const Size(1024, 700),
+        initialText: r'''$$\mathbf{T}(t)=\begin{bmatrix}
+
+1 & 0 & 0 & t_x\\
+
+0 & 1 & 0 & t_y\\
+
+0 & 0 & 1 & t_z\\
+
+0 & 0 & 0 & 1
+
+\end{bmatrix}$$''',
+      );
+
+      expect(
+        find.byType(ChatMarkdownLatexBlock),
+        findsOneWidget,
+      );
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
+    ),
+  );
+
+  testWidgets(
+    'Preview accepts Hexo note tags without custom rendering',
+    (tester) async {
+      await pumpEditor(
+        tester,
+        size: const Size(1024, 700),
+        initialText: r'''{% note default %}
+这是说明块
+{% endnote %}''',
+      );
+
+      expect(
+        find.byKey(const ValueKey('chat_markdown_editor_preview')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant(
+      <TargetPlatform>{TargetPlatform.macOS},
     ),
   );
 }

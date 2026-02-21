@@ -146,6 +146,12 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
 
   Future<Uint8List> _buildPdfBytes() async {
     final normalized = sanitizeChatMarkdown(_controller.text);
+
+    if (_requiresPreviewBasedPdfRender(normalized)) {
+      final previewPng = await _capturePreviewAsPngBytes();
+      return _buildPdfFromPreviewImage(previewPng);
+    }
+
     final blocks = _parseMarkdownBlocks(normalized);
     final previewTheme =
         resolveChatMarkdownTheme(_themePreset, Theme.of(context));
@@ -154,6 +160,62 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       blocks: blocks,
       emptyFallback: context.t.chat.markdownEditor.emptyPreview,
     );
+  }
+
+  bool _requiresPreviewBasedPdfRender(String markdown) {
+    const markmapFence = r'(^|\n)\s*```(?:markmap|mindmap)\b';
+    final hasMarkmap = RegExp(markmapFence, multiLine: true).hasMatch(markdown);
+    if (hasMarkmap) return true;
+
+    final hasBlockLatex = RegExp(r'(^|\n)\s*\$\$').hasMatch(markdown);
+    if (hasBlockLatex) return true;
+
+    return RegExp(r'(?<!\\)\$(?!\$)[^\n$]+(?<!\\)\$(?!\$)').hasMatch(markdown);
+  }
+
+  Future<Uint8List> _buildPdfFromPreviewImage(Uint8List pngBytes) async {
+    final bitmap = PdfBitmap(pngBytes);
+    final sourceWidth = bitmap.width.toDouble();
+    final sourceHeight = bitmap.height.toDouble();
+
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+      throw StateError('Invalid preview image size for PDF export');
+    }
+
+    final document = PdfDocument();
+    document.pageSettings.size = PdfPageSize.a4;
+    document.pageSettings.setMargins(0);
+
+    const pageSize = PdfPageSize.a4;
+    const contentLeft = _kPdfPageMarginHorizontal;
+    const contentTop = _kPdfPageMarginVertical;
+    final contentWidth = pageSize.width - (_kPdfPageMarginHorizontal * 2);
+    final contentHeight = pageSize.height - (_kPdfPageMarginVertical * 2);
+    final scaledHeight = sourceHeight * (contentWidth / sourceWidth);
+
+    for (var offset = 0.0;
+        offset < scaledHeight || (offset == 0 && scaledHeight == 0);
+        offset += contentHeight) {
+      final page = document.pages.add();
+      final graphics = page.graphics;
+      final state = graphics.save();
+
+      graphics.setClip(
+        bounds:
+            Rect.fromLTWH(contentLeft, contentTop, contentWidth, contentHeight),
+        mode: PdfFillMode.winding,
+      );
+      graphics.drawImage(
+        bitmap,
+        Rect.fromLTWH(
+            contentLeft, contentTop - offset, contentWidth, scaledHeight),
+      );
+      graphics.restore(state);
+    }
+
+    final bytes = await document.save();
+    document.dispose();
+    return Uint8List.fromList(bytes);
   }
 
   Future<File> _materializeExportFile(

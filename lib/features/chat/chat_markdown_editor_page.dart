@@ -18,6 +18,7 @@ import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
+import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
 
