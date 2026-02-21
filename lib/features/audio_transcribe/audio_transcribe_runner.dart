@@ -315,8 +315,10 @@ final class AudioTranscribeRunner {
   final AudioTranscribeNowMs _nowMs;
 
   Future<AudioTranscribeRunResult> runOnce({int limit = 5}) async {
+    final processLimit = limit < 1 ? 1 : limit;
+    final scanLimit = (processLimit * 8).clamp(processLimit, 200);
     final nowMs = _nowMs();
-    final due = await store.listDueJobs(nowMs: nowMs, limit: limit);
+    final due = await store.listDueJobs(nowMs: nowMs, limit: scanLimit);
     if (due.isEmpty) {
       return const AudioTranscribeRunResult(
         processed: 0,
@@ -326,7 +328,9 @@ final class AudioTranscribeRunner {
 
     var processed = 0;
     var failed = 0;
+    var handled = 0;
     for (final job in due) {
+      if (handled >= processLimit) break;
       if (job.status == 'ok') continue;
       try {
         final bytes = await store.readAttachmentBytes(
@@ -357,6 +361,7 @@ final class AudioTranscribeRunner {
           nowMs: nowMs,
         );
         processed += 1;
+        handled += 1;
       } catch (e) {
         final attempts = job.attempts + 1;
         final nextRetryAtMs = _nextRetryAtMsForError(
@@ -372,6 +377,7 @@ final class AudioTranscribeRunner {
           nowMs: nowMs,
         );
         failed += 1;
+        handled += 1;
       }
     }
 

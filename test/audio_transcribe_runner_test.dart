@@ -570,6 +570,78 @@ void main() {
     expect(store.failedBySha, isEmpty);
   });
 
+  test('runner scans past non-audio jobs to process pending audio jobs',
+      () async {
+    final store = _MemStore(
+      jobs: const [
+        AudioTranscribeJob(
+          attachmentSha256: 'na1',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+        AudioTranscribeJob(
+          attachmentSha256: 'na2',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+        AudioTranscribeJob(
+          attachmentSha256: 'na3',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+        AudioTranscribeJob(
+          attachmentSha256: 'na4',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+        AudioTranscribeJob(
+          attachmentSha256: 'na5',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+        AudioTranscribeJob(
+          attachmentSha256: 'audio1',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'na1': Uint8List.fromList('%PDF-1.7'.codeUnits),
+        'na2': Uint8List.fromList('not-audio'.codeUnits),
+        'na3': Uint8List.fromList('{"schema":"secondloop.document"}'.codeUnits),
+        'na4': Uint8List.fromList('plain text body'.codeUnits),
+        'na5': Uint8List.fromList(const <int>[0x00, 0x01, 0x02, 0x03]),
+        'audio1': Uint8List.fromList(const <int>[0x49, 0x44, 0x33, 0x04, 0x00]),
+      },
+    );
+    final client = _MemClient(engineName: 'whisper', modelName: 'whisper-1');
+    final runner = AudioTranscribeRunner(
+      store: store,
+      client: client,
+      nowMs: () => 2000,
+    );
+
+    final result = await runner.runOnce(limit: 1);
+
+    expect(result.processed, 1);
+    expect(result.failed, 0);
+    expect(client.calls, 1);
+    expect(store.okPayloadBySha.containsKey('audio1'), isTrue);
+    expect(store.okPayloadBySha.containsKey('na1'), isFalse);
+  });
+
   test('runner marks failed with backoff when transcribe throws', () async {
     final store = _MemStore(
       jobs: const [
