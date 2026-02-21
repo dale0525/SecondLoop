@@ -387,4 +387,40 @@ void main() {
       expect(payload, isNull);
     },
   );
+
+  test(
+    'shouldBackfillVideoManifestTranscriptPayload allows transcript backfill without OCR engine',
+    () {
+      final shouldBackfill = shouldBackfillVideoManifestTranscriptPayload(
+        const <String, Object?>{
+          'schema': 'secondloop.video_extract.v1',
+          'audio_sha256': 'sha-audio',
+          'ocr_engine': '',
+        },
+      );
+
+      expect(shouldBackfill, isTrue);
+    },
+  );
+
+  test(
+    'shouldBackfillVideoManifestTranscriptPayload requires video extract schema and linked audio sha',
+    () {
+      final missingAudioSha = shouldBackfillVideoManifestTranscriptPayload(
+        const <String, Object?>{
+          'schema': 'secondloop.video_extract.v1',
+          'audio_sha256': '',
+        },
+      );
+      final unsupportedSchema = shouldBackfillVideoManifestTranscriptPayload(
+        const <String, Object?>{
+          'schema': 'secondloop.video_manifest.v2',
+          'audio_sha256': 'sha-audio',
+        },
+      );
+
+      expect(missingAudioSha, isFalse);
+      expect(unsupportedSchema, isFalse);
+    },
+  );
 }

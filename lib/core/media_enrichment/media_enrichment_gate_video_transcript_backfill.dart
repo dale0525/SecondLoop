@@ -20,6 +20,21 @@ bool _looksLikeStaleAutoVideoReadableField({
       normalizedCandidate == normalizedExcerpt;
 }
 
+String _resolveVideoManifestLinkedAudioSha(Map<String, Object?> payload) {
+  final snakeCase = _normalizeAutoOcrPayloadText(payload['audio_sha256']);
+  if (snakeCase.isNotEmpty) return snakeCase;
+  return _normalizeAutoOcrPayloadText(payload['audioSha256']);
+}
+
+@visibleForTesting
+bool shouldBackfillVideoManifestTranscriptPayload(
+  Map<String, Object?> payload,
+) {
+  final schema = _normalizeAutoOcrPayloadText(payload['schema']).toLowerCase();
+  if (schema != 'secondloop.video_extract.v1') return false;
+  return _resolveVideoManifestLinkedAudioSha(payload).isNotEmpty;
+}
+
 @visibleForTesting
 Map<String, Object?>? buildVideoManifestTranscriptBackfillPayload({
   required Map<String, Object?> currentPayload,
@@ -168,16 +183,9 @@ extension _MediaEnrichmentGateVideoTranscriptBackfill
       final payload =
           _MediaEnrichmentGateState._decodePayloadObject(payloadJson);
       if (payload == null) continue;
+      if (!shouldBackfillVideoManifestTranscriptPayload(payload)) continue;
 
-      final schema =
-          _normalizeAutoOcrPayloadText(payload['schema']).toLowerCase();
-      if (schema != 'secondloop.video_extract.v1') continue;
-
-      final ocrEngine = _normalizeAutoOcrPayloadText(payload['ocr_engine']);
-      if (ocrEngine.isEmpty) continue;
-
-      final audioSha256 = _normalizeAutoOcrPayloadText(payload['audio_sha256']);
-      if (audioSha256.isEmpty) continue;
+      final audioSha256 = _resolveVideoManifestLinkedAudioSha(payload);
 
       final linkedAudioPayloadJson =
           await backend.readAttachmentAnnotationPayloadJson(
