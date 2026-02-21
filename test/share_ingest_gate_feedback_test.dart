@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +8,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/share/share_ingest.dart';
 import 'package:secondloop/features/share/share_ingest_gate.dart';
+import 'package:secondloop/features/share/share_intent_listener.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -24,17 +24,9 @@ void main() {
     final backend = _DelayedInsertBackend(releaseInsert);
 
     await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: const ShareIngestGate(child: SizedBox.shrink()),
-            ),
-          ),
-        ),
+      _buildTestApp(
+        backend: backend,
+        child: const ShareIngestGate(child: SizedBox.shrink()),
       ),
     );
 
@@ -55,6 +47,82 @@ void main() {
       step: const Duration(milliseconds: 20),
     );
   });
+
+  testWidgets(
+      'ShareIntentListener + ShareIngestGate shows immediate feedback for external shares',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    var consumeCalls = 0;
+    const channel = MethodChannel('secondloop/share_intent');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method != 'consumePendingShares') {
+        return null;
+      }
+      consumeCalls += 1;
+      if (consumeCalls == 1) {
+        return <Map<String, Object?>>[
+          {
+            'type': 'text',
+            'content': 'from-native-share-callback',
+          },
+        ];
+      }
+      return <Map<String, Object?>>[];
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    final releaseInsert = Completer<void>();
+    final backend = _DelayedInsertBackend(releaseInsert);
+
+    await tester.pumpWidget(
+      _buildTestApp(
+        backend: backend,
+        child: const ShareIntentListener(
+          child: ShareIngestGate(child: SizedBox.shrink()),
+        ),
+      ),
+    );
+
+    await _pumpUntil(
+      tester,
+      () => backend.insertMessageCalls > 0,
+      maxTicks: 40,
+      step: const Duration(milliseconds: 20),
+    );
+
+    expect(find.byKey(const ValueKey('share_ingest_feedback')), findsOneWidget);
+
+    releaseInsert.complete();
+    await _pumpUntil(
+      tester,
+      () => backend.insertCompleted,
+      maxTicks: 60,
+      step: const Duration(milliseconds: 20),
+    );
+  });
+}
+
+Widget _buildTestApp({
+  required AppBackend backend,
+  required Widget child,
+}) {
+  return wrapWithI18n(
+    MaterialApp(
+      home: AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: child,
+        ),
+      ),
+    ),
+  );
 }
 
 Future<void> _pumpUntil(
