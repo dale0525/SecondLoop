@@ -7,10 +7,10 @@ const double _kDefaultTargetPreviewPixelWidth = 4600;
 const double _kMinPreviewPixelRatio = 2.0;
 const double _kMaxPreviewPixelRatio = 8.0;
 const double _kMaxPreviewRasterDimension = 24000;
-const int _kPaginationSearchWindowRows = 180;
+const int _kPaginationSearchWindowRows = 220;
 const int _kPaginationWhitespaceBandRadius = 3;
 const double _kPaginationMinFillRatio = 0.72;
-const double _kPaginationMaxStretchRatio = 1.2;
+const double _kPaginationMaxStretchRatio = 1.35;
 const double _kPaginationWhitespaceRowScore = 12;
 const double _kPaginationWhitespaceBandScore = 18;
 
@@ -119,7 +119,6 @@ List<double> computeMarkdownPreviewPdfPageOffsets({
         double distance,
       })>[];
 
-      var bestFallbackRow = targetBreakPx.round().clamp(searchStart, searchEnd);
       var bestFallbackBandScore = double.infinity;
       var bestFallbackRowScore = double.infinity;
       var bestFallbackDistance = double.infinity;
@@ -163,7 +162,6 @@ List<double> computeMarkdownPreviewPdfPageOffsets({
           bestFallbackBandScore = bandScore;
           bestFallbackRowScore = rowScore;
           bestFallbackDistance = distance;
-          bestFallbackRow = row;
         }
       }
 
@@ -183,7 +181,7 @@ List<double> computeMarkdownPreviewPdfPageOffsets({
         });
         nextBreakPx = whitespaceCandidates.first.row.toDouble();
       } else {
-        nextBreakPx = bestFallbackRow.toDouble();
+        nextBreakPx = maxBreakPx;
       }
     }
 

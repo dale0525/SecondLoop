@@ -29,6 +29,7 @@ import 'chat_markdown_theme_presets.dart';
 part 'chat_markdown_editor_page_export.dart';
 part 'chat_markdown_editor_page_export_file.dart';
 part 'chat_markdown_editor_page_export_inline.dart';
+part 'chat_markdown_editor_page_export_pdf_renderer.dart';
 part 'chat_markdown_editor_page_preview.dart';
 
 const _kDefaultMarkdownModeRuneThreshold = 240;
