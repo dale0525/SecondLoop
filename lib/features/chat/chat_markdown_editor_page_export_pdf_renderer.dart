@@ -1,18 +1,29 @@
 part of 'chat_markdown_editor_page.dart';
 
 class _PdfMarkdownRenderer {
-  _PdfMarkdownRenderer({required this.theme})
-      : _backgroundBrush = PdfSolidBrush(_toPdfColor(theme.canvasColor)),
+  _PdfMarkdownRenderer({
+    required this.theme,
+    Map<String, Uint8List>? latexBitmapCache,
+  })  : _latexBitmapCache = latexBitmapCache ?? const <String, Uint8List>{},
+        _backgroundBrush = PdfSolidBrush(_toPdfColor(theme.canvasColor)),
         _textBrush = PdfSolidBrush(_toPdfColor(theme.textColor)),
         _mutedBrush = PdfSolidBrush(_toPdfColor(theme.mutedTextColor)),
+        _quoteBackgroundBrush =
+            PdfSolidBrush(_toPdfColor(theme.quoteBackground)),
+        _codeBackgroundBrush =
+            PdfSolidBrush(_toPdfColor(theme.codeBlockBackground)),
         _dividerPen = PdfPen(_toPdfColor(theme.dividerColor), width: 0.9),
         _quotePen = PdfPen(_toPdfColor(theme.quoteBorder), width: 2.2),
+        _codeBorderPen = PdfPen(
+          _toPdfColor(theme.borderColor.withOpacity(0.9)),
+          width: 0.9,
+        ),
         _textPen = PdfPen(_toPdfColor(theme.textColor), width: 1.0),
         _mutedPen = PdfPen(_toPdfColor(theme.mutedTextColor), width: 1.0),
         _textBoldPen = PdfPen(_toPdfColor(theme.textColor), width: 0.32),
         _mutedBoldPen = PdfPen(_toPdfColor(theme.mutedTextColor), width: 0.28),
         _bodyFont = PdfCjkStandardFont(
-          PdfCjkFontFamily.sinoTypeSongLight,
+          PdfCjkFontFamily.heiseiKakuGothicW5,
           12,
         ),
         _bodyBoldFont = PdfCjkStandardFont(
@@ -20,7 +31,7 @@ class _PdfMarkdownRenderer {
           12,
         ),
         _quoteFont = PdfCjkStandardFont(
-          PdfCjkFontFamily.sinoTypeSongLight,
+          PdfCjkFontFamily.heiseiKakuGothicW5,
           11.5,
         ),
         _quoteBoldFont = PdfCjkStandardFont(
@@ -29,7 +40,7 @@ class _PdfMarkdownRenderer {
         ),
         _codeFont = PdfCjkStandardFont(
           PdfCjkFontFamily.heiseiKakuGothicW5,
-          10.5,
+          10.8,
         ),
         _headingFonts = <PdfFont>[
           PdfCjkStandardFont(PdfCjkFontFamily.monotypeHeiMedium, 24),
@@ -41,11 +52,15 @@ class _PdfMarkdownRenderer {
         ];
 
   final ChatMarkdownPreviewTheme theme;
+  final Map<String, Uint8List> _latexBitmapCache;
   final PdfSolidBrush _backgroundBrush;
   final PdfSolidBrush _textBrush;
   final PdfSolidBrush _mutedBrush;
+  final PdfSolidBrush _quoteBackgroundBrush;
+  final PdfSolidBrush _codeBackgroundBrush;
   final PdfPen _dividerPen;
   final PdfPen _quotePen;
+  final PdfPen _codeBorderPen;
   final PdfPen _textPen;
   final PdfPen _mutedPen;
   final PdfPen _textBoldPen;
@@ -121,11 +136,15 @@ class _PdfMarkdownRenderer {
               strikePen: _mutedPen,
               boldPen: _mutedBoldPen,
               lineSpacing: 3.0,
-              indent: 18,
-              topSpacing: _isAtTopOfPage ? 0 : 6,
-              bottomSpacing: isLast ? 0 : 10,
+              indent: 14,
+              topSpacing: _isAtTopOfPage ? 0 : 8,
+              bottomSpacing: isLast ? 0 : 11,
               drawQuoteBorder: true,
               syntheticBold: true,
+              blockBackgroundBrush: _quoteBackgroundBrush,
+              blockPaddingHorizontal: 12,
+              blockPaddingVertical: 8,
+              keepTogether: true,
             ),
           );
           break;
@@ -140,33 +159,20 @@ class _PdfMarkdownRenderer {
               strikePen: _textPen,
               boldPen: _textBoldPen,
               lineSpacing: 2.2,
-              indent: 12,
               topSpacing: _isAtTopOfPage ? 0 : 8,
               bottomSpacing: isLast ? 0 : 10,
               keepAtLeastOneLine: true,
               parseInlineMarkdown: false,
+              blockBackgroundBrush: _codeBackgroundBrush,
+              blockBorderPen: _codeBorderPen,
+              blockPaddingHorizontal: 12,
+              blockPaddingVertical: 10,
+              keepTogether: true,
             ),
           );
           break;
         case _PdfMarkdownBlockType.latex:
-          _drawParagraph(
-            block.text,
-            style: _PdfTextStyle(
-              font: _codeFont,
-              boldFont: _codeFont,
-              codeFont: _codeFont,
-              brush: _textBrush,
-              strikePen: _textPen,
-              boldPen: _textBoldPen,
-              lineSpacing: 2.4,
-              indent: 12,
-              topSpacing: _isAtTopOfPage ? 0 : 8,
-              bottomSpacing: isLast ? 0 : 10,
-              keepAtLeastOneLine: true,
-              keepTogether: true,
-              parseInlineMarkdown: false,
-            ),
-          );
+          await _drawLatexBlock(block, isLast: isLast);
           break;
         case _PdfMarkdownBlockType.image:
           await _drawImageBlock(block, isLast: isLast);
@@ -177,6 +183,10 @@ class _PdfMarkdownRenderer {
         case _PdfMarkdownBlockType.horizontalRule:
           _drawHorizontalRule(isLast: isLast);
           break;
+      }
+
+      if (index % 8 == 7) {
+        await Future<void>.delayed(Duration.zero);
       }
     }
 
@@ -312,6 +322,72 @@ class _PdfMarkdownRenderer {
     }
   }
 
+  Future<void> _drawLatexBlock(
+    _PdfMarkdownBlock block, {
+    required bool isLast,
+  }) async {
+    final expression = block.text.trim();
+    final bytes = _latexBitmapCache[expression];
+    if (bytes == null || bytes.isEmpty) {
+      _drawParagraph(
+        expression,
+        style: _PdfTextStyle(
+          font: _codeFont,
+          boldFont: _codeFont,
+          codeFont: _codeFont,
+          brush: _textBrush,
+          strikePen: _textPen,
+          boldPen: _textBoldPen,
+          lineSpacing: 2.4,
+          topSpacing: _isAtTopOfPage ? 0 : 8,
+          bottomSpacing: isLast ? 0 : 10,
+          keepAtLeastOneLine: true,
+          keepTogether: true,
+          parseInlineMarkdown: false,
+          blockBackgroundBrush: _codeBackgroundBrush,
+          blockBorderPen: _codeBorderPen,
+          blockPaddingHorizontal: 12,
+          blockPaddingVertical: 10,
+        ),
+      );
+      return;
+    }
+
+    if (!_isAtTopOfPage) {
+      _advanceWithSpacing(8);
+    }
+
+    final bitmap = PdfBitmap(bytes);
+    final bitmapWidth = bitmap.width.toDouble();
+    final bitmapHeight = bitmap.height.toDouble();
+    if (bitmapWidth <= 0 || bitmapHeight <= 0) {
+      return;
+    }
+
+    final maxWidth = _contentWidth(_currentPage);
+    final pageHeight = _contentBottom(_currentPage) - _contentTop;
+    final maxHeight = pageHeight * 0.48;
+    final scale = math.min(
+      1.0,
+      math.min(maxWidth / bitmapWidth, maxHeight / bitmapHeight),
+    );
+    final drawWidth = bitmapWidth * scale;
+    final drawHeight = bitmapHeight * scale;
+
+    _ensureRoom(drawHeight + (isLast ? 0 : 8));
+
+    final drawX = _contentLeft(_currentPage) + (maxWidth - drawWidth) / 2;
+    _currentPage.graphics.drawImage(
+      bitmap,
+      Rect.fromLTWH(drawX, _cursorY, drawWidth, drawHeight),
+    );
+    _cursorY += drawHeight;
+
+    if (!isLast) {
+      _advanceWithSpacing(8);
+    }
+  }
+
   Future<void> _drawImageBlock(
     _PdfMarkdownBlock block, {
     required bool isLast,
@@ -427,8 +503,8 @@ class _PdfMarkdownRenderer {
       _advanceWithSpacing(style.topSpacing);
     }
 
-    final x = (_contentLeft(_currentPage) + style.indent).toDouble();
-    final width =
+    final baseX = (_contentLeft(_currentPage) + style.indent).toDouble();
+    final baseWidth =
         math.max(72.0, _contentWidth(_currentPage) - style.indent).toDouble();
 
     final spans = style.parseInlineMarkdown
@@ -443,34 +519,83 @@ class _PdfMarkdownRenderer {
             ),
           ];
 
-    final lines = _layoutInlineLines(spans, style: style, maxWidth: width);
-    if (lines.isEmpty) return;
+    List<_PdfInlineLine> layoutLines({required double horizontalPadding}) {
+      final lineWidth = math.max(48.0, baseWidth - horizontalPadding * 2);
+      return _layoutInlineLines(
+        spans,
+        style: style,
+        maxWidth: lineWidth,
+      );
+    }
+
+    var blockPaddingHorizontal = style.blockPaddingHorizontal;
+    var blockPaddingVertical = style.blockPaddingVertical;
+    var drawBlockDecoration = style.blockBackgroundBrush != null;
+
+    var lines = layoutLines(horizontalPadding: blockPaddingHorizontal);
+    if (lines.isEmpty) {
+      return;
+    }
+
+    double linesHeight() {
+      return lines.fold<double>(
+        0,
+        (sum, line) => sum + line.height,
+      );
+    }
+
+    var textHeight = linesHeight();
+    var blockHeight = textHeight + blockPaddingVertical * 2;
+    final pageContentHeight = _contentBottom(_currentPage) - _contentTop;
+
+    if (drawBlockDecoration && blockHeight > pageContentHeight) {
+      drawBlockDecoration = false;
+      blockPaddingHorizontal = 0;
+      blockPaddingVertical = 0;
+      lines = layoutLines(horizontalPadding: 0);
+      if (lines.isEmpty) {
+        return;
+      }
+      textHeight = linesHeight();
+      blockHeight = textHeight;
+    }
+
+    if (!drawBlockDecoration) {
+      blockPaddingHorizontal = 0;
+      blockPaddingVertical = 0;
+      blockHeight = textHeight;
+    }
 
     if (style.keepTogether) {
-      final availableHeight = _contentBottom(_currentPage) - _contentTop;
-      final blockHeight = lines.fold<double>(
-            0,
-            (sum, line) => sum + line.height,
-          ) +
-          style.bottomSpacing +
-          2;
-      if (blockHeight <= availableHeight) {
-        _ensureRoom(blockHeight);
+      final blockRequestHeight = blockHeight + style.bottomSpacing + 2;
+      if (blockRequestHeight <= pageContentHeight) {
+        _ensureRoom(blockRequestHeight);
       }
     } else if (style.keepAtLeastOneLine) {
-      _ensureRoom(lines.first.height + 2);
+      _ensureRoom(lines.first.height + blockPaddingVertical * 2 + 2);
+    }
+
+    final textX = baseX + blockPaddingHorizontal;
+
+    if (drawBlockDecoration) {
+      _currentPage.graphics.drawRectangle(
+        brush: style.blockBackgroundBrush,
+        pen: style.blockBorderPen,
+        bounds: Rect.fromLTWH(baseX, _cursorY, baseWidth, blockHeight),
+      );
+      _cursorY += blockPaddingVertical;
     }
 
     for (final line in lines) {
       _ensureRoom(line.height + 1);
       final y = _cursorY;
-      var drawX = x;
+      var drawX = textX;
 
       if (style.drawQuoteBorder) {
         final minX = _contentLeft(_currentPage) + 1;
         final maxX =
             _contentLeft(_currentPage) + _contentWidth(_currentPage) - 1;
-        final borderX = (x - 8).clamp(minX, maxX).toDouble();
+        final borderX = (textX - 8).clamp(minX, maxX).toDouble();
         _currentPage.graphics.drawLine(
           _quotePen,
           Offset(borderX, y),
@@ -490,6 +615,10 @@ class _PdfMarkdownRenderer {
       }
 
       _cursorY += line.height;
+    }
+
+    if (drawBlockDecoration) {
+      _cursorY += blockPaddingVertical;
     }
 
     _advanceWithSpacing(style.bottomSpacing);
@@ -659,213 +788,5 @@ class _PdfMarkdownRenderer {
       final safeWidth = measured > 0 ? measured : font.size * 0.58;
       return italic ? safeWidth * 1.01 : safeWidth;
     });
-  }
-}
-
-class _PdfTextStyle {
-  const _PdfTextStyle({
-    required this.font,
-    required this.boldFont,
-    required this.codeFont,
-    required this.brush,
-    required this.strikePen,
-    required this.boldPen,
-    required this.lineSpacing,
-    this.indent = 0,
-    this.topSpacing = 0,
-    this.bottomSpacing = 0,
-    this.keepAtLeastOneLine = false,
-    this.keepTogether = false,
-    this.drawQuoteBorder = false,
-    this.parseInlineMarkdown = true,
-    this.syntheticBold = false,
-  });
-
-  final PdfFont font;
-  final PdfFont boldFont;
-  final PdfFont codeFont;
-  final PdfBrush brush;
-  final PdfPen strikePen;
-  final PdfPen boldPen;
-  final double lineSpacing;
-  final double indent;
-  final double topSpacing;
-  final double bottomSpacing;
-  final bool keepAtLeastOneLine;
-  final bool keepTogether;
-  final bool drawQuoteBorder;
-  final bool parseInlineMarkdown;
-  final bool syntheticBold;
-}
-
-class _PdfInlinePaint {
-  const _PdfInlinePaint({
-    required this.font,
-    required this.brush,
-    required this.strikePen,
-    required this.boldPen,
-    required this.italic,
-    required this.strike,
-    required this.bold,
-  });
-
-  final PdfFont font;
-  final PdfBrush brush;
-  final PdfPen strikePen;
-  final PdfPen boldPen;
-  final bool italic;
-  final bool strike;
-  final bool bold;
-
-  bool matches(_PdfInlinePaint other) {
-    return font == other.font &&
-        brush == other.brush &&
-        strikePen == other.strikePen &&
-        boldPen == other.boldPen &&
-        italic == other.italic &&
-        strike == other.strike &&
-        bold == other.bold;
-  }
-}
-
-class _PdfInlineRun {
-  const _PdfInlineRun({
-    required this.text,
-    required this.width,
-    required this.paint,
-  });
-
-  final String text;
-  final double width;
-  final _PdfInlinePaint paint;
-}
-
-class _PdfInlineLine {
-  const _PdfInlineLine({
-    required this.runs,
-    required this.height,
-  });
-
-  final List<_PdfInlineRun> runs;
-  final double height;
-}
-
-enum _PdfMarkdownBlockType {
-  heading,
-  paragraph,
-  quote,
-  code,
-  latex,
-  image,
-  listItem,
-  horizontalRule,
-}
-
-enum _PdfMarkdownListKind {
-  unordered,
-  ordered,
-  task,
-}
-
-class _PdfMarkdownBlock {
-  const _PdfMarkdownBlock({
-    required this.type,
-    required this.text,
-    this.level = 0,
-    this.listKind,
-    this.order = 1,
-    this.checked = false,
-    this.source,
-  });
-
-  const _PdfMarkdownBlock.heading(
-    this.text, {
-    required this.level,
-  })  : type = _PdfMarkdownBlockType.heading,
-        listKind = null,
-        order = 1,
-        checked = false,
-        source = null;
-
-  const _PdfMarkdownBlock.paragraph(this.text)
-      : type = _PdfMarkdownBlockType.paragraph,
-        level = 0,
-        listKind = null,
-        order = 1,
-        checked = false,
-        source = null;
-
-  const _PdfMarkdownBlock.quote(this.text)
-      : type = _PdfMarkdownBlockType.quote,
-        level = 0,
-        listKind = null,
-        order = 1,
-        checked = false,
-        source = null;
-
-  const _PdfMarkdownBlock.code(this.text)
-      : type = _PdfMarkdownBlockType.code,
-        level = 0,
-        listKind = null,
-        order = 1,
-        checked = false,
-        source = null;
-
-  const _PdfMarkdownBlock.latex(this.text)
-      : type = _PdfMarkdownBlockType.latex,
-        level = 0,
-        listKind = null,
-        order = 1,
-        checked = false,
-        source = null;
-
-  const _PdfMarkdownBlock.image({
-    required this.source,
-    this.text = '',
-  })  : type = _PdfMarkdownBlockType.image,
-        level = 0,
-        listKind = null,
-        order = 1,
-        checked = false;
-
-  const _PdfMarkdownBlock.listItem({
-    required this.text,
-    required this.level,
-    required this.listKind,
-    this.order = 1,
-    this.checked = false,
-  })  : type = _PdfMarkdownBlockType.listItem,
-        source = null;
-
-  const _PdfMarkdownBlock.horizontalRule()
-      : type = _PdfMarkdownBlockType.horizontalRule,
-        text = '',
-        level = 0,
-        listKind = null,
-        order = 1,
-        checked = false,
-        source = null;
-
-  final _PdfMarkdownBlockType type;
-  final String text;
-  final int level;
-  final _PdfMarkdownListKind? listKind;
-  final int order;
-  final bool checked;
-  final String? source;
-
-  _PdfMarkdownBlock copyWith({
-    String? text,
-    String? source,
-  }) {
-    return _PdfMarkdownBlock(
-      type: type,
-      text: text ?? this.text,
-      level: level,
-      listKind: listKind,
-      order: order,
-      checked: checked,
-      source: source ?? this.source,
-    );
   }
 }

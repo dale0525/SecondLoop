@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:share_plus/share_plus.dart';
@@ -30,6 +31,7 @@ part 'chat_markdown_editor_page_export.dart';
 part 'chat_markdown_editor_page_export_file.dart';
 part 'chat_markdown_editor_page_export_inline.dart';
 part 'chat_markdown_editor_page_export_pdf_renderer.dart';
+part 'chat_markdown_editor_page_export_pdf_models.dart';
 part 'chat_markdown_editor_page_preview.dart';
 
 const _kDefaultMarkdownModeRuneThreshold = 240;

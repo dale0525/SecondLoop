@@ -1,7 +1,10 @@
 part of 'chat_markdown_editor_page.dart';
 
-const double _kPdfPageMarginHorizontal = 0;
-const double _kPdfPageMarginVertical = 0;
+const double _kPdfPageMarginHorizontal = 54;
+const double _kPdfPageMarginVertical = 48;
+const double _kPdfLatexCaptureMinWidth = 520;
+const double _kPdfLatexCaptureMaxWidth = 1180;
+const double _kPdfLatexCapturePixelRatio = 2.4;
 
 final RegExp _kPdfHeadingPattern = RegExp(
   r'^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$',
@@ -229,12 +232,165 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   Future<Uint8List> _buildPdfBytes() async {
     final normalized = sanitizeChatMarkdown(_controller.text);
     final blocks = _parseMarkdownBlocks(normalized);
+    final emptyFallback = context.t.chat.markdownEditor.emptyPreview;
     final previewTheme =
         resolveChatMarkdownTheme(_themePreset, Theme.of(context));
-    final renderer = _PdfMarkdownRenderer(theme: previewTheme);
+    final latexBitmapCache = await _buildPdfLatexBitmapCache(
+      blocks: blocks,
+      previewTheme: previewTheme,
+    );
+    final renderer = _PdfMarkdownRenderer(
+      theme: previewTheme,
+      latexBitmapCache: latexBitmapCache,
+    );
     return renderer.render(
       blocks: blocks,
-      emptyFallback: context.t.chat.markdownEditor.emptyPreview,
+      emptyFallback: emptyFallback,
     );
+  }
+
+  Future<Map<String, Uint8List>> _buildPdfLatexBitmapCache({
+    required List<_PdfMarkdownBlock> blocks,
+    required ChatMarkdownPreviewTheme previewTheme,
+  }) async {
+    final expressions = <String>{};
+    for (final block in blocks) {
+      if (block.type != _PdfMarkdownBlockType.latex) {
+        continue;
+      }
+
+      final expression = block.text.trim();
+      if (expression.isEmpty) {
+        continue;
+      }
+      expressions.add(expression);
+    }
+
+    if (expressions.isEmpty) {
+      return const <String, Uint8List>{};
+    }
+
+    final cache = <String, Uint8List>{};
+    for (final expression in expressions) {
+      final bytes = await _captureLatexFormulaBitmap(
+        expression: expression,
+        previewTheme: previewTheme,
+      );
+      if (bytes != null && bytes.isNotEmpty) {
+        cache[expression] = bytes;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    return cache;
+  }
+
+  Future<Uint8List?> _captureLatexFormulaBitmap({
+    required String expression,
+    required ChatMarkdownPreviewTheme previewTheme,
+  }) async {
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      return null;
+    }
+
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final captureWidth = viewportWidth.isFinite
+        ? viewportWidth
+            .clamp(_kPdfLatexCaptureMinWidth, _kPdfLatexCaptureMaxWidth)
+            .toDouble()
+        : 900.0;
+    final boundaryKey = GlobalKey();
+
+    final baseTextStyle = Theme.of(context).textTheme.bodyMedium ??
+        const TextStyle(fontSize: 14, height: 1.5);
+    final latexStyle = baseTextStyle.copyWith(
+      color: previewTheme.textColor,
+      fontSize: 14,
+      height: 1.35,
+    );
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        return Positioned(
+          top: 0,
+          left: 0,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: 0.001,
+              child: Material(
+                type: MaterialType.transparency,
+                child: RepaintBoundary(
+                  key: boundaryKey,
+                  child: SizedBox(
+                    width: captureWidth,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: previewTheme.codeBlockBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: previewTheme.borderColor.withOpacity(0.92),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Math.tex(
+                            expression,
+                            mathStyle: MathStyle.display,
+                            textStyle: latexStyle,
+                            onErrorFallback: (_) {
+                              return Text(
+                                expression,
+                                style: latexStyle.copyWith(
+                                  color: previewTheme.mutedTextColor,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(entry);
+
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await WidgetsBinding.instance.endOfFrame;
+
+      final renderObject = boundaryKey.currentContext?.findRenderObject();
+      if (renderObject is! RenderRepaintBoundary) {
+        return null;
+      }
+
+      final image = await renderObject.toImage(
+        pixelRatio: _kPdfLatexCapturePixelRatio,
+      );
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      if (data == null) {
+        return null;
+      }
+
+      return data.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    } finally {
+      entry.remove();
+    }
   }
 }
