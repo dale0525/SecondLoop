@@ -250,7 +250,13 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     printInfo.jobDisposition = .save
     printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
 
-    let operation = webView.printOperation(with: printInfo)
+    let operation: NSPrintOperation
+    if #available(macOS 11.0, *) {
+      operation = webView.printOperation(with: printInfo)
+    } else {
+      operation = NSPrintOperation(view: webView, printInfo: printInfo)
+    }
+
     operation.showsPrintPanel = false
     operation.showsProgressPanel = false
     _ = operation.run()
