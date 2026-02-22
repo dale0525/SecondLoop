@@ -386,9 +386,12 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                 defaultTargetPlatform == TargetPlatform.android ||
                 defaultTargetPlatform == TargetPlatform.iOS;
             if (shouldExtractVideoAudio) {
-              final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+              final audioProxy =
+                  await AudioTranscodeWorker.transcodeVideoAudioForManifest(
                 bytes,
-                sourceMimeType: normalizedMimeType,
+                originalMimeType: normalizedMimeType,
+                primarySegmentBytes: primarySegment.bytes,
+                primarySegmentMimeType: primarySegment.mimeType,
               );
               if (audioProxy.didTranscode &&
                   audioProxy.bytes.isNotEmpty &&
@@ -405,28 +408,39 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                   sessionKey,
                   audioAttachment.sha256,
                 ));
-                unawaited(
-                  _maybeEnqueueAudioTranscribeEnrichment(
-                    backend,
-                    sessionKey,
-                    audioAttachment.sha256,
-                    mimeType: audioAttachment.mimeType,
-                  ).catchError((_) {}),
-                );
               }
             }
-            if (audioSha256 == null) {
-              audioSha256 = primaryVideo.sha256;
-              audioMimeType = primaryVideo.mimeType;
-              unawaited(
-                _maybeEnqueueAudioTranscribeEnrichment(
-                  backend,
-                  sessionKey,
-                  primaryVideo.sha256,
-                  mimeType: primaryVideo.mimeType,
-                ).catchError((_) {}),
+
+            final queuedTranscriptShas = <String>{};
+            Future<void> enqueueVideoTranscriptJob(
+              String sha256,
+              String mimeType,
+            ) async {
+              final normalizedSha = sha256.trim();
+              if (normalizedSha.isEmpty) return;
+              if (!queuedTranscriptShas.add(normalizedSha)) return;
+              await _maybeEnqueueAudioTranscribeEnrichment(
+                backend,
+                sessionKey,
+                normalizedSha,
+                mimeType: mimeType,
               );
             }
+
+            for (final segment in videoSegments) {
+              unawaited(
+                enqueueVideoTranscriptJob(segment.sha256, segment.mimeType)
+                    .catchError((_) {}),
+              );
+            }
+
+            audioSha256 ??= primaryVideo.sha256;
+            audioMimeType ??= primaryVideo.mimeType;
+
+            unawaited(
+              enqueueVideoTranscriptJob(audioSha256, audioMimeType)
+                  .catchError((_) {}),
+            );
 
             final manifest = jsonEncode({
               ...buildVideoManifestPayload(
@@ -452,6 +466,28 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               bytes: manifestBytes,
               mimeType: 'application/x.secondloop.video+json',
             );
+
+            try {
+              final nowMs = DateTime.now().millisecondsSinceEpoch;
+              final initialPayload = buildInitialVideoExtractPayload(
+                manifestMimeType: 'application/x.secondloop.video+json',
+                originalSha256: primaryVideo.sha256,
+                originalMimeType: primaryVideo.mimeType,
+                audioSha256: audioSha256,
+                audioMimeType: audioMimeType,
+                segmentCount: videoSegments.length,
+              );
+              await backend.markAttachmentAnnotationOkJson(
+                sessionKey,
+                attachmentSha256: manifestAttachment.sha256,
+                lang: 'und',
+                modelName: 'video_extract.v1',
+                payloadJson: jsonEncode(initialPayload),
+                nowMs: nowMs,
+              );
+            } catch (_) {
+              // ignore
+            }
 
             try {
               await File(path).delete();
@@ -652,6 +688,30 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 }
 
 Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
+
+Map<String, Object?> buildInitialVideoExtractPayload({
+  required String manifestMimeType,
+  required String originalSha256,
+  required String originalMimeType,
+  required int segmentCount,
+  String? audioSha256,
+  String? audioMimeType,
+}) {
+  return <String, Object?>{
+    'schema': 'secondloop.video_extract.v1',
+    'mime_type': manifestMimeType,
+    'original_sha256': originalSha256,
+    'original_mime_type': originalMimeType,
+    'needs_ocr': true,
+    'ocr_auto_status': 'queued',
+    'video_segment_count': segmentCount,
+    'video_processed_segment_count': 0,
+    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
+      'audio_sha256': audioSha256,
+    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
+      'audio_mime_type': audioMimeType,
+  };
+}
 
 Map<String, Object?> buildVideoManifestPayload({
   required String videoSha256,

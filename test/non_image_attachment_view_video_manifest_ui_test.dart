@@ -89,7 +89,8 @@ void main() {
     expect(scroll.scrollDirection, Axis.horizontal);
   });
 
-  testWidgets('video manifest detail does not render duplicated insight card',
+  testWidgets(
+      'video manifest detail hides legacy insight card and keeps extracted text',
       (tester) async {
     final attachment = buildVideoManifestAttachment('sha-video-no-insights');
     final bytes = buildManifestBytes(keyframeCount: 1);
@@ -116,6 +117,7 @@ void main() {
       find.byKey(const ValueKey('video_manifest_insights_surface')),
       findsNothing,
     );
+    expect(find.textContaining('Key points'), findsWidgets);
   });
 
   testWidgets('video manifest keyframe gallery shows OCR overlay text',

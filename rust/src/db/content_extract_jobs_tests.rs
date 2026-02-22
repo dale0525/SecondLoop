@@ -153,6 +153,104 @@ fn process_pending_document_extractions_enriches_video_manifest_from_audio_trans
 }
 
 #[test]
+fn process_pending_document_extractions_merges_transcripts_from_all_video_segments() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [13u8; 32];
+
+    let mut cfg = get_content_enrichment_config(&conn).expect("config");
+    cfg.document_extract_enabled = false;
+    cfg.video_extract_enabled = true;
+    cfg.audio_transcribe_enabled = true;
+    cfg.url_fetch_enabled = false;
+    set_content_enrichment_config(&conn, &cfg).expect("write config");
+
+    let segment0 =
+        insert_attachment(&conn, &key, &app_dir, b"seg0", "video/mp4").expect("segment 0");
+    let segment1 =
+        insert_attachment(&conn, &key, &app_dir, b"seg1", "video/mp4").expect("segment 1");
+
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &segment0.sha256,
+        "und",
+        "audio_transcript.v1",
+        &serde_json::json!({
+            "schema": "secondloop.audio_transcript.v1",
+            "transcript_full": "segment 0 full transcript",
+            "transcript_excerpt": "segment 0 excerpt"
+        }),
+        1000,
+    )
+    .expect("mark segment 0 transcript");
+
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &segment1.sha256,
+        "und",
+        "audio_transcript.v1",
+        &serde_json::json!({
+            "schema": "secondloop.audio_transcript.v1",
+            "transcript_full": "segment 1 full transcript",
+            "transcript_excerpt": ""
+        }),
+        1000,
+    )
+    .expect("mark segment 1 transcript");
+
+    let manifest_payload = serde_json::json!({
+        "schema": "secondloop.video_manifest.v2",
+        "video_sha256": segment0.sha256,
+        "video_mime_type": "video/mp4",
+        "video_segments": [{
+            "index": 0,
+            "sha256": segment0.sha256,
+            "mime_type": "video/mp4"
+        }, {
+            "index": 1,
+            "sha256": segment1.sha256,
+            "mime_type": "video/mp4"
+        }]
+    });
+
+    let manifest = insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        manifest_payload.to_string().as_bytes(),
+        "application/x.secondloop.video+json",
+    )
+    .expect("manifest");
+    enqueue_attachment_annotation(&conn, &manifest.sha256, "und", 1200).expect("enqueue manifest");
+
+    let processed =
+        process_pending_document_extractions(&conn, &key, &app_dir, 10).expect("process pending");
+    assert_eq!(processed, 1);
+
+    let payload_json = read_attachment_annotation_payload_json(&conn, &key, &manifest.sha256)
+        .expect("read payload")
+        .expect("payload exists");
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_json).expect("valid payload json");
+
+    assert_eq!(
+        payload["transcript_full"].as_str(),
+        Some("segment 0 full transcript\n\nsegment 1 full transcript")
+    );
+    assert_eq!(
+        payload["transcript_excerpt"].as_str(),
+        Some("segment 0 excerpt\n\nsegment 1 full transcript")
+    );
+    assert_eq!(
+        payload["readable_text_full"].as_str(),
+        Some("segment 0 full transcript\n\nsegment 1 full transcript")
+    );
+}
+
+#[test]
 fn process_pending_document_extractions_accepts_video_manifest_v3_alias_fields() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
@@ -280,7 +378,7 @@ fn process_pending_document_extractions_accepts_video_manifest_v4_schema() {
 }
 
 #[test]
-fn process_pending_video_manifest_enqueues_audio_transcript_when_missing_and_enabled() {
+fn process_pending_video_manifest_enqueues_missing_segment_transcript_when_enabled() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
     let conn = open(&app_dir).expect("open");
@@ -327,8 +425,8 @@ fn process_pending_video_manifest_enqueues_audio_transcript_when_missing_and_ena
     assert!(
         due_now
             .iter()
-            .any(|job| job.attachment_sha256 == audio.sha256),
-        "missing due audio transcript job"
+            .any(|job| job.attachment_sha256 == video_segment.sha256),
+        "missing due segment transcript job"
     );
 
     let manifest_status: String = conn
@@ -365,14 +463,14 @@ fn process_pending_video_manifest_enqueues_audio_transcript_when_missing_and_ena
         "manifest waiting state should not expose user-visible error"
     );
 
-    let audio_status: String = conn
+    let audio_job_count: i64 = conn
         .query_row(
-            r#"SELECT status FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
+            r#"SELECT COUNT(*) FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
             rusqlite::params![audio.sha256],
             |row| row.get(0),
         )
-        .expect("audio status");
-    assert_eq!(audio_status, "pending");
+        .expect("audio job count");
+    assert_eq!(audio_job_count, 0);
 }
 
 #[test]
@@ -526,7 +624,7 @@ fn process_pending_video_manifest_skips_audio_wait_for_video_fallback_reference(
 }
 
 #[test]
-fn process_pending_video_manifest_skips_audio_wait_when_audio_mime_is_not_audio() {
+fn process_pending_video_manifest_waits_for_segment_transcript_even_with_fallback_audio() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
     let conn = open(&app_dir).expect("open");
@@ -569,19 +667,15 @@ fn process_pending_video_manifest_skips_audio_wait_when_audio_mime_is_not_audio(
 
     let processed =
         process_pending_document_extractions(&conn, &key, &app_dir, 10).expect("process pending");
-    assert_eq!(processed, 1);
+    assert_eq!(processed, 0);
 
-    let payload_json = read_attachment_annotation_payload_json(&conn, &key, &manifest.sha256)
-        .expect("read payload")
-        .expect("payload exists");
-    let payload: serde_json::Value =
-        serde_json::from_str(&payload_json).expect("valid payload json");
-
-    assert_eq!(
-        payload["schema"].as_str(),
-        Some("secondloop.video_extract.v1")
+    let due_now = list_due_attachment_annotations(&conn, now_ms(), 20).expect("due now");
+    assert!(
+        due_now
+            .iter()
+            .any(|job| job.attachment_sha256 == video_segment.sha256),
+        "video segment should be queued for transcript before fallback audio"
     );
-    assert_eq!(payload["transcript_full"], serde_json::Value::Null);
 
     let fallback_audio_job_count: i64 = conn
         .query_row(

@@ -37,6 +37,12 @@ typedef AudioNativeTranscodeFn = Future<Uint8List> Function(
   required bool mono,
 });
 
+typedef AudioNativeDecodeToWavFn = Future<Uint8List> Function(
+  Uint8List originalBytes, {
+  required String sourceMimeType,
+  int? maxDecodedWavBytes,
+});
+
 typedef AudioFfmpegExecutableResolver = Future<String?> Function();
 
 final class AudioTranscodeWorker {
@@ -53,9 +59,197 @@ final class AudioTranscodeWorker {
   @visibleForTesting
   static AudioNativeTranscodeFn? debugNativeTranscodeOverride;
   @visibleForTesting
+  static AudioNativeDecodeToWavFn? debugNativeDecodeToWavOverride;
+  @visibleForTesting
   static bool? debugUseNativeTranscodeOverride;
   @visibleForTesting
+  static bool? debugPreferVideoManifestWavProxyOverride;
+  @visibleForTesting
   static AudioFfmpegExecutableResolver? debugFfmpegExecutableResolver;
+
+  @visibleForTesting
+  static String debugExtensionForMimeType(String sourceMimeType) {
+    return _extensionForMimeType(sourceMimeType);
+  }
+
+  static Future<AudioTranscodeResult> transcodeVideoAudioForManifest(
+    Uint8List originalBytes, {
+    required String originalMimeType,
+    required Uint8List primarySegmentBytes,
+    required String primarySegmentMimeType,
+    AudioTranscodeFn? transcode,
+    AudioTranscodeCommandRunner? commandRunner,
+    AudioNativeTranscodeFn? nativeTranscode,
+    AudioNativeDecodeToWavFn? nativeDecodeToWav,
+    AudioFfmpegExecutableResolver? ffmpegExecutableResolver,
+  }) async {
+    final normalizedOriginalMime = originalMimeType.trim().toLowerCase();
+    final normalizedPrimaryMime = primarySegmentMimeType.trim().toLowerCase();
+    final shouldRetryWithOriginal =
+        !identical(originalBytes, primarySegmentBytes) ||
+            normalizedOriginalMime != normalizedPrimaryMime;
+
+    if (_shouldPreferVideoManifestWavProxy()) {
+      final primaryDirectWav = await _fallbackExtractAudioWavProxy(
+        primarySegmentBytes,
+        sourceMimeType: primarySegmentMimeType,
+        nativeDecodeToWav: nativeDecodeToWav,
+      );
+      if (primaryDirectWav.isNotEmpty) {
+        return AudioTranscodeResult(
+          bytes: primaryDirectWav,
+          mimeType: 'audio/wav',
+          didTranscode: true,
+        );
+      }
+
+      if (shouldRetryWithOriginal) {
+        final originalDirectWav = await _fallbackExtractAudioWavProxy(
+          originalBytes,
+          sourceMimeType: originalMimeType,
+          nativeDecodeToWav: nativeDecodeToWav,
+          maxDecodedWavBytes: 0,
+        );
+        if (originalDirectWav.isNotEmpty) {
+          return AudioTranscodeResult(
+            bytes: originalDirectWav,
+            mimeType: 'audio/wav',
+            didTranscode: true,
+          );
+        }
+      }
+    }
+
+    final primaryResult = await transcodeToM4aProxy(
+      primarySegmentBytes,
+      sourceMimeType: primarySegmentMimeType,
+      transcode: transcode,
+      commandRunner: commandRunner,
+      nativeTranscode: nativeTranscode,
+      nativeDecodeToWav: nativeDecodeToWav,
+      ffmpegExecutableResolver: ffmpegExecutableResolver,
+    );
+    if (await _isUsableVideoManifestAudioProxy(
+      primaryResult,
+      nativeDecodeToWav: nativeDecodeToWav,
+    )) {
+      return primaryResult;
+    }
+
+    final primaryWavFallback = await _fallbackExtractAudioWavProxy(
+      primarySegmentBytes,
+      sourceMimeType: primarySegmentMimeType,
+      nativeDecodeToWav: nativeDecodeToWav,
+    );
+    if (primaryWavFallback.isNotEmpty) {
+      return AudioTranscodeResult(
+        bytes: primaryWavFallback,
+        mimeType: 'audio/wav',
+        didTranscode: true,
+      );
+    }
+
+    if (!shouldRetryWithOriginal) {
+      return primaryResult;
+    }
+
+    final originalResult = await transcodeToM4aProxy(
+      originalBytes,
+      sourceMimeType: originalMimeType,
+      transcode: transcode,
+      commandRunner: commandRunner,
+      nativeTranscode: nativeTranscode,
+      nativeDecodeToWav: nativeDecodeToWav,
+      ffmpegExecutableResolver: ffmpegExecutableResolver,
+    );
+    if (await _isUsableVideoManifestAudioProxy(
+      originalResult,
+      nativeDecodeToWav: nativeDecodeToWav,
+    )) {
+      return originalResult;
+    }
+
+    final originalWavFallback = await _fallbackExtractAudioWavProxy(
+      originalBytes,
+      sourceMimeType: originalMimeType,
+      nativeDecodeToWav: nativeDecodeToWav,
+      maxDecodedWavBytes: 0,
+    );
+    if (originalWavFallback.isNotEmpty) {
+      return AudioTranscodeResult(
+        bytes: originalWavFallback,
+        mimeType: 'audio/wav',
+        didTranscode: true,
+      );
+    }
+
+    return primaryResult;
+  }
+
+  static bool _isUsableAudioProxy(AudioTranscodeResult result) {
+    final normalizedMimeType = result.mimeType.trim().toLowerCase();
+    return result.didTranscode &&
+        result.bytes.isNotEmpty &&
+        normalizedMimeType.startsWith('audio/');
+  }
+
+  static Future<bool> _isUsableVideoManifestAudioProxy(
+    AudioTranscodeResult result, {
+    AudioNativeDecodeToWavFn? nativeDecodeToWav,
+  }) async {
+    if (!_isUsableAudioProxy(result)) {
+      return false;
+    }
+
+    final normalizedMimeType = result.mimeType.trim().toLowerCase();
+    if (normalizedMimeType == 'audio/wav' ||
+        normalizedMimeType == 'audio/wave' ||
+        normalizedMimeType == 'audio/x-wav') {
+      return true;
+    }
+
+    if (!_shouldValidateVideoManifestAudioProxyDecode()) {
+      return true;
+    }
+
+    final decodeFn = nativeDecodeToWav ??
+        debugNativeDecodeToWavOverride ??
+        (
+          bytes, {
+          required sourceMimeType,
+          maxDecodedWavBytes,
+        }) {
+          return _decodeToWavWithNativePlatformApi(
+            bytes,
+            sourceMimeType: sourceMimeType,
+            maxDecodedWavBytes: maxDecodedWavBytes,
+          );
+        };
+
+    try {
+      final wavBytes = await decodeFn(
+        result.bytes,
+        sourceMimeType: result.mimeType,
+      );
+      return wavBytes.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool _shouldValidateVideoManifestAudioProxyDecode() {
+    final forced = debugUseNativeTranscodeOverride;
+    if (forced != null) return forced;
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
+  static bool _shouldPreferVideoManifestWavProxy() {
+    final forced = debugPreferVideoManifestWavProxyOverride;
+    if (forced != null) return forced;
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
 
   static Future<AudioTranscodeResult> transcodeToM4aProxy(
     Uint8List originalBytes, {
@@ -63,6 +257,7 @@ final class AudioTranscodeWorker {
     AudioTranscodeFn? transcode,
     AudioTranscodeCommandRunner? commandRunner,
     AudioNativeTranscodeFn? nativeTranscode,
+    AudioNativeDecodeToWavFn? nativeDecodeToWav,
     AudioFfmpegExecutableResolver? ffmpegExecutableResolver,
   }) async {
     final normalized = sourceMimeType.trim().toLowerCase();
@@ -136,18 +331,31 @@ final class AudioTranscodeWorker {
       originalBytes,
       sourceMimeType,
     );
-    if (transcodedBytes.isEmpty) {
+    if (transcodedBytes.isNotEmpty) {
       return AudioTranscodeResult(
-        bytes: originalBytes,
-        mimeType: canonicalSourceMimeType,
-        didTranscode: false,
+        bytes: transcodedBytes,
+        mimeType: targetMimeType,
+        didTranscode: true,
+      );
+    }
+
+    final wavFallbackBytes = await _fallbackExtractAudioWavProxy(
+      originalBytes,
+      sourceMimeType: sourceMimeType,
+      nativeDecodeToWav: nativeDecodeToWav,
+    );
+    if (wavFallbackBytes.isNotEmpty) {
+      return AudioTranscodeResult(
+        bytes: wavFallbackBytes,
+        mimeType: 'audio/wav',
+        didTranscode: true,
       );
     }
 
     return AudioTranscodeResult(
-      bytes: transcodedBytes,
-      mimeType: targetMimeType,
-      didTranscode: true,
+      bytes: originalBytes,
+      mimeType: canonicalSourceMimeType,
+      didTranscode: false,
     );
   }
 
@@ -180,6 +388,43 @@ final class AudioTranscodeWorker {
     if (forced != null) return forced;
     if (kIsWeb) return false;
     return Platform.isIOS || Platform.isAndroid || Platform.isMacOS;
+  }
+
+  static Future<Uint8List> _fallbackExtractAudioWavProxy(
+    Uint8List originalBytes, {
+    required String sourceMimeType,
+    AudioNativeDecodeToWavFn? nativeDecodeToWav,
+    int? maxDecodedWavBytes,
+  }) async {
+    final normalizedMimeType = sourceMimeType.trim().toLowerCase();
+    final isVideoSource = normalizedMimeType.startsWith('video/');
+    if (!isVideoSource || !_shouldUseNativeTranscode()) {
+      return Uint8List(0);
+    }
+
+    final decodeFn = nativeDecodeToWav ??
+        debugNativeDecodeToWavOverride ??
+        (
+          bytes, {
+          required sourceMimeType,
+          maxDecodedWavBytes,
+        }) {
+          return _decodeToWavWithNativePlatformApi(
+            bytes,
+            sourceMimeType: sourceMimeType,
+            maxDecodedWavBytes: maxDecodedWavBytes,
+          );
+        };
+
+    try {
+      return await decodeFn(
+        originalBytes,
+        sourceMimeType: sourceMimeType,
+        maxDecodedWavBytes: maxDecodedWavBytes,
+      );
+    } catch (_) {
+      return Uint8List(0);
+    }
   }
 
   static String _canonicalizeAudioMimeType(String sourceMimeType) {
@@ -370,10 +615,63 @@ final class AudioTranscodeWorker {
     }
   }
 
+  static Future<Uint8List> _decodeToWavWithNativePlatformApi(
+    Uint8List originalBytes, {
+    required String sourceMimeType,
+    int? maxDecodedWavBytes,
+  }) async {
+    if (kIsWeb) return Uint8List(0);
+    if (!(Platform.isIOS || Platform.isAndroid || Platform.isMacOS)) {
+      return Uint8List(0);
+    }
+
+    Directory? tempDir;
+    try {
+      tempDir =
+          await Directory.systemTemp.createTemp('secondloop_audio_native_');
+      final sourceExt = _extensionForMimeType(sourceMimeType);
+      final inputPath = '${tempDir.path}/input.$sourceExt';
+      final outputPath = '${tempDir.path}/output.wav';
+      await File(inputPath).writeAsBytes(originalBytes, flush: true);
+
+      final decodeRequest = <String, Object?>{
+        'input_path': inputPath,
+        'output_path': outputPath,
+        if (maxDecodedWavBytes != null)
+          'max_decoded_wav_bytes': maxDecodedWavBytes,
+      };
+      final ok = await _audioTranscodeChannel
+          .invokeMethod<bool>('decodeToWavPcm16Mono16k', decodeRequest)
+          .timeout(_nativeTranscodeTimeout);
+      if (ok != true) return Uint8List(0);
+
+      final outputFile = File(outputPath);
+      if (!await outputFile.exists()) return Uint8List(0);
+      final out = await outputFile.readAsBytes();
+      if (out.isEmpty) return Uint8List(0);
+      return out;
+    } on TimeoutException {
+      return Uint8List(0);
+    } catch (_) {
+      return Uint8List(0);
+    } finally {
+      if (tempDir != null) {
+        try {
+          await tempDir.delete(recursive: true);
+        } catch (_) {
+          // ignore
+        }
+      }
+    }
+  }
+
   static String _extensionForMimeType(String sourceMimeType) {
     final normalized = sourceMimeType.trim().toLowerCase();
     switch (normalized) {
       case 'audio/mp4':
+      case 'audio/m4a':
+      case 'audio/x-m4a':
+        return 'm4a';
       case 'video/mp4':
         return 'mp4';
       case 'audio/mpeg':

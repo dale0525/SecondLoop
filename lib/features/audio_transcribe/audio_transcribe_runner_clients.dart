@@ -458,6 +458,7 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     AudioTranscribeLocalRuntimeAudioDecode? decodeAudioToWav,
     AudioTranscribeLocalRuntimeRequest? requestLocalRuntimeTranscribe,
     AudioTranscribeLocalWhisperRequest? requestLocalWhisperTranscribe,
+    AudioTranscribeEnsureLocalWhisperModel? ensureLocalWhisperModelAvailable,
   }) : _requestLocalRuntimeTranscribe = requestLocalRuntimeTranscribe ??
             _buildDefaultLocalRuntimeRequest(
               whisperModel: whisperModel,
@@ -465,6 +466,9 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
                   decodeAudioToWav ?? _decodeAudioToWavForLocalRuntimeDefault,
               requestLocalWhisperTranscribe: requestLocalWhisperTranscribe ??
                   rust_audio_transcribe.audioTranscribeLocalWhisper,
+              ensureLocalWhisperModelAvailable:
+                  ensureLocalWhisperModelAvailable ??
+                      _ensureLocalWhisperModelAvailableDefault,
             );
 
   @override
@@ -511,6 +515,8 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     required String whisperModel,
     required AudioTranscribeLocalRuntimeAudioDecode decodeAudioToWav,
     required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
+    required AudioTranscribeEnsureLocalWhisperModel
+        ensureLocalWhisperModelAvailable,
   }) {
     final normalizedModelName = _normalizeRuntimeWhisperModel(whisperModel);
     return ({
@@ -527,6 +533,7 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
         audioBytes: audioBytes,
         decodeAudioToWav: decodeAudioToWav,
         requestLocalWhisperTranscribe: requestLocalWhisperTranscribe,
+        ensureLocalWhisperModelAvailable: ensureLocalWhisperModelAvailable,
       );
     };
   }
@@ -554,6 +561,8 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
     required Uint8List audioBytes,
     required AudioTranscribeLocalRuntimeAudioDecode decodeAudioToWav,
     required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
+    required AudioTranscribeEnsureLocalWhisperModel
+        ensureLocalWhisperModelAvailable,
   }) async {
     if (kIsWeb) {
       throw StateError('audio_transcribe_local_runtime_unavailable');
@@ -573,11 +582,13 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
       }
 
       final normalizedLang = isAutoAudioTranscribeLang(lang) ? '' : lang.trim();
-      return await requestLocalWhisperTranscribe(
+      return await _requestLocalRuntimeWhisperWithModelRecovery(
         appDir: appDir,
-        modelName: whisperModel,
+        whisperModel: whisperModel,
         lang: normalizedLang,
         wavBytes: wavBytes,
+        requestLocalWhisperTranscribe: requestLocalWhisperTranscribe,
+        ensureLocalWhisperModelAvailable: ensureLocalWhisperModelAvailable,
       );
     } on StateError {
       rethrow;
@@ -590,6 +601,147 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
       throw StateError('audio_transcribe_local_runtime_failed:$detail');
     }
   }
+
+  static Future<String> _requestLocalRuntimeWhisperWithModelRecovery({
+    required String appDir,
+    required String whisperModel,
+    required String lang,
+    required List<int> wavBytes,
+    required AudioTranscribeLocalWhisperRequest requestLocalWhisperTranscribe,
+    required AudioTranscribeEnsureLocalWhisperModel
+        ensureLocalWhisperModelAvailable,
+  }) async {
+    try {
+      return await requestLocalWhisperTranscribe(
+        appDir: appDir,
+        modelName: whisperModel,
+        lang: lang,
+        wavBytes: wavBytes,
+      );
+    } on StateError catch (error) {
+      if (!_isMissingLocalRuntimeModelError(error)) {
+        rethrow;
+      }
+
+      try {
+        await ensureLocalWhisperModelAvailable(modelName: whisperModel);
+      } catch (downloadError) {
+        final detail = downloadError.toString().trim();
+        if (detail.isEmpty) {
+          throw StateError(
+            'audio_transcribe_local_runtime_model_download_failed:$whisperModel',
+          );
+        }
+        throw StateError(
+          'audio_transcribe_local_runtime_model_download_failed:'
+          '$whisperModel:$detail',
+        );
+      }
+
+      return requestLocalWhisperTranscribe(
+        appDir: appDir,
+        modelName: whisperModel,
+        lang: lang,
+        wavBytes: wavBytes,
+      );
+    }
+  }
+
+  static bool _isMissingLocalRuntimeModelError(StateError error) {
+    final detail = error.toString().trim().toLowerCase();
+    return detail.contains('audio_transcribe_local_runtime_model_missing');
+  }
+
+  static Future<void> _ensureLocalWhisperModelAvailableDefault({
+    required String modelName,
+  }) async {
+    if (kIsWeb) return;
+    final store = createAudioTranscribeWhisperModelStore();
+    if (!store.supportsRuntimeDownload) {
+      return;
+    }
+    await store.ensureModelAvailable(model: modelName);
+  }
+}
+
+@visibleForTesting
+bool shouldBypassLocalRuntimeDecodeForWav({
+  required String mimeType,
+  required Uint8List audioBytes,
+}) {
+  final normalizedMimeType = mimeType.trim().toLowerCase();
+  final isWavMimeType = normalizedMimeType == 'audio/wav' ||
+      normalizedMimeType == 'audio/wave' ||
+      normalizedMimeType == 'audio/x-wav';
+  if (!isWavMimeType) {
+    return false;
+  }
+  return isCanonicalPcm16Mono16kWavBytes(audioBytes);
+}
+
+@visibleForTesting
+bool isCanonicalPcm16Mono16kWavBytes(Uint8List bytes) {
+  if (bytes.lengthInBytes < 44) {
+    return false;
+  }
+
+  bool hasAscii(int offset, String value) {
+    final units = value.codeUnits;
+    if (offset < 0 || offset + units.length > bytes.lengthInBytes) {
+      return false;
+    }
+    for (var i = 0; i < units.length; i++) {
+      if (bytes[offset + i] != units[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  int readUint16Le(int offset) {
+    return bytes[offset] | (bytes[offset + 1] << 8);
+  }
+
+  int readUint32Le(int offset) {
+    return bytes[offset] |
+        (bytes[offset + 1] << 8) |
+        (bytes[offset + 2] << 16) |
+        (bytes[offset + 3] << 24);
+  }
+
+  if (!hasAscii(0, 'RIFF') || !hasAscii(8, 'WAVE')) {
+    return false;
+  }
+  if (!hasAscii(12, 'fmt ') || !hasAscii(36, 'data')) {
+    return false;
+  }
+
+  final fmtChunkSize = readUint32Le(16);
+  if (fmtChunkSize < 16) {
+    return false;
+  }
+
+  final audioFormat = readUint16Le(20);
+  final channelCount = readUint16Le(22);
+  final sampleRate = readUint32Le(24);
+  final bitsPerSample = readUint16Le(34);
+  if (audioFormat != 1 ||
+      channelCount != 1 ||
+      sampleRate != 16000 ||
+      bitsPerSample != 16) {
+    return false;
+  }
+
+  final dataLength = readUint32Le(40);
+  const payloadOffset = 44;
+  if (dataLength <= 0) {
+    return false;
+  }
+  if (payloadOffset + dataLength > bytes.lengthInBytes) {
+    return false;
+  }
+
+  return true;
 }
 
 Future<Uint8List> _decodeAudioToWavForLocalRuntimeDefault({
@@ -600,6 +752,13 @@ Future<Uint8List> _decodeAudioToWavForLocalRuntimeDefault({
   final effectiveMimeType = normalizedMimeType.isEmpty
       ? (sniffAudioMimeType(audioBytes) ?? '')
       : normalizedMimeType;
+
+  if (shouldBypassLocalRuntimeDecodeForWav(
+    mimeType: effectiveMimeType,
+    audioBytes: audioBytes,
+  )) {
+    return audioBytes;
+  }
 
   if (Platform.isAndroid || Platform.isIOS) {
     return _decodeAudioToWavWithNativeTranscode(
