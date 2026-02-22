@@ -269,50 +269,76 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       final contentWidth = contentBounds.width;
       final contentHeight = contentBounds.height;
 
-      final sourceWidth = renderObject.size.width;
-      final sourceHeight = renderObject.size.height;
-      if (!sourceWidth.isFinite ||
-          !sourceHeight.isFinite ||
-          sourceWidth <= 0 ||
-          sourceHeight <= 0) {
+      final sourceLogicalWidth = renderObject.size.width;
+      final sourceLogicalHeight = renderObject.size.height;
+      if (!sourceLogicalWidth.isFinite ||
+          !sourceLogicalHeight.isFinite ||
+          sourceLogicalWidth <= 0 ||
+          sourceLogicalHeight <= 0) {
         throw StateError('Preview has invalid dimensions for PDF export');
       }
 
-      final contentScale = contentWidth / sourceWidth;
-      final logicalPageHeight = contentHeight / contentScale;
-      if (!logicalPageHeight.isFinite || logicalPageHeight <= 1) {
-        throw StateError('Failed to calculate PDF page height from preview');
+      final paginationRatio =
+          _resolvePreviewPaginationPixelRatio(renderObject.size);
+      final paginationImage =
+          await renderObject.toImage(pixelRatio: paginationRatio);
+      final paginationBytes =
+          await paginationImage.toByteData(format: ui.ImageByteFormat.png);
+      paginationImage.dispose();
+      if (paginationBytes == null) {
+        throw StateError('Failed to build pagination map for PDF export');
       }
 
-      final pageCount =
-          (sourceHeight / logicalPageHeight).ceil().clamp(1, 9999);
+      final pageOffsets = await computeMarkdownPreviewPdfPageOffsetsAsync(
+        pngBytes: paginationBytes.buffer.asUint8List(),
+        sourceWidth: sourceLogicalWidth * paginationRatio,
+        sourceHeight: sourceLogicalHeight * paginationRatio,
+        contentWidth: contentWidth,
+        contentHeight: contentHeight,
+      );
+
+      final pageSlices = buildMarkdownPreviewPdfSlices(
+        pageOffsets: pageOffsets,
+        sourceLogicalWidth: sourceLogicalWidth,
+        sourceLogicalHeight: sourceLogicalHeight,
+        contentWidth: contentWidth,
+        contentHeight: contentHeight,
+      );
+      if (pageSlices.isEmpty) {
+        throw StateError('Failed to build preview slices for PDF export');
+      }
+
       final devicePixelRatio =
           ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
-      final slicePixelRatio = math.min(
-        _resolvePreviewSlicePixelRatio(
-          logicalWidth: sourceWidth,
-          logicalHeight: logicalPageHeight,
-          devicePixelRatio: devicePixelRatio,
-        ),
-        _resolvePreviewSlicePixelRatioCap(pageCount: pageCount),
-      );
+      final slicePixelRatioCap =
+          _resolvePreviewSlicePixelRatioCap(pageCount: pageSlices.length);
 
       final document = PdfDocument();
       document.pageSettings.size = PdfPageSize.a4;
       document.pageSettings.setMargins(0);
 
-      var logicalOffset = 0.0;
-      while (logicalOffset < sourceHeight - 0.5) {
-        final logicalHeight = math.min(
-          logicalPageHeight,
-          sourceHeight - logicalOffset,
-        );
-        if (logicalHeight <= 0) {
-          break;
+      for (var index = 0; index < pageSlices.length; index += 1) {
+        final slice = pageSlices[index];
+        if (slice.logicalHeight <= 0.5 || slice.drawHeight <= 0.5) {
+          continue;
         }
 
+        final slicePixelRatio = math.min(
+          _resolvePreviewSlicePixelRatio(
+            logicalWidth: sourceLogicalWidth,
+            logicalHeight: slice.logicalHeight,
+            devicePixelRatio: devicePixelRatio,
+          ),
+          slicePixelRatioCap,
+        );
+
         final sliceImage = await renderLayer.toImage(
-          Rect.fromLTWH(0, logicalOffset, sourceWidth, logicalHeight),
+          Rect.fromLTWH(
+            0,
+            slice.logicalOffset,
+            sourceLogicalWidth,
+            slice.logicalHeight,
+          ),
           pixelRatio: slicePixelRatio,
         );
         final sliceBytes =
@@ -323,22 +349,23 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         }
 
         final bitmap = PdfBitmap(sliceBytes.buffer.asUint8List());
-        final drawHeight = logicalHeight * contentScale;
+        final drawLeft =
+            contentBounds.left + (contentBounds.width - slice.drawWidth) / 2;
 
         final page = document.pages.add();
         page.graphics.drawImage(
           bitmap,
           Rect.fromLTWH(
-            contentBounds.left,
+            drawLeft,
             contentBounds.top,
-            contentBounds.width,
-            drawHeight,
+            slice.drawWidth,
+            slice.drawHeight,
           ),
         );
 
-        logicalOffset += logicalHeight;
-        await Future<void>.delayed(Duration.zero);
-        await WidgetsBinding.instance.endOfFrame;
+        if (index.isOdd) {
+          await Future<void>.delayed(Duration.zero);
+        }
       }
 
       final bytes = await document.save();
@@ -357,6 +384,18 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         }
       }
     }
+  }
+
+  double _resolvePreviewPaginationPixelRatio(Size logicalSize) {
+    const maxPaginationDimensionPx = 6400.0;
+
+    final longestDimension = math.max(logicalSize.width, logicalSize.height);
+    if (!longestDimension.isFinite || longestDimension <= 0) {
+      return 1.0;
+    }
+
+    final ratio = maxPaginationDimensionPx / longestDimension;
+    return ratio.clamp(0.16, 1.0);
   }
 
   Future<Uint8List> _buildPdfWithVectorRenderer() {
@@ -395,15 +434,18 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   }
 
   double _resolvePreviewSlicePixelRatioCap({required int pageCount}) {
-    if (pageCount >= 48) {
-      return 2.2;
+    if (pageCount >= 64) {
+      return 1.55;
     }
-    if (pageCount >= 30) {
-      return 2.7;
+    if (pageCount >= 40) {
+      return 1.85;
     }
-    if (pageCount >= 16) {
-      return 3.2;
+    if (pageCount >= 24) {
+      return 2.15;
     }
-    return 8.0;
+    if (pageCount >= 12) {
+      return 2.6;
+    }
+    return 4.8;
   }
 }
