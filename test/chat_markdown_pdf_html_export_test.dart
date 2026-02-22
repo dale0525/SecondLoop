@@ -37,6 +37,8 @@ void main() {
 
     expect(html, isNot(contains('cdn.jsdelivr.net/npm/katex')));
     expect(html, contains('data:font/woff2;base64,'));
+    expect(html, isNot(contains('fonts/KaTeX_')));
+    expect(html, isNot(contains('.ttf')));
   });
 
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {

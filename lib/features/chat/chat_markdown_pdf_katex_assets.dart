@@ -64,14 +64,62 @@ Future<String> _inlineKatexFontDataUrls(String css) async {
         'url("data:$mimeType;base64,${base64Encode(bytes)}")';
   }
 
+  final preferredFamilyReplacement =
+      _buildPreferredFamilyReplacementMap(replacementUrls);
+
   return css.replaceAllMapped(_kKatexCssFontUrlPattern, (match) {
     final fileName = match.group(2);
     if (fileName == null) {
       return match.group(0) ?? '';
     }
 
-    return replacementUrls[fileName] ?? (match.group(0) ?? '');
+    final exactReplacement = replacementUrls[fileName];
+    if (exactReplacement != null) {
+      return exactReplacement;
+    }
+
+    final familyName = _stripFileExtension(fileName);
+    return preferredFamilyReplacement[familyName] ?? (match.group(0) ?? '');
   });
+}
+
+Map<String, String> _buildPreferredFamilyReplacementMap(
+    Map<String, String> replacementUrls) {
+  final familyReplacement = <String, String>{};
+  final orderedFileNames = replacementUrls.keys.toList(growable: false)
+    ..sort(_compareFontExtensionPriority);
+
+  for (final fileName in orderedFileNames) {
+    familyReplacement.putIfAbsent(
+      _stripFileExtension(fileName),
+      () => replacementUrls[fileName]!,
+    );
+  }
+
+  return familyReplacement;
+}
+
+int _compareFontExtensionPriority(String a, String b) {
+  return _fontExtensionPriority(a).compareTo(_fontExtensionPriority(b));
+}
+
+int _fontExtensionPriority(String fileName) {
+  final lower = fileName.toLowerCase();
+  if (lower.endsWith('.woff2')) {
+    return 0;
+  }
+  if (lower.endsWith('.woff')) {
+    return 1;
+  }
+  return 2;
+}
+
+String _stripFileExtension(String fileName) {
+  final dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex <= 0) {
+    return fileName;
+  }
+  return fileName.substring(0, dotIndex);
 }
 
 bool _shouldInlineFontAsset(String fileName) {
