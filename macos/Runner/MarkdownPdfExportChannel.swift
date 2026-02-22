@@ -5,6 +5,7 @@ import WebKit
 private let kMarkdownPdfMethod = "exportMarkdownHtmlToPdf"
 private let kMarkdownPdfPageWidth: CGFloat = 595.2
 private let kMarkdownPdfPageHeight: CGFloat = 841.8
+private let kMarkdownPdfHiddenOriginX: CGFloat = -10000
 
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
@@ -76,14 +77,18 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     let webView = WKWebView(
-      frame: NSRect(x: 0, y: 0, width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight),
+      frame: NSRect(
+        x: kMarkdownPdfHiddenOriginX,
+        y: 0,
+        width: kMarkdownPdfPageWidth,
+        height: kMarkdownPdfPageHeight
+      ),
       configuration: config
     )
     webView.navigationDelegate = self
     self.webView = webView
 
     if let hostView = MarkdownPdfExportTask.resolveHostView() {
-      webView.alphaValue = 0.01
       hostView.addSubview(webView)
     }
 
@@ -211,7 +216,12 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       }
 
       contentHeight = max(contentHeight, kMarkdownPdfPageHeight)
-      webView.frame = NSRect(x: 0, y: 0, width: kMarkdownPdfPageWidth, height: contentHeight)
+      webView.frame = NSRect(
+        x: kMarkdownPdfHiddenOriginX,
+        y: 0,
+        width: kMarkdownPdfPageWidth,
+        height: kMarkdownPdfPageHeight
+      )
 
       self.exportPdfViaPrintOperation(
         webView: webView,
@@ -224,6 +234,9 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     webView: WKWebView,
     contentHeight: CGFloat
   ) {
+    let outputUrl = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("secondloop_markdown_\(UUID().uuidString).pdf")
+
     let printInfo = NSPrintInfo()
     printInfo.paperSize = NSSize(width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight)
     printInfo.topMargin = 0
@@ -234,32 +247,45 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     printInfo.verticalPagination = .automatic
     printInfo.isVerticallyCentered = false
     printInfo.isHorizontallyCentered = false
+    printInfo.jobDisposition = .save
+    printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
 
-    let printData = NSMutableData()
-    let operation = NSPrintOperation.pdfOperation(
-      with: webView,
-      inside: webView.bounds,
-      to: printData,
-      printInfo: printInfo
-    )
+    let operation: NSPrintOperation
+    if #available(macOS 11.0, *) {
+      operation = webView.printOperation(with: printInfo)
+    } else {
+      operation = NSPrintOperation(view: webView, printInfo: printInfo)
+    }
+
     operation.showsPrintPanel = false
     operation.showsProgressPanel = false
     operation.canSpawnSeparateThread = true
 
     let didRun = operation.run()
-    let pdfData = printData as Data
-    if didRun, !pdfData.isEmpty {
-      complete(success: pdfData)
+    if didRun,
+       let data = waitForPdfFileData(at: outputUrl) {
+      try? FileManager.default.removeItem(at: outputUrl)
+      complete(success: data)
       return
     }
 
+    try? FileManager.default.removeItem(at: outputUrl)
+
     if #available(macOS 11.0, *) {
+      let renderHeight = max(contentHeight, kMarkdownPdfPageHeight)
+      webView.frame = NSRect(
+        x: kMarkdownPdfHiddenOriginX,
+        y: 0,
+        width: kMarkdownPdfPageWidth,
+        height: renderHeight
+      )
+
       let config = WKPDFConfiguration()
       config.rect = CGRect(
         x: 0,
         y: 0,
         width: kMarkdownPdfPageWidth,
-        height: max(contentHeight, kMarkdownPdfPageHeight)
+        height: renderHeight
       )
 
       webView.createPDF(configuration: config) { [weak self] result in
@@ -281,6 +307,21 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     completeWithDataWithPdfFallback(webView: webView)
+  }
+
+  private func waitForPdfFileData(at outputUrl: URL) -> Data? {
+    let maxAttempts = 20
+    for attempt in 0 ... maxAttempts {
+      if let data = try? Data(contentsOf: outputUrl), !data.isEmpty {
+        return data
+      }
+
+      if attempt < maxAttempts {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+      }
+    }
+
+    return nil
   }
 
   private func completeWithDataWithPdfFallback(webView: WKWebView) {
