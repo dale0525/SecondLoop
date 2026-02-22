@@ -133,6 +133,7 @@ void main() {
 
       expect(find.text('Export as PNG'), findsOneWidget);
       expect(find.text('Export as PDF'), findsOneWidget);
+      expect(find.text('Copy to Clipboard'), findsOneWidget);
     },
     variant: const TargetPlatformVariant(
       <TargetPlatform>{TargetPlatform.macOS},

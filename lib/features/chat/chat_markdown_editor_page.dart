@@ -11,19 +11,25 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:share_plus/share_plus.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import 'chat_markdown_clipboard_export.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
+import 'chat_markdown_pdf_export_layout.dart';
+import 'chat_markdown_pdf_preview_export.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
 
 part 'chat_markdown_editor_page_export.dart';
+part 'chat_markdown_editor_page_export_file.dart';
 part 'chat_markdown_editor_page_export_inline.dart';
+part 'chat_markdown_editor_page_export_pdf_renderer.dart';
 part 'chat_markdown_editor_page_preview.dart';
 
 const _kDefaultMarkdownModeRuneThreshold = 240;
@@ -58,6 +64,12 @@ enum ChatMarkdownCompactPane {
 enum _MarkdownExportFormat {
   png,
   pdf,
+}
+
+enum _MarkdownExportAction {
+  png,
+  pdf,
+  copyToClipboard,
 }
 
 class ChatMarkdownEditorResult {
@@ -329,19 +341,23 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
   }
 
   Widget _buildExportMenuButton(BuildContext context) {
-    return PopupMenuButton<_MarkdownExportFormat>(
+    return PopupMenuButton<_MarkdownExportAction>(
       key: const ValueKey('chat_markdown_editor_export_menu'),
       tooltip: context.t.chat.markdownEditor.exportMenu,
       enabled: !_exporting,
-      onSelected: _export,
-      itemBuilder: (context) => <PopupMenuEntry<_MarkdownExportFormat>>[
-        PopupMenuItem<_MarkdownExportFormat>(
-          value: _MarkdownExportFormat.png,
+      onSelected: _handleExportAction,
+      itemBuilder: (context) => <PopupMenuEntry<_MarkdownExportAction>>[
+        PopupMenuItem<_MarkdownExportAction>(
+          value: _MarkdownExportAction.png,
           child: Text(context.t.chat.markdownEditor.exportPng),
         ),
-        PopupMenuItem<_MarkdownExportFormat>(
-          value: _MarkdownExportFormat.pdf,
+        PopupMenuItem<_MarkdownExportAction>(
+          value: _MarkdownExportAction.pdf,
           child: Text(context.t.chat.markdownEditor.exportPdf),
+        ),
+        PopupMenuItem<_MarkdownExportAction>(
+          value: _MarkdownExportAction.copyToClipboard,
+          child: Text(context.t.chat.markdownEditor.exportCopyClipboard),
         ),
       ],
       icon: _exporting

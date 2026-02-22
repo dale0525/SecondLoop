@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_markdown_style.dart';
+import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
+import 'chat_markdown_theme_presets.dart';
 
 class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({required this.content, super.key});
@@ -14,6 +16,10 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
+    final theme = Theme.of(context);
+    final previewTheme =
+        resolveChatMarkdownTheme(ChatMarkdownThemePreset.studio, theme);
+
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
       appBar: AppBar(
@@ -43,7 +49,14 @@ class MessageViewerPage extends StatelessWidget {
       body: Markdown(
         data: normalized,
         selectable: true,
+        softLineBreak: true,
         styleSheet: slMarkdownStyleSheet(context),
+        blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+        inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+        builders: buildChatMarkdownElementBuilders(
+          previewTheme: previewTheme,
+          exportRenderMode: false,
+        ),
       ),
     );
   }

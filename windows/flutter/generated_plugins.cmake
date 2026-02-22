@@ -8,11 +8,13 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_secure_storage_windows
   hotkey_manager_windows
+  irondash_engine_context
   just_audio_windows
   local_auth_windows
   record_windows
   screen_retriever
   share_plus
+  super_native_extensions
   tray_manager
   url_launcher_windows
   window_manager

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
@@ -17,6 +19,10 @@ List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes() {
     _LatexInlineSyntax(),
   ];
 }
+
+const double _kLatexBlockMinLayoutWidth = 220;
+const double _kLatexBlockMaxLayoutWidth = 8192;
+const double _kLatexInlineMaxViewportWidth = 420;
 
 Map<String, MarkdownElementBuilder> buildChatMarkdownElementBuilders({
   required ChatMarkdownPreviewTheme previewTheme,
@@ -55,7 +61,6 @@ class ChatMarkdownLatexInline extends StatelessWidget {
     final style = (DefaultTextStyle.of(context).style).copyWith(
       color: previewTheme.textColor,
       fontSize: exportRenderMode ? 13 : null,
-      height: 1.3,
     );
 
     return DecoratedBox(
@@ -67,11 +72,29 @@ class ChatMarkdownLatexInline extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        child: _LatexFormula(
-          expression: expression,
-          textStyle: style,
-          blockMode: false,
-          fallbackColor: previewTheme.mutedTextColor,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: _kLatexInlineMaxViewportWidth,
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            primary: false,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: _kLatexBlockMaxLayoutWidth,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                widthFactor: 1,
+                child: _LatexFormula(
+                  expression: expression,
+                  textStyle: style,
+                  blockMode: false,
+                  fallbackColor: previewTheme.mutedTextColor,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -95,7 +118,6 @@ class ChatMarkdownLatexBlock extends StatelessWidget {
     final style = (DefaultTextStyle.of(context).style).copyWith(
       color: previewTheme.textColor,
       fontSize: exportRenderMode ? 14 : 15,
-      height: 1.35,
     );
 
     return Container(
@@ -109,14 +131,35 @@ class ChatMarkdownLatexBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(exportRenderMode ? 10 : 12),
         border: Border.all(color: previewTheme.borderColor.withOpacity(0.92)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: _LatexFormula(
-          expression: expression,
-          textStyle: style,
-          blockMode: true,
-          fallbackColor: previewTheme.mutedTextColor,
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          final minFormulaWidth =
+              math.max(_kLatexBlockMinLayoutWidth, availableWidth);
+          final maxFormulaWidth =
+              math.max(minFormulaWidth, _kLatexBlockMaxLayoutWidth);
+
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: minFormulaWidth,
+                maxWidth: maxFormulaWidth,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _LatexFormula(
+                  expression: expression,
+                  textStyle: style,
+                  blockMode: true,
+                  fallbackColor: previewTheme.mutedTextColor,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -376,9 +419,17 @@ class _LatexFormula extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveExpression =
+        _normalizeLatexExpression(expression, blockMode: blockMode);
+    final effectiveMathStyle = _resolveLatexMathStyle(
+      effectiveExpression,
+      blockMode: blockMode,
+    );
+
     return Math.tex(
-      expression,
-      mathStyle: blockMode ? MathStyle.display : MathStyle.text,
+      effectiveExpression,
+      mathStyle: effectiveMathStyle,
+      textScaleFactor: 1.0,
       textStyle: textStyle,
       onErrorFallback: (error) {
         return Text(
@@ -391,6 +442,114 @@ class _LatexFormula extends StatelessWidget {
       },
     );
   }
+}
+
+MathStyle _resolveLatexMathStyle(
+  String expression, {
+  required bool blockMode,
+}) {
+  if (blockMode) {
+    return MathStyle.display;
+  }
+
+  final hasInlineMatrixEnvironment = RegExp(
+    r'\\begin\{(?:matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|smallmatrix|array)\}',
+  ).hasMatch(expression);
+  if (hasInlineMatrixEnvironment) {
+    return MathStyle.display;
+  }
+
+  return MathStyle.text;
+}
+
+String _normalizeLatexExpression(
+  String expression, {
+  required bool blockMode,
+}) {
+  final normalized = expression.trim();
+  if (normalized.isEmpty || !blockMode) {
+    return normalized;
+  }
+
+  final sizeWrapper = _extractLatexSizeWrapper(normalized);
+  if (sizeWrapper != null) {
+    final normalizedInner = _normalizeLatexExpression(
+      sizeWrapper.content,
+      blockMode: true,
+    );
+    return '{\\${sizeWrapper.command} $normalizedInner}';
+  }
+
+  if (!normalized.contains(r'\\')) {
+    return normalized;
+  }
+
+  final hasMultilineEnvironment = RegExp(
+    r'\\begin\{(?:aligned|align|align\*|array|cases|split|gather|gathered|multline|multline\*|eqnarray)\}',
+  ).hasMatch(normalized);
+  if (hasMultilineEnvironment) {
+    return normalized;
+  }
+
+  return r'\begin{aligned}' + normalized + r'\end{aligned}';
+}
+
+({String command, String content})? _extractLatexSizeWrapper(
+    String expression) {
+  final commandMatch = RegExp(
+    r'^\\(tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge)\s*',
+  ).firstMatch(expression);
+  if (commandMatch == null) {
+    return null;
+  }
+
+  final openingBraceIndex = commandMatch.end;
+  if (openingBraceIndex >= expression.length ||
+      expression[openingBraceIndex] != '{') {
+    return null;
+  }
+
+  var depth = 0;
+  var closingBraceIndex = -1;
+  for (var i = openingBraceIndex; i < expression.length; i++) {
+    final char = expression[i];
+    if (char == '{' && !_isEscapedLatexChar(expression, i)) {
+      depth++;
+      continue;
+    }
+    if (char == '}' && !_isEscapedLatexChar(expression, i)) {
+      depth--;
+      if (depth == 0) {
+        closingBraceIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (closingBraceIndex < 0) {
+    return null;
+  }
+
+  final trailing = expression.substring(closingBraceIndex + 1).trim();
+  if (trailing.isNotEmpty) {
+    return null;
+  }
+
+  return (
+    command: commandMatch.group(1)!,
+    content: expression.substring(openingBraceIndex + 1, closingBraceIndex),
+  );
+}
+
+bool _isEscapedLatexChar(String expression, int index) {
+  var backslashCount = 0;
+  for (var cursor = index - 1; cursor >= 0; cursor--) {
+    if (expression[cursor] != '\\') {
+      break;
+    }
+    backslashCount++;
+  }
+  return backslashCount.isOdd;
 }
 
 class _MarkmapBlockBuilder extends MarkdownElementBuilder {
