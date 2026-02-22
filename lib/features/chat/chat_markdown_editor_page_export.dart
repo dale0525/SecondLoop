@@ -92,10 +92,13 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       );
     } catch (error) {
       if (!mounted) return;
+      final resolvedReason = format == _MarkdownExportFormat.pdf
+          ? _resolvePdfExportFailureReason(error)
+          : '$error';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.t.chat.markdownEditor.exportFailed(error: '$error'),
+            context.t.chat.markdownEditor.exportFailed(error: resolvedReason),
           ),
           duration: const Duration(seconds: 3),
         ),
@@ -104,6 +107,27 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       if (mounted) {
         setState(() => _exporting = false);
       }
+    }
+  }
+
+  String _resolvePdfExportFailureReason(Object error) {
+    switch (classifyMarkdownPdfExportError(error)) {
+      case MarkdownPdfExportErrorKind.noWindowsBrowser:
+        return context.t.chat.markdownEditor.exportReasonNoWindowsBrowser;
+      case MarkdownPdfExportErrorKind.windowsBrowserPrintFailed:
+        return context.t.chat.markdownEditor.exportReasonWindowsBrowserPrint;
+      case MarkdownPdfExportErrorKind.timeout:
+        return context.t.chat.markdownEditor.exportReasonTimeout;
+      case MarkdownPdfExportErrorKind.renderFailed:
+        return context.t.chat.markdownEditor.exportReasonRender;
+      case MarkdownPdfExportErrorKind.writeFailed:
+        return context.t.chat.markdownEditor.exportReasonWrite;
+      case MarkdownPdfExportErrorKind.cancelled:
+        return context.t.chat.markdownEditor.exportReasonCancelled;
+      case MarkdownPdfExportErrorKind.notSupported:
+        return context.t.chat.markdownEditor.exportReasonUnsupported;
+      case MarkdownPdfExportErrorKind.unknown:
+        return '$error';
     }
   }
 

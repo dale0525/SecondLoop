@@ -839,7 +839,14 @@
       "exportDone": "已导出为 $format",
       "exportSavedPath": "已保存到：$path",
       "exportFailed": "导出失败：$error",
-      "stats": "$lines 行 · $characters 字符",
+
+  "exportReasonNoWindowsBrowser": "未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。",
+  "exportReasonWindowsBrowserPrint": "Windows 浏览器打印失败，请确认浏览器可用后重试。",
+  "exportReasonTimeout": "导出超时。请减少超大图片或文档长度后重试。",
+  "exportReasonRender": "预览内容渲染失败，无法导出 PDF。",
+  "exportReasonWrite": "PDF 写入失败，请检查磁盘空间后重试。",
+  "exportReasonCancelled": "PDF 导出已取消。",
+  "exportReasonUnsupported": "当前平台暂不支持 PDF 导出。",      "stats": "$lines 行 · $characters 字符",
       "simpleInput": "简易输入",
       "actions": {
         "heading": "标题",
