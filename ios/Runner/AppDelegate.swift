@@ -22,6 +22,7 @@ import Vision
 
   private var locationManager: CLLocationManager?
   private var pendingLocationResult: FlutterResult?
+  private var markdownPdfExportChannel: MarkdownPdfExportChannel?
 
   override func application(
     _ application: UIApplication,
@@ -133,6 +134,10 @@ import Vision
           result(FlutterMethodNotImplemented)
         }
       }
+
+      markdownPdfExportChannel = MarkdownPdfExportChannel(
+        binaryMessenger: controller.binaryMessenger
+      )
     }
 
     WorkmanagerPlugin.setPluginRegistrantCallback { registry in
