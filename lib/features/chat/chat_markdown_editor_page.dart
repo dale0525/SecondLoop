@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -21,6 +20,7 @@ import '../../ui/sl_tokens.dart';
 import 'chat_markdown_clipboard_export.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
+import 'chat_markdown_pdf_image_loader.dart';
 import 'chat_markdown_pdf_preview_export.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';

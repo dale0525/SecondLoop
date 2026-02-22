@@ -341,7 +341,10 @@ class _PdfMarkdownRenderer {
       _advanceWithSpacing(8);
     }
 
-    final imageBytes = await _loadImageBytes(source);
+    final imageBytes = await _imageBytesCache.putIfAbsent(
+      source,
+      () => loadMarkdownPdfImageBytes(source),
+    );
     if (imageBytes == null || imageBytes.isEmpty) {
       final fallback = block.text.trim().isEmpty ? source : block.text.trim();
       _drawParagraph(
@@ -411,69 +414,6 @@ class _PdfMarkdownRenderer {
     } else if (!isLast) {
       _advanceWithSpacing(8);
     }
-  }
-
-  Future<Uint8List?> _loadImageBytes(String source) {
-    return _imageBytesCache.putIfAbsent(
-      source,
-      () => _resolveImageBytes(source),
-    );
-  }
-
-  Future<Uint8List?> _resolveImageBytes(String source) async {
-    final trimmed = source.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    if (trimmed.startsWith('data:image/')) {
-      final commaIndex = trimmed.indexOf(',');
-      if (commaIndex <= 0 || commaIndex >= trimmed.length - 1) {
-        return null;
-      }
-      final meta = trimmed.substring(0, commaIndex).toLowerCase();
-      final payload = trimmed.substring(commaIndex + 1);
-      if (!meta.contains(';base64')) {
-        return null;
-      }
-      try {
-        return base64Decode(payload);
-      } catch (_) {
-        return null;
-      }
-    }
-
-    final uri = Uri.tryParse(trimmed);
-    if (uri != null && uri.hasScheme) {
-      if (uri.scheme == 'file') {
-        final file = File.fromUri(uri);
-        if (!await file.exists()) {
-          return null;
-        }
-        return file.readAsBytes();
-      }
-
-      if (uri.scheme == 'http' || uri.scheme == 'https') {
-        final client = HttpClient();
-        try {
-          final request = await client.getUrl(uri);
-          final response = await request.close();
-          if (response.statusCode != HttpStatus.ok) {
-            return null;
-          }
-          return consolidateHttpClientResponseBytes(response);
-        } finally {
-          client.close(force: true);
-        }
-      }
-      return null;
-    }
-
-    final file = File(trimmed);
-    if (!await file.exists()) {
-      return null;
-    }
-    return file.readAsBytes();
   }
 
   void _drawParagraph(
