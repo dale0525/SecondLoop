@@ -26,6 +26,9 @@ void main() {
     expect(html, contains('@page'));
     expect(html, contains('size: A4'));
     expect(html, contains('window.__SECONDLOOP_PDF_READY__'));
+    expect(html, contains('waitForAssets'));
+    expect(html, contains('.sl-latex-inline-matrix'));
+    expect(html, contains('-webkit-column-break-inside: avoid;'));
   });
 
   test('PDF HTML export embeds KaTeX assets for offline rendering', () async {

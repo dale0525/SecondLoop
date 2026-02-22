@@ -1,12 +1,10 @@
 import Cocoa
 import FlutterMacOS
-import PDFKit
 import WebKit
 
 private let kMarkdownPdfMethod = "exportMarkdownHtmlToPdf"
 private let kMarkdownPdfPageWidth: CGFloat = 595.2
 private let kMarkdownPdfPageHeight: CGFloat = 841.8
-private let kMarkdownPdfHiddenOriginX: CGFloat = -10000
 
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
@@ -79,7 +77,7 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     let webView = WKWebView(
       frame: NSRect(
-        x: kMarkdownPdfHiddenOriginX,
+        x: 0,
         y: 0,
         width: kMarkdownPdfPageWidth,
         height: kMarkdownPdfPageHeight
@@ -87,6 +85,7 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       configuration: config
     )
     webView.navigationDelegate = self
+    webView.alphaValue = 0.01
     self.webView = webView
 
     if let hostView = MarkdownPdfExportTask.resolveHostView() {
@@ -203,121 +202,10 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       return
     }
 
-    webView.evaluateJavaScript(
-      "Math.max(document.documentElement.scrollHeight || 0, document.body.scrollHeight || 0, 1123)"
-    ) { [weak self] value, _ in
-      guard let self = self else { return }
-
-      var contentHeight = kMarkdownPdfPageHeight
-      if let number = value as? NSNumber {
-        contentHeight = CGFloat(truncating: number)
-      } else if let raw = value as? String,
-                let parsed = Double(raw.replacingOccurrences(of: "\"", with: "")) {
-        contentHeight = CGFloat(parsed)
-      }
-
-      contentHeight = max(contentHeight, kMarkdownPdfPageHeight)
-
-      if #available(macOS 11.0, *) {
-        webView.frame = NSRect(
-          x: kMarkdownPdfHiddenOriginX,
-          y: 0,
-          width: kMarkdownPdfPageWidth,
-          height: contentHeight
-        )
-        self.exportPdfViaCreatePdfPagination(
-          webView: webView,
-          contentHeight: contentHeight
-        )
-        return
-      }
-
-      webView.frame = NSRect(
-        x: kMarkdownPdfHiddenOriginX,
-        y: 0,
-        width: kMarkdownPdfPageWidth,
-        height: kMarkdownPdfPageHeight
-      )
-      self.exportPdfViaLegacyPrintOperation(webView: webView)
-    }
+    exportPdfViaPrintOperation(webView: webView)
   }
 
-  @available(macOS 11.0, *)
-  private func exportPdfViaCreatePdfPagination(
-    webView: WKWebView,
-    contentHeight: CGFloat
-  ) {
-    let pageHeight = kMarkdownPdfPageHeight
-    let pageCount = max(Int(ceil(contentHeight / pageHeight)), 1)
-    var pageDocuments: [Data] = []
-    pageDocuments.reserveCapacity(pageCount)
-
-    func capturePage(_ index: Int) {
-      if index >= pageCount {
-        if let merged = mergePdfPages(pageDocuments), !merged.isEmpty {
-          complete(success: merged)
-          return
-        }
-
-        completeWithDataWithPdfFallback(webView: webView)
-        return
-      }
-
-      let config = WKPDFConfiguration()
-      config.rect = CGRect(
-        x: 0,
-        y: CGFloat(index) * pageHeight,
-        width: kMarkdownPdfPageWidth,
-        height: pageHeight
-      )
-
-      webView.createPDF(configuration: config) { [weak self] result in
-        guard let self = self else { return }
-
-        switch result {
-        case .success(let data):
-          if !data.isEmpty {
-            pageDocuments.append(data)
-          }
-        case .failure:
-          break
-        }
-
-        capturePage(index + 1)
-      }
-    }
-
-    capturePage(0)
-  }
-
-  @available(macOS 11.0, *)
-  private func mergePdfPages(_ pageDocuments: [Data]) -> Data? {
-    let merged = PDFDocument()
-    var insertIndex = 0
-
-    for pageDocumentData in pageDocuments {
-      guard let pageDocument = PDFDocument(data: pageDocumentData) else {
-        continue
-      }
-
-      for pageIndex in 0 ..< pageDocument.pageCount {
-        guard let page = pageDocument.page(at: pageIndex) else {
-          continue
-        }
-
-        merged.insert(page, at: insertIndex)
-        insertIndex += 1
-      }
-    }
-
-    guard insertIndex > 0 else {
-      return nil
-    }
-
-    return merged.dataRepresentation()
-  }
-
-  private func exportPdfViaLegacyPrintOperation(webView: WKWebView) {
+  private func exportPdfViaPrintOperation(webView: WKWebView) {
     let outputUrl = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("secondloop_markdown_\(UUID().uuidString).pdf")
 
@@ -334,9 +222,16 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     printInfo.jobDisposition = .save
     printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
 
-    let operation = NSPrintOperation(view: webView, printInfo: printInfo)
+    let operation: NSPrintOperation
+    if #available(macOS 11.0, *) {
+      operation = webView.printOperation(with: printInfo)
+    } else {
+      operation = NSPrintOperation(view: webView, printInfo: printInfo)
+    }
+
     operation.showsPrintPanel = false
     operation.showsProgressPanel = false
+    operation.canSpawnSeparateThread = true
 
     let didRun = operation.run()
     if didRun,
@@ -347,7 +242,13 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     try? FileManager.default.removeItem(at: outputUrl)
-    completeWithDataWithPdfFallback(webView: webView)
+    complete(
+      failure: FlutterError(
+        code: "markdown_pdf_export_io_failed",
+        message: "Failed to generate PDF bytes",
+        details: nil
+      )
+    )
   }
 
   private func waitForPdfFileData(at outputUrl: URL) -> Data? {
@@ -363,22 +264,6 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     return nil
-  }
-
-  private func completeWithDataWithPdfFallback(webView: WKWebView) {
-    let fallback = webView.dataWithPDF(inside: webView.bounds)
-    if fallback.isEmpty {
-      complete(
-        failure: FlutterError(
-          code: "markdown_pdf_export_io_failed",
-          message: "Failed to generate PDF bytes",
-          details: nil
-        )
-      )
-      return
-    }
-
-    complete(success: fallback)
   }
 
   private func complete(success data: Data) {

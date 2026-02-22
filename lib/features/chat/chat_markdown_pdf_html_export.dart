@@ -182,10 +182,13 @@ img,
 svg,
 video,
 .sl-latex-block,
+.sl-latex-inline-matrix,
 .katex-display,
+.katex-display > .katex,
 .sl-markmap-fallback {
   break-inside: avoid-page;
   page-break-inside: avoid;
+  -webkit-column-break-inside: avoid;
 }
 img {
   display: block;
@@ -286,15 +289,46 @@ window.__SECONDLOOP_PDF_READY__ = false;
     }
   }
 
+  function waitForAssets(attempt) {
+    var hasPendingImage = false;
+    var images = document.images || [];
+    for (var i = 0; i < images.length; i += 1) {
+      var image = images[i];
+      if (!image.complete) {
+        hasPendingImage = true;
+        break;
+      }
+    }
+
+    var fontsReady = true;
+    if (document.fonts && typeof document.fonts.status === 'string') {
+      fontsReady = document.fonts.status === 'loaded';
+    }
+
+    if (hasPendingImage || !fontsReady) {
+      if (attempt >= 240) {
+        window.__SECONDLOOP_PDF_READY__ = true;
+        return;
+      }
+
+      setTimeout(function () {
+        waitForAssets(attempt + 1);
+      }, 25);
+      return;
+    }
+
+    window.__SECONDLOOP_PDF_READY__ = true;
+  }
+
   function waitUntilReady(attempt) {
     if (window.katex && typeof window.katex.render === 'function') {
       renderLatexElements();
-      window.__SECONDLOOP_PDF_READY__ = true;
+      waitForAssets(0);
       return;
     }
 
     if (attempt >= 240) {
-      window.__SECONDLOOP_PDF_READY__ = true;
+      waitForAssets(0);
       return;
     }
 
