@@ -31,8 +31,121 @@ bool shouldBackfillVideoManifestTranscriptPayload(
   Map<String, Object?> payload,
 ) {
   final schema = _normalizeAutoOcrPayloadText(payload['schema']).toLowerCase();
-  if (schema != 'secondloop.video_extract.v1') return false;
-  return _resolveVideoManifestLinkedAudioSha(payload).isNotEmpty;
+  return schema == 'secondloop.video_extract.v1';
+}
+
+Future<Map<String, Object?>?>
+    _readAttachmentAnnotationPayloadByShaForAutoBackfill({
+  required NativeAppBackend backend,
+  required Uint8List sessionKey,
+  required String attachmentSha256,
+}) async {
+  final normalizedSha = attachmentSha256.trim();
+  if (normalizedSha.isEmpty) return null;
+  final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+    sessionKey,
+    sha256: normalizedSha,
+  );
+  final payloadRaw = payloadJson?.trim();
+  if (payloadRaw == null || payloadRaw.isEmpty) {
+    return null;
+  }
+  final decoded = _MediaEnrichmentGateState._decodePayloadObject(payloadRaw);
+  if (decoded == null || decoded.isEmpty) {
+    return null;
+  }
+  return decoded;
+}
+
+({String transcriptFull, String transcriptExcerpt})
+    _extractTranscriptFieldsFromPayload(
+  Map<String, Object?>? payload,
+) {
+  final transcriptFull =
+      _normalizeAutoOcrPayloadText(payload?['transcript_full']);
+  final transcriptExcerptRaw =
+      _normalizeAutoOcrPayloadText(payload?['transcript_excerpt']);
+  final transcriptExcerpt = transcriptExcerptRaw.isNotEmpty
+      ? transcriptExcerptRaw
+      : _truncateUtf8ForAutoOcr(transcriptFull, 8 * 1024);
+  return (
+    transcriptFull: transcriptFull,
+    transcriptExcerpt: transcriptExcerpt,
+  );
+}
+
+final class _VideoManifestSegmentTranscriptAggregate {
+  const _VideoManifestSegmentTranscriptAggregate({
+    required this.transcriptFull,
+    required this.transcriptExcerpt,
+    required this.missingSegmentCount,
+  });
+
+  final String transcriptFull;
+  final String transcriptExcerpt;
+  final int missingSegmentCount;
+}
+
+Future<_VideoManifestSegmentTranscriptAggregate>
+    _collectVideoManifestSegmentTranscript({
+  required NativeAppBackend backend,
+  required Uint8List sessionKey,
+  required ParsedVideoManifest manifest,
+}) async {
+  if (manifest.segments.isEmpty) {
+    return const _VideoManifestSegmentTranscriptAggregate(
+      transcriptFull: '',
+      transcriptExcerpt: '',
+      missingSegmentCount: 0,
+    );
+  }
+
+  final transcriptFullParts = <String>[];
+  final transcriptExcerptParts = <String>[];
+  var missingSegmentCount = 0;
+
+  for (final segment in manifest.segments) {
+    final segmentPayload =
+        await _readAttachmentAnnotationPayloadByShaForAutoBackfill(
+      backend: backend,
+      sessionKey: sessionKey,
+      attachmentSha256: segment.sha256,
+    );
+    if (segmentPayload == null) {
+      missingSegmentCount += 1;
+      continue;
+    }
+
+    final segmentTranscript =
+        _extractTranscriptFieldsFromPayload(segmentPayload);
+    if (segmentTranscript.transcriptFull.isEmpty &&
+        segmentTranscript.transcriptExcerpt.isEmpty) {
+      continue;
+    }
+
+    transcriptFullParts.add(
+      segmentTranscript.transcriptFull.isNotEmpty
+          ? segmentTranscript.transcriptFull
+          : segmentTranscript.transcriptExcerpt,
+    );
+    transcriptExcerptParts.add(
+      segmentTranscript.transcriptExcerpt.isNotEmpty
+          ? segmentTranscript.transcriptExcerpt
+          : _truncateUtf8ForAutoOcr(segmentTranscript.transcriptFull, 8 * 1024),
+    );
+  }
+
+  final transcriptFull = transcriptFullParts.join('\n\n').trim();
+  var transcriptExcerpt = transcriptExcerptParts.join('\n\n').trim();
+  if (transcriptExcerpt.isEmpty) {
+    transcriptExcerpt = _truncateUtf8ForAutoOcr(transcriptFull, 8 * 1024);
+  }
+
+  return _VideoManifestSegmentTranscriptAggregate(
+    transcriptFull: transcriptFull,
+    transcriptExcerpt: transcriptExcerpt,
+    missingSegmentCount: missingSegmentCount,
+  );
 }
 
 @visibleForTesting
@@ -185,30 +298,53 @@ extension _MediaEnrichmentGateVideoTranscriptBackfill
       if (payload == null) continue;
       if (!shouldBackfillVideoManifestTranscriptPayload(payload)) continue;
 
-      final audioSha256 = _resolveVideoManifestLinkedAudioSha(payload);
-
-      final linkedAudioPayloadJson =
-          await backend.readAttachmentAnnotationPayloadJson(
+      final manifestBytes = await backend.readAttachmentBytes(
         sessionKey,
-        sha256: audioSha256,
+        sha256: attachment.sha256,
       );
-      final linkedAudioPayload = _MediaEnrichmentGateState._decodePayloadObject(
-        linkedAudioPayloadJson,
-      );
-      if (linkedAudioPayload == null) continue;
+      final manifest = parseVideoManifestPayload(manifestBytes);
+      if (manifest == null) continue;
 
-      final transcriptSeed = resolveVideoManifestTranscriptSeed(
-        runningPayload: payload,
-        audioSha256: audioSha256,
-        audioMimeType: _normalizeAutoOcrPayloadText(payload['audio_mime_type']),
-        linkedAudioPayload: linkedAudioPayload,
-        allowDeferForMissingLinkedAudio: false,
+      final segmentTranscript = await _collectVideoManifestSegmentTranscript(
+        backend: backend,
+        sessionKey: sessionKey,
+        manifest: manifest,
       );
+
+      var transcriptFull = '';
+      var transcriptExcerpt = '';
+      if (segmentTranscript.missingSegmentCount <= 0) {
+        transcriptFull = segmentTranscript.transcriptFull;
+        transcriptExcerpt = segmentTranscript.transcriptExcerpt;
+      }
+
+      if (transcriptFull.isEmpty && transcriptExcerpt.isEmpty) {
+        final audioSha256 = _resolveVideoManifestLinkedAudioSha(payload);
+        if (audioSha256.isNotEmpty) {
+          final linkedAudioPayload =
+              await _readAttachmentAnnotationPayloadByShaForAutoBackfill(
+            backend: backend,
+            sessionKey: sessionKey,
+            attachmentSha256: audioSha256,
+          );
+
+          final transcriptSeed = resolveVideoManifestTranscriptSeed(
+            runningPayload: payload,
+            audioSha256: audioSha256,
+            audioMimeType:
+                _normalizeAutoOcrPayloadText(payload['audio_mime_type']),
+            linkedAudioPayload: linkedAudioPayload,
+            allowDeferForMissingLinkedAudio: false,
+          );
+          transcriptFull = transcriptSeed.transcriptFull;
+          transcriptExcerpt = transcriptSeed.transcriptExcerpt;
+        }
+      }
 
       final nextPayload = buildVideoManifestTranscriptBackfillPayload(
         currentPayload: payload,
-        transcriptFull: transcriptSeed.transcriptFull,
-        transcriptExcerpt: transcriptSeed.transcriptExcerpt,
+        transcriptFull: transcriptFull,
+        transcriptExcerpt: transcriptExcerpt,
       );
       if (nextPayload == null) continue;
 

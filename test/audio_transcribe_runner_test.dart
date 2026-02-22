@@ -330,6 +330,107 @@ void main() {
     expect(client.modelName, 'runtime-whisper-tiny');
   });
 
+  test('local runtime client retries after ensuring missing whisper model',
+      () async {
+    var ensureCalls = 0;
+    var transcribeCalls = 0;
+
+    final client = LocalRuntimeAudioTranscribeClient(
+      modelName: 'runtime-whisper-base',
+      whisperModel: 'base',
+      appDirProvider: () async => '/tmp/secondloop-test',
+      decodeAudioToWav: ({
+        required mimeType,
+        required audioBytes,
+      }) async {
+        expect(mimeType, 'audio/mp4');
+        expect(audioBytes, isNotEmpty);
+        return Uint8List.fromList(const <int>[1, 2, 3]);
+      },
+      requestLocalWhisperTranscribe: ({
+        required appDir,
+        required modelName,
+        required lang,
+        required wavBytes,
+      }) async {
+        transcribeCalls += 1;
+        expect(appDir, '/tmp/secondloop-test');
+        expect(modelName, 'base');
+        expect(lang, 'en');
+        expect(wavBytes, Uint8List.fromList(const <int>[1, 2, 3]));
+        if (transcribeCalls == 1) {
+          throw StateError('audio_transcribe_local_runtime_model_missing:base');
+        }
+        return jsonEncode(<String, Object?>{'text': 'recovered runtime text'});
+      },
+      ensureLocalWhisperModelAvailable: ({required modelName}) async {
+        ensureCalls += 1;
+        expect(modelName, 'base');
+      },
+    );
+
+    final response = await client.transcribe(
+      lang: 'en',
+      mimeType: 'audio/mp4',
+      audioBytes: Uint8List.fromList(const <int>[0x00, 0x00, 0x00, 0x18]),
+    );
+
+    expect(ensureCalls, 1);
+    expect(transcribeCalls, 2);
+    expect(response.transcriptFull, 'recovered runtime text');
+  });
+
+  test('local runtime client surfaces model download failures', () async {
+    var ensureCalls = 0;
+    var transcribeCalls = 0;
+
+    final client = LocalRuntimeAudioTranscribeClient(
+      modelName: 'runtime-whisper-base',
+      whisperModel: 'base',
+      appDirProvider: () async => '/tmp/secondloop-test',
+      decodeAudioToWav: ({
+        required mimeType,
+        required audioBytes,
+      }) async {
+        expect(mimeType, 'audio/mp4');
+        expect(audioBytes, isNotEmpty);
+        return Uint8List.fromList(const <int>[1, 2, 3]);
+      },
+      requestLocalWhisperTranscribe: ({
+        required appDir,
+        required modelName,
+        required lang,
+        required wavBytes,
+      }) async {
+        transcribeCalls += 1;
+        throw StateError('audio_transcribe_local_runtime_model_missing:base');
+      },
+      ensureLocalWhisperModelAvailable: ({required modelName}) async {
+        ensureCalls += 1;
+        expect(modelName, 'base');
+        throw StateError('download_network_unavailable');
+      },
+    );
+
+    await expectLater(
+      () => client.transcribe(
+        lang: 'en',
+        mimeType: 'audio/mp4',
+        audioBytes: Uint8List.fromList(const <int>[0x00, 0x00, 0x00, 0x18]),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.toString(),
+          'detail',
+          contains('audio_transcribe_local_runtime_model_download_failed'),
+        ),
+      ),
+    );
+
+    expect(ensureCalls, 1);
+    expect(transcribeCalls, 1);
+  });
+
   test('local runtime client parses transcript payload', () async {
     final client = LocalRuntimeAudioTranscribeClient(
       modelName: 'runtime-whisper-small',
@@ -506,6 +607,67 @@ void main() {
     expect(sniffAudioMimeType(matroska), 'video/x-matroska');
   });
 
+  test('resolveAudioTranscribeMimeType keeps explicit video hints for mp4', () {
+    final mp4LikeBytes = Uint8List.fromList(const <int>[
+      0x00,
+      0x00,
+      0x00,
+      0x20,
+      0x66,
+      0x74,
+      0x79,
+      0x70,
+      0x69,
+      0x73,
+      0x6F,
+      0x6D,
+    ]);
+
+    expect(
+      resolveAudioTranscribeMimeType(
+        bytes: mp4LikeBytes,
+        mimeTypeHint: 'video/mp4',
+      ),
+      'video/mp4',
+    );
+    expect(
+      resolveAudioTranscribeMimeType(
+        bytes: mp4LikeBytes,
+        mimeTypeHint: 'audio/mp4',
+      ),
+      'audio/mp4',
+    );
+    expect(
+      resolveAudioTranscribeMimeType(
+        bytes: mp4LikeBytes,
+        mimeTypeHint: '',
+      ),
+      'audio/mp4',
+    );
+  });
+
+  test('resolveAudioTranscribeMimeType keeps explicit audio hints for webm',
+      () {
+    final webm = Uint8List.fromList(
+      <int>[0x1A, 0x45, 0xDF, 0xA3, ...'webm'.codeUnits],
+    );
+
+    expect(
+      resolveAudioTranscribeMimeType(
+        bytes: webm,
+        mimeTypeHint: 'audio/webm',
+      ),
+      'audio/webm',
+    );
+    expect(
+      resolveAudioTranscribeMimeType(
+        bytes: webm,
+        mimeTypeHint: 'video/webm',
+      ),
+      'video/webm',
+    );
+  });
+
   test('runner falls back to mime type hints when sniffing is unavailable',
       () async {
     final store = _MemStore(
@@ -537,6 +699,58 @@ void main() {
     expect(result.failed, 0);
     expect(client.calls, 1);
     expect(client.lastMimeType, 'video/webm');
+  });
+
+  test('runner keeps explicit video hints for mp4 containers', () async {
+    final mp4LikeBytes = Uint8List.fromList(const <int>[
+      0x00,
+      0x00,
+      0x00,
+      0x20,
+      0x66,
+      0x74,
+      0x79,
+      0x70,
+      0x69,
+      0x73,
+      0x6F,
+      0x6D,
+      0x00,
+      0x00,
+      0x00,
+      0x08,
+      0x6D,
+      0x64,
+      0x61,
+      0x74,
+    ]);
+    final store = _MemStore(
+      jobs: const [
+        AudioTranscribeJob(
+          attachmentSha256: 'hinted-mp4-video',
+          lang: 'en',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          mimeTypeHint: 'video/mp4',
+        ),
+      ],
+      bytesBySha: {
+        'hinted-mp4-video': mp4LikeBytes,
+      },
+    );
+    final client = _MemClient(engineName: 'whisper', modelName: 'whisper-1');
+    final runner = AudioTranscribeRunner(
+      store: store,
+      client: client,
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce(limit: 5);
+    expect(result.processed, 1);
+    expect(result.failed, 0);
+    expect(client.calls, 1);
+    expect(client.lastMimeType, 'video/mp4');
   });
 
   test('runner skips non-audio attachments', () async {
@@ -640,6 +854,50 @@ void main() {
     expect(client.calls, 1);
     expect(store.okPayloadBySha.containsKey('audio1'), isTrue);
     expect(store.okPayloadBySha.containsKey('na1'), isFalse);
+  });
+
+  test('runner scans deep queues to avoid audio transcript starvation',
+      () async {
+    const nonAudioCount = 120;
+    final jobs = <AudioTranscribeJob>[
+      for (var i = 0; i < nonAudioCount; i += 1)
+        AudioTranscribeJob(
+          attachmentSha256: 'stale-$i',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      const AudioTranscribeJob(
+        attachmentSha256: 'audio-target',
+        lang: 'en',
+        status: 'pending',
+        attempts: 0,
+        nextRetryAtMs: null,
+      ),
+    ];
+    final bytesBySha = <String, Uint8List>{
+      for (var i = 0; i < nonAudioCount; i += 1)
+        'stale-$i': Uint8List.fromList('%PDF-1.7'.codeUnits),
+      'audio-target': Uint8List.fromList(
+        const <int>[0x49, 0x44, 0x33, 0x04, 0x00],
+      ),
+    };
+
+    final store = _MemStore(jobs: jobs, bytesBySha: bytesBySha);
+    final client = _MemClient(engineName: 'whisper', modelName: 'whisper-1');
+    final runner = AudioTranscribeRunner(
+      store: store,
+      client: client,
+      nowMs: () => 3000,
+    );
+
+    final result = await runner.runOnce(limit: 1);
+
+    expect(result.processed, 1);
+    expect(result.failed, 0);
+    expect(client.calls, 1);
+    expect(store.okPayloadBySha.containsKey('audio-target'), isTrue);
   });
 
   test('runner marks failed with backoff when transcribe throws', () async {

@@ -824,6 +824,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                     builder: (context, snapshot) {
                       final manifest = snapshot.data;
                       if (manifest == null) return const SizedBox.shrink();
+
                       return _buildVideoManifestPreviewCard(
                         context,
                         manifest,

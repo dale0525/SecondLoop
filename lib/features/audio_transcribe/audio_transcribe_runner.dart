@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
@@ -143,6 +144,9 @@ typedef AudioTranscribeLocalWhisperRequest = Future<String> Function({
   required String modelName,
   required String lang,
   required List<int> wavBytes,
+});
+typedef AudioTranscribeEnsureLocalWhisperModel = Future<void> Function({
+  required String modelName,
 });
 typedef AudioTranscribeWindowsNativeSttRequest = Future<String> Function({
   required String lang,
@@ -289,14 +293,28 @@ String? resolveAudioTranscribeMimeType({
   required Uint8List bytes,
   required String mimeTypeHint,
 }) {
-  final sniffedMimeType = sniffAudioMimeType(bytes);
-  if (sniffedMimeType != null && sniffedMimeType.trim().isNotEmpty) {
+  final normalizedHint = mimeTypeHint.trim().toLowerCase();
+  final hasExplicitHint = normalizedHint.startsWith('audio/') ||
+      normalizedHint.startsWith('video/');
+
+  final sniffedMimeType = sniffAudioMimeType(bytes)?.trim().toLowerCase();
+  if (sniffedMimeType != null && sniffedMimeType.isNotEmpty) {
+    if (hasExplicitHint) {
+      final hintIsAudio = normalizedHint.startsWith('audio/');
+      final hintIsVideo = normalizedHint.startsWith('video/');
+      final sniffedIsAudio = sniffedMimeType.startsWith('audio/');
+      final sniffedIsVideo = sniffedMimeType.startsWith('video/');
+      final hasContainerFamilyConflict =
+          (hintIsAudio && sniffedIsVideo) || (hintIsVideo && sniffedIsAudio);
+      if (hasContainerFamilyConflict) {
+        return normalizedHint;
+      }
+    }
+
     return sniffedMimeType;
   }
 
-  final normalizedHint = mimeTypeHint.trim().toLowerCase();
-  if (normalizedHint.startsWith('audio/') ||
-      normalizedHint.startsWith('video/')) {
+  if (hasExplicitHint) {
     return normalizedHint;
   }
 
@@ -316,7 +334,7 @@ final class AudioTranscribeRunner {
 
   Future<AudioTranscribeRunResult> runOnce({int limit = 5}) async {
     final processLimit = limit < 1 ? 1 : limit;
-    final scanLimit = (processLimit * 8).clamp(processLimit, 200);
+    const scanLimit = 500;
     final nowMs = _nowMs();
     final due = await store.listDueJobs(nowMs: nowMs, limit: scanLimit);
     if (due.isEmpty) {
@@ -332,6 +350,14 @@ final class AudioTranscribeRunner {
     for (final job in due) {
       if (handled >= processLimit) break;
       if (job.status == 'ok') continue;
+
+      final normalizedMimeTypeHint = job.mimeTypeHint.trim().toLowerCase();
+      if (normalizedMimeTypeHint.isNotEmpty &&
+          !normalizedMimeTypeHint.startsWith('audio/') &&
+          !normalizedMimeTypeHint.startsWith('video/')) {
+        continue;
+      }
+
       try {
         final bytes = await store.readAttachmentBytes(
           attachmentSha256: job.attachmentSha256,

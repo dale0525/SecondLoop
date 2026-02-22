@@ -404,7 +404,7 @@ void main() {
   );
 
   test(
-    'shouldBackfillVideoManifestTranscriptPayload requires video extract schema and linked audio sha',
+    'shouldBackfillVideoManifestTranscriptPayload only requires video extract schema',
     () {
       final missingAudioSha = shouldBackfillVideoManifestTranscriptPayload(
         const <String, Object?>{
@@ -419,7 +419,7 @@ void main() {
         },
       );
 
-      expect(missingAudioSha, isFalse);
+      expect(missingAudioSha, isTrue);
       expect(unsupportedSchema, isFalse);
     },
   );
