@@ -26,4 +26,37 @@ void main() {
     expect(sectionsContent, contains('bool highlighted = false,'));
     expect(sectionsContent, contains('AnimatedContainer('));
   });
+
+  test('media local capability deep focus wires desktop fallback anchor', () {
+    final pageContent = File(
+      'lib/features/settings/media_annotation_settings_page.dart',
+    ).readAsStringSync();
+    final localCapabilityContent = File(
+      'lib/features/settings/media_annotation_settings_page_local_capability.dart',
+    ).readAsStringSync();
+    final linuxOcrContent = File(
+      'lib/features/settings/media_annotation_settings_page_linux_ocr.dart',
+    ).readAsStringSync();
+
+    expect(
+      pageContent,
+      contains('final GlobalKey _desktopLocalCapabilityCardAnchorKey'),
+    );
+    expect(
+      localCapabilityContent,
+      contains('BuildContext? _localCapabilityCardFocusContext()'),
+    );
+    expect(
+      localCapabilityContent,
+      contains('_desktopLocalCapabilityCardAnchorKey.currentContext'),
+    );
+    expect(
+      localCapabilityContent,
+      contains('bool _shouldShowDesktopLocalCapabilityCard()'),
+    );
+    expect(
+      linuxOcrContent,
+      contains('anchorKey: _desktopLocalCapabilityCardAnchorKey,'),
+    );
+  });
 }

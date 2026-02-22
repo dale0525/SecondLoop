@@ -133,6 +133,7 @@ class _MediaAnnotationSettingsPageState
   bool _audioWhisperRuntimeStatusReady = false;
   Object? _audioWhisperRuntimeStatusError;
   final GlobalKey _localCapabilityCardAnchorKey = GlobalKey();
+  final GlobalKey _desktopLocalCapabilityCardAnchorKey = GlobalKey();
   bool _didRunLocalCapabilityCardFocus = false;
   bool _highlightLocalCapabilityCard = false;
   Timer? _clearLocalCapabilityCardHighlightTimer;
