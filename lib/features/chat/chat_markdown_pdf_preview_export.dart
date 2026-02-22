@@ -16,12 +16,36 @@ const double _kPaginationProtectedMinFillRatio = 0.55;
 const double _kPaginationProtectedMaxStretchRatio = 1.95;
 const double _kProtectedRowCoverageDiffThreshold = 10;
 const double _kProtectedRowCoverageThreshold = 0.2;
+const double _kProtectedRowMaxInkRunCoverageThreshold = 0.11;
 const int _kProtectedRangeMaxGapRows = 12;
 const int _kProtectedRangeMinHeightRows = 46;
 const int _kProtectedRangePaddingRows = 2;
 
+final List<RegExp> _kPreviewRenderRequiredPatterns = <RegExp>[
+  RegExp(r'^\s*\$\$', multiLine: true),
+  RegExp(r'(?<!\\)\$(?!\$)(?:[^$\n]|\\\$)+(?<!\\)\$(?!\$)'),
+  RegExp(r'!\[[^\]]*\]\([^\)]+\)'),
+  RegExp(r'^\s*<img\b', multiLine: true, caseSensitive: false),
+  RegExp(
+    r'^\s{0,3}(```+|~~~+)\s*(?:markmap|mindmap)\s*$',
+    multiLine: true,
+    caseSensitive: false,
+  ),
+  RegExp(r'^\s*\|.*\|\s*$', multiLine: true),
+];
+
 bool shouldUsePreviewBasedPdfRender(String markdown) {
-  return true;
+  if (markdown.trim().isEmpty) {
+    return false;
+  }
+
+  for (final pattern in _kPreviewRenderRequiredPatterns) {
+    if (pattern.hasMatch(markdown)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 double resolveMarkdownPreviewExportPixelRatio({
@@ -340,7 +364,14 @@ List<({int start, int end})> _detectProtectedRowRanges(
       background: background,
       diffThreshold: _kProtectedRowCoverageDiffThreshold,
     );
-    activeRows[row] = coverage >= _kProtectedRowCoverageThreshold;
+    final maxInkRunCoverage = _rowMaxInkRunCoverage(
+      image,
+      row: row,
+      background: background,
+      diffThreshold: _kProtectedRowCoverageDiffThreshold,
+    );
+    activeRows[row] = coverage >= _kProtectedRowCoverageThreshold ||
+        maxInkRunCoverage >= _kProtectedRowMaxInkRunCoverageThreshold;
   }
 
   final ranges = <({int start, int end})>[];
@@ -627,6 +658,38 @@ double _rowInkScore(
     return 0;
   }
   return score / sampled;
+}
+
+double _rowMaxInkRunCoverage(
+  img.Image image, {
+  required int row,
+  required ({double r, double g, double b}) background,
+  required double diffThreshold,
+}) {
+  if (image.width <= 0) {
+    return 0;
+  }
+
+  var currentRun = 0;
+  var maxRun = 0;
+
+  for (var x = 0; x < image.width; x += 1) {
+    final pixel = image.getPixel(x, row);
+    final diff = (pixel.r - background.r).abs() +
+        (pixel.g - background.g).abs() +
+        (pixel.b - background.b).abs();
+    if (diff > diffThreshold) {
+      currentRun += 1;
+      if (currentRun > maxRun) {
+        maxRun = currentRun;
+      }
+      continue;
+    }
+
+    currentRun = 0;
+  }
+
+  return maxRun / image.width;
 }
 
 double _rowInkCoverage(

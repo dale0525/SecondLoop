@@ -345,7 +345,8 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
           ),
         );
 
-        await Future<void>.delayed(const Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration.zero);
+        await WidgetsBinding.instance.endOfFrame;
       }
 
       final bytes = await document.save();
