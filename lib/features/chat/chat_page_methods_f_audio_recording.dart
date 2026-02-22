@@ -126,6 +126,21 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   AudioRecorder get _audioRecorder =>
       _audioRecorderInstance ??= AudioRecorder();
 
+  RecordConfig get _audioRecordingConfig => const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 64000,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+
+  String _nextAudioRecordingSegmentPath({
+    required String tempDirPath,
+    required DateTime sessionStartedAt,
+    required int segmentIndex,
+  }) {
+    return '$tempDirPath/secondloop_record_${sessionStartedAt.millisecondsSinceEpoch}_segment_$segmentIndex.m4a';
+  }
+
   Future<void> _recordAndSendAudioFromSheet() async {
     if (_isComposerBusy) return;
     if (!_supportsAudioRecording) return;
@@ -151,50 +166,104 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
     final tempDir = await getTemporaryDirectory();
     final startedAt = DateTime.now();
-    final filePath =
-        '${tempDir.path}/secondloop_record_${startedAt.millisecondsSinceEpoch}.m4a';
-
+    final segmentTracker = _RecordedAudioSegmentFileTracker();
     var recorderStarted = false;
-    String? recordedPath;
+    String? activeSegmentPath;
+    var segmentIndex = 0;
+    var stitchedAfterInterruption = false;
+
+    Future<void> startRecordingSegment() async {
+      segmentIndex += 1;
+      final path = _nextAudioRecordingSegmentPath(
+        tempDirPath: tempDir.path,
+        sessionStartedAt: startedAt,
+        segmentIndex: segmentIndex,
+      );
+
+      await _audioRecorder.start(_audioRecordingConfig, path: path);
+      activeSegmentPath = path;
+      recorderStarted = true;
+    }
+
+    Future<_AudioInterruptionRecoveryOutcome>
+        recoverFromSystemInterruption() async {
+      try {
+        await _audioRecorder.resume();
+        return _AudioInterruptionRecoveryOutcome.resumed;
+      } catch (_) {
+        final isRecording = await _safeAudioRecorderIsRecording();
+        if (isRecording) {
+          return _AudioInterruptionRecoveryOutcome.pending;
+        }
+
+        segmentTracker.addPath(activeSegmentPath);
+        try {
+          await startRecordingSegment();
+          stitchedAfterInterruption = true;
+          return _AudioInterruptionRecoveryOutcome.restarted;
+        } catch (_) {
+          return _AudioInterruptionRecoveryOutcome.pending;
+        }
+      }
+    }
 
     try {
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 64000,
-          sampleRate: 16000,
-          numChannels: 1,
-        ),
-        path: filePath,
-      );
-      recorderStarted = true;
+      await startRecordingSegment();
 
       if (!mounted) return;
       _setState(() => _recordingAudio = true);
       await _setRecordingWakeLock(true);
 
-      final action = await _showAudioRecordingSheet(startedAt: startedAt);
+      final action = await _showAudioRecordingSheet(
+        startedAt: startedAt,
+        recoverFromSystemInterruption: recoverFromSystemInterruption,
+      );
       final shouldSend = action == _AudioRecordingSheetAction.stop;
 
-      recordedPath = await _audioRecorder.stop();
-      recorderStarted = false;
+      String? recordedPath;
+      if (recorderStarted) {
+        try {
+          recordedPath = await _audioRecorder.stop();
+        } catch (_) {
+          recordedPath = activeSegmentPath;
+        }
+        recorderStarted = false;
+      }
+      segmentTracker.addPath(recordedPath ?? activeSegmentPath);
+      activeSegmentPath = null;
 
       if (!shouldSend) return;
 
-      final path = recordedPath?.trim();
-      if (path == null || path.isEmpty) {
-        throw Exception('recording_path_empty');
+      final segmentBytes = await _readRecordedAudioSegmentBytes(
+        segmentTracker.orderedPaths,
+      );
+      if (segmentBytes.isEmpty) {
+        throw Exception('recording_bytes_empty');
       }
 
-      final bytes = await File(path).readAsBytes();
+      final bytes = await _stitchRecordedAudioSegmentsToM4a(segmentBytes);
       if (bytes.isEmpty) {
-        throw Exception('recording_bytes_empty');
+        throw Exception('recording_segments_stitch_empty');
       }
 
       await _uploadRecordedAudioWithRecovery(
         bytes,
         filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
       );
+
+      if (stitchedAfterInterruption && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _localizedByLanguage(
+                zh: '检测到来电中断，已自动恢复并拼接录音。',
+                en: 'Recording resumed after interruption and segments were stitched automatically.',
+              ),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (error) {
       _showAudioErrorSnackBar(
         error,
@@ -203,14 +272,15 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     } finally {
       if (recorderStarted) {
         try {
-          await _audioRecorder.stop();
+          final cleanupPath = await _audioRecorder.stop();
+          segmentTracker.addPath(cleanupPath ?? activeSegmentPath);
         } catch (_) {
           // Ignore stop failures during cleanup.
         }
       }
+      segmentTracker.addPath(activeSegmentPath);
 
-      final pathToDelete = recordedPath?.trim();
-      if (pathToDelete != null && pathToDelete.isNotEmpty) {
+      for (final pathToDelete in segmentTracker.orderedPaths) {
         try {
           await File(pathToDelete).delete();
         } catch (_) {
@@ -292,13 +362,19 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
   Future<_AudioRecordingSheetAction?> _showAudioRecordingSheet({
     required DateTime startedAt,
+    required Future<_AudioInterruptionRecoveryOutcome> Function()
+        recoverFromSystemInterruption,
   }) {
     Timer? ticker;
     var initialized = false;
     var paused = false;
+    var pausedByUser = false;
+    var interruptedBySystem = false;
+    var recoveringInterruption = false;
     var togglingPause = false;
     var pausedDuration = Duration.zero;
     DateTime? pausedAt;
+    DateTime? lastInterruptionRecoveryAttemptAt;
     var elapsed = Duration.zero;
     var normalizedAmplitude = 0.0;
 
@@ -309,10 +385,72 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       return next;
     }
 
+    void closePauseWindow() {
+      final pausedAnchor = pausedAt;
+      if (pausedAnchor == null) return;
+      pausedDuration += DateTime.now().difference(pausedAnchor);
+      pausedAt = null;
+    }
+
+    Future<void> tryRecoverFromInterruption(
+      BuildContext sheetContext,
+      StateSetter setSheetState,
+    ) async {
+      if (recoveringInterruption || pausedByUser || !interruptedBySystem) {
+        return;
+      }
+
+      if (sheetContext.mounted) {
+        setSheetState(() => recoveringInterruption = true);
+      }
+
+      try {
+        final outcome = await recoverFromSystemInterruption();
+        if (!sheetContext.mounted) return;
+
+        setSheetState(() {
+          switch (outcome) {
+            case _AudioInterruptionRecoveryOutcome.resumed:
+            case _AudioInterruptionRecoveryOutcome.restarted:
+              closePauseWindow();
+              paused = false;
+              interruptedBySystem = false;
+              break;
+            case _AudioInterruptionRecoveryOutcome.pending:
+              break;
+          }
+        });
+      } finally {
+        if (sheetContext.mounted) {
+          setSheetState(() => recoveringInterruption = false);
+        }
+      }
+    }
+
     Future<void> refreshUi(
       BuildContext sheetContext,
       StateSetter setSheetState,
     ) async {
+      bool recorderPaused = paused;
+      try {
+        recorderPaused = await _audioRecorder.isPaused();
+      } catch (_) {
+        recorderPaused = paused;
+      }
+
+      if (recorderPaused) {
+        pausedAt ??= DateTime.now();
+        if (!pausedByUser) {
+          interruptedBySystem = true;
+        }
+      } else {
+        closePauseWindow();
+        if (!pausedByUser) {
+          interruptedBySystem = false;
+        }
+      }
+      paused = recorderPaused;
+
       final nextElapsed = computeElapsed();
       var nextAmplitude = normalizedAmplitude;
       if (!paused) {
@@ -332,6 +470,19 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         elapsed = nextElapsed;
         normalizedAmplitude = nextAmplitude;
       });
+
+      final shouldRecover =
+          interruptedBySystem && !pausedByUser && !recoveringInterruption;
+      if (!shouldRecover) return;
+
+      final now = DateTime.now();
+      final lastAttemptAt = lastInterruptionRecoveryAttemptAt;
+      final canRetry = lastAttemptAt == null ||
+          now.difference(lastAttemptAt) >= _kAudioInterruptionRetryInterval;
+      if (!canRetry) return;
+
+      lastInterruptionRecoveryAttemptAt = now;
+      unawaited(tryRecoverFromInterruption(sheetContext, setSheetState));
     }
 
     Future<void> togglePause(
@@ -343,17 +494,17 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       setSheetState(() => togglingPause = true);
       try {
         if (paused) {
-          final pausedAnchor = pausedAt;
           await _audioRecorder.resume();
-          if (pausedAnchor != null) {
-            pausedDuration += DateTime.now().difference(pausedAnchor);
-          }
+          closePauseWindow();
           paused = false;
-          pausedAt = null;
+          pausedByUser = false;
+          interruptedBySystem = false;
         } else {
           await _audioRecorder.pause();
           pausedAt = DateTime.now();
           paused = true;
+          pausedByUser = true;
+          interruptedBySystem = false;
         }
         if (!sheetContext.mounted) return;
         await refreshUi(sheetContext, setSheetState);
@@ -389,12 +540,22 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
             final pauseResumeLabel = paused
                 ? _localizedByLanguage(zh: '继续', en: 'Resume')
                 : _localizedByLanguage(zh: '暂停', en: 'Pause');
-            final statusHint = paused
-                ? _localizedByLanguage(
-                    zh: '录音已暂停，点击继续后可接着录。',
-                    en: 'Recording paused. Tap Resume when ready.',
-                  )
-                : context.t.chat.recordingHint;
+            final statusHint = interruptedBySystem
+                ? recoveringInterruption
+                    ? _localizedByLanguage(
+                        zh: '检测到来电中断，正在自动恢复录音……',
+                        en: 'Detected an interruption. Recovering recording automatically...',
+                      )
+                    : _localizedByLanguage(
+                        zh: '检测到来电中断，通话结束后将自动恢复并继续录音。',
+                        en: 'Interruption detected. Recording will resume automatically when possible.',
+                      )
+                : paused
+                    ? _localizedByLanguage(
+                        zh: '录音已暂停，点击继续后可接着录。',
+                        en: 'Recording paused. Tap Resume when ready.',
+                      )
+                    : context.t.chat.recordingHint;
             final manualStopHint = _localizedByLanguage(
               zh: '录音不会自动停止，完成后请点击停止发送。',
               en: 'Recording does not auto-stop. Tap Stop when you are done.',
@@ -457,7 +618,9 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
                         Expanded(
                           child: OutlinedButton.icon(
                             key: const ValueKey('chat_recording_pause_resume'),
-                            onPressed: togglingPause
+                            onPressed: togglingPause ||
+                                    recoveringInterruption ||
+                                    interruptedBySystem && !pausedByUser
                                 ? null
                                 : () => unawaited(
                                       togglePause(

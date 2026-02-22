@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -100,6 +101,7 @@ part 'chat_page_methods_e.dart';
 part 'chat_page_methods_i_detached_jobs.dart';
 part 'chat_page_methods_j_message_edit.dart';
 part 'chat_page_methods_f_audio_recording.dart';
+part 'chat_page_methods_f_audio_recording_stitching.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_methods_k_tags.dart';
