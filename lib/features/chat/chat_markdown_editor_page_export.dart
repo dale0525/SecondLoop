@@ -14,6 +14,11 @@ final RegExp _kPdfTaskListPattern =
 final RegExp _kPdfOrderedListPattern = RegExp(r'^(\s*)(\d+)[.)]\s+(.*)$');
 final RegExp _kPdfUnorderedListPattern = RegExp(r'^(\s*)([-+*])\s+(.*)$');
 final RegExp _kPdfListContinuationPattern = RegExp(r'^\s{2,}\S');
+final RegExp _kPdfLatexBlockOpeningPattern = RegExp(r'^\s*\$\$(.*)$');
+final RegExp _kPdfLatexBlockClosingPattern = RegExp(r'^(.*?)\$\$\s*$');
+final RegExp _kPdfImageLinePattern = RegExp(
+  r'^\s*!\[([^\]]*)\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)\s*$',
+);
 
 mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   bool get _exporting;
@@ -223,11 +228,6 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
 
   Future<Uint8List> _buildPdfBytes() async {
     final normalized = sanitizeChatMarkdown(_controller.text);
-
-    if (shouldUsePreviewBasedPdfRender(normalized)) {
-      return _buildPdfFromPreviewSlices();
-    }
-
     final blocks = _parseMarkdownBlocks(normalized);
     final previewTheme =
         resolveChatMarkdownTheme(_themePreset, Theme.of(context));
@@ -236,194 +236,5 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       blocks: blocks,
       emptyFallback: context.t.chat.markdownEditor.emptyPreview,
     );
-  }
-
-  Future<Uint8List> _buildPdfFromPreviewSlices() async {
-    final isWideLayout = _isWideLayout(context);
-    final switchedPane =
-        !isWideLayout && _compactPane == ChatMarkdownCompactPane.editor;
-    final previousRenderMode = _exportRenderMode;
-
-    setState(() {
-      _exportRenderMode = true;
-      if (switchedPane) {
-        _compactPane = ChatMarkdownCompactPane.preview;
-      }
-    });
-    await Future<void>.delayed(const Duration(milliseconds: 220));
-    await WidgetsBinding.instance.endOfFrame;
-
-    try {
-      if (_previewScrollController.hasClients) {
-        _previewScrollController.jumpTo(0);
-      }
-
-      final renderObject = await _waitForPreviewRenderBoundary();
-      // ignore: invalid_use_of_protected_member
-      final renderLayer = renderObject.layer;
-      if (renderLayer is! OffsetLayer) {
-        throw StateError('Preview render layer is not ready for slicing');
-      }
-
-      const pageSize = PdfPageSize.a4;
-      final contentBounds = buildPdfPreviewContentRect(
-        Size(pageSize.width, pageSize.height),
-      );
-      final contentWidth = contentBounds.width;
-      final contentHeight = contentBounds.height;
-
-      final paginationRatio =
-          _resolvePreviewPaginationPixelRatio(renderObject.size);
-      final paginationImage = await renderObject.toImage(
-        pixelRatio: paginationRatio,
-      );
-      final paginationBytes =
-          await paginationImage.toByteData(format: ui.ImageByteFormat.png);
-      paginationImage.dispose();
-      if (paginationBytes == null) {
-        throw StateError('Failed to build pagination map for PDF export');
-      }
-
-      final pageOffsets = await computeMarkdownPreviewPdfPageOffsetsAsync(
-        pngBytes: paginationBytes.buffer.asUint8List(),
-        sourceWidth: renderObject.size.width * paginationRatio,
-        sourceHeight: renderObject.size.height * paginationRatio,
-        contentWidth: contentWidth,
-        contentHeight: contentHeight,
-      );
-
-      final pageSlices = buildMarkdownPreviewPdfSlices(
-        pageOffsets: pageOffsets,
-        sourceLogicalWidth: renderObject.size.width,
-        sourceLogicalHeight: renderObject.size.height,
-        contentWidth: contentWidth,
-        contentHeight: contentHeight,
-      );
-      if (pageSlices.isEmpty) {
-        throw StateError('Failed to build preview slices for PDF export');
-      }
-
-      final devicePixelRatio =
-          ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
-      final slicePixelRatioCap = _resolvePreviewSlicePixelRatioCap(
-        pageCount: pageSlices.length,
-      );
-
-      final document = PdfDocument();
-      document.pageSettings.size = PdfPageSize.a4;
-      document.pageSettings.setMargins(0);
-
-      for (final slice in pageSlices) {
-        if (slice.logicalHeight <= 0.5) {
-          continue;
-        }
-
-        final slicePixelRatio = math.min(
-          _resolvePreviewSlicePixelRatio(
-            logicalWidth: renderObject.size.width,
-            logicalHeight: slice.logicalHeight,
-            devicePixelRatio: devicePixelRatio,
-          ),
-          slicePixelRatioCap,
-        );
-
-        final sliceImage = await renderLayer.toImage(
-          Rect.fromLTWH(
-            0,
-            slice.logicalOffset,
-            renderObject.size.width,
-            slice.logicalHeight,
-          ),
-          pixelRatio: slicePixelRatio,
-        );
-        final sliceBytes =
-            await sliceImage.toByteData(format: ui.ImageByteFormat.png);
-        sliceImage.dispose();
-        if (sliceBytes == null) {
-          throw StateError('Failed to encode preview slice for PDF export');
-        }
-
-        final bitmap = PdfBitmap(sliceBytes.buffer.asUint8List());
-        final drawLeft =
-            contentBounds.left + (contentBounds.width - slice.drawWidth) / 2;
-
-        final page = document.pages.add();
-        page.graphics.drawImage(
-          bitmap,
-          Rect.fromLTWH(
-            drawLeft,
-            contentBounds.top,
-            slice.drawWidth,
-            slice.drawHeight,
-          ),
-        );
-
-        await Future<void>.delayed(Duration.zero);
-        await WidgetsBinding.instance.endOfFrame;
-      }
-
-      final bytes = await document.save();
-      document.dispose();
-      return Uint8List.fromList(bytes);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _exportRenderMode = previousRenderMode;
-          if (switchedPane) {
-            _compactPane = ChatMarkdownCompactPane.editor;
-          }
-        });
-        if (switchedPane) {
-          _editorFocusNode.requestFocus();
-        }
-      }
-    }
-  }
-
-  double _resolvePreviewPaginationPixelRatio(Size logicalSize) {
-    const maxPaginationDimensionPx = 7800.0;
-
-    final longestDimension = math.max(logicalSize.width, logicalSize.height);
-    if (!longestDimension.isFinite || longestDimension <= 0) {
-      return 1.0;
-    }
-
-    final ratio = maxPaginationDimensionPx / longestDimension;
-    return ratio.clamp(0.2, 1.0);
-  }
-
-  double _resolvePreviewSlicePixelRatio({
-    required double logicalWidth,
-    required double logicalHeight,
-    required double devicePixelRatio,
-  }) {
-    const maxLayerDimensionPx = 15000.0;
-
-    final preferred = resolveMarkdownPreviewExportPixelRatio(
-      logicalWidth: logicalWidth,
-      logicalHeight: logicalHeight,
-      devicePixelRatio: devicePixelRatio,
-    );
-    final longestDimension = math.max(logicalWidth, logicalHeight);
-    if (!longestDimension.isFinite || longestDimension <= 0) {
-      return preferred;
-    }
-
-    final layerSafeRatio = maxLayerDimensionPx / longestDimension;
-    final bounded = math.min(preferred, layerSafeRatio);
-    return bounded.clamp(1.0, 8.0);
-  }
-
-  double _resolvePreviewSlicePixelRatioCap({required int pageCount}) {
-    if (pageCount >= 48) {
-      return 2.2;
-    }
-    if (pageCount >= 28) {
-      return 2.6;
-    }
-    if (pageCount >= 16) {
-      return 3.0;
-    }
-    return 8.0;
   }
 }

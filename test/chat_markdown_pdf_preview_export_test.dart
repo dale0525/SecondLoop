@@ -9,7 +9,7 @@ void main() {
     expect(shouldUsePreviewBasedPdfRender(plainMarkdown), isFalse);
   });
 
-  test('Preview-based PDF render stays enabled for rich markdown blocks', () {
+  test('Preview-based PDF render is disabled for rich markdown blocks', () {
     const richMarkdown = r'''
 # Math
 
@@ -23,7 +23,7 @@ $$
 ![diagram](https://example.com/diagram.png)
 ''';
 
-    expect(shouldUsePreviewBasedPdfRender(richMarkdown), isTrue);
+    expect(shouldUsePreviewBasedPdfRender(richMarkdown), isFalse);
   });
 
   test('Export pixel ratio scales up narrow previews for better quality', () {

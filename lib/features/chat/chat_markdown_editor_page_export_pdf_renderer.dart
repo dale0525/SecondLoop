@@ -62,6 +62,8 @@ class _PdfMarkdownRenderer {
   late double _cursorY;
   final HashSet<PdfPage> _paintedPages = HashSet<PdfPage>.identity();
   final Map<String, double> _glyphWidthCache = <String, double>{};
+  final Map<String, Future<Uint8List?>> _imageBytesCache =
+      <String, Future<Uint8List?>>{};
 
   Future<Uint8List> render({
     required List<_PdfMarkdownBlock> blocks,
@@ -145,6 +147,29 @@ class _PdfMarkdownRenderer {
               parseInlineMarkdown: false,
             ),
           );
+          break;
+        case _PdfMarkdownBlockType.latex:
+          _drawParagraph(
+            block.text,
+            style: _PdfTextStyle(
+              font: _codeFont,
+              boldFont: _codeFont,
+              codeFont: _codeFont,
+              brush: _textBrush,
+              strikePen: _textPen,
+              boldPen: _textBoldPen,
+              lineSpacing: 2.4,
+              indent: 12,
+              topSpacing: _isAtTopOfPage ? 0 : 8,
+              bottomSpacing: isLast ? 0 : 10,
+              keepAtLeastOneLine: true,
+              keepTogether: true,
+              parseInlineMarkdown: false,
+            ),
+          );
+          break;
+        case _PdfMarkdownBlockType.image:
+          await _drawImageBlock(block, isLast: isLast);
           break;
         case _PdfMarkdownBlockType.listItem:
           _drawListItem(block, isLast: isLast);
@@ -287,6 +312,170 @@ class _PdfMarkdownRenderer {
     }
   }
 
+  Future<void> _drawImageBlock(
+    _PdfMarkdownBlock block, {
+    required bool isLast,
+  }) async {
+    final source = block.source?.trim() ?? '';
+    if (source.isEmpty) {
+      final fallback =
+          block.text.trim().isEmpty ? '[Image]' : block.text.trim();
+      _drawParagraph(
+        fallback,
+        style: _PdfTextStyle(
+          font: _quoteFont,
+          boldFont: _quoteBoldFont,
+          codeFont: _codeFont,
+          brush: _mutedBrush,
+          strikePen: _mutedPen,
+          boldPen: _mutedBoldPen,
+          lineSpacing: 2.8,
+          topSpacing: _isAtTopOfPage ? 0 : 6,
+          bottomSpacing: isLast ? 0 : 8,
+        ),
+      );
+      return;
+    }
+
+    if (!_isAtTopOfPage) {
+      _advanceWithSpacing(8);
+    }
+
+    final imageBytes = await _loadImageBytes(source);
+    if (imageBytes == null || imageBytes.isEmpty) {
+      final fallback = block.text.trim().isEmpty ? source : block.text.trim();
+      _drawParagraph(
+        fallback,
+        style: _PdfTextStyle(
+          font: _quoteFont,
+          boldFont: _quoteBoldFont,
+          codeFont: _codeFont,
+          brush: _mutedBrush,
+          strikePen: _mutedPen,
+          boldPen: _mutedBoldPen,
+          lineSpacing: 2.8,
+          topSpacing: 0,
+          bottomSpacing: isLast ? 0 : 8,
+          parseInlineMarkdown: false,
+        ),
+      );
+      return;
+    }
+
+    final bitmap = PdfBitmap(imageBytes);
+    final imageWidth = bitmap.width.toDouble();
+    final imageHeight = bitmap.height.toDouble();
+    if (imageWidth <= 0 || imageHeight <= 0) {
+      return;
+    }
+
+    final contentWidth = _contentWidth(_currentPage);
+    final pageHeight = _contentBottom(_currentPage) - _contentTop;
+    final maxImageHeight = pageHeight * 0.7;
+
+    final drawScale = math.min(
+      1.0,
+      math.min(contentWidth / imageWidth, maxImageHeight / imageHeight),
+    );
+    final drawWidth = imageWidth * drawScale;
+    final drawHeight = imageHeight * drawScale;
+
+    final caption = block.text.trim();
+    final captionHeight = caption.isEmpty ? 0 : (_quoteFont.height + 8);
+
+    _ensureRoom(drawHeight + captionHeight + 4);
+
+    final drawX = _contentLeft(_currentPage) + (contentWidth - drawWidth) / 2;
+    _currentPage.graphics.drawImage(
+      bitmap,
+      Rect.fromLTWH(drawX, _cursorY, drawWidth, drawHeight),
+    );
+    _cursorY += drawHeight;
+
+    if (caption.isNotEmpty) {
+      _drawParagraph(
+        caption,
+        style: _PdfTextStyle(
+          font: _quoteFont,
+          boldFont: _quoteBoldFont,
+          codeFont: _codeFont,
+          brush: _mutedBrush,
+          strikePen: _mutedPen,
+          boldPen: _mutedBoldPen,
+          lineSpacing: 2.4,
+          topSpacing: 4,
+          bottomSpacing: isLast ? 0 : 8,
+          parseInlineMarkdown: false,
+        ),
+      );
+    } else if (!isLast) {
+      _advanceWithSpacing(8);
+    }
+  }
+
+  Future<Uint8List?> _loadImageBytes(String source) {
+    return _imageBytesCache.putIfAbsent(
+      source,
+      () => _resolveImageBytes(source),
+    );
+  }
+
+  Future<Uint8List?> _resolveImageBytes(String source) async {
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    if (trimmed.startsWith('data:image/')) {
+      final commaIndex = trimmed.indexOf(',');
+      if (commaIndex <= 0 || commaIndex >= trimmed.length - 1) {
+        return null;
+      }
+      final meta = trimmed.substring(0, commaIndex).toLowerCase();
+      final payload = trimmed.substring(commaIndex + 1);
+      if (!meta.contains(';base64')) {
+        return null;
+      }
+      try {
+        return base64Decode(payload);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.hasScheme) {
+      if (uri.scheme == 'file') {
+        final file = File.fromUri(uri);
+        if (!await file.exists()) {
+          return null;
+        }
+        return file.readAsBytes();
+      }
+
+      if (uri.scheme == 'http' || uri.scheme == 'https') {
+        final client = HttpClient();
+        try {
+          final request = await client.getUrl(uri);
+          final response = await request.close();
+          if (response.statusCode != HttpStatus.ok) {
+            return null;
+          }
+          return consolidateHttpClientResponseBytes(response);
+        } finally {
+          client.close(force: true);
+        }
+      }
+      return null;
+    }
+
+    final file = File(trimmed);
+    if (!await file.exists()) {
+      return null;
+    }
+    return file.readAsBytes();
+  }
+
   void _drawParagraph(
     String text, {
     required _PdfTextStyle style,
@@ -317,7 +506,18 @@ class _PdfMarkdownRenderer {
     final lines = _layoutInlineLines(spans, style: style, maxWidth: width);
     if (lines.isEmpty) return;
 
-    if (style.keepAtLeastOneLine) {
+    if (style.keepTogether) {
+      final availableHeight = _contentBottom(_currentPage) - _contentTop;
+      final blockHeight = lines.fold<double>(
+            0,
+            (sum, line) => sum + line.height,
+          ) +
+          style.bottomSpacing +
+          2;
+      if (blockHeight <= availableHeight) {
+        _ensureRoom(blockHeight);
+      }
+    } else if (style.keepAtLeastOneLine) {
       _ensureRoom(lines.first.height + 2);
     }
 
@@ -535,6 +735,7 @@ class _PdfTextStyle {
     this.topSpacing = 0,
     this.bottomSpacing = 0,
     this.keepAtLeastOneLine = false,
+    this.keepTogether = false,
     this.drawQuoteBorder = false,
     this.parseInlineMarkdown = true,
     this.syntheticBold = false,
@@ -551,6 +752,7 @@ class _PdfTextStyle {
   final double topSpacing;
   final double bottomSpacing;
   final bool keepAtLeastOneLine;
+  final bool keepTogether;
   final bool drawQuoteBorder;
   final bool parseInlineMarkdown;
   final bool syntheticBold;
@@ -613,6 +815,8 @@ enum _PdfMarkdownBlockType {
   paragraph,
   quote,
   code,
+  latex,
+  image,
   listItem,
   horizontalRule,
 }
@@ -631,6 +835,7 @@ class _PdfMarkdownBlock {
     this.listKind,
     this.order = 1,
     this.checked = false,
+    this.source,
   });
 
   const _PdfMarkdownBlock.heading(
@@ -639,24 +844,45 @@ class _PdfMarkdownBlock {
   })  : type = _PdfMarkdownBlockType.heading,
         listKind = null,
         order = 1,
-        checked = false;
+        checked = false,
+        source = null;
 
   const _PdfMarkdownBlock.paragraph(this.text)
       : type = _PdfMarkdownBlockType.paragraph,
         level = 0,
         listKind = null,
         order = 1,
-        checked = false;
+        checked = false,
+        source = null;
 
   const _PdfMarkdownBlock.quote(this.text)
       : type = _PdfMarkdownBlockType.quote,
         level = 0,
         listKind = null,
         order = 1,
-        checked = false;
+        checked = false,
+        source = null;
 
   const _PdfMarkdownBlock.code(this.text)
       : type = _PdfMarkdownBlockType.code,
+        level = 0,
+        listKind = null,
+        order = 1,
+        checked = false,
+        source = null;
+
+  const _PdfMarkdownBlock.latex(this.text)
+      : type = _PdfMarkdownBlockType.latex,
+        level = 0,
+        listKind = null,
+        order = 1,
+        checked = false,
+        source = null;
+
+  const _PdfMarkdownBlock.image({
+    required this.source,
+    this.text = '',
+  })  : type = _PdfMarkdownBlockType.image,
         level = 0,
         listKind = null,
         order = 1,
@@ -668,7 +894,8 @@ class _PdfMarkdownBlock {
     required this.listKind,
     this.order = 1,
     this.checked = false,
-  }) : type = _PdfMarkdownBlockType.listItem;
+  })  : type = _PdfMarkdownBlockType.listItem,
+        source = null;
 
   const _PdfMarkdownBlock.horizontalRule()
       : type = _PdfMarkdownBlockType.horizontalRule,
@@ -676,7 +903,8 @@ class _PdfMarkdownBlock {
         level = 0,
         listKind = null,
         order = 1,
-        checked = false;
+        checked = false,
+        source = null;
 
   final _PdfMarkdownBlockType type;
   final String text;
@@ -684,9 +912,11 @@ class _PdfMarkdownBlock {
   final _PdfMarkdownListKind? listKind;
   final int order;
   final bool checked;
+  final String? source;
 
   _PdfMarkdownBlock copyWith({
     String? text,
+    String? source,
   }) {
     return _PdfMarkdownBlock(
       type: type,
@@ -695,6 +925,7 @@ class _PdfMarkdownBlock {
       listKind: listKind,
       order: order,
       checked: checked,
+      source: source ?? this.source,
     );
   }
 }

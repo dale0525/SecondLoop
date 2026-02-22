@@ -21,19 +21,6 @@ const int _kProtectedRangeMaxGapRows = 12;
 const int _kProtectedRangeMinHeightRows = 46;
 const int _kProtectedRangePaddingRows = 2;
 
-final List<RegExp> _kPreviewRenderRequiredPatterns = <RegExp>[
-  RegExp(r'^\s*\$\$', multiLine: true),
-  RegExp(r'(?<!\\)\$(?!\$)(?:[^$\n]|\\\$)+(?<!\\)\$(?!\$)'),
-  RegExp(r'!\[[^\]]*\]\([^\)]+\)'),
-  RegExp(r'^\s*<img\b', multiLine: true, caseSensitive: false),
-  RegExp(
-    r'^\s{0,3}(```+|~~~+)\s*(?:markmap|mindmap)\s*$',
-    multiLine: true,
-    caseSensitive: false,
-  ),
-  RegExp(r'^\s*\|.*\|\s*$', multiLine: true),
-];
-
 typedef MarkdownPreviewPdfSlice = ({
   double logicalOffset,
   double logicalHeight,
@@ -41,17 +28,7 @@ typedef MarkdownPreviewPdfSlice = ({
   double drawHeight,
 });
 
-bool shouldUsePreviewBasedPdfRender(String markdown) {
-  if (markdown.trim().isEmpty) {
-    return false;
-  }
-
-  for (final pattern in _kPreviewRenderRequiredPatterns) {
-    if (pattern.hasMatch(markdown)) {
-      return true;
-    }
-  }
-
+bool shouldUsePreviewBasedPdfRender(String _) {
   return false;
 }
 
