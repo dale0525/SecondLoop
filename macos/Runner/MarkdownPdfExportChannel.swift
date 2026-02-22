@@ -208,47 +208,72 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       contentHeight = max(contentHeight, kMarkdownPdfPageHeight)
       webView.frame = NSRect(x: 0, y: 0, width: kMarkdownPdfPageWidth, height: contentHeight)
 
-      let outputUrl = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("secondloop_markdown_\(UUID().uuidString).pdf")
+      if #available(macOS 11.0, *) {
+        let config = WKPDFConfiguration()
+        config.rect = CGRect(x: 0, y: 0, width: kMarkdownPdfPageWidth, height: contentHeight)
 
-      let printInfo = NSPrintInfo()
-      printInfo.paperSize = NSSize(width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight)
-      printInfo.topMargin = 0
-      printInfo.bottomMargin = 0
-      printInfo.leftMargin = 0
-      printInfo.rightMargin = 0
-      printInfo.horizontalPagination = .automatic
-      printInfo.verticalPagination = .automatic
-      printInfo.isVerticallyCentered = false
-      printInfo.isHorizontallyCentered = false
-      printInfo.jobDisposition = .save
-      printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
+        webView.createPDF(configuration: config) { [weak self] result in
+          guard let self = self else { return }
 
-      let operation = NSPrintOperation(view: webView, printInfo: printInfo)
-      operation.showsPrintPanel = false
-      operation.showsProgressPanel = false
-      _ = operation.run()
-
-      guard let data = try? Data(contentsOf: outputUrl), !data.isEmpty else {
-        let fallback = webView.dataWithPDF(inside: webView.bounds)
-        if fallback.isEmpty {
-          self.complete(
-            failure: FlutterError(
-              code: "markdown_pdf_export_io_failed",
-              message: "Failed to generate PDF bytes",
-              details: nil
-            )
-          )
-          return
+          switch result {
+          case .success(let data):
+            if !data.isEmpty {
+              self.complete(success: data)
+              return
+            }
+            self.exportPdfViaPrintOperation(webView: webView)
+          case .failure:
+            self.exportPdfViaPrintOperation(webView: webView)
+          }
         }
-
-        self.complete(success: fallback)
         return
       }
 
-      try? FileManager.default.removeItem(at: outputUrl)
-      self.complete(success: data)
+      self.exportPdfViaPrintOperation(webView: webView)
     }
+  }
+
+  private func exportPdfViaPrintOperation(webView: WKWebView) {
+    let outputUrl = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("secondloop_markdown_\(UUID().uuidString).pdf")
+
+    let printInfo = NSPrintInfo()
+    printInfo.paperSize = NSSize(width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight)
+    printInfo.topMargin = 0
+    printInfo.bottomMargin = 0
+    printInfo.leftMargin = 0
+    printInfo.rightMargin = 0
+    printInfo.horizontalPagination = .automatic
+    printInfo.verticalPagination = .automatic
+    printInfo.isVerticallyCentered = false
+    printInfo.isHorizontallyCentered = false
+    printInfo.jobDisposition = .save
+    printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
+
+    let operation = webView.printOperation(with: printInfo)
+    operation.showsPrintPanel = false
+    operation.showsProgressPanel = false
+    _ = operation.run()
+
+    guard let data = try? Data(contentsOf: outputUrl), !data.isEmpty else {
+      let fallback = webView.dataWithPDF(inside: webView.bounds)
+      if fallback.isEmpty {
+        complete(
+          failure: FlutterError(
+            code: "markdown_pdf_export_io_failed",
+            message: "Failed to generate PDF bytes",
+            details: nil
+          )
+        )
+        return
+      }
+
+      complete(success: fallback)
+      return
+    }
+
+    try? FileManager.default.removeItem(at: outputUrl)
+    complete(success: data)
   }
 
   private func complete(success data: Data) {
