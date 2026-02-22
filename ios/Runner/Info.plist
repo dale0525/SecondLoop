@@ -52,7 +52,7 @@
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.secondloop.secondloop.backgroundSync</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).backgroundSync</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos to send in chat.</string>

@@ -10,6 +10,7 @@ PIXI_TOML = REPO_ROOT / "pixi.toml"
 ANDROID_RUN_SCRIPT = REPO_ROOT / "scripts/run_android_with_auto_emulator.sh"
 RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
 SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
+ANDROID_BUILD_GRADLE = REPO_ROOT / "android/app/build.gradle"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -34,6 +35,23 @@ class PixiAndroidTasksTests(unittest.TestCase):
         command = run_android_task.get("cmd", "")
 
         self.assertIn("scripts/run_android_with_auto_emulator.sh", command)
+
+    def test_android_local_dev_tasks_use_dev_app_id(self) -> None:
+        tasks = self._load_tasks()
+
+        for task_name in [
+            "run-android",
+            "build-android-apk",
+            "run-android-cn",
+            "build-android-apk-cn",
+        ]:
+            with self.subTest(task=task_name):
+                task = tasks[task_name]
+                command = task.get("cmd", "")
+                self.assertIn(
+                    "SECONDLOOP_APP_ID=com.secondloop.secondloopdev",
+                    command,
+                )
 
     def test_auto_emulator_script_checks_for_existing_android_devices(self) -> None:
         script = ANDROID_RUN_SCRIPT.read_text(encoding="utf-8")
@@ -62,6 +80,12 @@ class PixiAndroidTasksTests(unittest.TestCase):
 
         self.assertIn("first_android_device_serial", script)
         self.assertIn('run -d "$device_serial"', script)
+
+    def test_auto_emulator_script_defaults_to_global_app_id_override(self) -> None:
+        script = ANDROID_RUN_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("SECONDLOOP_APP_ID", script)
+        self.assertIn("SECONDLOOP_ANDROID_APP_ID", script)
 
     def test_run_with_android_env_unsets_host_toolchain_vars(self) -> None:
         script = RUN_WITH_ANDROID_ENV_SCRIPT.read_text(encoding="utf-8")
@@ -93,6 +117,12 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn('whisper-rs-sys-0.14.1/build.rs', script)
         self.assertIn('target.contains("apple-darwin")', script)
         self.assertIn('cfg!(feature = "openblas")', script)
+
+    def test_android_gradle_application_id_supports_environment_override(self) -> None:
+        gradle_file = ANDROID_BUILD_GRADLE.read_text(encoding="utf-8")
+
+        self.assertIn('System.getenv("SECONDLOOP_APP_ID")', gradle_file)
+        self.assertIn("applicationId secondloopApplicationId", gradle_file)
 
 
 if __name__ == "__main__":

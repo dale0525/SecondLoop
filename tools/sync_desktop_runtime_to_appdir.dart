@@ -141,7 +141,8 @@ Future<void> main(List<String> args) async {
 
 _Config _parseArgs(List<String> args) {
   var platform = _detectHostPlatform();
-  var bundleId = _kDefaultBundleId;
+  final envBundleId = Platform.environment['SECONDLOOP_APP_ID']?.trim() ?? '';
+  var bundleId = envBundleId.isNotEmpty ? envBundleId : _kDefaultBundleId;
   var sourceDir = _kDefaultRuntimeSourceDir;
   var dryRun = false;
 

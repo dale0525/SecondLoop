@@ -7,7 +7,11 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "secondloop")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.secondloop.secondloop")
+set(SECONDLOOP_APP_ID "$ENV{SECONDLOOP_APP_ID}")
+if("${SECONDLOOP_APP_ID}" STREQUAL "")
+  set(SECONDLOOP_APP_ID "com.secondloop.secondloop")
+endif()
+set(APPLICATION_ID "${SECONDLOOP_APP_ID}")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

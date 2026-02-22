@@ -11,7 +11,7 @@ export ANDROID_AVD_HOME
 
 ANDROID_API_LEVEL="${SECONDLOOP_ANDROID_API_LEVEL:-34}"
 ANDROID_AVD_NAME="${SECONDLOOP_ANDROID_AVD_NAME:-secondloop_api34}"
-ANDROID_APP_ID="${SECONDLOOP_ANDROID_APP_ID:-com.secondloop.secondloop}"
+ANDROID_APP_ID="${SECONDLOOP_ANDROID_APP_ID:-${SECONDLOOP_APP_ID:-com.secondloop.secondloop}}"
 
 system_image_arch="${SECONDLOOP_ANDROID_IMAGE_ARCH:-}"
 if [[ -z "$system_image_arch" ]]; then

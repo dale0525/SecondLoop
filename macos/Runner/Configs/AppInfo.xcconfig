@@ -8,7 +8,7 @@
 PRODUCT_NAME = SecondLoop
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.secondloop.secondloop
+PRODUCT_BUNDLE_IDENTIFIER = $(SECONDLOOP_APP_ID:default=com.secondloop.secondloop)
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.secondloop. All rights reserved.

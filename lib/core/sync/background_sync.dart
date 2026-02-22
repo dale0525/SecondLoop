@@ -15,7 +15,11 @@ import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 
-const _kWorkmanagerTaskId = 'com.secondloop.secondloop.backgroundSync';
+const _kAppId = String.fromEnvironment(
+  'SECONDLOOP_APP_ID',
+  defaultValue: 'com.secondloop.secondloop',
+);
+const _kWorkmanagerTaskId = '$_kAppId.backgroundSync';
 const _kWorkmanagerUniqueName = _kWorkmanagerTaskId;
 const _kWorkmanagerTaskName = _kWorkmanagerTaskId;
 

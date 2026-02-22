@@ -138,7 +138,8 @@ import Vision
     WorkmanagerPlugin.setPluginRegistrantCallback { registry in
       GeneratedPluginRegistrant.register(with: registry)
     }
-    WorkmanagerPlugin.registerTask(withIdentifier: "com.secondloop.secondloop.backgroundSync")
+    let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.secondloop.secondloop"
+    WorkmanagerPlugin.registerTask(withIdentifier: "\(bundleIdentifier).backgroundSync")
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
