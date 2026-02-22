@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import 'chat_markdown_rich_rendering.dart';
+import 'chat_markdown_pdf_katex_assets.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
 
@@ -52,12 +53,16 @@ Future<String> buildChatMarkdownPdfHtmlDocument({
 
   final transformedHtml = _transformRichTagHtml(contentHtml);
 
+  final katexAssets = await loadBundledKatexAssets();
+
   return '''<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<style>
+${katexAssets.css}
+</style>
 <style>
 @page {
   size: A4;
@@ -223,7 +228,9 @@ img {
   color: ${_toCssColor(theme.mutedTextColor)};
 }
 </style>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+${katexAssets.js}
+</script>
 <script>
 window.__SECONDLOOP_PDF_READY__ = false;
 (function () {

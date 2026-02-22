@@ -28,6 +28,17 @@ void main() {
     expect(html, contains('window.__SECONDLOOP_PDF_READY__'));
   });
 
+  test('PDF HTML export embeds KaTeX assets for offline rendering', () async {
+    final html = await buildChatMarkdownPdfHtmlDocument(
+      markdown: r'$$\\int_0^1 x^2 dx$$',
+      theme: buildTheme(),
+      emptyFallback: 'Empty',
+    );
+
+    expect(html, isNot(contains('cdn.jsdelivr.net/npm/katex')));
+    expect(html, contains('data:font/woff2;base64,'));
+  });
+
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {
     const markdown = r'''
 Inline $x^2$ and block:
