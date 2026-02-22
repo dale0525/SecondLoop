@@ -271,8 +271,6 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       );
       final contentWidth = contentBounds.width;
       final contentHeight = contentBounds.height;
-      final pageLogicalHeight =
-          contentHeight * (renderObject.size.width / contentWidth);
 
       final paginationRatio =
           _resolvePreviewPaginationPixelRatio(renderObject.size);
@@ -294,32 +292,47 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         contentHeight: contentHeight,
       );
 
+      final pageSlices = buildMarkdownPreviewPdfSlices(
+        pageOffsets: pageOffsets,
+        sourceLogicalWidth: renderObject.size.width,
+        sourceLogicalHeight: renderObject.size.height,
+        contentWidth: contentWidth,
+        contentHeight: contentHeight,
+      );
+      if (pageSlices.isEmpty) {
+        throw StateError('Failed to build preview slices for PDF export');
+      }
+
       final devicePixelRatio =
           ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
-      final slicePixelRatio = _resolvePreviewSlicePixelRatio(
-        logicalWidth: renderObject.size.width,
-        logicalHeight: pageLogicalHeight,
-        devicePixelRatio: devicePixelRatio,
+      final slicePixelRatioCap = _resolvePreviewSlicePixelRatioCap(
+        pageCount: pageSlices.length,
       );
 
       final document = PdfDocument();
       document.pageSettings.size = PdfPageSize.a4;
       document.pageSettings.setMargins(0);
 
-      for (final offset in pageOffsets) {
-        final logicalOffset = offset * (renderObject.size.width / contentWidth);
-        final remainingHeight = renderObject.size.height - logicalOffset;
-        if (!logicalOffset.isFinite || remainingHeight <= 0.5) {
+      for (final slice in pageSlices) {
+        if (slice.logicalHeight <= 0.5) {
           continue;
         }
 
-        final sliceLogicalHeight = math.min(pageLogicalHeight, remainingHeight);
+        final slicePixelRatio = math.min(
+          _resolvePreviewSlicePixelRatio(
+            logicalWidth: renderObject.size.width,
+            logicalHeight: slice.logicalHeight,
+            devicePixelRatio: devicePixelRatio,
+          ),
+          slicePixelRatioCap,
+        );
+
         final sliceImage = await renderLayer.toImage(
           Rect.fromLTWH(
             0,
-            logicalOffset,
+            slice.logicalOffset,
             renderObject.size.width,
-            sliceLogicalHeight,
+            slice.logicalHeight,
           ),
           pixelRatio: slicePixelRatio,
         );
@@ -331,17 +344,17 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         }
 
         final bitmap = PdfBitmap(sliceBytes.buffer.asUint8List());
-        final drawHeight = sliceLogicalHeight *
-            (contentBounds.width / renderObject.size.width);
+        final drawLeft =
+            contentBounds.left + (contentBounds.width - slice.drawWidth) / 2;
 
         final page = document.pages.add();
         page.graphics.drawImage(
           bitmap,
           Rect.fromLTWH(
-            contentBounds.left,
+            drawLeft,
             contentBounds.top,
-            contentBounds.width,
-            drawHeight,
+            slice.drawWidth,
+            slice.drawHeight,
           ),
         );
 
@@ -399,5 +412,18 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     final layerSafeRatio = maxLayerDimensionPx / longestDimension;
     final bounded = math.min(preferred, layerSafeRatio);
     return bounded.clamp(1.0, 8.0);
+  }
+
+  double _resolvePreviewSlicePixelRatioCap({required int pageCount}) {
+    if (pageCount >= 48) {
+      return 2.2;
+    }
+    if (pageCount >= 28) {
+      return 2.6;
+    }
+    if (pageCount >= 16) {
+      return 3.0;
+    }
+    return 8.0;
   }
 }

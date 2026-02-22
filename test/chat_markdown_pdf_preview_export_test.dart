@@ -66,6 +66,48 @@ $$
     expect(ratio, greaterThanOrEqualTo(1.4));
   });
 
+  test(
+      'buildMarkdownPreviewPdfSlices keeps continuous coverage for stretched breaks',
+      () {
+    final slices = buildMarkdownPreviewPdfSlices(
+      pageOffsets: const <double>[0, 130, 260],
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 400,
+      contentWidth: 100,
+      contentHeight: 100,
+    );
+
+    expect(slices, hasLength(3));
+    _expectSliceCoverage(
+      slices,
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 400,
+      contentWidth: 100,
+    );
+  });
+
+  test(
+      'buildMarkdownPreviewPdfSlices scales oversized slices instead of dropping content',
+      () {
+    final slices = buildMarkdownPreviewPdfSlices(
+      pageOffsets: const <double>[0, 160, 310],
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 420,
+      contentWidth: 100,
+      contentHeight: 100,
+    );
+
+    expect(slices, isNotEmpty);
+    expect(slices.first.drawHeight, 100);
+    expect(slices.first.drawWidth, lessThan(100));
+    _expectSliceCoverage(
+      slices,
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 420,
+      contentWidth: 100,
+    );
+  });
+
   test('Preview PDF pagination avoids splitting dense formula regions', () {
     final image = img.Image(width: 120, height: 360);
     _fill(image, r: 245, g: 245, b: 245);
@@ -342,4 +384,24 @@ void _drawNarrowImageLikeBlock(
       }
     }
   }
+}
+
+void _expectSliceCoverage(
+  List<MarkdownPreviewPdfSlice> slices, {
+  required double sourceLogicalWidth,
+  required double sourceLogicalHeight,
+  required double contentWidth,
+}) {
+  final contentPerLogical = contentWidth / sourceLogicalWidth;
+  final expectedTotalContentHeight = sourceLogicalHeight * contentPerLogical;
+
+  var cursor = 0.0;
+  for (final slice in slices) {
+    final start = slice.logicalOffset * contentPerLogical;
+    final height = slice.logicalHeight * contentPerLogical;
+    expect((start - cursor).abs(), lessThan(0.05));
+    cursor = start + height;
+  }
+
+  expect((cursor - expectedTotalContentHeight).abs(), lessThan(0.05));
 }

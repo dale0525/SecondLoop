@@ -34,6 +34,13 @@ final List<RegExp> _kPreviewRenderRequiredPatterns = <RegExp>[
   RegExp(r'^\s*\|.*\|\s*$', multiLine: true),
 ];
 
+typedef MarkdownPreviewPdfSlice = ({
+  double logicalOffset,
+  double logicalHeight,
+  double drawWidth,
+  double drawHeight,
+});
+
 bool shouldUsePreviewBasedPdfRender(String markdown) {
   if (markdown.trim().isEmpty) {
     return false;
@@ -300,6 +307,90 @@ List<double> computeMarkdownPreviewPdfPageOffsets({
   }
 
   return offsets;
+}
+
+List<MarkdownPreviewPdfSlice> buildMarkdownPreviewPdfSlices({
+  required List<double> pageOffsets,
+  required double sourceLogicalWidth,
+  required double sourceLogicalHeight,
+  required double contentWidth,
+  required double contentHeight,
+}) {
+  if (sourceLogicalWidth <= 0 ||
+      sourceLogicalHeight <= 0 ||
+      contentWidth <= 0 ||
+      contentHeight <= 0) {
+    return const <MarkdownPreviewPdfSlice>[];
+  }
+
+  final logicalPerContentPoint = sourceLogicalWidth / contentWidth;
+  if (!logicalPerContentPoint.isFinite || logicalPerContentPoint <= 0) {
+    return const <MarkdownPreviewPdfSlice>[];
+  }
+
+  final scaledContentHeight = sourceLogicalHeight / logicalPerContentPoint;
+  if (!scaledContentHeight.isFinite || scaledContentHeight <= 0) {
+    return const <MarkdownPreviewPdfSlice>[];
+  }
+
+  const offsetEpsilon = 0.01;
+  final sortedOffsets = <double>[0];
+  for (final rawOffset in pageOffsets) {
+    if (!rawOffset.isFinite) {
+      continue;
+    }
+
+    final offset = rawOffset.clamp(0, scaledContentHeight).toDouble();
+    if (offset <= sortedOffsets.last + offsetEpsilon) {
+      continue;
+    }
+    sortedOffsets.add(offset);
+  }
+
+  if (sortedOffsets.last < scaledContentHeight - offsetEpsilon) {
+    sortedOffsets.add(scaledContentHeight);
+  }
+
+  final slices = <MarkdownPreviewPdfSlice>[];
+  for (var index = 0; index + 1 < sortedOffsets.length; index += 1) {
+    final startContentOffset = sortedOffsets[index];
+    final endContentOffset = sortedOffsets[index + 1];
+    final contentSliceHeight = endContentOffset - startContentOffset;
+    if (contentSliceHeight <= offsetEpsilon) {
+      continue;
+    }
+
+    final logicalOffset = startContentOffset * logicalPerContentPoint;
+    final availableLogicalHeight = sourceLogicalHeight - logicalOffset;
+    if (!logicalOffset.isFinite || availableLogicalHeight <= offsetEpsilon) {
+      continue;
+    }
+
+    final logicalHeight = math.min(
+      availableLogicalHeight,
+      contentSliceHeight * logicalPerContentPoint,
+    );
+    if (!logicalHeight.isFinite || logicalHeight <= offsetEpsilon) {
+      continue;
+    }
+
+    var drawWidth = contentWidth;
+    var drawHeight = contentSliceHeight;
+    if (drawHeight > contentHeight) {
+      final shrinkRatio = contentHeight / drawHeight;
+      drawWidth *= shrinkRatio;
+      drawHeight = contentHeight;
+    }
+
+    slices.add((
+      logicalOffset: logicalOffset,
+      logicalHeight: logicalHeight,
+      drawWidth: drawWidth,
+      drawHeight: drawHeight,
+    ));
+  }
+
+  return slices;
 }
 
 List<double> _buildLinearPageOffsets({
