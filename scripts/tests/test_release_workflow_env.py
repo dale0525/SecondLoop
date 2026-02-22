@@ -95,6 +95,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('## Build Provenance', workflow_text)
         self.assertIn('actions/runs/${GITHUB_RUN_ID}', workflow_text)
 
+    def test_release_workflow_installs_vulkan_sdk_for_linux_and_windows(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("windows:\n    needs: preflight", workflow_text)
+        self.assertIn("linux:\n    needs: preflight", workflow_text)
+        self.assertGreaterEqual(workflow_text.count("humbletim/install-vulkan-sdk@v1.2"), 2)
+        self.assertIn("version: 1.4.309.0", workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()
