@@ -2,9 +2,6 @@ part of 'chat_markdown_editor_page.dart';
 
 const double _kPdfPageMarginHorizontal = 54;
 const double _kPdfPageMarginVertical = 48;
-const double _kPdfLatexCaptureMinWidth = 520;
-const double _kPdfLatexCaptureMaxWidth = 1180;
-const double _kPdfLatexCapturePixelRatio = 2.4;
 
 final RegExp _kPdfHeadingPattern = RegExp(
   r'^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$',
@@ -230,167 +227,183 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   }
 
   Future<Uint8List> _buildPdfBytes() async {
+    try {
+      return await _buildPdfFromPreviewCapture();
+    } catch (_) {
+      return _buildPdfWithVectorRenderer();
+    }
+  }
+
+  Future<Uint8List> _buildPdfFromPreviewCapture() async {
+    final isWideLayout = _isWideLayout(context);
+    final switchedPane =
+        !isWideLayout && _compactPane == ChatMarkdownCompactPane.editor;
+    final previousRenderMode = _exportRenderMode;
+
+    setState(() {
+      _exportRenderMode = true;
+      if (switchedPane) {
+        _compactPane = ChatMarkdownCompactPane.preview;
+      }
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+
+    try {
+      if (_previewScrollController.hasClients) {
+        _previewScrollController.jumpTo(0);
+      }
+
+      final renderObject = await _waitForPreviewRenderBoundary();
+      // ignore: invalid_use_of_protected_member
+      final renderLayer = renderObject.layer;
+      if (renderLayer is! OffsetLayer) {
+        throw StateError('Preview render layer is not ready for PDF export');
+      }
+
+      const pageSize = PdfPageSize.a4;
+      final contentBounds = buildPdfPreviewContentRect(
+        Size(pageSize.width, pageSize.height),
+      );
+      final contentWidth = contentBounds.width;
+      final contentHeight = contentBounds.height;
+
+      final sourceWidth = renderObject.size.width;
+      final sourceHeight = renderObject.size.height;
+      if (!sourceWidth.isFinite ||
+          !sourceHeight.isFinite ||
+          sourceWidth <= 0 ||
+          sourceHeight <= 0) {
+        throw StateError('Preview has invalid dimensions for PDF export');
+      }
+
+      final contentScale = contentWidth / sourceWidth;
+      final logicalPageHeight = contentHeight / contentScale;
+      if (!logicalPageHeight.isFinite || logicalPageHeight <= 1) {
+        throw StateError('Failed to calculate PDF page height from preview');
+      }
+
+      final pageCount =
+          (sourceHeight / logicalPageHeight).ceil().clamp(1, 9999);
+      final devicePixelRatio =
+          ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+      final slicePixelRatio = math.min(
+        _resolvePreviewSlicePixelRatio(
+          logicalWidth: sourceWidth,
+          logicalHeight: logicalPageHeight,
+          devicePixelRatio: devicePixelRatio,
+        ),
+        _resolvePreviewSlicePixelRatioCap(pageCount: pageCount),
+      );
+
+      final document = PdfDocument();
+      document.pageSettings.size = PdfPageSize.a4;
+      document.pageSettings.setMargins(0);
+
+      var logicalOffset = 0.0;
+      while (logicalOffset < sourceHeight - 0.5) {
+        final logicalHeight = math.min(
+          logicalPageHeight,
+          sourceHeight - logicalOffset,
+        );
+        if (logicalHeight <= 0) {
+          break;
+        }
+
+        final sliceImage = await renderLayer.toImage(
+          Rect.fromLTWH(0, logicalOffset, sourceWidth, logicalHeight),
+          pixelRatio: slicePixelRatio,
+        );
+        final sliceBytes =
+            await sliceImage.toByteData(format: ui.ImageByteFormat.png);
+        sliceImage.dispose();
+        if (sliceBytes == null) {
+          throw StateError('Failed to encode preview slice for PDF export');
+        }
+
+        final bitmap = PdfBitmap(sliceBytes.buffer.asUint8List());
+        final drawHeight = logicalHeight * contentScale;
+
+        final page = document.pages.add();
+        page.graphics.drawImage(
+          bitmap,
+          Rect.fromLTWH(
+            contentBounds.left,
+            contentBounds.top,
+            contentBounds.width,
+            drawHeight,
+          ),
+        );
+
+        logicalOffset += logicalHeight;
+        await Future<void>.delayed(Duration.zero);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+
+      final bytes = await document.save();
+      document.dispose();
+      return Uint8List.fromList(bytes);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportRenderMode = previousRenderMode;
+          if (switchedPane) {
+            _compactPane = ChatMarkdownCompactPane.editor;
+          }
+        });
+        if (switchedPane) {
+          _editorFocusNode.requestFocus();
+        }
+      }
+    }
+  }
+
+  Future<Uint8List> _buildPdfWithVectorRenderer() {
     final normalized = sanitizeChatMarkdown(_controller.text);
     final blocks = _parseMarkdownBlocks(normalized);
     final emptyFallback = context.t.chat.markdownEditor.emptyPreview;
     final previewTheme =
         resolveChatMarkdownTheme(_themePreset, Theme.of(context));
-    final latexBitmapCache = await _buildPdfLatexBitmapCache(
-      blocks: blocks,
-      previewTheme: previewTheme,
-    );
-    final renderer = _PdfMarkdownRenderer(
-      theme: previewTheme,
-      latexBitmapCache: latexBitmapCache,
-    );
+    final renderer = _PdfMarkdownRenderer(theme: previewTheme);
     return renderer.render(
       blocks: blocks,
       emptyFallback: emptyFallback,
     );
   }
 
-  Future<Map<String, Uint8List>> _buildPdfLatexBitmapCache({
-    required List<_PdfMarkdownBlock> blocks,
-    required ChatMarkdownPreviewTheme previewTheme,
-  }) async {
-    final expressions = <String>{};
-    for (final block in blocks) {
-      if (block.type != _PdfMarkdownBlockType.latex) {
-        continue;
-      }
+  double _resolvePreviewSlicePixelRatio({
+    required double logicalWidth,
+    required double logicalHeight,
+    required double devicePixelRatio,
+  }) {
+    const maxLayerDimensionPx = 14000.0;
 
-      final expression = block.text.trim();
-      if (expression.isEmpty) {
-        continue;
-      }
-      expressions.add(expression);
+    final preferred = resolveMarkdownPreviewExportPixelRatio(
+      logicalWidth: logicalWidth,
+      logicalHeight: logicalHeight,
+      devicePixelRatio: devicePixelRatio,
+    );
+    final longestDimension = math.max(logicalWidth, logicalHeight);
+    if (!longestDimension.isFinite || longestDimension <= 0) {
+      return preferred;
     }
 
-    if (expressions.isEmpty) {
-      return const <String, Uint8List>{};
-    }
-
-    final cache = <String, Uint8List>{};
-    for (final expression in expressions) {
-      final bytes = await _captureLatexFormulaBitmap(
-        expression: expression,
-        previewTheme: previewTheme,
-      );
-      if (bytes != null && bytes.isNotEmpty) {
-        cache[expression] = bytes;
-      }
-      await Future<void>.delayed(Duration.zero);
-    }
-
-    return cache;
+    final safeRatio = maxLayerDimensionPx / longestDimension;
+    final bounded = math.min(preferred, safeRatio);
+    return bounded.clamp(1.0, 8.0);
   }
 
-  Future<Uint8List?> _captureLatexFormulaBitmap({
-    required String expression,
-    required ChatMarkdownPreviewTheme previewTheme,
-  }) async {
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    if (overlay == null) {
-      return null;
+  double _resolvePreviewSlicePixelRatioCap({required int pageCount}) {
+    if (pageCount >= 48) {
+      return 2.2;
     }
-
-    final viewportWidth = MediaQuery.sizeOf(context).width;
-    final captureWidth = viewportWidth.isFinite
-        ? viewportWidth
-            .clamp(_kPdfLatexCaptureMinWidth, _kPdfLatexCaptureMaxWidth)
-            .toDouble()
-        : 900.0;
-    final boundaryKey = GlobalKey();
-
-    final baseTextStyle = Theme.of(context).textTheme.bodyMedium ??
-        const TextStyle(fontSize: 14, height: 1.5);
-    final latexStyle = baseTextStyle.copyWith(
-      color: previewTheme.textColor,
-      fontSize: 14,
-      height: 1.35,
-    );
-
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (overlayContext) {
-        return Positioned(
-          top: 0,
-          left: 0,
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: 0.001,
-              child: Material(
-                type: MaterialType.transparency,
-                child: RepaintBoundary(
-                  key: boundaryKey,
-                  child: SizedBox(
-                    width: captureWidth,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: previewTheme.codeBlockBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: previewTheme.borderColor.withOpacity(0.92),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Math.tex(
-                            expression,
-                            mathStyle: MathStyle.display,
-                            textStyle: latexStyle,
-                            onErrorFallback: (_) {
-                              return Text(
-                                expression,
-                                style: latexStyle.copyWith(
-                                  color: previewTheme.mutedTextColor,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    overlay.insert(entry);
-
-    try {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
-      await WidgetsBinding.instance.endOfFrame;
-
-      final renderObject = boundaryKey.currentContext?.findRenderObject();
-      if (renderObject is! RenderRepaintBoundary) {
-        return null;
-      }
-
-      final image = await renderObject.toImage(
-        pixelRatio: _kPdfLatexCapturePixelRatio,
-      );
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      if (data == null) {
-        return null;
-      }
-
-      return data.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    } finally {
-      entry.remove();
+    if (pageCount >= 30) {
+      return 2.7;
     }
+    if (pageCount >= 16) {
+      return 3.2;
+    }
+    return 8.0;
   }
 }
