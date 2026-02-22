@@ -227,174 +227,19 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   }
 
   Future<Uint8List> _buildPdfBytes() async {
-    try {
-      return await _buildPdfFromPreviewCapture();
-    } catch (_) {
-      return _buildPdfWithVectorRenderer();
-    }
-  }
-
-  Future<Uint8List> _buildPdfFromPreviewCapture() async {
-    final isWideLayout = _isWideLayout(context);
-    final switchedPane =
-        !isWideLayout && _compactPane == ChatMarkdownCompactPane.editor;
-    final previousRenderMode = _exportRenderMode;
-
-    setState(() {
-      _exportRenderMode = true;
-      if (switchedPane) {
-        _compactPane = ChatMarkdownCompactPane.preview;
-      }
-    });
-    await Future<void>.delayed(const Duration(milliseconds: 220));
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-
-    try {
-      if (_previewScrollController.hasClients) {
-        _previewScrollController.jumpTo(0);
-      }
-
-      final renderObject = await _waitForPreviewRenderBoundary();
-      // ignore: invalid_use_of_protected_member
-      final renderLayer = renderObject.layer;
-      if (renderLayer is! OffsetLayer) {
-        throw StateError('Preview render layer is not ready for PDF export');
-      }
-
-      const pageSize = PdfPageSize.a4;
-      final contentBounds = buildPdfPreviewContentRect(
-        Size(pageSize.width, pageSize.height),
+    final markdown = _controller.text;
+    if (isNativeMarkdownPdfExportSupported()) {
+      final previewTheme =
+          resolveChatMarkdownTheme(_themePreset, Theme.of(context));
+      final html = await buildChatMarkdownPdfHtmlDocument(
+        markdown: markdown,
+        theme: previewTheme,
+        emptyFallback: context.t.chat.markdownEditor.emptyPreview,
       );
-      final contentWidth = contentBounds.width;
-      final contentHeight = contentBounds.height;
-
-      final sourceLogicalWidth = renderObject.size.width;
-      final sourceLogicalHeight = renderObject.size.height;
-      if (!sourceLogicalWidth.isFinite ||
-          !sourceLogicalHeight.isFinite ||
-          sourceLogicalWidth <= 0 ||
-          sourceLogicalHeight <= 0) {
-        throw StateError('Preview has invalid dimensions for PDF export');
-      }
-
-      final paginationRatio =
-          _resolvePreviewPaginationPixelRatio(renderObject.size);
-      final paginationImage =
-          await renderObject.toImage(pixelRatio: paginationRatio);
-      final paginationBytes =
-          await paginationImage.toByteData(format: ui.ImageByteFormat.png);
-      paginationImage.dispose();
-      if (paginationBytes == null) {
-        throw StateError('Failed to build pagination map for PDF export');
-      }
-
-      final pageOffsets = await computeMarkdownPreviewPdfPageOffsetsAsync(
-        pngBytes: paginationBytes.buffer.asUint8List(),
-        sourceWidth: sourceLogicalWidth * paginationRatio,
-        sourceHeight: sourceLogicalHeight * paginationRatio,
-        contentWidth: contentWidth,
-        contentHeight: contentHeight,
-      );
-
-      final pageSlices = buildMarkdownPreviewPdfSlices(
-        pageOffsets: pageOffsets,
-        sourceLogicalWidth: sourceLogicalWidth,
-        sourceLogicalHeight: sourceLogicalHeight,
-        contentWidth: contentWidth,
-        contentHeight: contentHeight,
-      );
-      if (pageSlices.isEmpty) {
-        throw StateError('Failed to build preview slices for PDF export');
-      }
-
-      final devicePixelRatio =
-          ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
-      final slicePixelRatioCap =
-          _resolvePreviewSlicePixelRatioCap(pageCount: pageSlices.length);
-
-      final document = PdfDocument();
-      document.pageSettings.size = PdfPageSize.a4;
-      document.pageSettings.setMargins(0);
-
-      for (var index = 0; index < pageSlices.length; index += 1) {
-        final slice = pageSlices[index];
-        if (slice.logicalHeight <= 0.5 || slice.drawHeight <= 0.5) {
-          continue;
-        }
-
-        final slicePixelRatio = math.min(
-          _resolvePreviewSlicePixelRatio(
-            logicalWidth: sourceLogicalWidth,
-            logicalHeight: slice.logicalHeight,
-            devicePixelRatio: devicePixelRatio,
-          ),
-          slicePixelRatioCap,
-        );
-
-        final sliceImage = await renderLayer.toImage(
-          Rect.fromLTWH(
-            0,
-            slice.logicalOffset,
-            sourceLogicalWidth,
-            slice.logicalHeight,
-          ),
-          pixelRatio: slicePixelRatio,
-        );
-        final sliceBytes =
-            await sliceImage.toByteData(format: ui.ImageByteFormat.png);
-        sliceImage.dispose();
-        if (sliceBytes == null) {
-          throw StateError('Failed to encode preview slice for PDF export');
-        }
-
-        final bitmap = PdfBitmap(sliceBytes.buffer.asUint8List());
-        final drawLeft =
-            contentBounds.left + (contentBounds.width - slice.drawWidth) / 2;
-
-        final page = document.pages.add();
-        page.graphics.drawImage(
-          bitmap,
-          Rect.fromLTWH(
-            drawLeft,
-            contentBounds.top,
-            slice.drawWidth,
-            slice.drawHeight,
-          ),
-        );
-
-        await Future<void>.delayed(Duration.zero);
-        await WidgetsBinding.instance.endOfFrame;
-      }
-
-      final bytes = await document.save();
-      document.dispose();
-      return Uint8List.fromList(bytes);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _exportRenderMode = previousRenderMode;
-          if (switchedPane) {
-            _compactPane = ChatMarkdownCompactPane.editor;
-          }
-        });
-        if (switchedPane) {
-          _editorFocusNode.requestFocus();
-        }
-      }
-    }
-  }
-
-  double _resolvePreviewPaginationPixelRatio(Size logicalSize) {
-    const maxPaginationDimensionPx = 8600.0;
-
-    final longestDimension = math.max(logicalSize.width, logicalSize.height);
-    if (!longestDimension.isFinite || longestDimension <= 0) {
-      return 1.0;
+      return exportMarkdownHtmlToPdfBytes(html: html);
     }
 
-    final ratio = maxPaginationDimensionPx / longestDimension;
-    return ratio.clamp(0.2, 1.0);
+    return _buildPdfWithVectorRenderer();
   }
 
   Future<Uint8List> _buildPdfWithVectorRenderer() {
@@ -408,43 +253,5 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       blocks: blocks,
       emptyFallback: emptyFallback,
     );
-  }
-
-  double _resolvePreviewSlicePixelRatio({
-    required double logicalWidth,
-    required double logicalHeight,
-    required double devicePixelRatio,
-  }) {
-    const maxLayerDimensionPx = 12000.0;
-
-    final preferred = resolveMarkdownPreviewExportPixelRatio(
-      logicalWidth: logicalWidth,
-      logicalHeight: logicalHeight,
-      devicePixelRatio: devicePixelRatio,
-    );
-    final longestDimension = math.max(logicalWidth, logicalHeight);
-    if (!longestDimension.isFinite || longestDimension <= 0) {
-      return preferred;
-    }
-
-    final safeRatio = maxLayerDimensionPx / longestDimension;
-    final bounded = math.min(preferred, safeRatio);
-    return bounded.clamp(1.0, 8.0);
-  }
-
-  double _resolvePreviewSlicePixelRatioCap({required int pageCount}) {
-    if (pageCount >= 64) {
-      return 1.25;
-    }
-    if (pageCount >= 40) {
-      return 1.45;
-    }
-    if (pageCount >= 24) {
-      return 1.75;
-    }
-    if (pageCount >= 12) {
-      return 2.1;
-    }
-    return 3.2;
   }
 }

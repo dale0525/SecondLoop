@@ -42,11 +42,18 @@ class MainActivity : FlutterFragmentActivity() {
   private var audioTranscodeChannel: MethodChannel? = null
   private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
+  private var markdownPdfExportChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
   }
   private val nativeAudioTranscribeChannelHandler by lazy {
     NativeAudioTranscribeChannelHandler()
+  }
+  private val markdownPdfExportChannelHandler by lazy {
+    MarkdownPdfExportChannelHandler(
+      activity = this,
+      cacheDir = cacheDir,
+    )
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -209,6 +216,13 @@ class MainActivity : FlutterFragmentActivity() {
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/ocr").apply {
         setMethodCallHandler { call, result ->
           ocrAndPdfChannelHandler.handle(call, result)
+        }
+      }
+
+    markdownPdfExportChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/markdown_pdf_export").apply {
+        setMethodCallHandler { call, result ->
+          markdownPdfExportChannelHandler.handle(call, result)
         }
       }
   }
