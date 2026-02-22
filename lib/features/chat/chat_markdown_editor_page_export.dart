@@ -48,6 +48,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   Future<void> _exportFile(_MarkdownExportFormat format) async {
     if (_exporting) return;
     setState(() => _exporting = true);
+    await Future<void>.delayed(const Duration(milliseconds: 16));
 
     try {
       final bytes = switch (format) {
@@ -285,7 +286,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         throw StateError('Failed to build pagination map for PDF export');
       }
 
-      final pageOffsets = computeMarkdownPreviewPdfPageOffsets(
+      final pageOffsets = await computeMarkdownPreviewPdfPageOffsetsAsync(
         pngBytes: paginationBytes.buffer.asUint8List(),
         sourceWidth: renderObject.size.width * paginationRatio,
         sourceHeight: renderObject.size.height * paginationRatio,
@@ -343,6 +344,8 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
             drawHeight,
           ),
         );
+
+        await Future<void>.delayed(const Duration(milliseconds: 1));
       }
 
       final bytes = await document.save();

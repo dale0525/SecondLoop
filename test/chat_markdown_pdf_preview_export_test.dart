@@ -99,6 +99,67 @@ void main() {
     expect(offsets.length, greaterThan(1));
     expect(offsets[1], greaterThanOrEqualTo(248.0));
   });
+
+  test('Preview PDF pagination avoids splitting sparse matrix-style blocks',
+      () {
+    final image = img.Image(width: 180, height: 720);
+    _fill(image, r: 245, g: 245, b: 245);
+    _drawSparseMatrixLikeBlock(image, top: 250, bottom: 520);
+
+    final offsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: img.encodePng(image),
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 320,
+    );
+
+    expect(offsets.length, greaterThan(1));
+    expect(offsets[1], isNot(inInclusiveRange(250.0, 520.0)));
+  });
+
+  test('Preview PDF pagination avoids splitting image-like content blocks', () {
+    final image = img.Image(width: 200, height: 740);
+    _fill(image, r: 245, g: 245, b: 245);
+    _drawImageLikeBlock(image, top: 180, bottom: 420);
+
+    final offsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: img.encodePng(image),
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 260,
+    );
+
+    expect(offsets.length, greaterThan(1));
+    expect(offsets[1], isNot(inInclusiveRange(180.0, 420.0)));
+  });
+
+  test('Async pagination computation keeps parity with sync result', () async {
+    final image = img.Image(width: 140, height: 440);
+    _fill(image, r: 245, g: 245, b: 245);
+    _drawBlock(image, top: 140, bottom: 260);
+
+    final png = img.encodePng(image);
+
+    final syncOffsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: png,
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 220,
+    );
+
+    final asyncOffsets = await computeMarkdownPreviewPdfPageOffsetsAsync(
+      pngBytes: png,
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 220,
+    );
+
+    expect(asyncOffsets, syncOffsets);
+  });
 }
 
 void _fill(
@@ -122,6 +183,50 @@ void _drawBlock(
   for (var y = top; y < bottom; y += 1) {
     for (var x = 10; x < image.width - 10; x += 1) {
       image.setPixelRgb(x, y, 20, 20, 20);
+    }
+  }
+}
+
+void _drawSparseMatrixLikeBlock(
+  img.Image image, {
+  required int top,
+  required int bottom,
+}) {
+  for (var y = top; y < bottom; y += 1) {
+    if ((y - top) % 14 > 2) {
+      continue;
+    }
+
+    for (var x = 18; x < image.width - 18; x += 1) {
+      image.setPixelRgb(x, y, 24, 24, 24);
+    }
+
+    image.setPixelRgb(10, y, 24, 24, 24);
+    image.setPixelRgb(image.width - 11, y, 24, 24, 24);
+  }
+}
+
+void _drawImageLikeBlock(
+  img.Image image, {
+  required int top,
+  required int bottom,
+}) {
+  for (var y = top; y < bottom; y += 1) {
+    for (var x = 8; x < image.width - 8; x += 1) {
+      final value = ((x * 37 + y * 17) % 160) + 60;
+      image.setPixelRgb(
+        x,
+        y,
+        value,
+        (value + 40) % 255,
+        (value + 80) % 255,
+      );
+    }
+
+    if ((y - top) % 29 == 0) {
+      for (var x = 8; x < image.width - 8; x += 1) {
+        image.setPixelRgb(x, y, 245, 245, 245);
+      }
     }
   }
 }
