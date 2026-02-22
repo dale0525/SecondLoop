@@ -82,6 +82,11 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     webView.navigationDelegate = self
     self.webView = webView
 
+    if let hostView = MarkdownPdfExportTask.resolveHostView() {
+      webView.alphaValue = 0.01
+      hostView.addSubview(webView)
+    }
+
     let timeout = DispatchWorkItem { [weak self] in
       self?.complete(
         failure: FlutterError(
@@ -208,32 +213,17 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       contentHeight = max(contentHeight, kMarkdownPdfPageHeight)
       webView.frame = NSRect(x: 0, y: 0, width: kMarkdownPdfPageWidth, height: contentHeight)
 
-      if #available(macOS 11.0, *) {
-        let config = WKPDFConfiguration()
-        config.rect = CGRect(x: 0, y: 0, width: kMarkdownPdfPageWidth, height: contentHeight)
-
-        webView.createPDF(configuration: config) { [weak self] result in
-          guard let self = self else { return }
-
-          switch result {
-          case .success(let data):
-            if !data.isEmpty {
-              self.complete(success: data)
-              return
-            }
-            self.exportPdfViaPrintOperation(webView: webView)
-          case .failure:
-            self.exportPdfViaPrintOperation(webView: webView)
-          }
-        }
-        return
-      }
-
-      self.exportPdfViaPrintOperation(webView: webView)
+      self.exportPdfViaPrintOperation(
+        webView: webView,
+        contentHeight: contentHeight
+      )
     }
   }
 
-  private func exportPdfViaPrintOperation(webView: WKWebView) {
+  private func exportPdfViaPrintOperation(
+    webView: WKWebView,
+    contentHeight: CGFloat
+  ) {
     let outputUrl = URL(fileURLWithPath: NSTemporaryDirectory())
       .appendingPathComponent("secondloop_markdown_\(UUID().uuidString).pdf")
 
@@ -259,27 +249,62 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     operation.showsPrintPanel = false
     operation.showsProgressPanel = false
-    _ = operation.run()
+    let didRun = operation.run()
 
-    guard let data = try? Data(contentsOf: outputUrl), !data.isEmpty else {
-      let fallback = webView.dataWithPDF(inside: webView.bounds)
-      if fallback.isEmpty {
-        complete(
-          failure: FlutterError(
-            code: "markdown_pdf_export_io_failed",
-            message: "Failed to generate PDF bytes",
-            details: nil
-          )
-        )
-        return
-      }
-
-      complete(success: fallback)
+    if didRun,
+       let data = try? Data(contentsOf: outputUrl),
+       !data.isEmpty {
+      try? FileManager.default.removeItem(at: outputUrl)
+      complete(success: data)
       return
     }
 
     try? FileManager.default.removeItem(at: outputUrl)
-    complete(success: data)
+
+    if #available(macOS 11.0, *) {
+      let config = WKPDFConfiguration()
+      config.rect = CGRect(
+        x: 0,
+        y: 0,
+        width: kMarkdownPdfPageWidth,
+        height: max(contentHeight, kMarkdownPdfPageHeight)
+      )
+
+      webView.createPDF(configuration: config) { [weak self] result in
+        guard let self = self else { return }
+
+        switch result {
+        case .success(let data):
+          if !data.isEmpty {
+            self.complete(success: data)
+            return
+          }
+        case .failure:
+          break
+        }
+
+        self.completeWithDataWithPdfFallback(webView: webView)
+      }
+      return
+    }
+
+    completeWithDataWithPdfFallback(webView: webView)
+  }
+
+  private func completeWithDataWithPdfFallback(webView: WKWebView) {
+    let fallback = webView.dataWithPDF(inside: webView.bounds)
+    if fallback.isEmpty {
+      complete(
+        failure: FlutterError(
+          code: "markdown_pdf_export_io_failed",
+          message: "Failed to generate PDF bytes",
+          details: nil
+        )
+      )
+      return
+    }
+
+    complete(success: fallback)
   }
 
   private func complete(success data: Data) {
@@ -300,11 +325,25 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     finish()
   }
 
+  private static func resolveHostView() -> NSView? {
+    if let keyWindow = NSApplication.shared.windows.first(where: { $0.isKeyWindow }),
+       let contentView = keyWindow.contentView {
+      return contentView
+    }
+
+    if let mainContentView = NSApplication.shared.mainWindow?.contentView {
+      return mainContentView
+    }
+
+    return NSApplication.shared.windows.first?.contentView
+  }
+
   private func finish() {
     timeoutWorkItem?.cancel()
     timeoutWorkItem = nil
 
     webView?.navigationDelegate = nil
+    webView?.removeFromSuperview()
     webView = nil
 
     result = nil
