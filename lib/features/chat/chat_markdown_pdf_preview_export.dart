@@ -9,16 +9,16 @@ const double _kMaxPreviewRasterDimension = 24000;
 const int _kPaginationSearchWindowRows = 220;
 const int _kPaginationWhitespaceBandRadius = 3;
 const double _kPaginationMinFillRatio = 0.72;
-const double _kPaginationMaxStretchRatio = 1.35;
-const double _kPaginationWhitespaceRowScore = 12;
-const double _kPaginationWhitespaceBandScore = 18;
+const double _kPaginationMaxStretchRatio = 1.12;
+const double _kPaginationWhitespaceRowScore = 8;
+const double _kPaginationWhitespaceBandScore = 13;
 const double _kPaginationProtectedMinFillRatio = 0.55;
-const double _kPaginationProtectedMaxStretchRatio = 1.95;
+const double _kPaginationProtectedMaxStretchRatio = 1.3;
 const double _kProtectedRowCoverageDiffThreshold = 10;
-const double _kProtectedRowCoverageThreshold = 0.2;
-const double _kProtectedRowMaxInkRunCoverageThreshold = 0.11;
-const int _kProtectedRangeMaxGapRows = 12;
-const int _kProtectedRangeMinHeightRows = 46;
+const double _kProtectedRowCoverageThreshold = 0.16;
+const double _kProtectedRowMaxInkRunCoverageThreshold = 0.08;
+const int _kProtectedRangeMaxGapRows = 20;
+const int _kProtectedRangeMinHeightRows = 30;
 const int _kProtectedRangePaddingRows = 2;
 
 typedef MarkdownPreviewPdfSlice = ({
@@ -337,34 +337,36 @@ List<MarkdownPreviewPdfSlice> buildMarkdownPreviewPdfSlices({
       continue;
     }
 
-    final logicalOffset = startContentOffset * logicalPerContentPoint;
-    final availableLogicalHeight = sourceLogicalHeight - logicalOffset;
-    if (!logicalOffset.isFinite || availableLogicalHeight <= offsetEpsilon) {
-      continue;
-    }
+    var cursorContentOffset = startContentOffset;
+    var remainingContentHeight = contentSliceHeight;
 
-    final logicalHeight = math.min(
-      availableLogicalHeight,
-      contentSliceHeight * logicalPerContentPoint,
-    );
-    if (!logicalHeight.isFinite || logicalHeight <= offsetEpsilon) {
-      continue;
-    }
+    while (remainingContentHeight > offsetEpsilon) {
+      final chunkContentHeight =
+          math.min(contentHeight, remainingContentHeight);
+      final logicalOffset = cursorContentOffset * logicalPerContentPoint;
+      final availableLogicalHeight = sourceLogicalHeight - logicalOffset;
+      if (!logicalOffset.isFinite || availableLogicalHeight <= offsetEpsilon) {
+        break;
+      }
 
-    var drawWidth = contentWidth;
-    var drawHeight = contentSliceHeight;
-    if (drawHeight > contentHeight) {
-      final shrinkRatio = contentHeight / drawHeight;
-      drawWidth *= shrinkRatio;
-      drawHeight = contentHeight;
-    }
+      final logicalHeight = math.min(
+        availableLogicalHeight,
+        chunkContentHeight * logicalPerContentPoint,
+      );
+      if (!logicalHeight.isFinite || logicalHeight <= offsetEpsilon) {
+        break;
+      }
 
-    slices.add((
-      logicalOffset: logicalOffset,
-      logicalHeight: logicalHeight,
-      drawWidth: drawWidth,
-      drawHeight: drawHeight,
-    ));
+      slices.add((
+        logicalOffset: logicalOffset,
+        logicalHeight: logicalHeight,
+        drawWidth: contentWidth,
+        drawHeight: chunkContentHeight,
+      ));
+
+      cursorContentOffset += chunkContentHeight;
+      remainingContentHeight -= chunkContentHeight;
+    }
   }
 
   return slices;

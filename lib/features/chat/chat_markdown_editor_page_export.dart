@@ -363,9 +363,8 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
           ),
         );
 
-        if (index.isOdd) {
-          await Future<void>.delayed(Duration.zero);
-        }
+        await Future<void>.delayed(Duration.zero);
+        await WidgetsBinding.instance.endOfFrame;
       }
 
       final bytes = await document.save();
@@ -387,7 +386,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   }
 
   double _resolvePreviewPaginationPixelRatio(Size logicalSize) {
-    const maxPaginationDimensionPx = 6400.0;
+    const maxPaginationDimensionPx = 8600.0;
 
     final longestDimension = math.max(logicalSize.width, logicalSize.height);
     if (!longestDimension.isFinite || longestDimension <= 0) {
@@ -395,7 +394,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     }
 
     final ratio = maxPaginationDimensionPx / longestDimension;
-    return ratio.clamp(0.16, 1.0);
+    return ratio.clamp(0.2, 1.0);
   }
 
   Future<Uint8List> _buildPdfWithVectorRenderer() {
@@ -416,7 +415,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     required double logicalHeight,
     required double devicePixelRatio,
   }) {
-    const maxLayerDimensionPx = 14000.0;
+    const maxLayerDimensionPx = 12000.0;
 
     final preferred = resolveMarkdownPreviewExportPixelRatio(
       logicalWidth: logicalWidth,
@@ -435,17 +434,17 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
 
   double _resolvePreviewSlicePixelRatioCap({required int pageCount}) {
     if (pageCount >= 64) {
-      return 1.55;
+      return 1.25;
     }
     if (pageCount >= 40) {
-      return 1.85;
+      return 1.45;
     }
     if (pageCount >= 24) {
-      return 2.15;
+      return 1.75;
     }
     if (pageCount >= 12) {
-      return 2.6;
+      return 2.1;
     }
-    return 4.8;
+    return 3.2;
   }
 }

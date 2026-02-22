@@ -77,7 +77,7 @@ $$
       contentHeight: 100,
     );
 
-    expect(slices, hasLength(3));
+    expect(slices, hasLength(6));
     _expectSliceCoverage(
       slices,
       sourceLogicalWidth: 100,
@@ -87,7 +87,7 @@ $$
   });
 
   test(
-      'buildMarkdownPreviewPdfSlices scales oversized slices instead of dropping content',
+      'buildMarkdownPreviewPdfSlices splits oversized slices into full-width pages',
       () {
     final slices = buildMarkdownPreviewPdfSlices(
       pageOffsets: const <double>[0, 160, 310],
@@ -97,9 +97,12 @@ $$
       contentHeight: 100,
     );
 
-    expect(slices, isNotEmpty);
-    expect(slices.first.drawHeight, 100);
-    expect(slices.first.drawWidth, lessThan(100));
+    expect(slices, hasLength(6));
+    for (final slice in slices) {
+      expect(slice.drawWidth, 100);
+      expect(slice.drawHeight, lessThanOrEqualTo(100));
+    }
+
     _expectSliceCoverage(
       slices,
       sourceLogicalWidth: 100,
