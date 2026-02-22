@@ -122,6 +122,35 @@ bool shouldKeepScreenAwakeDuringRecording({required bool isWeb}) {
   return !isWeb;
 }
 
+String buildAudioRecordingStatusHint({
+  required bool interruptedBySystem,
+  required bool recoveringInterruption,
+  required bool paused,
+  required String defaultHint,
+  required String pausedHint,
+  required String interruptionHint,
+  required String recoveringHint,
+}) {
+  if (interruptedBySystem) {
+    return recoveringInterruption ? recoveringHint : interruptionHint;
+  }
+  if (paused) {
+    return pausedHint;
+  }
+  return defaultHint;
+}
+
+bool shouldDisableAudioPauseResumeButton({
+  required bool togglingPause,
+  required bool recoveringInterruption,
+  required bool interruptedBySystem,
+  required bool pausedByUser,
+}) {
+  if (togglingPause || recoveringInterruption) return true;
+  if (interruptedBySystem && !pausedByUser) return true;
+  return false;
+}
+
 extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
   AudioRecorder get _audioRecorder =>
       _audioRecorderInstance ??= AudioRecorder();
@@ -540,22 +569,24 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
             final pauseResumeLabel = paused
                 ? _localizedByLanguage(zh: '继续', en: 'Resume')
                 : _localizedByLanguage(zh: '暂停', en: 'Pause');
-            final statusHint = interruptedBySystem
-                ? recoveringInterruption
-                    ? _localizedByLanguage(
-                        zh: '检测到来电中断，正在自动恢复录音……',
-                        en: 'Detected an interruption. Recovering recording automatically...',
-                      )
-                    : _localizedByLanguage(
-                        zh: '检测到来电中断，通话结束后将自动恢复并继续录音。',
-                        en: 'Interruption detected. Recording will resume automatically when possible.',
-                      )
-                : paused
-                    ? _localizedByLanguage(
-                        zh: '录音已暂停，点击继续后可接着录。',
-                        en: 'Recording paused. Tap Resume when ready.',
-                      )
-                    : context.t.chat.recordingHint;
+            final statusHint = buildAudioRecordingStatusHint(
+              interruptedBySystem: interruptedBySystem,
+              recoveringInterruption: recoveringInterruption,
+              paused: paused,
+              defaultHint: context.t.chat.recordingHint,
+              pausedHint: _localizedByLanguage(
+                zh: '录音已暂停，点击继续后可接着录。',
+                en: 'Recording paused. Tap Resume when ready.',
+              ),
+              interruptionHint: _localizedByLanguage(
+                zh: '检测到来电中断，通话结束后将自动恢复并继续录音。',
+                en: 'Interruption detected. Recording will resume automatically when possible.',
+              ),
+              recoveringHint: _localizedByLanguage(
+                zh: '检测到来电中断，正在自动恢复录音……',
+                en: 'Detected an interruption. Recovering recording automatically...',
+              ),
+            );
             final manualStopHint = _localizedByLanguage(
               zh: '录音不会自动停止，完成后请点击停止发送。',
               en: 'Recording does not auto-stop. Tap Stop when you are done.',
@@ -618,9 +649,12 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
                         Expanded(
                           child: OutlinedButton.icon(
                             key: const ValueKey('chat_recording_pause_resume'),
-                            onPressed: togglingPause ||
-                                    recoveringInterruption ||
-                                    interruptedBySystem && !pausedByUser
+                            onPressed: shouldDisableAudioPauseResumeButton(
+                              togglingPause: togglingPause,
+                              recoveringInterruption: recoveringInterruption,
+                              interruptedBySystem: interruptedBySystem,
+                              pausedByUser: pausedByUser,
+                            )
                                 ? null
                                 : () => unawaited(
                                       togglePause(

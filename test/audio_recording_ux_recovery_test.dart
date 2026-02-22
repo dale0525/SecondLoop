@@ -104,6 +104,109 @@ void main() {
     });
   });
 
+  group('audio interruption ui helpers', () {
+    test('status hint prioritizes interruption recovery states', () {
+      const defaultHint = 'default';
+      const pausedHint = 'paused';
+      const interruptionHint = 'interruption';
+      const recoveringHint = 'recovering';
+
+      expect(
+        buildAudioRecordingStatusHint(
+          interruptedBySystem: true,
+          recoveringInterruption: true,
+          paused: true,
+          defaultHint: defaultHint,
+          pausedHint: pausedHint,
+          interruptionHint: interruptionHint,
+          recoveringHint: recoveringHint,
+        ),
+        recoveringHint,
+      );
+
+      expect(
+        buildAudioRecordingStatusHint(
+          interruptedBySystem: true,
+          recoveringInterruption: false,
+          paused: false,
+          defaultHint: defaultHint,
+          pausedHint: pausedHint,
+          interruptionHint: interruptionHint,
+          recoveringHint: recoveringHint,
+        ),
+        interruptionHint,
+      );
+
+      expect(
+        buildAudioRecordingStatusHint(
+          interruptedBySystem: false,
+          recoveringInterruption: false,
+          paused: true,
+          defaultHint: defaultHint,
+          pausedHint: pausedHint,
+          interruptionHint: interruptionHint,
+          recoveringHint: recoveringHint,
+        ),
+        pausedHint,
+      );
+
+      expect(
+        buildAudioRecordingStatusHint(
+          interruptedBySystem: false,
+          recoveringInterruption: false,
+          paused: false,
+          defaultHint: defaultHint,
+          pausedHint: pausedHint,
+          interruptionHint: interruptionHint,
+          recoveringHint: recoveringHint,
+        ),
+        defaultHint,
+      );
+    });
+
+    test('pause resume button disabled during recovery and system pause', () {
+      expect(
+        shouldDisableAudioPauseResumeButton(
+          togglingPause: true,
+          recoveringInterruption: false,
+          interruptedBySystem: false,
+          pausedByUser: false,
+        ),
+        isTrue,
+      );
+
+      expect(
+        shouldDisableAudioPauseResumeButton(
+          togglingPause: false,
+          recoveringInterruption: true,
+          interruptedBySystem: false,
+          pausedByUser: false,
+        ),
+        isTrue,
+      );
+
+      expect(
+        shouldDisableAudioPauseResumeButton(
+          togglingPause: false,
+          recoveringInterruption: false,
+          interruptedBySystem: true,
+          pausedByUser: false,
+        ),
+        isTrue,
+      );
+
+      expect(
+        shouldDisableAudioPauseResumeButton(
+          togglingPause: false,
+          recoveringInterruption: false,
+          interruptedBySystem: true,
+          pausedByUser: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('wav stitching helpers', () {
     test('buildWavFromPcm16Mono16k and extractPcm16Mono16kFromWav roundtrip',
         () {
