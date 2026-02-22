@@ -120,6 +120,55 @@ void main() {
   });
 
   test(
+      'resolveVideoManifestTranscriptSeed skips defer when linked sha points to a video fallback',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{},
+      audioSha256: 'sha-video-proxy',
+      audioMimeType: 'video/mp4',
+      linkedAudioPayload: null,
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, isEmpty);
+    expect(result.transcriptExcerpt, isEmpty);
+  });
+
+  test(
+      'resolveVideoManifestTranscriptSeed skips defer when linked sha equals manifest video sha',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{
+        'video_sha256': 'sha-video-proxy',
+      },
+      audioSha256: 'sha-video-proxy',
+      linkedAudioPayload: null,
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, isEmpty);
+    expect(result.transcriptExcerpt, isEmpty);
+  });
+
+  test(
+      'resolveVideoManifestTranscriptSeed uses linked transcript even when linked sha equals manifest video sha',
+      () {
+    final result = resolveVideoManifestTranscriptSeed(
+      runningPayload: const <String, Object?>{
+        'video_sha256': 'sha-video-proxy',
+      },
+      audioSha256: 'sha-video-proxy',
+      linkedAudioPayload: const <String, Object?>{
+        'transcript_full': 'Linked transcript full body',
+      },
+    );
+
+    expect(result.shouldDeferForLinkedAudio, isFalse);
+    expect(result.transcriptFull, 'Linked transcript full body');
+    expect(result.transcriptExcerpt, 'Linked transcript full body');
+  });
+
+  test(
       'resolveVideoManifestTranscriptSeed defers when linked audio transcript is missing',
       () {
     final result = resolveVideoManifestTranscriptSeed(

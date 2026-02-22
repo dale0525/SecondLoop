@@ -10,7 +10,7 @@ import 'package:secondloop/features/share/share_ingest.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  test('ShareIngest drains queued text into Main Stream', () async {
+  test('ShareIngest drains queued text into Loop Home', () async {
     SharedPreferences.setMockInitialValues({});
 
     final backend = _ShareBackend();
@@ -168,10 +168,10 @@ final class _ShareBackend extends AppBackend implements AttachmentsBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       const Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

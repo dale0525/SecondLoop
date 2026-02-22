@@ -51,6 +51,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   final GlobalKey _askAiSectionAnchorKey = GlobalKey();
   final GlobalKey _embeddingsSectionAnchorKey = GlobalKey();
   final GlobalKey _mediaSectionAnchorKey = GlobalKey();
+  final GlobalKey _mediaLocalCapabilityEntryAnchorKey = GlobalKey();
 
   bool _didRunInitialFocus = false;
   AiSettingsSection? _highlightedSection;
@@ -110,6 +111,42 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       AiSettingsSection.embeddings => _embeddingsSectionAnchorKey,
       AiSettingsSection.mediaUnderstanding => _mediaSectionAnchorKey,
     };
+  }
+
+  bool _shouldFocusMediaLocalCapabilityEntry(AiSettingsSection section) {
+    if (section != AiSettingsSection.mediaUnderstanding) return false;
+    if (!widget.focusMediaLocalCapabilityCard) return false;
+    return AppBackendScope.maybeOf(context) != null &&
+        SessionScope.maybeOf(context) != null;
+  }
+
+  GlobalKey _focusAnchorKeyOf(AiSettingsSection section) {
+    if (_shouldFocusMediaLocalCapabilityEntry(section)) {
+      return _mediaLocalCapabilityEntryAnchorKey;
+    }
+    return _sectionAnchorKeyOf(section);
+  }
+
+  Future<void> _nudgeTowardsMediaLocalCapabilityEntry({
+    required bool disableAnimations,
+  }) async {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final nextOffset = (position.pixels + position.viewportDimension * 0.9)
+        .clamp(0.0, position.maxScrollExtent)
+        .toDouble();
+    if ((nextOffset - position.pixels).abs() < 0.5) return;
+
+    if (disableAnimations) {
+      position.jumpTo(nextOffset);
+      return;
+    }
+
+    await _scrollController.animateTo(
+      nextOffset,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<(bool cloudAvailable, String gatewayBaseUrl, String idToken)>
@@ -583,18 +620,38 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   Future<void> _scrollToAndHighlight(AiSettingsSection section) async {
     if (!mounted) return;
 
-    final targetContext = _sectionAnchorKeyOf(section).currentContext;
+    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ??
+        WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
+            .disableAnimations;
+    final focusMediaLocalCapability =
+        _shouldFocusMediaLocalCapabilityEntry(section);
+
+    final targetContext = _focusAnchorKeyOf(section).currentContext;
     if (targetContext == null) {
+      if (focusMediaLocalCapability) {
+        final fallbackContext = _sectionAnchorKeyOf(section).currentContext;
+        if (fallbackContext != null) {
+          await Scrollable.ensureVisible(
+            fallbackContext,
+            alignment: 0.08,
+            duration: disableAnimations
+                ? Duration.zero
+                : const Duration(milliseconds: 380),
+            curve: Curves.easeOutCubic,
+          );
+        }
+        if (!mounted) return;
+        await _nudgeTowardsMediaLocalCapabilityEntry(
+          disableAnimations: disableAnimations,
+        );
+      }
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         unawaited(_scrollToAndHighlight(section));
       });
       return;
     }
-
-    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ??
-        WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
-            .disableAnimations;
 
     await Scrollable.ensureVisible(
       targetContext,

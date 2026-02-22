@@ -504,9 +504,12 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
           if (AppBackendScope.maybeOf(context) != null &&
               SessionScope.maybeOf(context) != null) ...[
             const SizedBox(height: 12),
-            MediaAnnotationSettingsPage(
-              embedded: true,
-              focusLocalCapabilityCard: widget.focusMediaLocalCapabilityCard,
+            KeyedSubtree(
+              key: _mediaLocalCapabilityEntryAnchorKey,
+              child: MediaAnnotationSettingsPage(
+                embedded: true,
+                focusLocalCapabilityCard: widget.focusMediaLocalCapabilityCard,
+              ),
             ),
           ],
         ],

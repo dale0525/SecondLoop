@@ -81,11 +81,9 @@ extension _ChatPageStateMethodsMAskScopeEmptyCard on _ChatPageState {
         }
         break;
       case AskScopeEmptyAction.switchScopeToAll:
-        if (_thisThreadOnly || _activeTopicThreadId != null) {
+        if (_thisThreadOnly) {
           _setState(() {
             _thisThreadOnly = false;
-            _activeTopicThreadId = null;
-            _activeTopicThread = null;
           });
           _refresh();
         }

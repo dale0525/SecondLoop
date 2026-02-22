@@ -30,7 +30,7 @@ fn plain_text_message_produces_shadow_suggested_tag_without_applying_message_tag
     kv_set_string(&conn, KV_MESSAGE_TAG_AUTOFILL_APPLY_ENABLED, "false").expect("disable apply");
 
     let key = [17u8; 32];
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let message = insert_message(
         &conn,
         &key,
@@ -68,7 +68,7 @@ fn default_mode_allows_high_confidence_autofill_to_write_message_tag() {
     let conn = open(dir.path()).expect("open");
 
     let key = [23u8; 32];
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let message = insert_message(
         &conn,
         &key,
@@ -104,7 +104,7 @@ fn attachment_annotation_enqueues_and_processes_autofill_for_linked_messages() {
     let conn = open(&app_dir).expect("open");
 
     let key = [31u8; 32];
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let message = insert_message(
         &conn,
         &key,

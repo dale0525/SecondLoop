@@ -14,7 +14,7 @@ use crate::embedding::Embedder;
 use crate::vector;
 
 const DEFAULT_EMBEDDING_DIM: usize = crate::embedding::DEFAULT_EMBED_DIM;
-const MAIN_STREAM_CONVERSATION_ID: &str = "main_stream";
+const LOOP_HOME_CONVERSATION_ID: &str = "loop_home";
 const KV_ACTIVE_EMBEDDING_MODEL_NAME: &str = "embedding.active_model_name";
 const KV_ACTIVE_EMBEDDING_DIM: &str = "embedding.active_dim";
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_BASE_URL: &str = "embedding.cloud_gateway.embeddings.base_url";
@@ -68,15 +68,6 @@ pub struct TagMergeSuggestion {
     pub score: f64,
     pub source_usage_count: i64,
     pub target_usage_count: i64,
-}
-
-#[derive(Clone, Debug)]
-pub struct TopicThread {
-    pub id: String,
-    pub conversation_id: String,
-    pub title: Option<String>,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
 }
 
 #[derive(Clone, Debug)]

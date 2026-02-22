@@ -24,7 +24,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: '下午买牛奶',
           createdAtMs: 1,
@@ -62,8 +62,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -94,7 +94,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm_bubble_open',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: '晚上收快递',
           createdAtMs: 10,
@@ -132,8 +132,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -159,7 +159,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm_focus_badge',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: '查看事项详情',
             createdAtMs: 11,
@@ -197,8 +197,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
+                    id: 'loop_home',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -239,7 +239,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm_focus_action',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: '打开事项详情',
             createdAtMs: 12,
@@ -270,8 +270,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
+                    id: 'loop_home',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -317,7 +317,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm2',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: '已经联系供应商了',
           createdAtMs: 2,
@@ -354,8 +354,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -387,7 +387,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm3',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: '跟进采购进度',
           createdAtMs: 3,
@@ -425,8 +425,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -457,7 +457,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm4',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: '已经联系供应商了',
           createdAtMs: 4,
@@ -498,8 +498,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -550,7 +550,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm5',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'buy milk',
           createdAtMs: 5,
@@ -558,7 +558,7 @@ void main() {
         ),
         Message(
           id: 'm6',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'vendor replied, continue this thread',
           createdAtMs: 6,
@@ -609,8 +609,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -654,7 +654,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm9',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: '更新了任务内容',
             createdAtMs: 9,
@@ -708,8 +708,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
+                    id: 'loop_home',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -738,7 +738,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm10',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: 'Call supplier',
             createdAtMs: 10,
@@ -776,8 +776,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
+                    id: 'loop_home',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -822,7 +822,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm7',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: 'Submit invoice',
             createdAtMs: 7,
@@ -830,7 +830,7 @@ void main() {
           ),
           Message(
             id: 'm8',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: 'Vendor confirmed delivery slot',
             createdAtMs: 8,
@@ -878,8 +878,8 @@ void main() {
                 lock: () {},
                 child: const ChatPage(
                   conversation: Conversation(
-                    id: 'main_stream',
-                    title: 'Main Stream',
+                    id: 'loop_home',
+                    title: 'Loop',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),

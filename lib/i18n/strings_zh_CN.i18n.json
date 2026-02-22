@@ -2,7 +2,7 @@
   "app": {
     "title": "SecondLoop",
     "tabs": {
-      "main": "主线",
+      "main": "记录",
       "settings": "设置"
     }
   },
@@ -53,7 +53,7 @@
     "loadFailed": "加载失败：$error",
     "saveFailed": "保存失败：$error",
     "lockGateError": "锁定流程错误：$error",
-    "missingMainStream": "缺少主线对话"
+    "missingLoopHomeConversation": "缺少记录会话"
   },
   "actions": {
     "capture": {
@@ -778,7 +778,7 @@
     "unlocking": "正在解锁…"
   },
   "chat": {
-    "mainStreamTitle": "主线",
+    "loopTitle": "记录",
     "attachTooltip": "添加附件",
     "attachPickMedia": "选择媒体文件",
     "attachTakePhoto": "拍照",
@@ -909,27 +909,6 @@
     "semanticParseStatusUpdatedGeneric": "已更新待办",
     "semanticParseStatusUndone": "已撤销自动动作",
     "askAiRecoveredDetached": "已恢复已完成的云端回答。",
-    "topicThread": {
-      "filterTooltip": "主题线程筛选",
-      "actionLabel": "主题线程",
-      "create": "新建主题线程",
-      "clearFilter": "清除线程筛选",
-      "clear": "清除线程",
-      "manage": "管理线程",
-      "rename": "重命名线程",
-      "delete": "删除线程",
-      "deleteDialog": {
-        "title": "删除主题线程？",
-        "message": "删除后将移除该线程及其消息归属，且无法撤销。",
-        "confirm": "删除"
-      },
-      "addMessage": "加入此消息",
-      "removeMessage": "移除此消息",
-      "createDialogTitle": "新建主题线程",
-      "renameDialogTitle": "重命名主题线程",
-      "titleFieldLabel": "线程标题（可选）",
-      "untitled": "未命名主题线程"
-    },
     "tagFilter": {
       "tooltip": "标签筛选",
       "clearFilter": "清空标签筛选",

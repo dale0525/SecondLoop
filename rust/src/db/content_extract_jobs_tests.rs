@@ -445,3 +445,150 @@ fn process_pending_video_manifest_skips_audio_wait_when_audio_transcribe_disable
         .expect("audio job count");
     assert_eq!(audio_job_count, 0);
 }
+
+#[test]
+fn process_pending_video_manifest_skips_audio_wait_for_video_fallback_reference() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [11u8; 32];
+
+    let mut cfg = get_content_enrichment_config(&conn).expect("config");
+    cfg.document_extract_enabled = false;
+    cfg.video_extract_enabled = true;
+    cfg.audio_transcribe_enabled = true;
+    cfg.url_fetch_enabled = false;
+    set_content_enrichment_config(&conn, &cfg).expect("write config");
+
+    let video_segment =
+        insert_attachment(&conn, &key, &app_dir, b"mp4", "video/mp4").expect("video segment");
+
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &video_segment.sha256,
+        "und",
+        "video_extract.v1",
+        &serde_json::json!({
+            "schema": "secondloop.video_extract.v1",
+            "transcript_full": "not audio transcript"
+        }),
+        1000,
+    )
+    .expect("mark non-audio annotation ok");
+
+    let manifest_payload = serde_json::json!({
+        "schema": "secondloop.video_manifest.v2",
+        "video_sha256": video_segment.sha256,
+        "video_mime_type": "video/mp4",
+        "audio_sha256": video_segment.sha256,
+        "audio_mime_type": "video/mp4",
+        "video_segments": [{
+            "index": 0,
+            "sha256": video_segment.sha256,
+            "mime_type": "video/mp4"
+        }]
+    });
+
+    let manifest = insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        manifest_payload.to_string().as_bytes(),
+        "application/x.secondloop.video+json",
+    )
+    .expect("manifest");
+    enqueue_attachment_annotation(&conn, &manifest.sha256, "und", 1200).expect("enqueue manifest");
+
+    let processed =
+        process_pending_document_extractions(&conn, &key, &app_dir, 10).expect("process pending");
+    assert_eq!(processed, 1);
+
+    let payload_json = read_attachment_annotation_payload_json(&conn, &key, &manifest.sha256)
+        .expect("read payload")
+        .expect("payload exists");
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_json).expect("valid payload json");
+
+    assert_eq!(
+        payload["schema"].as_str(),
+        Some("secondloop.video_extract.v1")
+    );
+    assert_eq!(payload["transcript_full"], serde_json::Value::Null);
+
+    let due_now = list_due_attachment_annotations(&conn, now_ms(), 20).expect("due now");
+    assert!(
+        !due_now
+            .iter()
+            .any(|job| job.attachment_sha256 == video_segment.sha256),
+        "video fallback sha should not be enqueued for transcript"
+    );
+}
+
+#[test]
+fn process_pending_video_manifest_skips_audio_wait_when_audio_mime_is_not_audio() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [12u8; 32];
+
+    let mut cfg = get_content_enrichment_config(&conn).expect("config");
+    cfg.document_extract_enabled = false;
+    cfg.video_extract_enabled = true;
+    cfg.audio_transcribe_enabled = true;
+    cfg.url_fetch_enabled = false;
+    set_content_enrichment_config(&conn, &cfg).expect("write config");
+
+    let video_segment =
+        insert_attachment(&conn, &key, &app_dir, b"segment", "video/mp4").expect("video segment");
+    let video_fallback_audio = insert_attachment(&conn, &key, &app_dir, b"fallback", "video/mp4")
+        .expect("video fallback audio");
+
+    let manifest_payload = serde_json::json!({
+        "schema": "secondloop.video_manifest.v2",
+        "video_sha256": video_segment.sha256,
+        "video_mime_type": "video/mp4",
+        "audio_sha256": video_fallback_audio.sha256,
+        "audio_mime_type": "video/mp4",
+        "video_segments": [{
+            "index": 0,
+            "sha256": video_segment.sha256,
+            "mime_type": "video/mp4"
+        }]
+    });
+
+    let manifest = insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        manifest_payload.to_string().as_bytes(),
+        "application/x.secondloop.video+json",
+    )
+    .expect("manifest");
+    enqueue_attachment_annotation(&conn, &manifest.sha256, "und", 1200).expect("enqueue manifest");
+
+    let processed =
+        process_pending_document_extractions(&conn, &key, &app_dir, 10).expect("process pending");
+    assert_eq!(processed, 1);
+
+    let payload_json = read_attachment_annotation_payload_json(&conn, &key, &manifest.sha256)
+        .expect("read payload")
+        .expect("payload exists");
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_json).expect("valid payload json");
+
+    assert_eq!(
+        payload["schema"].as_str(),
+        Some("secondloop.video_extract.v1")
+    );
+    assert_eq!(payload["transcript_full"], serde_json::Value::Null);
+
+    let fallback_audio_job_count: i64 = conn
+        .query_row(
+            r#"SELECT COUNT(*) FROM attachment_annotations WHERE attachment_sha256 = ?1"#,
+            rusqlite::params![video_fallback_audio.sha256],
+            |row| row.get(0),
+        )
+        .expect("fallback audio job count");
+    assert_eq!(fallback_audio_job_count, 0);
+}

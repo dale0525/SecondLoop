@@ -18,7 +18,7 @@ fn sync_push_then_pull_copies_message_attachments_metadata_and_link() {
     let conn_a = db::open(&app_dir_a).expect("open A db");
 
     let conversation =
-        db::get_or_create_main_stream_conversation(&conn_a, &key_a).expect("conversation A");
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
     let message =
         db::insert_message(&conn_a, &key_a, &conversation.id, "user", "hello").expect("message A");
 
