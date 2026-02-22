@@ -222,7 +222,7 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       printInfo.isVerticallyCentered = false
       printInfo.isHorizontallyCentered = false
       printInfo.jobDisposition = .save
-      printInfo.dictionary()[.jobSavingURL] = outputUrl
+      printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
 
       let operation = NSPrintOperation(view: webView, printInfo: printInfo)
       operation.showsPrintPanel = false
