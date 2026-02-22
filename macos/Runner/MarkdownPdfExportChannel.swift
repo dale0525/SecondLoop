@@ -224,9 +224,6 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     webView: WKWebView,
     contentHeight: CGFloat
   ) {
-    let outputUrl = URL(fileURLWithPath: NSTemporaryDirectory())
-      .appendingPathComponent("secondloop_markdown_\(UUID().uuidString).pdf")
-
     let printInfo = NSPrintInfo()
     printInfo.paperSize = NSSize(width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight)
     printInfo.topMargin = 0
@@ -237,29 +234,24 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     printInfo.verticalPagination = .automatic
     printInfo.isVerticallyCentered = false
     printInfo.isHorizontallyCentered = false
-    printInfo.jobDisposition = .save
-    printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = outputUrl
 
-    let operation: NSPrintOperation
-    if #available(macOS 11.0, *) {
-      operation = webView.printOperation(with: printInfo)
-    } else {
-      operation = NSPrintOperation(view: webView, printInfo: printInfo)
-    }
-
+    let printData = NSMutableData()
+    let operation = NSPrintOperation.pdfOperation(
+      with: webView,
+      inside: webView.bounds,
+      to: printData,
+      printInfo: printInfo
+    )
     operation.showsPrintPanel = false
     operation.showsProgressPanel = false
-    let didRun = operation.run()
+    operation.canSpawnSeparateThread = true
 
-    if didRun,
-       let data = try? Data(contentsOf: outputUrl),
-       !data.isEmpty {
-      try? FileManager.default.removeItem(at: outputUrl)
-      complete(success: data)
+    let didRun = operation.run()
+    let pdfData = printData as Data
+    if didRun, !pdfData.isEmpty {
+      complete(success: pdfData)
       return
     }
-
-    try? FileManager.default.removeItem(at: outputUrl)
 
     if #available(macOS 11.0, *) {
       let config = WKPDFConfiguration()
