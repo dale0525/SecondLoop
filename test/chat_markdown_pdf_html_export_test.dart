@@ -58,7 +58,7 @@ void main() {
     expect(html, contains('position: fixed'));
   });
 
-  test('PDF HTML export clones content padding on each page fragment',
+  test('PDF HTML export keeps per-page spacing with table frame wrappers',
       () async {
     final html = await buildChatMarkdownPdfHtmlDocument(
       markdown: 'Theme check',
@@ -73,11 +73,14 @@ void main() {
   margin: 0;
   background:'''),
     );
-    expect(html, contains('.sl-pdf-content'));
-    expect(html, contains('padding: 48px 54px 64px 54px;'));
-    expect(html, contains('-webkit-box-decoration-break: clone;'));
-    expect(html, contains('box-decoration-break: clone;'));
-    expect(html, contains('<main class="sl-pdf-content">'));
+    expect(html, contains('.sl-pdf-frame'));
+    expect(html, contains('display: table-header-group;'));
+    expect(html, contains('display: table-footer-group;'));
+    expect(html, contains('height: 48pt;'));
+    expect(html, contains('height: 64pt;'));
+    expect(html, contains('padding: 0 54pt;'));
+    expect(html, contains('<table class="sl-pdf-frame" role="presentation">'));
+    expect(html, contains('<main class="sl-pdf-frame__content">'));
   });
 
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {

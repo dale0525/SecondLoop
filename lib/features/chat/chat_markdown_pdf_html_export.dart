@@ -110,10 +110,32 @@ body::before {
   z-index: -1;
   pointer-events: none;
 }
-.sl-pdf-content {
-  padding: 48px 54px 64px 54px;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
+.sl-pdf-frame {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.sl-pdf-frame > thead {
+  display: table-header-group;
+}
+.sl-pdf-frame > tfoot {
+  display: table-footer-group;
+}
+.sl-pdf-frame > thead > tr > td,
+.sl-pdf-frame > tbody > tr > td,
+.sl-pdf-frame > tfoot > tr > td {
+  border: 0;
+  padding: 0;
+}
+.sl-pdf-frame__spacer-top {
+  height: 48pt;
+}
+.sl-pdf-frame__spacer-bottom {
+  height: 64pt;
+}
+.sl-pdf-frame__content {
+  padding: 0 54pt;
 }
 a {
   color: ${_toCssColor(theme.linkColor)};
@@ -377,9 +399,31 @@ window.__SECONDLOOP_PDF_READY__ = false;
 </script>
 </head>
 <body>
-<main class="sl-pdf-content">
+<table class="sl-pdf-frame" role="presentation">
+  <thead>
+    <tr>
+      <td>
+        <div class="sl-pdf-frame__spacer-top"></div>
+      </td>
+    </tr>
+  </thead>
+  <tfoot>
+    <tr>
+      <td>
+        <div class="sl-pdf-frame__spacer-bottom"></div>
+      </td>
+    </tr>
+  </tfoot>
+  <tbody>
+    <tr>
+      <td>
+        <main class="sl-pdf-frame__content">
 $transformedHtml
-</main>
+        </main>
+      </td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>''';
 }
