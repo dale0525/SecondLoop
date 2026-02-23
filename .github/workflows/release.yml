@@ -85,7 +85,9 @@ jobs:
             exit 1
           fi
 
+          set +o pipefail
           yes | "${sdkmanager}" --sdk_root="${sdk_root}" --licenses >/dev/null
+          set -o pipefail
           "${sdkmanager}" --sdk_root="${sdk_root}" --install "ndk;26.3.11579264"
       - name: Validate prod config
         shell: bash
@@ -243,6 +245,9 @@ jobs:
               "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
             )
             flutter build windows --release @buildArgs @defines
+            if ($LASTEXITCODE -ne 0) {
+              throw "flutter build windows failed with exit code $LASTEXITCODE"
+            }
           } finally {
             if ($enteredWorkspace) {
               Pop-Location
