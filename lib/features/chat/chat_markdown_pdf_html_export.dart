@@ -66,7 +66,7 @@ ${katexAssets.css}
 <style>
 @page {
   size: A4;
-  margin: 48px 54px 64px 54px;
+  margin: 0;
   background: ${_toCssColor(theme.panelColor)};
 }
 :root {
@@ -94,6 +94,7 @@ html {
 body {
   position: relative;
   z-index: 0;
+  padding: 48px 54px 64px 54px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   font-size: 13px;
   line-height: 1.45;
