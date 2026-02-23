@@ -44,6 +44,18 @@ void main() {
     expect(html, isNot(contains('.ttf')));
   });
 
+  test('PDF HTML export enforces exact print colors for theme fidelity',
+      () async {
+    final html = await buildChatMarkdownPdfHtmlDocument(
+      markdown: 'Theme check',
+      theme: buildTheme(),
+      emptyFallback: 'Empty',
+    );
+
+    expect(html, contains('print-color-adjust: exact'));
+    expect(html, contains('-webkit-print-color-adjust: exact'));
+  });
+
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {
     const markdown = r'''
 Inline $x^2$ and block:
