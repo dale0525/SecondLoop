@@ -29,6 +29,16 @@ abstract class CloudAuthController {
   Future<void> signOut();
 }
 
+Future<String?> readCloudIdTokenForBackground(CloudAuthController? controller) {
+  if (controller == null) {
+    return Future<String?>.value();
+  }
+  if (controller case final CloudAuthControllerImpl impl) {
+    return impl.getIdTokenSilently();
+  }
+  return controller.getIdToken();
+}
+
 final class CloudAuthControllerImpl extends ChangeNotifier
     implements CloudAuthController {
   CloudAuthControllerImpl({
@@ -112,6 +122,13 @@ final class CloudAuthControllerImpl extends ChangeNotifier
   @override
   Future<String?> getIdToken() async {
     return _getIdToken();
+  }
+
+  Future<String?> getIdTokenSilently() async {
+    final cached = _cachedTokens;
+    if (cached == null) return null;
+    if (_nowMs() >= cached.expiresAtMs) return null;
+    return cached.idToken;
   }
 
   Future<String?> _getIdToken({bool forceRefresh = false}) async {

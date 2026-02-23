@@ -8,6 +8,7 @@ import 'ai_routing.dart';
 import 'embeddings_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
+import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -167,7 +168,9 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
 
       String? cloudIdToken;
       try {
-        cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+        cloudIdToken = await readCloudIdTokenForBackground(
+          cloudAuthScope?.controller,
+        );
       } catch (_) {
         cloudIdToken = null;
       }

@@ -71,6 +71,33 @@ void main() {
     expect(await controller.getIdToken(), 'id_token_2');
     expect(toolkit.refreshCalls, 1);
   });
+
+  test('silent token fetch avoids loading stored session', () async {
+    final clock = _FakeClockMs(1000);
+    final toolkit = _FakeIdentityToolkit(clock: clock);
+    final store = _InMemoryCloudAuthStore();
+
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: clock.nowMs,
+    );
+
+    expect(await controller.getIdTokenSilently(), isNull);
+    expect(store.loadCalls, 0);
+  });
+
+  test('background token read uses regular flow for non-impl controller',
+      () async {
+    final controller = _FakeCloudAuthControllerForBackground();
+
+    expect(await readCloudIdTokenForBackground(controller), 'fallback_token');
+    expect(controller.getIdTokenCalls, 1);
+  });
+
+  test('background token read returns null for missing controller', () async {
+    expect(await readCloudIdTokenForBackground(null), isNull);
+  });
 }
 
 final class _FakeClockMs {
@@ -155,9 +182,13 @@ final class _FakeIdentityToolkit implements FirebaseIdentityToolkit {
 
 final class _InMemoryCloudAuthStore implements CloudAuthStore {
   CloudAuthStoredSession? _session;
+  int loadCalls = 0;
 
   @override
-  Future<CloudAuthStoredSession?> load() async => _session;
+  Future<CloudAuthStoredSession?> load() async {
+    loadCalls += 1;
+    return _session;
+  }
 
   @override
   Future<void> save(CloudAuthStoredSession session) async {
@@ -168,4 +199,45 @@ final class _InMemoryCloudAuthStore implements CloudAuthStore {
   Future<void> clear() async {
     _session = null;
   }
+}
+
+final class _FakeCloudAuthControllerForBackground
+    implements CloudAuthController {
+  int getIdTokenCalls = 0;
+
+  @override
+  String? get uid => null;
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<String?> getIdToken() async {
+    getIdTokenCalls += 1;
+    return 'fallback_token';
+  }
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
 }
