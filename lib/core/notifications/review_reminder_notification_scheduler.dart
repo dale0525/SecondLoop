@@ -37,7 +37,10 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       'Reminders for pending todo reviews';
 
   static const String _windowsAppName = 'SecondLoop';
-  static const String _windowsAppUserModelId = 'com.secondloop.secondloop';
+  static const String _windowsAppUserModelId = String.fromEnvironment(
+    'SECONDLOOP_APP_ID',
+    defaultValue: 'com.secondloop.secondloop',
+  );
   static const String _windowsGuid = 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59';
 
   final FlutterLocalNotificationsPlugin _plugin;

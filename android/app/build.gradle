@@ -39,6 +39,20 @@ def isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.toLowerCase().contains("release")
 }
 
+def secondloopApplicationId = System.getenv("SECONDLOOP_APP_ID")
+if (secondloopApplicationId == null || secondloopApplicationId.trim().isEmpty()) {
+    secondloopApplicationId = "com.secondloop.secondloop"
+}
+
+def secondloopApplicationName = System.getenv("SECONDLOOP_APP_NAME")
+if (secondloopApplicationName == null || secondloopApplicationName.trim().isEmpty()) {
+    if (secondloopApplicationId == "com.secondloop.secondloopdev") {
+        secondloopApplicationName = "SecondLoop Dev"
+    } else {
+        secondloopApplicationName = "SecondLoop"
+    }
+}
+
 android {
     namespace "com.secondloop.secondloop"
     compileSdkVersion 35
@@ -68,13 +82,14 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.secondloop.secondloop"
+        applicationId secondloopApplicationId
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        manifestPlaceholders += [appName: secondloopApplicationName]
 
         if (isReleaseBuildRequested) {
             ndk {

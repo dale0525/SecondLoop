@@ -56,6 +56,22 @@ function Get-DevMsiVersion {
 
 Import-DotEnvLocal
 
+$appId = $env:SECONDLOOP_APP_ID
+if ([string]::IsNullOrWhiteSpace($appId)) {
+  $appId = 'com.secondloop.secondloopdev'
+}
+$env:SECONDLOOP_APP_ID = $appId
+
+$appName = $env:SECONDLOOP_APP_NAME
+if ([string]::IsNullOrWhiteSpace($appName)) {
+  if ($appId -eq 'com.secondloop.secondloopdev') {
+    $appName = 'SecondLoop Dev'
+  } else {
+    $appName = 'SecondLoop'
+  }
+}
+$env:SECONDLOOP_APP_NAME = $appName
+
 if ($UseFlutterRun) {
   & (Join-Path $PSScriptRoot 'setup_nuget.ps1')
 
@@ -92,6 +108,8 @@ if ($UseFlutterRun) {
   $defines = @()
   if ($firebaseWebApiKey) { $defines += "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$firebaseWebApiKey" }
   if ($cloudGatewayBaseUrl) { $defines += "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$cloudGatewayBaseUrl" }
+  if ($appId) { $defines += "--dart-define=SECONDLOOP_APP_ID=$appId" }
+  if ($appName) { $defines += "--dart-define=SECONDLOOP_APP_NAME=$appName" }
 
   & dart pub global run fvm:main flutter run -d windows @defines
   exit $LASTEXITCODE

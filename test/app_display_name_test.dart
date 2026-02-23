@@ -3,14 +3,24 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-void main() {
-  test('Platform display names use "SecondLoop"', () {
-    expect(_androidApplicationLabel(), 'SecondLoop');
+const _appleAppNamePlaceholder = r'$(SECONDLOOP_APP_NAME:default=SecondLoop)';
 
-    expect(_plistStringValue('ios/Runner/Info.plist', 'CFBundleDisplayName'),
-        'SecondLoop');
-    expect(_plistStringValue('ios/Runner/Info.plist', 'CFBundleName'),
-        'SecondLoop');
+void main() {
+  test(
+      'Platform display names default to SecondLoop and support app-name overrides',
+      () {
+    expect(_androidApplicationLabelTemplate(), r'${appName}');
+    expect(_androidDefaultApplicationName(), 'SecondLoop');
+    expect(_androidDevApplicationName(), 'SecondLoop Dev');
+
+    expect(
+      _plistStringValue('ios/Runner/Info.plist', 'CFBundleDisplayName'),
+      _appleAppNamePlaceholder,
+    );
+    expect(
+      _plistStringValue('ios/Runner/Info.plist', 'CFBundleName'),
+      _appleAppNamePlaceholder,
+    );
 
     final webManifest = jsonDecode(File('web/manifest.json').readAsStringSync())
         as Map<String, Object?>;
@@ -23,31 +33,88 @@ void main() {
     expect(_htmlTitle(webIndex), 'SecondLoop');
 
     final linuxShell = File('linux/my_application.cc').readAsStringSync();
-    expect(_gtkStringArgValue(linuxShell, 'gtk_header_bar_set_title'),
-        'SecondLoop');
+    expect(_linuxAppNameMacro(linuxShell), 'SecondLoop');
     expect(
-        _gtkStringArgValue(linuxShell, 'gtk_window_set_title'), 'SecondLoop');
+      linuxShell.contains(
+          'gtk_header_bar_set_title(header_bar, SECONDLOOP_APP_NAME);'),
+      isTrue,
+    );
+    expect(
+      linuxShell.contains('gtk_window_set_title(window, SECONDLOOP_APP_NAME);'),
+      isTrue,
+    );
 
     final windowsMain = File('windows/runner/main.cpp').readAsStringSync();
-    expect(_windowsCreateTitle(windowsMain), 'SecondLoop');
+    expect(_windowsWindowTitleMacro(windowsMain), 'SecondLoop');
+    expect(
+      windowsMain
+          .contains('window.Create(SECONDLOOP_WINDOW_TITLE, origin, size)'),
+      isTrue,
+    );
 
     final windowsRc = File('windows/runner/Runner.rc').readAsStringSync();
     expect(_windowsRcValue(windowsRc, 'FileDescription'), 'SecondLoop');
     expect(_windowsRcValue(windowsRc, 'ProductName'), 'SecondLoop');
 
     expect(
-        _xcconfigValue('macos/Runner/Configs/AppInfo.xcconfig', 'PRODUCT_NAME'),
-        'SecondLoop');
+      _xcconfigValue('macos/Runner/Configs/AppInfo.xcconfig', 'PRODUCT_NAME'),
+      _appleAppNamePlaceholder,
+    );
   });
 }
 
-String _androidApplicationLabel() {
+String _androidApplicationLabelTemplate() {
   final manifest =
       File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
   final match = RegExp(r'android:label="([^"]+)"').firstMatch(manifest);
   if (match == null) {
     fail(
         'Could not find android:label in android/app/src/main/AndroidManifest.xml');
+  }
+  return match.group(1)!;
+}
+
+String _androidDefaultApplicationName() {
+  final buildGradle = File('android/app/build.gradle').readAsStringSync();
+  final match = RegExp(
+    r'else\s*\{\s*secondloopApplicationName = "([^"]+)"',
+    dotAll: true,
+  ).firstMatch(buildGradle);
+  if (match == null) {
+    fail(
+        'Could not find default SECONDLOOP_APP_NAME assignment in android/app/build.gradle');
+  }
+  return match.group(1)!;
+}
+
+String _androidDevApplicationName() {
+  final buildGradle = File('android/app/build.gradle').readAsStringSync();
+  final match = RegExp(
+    r'if \(secondloopApplicationId == "com.secondloop.secondloopdev"\)\s*\{\s*secondloopApplicationName = "([^"]+)"',
+    dotAll: true,
+  ).firstMatch(buildGradle);
+  if (match == null) {
+    fail(
+        'Could not find dev SECONDLOOP_APP_NAME assignment in android/app/build.gradle');
+  }
+  return match.group(1)!;
+}
+
+String _linuxAppNameMacro(String source) {
+  final match =
+      RegExp(r'#define SECONDLOOP_APP_NAME "([^"]+)"').firstMatch(source);
+  if (match == null) {
+    fail('Could not find SECONDLOOP_APP_NAME macro in linux/my_application.cc');
+  }
+  return match.group(1)!;
+}
+
+String _windowsWindowTitleMacro(String source) {
+  final match =
+      RegExp(r'#define SECONDLOOP_WINDOW_TITLE L"([^"]+)"').firstMatch(source);
+  if (match == null) {
+    fail(
+        'Could not find SECONDLOOP_WINDOW_TITLE macro in windows/runner/main.cpp');
   }
   return match.group(1)!;
 }
@@ -81,27 +148,6 @@ String _htmlTitle(String html) {
   return match.group(1)!;
 }
 
-String _gtkStringArgValue(String code, String functionName) {
-  final match =
-      RegExp('$functionName\\([^,]+,\\s*"([^"]+)"\\)', multiLine: true)
-          .firstMatch(code);
-  if (match == null) {
-    fail(
-        'Could not find $functionName(..., "...") call in linux/my_application.cc');
-  }
-  return match.group(1)!;
-}
-
-String _windowsCreateTitle(String code) {
-  final match =
-      RegExp(r'window\.Create\(L"([^"]+)"', multiLine: true).firstMatch(code);
-  if (match == null) {
-    fail(
-        'Could not find window.Create(L"...") call in windows/runner/main.cpp');
-  }
-  return match.group(1)!;
-}
-
 String _windowsRcValue(String content, String key) {
   final match =
       RegExp('VALUE "$key", "([^"]+)"', multiLine: true).firstMatch(content);
@@ -113,8 +159,9 @@ String _windowsRcValue(String content, String key) {
 
 String _xcconfigValue(String path, String key) {
   final content = File(path).readAsStringSync();
-  final match = RegExp('^\\s*$key\\s*=\\s*(.+)\\s*\$', multiLine: true)
-      .firstMatch(content);
+  final pattern =
+      r'^\s*__KEY__\s*=\s*(.+)\s*$'.replaceFirst('__KEY__', RegExp.escape(key));
+  final match = RegExp(pattern, multiLine: true).firstMatch(content);
   if (match == null) {
     fail('Could not find "$key = ..." in $path');
   }
