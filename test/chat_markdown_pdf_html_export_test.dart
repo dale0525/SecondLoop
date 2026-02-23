@@ -58,8 +58,7 @@ void main() {
     expect(html, contains('position: fixed'));
   });
 
-  test('PDF HTML export paints @page background with theme panel color',
-      () async {
+  test('PDF HTML export keeps page margins in @page definition', () async {
     final html = await buildChatMarkdownPdfHtmlDocument(
       markdown: 'Theme check',
       theme: buildTheme(),
@@ -70,9 +69,11 @@ void main() {
       html,
       contains('''@page {
   size: A4;
-  margin: 48px 54px 64px 54px;
+  margin: 48pt 54pt 64pt 54pt;
   background:'''),
     );
+    expect(html, isNot(contains('.sl-pdf-frame')));
+    expect(html, isNot(contains('.sl-pdf-content')));
   });
 
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {

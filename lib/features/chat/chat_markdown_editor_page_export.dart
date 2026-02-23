@@ -263,14 +263,67 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         theme: previewTheme,
         emptyFallback: context.t.chat.markdownEditor.emptyPreview,
       );
-      return exportMarkdownHtmlToPdfBytes(
+      final nativeBytes = await exportMarkdownHtmlToPdfBytes(
         html: html,
         pageBackgroundColorHex:
             _formatPdfExportColorHex(previewTheme.panelColor),
       );
+      return _composeNativePdfWithThemeBackground(
+        pdfBytes: nativeBytes,
+        backgroundColor: previewTheme.panelColor,
+      );
     }
 
     return _buildPdfWithVectorRenderer();
+  }
+
+  Future<Uint8List> _composeNativePdfWithThemeBackground({
+    required Uint8List pdfBytes,
+    required Color backgroundColor,
+  }) async {
+    PdfDocument? sourceDocument;
+    PdfDocument? composedDocument;
+
+    try {
+      sourceDocument = PdfDocument(inputBytes: pdfBytes);
+      if (sourceDocument.pages.count == 0) {
+        return pdfBytes;
+      }
+
+      composedDocument = PdfDocument()..pageSettings.setMargins(0);
+      final backgroundBrush = PdfSolidBrush(_toPdfColor(backgroundColor));
+
+      for (var pageIndex = 0;
+          pageIndex < sourceDocument.pages.count;
+          pageIndex += 1) {
+        final sourcePage = sourceDocument.pages[pageIndex];
+        final sourceSize = sourcePage.size;
+        composedDocument.pageSettings.size =
+            Size(sourceSize.width, sourceSize.height);
+
+        final outputPage = composedDocument.pages.add();
+        outputPage.graphics.drawRectangle(
+          brush: backgroundBrush,
+          bounds: Rect.fromLTWH(0, 0, sourceSize.width, sourceSize.height),
+        );
+        outputPage.graphics.drawPdfTemplate(
+          sourcePage.createTemplate(),
+          Offset.zero,
+          Size(sourceSize.width, sourceSize.height),
+        );
+      }
+
+      final composedBytes = await composedDocument.save();
+      if (composedBytes.isEmpty) {
+        return pdfBytes;
+      }
+      return Uint8List.fromList(composedBytes);
+    } catch (_) {
+      return pdfBytes;
+    } finally {
+      sourceDocument?.dispose();
+      composedDocument?.dispose();
+    }
   }
 
   Future<Uint8List> _buildPdfWithVectorRenderer() {

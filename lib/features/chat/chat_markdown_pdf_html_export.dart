@@ -66,7 +66,7 @@ ${katexAssets.css}
 <style>
 @page {
   size: A4;
-  margin: 48px 54px 64px 54px;
+  margin: 48pt 54pt 64pt 54pt;
   background: ${_toCssColor(theme.panelColor)};
 }
 :root {
