@@ -94,6 +94,7 @@ Future<void> main(List<String> args) async {
     repository: repo,
     requireExplicit: config.requireRuntimeTag,
     localEnv: localEnv,
+    outputDirPath: config.outputDir,
   );
 
   final platformName = _platformName(platform);
@@ -361,6 +362,7 @@ Future<String> _resolveRuntimeTag({
   required String repository,
   required bool requireExplicit,
   required Map<String, String> localEnv,
+  required String outputDirPath,
 }) async {
   final configuredTag = configured ??
       Platform.environment['SECONDLOOP_DESKTOP_RUNTIME_TAG']?.trim() ??
@@ -375,7 +377,18 @@ Future<String> _resolveRuntimeTag({
     );
   }
 
-  final latest = await _discoverLatestRuntimeTag(repository);
+  final installedTag = await _resolveInstalledRuntimeTag(
+    outputDirPath: outputDirPath,
+    repository: repository,
+  );
+  if (installedTag != null) {
+    return installedTag;
+  }
+
+  final latest = await _discoverLatestRuntimeTag(
+    repository,
+    githubToken: _resolveGithubToken(localEnv),
+  );
   if (latest == null) {
     throw StateError(
       'Unable to discover latest desktop runtime tag for $repository. '
@@ -385,11 +398,14 @@ Future<String> _resolveRuntimeTag({
   return latest;
 }
 
-Future<String?> _discoverLatestRuntimeTag(String repository) async {
+Future<String?> _discoverLatestRuntimeTag(
+  String repository, {
+  String? githubToken,
+}) async {
   final url = Uri.parse(
     'https://api.github.com/repos/$repository/releases?per_page=100',
   );
-  final responseText = await _httpGetText(url);
+  final responseText = await _httpGetText(url, githubToken: githubToken);
   final dynamic decoded = jsonDecode(responseText);
   if (decoded is! List) return null;
 
@@ -402,6 +418,37 @@ Future<String?> _discoverLatestRuntimeTag(String repository) async {
     if (tag.startsWith('desktop-runtime-v')) return tag;
   }
   return null;
+}
+
+Future<String?> _resolveInstalledRuntimeTag({
+  required String outputDirPath,
+  required String repository,
+}) async {
+  final markerFile = File(_join(outputDirPath, _installMarkerFile));
+  if (!await markerFile.exists()) return null;
+
+  try {
+    final raw = await markerFile.readAsString();
+    final dynamic decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+
+    final markerRepo = decoded['repo']?.toString().trim();
+    if (markerRepo != null &&
+        markerRepo.isNotEmpty &&
+        markerRepo != repository) {
+      return null;
+    }
+
+    final markerTag = decoded['runtime_tag']?.toString().trim() ?? '';
+    if (markerTag.isEmpty) return null;
+    if (!RegExp(_runtimeTagPattern).hasMatch(markerTag)) return null;
+
+    return markerTag;
+  } on IOException {
+    return null;
+  } on FormatException {
+    return null;
+  }
 }
 
 Future<bool> _isRuntimeAlreadyInstalled({
@@ -455,6 +502,17 @@ String _basenameFromAnyPath(String path) {
 }
 
 String basenameFromAnyPathForTest(String path) => _basenameFromAnyPath(path);
+
+Future<String?> resolveInstalledRuntimeTagForTest({
+  required String outputDirPath,
+  required String repository,
+}) =>
+    _resolveInstalledRuntimeTag(
+      outputDirPath: outputDirPath,
+      repository: repository,
+    );
+
+String joinForTest(String base, String part) => _join(base, part);
 
 Future<bool> _hasRequiredRuntimePayload(Directory outputDir) async {
   if (!await outputDir.exists()) return false;
@@ -738,18 +796,57 @@ Future<Map<String, String>> _readDotenv(String filePath) async {
   return values;
 }
 
-Future<String> _httpGetText(Uri url) async {
+String? _resolveGithubToken(Map<String, String> localEnv) {
+  final platformGhToken = Platform.environment['GH_TOKEN']?.trim();
+  if (platformGhToken != null && platformGhToken.isNotEmpty) {
+    return platformGhToken;
+  }
+
+  final platformGithubToken = Platform.environment['GITHUB_TOKEN']?.trim();
+  if (platformGithubToken != null && platformGithubToken.isNotEmpty) {
+    return platformGithubToken;
+  }
+
+  final localGhToken = localEnv['GH_TOKEN']?.trim();
+  if (localGhToken != null && localGhToken.isNotEmpty) {
+    return localGhToken;
+  }
+
+  final localGithubToken = localEnv['GITHUB_TOKEN']?.trim();
+  if (localGithubToken != null && localGithubToken.isNotEmpty) {
+    return localGithubToken;
+  }
+
+  return null;
+}
+
+Future<String> _httpGetText(
+  Uri url, {
+  String? githubToken,
+}) async {
   final client = HttpClient();
   try {
     final request = await client.getUrl(url);
     request.headers.set('User-Agent', 'secondloop-runtime-preparer');
-    final token = Platform.environment['GH_TOKEN'] ??
-        Platform.environment['GITHUB_TOKEN'];
-    if (token != null && token.trim().isNotEmpty) {
-      request.headers.set('Authorization', 'Bearer ${token.trim()}');
+    final token = (githubToken ??
+            Platform.environment['GH_TOKEN'] ??
+            Platform.environment['GITHUB_TOKEN'])
+        ?.trim();
+    if (token != null && token.isNotEmpty) {
+      request.headers.set('Authorization', 'Bearer $token');
     }
     final response = await request.close();
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 403 &&
+          url.host == 'api.github.com' &&
+          url.path.contains('/releases')) {
+        throw HttpException(
+          'HTTP 403 for $url. GitHub API limit reached or token missing. '
+          'Set SECONDLOOP_DESKTOP_RUNTIME_TAG to skip release discovery '
+          'or provide GH_TOKEN/GITHUB_TOKEN.',
+          uri: url,
+        );
+      }
       throw HttpException(
         'HTTP ${response.statusCode} for $url',
         uri: url,

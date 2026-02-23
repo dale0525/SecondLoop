@@ -12,6 +12,8 @@ RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
 SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
 ANDROID_BUILD_GRADLE = REPO_ROOT / "android/app/build.gradle"
 ANDROID_MANIFEST = REPO_ROOT / "android/app/src/main/AndroidManifest.xml"
+FLUTTER_WITH_DEFINES_SCRIPT = REPO_ROOT / "scripts/flutter_with_defines.sh"
+BUILD_ANDROID_RELEASE_APK_SCRIPT = REPO_ROOT / "scripts/build_android_release_apk.sh"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -129,7 +131,7 @@ class PixiAndroidTasksTests(unittest.TestCase):
     def test_setup_rustup_patches_whisper_rs_sys_cross_compile_link_logic(self) -> None:
         script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('whisper-rs-sys-0.14.1/build.rs', script)
+        self.assertIn('whisper-rs-sys-0.14*/build.rs', script)
         self.assertIn('target.contains("apple-darwin")', script)
         self.assertIn('cfg!(feature = "openblas")', script)
 
@@ -143,13 +145,33 @@ class PixiAndroidTasksTests(unittest.TestCase):
         gradle_file = ANDROID_BUILD_GRADLE.read_text(encoding="utf-8")
 
         self.assertIn('System.getenv("SECONDLOOP_APP_NAME")', gradle_file)
-        self.assertIn('if (secondloopApplicationId == "com.secondloop.secondloopdev")', gradle_file)
-        self.assertIn('manifestPlaceholders += [appName: secondloopApplicationName]', gradle_file)
+        self.assertIn(
+            'if (secondloopApplicationId == "com.secondloop.secondloopdev")',
+            gradle_file,
+        )
+        self.assertIn(
+            'manifestPlaceholders += [appName: secondloopApplicationName]',
+            gradle_file,
+        )
 
     def test_android_manifest_uses_app_name_placeholder(self) -> None:
         manifest_file = ANDROID_MANIFEST.read_text(encoding="utf-8")
 
         self.assertIn('android:label="${appName}"', manifest_file)
+
+    def test_flutter_with_defines_falls_back_to_flutter_when_fvm_is_missing(self) -> None:
+        script = FLUTTER_WITH_DEFINES_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("dart pub global list", script)
+        self.assertIn('command -v flutter', script)
+        self.assertIn('No active package fvm', script)
+
+    def test_android_release_script_supports_target_platform_override(self) -> None:
+        script = BUILD_ANDROID_RELEASE_APK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('SECONDLOOP_ANDROID_TARGET_PLATFORMS', script)
+        self.assertIn('android-arm,android-arm64', script)
+        self.assertIn('--target-platform "${target_platforms}"', script)
 
 
 if __name__ == "__main__":

@@ -76,6 +76,27 @@ void main() {
     ]);
   });
 
+  test('initial video extract payload seeds auto OCR and transcript linkage',
+      () {
+    final payload = buildInitialVideoExtractPayload(
+      manifestMimeType: 'application/x.secondloop.video+json',
+      originalSha256: 'sha_video_proxy',
+      originalMimeType: 'video/mp4',
+      audioSha256: 'sha_audio_proxy',
+      audioMimeType: 'audio/mp4',
+      segmentCount: 2,
+    );
+
+    expect(payload['schema'], 'secondloop.video_extract.v1');
+    expect(payload['mime_type'], 'application/x.secondloop.video+json');
+    expect(payload['original_sha256'], 'sha_video_proxy');
+    expect(payload['audio_sha256'], 'sha_audio_proxy');
+    expect(payload['audio_mime_type'], 'audio/mp4');
+    expect(payload['video_segment_count'], 2);
+    expect(payload['video_processed_segment_count'], 0);
+    expect(payload['needs_ocr'], isTrue);
+    expect(payload['ocr_auto_status'], 'queued');
+  });
   test('video manifest payload omits optional media fields when absent', () {
     final payload = buildVideoManifestPayload(
       videoSha256: 'sha_video_proxy',

@@ -25,7 +25,21 @@ function(apply_cargokit target manifest_dir lib_name any_symbol_name)
         set(CARGOKIT_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}")
         set(OUTPUT_LIB "${CMAKE_CURRENT_BINARY_DIR}/${CARGOKIT_LIB_FULL_NAME}")
     endif()
-    set(CARGOKIT_TEMP_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargokit_build")
+    set(cargokit_target_temp_dir_override "$ENV{CARGOKIT_TARGET_TEMP_DIR}")
+    if (NOT "${cargokit_target_temp_dir_override}" STREQUAL "")
+        set(CARGOKIT_TEMP_DIR "${cargokit_target_temp_dir_override}")
+        string(REPLACE "\\" "/" CARGOKIT_TEMP_DIR "${CARGOKIT_TEMP_DIR}")
+    else()
+        set(CARGOKIT_TEMP_DIR "${CMAKE_CURRENT_BINARY_DIR}/cargokit_build")
+    endif()
+
+    set(cargokit_tool_temp_dir_override "$ENV{CARGOKIT_TOOL_TEMP_DIR}")
+    if (NOT "${cargokit_tool_temp_dir_override}" STREQUAL "")
+        set(CARGOKIT_TOOL_TEMP_DIR "${cargokit_tool_temp_dir_override}")
+        string(REPLACE "\\" "/" CARGOKIT_TOOL_TEMP_DIR "${CARGOKIT_TOOL_TEMP_DIR}")
+    else()
+        set(CARGOKIT_TOOL_TEMP_DIR "${CARGOKIT_TEMP_DIR}/tool")
+    endif()
 
     if (FLUTTER_TARGET_PLATFORM)
         set(CARGOKIT_TARGET_PLATFORM "${FLUTTER_TARGET_PLATFORM}")
@@ -40,7 +54,7 @@ function(apply_cargokit target manifest_dir lib_name any_symbol_name)
         "CARGOKIT_TARGET_TEMP_DIR=${CARGOKIT_TEMP_DIR}"
         "CARGOKIT_OUTPUT_DIR=${CARGOKIT_OUTPUT_DIR}"
         "CARGOKIT_TARGET_PLATFORM=${CARGOKIT_TARGET_PLATFORM}"
-        "CARGOKIT_TOOL_TEMP_DIR=${CARGOKIT_TEMP_DIR}/tool"
+        "CARGOKIT_TOOL_TEMP_DIR=${CARGOKIT_TOOL_TEMP_DIR}"
         "CARGOKIT_ROOT_PROJECT_DIR=${CMAKE_SOURCE_DIR}"
     )
 

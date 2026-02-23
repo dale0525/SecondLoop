@@ -12,6 +12,30 @@ const int _kChatVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
 const int _kChatVideoProxyMaxDurationMs = 60 * 60 * 1000;
 const int _kChatVideoProxyMaxBytes = 200 * 1024 * 1024;
 
+Map<String, Object?> _buildInitialVideoExtractPayload({
+  required String manifestMimeType,
+  required String originalSha256,
+  required String originalMimeType,
+  required int segmentCount,
+  String? audioSha256,
+  String? audioMimeType,
+}) {
+  return <String, Object?>{
+    'schema': 'secondloop.video_extract.v1',
+    'mime_type': manifestMimeType,
+    'original_sha256': originalSha256,
+    'original_mime_type': originalMimeType,
+    'needs_ocr': true,
+    'ocr_auto_status': 'queued',
+    'video_segment_count': segmentCount,
+    'video_processed_segment_count': 0,
+    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
+      'audio_sha256': audioSha256,
+    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
+      'audio_mime_type': audioMimeType,
+  };
+}
+
 Map<String, Object?> buildVideoManifestPayload({
   required String videoSha256,
   required String videoMimeType,
@@ -488,9 +512,12 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
               defaultTargetPlatform == TargetPlatform.android ||
               defaultTargetPlatform == TargetPlatform.iOS;
           if (shouldExtractVideoAudio) {
-            final audioProxy = await AudioTranscodeWorker.transcodeToM4aProxy(
+            final audioProxy =
+                await AudioTranscodeWorker.transcodeVideoAudioForManifest(
               rawBytes,
-              sourceMimeType: normalizedMimeType,
+              originalMimeType: normalizedMimeType,
+              primarySegmentBytes: primarySegment.bytes,
+              primarySegmentMimeType: primarySegment.mimeType,
             );
             if (audioProxy.didTranscode &&
                 audioProxy.bytes.isNotEmpty &&
@@ -503,28 +530,39 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
               audioSha256 = audioAttachment.sha256;
               audioMimeType = audioAttachment.mimeType;
               backupShas.add(audioAttachment.sha256);
-              unawaited(
-                _maybeEnqueueAudioTranscribeEnrichment(
-                  backend,
-                  sessionKey,
-                  audioAttachment.sha256,
-                  mimeType: audioAttachment.mimeType,
-                ).catchError((_) {}),
-              );
             }
           }
-          if (audioSha256 == null) {
-            audioSha256 = primaryVideo.sha256;
-            audioMimeType = primaryVideo.mimeType;
-            unawaited(
-              _maybeEnqueueAudioTranscribeEnrichment(
-                backend,
-                sessionKey,
-                primaryVideo.sha256,
-                mimeType: primaryVideo.mimeType,
-              ).catchError((_) {}),
+
+          final queuedTranscriptShas = <String>{};
+          Future<void> enqueueVideoTranscriptJob(
+            String sha256,
+            String mimeType,
+          ) async {
+            final normalizedSha = sha256.trim();
+            if (normalizedSha.isEmpty) return;
+            if (!queuedTranscriptShas.add(normalizedSha)) return;
+            await _maybeEnqueueAudioTranscribeEnrichment(
+              backend,
+              sessionKey,
+              normalizedSha,
+              mimeType: mimeType,
             );
           }
+
+          for (final segment in videoSegments) {
+            unawaited(
+              enqueueVideoTranscriptJob(segment.sha256, segment.mimeType)
+                  .catchError((_) {}),
+            );
+          }
+
+          audioSha256 ??= primaryVideo.sha256;
+          audioMimeType ??= primaryVideo.mimeType;
+
+          unawaited(
+            enqueueVideoTranscriptJob(audioSha256, audioMimeType)
+                .catchError((_) {}),
+          );
 
           final manifest = jsonEncode({
             ...buildVideoManifestPayload(
@@ -550,6 +588,29 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
             bytes: manifestBytes,
             mimeType: kSecondLoopVideoManifestMimeType,
           );
+
+          try {
+            final nowMs = DateTime.now().millisecondsSinceEpoch;
+            final initialPayload = _buildInitialVideoExtractPayload(
+              manifestMimeType: kSecondLoopVideoManifestMimeType,
+              originalSha256: primaryVideo.sha256,
+              originalMimeType: primaryVideo.mimeType,
+              audioSha256: audioSha256,
+              audioMimeType: audioMimeType,
+              segmentCount: videoSegments.length,
+            );
+            await backend.markAttachmentAnnotationOkJson(
+              sessionKey,
+              attachmentSha256: manifestAttachment.sha256,
+              lang: 'und',
+              modelName: 'video_extract.v1',
+              payloadJson: jsonEncode(initialPayload),
+              nowMs: nowMs,
+            );
+          } catch (_) {
+            // ignore
+          }
+
           shaToLink = manifestAttachment.sha256;
         }
       } else if (normalizedMimeType.startsWith('audio/')) {

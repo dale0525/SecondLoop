@@ -279,6 +279,98 @@ fn parse_audio_transcript_payload(payload_json: &str) -> Result<(String, String)
     Ok((normalized_full, normalized_excerpt))
 }
 
+#[derive(Clone, Debug)]
+struct AttachmentTranscriptLookup {
+    has_annotation_payload: bool,
+    transcript_full: String,
+    transcript_excerpt: String,
+}
+
+#[derive(Clone, Debug)]
+struct VideoManifestSegmentTranscriptAggregate {
+    transcript_full: String,
+    transcript_excerpt: String,
+    missing_segment_shas: Vec<String>,
+}
+
+fn lookup_attachment_transcript(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_sha256: &str,
+) -> Result<AttachmentTranscriptLookup> {
+    let transcript_payload_json =
+        read_attachment_annotation_payload_json(conn, key, attachment_sha256)?;
+
+    let Some(payload_json) = transcript_payload_json else {
+        return Ok(AttachmentTranscriptLookup {
+            has_annotation_payload: false,
+            transcript_full: String::new(),
+            transcript_excerpt: String::new(),
+        });
+    };
+
+    let (transcript_full, transcript_excerpt) = parse_audio_transcript_payload(&payload_json)
+        .unwrap_or_else(|_| (String::new(), String::new()));
+
+    Ok(AttachmentTranscriptLookup {
+        has_annotation_payload: true,
+        transcript_full,
+        transcript_excerpt,
+    })
+}
+
+fn collect_video_manifest_segment_transcript(
+    conn: &Connection,
+    key: &[u8; 32],
+    manifest: &ParsedVideoManifestPayload,
+) -> Result<VideoManifestSegmentTranscriptAggregate> {
+    let mut transcript_full_parts = Vec::<String>::new();
+    let mut transcript_excerpt_parts = Vec::<String>::new();
+    let mut missing_segment_shas = Vec::<String>::new();
+
+    for segment in manifest.segments.iter() {
+        let transcript = lookup_attachment_transcript(conn, key, &segment.sha256)?;
+        if !transcript.has_annotation_payload {
+            missing_segment_shas.push(segment.sha256.clone());
+            continue;
+        }
+
+        let normalized_full = transcript.transcript_full.trim();
+        let normalized_excerpt = transcript.transcript_excerpt.trim();
+        if normalized_full.is_empty() && normalized_excerpt.is_empty() {
+            continue;
+        }
+
+        let full = if normalized_full.is_empty() {
+            normalized_excerpt.to_string()
+        } else {
+            normalized_full.to_string()
+        };
+        let excerpt = if normalized_excerpt.is_empty() {
+            truncate_utf8_for_excerpt(&full, VIDEO_EXTRACT_EXCERPT_MAX_BYTES)
+        } else {
+            normalized_excerpt.to_string()
+        };
+
+        transcript_full_parts.push(full);
+        transcript_excerpt_parts.push(excerpt);
+    }
+
+    let transcript_full = transcript_full_parts.join("\n\n").trim().to_string();
+    let transcript_excerpt_raw = transcript_excerpt_parts.join("\n\n").trim().to_string();
+    let transcript_excerpt = if transcript_excerpt_raw.is_empty() {
+        truncate_utf8_for_excerpt(&transcript_full, VIDEO_EXTRACT_EXCERPT_MAX_BYTES)
+    } else {
+        transcript_excerpt_raw
+    };
+
+    Ok(VideoManifestSegmentTranscriptAggregate {
+        transcript_full,
+        transcript_excerpt,
+        missing_segment_shas,
+    })
+}
+
 fn should_wait_for_linked_audio_transcript(manifest: &ParsedVideoManifestPayload) -> bool {
     let Some(audio_sha256) = manifest.audio_sha256.as_deref() else {
         return false;
@@ -597,28 +689,58 @@ pub fn process_pending_document_extractions(
             if process_video_manifests && is_video_manifest_mime_type(&normalized_mime) {
                 let manifest = parse_video_manifest_payload(&bytes)?;
 
+                let segment_transcript =
+                    collect_video_manifest_segment_transcript(conn, key, &manifest)?;
                 let mut transcript_full = String::new();
                 let mut transcript_excerpt = String::new();
-                let should_wait_for_audio_transcript =
-                    should_wait_for_linked_audio_transcript(&manifest);
-                if let Some(audio_sha256) = manifest.audio_sha256.as_deref() {
-                    let transcript_payload_json =
-                        read_attachment_annotation_payload_json(conn, key, audio_sha256)?;
 
-                    if let Some(payload_json) = transcript_payload_json {
-                        if let Ok((full, excerpt)) = parse_audio_transcript_payload(&payload_json) {
-                            transcript_full = full;
-                            transcript_excerpt = excerpt;
+                if segment_transcript.missing_segment_shas.is_empty() {
+                    transcript_full = segment_transcript.transcript_full;
+                    transcript_excerpt = segment_transcript.transcript_excerpt;
+                } else if cfg.audio_transcribe_enabled {
+                    let mut missing_segment_shas = std::collections::BTreeSet::<String>::new();
+                    for segment_sha in segment_transcript.missing_segment_shas.iter() {
+                        let normalized_sha = segment_sha.trim();
+                        if normalized_sha.is_empty() {
+                            continue;
                         }
-                    } else if should_wait_for_audio_transcript && cfg.audio_transcribe_enabled {
-                        enqueue_attachment_annotation(conn, audio_sha256, "und", now)?;
-                        enqueue_attachment_annotation(
-                            conn,
-                            &job.attachment_sha256,
-                            &job.lang,
-                            now,
-                        )?;
-                        return Ok(ContentExtractProcessOutcome::Deferred);
+                        if !missing_segment_shas.insert(normalized_sha.to_string()) {
+                            continue;
+                        }
+                        enqueue_attachment_annotation(conn, normalized_sha, "und", now)?;
+                    }
+
+                    enqueue_attachment_annotation(
+                        conn,
+                        &job.attachment_sha256,
+                        &job.lang,
+                        now,
+                    )?;
+                    return Ok(ContentExtractProcessOutcome::Deferred);
+                }
+
+                if transcript_full.trim().is_empty() && transcript_excerpt.trim().is_empty() {
+                    let should_wait_for_audio_transcript =
+                        should_wait_for_linked_audio_transcript(&manifest);
+                    if let Some(audio_sha256) = manifest.audio_sha256.as_deref() {
+                        let transcript_lookup =
+                            lookup_attachment_transcript(conn, key, audio_sha256)?;
+
+                        if transcript_lookup.has_annotation_payload {
+                            transcript_full = transcript_lookup.transcript_full;
+                            transcript_excerpt = transcript_lookup.transcript_excerpt;
+                        } else if cfg.audio_transcribe_enabled {
+                            enqueue_attachment_annotation(conn, audio_sha256, "und", now)?;
+                            if should_wait_for_audio_transcript {
+                                enqueue_attachment_annotation(
+                                    conn,
+                                    &job.attachment_sha256,
+                                    &job.lang,
+                                    now,
+                                )?;
+                                return Ok(ContentExtractProcessOutcome::Deferred);
+                            }
+                        }
                     }
                 }
 

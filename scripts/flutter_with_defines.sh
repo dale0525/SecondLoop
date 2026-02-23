@@ -197,8 +197,39 @@ fi
 maybe_clear_macos_module_cache_conflict
 maybe_clear_macos_stale_app_bundle_for_speech_privacy
 
+run_flutter_command() {
+  local -a args=("$@")
+
+  if command -v dart >/dev/null 2>&1; then
+    if dart pub global list 2>/dev/null | awk '{print $1}' | grep -qx 'fvm'; then
+      exec dart pub global run fvm:main flutter "${args[@]}"
+    fi
+
+    if command -v flutter >/dev/null 2>&1; then
+      echo "SecondLoop: No active package fvm. Falling back to flutter on PATH." >&2
+      exec flutter "${args[@]}"
+    fi
+
+    cat >&2 <<'EOF'
+SecondLoop: No active package fvm.
+Install fvm globally (`dart pub global activate fvm`) or ensure `flutter` is in PATH.
+EOF
+    exit 1
+  fi
+
+  if command -v flutter >/dev/null 2>&1; then
+    exec flutter "${args[@]}"
+  fi
+
+  cat >&2 <<'EOF'
+SecondLoop: neither `dart` nor `flutter` is available in PATH.
+Install Flutter SDK or run commands through `pixi run`.
+EOF
+  exit 1
+}
+
 if (( ${#defines[@]} > 0 )); then
-  exec dart pub global run fvm:main flutter "$@" "${defines[@]}"
+  run_flutter_command "$@" "${defines[@]}"
 fi
 
-exec dart pub global run fvm:main flutter "$@"
+run_flutter_command "$@"
