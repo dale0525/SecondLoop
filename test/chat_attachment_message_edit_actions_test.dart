@@ -45,14 +45,14 @@ void main() {
 
       await _pumpChatPage(tester, backend);
 
-      final messageRow = find.byKey(const ValueKey('chat_message_row_m1'));
-      expect(messageRow, findsOneWidget);
+      final bubble = find.byKey(const ValueKey('message_bubble_m1'));
+      expect(bubble, findsOneWidget);
       expect(find.byKey(const ValueKey('message_edit_m1')), findsNothing);
 
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await tester.pump();
-      await mouse.moveTo(tester.getCenter(messageRow));
+      await mouse.moveTo(tester.getCenter(bubble));
       await _pumpUi(tester);
 
       expect(find.byKey(const ValueKey('message_delete_m1')), findsOneWidget);
@@ -181,11 +181,11 @@ void main() {
 
       await _pumpChatPage(tester, backend);
 
-      final messageRow = find.byKey(const ValueKey('chat_message_row_m1'));
+      final bubble = find.byKey(const ValueKey('message_bubble_m1'));
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       await tester.pump();
-      await mouse.moveTo(tester.getCenter(messageRow));
+      await mouse.moveTo(tester.getCenter(bubble));
       await _pumpUi(tester);
 
       expect(find.byKey(const ValueKey('message_delete_m1')), findsOneWidget);
