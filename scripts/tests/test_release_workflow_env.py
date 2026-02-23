@@ -118,14 +118,30 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("name: Install Android NDK", workflow_text)
         self.assertIn('flutter_gradle="${FLUTTER_ROOT}/packages/flutter_tools/gradle/src/main/groovy/flutter.groovy"', workflow_text)
         self.assertIn('flutter_ndk_version="$(sed -nE', workflow_text)
-        self.assertIn('s/^.*ndkVersion[[:space:]]*=[[:space:]]*"([^"]+)".*/\\1/p', workflow_text)
+        self.assertIn('ndkVersion[[:space:]]*=[[:space:]]*', workflow_text)
+        self.assertIn('/\\1/p', workflow_text)
         self.assertIn('ndk_package="ndk;${flutter_ndk_version}"', workflow_text)
         self.assertIn('"${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"', workflow_text)
 
-    def test_release_workflow_builds_android_release_for_arm64_only(self) -> None:
+    def test_release_workflow_persists_android_ndk_root_for_later_steps(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn('export SECONDLOOP_ANDROID_TARGET_PLATFORMS="android-arm64"', workflow_text)
+        self.assertIn('ndk_root="${sdk_root}/ndk/${flutter_ndk_version}"', workflow_text)
+        self.assertIn('echo "SECONDLOOP_ANDROID_NDK_ROOT=${ndk_root}" >> "${GITHUB_ENV}"', workflow_text)
+
+    def test_release_workflow_builds_android_release_for_arm_and_arm64(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertNotIn('export SECONDLOOP_ANDROID_TARGET_PLATFORMS="android-arm64"', workflow_text)
+        self.assertIn('bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"', workflow_text)
+
+    def test_release_workflow_sets_bindgen_clang_args_for_android_targets(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('ndk_sysroot="${SECONDLOOP_ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"', workflow_text)
+        self.assertIn('export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${ndk_sysroot}"', workflow_text)
+        self.assertIn('export BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--sysroot=${ndk_sysroot} --target=armv7a-linux-androideabi23"', workflow_text)
+        self.assertIn('export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=${ndk_sysroot} --target=aarch64-linux-android23"', workflow_text)
 
     def test_release_workflow_runs_android_rustup_setup_before_build(self) -> None:
         workflow_text = self._workflow_text()

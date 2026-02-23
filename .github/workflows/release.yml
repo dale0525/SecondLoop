@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
 
-          flutter_ndk_version="$(sed -nE 's/^.*ndkVersion[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "${flutter_gradle}" | head -n1)"
+          flutter_ndk_version="$(sed -nE "s/^.*ndkVersion[[:space:]]*=[[:space:]]*['\"]([^'\"]+)['\"].*/\1/p" "${flutter_gradle}" | head -n1)"
           if [[ -z "${flutter_ndk_version}" ]]; then
             echo "Failed to parse ndkVersion from ${flutter_gradle}"
             exit 1
@@ -102,6 +102,13 @@ jobs:
           yes | "${sdkmanager}" --sdk_root="${sdk_root}" --licenses >/dev/null
           set -o pipefail
           "${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"
+
+          ndk_root="${sdk_root}/ndk/${flutter_ndk_version}"
+          if [[ ! -d "${ndk_root}" ]]; then
+            echo "Installed NDK root not found: ${ndk_root}"
+            exit 1
+          fi
+          echo "SECONDLOOP_ANDROID_NDK_ROOT=${ndk_root}" >> "${GITHUB_ENV}"
       - name: Validate prod config
         shell: bash
         run: |
@@ -170,7 +177,21 @@ jobs:
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
-          export SECONDLOOP_ANDROID_TARGET_PLATFORMS="android-arm64"
+
+          : "${SECONDLOOP_ANDROID_NDK_ROOT:?Missing Android NDK root from install step}"
+          ndk_sysroot="${SECONDLOOP_ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          if [[ ! -d "${ndk_sysroot}" ]]; then
+            echo "Android NDK sysroot not found: ${ndk_sysroot}"
+            exit 1
+          fi
+
+          export ANDROID_NDK_ROOT="${SECONDLOOP_ANDROID_NDK_ROOT}"
+          export ANDROID_NDK_HOME="${SECONDLOOP_ANDROID_NDK_ROOT}"
+          export ANDROID_NDK="${SECONDLOOP_ANDROID_NDK_ROOT}"
+          export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${ndk_sysroot}"
+          export BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--sysroot=${ndk_sysroot} --target=armv7a-linux-androideabi23"
+          export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=${ndk_sysroot} --target=aarch64-linux-android23"
+
           bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
