@@ -5,6 +5,9 @@ import WebKit
 private let kMarkdownPdfMethod = "exportMarkdownHtmlToPdf"
 private let kMarkdownPdfPageWidth: CGFloat = 595.2
 private let kMarkdownPdfPageHeight: CGFloat = 841.8
+private let kMarkdownPdfTopMargin: CGFloat = 48
+private let kMarkdownPdfBottomMargin: CGFloat = 64
+private let kMarkdownPdfHorizontalMargin: CGFloat = 54
 
 private struct PdfDetectedMargins {
   let top: CGFloat
@@ -228,10 +231,10 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     let printInfo = NSPrintInfo()
     printInfo.paperSize = NSSize(width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight)
-    printInfo.topMargin = 0
-    printInfo.bottomMargin = 0
-    printInfo.leftMargin = 0
-    printInfo.rightMargin = 0
+    printInfo.topMargin = kMarkdownPdfTopMargin
+    printInfo.bottomMargin = kMarkdownPdfBottomMargin
+    printInfo.leftMargin = kMarkdownPdfHorizontalMargin
+    printInfo.rightMargin = kMarkdownPdfHorizontalMargin
     printInfo.horizontalPagination = .automatic
     printInfo.verticalPagination = .automatic
     printInfo.isVerticallyCentered = false
