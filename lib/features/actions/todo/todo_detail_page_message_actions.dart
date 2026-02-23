@@ -33,188 +33,100 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     final syncEngine = SyncEngineScope.maybeOf(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    Future<({String content, bool openMarkdown})?> showSimpleEditor(
-      String initialText,
-    ) {
-      var draft = initialText;
-      return showDialog<({String content, bool openMarkdown})>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(context.t.chat.editMessageTitle),
-          content: SizedBox(
-            width: 560,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    key: const ValueKey('edit_message_content'),
-                    initialValue: initialText,
-                    autofocus: true,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    minLines: 1,
-                    maxLines: 6,
-                    onChanged: (value) => draft = value,
-                    decoration: InputDecoration(
-                      hintText: context.t.common.fields.message,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  key: const ValueKey('chat_markdown_editor_switch_markdown'),
-                  tooltip: context.t.chat.markdownEditor.openButton,
-                  onPressed: () => Navigator.of(dialogContext).pop(
-                    (content: draft, openMarkdown: true),
-                  ),
-                  icon: const Icon(Icons.open_in_full_rounded),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton.icon(
-              key: const ValueKey('edit_message_save'),
-              onPressed: () => Navigator.of(dialogContext).pop(
-                (content: draft, openMarkdown: false),
-              ),
-              icon: const Icon(Icons.save_rounded, size: 18),
-              label: Text(context.t.common.actions.save),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Future<ChatMarkdownEditorResult?> showMarkdownEditor(String initialText) {
-      return Navigator.of(context).push<ChatMarkdownEditorResult>(
-        MaterialPageRoute(
-          builder: (context) => ChatMarkdownEditorPage(
-            initialText: initialText,
-            title: context.t.chat.editMessageTitle,
-            saveLabel: context.t.common.actions.save,
-            inputFieldKey: const ValueKey('edit_message_content'),
-            saveButtonKey: const ValueKey('edit_message_save'),
-            allowPlainMode: true,
-            initialMode: ChatEditorMode.markdown,
-          ),
-        ),
-      );
-    }
-
     try {
-      var draft = message.content;
-      var useMarkdown = shouldUseMarkdownEditorByDefault(draft);
+      final markdownResult = await openChatMarkdownEditor(
+        context,
+        initialText: message.content,
+        title: context.t.chat.editMessageTitle,
+        saveLabel: context.t.common.actions.save,
+        inputFieldKey: const ValueKey('edit_message_content'),
+        saveButtonKey: const ValueKey('edit_message_save'),
+        allowPlainMode: false,
+      );
+      if (markdownResult == null) return;
 
-      while (true) {
-        if (useMarkdown) {
-          final markdownResult = await showMarkdownEditor(draft);
-          if (markdownResult == null) return;
-          draft = markdownResult.text;
-          if (markdownResult.shouldSwitchToSimpleInput) {
-            useMarkdown = false;
-            continue;
+      final trimmed = markdownResult.text.trim();
+      await backend.editMessage(sessionKey, message.id, trimmed);
+
+      var shouldRequeueSemanticParse = false;
+      try {
+        final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
+        shouldRequeueSemanticParse = shouldRequeueSemanticParseAfterMessageEdit(
+          previousText: message.content,
+          editedText: trimmed,
+          isSourceEntry: linkedTodoInfo?.isSourceEntry == true,
+        );
+      } catch (_) {
+        // ignore
+      }
+
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      try {
+        await backend.markSemanticParseJobCanceled(
+          sessionKey,
+          messageId: message.id,
+          nowMs: nowMs,
+        );
+      } catch (_) {
+        // ignore
+      }
+
+      if (shouldRequeueSemanticParse && mounted) {
+        final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+            SubscriptionStatus.unknown;
+        final cloudAuthScope = CloudAuthScope.maybeOf(context);
+        final cloudGatewayConfig =
+            cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+
+        final prefs = await SharedPreferences.getInstance();
+        final consented =
+            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+
+        if (consented) {
+          String? cloudIdToken;
+          try {
+            cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+          } catch (_) {
+            cloudIdToken = null;
           }
-        } else {
-          final plainResult = await showSimpleEditor(draft);
-          if (plainResult == null) return;
-          draft = plainResult.content;
-          if (plainResult.openMarkdown) {
-            useMarkdown = true;
-            continue;
+
+          AskAiRouteKind route;
+          try {
+            route = await decideAiAutomationRoute(
+              backend,
+              sessionKey,
+              cloudIdToken: cloudIdToken,
+              cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
+              subscriptionStatus: subscriptionStatus,
+            );
+          } catch (_) {
+            route = AskAiRouteKind.needsSetup;
           }
-        }
 
-        final trimmed = draft.trim();
-        await backend.editMessage(sessionKey, message.id, trimmed);
-
-        var shouldRequeueSemanticParse = false;
-        try {
-          final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
-          shouldRequeueSemanticParse =
-              shouldRequeueSemanticParseAfterMessageEdit(
-            previousText: message.content,
-            editedText: trimmed,
-            isSourceEntry: linkedTodoInfo?.isSourceEntry == true,
-          );
-        } catch (_) {
-          // ignore
-        }
-
-        final nowMs = DateTime.now().millisecondsSinceEpoch;
-        try {
-          await backend.markSemanticParseJobCanceled(
-            sessionKey,
-            messageId: message.id,
-            nowMs: nowMs,
-          );
-        } catch (_) {
-          // ignore
-        }
-
-        if (shouldRequeueSemanticParse && mounted) {
-          final subscriptionStatus =
-              SubscriptionScope.maybeOf(context)?.status ??
-                  SubscriptionStatus.unknown;
-          final cloudAuthScope = CloudAuthScope.maybeOf(context);
-          final cloudGatewayConfig =
-              cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-
-          final prefs = await SharedPreferences.getInstance();
-          final consented =
-              prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
-
-          if (consented) {
-            String? cloudIdToken;
+          if (route != AskAiRouteKind.needsSetup) {
             try {
-              cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-            } catch (_) {
-              cloudIdToken = null;
-            }
-
-            AskAiRouteKind route;
-            try {
-              route = await decideAiAutomationRoute(
-                backend,
+              await backend.enqueueSemanticParseJob(
                 sessionKey,
-                cloudIdToken: cloudIdToken,
-                cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-                subscriptionStatus: subscriptionStatus,
+                messageId: message.id,
+                nowMs: nowMs,
               );
             } catch (_) {
-              route = AskAiRouteKind.needsSetup;
-            }
-
-            if (route != AskAiRouteKind.needsSetup) {
-              try {
-                await backend.enqueueSemanticParseJob(
-                  sessionKey,
-                  messageId: message.id,
-                  nowMs: nowMs,
-                );
-              } catch (_) {
-                // ignore
-              }
+              // ignore
             }
           }
         }
-
-        if (!mounted) return;
-        syncEngine?.notifyLocalMutation();
-        _refreshActivities();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(context.t.chat.messageUpdated),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        return;
       }
+
+      if (!mounted) return;
+      syncEngine?.notifyLocalMutation();
+      _refreshActivities();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.messageUpdated),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
@@ -340,12 +252,12 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     String content, {
     required bool isDesktopPlatform,
   }) {
-    final normalized = sanitizeChatMarkdown(content);
-    final markdown = MarkdownBody(
-      data: normalized,
-      selectable: false,
-      styleSheet: slMarkdownStyleSheet(
+    final markdown = ChatMarkdownPreviewPanel(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+      child: buildChatMarkdownPreviewBody(
         context,
+        text: content,
+        selectable: false,
         bodyStyle: Theme.of(context).textTheme.bodyLarge,
       ),
     );

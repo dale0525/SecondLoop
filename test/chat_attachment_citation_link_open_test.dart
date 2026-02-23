@@ -108,7 +108,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final markdown = tester.widget<Markdown>(find.byType(Markdown));
+    final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     final onTapLink = markdown.onTapLink;
     expect(onTapLink, isNotNull);
 

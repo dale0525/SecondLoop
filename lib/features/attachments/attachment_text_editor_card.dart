@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../i18n/strings.g.dart';
-import '../../ui/sl_markdown_style.dart';
 import '../../ui/sl_surface.dart';
-import 'attachment_markdown_normalizer.dart';
+import '../chat/chat_markdown_editor_launcher.dart';
+import '../chat/chat_markdown_preview.dart';
 
 class AttachmentTextEditorCard extends StatefulWidget {
   const AttachmentTextEditorCard({
@@ -46,13 +45,11 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _persistValue(String nextValue) async {
     if (_saving) return;
     final callback = widget.onSave;
-    final controller = _controller;
-    if (callback == null || controller == null) return;
+    if (callback == null) return;
 
-    final nextValue = controller.text.trim();
     setState(() => _saving = true);
     try {
       await callback(nextValue);
@@ -75,10 +72,36 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
     }
   }
 
+  Future<void> _save() async {
+    final controller = _controller;
+    if (controller == null) return;
+    await _persistValue(controller.text.trim());
+  }
+
   void _beginEdit() {
+    if (_saving) return;
+    if (widget.markdown) {
+      unawaited(_editMarkdownWithFullEditor());
+      return;
+    }
+
     _controller?.dispose();
     _controller = TextEditingController(text: widget.text);
     setState(() => _editing = true);
+  }
+
+  Future<void> _editMarkdownWithFullEditor() async {
+    final result = await openChatMarkdownEditor(
+      context,
+      initialText: widget.text,
+      title: (widget.label ?? '').trim().isNotEmpty
+          ? widget.label!.trim()
+          : context.t.chat.markdownEditor.title,
+      saveLabel: context.t.common.actions.save,
+      allowPlainMode: false,
+    );
+    if (result == null) return;
+    await _persistValue(result.text.trim());
   }
 
   void _cancelEdit() {
@@ -119,7 +142,7 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
                     key: ValueKey('${widget.fieldKeyPrefix}_edit'),
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: context.t.common.actions.edit,
-                    onPressed: _beginEdit,
+                    onPressed: _saving ? null : _beginEdit,
                   ),
               ],
             ),
@@ -135,13 +158,14 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
                     ?.copyWith(fontStyle: FontStyle.italic),
               )
             else if (widget.markdown)
-              MarkdownBody(
-                key: ValueKey('${widget.fieldKeyPrefix}_markdown_display'),
-                data: normalizeAttachmentMarkdown(text),
-                selectable: true,
-                softLineBreak: true,
-                styleSheet: slMarkdownStyleSheet(
+              ChatMarkdownPreviewPanel(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+                child: buildChatMarkdownPreviewBody(
                   context,
+                  key: ValueKey('${widget.fieldKeyPrefix}_markdown_display'),
+                  text: text,
+                  selectable: true,
+                  restoreEscapedNewlines: true,
                   bodyStyle: Theme.of(context).textTheme.bodySmall,
                 ),
               )

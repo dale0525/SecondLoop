@@ -145,7 +145,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   }
 
   Future<Uint8List> _buildPdfBytes() async {
-    final normalized = sanitizeChatMarkdown(_controller.text);
+    final normalized = normalizeChatMarkdownForPreview(_controller.text);
     final blocks = _parseMarkdownBlocks(normalized);
     final previewTheme =
         resolveChatMarkdownTheme(_themePreset, Theme.of(context));

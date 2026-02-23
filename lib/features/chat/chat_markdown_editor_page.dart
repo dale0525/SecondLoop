@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:share_plus/share_plus.dart';
@@ -18,7 +17,7 @@ import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
-import 'chat_markdown_sanitizer.dart';
+import 'chat_markdown_preview.dart';
 import 'chat_markdown_theme_presets.dart';
 
 part 'chat_markdown_editor_page_export.dart';

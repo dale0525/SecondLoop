@@ -7,7 +7,7 @@ import 'message_actions_test_helpers.dart';
 import 'test_backend.dart';
 
 void main() {
-  testWidgets('Editing long chat message defaults to markdown mode',
+  testWidgets('Editing chat message opens markdown editor directly',
       (tester) async {
     final longContent = List<String>.filled(
       8,
@@ -40,7 +40,7 @@ void main() {
     expect(find.byKey(const ValueKey('chat_markdown_editor_preview')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')),
-        findsOneWidget);
+        findsNothing);
     expect(find.byKey(const ValueKey('chat_markdown_editor_switch_markdown')),
         findsNothing);
   });

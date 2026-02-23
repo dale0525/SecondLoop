@@ -65,11 +65,13 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('attachment_text_full_edit')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
+        findsOneWidget);
     await tester.enterText(
-      find.byKey(const ValueKey('attachment_text_full_field')),
+      find.byKey(const ValueKey('chat_markdown_editor_input')),
       '# Edited Full',
     );
-    await tester.tap(find.byKey(const ValueKey('attachment_text_full_save')));
+    await tester.tap(find.byKey(const ValueKey('chat_markdown_editor_save')));
     await tester.pumpAndSettle();
 
     expect(savedFull, '# Edited Full');
