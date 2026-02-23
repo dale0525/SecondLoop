@@ -1,12 +1,16 @@
-import 'dart:typed_data';
-
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/lock/lock_gate.dart';
+import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
+
+import 'test_i18n.dart';
 
 void main() {
   testWidgets(
@@ -38,6 +42,121 @@ void main() {
 
     expect(find.byKey(const ValueKey('setup_password')), findsOneWidget);
   });
+
+  testWidgets(
+      'lock now without master password routes to setup across platforms',
+      (tester) async {
+    final platforms = [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ];
+
+    for (final platform in platforms) {
+      debugDefaultTargetPlatformOverride = platform;
+      SharedPreferences.setMockInitialValues({
+        'app_lock_enabled_v1': false,
+      });
+
+      final backend = _SavedKeyBackend(masterPasswordSet: false);
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: const LockGate(
+                child: Scaffold(body: SettingsPage()),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('setup_password')), findsNothing);
+      expect(find.text('Lock now'), findsOneWidget);
+
+      await tester.tap(find.text('Lock now'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('setup_password')),
+        findsOneWidget,
+        reason: 'platform=$platform',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets(
+      'direct lock without setup flag still routes to setup across platforms',
+      (tester) async {
+    final platforms = [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ];
+
+    for (final platform in platforms) {
+      debugDefaultTargetPlatformOverride = platform;
+      SharedPreferences.setMockInitialValues({
+        'app_lock_enabled_v1': false,
+      });
+
+      final backend = _SavedKeyBackend(masterPasswordSet: false);
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: const LockGate(child: _ManualLockPage()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('setup_password')), findsNothing);
+      expect(find.byKey(const ValueKey('manual_lock_trigger')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('manual_lock_trigger')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('setup_password')),
+        findsOneWidget,
+        reason: 'platform=$platform',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+}
+
+class _ManualLockPage extends StatelessWidget {
+  const _ManualLockPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: TextButton(
+          key: const ValueKey('manual_lock_trigger'),
+          onPressed: SessionScope.of(context).lock,
+          child: const Text('Lock'),
+        ),
+      ),
+    );
+  }
 }
 
 final class _SavedKeyBackend extends AppBackend {

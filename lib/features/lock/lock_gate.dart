@@ -23,6 +23,7 @@ class LockGate extends StatefulWidget {
 class _LockGateState extends State<LockGate> {
   Future<_GateBootstrapResult>? _bootstrapFuture;
   Uint8List? _sessionKey;
+  bool _forceSetupOnNextBootstrap = false;
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kMasterPasswordSetupRequiredPrefsKey =
@@ -67,6 +68,7 @@ class _LockGateState extends State<LockGate> {
     setState(() {
       _sessionKey = null;
       _bootstrapFuture = null;
+      _forceSetupOnNextBootstrap = true;
     });
   }
 
@@ -79,13 +81,16 @@ class _LockGateState extends State<LockGate> {
 
     final isSet = await backend.isMasterPasswordSet();
     if (!isSet) {
-      if (appLockEnabled || setupRequired) {
+      if (_forceSetupOnNextBootstrap || appLockEnabled || setupRequired) {
+        _forceSetupOnNextBootstrap = false;
         return const _GateBootstrapResult.needsSetup();
       }
 
       final deferredKey = await _loadOrCreateDeferredSessionKey(prefs);
       return _GateBootstrapResult.unlocked(deferredKey);
     }
+
+    _forceSetupOnNextBootstrap = false;
 
     if (setupRequired) {
       await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
