@@ -352,12 +352,29 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
         continue
       }
 
-      let mediaBox = page.getBoxRect(.mediaBox)
-      context.beginPDFPage([kCGPDFContextMediaBox as String: mediaBox] as CFDictionary)
-      context.drawPDFPage(page)
-      context.setBlendMode(.destinationOver)
+      let sourceBox = page.getBoxRect(.mediaBox)
+      let pageRect = CGRect(origin: .zero, size: sourceBox.size)
+
+      context.beginPDFPage([kCGPDFContextMediaBox as String: pageRect] as CFDictionary)
+
+      context.saveGState()
+      context.setBlendMode(.normal)
       context.setFillColor(pageBackgroundColor.cgColor)
-      context.fill(mediaBox)
+      context.fill(pageRect)
+      context.restoreGState()
+
+      context.saveGState()
+      context.setBlendMode(.normal)
+      let drawingTransform = page.getDrawingTransform(
+        .mediaBox,
+        rect: pageRect,
+        rotate: 0,
+        preserveAspectRatio: true
+      )
+      context.concatenate(drawingTransform)
+      context.drawPDFPage(page)
+      context.restoreGState()
+
       context.endPDFPage()
     }
 
