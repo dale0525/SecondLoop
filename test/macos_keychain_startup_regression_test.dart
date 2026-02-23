@@ -10,90 +10,65 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/cloud_auth_store.dart';
+import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/cloud_subscription_controller.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Embeddings BYOK preference falls back to local on BYOK error',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'embeddings_source_preference_v1': 'byok',
-      'embeddings_data_consent_v1': false,
-    });
-
-    final backend = _FakeEmbeddingsNativeBackend(
-      embeddingProfiles: const <EmbeddingProfile>[
-        EmbeddingProfile(
-          id: 'embed_1',
-          name: 'Active',
-          providerType: 'openai-compatible',
-          baseUrl: 'https://api.openai.com/v1',
-          modelName: 'text-embedding-3-small',
-          isActive: true,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-        ),
-      ],
-      throwOnByok: true,
+  test('startup subscription refresh keeps keychain untouched before unlock',
+      () async {
+    final store = _InMemoryCloudAuthStore();
+    final auth = CloudAuthControllerImpl(
+      identityToolkit: _NeverCalledIdentityToolkit(),
+      store: store,
+      nowMs: () => 1000,
     );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const EmbeddingsIndexGate(child: SizedBox.shrink()),
-          ),
-        ),
-      ),
+    final subscriptions = CloudSubscriptionController(
+      idTokenGetter: () => readCloudIdTokenForBackground(auth),
+      cloudGatewayBaseUrl: 'https://gateway.secondloop.test',
     );
+    addTearDown(subscriptions.dispose);
 
-    await tester.pump();
-    expect(backend.calls, isEmpty);
+    await subscriptions.refresh();
 
-    await tester.pump(const Duration(seconds: 3));
-
-    expect(backend.calls, contains('byok'));
-    expect(backend.calls, contains('local'));
+    expect(subscriptions.status, SubscriptionStatus.unknown);
+    expect(store.loadCalls, 0);
   });
 
   testWidgets(
-      'Embeddings cloud preference falls back to BYOK when not entitled',
+      'embeddings gate avoids loading stored cloud session on cold start',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_source_preference_v1': 'cloud',
       'embeddings_data_consent_v1': true,
     });
 
-    final backend = _FakeEmbeddingsNativeBackend(
-      embeddingProfiles: const <EmbeddingProfile>[
-        EmbeddingProfile(
-          id: 'embed_1',
-          name: 'Active',
-          providerType: 'openai-compatible',
-          baseUrl: 'https://api.openai.com/v1',
-          modelName: 'text-embedding-3-small',
-          isActive: true,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-        ),
-      ],
+    final backend = _FakeEmbeddingsNativeBackend();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final cloudAuth = CloudAuthControllerImpl(
+      identityToolkit: _NeverCalledIdentityToolkit(),
+      store: store,
+      nowMs: () => 1000,
     );
 
     await tester.pumpWidget(
       MaterialApp(
         home: CloudAuthScope(
-          controller: _FakeCloudAuthController(),
+          controller: cloudAuth,
           gatewayConfig: const CloudGatewayConfig(
             baseUrl: 'https://gateway.test',
             modelName: 'gpt-test',
           ),
           child: SubscriptionScope(
             controller: _FakeSubscriptionStatusController(
-                SubscriptionStatus.notEntitled),
+              SubscriptionStatus.entitled,
+            ),
             child: AppBackendScope(
               backend: backend,
               child: SessionScope(
@@ -110,24 +85,80 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.calls, contains('byok'));
+    expect(backend.calls, contains('local'));
     expect(backend.calls, isNot(contains('cloud')));
+    expect(store.loadCalls, 0);
   });
 }
 
-final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
-  _FakeEmbeddingsNativeBackend({
-    required this.embeddingProfiles,
-    this.throwOnByok = false,
-  }) : super(appDirProvider: () async => '/tmp/secondloop-test');
+final class _InMemoryCloudAuthStore implements CloudAuthStore {
+  _InMemoryCloudAuthStore([this._session]);
 
-  final List<EmbeddingProfile> embeddingProfiles;
-  final bool throwOnByok;
+  CloudAuthStoredSession? _session;
+  int loadCalls = 0;
+
+  @override
+  Future<CloudAuthStoredSession?> load() async {
+    loadCalls += 1;
+    return _session;
+  }
+
+  @override
+  Future<void> save(CloudAuthStoredSession session) async {
+    _session = session;
+  }
+
+  @override
+  Future<void> clear() async {
+    _session = null;
+  }
+}
+
+final class _NeverCalledIdentityToolkit implements FirebaseIdentityToolkit {
+  @override
+  Future<FirebaseAuthTokens> signInWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseAuthTokens> signUpWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseAuthTokens> refreshIdToken({required String refreshToken}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseUserInfo> lookup({required String idToken}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> sendOobCode({
+    required String requestType,
+    required String idToken,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
+  _FakeEmbeddingsNativeBackend()
+      : super(appDirProvider: () async => '/tmp/secondloop-test');
+
   final List<String> calls = <String>[];
 
   @override
   Future<List<EmbeddingProfile>> listEmbeddingProfiles(Uint8List key) async {
-    return embeddingProfiles;
+    return const <EmbeddingProfile>[];
   }
 
   @override
@@ -150,9 +181,6 @@ final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
     int activityLimit = 64,
   }) async {
     calls.add('byok');
-    if (throwOnByok) {
-      throw StateError('byok-failed');
-    }
     return 0;
   }
 
@@ -165,41 +193,6 @@ final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
     calls.add('local');
     return 0;
   }
-}
-
-final class _FakeCloudAuthController implements CloudAuthController {
-  @override
-  String? get uid => 'uid_1';
-
-  @override
-  String? get email => null;
-
-  @override
-  bool? get emailVerified => null;
-
-  @override
-  Future<String?> getIdToken() async => 'token';
-
-  @override
-  Future<void> refreshUserInfo() async {}
-
-  @override
-  Future<void> sendEmailVerification() async {}
-
-  @override
-  Future<void> signInWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signUpWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signOut() async {}
 }
 
 final class _FakeSubscriptionStatusController extends ChangeNotifier
