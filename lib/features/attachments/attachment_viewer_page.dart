@@ -867,6 +867,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     initialMetadata: metadata,
                     annotationPayloadFuture: _annotationPayloadFuture,
                     initialAnnotationPayload: _annotationPayload,
+                    annotationJob: _annotationJob,
                     onRunOcr: runOcr,
                     ocrRunning: _runningDocumentOcr,
                     ocrStatusText: _documentOcrStatusText,
