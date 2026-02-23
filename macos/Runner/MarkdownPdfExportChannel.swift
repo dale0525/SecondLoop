@@ -504,12 +504,13 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
       eligiblePageCount += 1
       let coreThreshold = max(0.6, originalCoreVariance * 0.05)
-      if rebuiltCoreVariance < coreThreshold {
+      let isCollapsedCore = rebuiltCoreVariance < coreThreshold && rebuiltCoreVariance < 0.22
+      if isCollapsedCore {
         suspiciousPageCount += 1
       }
     }
 
-    guard eligiblePageCount > 0 else {
+    guard eligiblePageCount > 1 else {
       return false
     }
 
