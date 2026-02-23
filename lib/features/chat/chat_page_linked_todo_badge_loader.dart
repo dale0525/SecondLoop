@@ -42,7 +42,7 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
         if (!messagesById.containsKey(sourceMessageId)) continue;
         if (byMessageId.containsKey(sourceMessageId)) continue;
         final todo = todosById[activity.todoId];
-        if (todo == null) continue;
+        if (todo == null || todo.status == 'dismissed') continue;
         byMessageId[sourceMessageId] = _TodoMessageBadgeMeta(
           todoId: todo.id,
           todoTitle: todo.title,
