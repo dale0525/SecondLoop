@@ -162,6 +162,7 @@
       "title": "Tasks",
       "summary": "Today $due • Overdue $overdue",
       "upcomingSummary": "Upcoming $count",
+      "undeterminedSummary": "$count unscheduled",
       "viewAll": "View all",
       "empty": "No scheduled tasks"
     },

@@ -690,18 +690,24 @@ final class _TodoAgendaSummary {
     required this.overdueCount,
     required this.upcomingCount,
     required this.previewTodos,
+    required this.undeterminedCount,
+    required this.undeterminedPreviewTodos,
   });
 
   const _TodoAgendaSummary.empty()
       : dueCount = 0,
         overdueCount = 0,
         upcomingCount = 0,
-        previewTodos = const <Todo>[];
+        previewTodos = const <Todo>[],
+        undeterminedCount = 0,
+        undeterminedPreviewTodos = const <Todo>[];
 
   final int dueCount;
   final int overdueCount;
   final int upcomingCount;
   final List<Todo> previewTodos;
+  final int undeterminedCount;
+  final List<Todo> undeterminedPreviewTodos;
 }
 
 enum _MessageAction {

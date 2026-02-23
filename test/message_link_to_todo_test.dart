@@ -44,8 +44,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_link_todo')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('todo_note_link_sheet')), findsOneWidget);
-    await tester.tap(find.text('Task A'));
+    final linkSheet = find.byKey(const ValueKey('todo_note_link_sheet'));
+    expect(linkSheet, findsOneWidget);
+
+    await tester.tap(
+      find.descendant(of: linkSheet, matching: find.text('Task A')),
+    );
     await tester.pumpAndSettle();
 
     expect(backend.noteLinks, [
@@ -92,7 +96,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('message_action_link_todo')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('todo_note_link_sheet')), findsOneWidget);
+    final linkSheet = find.byKey(const ValueKey('todo_note_link_sheet'));
+    expect(linkSheet, findsOneWidget);
     expect(find.byKey(const ValueKey('todo_note_link_search')), findsOneWidget);
 
     await tester.enterText(
@@ -101,10 +106,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Task A'), findsNothing);
-    expect(find.text('Task B'), findsOneWidget);
+    expect(
+      find.descendant(of: linkSheet, matching: find.text('Task A')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: linkSheet, matching: find.text('Task B')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Task B'));
+    await tester.tap(
+      find.descendant(of: linkSheet, matching: find.text('Task B')),
+    );
     await tester.pumpAndSettle();
 
     expect(backend.noteLinks.last, (

@@ -304,10 +304,16 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     final nowLocal = DateTime.now();
     final due = <({Todo todo, DateTime dueLocal})>[];
     final upcoming = <({Todo todo, DateTime dueLocal})>[];
+    final undetermined = <Todo>[];
+
     for (final todo in todos) {
-      final dueMs = todo.dueAtMs;
-      if (dueMs == null) continue;
       if (todo.status == 'done' || todo.status == 'dismissed') continue;
+
+      final dueMs = todo.dueAtMs;
+      if (dueMs == null) {
+        undetermined.add(todo);
+        continue;
+      }
 
       final dueLocal =
           DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true).toLocal();
@@ -326,13 +332,23 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     due.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
     upcoming.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
-    if (due.isEmpty && upcoming.isEmpty) {
+    undetermined.sort((a, b) {
+      final aNextReviewAtMs = a.nextReviewAtMs ?? 9223372036854775807;
+      final bNextReviewAtMs = b.nextReviewAtMs ?? 9223372036854775807;
+      if (aNextReviewAtMs != bNextReviewAtMs) {
+        return aNextReviewAtMs.compareTo(bNextReviewAtMs);
+      }
+      return b.updatedAtMs.compareTo(a.updatedAtMs);
+    });
+
+    if (due.isEmpty && upcoming.isEmpty && undetermined.isEmpty) {
       return const _TodoAgendaSummary.empty();
     }
 
     final overdueCount = due.where((e) => e.dueLocal.isBefore(nowLocal)).length;
     const duePreviewLimit = 2;
     const upcomingPreviewLimit = 2;
+    const undeterminedPreviewLimit = 2;
     final previewTodos = <Todo>[
       ...due.take(duePreviewLimit).map((e) => e.todo),
       ...upcoming.take(upcomingPreviewLimit).map((e) => e.todo),
@@ -343,6 +359,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       overdueCount: overdueCount,
       upcomingCount: upcoming.length,
       previewTodos: previewTodos.toList(growable: false),
+      undeterminedCount: undetermined.length,
+      undeterminedPreviewTodos:
+          undetermined.take(undeterminedPreviewLimit).toList(growable: false),
     );
   }
 
