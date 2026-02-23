@@ -58,8 +58,7 @@ void main() {
     expect(html, contains('position: fixed'));
   });
 
-  test('PDF HTML export keeps per-page spacing with table frame wrappers',
-      () async {
+  test('PDF HTML export keeps page margins in @page definition', () async {
     final html = await buildChatMarkdownPdfHtmlDocument(
       markdown: 'Theme check',
       theme: buildTheme(),
@@ -70,17 +69,11 @@ void main() {
       html,
       contains('''@page {
   size: A4;
-  margin: 0;
+  margin: 48pt 54pt 64pt 54pt;
   background:'''),
     );
-    expect(html, contains('.sl-pdf-frame'));
-    expect(html, contains('display: table-header-group;'));
-    expect(html, contains('display: table-footer-group;'));
-    expect(html, contains('height: 48pt;'));
-    expect(html, contains('height: 64pt;'));
-    expect(html, contains('padding: 0 54pt;'));
-    expect(html, contains('<table class="sl-pdf-frame" role="presentation">'));
-    expect(html, contains('<main class="sl-pdf-frame__content">'));
+    expect(html, isNot(contains('.sl-pdf-frame')));
+    expect(html, isNot(contains('.sl-pdf-content')));
   });
 
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {
