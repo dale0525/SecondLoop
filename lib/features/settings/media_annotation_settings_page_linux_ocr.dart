@@ -157,6 +157,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
 
     return mediaAnnotationCapabilityCard(
       key: MediaAnnotationSettingsPage.linuxOcrModelTileKey,
+      anchorKey: _desktopLocalCapabilityCardAnchorKey,
       context: context,
       title: zh ? '本地能力引擎' : 'Local Capability Engine',
       description: isMacOS

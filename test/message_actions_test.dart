@@ -22,7 +22,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -54,7 +54,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -95,7 +95,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'weekly report',
           createdAtMs: 0,
@@ -141,7 +141,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -196,7 +196,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'tomorrow 3pm submit report',
           createdAtMs: 0,
@@ -244,7 +244,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -288,7 +288,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -333,7 +333,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -371,7 +371,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -421,7 +421,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -462,7 +462,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -507,7 +507,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Photo',
           createdAtMs: 1,
@@ -538,7 +538,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'Photo',
           createdAtMs: 1,
@@ -573,7 +573,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -618,7 +618,7 @@ void main() {
       messages: [
         const Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'hello',
           createdAtMs: 0,
@@ -670,7 +670,7 @@ void main() {
       messages: [
         const Message(
           id: 'm2',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: 'note',
           createdAtMs: 0,
@@ -718,7 +718,7 @@ void main() {
       messages: [
         const Message(
           id: 'm2',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'assistant',
           content: 'ai',
           createdAtMs: 0,
@@ -811,7 +811,7 @@ class MessageActionsBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override

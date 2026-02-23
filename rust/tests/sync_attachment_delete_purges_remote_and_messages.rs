@@ -56,7 +56,7 @@ fn sync_attachment_delete_purges_remote_and_messages() {
     let conn_a = db::open(&app_dir_a).expect("open A db");
 
     let conversation =
-        db::get_or_create_main_stream_conversation(&conn_a, &key_a).expect("conversation A");
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
     let message1 =
         db::insert_message(&conn_a, &key_a, &conversation.id, "user", "m1").expect("message1");
     let message2 =

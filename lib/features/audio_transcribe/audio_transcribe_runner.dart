@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
@@ -22,6 +23,7 @@ final class AudioTranscribeJob {
     required this.status,
     required this.attempts,
     required this.nextRetryAtMs,
+    this.mimeTypeHint = '',
   });
 
   final String attachmentSha256;
@@ -29,6 +31,7 @@ final class AudioTranscribeJob {
   final String status;
   final int attempts;
   final int? nextRetryAtMs;
+  final String mimeTypeHint;
 }
 
 abstract class AudioTranscribeStore {
@@ -141,6 +144,9 @@ typedef AudioTranscribeLocalWhisperRequest = Future<String> Function({
   required String modelName,
   required String lang,
   required List<int> wavBytes,
+});
+typedef AudioTranscribeEnsureLocalWhisperModel = Future<void> Function({
+  required String modelName,
 });
 typedef AudioTranscribeWindowsNativeSttRequest = Future<String> Function({
   required String lang,
@@ -264,6 +270,54 @@ String? sniffAudioMimeType(Uint8List bytes) {
     return 'audio/mp4';
   }
 
+  if (bytes.lengthInBytes >= 4 &&
+      bytes[0] == 0x1A &&
+      bytes[1] == 0x45 &&
+      bytes[2] == 0xDF &&
+      bytes[3] == 0xA3) {
+    final probeLen = bytes.lengthInBytes < 96 ? bytes.lengthInBytes : 96;
+    final probe = utf8.decode(
+      bytes.sublist(0, probeLen),
+      allowMalformed: true,
+    );
+    if (probe.toLowerCase().contains('webm')) {
+      return 'video/webm';
+    }
+    return 'video/x-matroska';
+  }
+
+  return null;
+}
+
+String? resolveAudioTranscribeMimeType({
+  required Uint8List bytes,
+  required String mimeTypeHint,
+}) {
+  final normalizedHint = mimeTypeHint.trim().toLowerCase();
+  final hasExplicitHint = normalizedHint.startsWith('audio/') ||
+      normalizedHint.startsWith('video/');
+
+  final sniffedMimeType = sniffAudioMimeType(bytes)?.trim().toLowerCase();
+  if (sniffedMimeType != null && sniffedMimeType.isNotEmpty) {
+    if (hasExplicitHint) {
+      final hintIsAudio = normalizedHint.startsWith('audio/');
+      final hintIsVideo = normalizedHint.startsWith('video/');
+      final sniffedIsAudio = sniffedMimeType.startsWith('audio/');
+      final sniffedIsVideo = sniffedMimeType.startsWith('video/');
+      final hasContainerFamilyConflict =
+          (hintIsAudio && sniffedIsVideo) || (hintIsVideo && sniffedIsAudio);
+      if (hasContainerFamilyConflict) {
+        return normalizedHint;
+      }
+    }
+
+    return sniffedMimeType;
+  }
+
+  if (hasExplicitHint) {
+    return normalizedHint;
+  }
+
   return null;
 }
 
@@ -279,8 +333,10 @@ final class AudioTranscribeRunner {
   final AudioTranscribeNowMs _nowMs;
 
   Future<AudioTranscribeRunResult> runOnce({int limit = 5}) async {
+    final processLimit = limit < 1 ? 1 : limit;
+    const scanLimit = 500;
     final nowMs = _nowMs();
-    final due = await store.listDueJobs(nowMs: nowMs, limit: limit);
+    final due = await store.listDueJobs(nowMs: nowMs, limit: scanLimit);
     if (due.isEmpty) {
       return const AudioTranscribeRunResult(
         processed: 0,
@@ -290,13 +346,26 @@ final class AudioTranscribeRunner {
 
     var processed = 0;
     var failed = 0;
+    var handled = 0;
     for (final job in due) {
+      if (handled >= processLimit) break;
       if (job.status == 'ok') continue;
+
+      final normalizedMimeTypeHint = job.mimeTypeHint.trim().toLowerCase();
+      if (normalizedMimeTypeHint.isNotEmpty &&
+          !normalizedMimeTypeHint.startsWith('audio/') &&
+          !normalizedMimeTypeHint.startsWith('video/')) {
+        continue;
+      }
+
       try {
         final bytes = await store.readAttachmentBytes(
           attachmentSha256: job.attachmentSha256,
         );
-        final mimeType = sniffAudioMimeType(bytes);
+        final mimeType = resolveAudioTranscribeMimeType(
+          bytes: bytes,
+          mimeTypeHint: job.mimeTypeHint,
+        );
         if (mimeType == null) continue;
 
         final response = await client.transcribe(
@@ -318,6 +387,7 @@ final class AudioTranscribeRunner {
           nowMs: nowMs,
         );
         processed += 1;
+        handled += 1;
       } catch (e) {
         final attempts = job.attempts + 1;
         final nextRetryAtMs = _nextRetryAtMsForError(
@@ -333,6 +403,7 @@ final class AudioTranscribeRunner {
           nowMs: nowMs,
         );
         failed += 1;
+        handled += 1;
       }
     }
 
@@ -421,6 +492,23 @@ final class BackendAudioTranscribeStore implements AudioTranscribeStore {
       nowMs: nowMs,
       limit: limit,
     );
+    if (rows.isEmpty) return const <AudioTranscribeJob>[];
+
+    final mimeTypeBySha = <String, String>{};
+    try {
+      final recent = await backend.listRecentAttachments(
+        _sessionKey,
+        limit: limit.clamp(20, 120) * 8,
+      );
+      for (final attachment in recent) {
+        final sha = attachment.sha256.trim();
+        if (sha.isEmpty || mimeTypeBySha.containsKey(sha)) continue;
+        mimeTypeBySha[sha] = attachment.mimeType.trim().toLowerCase();
+      }
+    } catch (_) {
+      // Best-effort hint loading.
+    }
+
     return rows
         .map(
           (r) => AudioTranscribeJob(
@@ -429,6 +517,7 @@ final class BackendAudioTranscribeStore implements AudioTranscribeStore {
             status: r.status,
             attempts: r.attempts,
             nextRetryAtMs: r.nextRetryAtMs,
+            mimeTypeHint: mimeTypeBySha[r.attachmentSha256] ?? '',
           ),
         )
         .toList(growable: false);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -6,6 +7,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/share/share_intent_listener.dart';
+
+Future<void> _sendShareChannelMethodCall(String method) async {
+  final encoded = const StandardMethodCodec().encodeMethodCall(
+    MethodCall(method),
+  );
+  final completer = Completer<void>();
+  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage(
+    'secondloop/share_intent',
+    encoded,
+    (ByteData? _) => completer.complete(),
+  );
+  await completer.future;
+}
 
 void main() {
   testWidgets('ShareIntentListener enqueues file + url shares', (tester) async {
@@ -147,5 +162,59 @@ void main() {
     expect(first['path'], '/tmp/shared-image.bin');
     expect(first['mimeType'], 'image/jpeg');
     expect(first['filename'], 'camera-roll.jpg');
+  });
+
+  testWidgets(
+      'ShareIntentListener consumes shares when native pushes pendingSharesChanged',
+      (tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    var consumeCalls = 0;
+    const channel = MethodChannel('secondloop/share_intent');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method != 'consumePendingShares') {
+        return null;
+      }
+
+      consumeCalls += 1;
+      if (consumeCalls == 1) {
+        return <Map<String, Object?>>[];
+      }
+
+      return <Map<String, Object?>>[
+        {
+          'type': 'text',
+          'content': 'from-native-callback',
+        },
+      ];
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: ShareIntentListener(child: SizedBox.shrink()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('share_ingest_queue_v1'), isNull);
+
+    await _sendShareChannelMethodCall('pendingSharesChanged');
+    await tester.pumpAndSettle();
+
+    prefs = await SharedPreferences.getInstance();
+    final queue = prefs.getStringList('share_ingest_queue_v1');
+    expect(queue, isNotNull);
+    expect(queue!.length, 1);
+    final first = jsonDecode(queue.first) as Map;
+    expect(first['type'], 'text');
+    expect(first['content'], 'from-native-callback');
   });
 }

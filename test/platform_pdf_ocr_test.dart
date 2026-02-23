@@ -112,6 +112,50 @@ void main() {
   });
 
   test(
+      'PlatformPdfOcr falls back to mobile native OCR when runtime returns unsupported empty image payload',
+      () async {
+    const channel = MethodChannel('secondloop/ocr');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    var nativeCalled = false;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      nativeCalled = true;
+      expect(call.method, 'ocrImage');
+      return <String, Object?>{
+        'ocr_text_full': 'android recovered text',
+        'ocr_text_excerpt': 'android recovered text',
+        'ocr_engine': 'android_mlkit',
+        'ocr_is_truncated': false,
+        'ocr_page_count': 1,
+        'ocr_processed_pages': 1,
+      };
+    });
+
+    final result = await PlatformPdfOcr.tryOcrImageBytes(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      languageHints: 'device_plus_en',
+      ocrImageInvoke: (bytes, {required languageHints}) async {
+        expect(languageHints, 'device_plus_en');
+        return <String, Object?>{
+          'ocr_text_full': '',
+          'ocr_text_excerpt': '',
+          'ocr_engine': 'desktop_rust_image_unsupported',
+          'ocr_is_truncated': false,
+          'ocr_page_count': 1,
+          'ocr_processed_pages': 1,
+        };
+      },
+    );
+
+    expect(result, isNotNull);
+    expect(result!.fullText, 'android recovered text');
+    expect(result.engine, 'android_mlkit');
+    expect(nativeCalled, isTrue);
+    expect(PlatformPdfOcr.lastErrorMessage, isNull);
+  });
+
+  test(
       'PlatformPdfOcr transcodes HEIF-like bytes then runs runtime OCR on windows',
       () async {
     const channel = MethodChannel('secondloop/ocr');

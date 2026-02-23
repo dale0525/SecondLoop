@@ -63,12 +63,6 @@ fn normalize_tag_ids(raw: &[String]) -> Vec<String> {
     set.into_iter().collect()
 }
 
-fn normalize_topic_thread_id(raw: Option<&str>) -> Option<String> {
-    raw.map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(std::string::ToString::to_string)
-}
-
 fn list_conversation_message_ids(conn: &Connection, conversation_id: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
         r#"SELECT id
@@ -141,29 +135,18 @@ fn collect_scoped_contexts(
     exclude_tag_ids: &[String],
     top_k: usize,
     time_scope: Option<TimeScope>,
-    topic_thread_id: Option<&str>,
     focus: ScopedFocus,
 ) -> Result<Vec<String>> {
     let include_tag_ids = normalize_tag_ids(include_tag_ids);
     let exclude_tag_ids = normalize_tag_ids(exclude_tag_ids);
-    let topic_thread_id = normalize_topic_thread_id(topic_thread_id);
-    let uses_topic_thread_scope = topic_thread_id.is_some();
 
-    if include_tag_ids.is_empty()
-        && exclude_tag_ids.is_empty()
-        && topic_thread_id.is_none()
-        && time_scope.is_none()
-    {
+    if include_tag_ids.is_empty() && exclude_tag_ids.is_empty() && time_scope.is_none() {
         return Ok(Vec::new());
     }
 
-    let mut message_ids = if let Some(thread_id) = topic_thread_id.as_deref() {
-        db::list_topic_thread_message_ids(conn, thread_id)?
-    } else {
-        match focus {
-            ScopedFocus::Conversation => list_conversation_message_ids(conn, conversation_id)?,
-            ScopedFocus::AllMemories => list_all_message_ids(conn)?,
-        }
+    let mut message_ids = match focus {
+        ScopedFocus::Conversation => list_conversation_message_ids(conn, conversation_id)?,
+        ScopedFocus::AllMemories => list_all_message_ids(conn)?,
     };
 
     if !include_tag_ids.is_empty() {
@@ -208,9 +191,7 @@ fn collect_scoped_contexts(
         let Some(message) = db::get_message_by_id_optional(conn, key, &message_id)? else {
             continue;
         };
-        if matches!(focus, ScopedFocus::Conversation)
-            && !uses_topic_thread_scope
-            && message.conversation_id != conversation_id
+        if matches!(focus, ScopedFocus::Conversation) && message.conversation_id != conversation_id
         {
             continue;
         }
@@ -381,7 +362,6 @@ pub fn rag_ask_ai_stream_scoped(
     time_end_ms: Option<i64>,
     include_tag_ids: Vec<String>,
     exclude_tag_ids: Vec<String>,
-    topic_thread_id: Option<String>,
     strict_mode: bool,
     locale_language: String,
     local_day: String,
@@ -416,7 +396,6 @@ pub fn rag_ask_ai_stream_scoped(
             &exclude_tag_ids,
             top_k as usize,
             time_scope,
-            topic_thread_id.as_deref(),
             focus,
         )?;
 
@@ -467,7 +446,6 @@ pub fn rag_ask_ai_stream_cloud_gateway_scoped(
     time_end_ms: Option<i64>,
     include_tag_ids: Vec<String>,
     exclude_tag_ids: Vec<String>,
-    topic_thread_id: Option<String>,
     strict_mode: bool,
     locale_language: String,
     gateway_base_url: String,
@@ -508,7 +486,6 @@ pub fn rag_ask_ai_stream_cloud_gateway_scoped(
             &exclude_tag_ids,
             top_k as usize,
             time_scope,
-            topic_thread_id.as_deref(),
             focus,
         )?;
 
@@ -553,92 +530,6 @@ mod tests {
     use crate::crypto::KdfParams;
 
     use super::*;
-
-    #[test]
-    fn collect_scoped_contexts_supports_topic_thread_only_scope() {
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-        let m1 = db::insert_message(&conn, &key, &conversation.id, "user", "alpha")
-            .expect("insert alpha");
-        let _m2 =
-            db::insert_message(&conn, &key, &conversation.id, "user", "beta").expect("insert beta");
-        let m3 = db::insert_message(&conn, &key, &conversation.id, "user", "gamma")
-            .expect("insert gamma");
-
-        let thread = db::create_topic_thread(&conn, &key, &conversation.id, Some("weekly"))
-            .expect("create thread");
-        db::set_topic_thread_message_ids(&conn, &key, &thread.id, &[m1.id.clone(), m3.id.clone()])
-            .expect("set thread messages");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            &[],
-            &[],
-            10,
-            None,
-            Some(thread.id.as_str()),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 2);
-        assert!(contexts.iter().any(|v| v.contains("alpha")));
-        assert!(contexts.iter().any(|v| v.contains("gamma")));
-        assert!(contexts.iter().all(|v| !v.contains("beta")));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_intersects_tags_with_topic_thread() {
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-        let m1 = db::insert_message(&conn, &key, &conversation.id, "user", "work alpha")
-            .expect("insert m1");
-        let m2 = db::insert_message(&conn, &key, &conversation.id, "user", "work beta")
-            .expect("insert m2");
-        let m3 = db::insert_message(&conn, &key, &conversation.id, "assistant", "gamma")
-            .expect("insert m3");
-
-        let thread = db::create_topic_thread(&conn, &key, &conversation.id, Some("weekly"))
-            .expect("create thread");
-        db::set_topic_thread_message_ids(&conn, &key, &thread.id, &[m1.id.clone(), m3.id.clone()])
-            .expect("set thread messages");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m1.id, std::slice::from_ref(&work.id))
-            .expect("set m1 tags");
-        db::set_message_tags(&conn, &key, &m2.id, std::slice::from_ref(&work.id))
-            .expect("set m2 tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            std::slice::from_ref(&work.id),
-            &[],
-            10,
-            None,
-            Some(thread.id.as_str()),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("work alpha"));
-    }
 
     #[test]
     fn collect_scoped_contexts_applies_time_window_with_tag_filter() {
@@ -700,7 +591,6 @@ mod tests {
                 start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
                 end_ms_exclusive: base,
             }),
-            None,
             ScopedFocus::Conversation,
         )
         .expect("collect contexts");
@@ -710,7 +600,7 @@ mod tests {
     }
 
     #[test]
-    fn collect_scoped_contexts_applies_time_window_without_tag_or_thread_filters() {
+    fn collect_scoped_contexts_applies_time_window_without_tag_filters() {
         use rusqlite::params;
 
         let temp = tempdir().expect("tempdir");
@@ -750,193 +640,12 @@ mod tests {
                 start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
                 end_ms_exclusive: base,
             }),
-            None,
             ScopedFocus::Conversation,
         )
         .expect("collect contexts");
 
         assert_eq!(contexts.len(), 1);
         assert!(contexts[0].contains("in window note"));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_intersects_time_tags_and_topic_thread() {
-        use rusqlite::params;
-
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-
-        let m_match =
-            db::insert_message(&conn, &key, &conversation.id, "user", "weekly work summary")
-                .expect("insert m_match");
-        let m_out_time =
-            db::insert_message(&conn, &key, &conversation.id, "user", "old work summary")
-                .expect("insert m_out_time");
-        let m_no_tag = db::insert_message(
-            &conn,
-            &key,
-            &conversation.id,
-            "user",
-            "thread note without tag",
-        )
-        .expect("insert m_no_tag");
-        let m_out_thread = db::insert_message(
-            &conn,
-            &key,
-            &conversation.id,
-            "user",
-            "work but outside thread",
-        )
-        .expect("insert m_out_thread");
-
-        let base = 1_700_000_000_000i64;
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![m_match.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set m_match time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![m_out_time.id, base - 20 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set m_out_time time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![m_no_tag.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set m_no_tag time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![m_out_thread.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set m_out_thread time");
-
-        let thread = db::create_topic_thread(&conn, &key, &conversation.id, Some("weekly"))
-            .expect("create thread");
-        db::set_topic_thread_message_ids(
-            &conn,
-            &key,
-            &thread.id,
-            &[
-                m_match.id.clone(),
-                m_out_time.id.clone(),
-                m_no_tag.id.clone(),
-            ],
-        )
-        .expect("set topic thread messages");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m_match.id, std::slice::from_ref(&work.id))
-            .expect("set m_match tags");
-        db::set_message_tags(&conn, &key, &m_out_time.id, std::slice::from_ref(&work.id))
-            .expect("set m_out_time tags");
-        db::set_message_tags(
-            &conn,
-            &key,
-            &m_out_thread.id,
-            std::slice::from_ref(&work.id),
-        )
-        .expect("set m_out_thread tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            std::slice::from_ref(&work.id),
-            &[],
-            10,
-            Some(TimeScope {
-                start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
-                end_ms_exclusive: base,
-            }),
-            Some(thread.id.as_str()),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("weekly work summary"));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_returns_empty_when_combined_scope_has_no_overlap() {
-        use rusqlite::params;
-
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-
-        let m_thread_only = db::insert_message(
-            &conn,
-            &key,
-            &conversation.id,
-            "user",
-            "thread message without tag",
-        )
-        .expect("insert m_thread_only");
-        let m_tag_only = db::insert_message(
-            &conn,
-            &key,
-            &conversation.id,
-            "user",
-            "tagged outside thread",
-        )
-        .expect("insert m_tag_only");
-
-        let base = 1_700_000_000_000i64;
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![m_thread_only.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set m_thread_only time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![m_tag_only.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set m_tag_only time");
-
-        let thread = db::create_topic_thread(&conn, &key, &conversation.id, Some("weekly"))
-            .expect("create thread");
-        db::set_topic_thread_message_ids(
-            &conn,
-            &key,
-            &thread.id,
-            std::slice::from_ref(&m_thread_only.id),
-        )
-        .expect("set topic thread messages");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m_tag_only.id, std::slice::from_ref(&work.id))
-            .expect("set m_tag_only tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            std::slice::from_ref(&work.id),
-            &[],
-            10,
-            Some(TimeScope {
-                start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
-                end_ms_exclusive: base,
-            }),
-            Some(thread.id.as_str()),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert!(contexts.is_empty());
     }
 
     #[test]
@@ -972,7 +681,6 @@ mod tests {
             std::slice::from_ref(&work.id),
             &[],
             10,
-            None,
             None,
             ScopedFocus::AllMemories,
         )
@@ -1015,7 +723,6 @@ mod tests {
             &[],
             std::slice::from_ref(&work.id),
             10,
-            None,
             None,
             ScopedFocus::Conversation,
         )
@@ -1063,7 +770,6 @@ mod tests {
             std::slice::from_ref(&work.id),
             std::slice::from_ref(&social.id),
             10,
-            None,
             None,
             ScopedFocus::Conversation,
         )

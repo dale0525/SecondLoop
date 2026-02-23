@@ -66,6 +66,49 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "ANDROID_SDK_ROOT/ANDROID_HOME is not set"
+            exit 1
+          fi
+
+          sdkmanager="${sdk_root}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager || true)"
+          fi
+          if [[ -z "${sdkmanager}" || ! -x "${sdkmanager}" ]]; then
+            echo "sdkmanager not found (checked ${sdk_root}/cmdline-tools/latest/bin/sdkmanager and PATH)"
+            exit 1
+          fi
+
+          flutter_gradle="${FLUTTER_ROOT}/packages/flutter_tools/gradle/src/main/groovy/flutter.groovy"
+          if [[ ! -f "${flutter_gradle}" ]]; then
+            echo "Unable to locate Flutter gradle config at ${flutter_gradle}"
+            exit 1
+          fi
+
+          flutter_ndk_version="$(sed -nE "s/^.*ndkVersion[[:space:]]*=[[:space:]]*['\"]([^'\"]+)['\"].*/\1/p" "${flutter_gradle}" | head -n1)"
+          if [[ -z "${flutter_ndk_version}" ]]; then
+            echo "Failed to parse ndkVersion from ${flutter_gradle}"
+            exit 1
+          fi
+          ndk_package="ndk;${flutter_ndk_version}"
+
+          set +o pipefail
+          yes | "${sdkmanager}" --sdk_root="${sdk_root}" --licenses >/dev/null
+          set -o pipefail
+          "${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"
+
+          ndk_root="${sdk_root}/ndk/${flutter_ndk_version}"
+          if [[ ! -d "${ndk_root}" ]]; then
+            echo "Installed NDK root not found: ${ndk_root}"
+            exit 1
+          fi
+          echo "SECONDLOOP_ANDROID_NDK_ROOT=${ndk_root}" >> "${GITHUB_ENV}"
       - name: Validate prod config
         shell: bash
         run: |
@@ -108,6 +151,9 @@ jobs:
             echo "keyAlias=${ANDROID_KEY_ALIAS}"
             echo "storeFile=app/upload-keystore.jks"
           } > android/key.properties
+      - name: Setup Rustup for Android build
+        shell: bash
+        run: bash scripts/setup_rustup.sh
       - run: flutter pub get
       - name: Build (prod)
         shell: bash
@@ -131,6 +177,21 @@ jobs:
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
+
+          : "${SECONDLOOP_ANDROID_NDK_ROOT:?Missing Android NDK root from install step}"
+          ndk_sysroot="${SECONDLOOP_ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          if [[ ! -d "${ndk_sysroot}" ]]; then
+            echo "Android NDK sysroot not found: ${ndk_sysroot}"
+            exit 1
+          fi
+
+          export ANDROID_NDK_ROOT="${SECONDLOOP_ANDROID_NDK_ROOT}"
+          export ANDROID_NDK_HOME="${SECONDLOOP_ANDROID_NDK_ROOT}"
+          export ANDROID_NDK="${SECONDLOOP_ANDROID_NDK_ROOT}"
+          export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${ndk_sysroot}"
+          export BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--sysroot=${ndk_sysroot} --target=armv7a-linux-androideabi23"
+          export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=${ndk_sysroot} --target=aarch64-linux-android23"
+
           bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
@@ -164,6 +225,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.1"
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
       - name: Validate prod config
         shell: pwsh
         run: |
@@ -193,22 +259,60 @@ jobs:
       - name: Prepare bundled FFmpeg
         shell: pwsh
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows --source-bin "C:\ProgramData\chocolatey\bin\ffmpeg.exe"
+      - name: Ensure Ninja is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja --yes --no-progress
+          }
       - name: Build (prod)
         shell: pwsh
         run: |
-          $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
-          if ($Env:GITHUB_REF -like "refs/tags/v*") {
-            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
-            if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
-              $buildArgs += "--build-name=$($Matches[1]).$($Matches[2]).$($Matches[3])"
-            }
+          cmd /c subst W: /d > $null 2>&1
+          $workspaceParent = Split-Path -Parent $Env:GITHUB_WORKSPACE
+          $workspaceLeaf = Split-Path -Leaf $Env:GITHUB_WORKSPACE
+          if ([string]::IsNullOrWhiteSpace($workspaceParent) -or [string]::IsNullOrWhiteSpace($workspaceLeaf)) {
+            throw "Unable to resolve workspace path segments from $Env:GITHUB_WORKSPACE"
           }
-          $defines = @(
-            "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
-            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
-            "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
-          )
-          flutter build windows --release @buildArgs @defines
+          cmd /c subst W: $workspaceParent
+          $shortWorkspacePath = "W:\$workspaceLeaf"
+
+          $enteredWorkspace = $false
+          try {
+            if (-not (Test-Path -LiteralPath $shortWorkspacePath)) {
+              throw "Short workspace path not found: $shortWorkspacePath"
+            }
+            Push-Location $shortWorkspacePath
+            $enteredWorkspace = $true
+
+            $Env:CARGOKIT_TARGET_TEMP_DIR = 'W:\ck'
+            $Env:CARGOKIT_TOOL_TEMP_DIR = 'W:\ck\tool'
+            New-Item -ItemType Directory -Path $Env:CARGOKIT_TARGET_TEMP_DIR -Force | Out-Null
+            New-Item -ItemType Directory -Path $Env:CARGOKIT_TOOL_TEMP_DIR -Force | Out-Null
+
+            $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
+            if ($Env:GITHUB_REF -like "refs/tags/v*") {
+              $candidate = $Env:GITHUB_REF_NAME.Substring(1)
+              if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
+                $buildArgs += "--build-name=$($Matches[1]).$($Matches[2]).$($Matches[3])"
+              }
+            }
+            $defines = @(
+              "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
+              "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
+              "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
+            )
+            $Env:CMAKE_GENERATOR = "Ninja"
+            flutter build windows --release -v @buildArgs @defines
+            if ($LASTEXITCODE -ne 0) {
+              throw "flutter build windows failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            if ($enteredWorkspace) {
+              Pop-Location
+            }
+            cmd /c subst W: /d > $null 2>&1
+          }
       - name: Setup portable WiX Toolset v3
         shell: pwsh
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_wix.ps1
@@ -347,6 +451,11 @@ jobs:
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
+          # whisper-rs currently enables i8mm code paths under certain Apple/Clang combinations
+          # that are not always safe on hosted runners. Undefine the macro so ggml falls back.
+          export CFLAGS="${CFLAGS-} -U__ARM_FEATURE_MATMUL_INT8"
+          export CXXFLAGS="${CXXFLAGS-} -U__ARM_FEATURE_MATMUL_INT8"
+
           # flutter build macos defaults to code signing and fails on CI without Apple certs.
           # Use config-only to generate build settings (build name/number + dart-defines),
           # then build with xcodebuild while explicitly disabling code signing.
@@ -410,6 +519,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.1"
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
       - name: Install Linux build dependencies
         shell: bash
         run: |
@@ -427,6 +541,7 @@ jobs:
             libkeybinder-3.0-dev \
             liblzma-dev \
             libsecret-1-dev \
+            libvulkan-dev \
             ninja-build \
             pkg-config \
             libpoppler-glib-dev \

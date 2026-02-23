@@ -395,6 +395,10 @@ final class PlatformPdfOcr {
         _shouldFallbackToNativeImageOcrOnDecodeFailure(
           parsed: parsed,
           runtimeError: runtimeError,
+        ) ||
+        _shouldPreferNativeMobileImageOcr(
+          parsed: parsed,
+          runtimeError: runtimeError,
         );
     if (shouldFallbackToNative) {
       final nativeRaw = await _invokeSafely(
@@ -533,6 +537,18 @@ final class PlatformPdfOcr {
     }
     if (parsed.fullText.trim().isNotEmpty) return false;
     return parsed.engine.trim().toLowerCase().startsWith('desktop_rust_pdf_');
+  }
+
+  static bool _shouldPreferNativeMobileImageOcr({
+    required PlatformPdfOcrResult? parsed,
+    required String? runtimeError,
+  }) {
+    if (!_isMobilePlatform()) return false;
+    if (parsed == null) {
+      return (runtimeError?.trim().isNotEmpty ?? false);
+    }
+    if (parsed.fullText.trim().isNotEmpty) return false;
+    return parsed.engine.trim().toLowerCase().startsWith('desktop_rust_image_');
   }
 
   static bool _shouldPreferNativeDesktopPdfOcrOnEmptyRuntimeResult({

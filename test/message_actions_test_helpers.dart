@@ -40,8 +40,8 @@ Widget wrapChatForTests({required AppBackend backend, SyncEngine? syncEngine}) {
             lock: () {},
             child: const ChatPage(
               conversation: Conversation(
-                id: 'main_stream',
-                title: 'Main Stream',
+                id: 'loop_home',
+                title: 'Loop',
                 createdAtMs: 0,
                 updatedAtMs: 0,
               ),

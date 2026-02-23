@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/attachments/platform_pdf_ocr.dart';
 import 'package:secondloop/features/attachments/video_keyframe_ocr_worker.dart';
+import 'package:secondloop/features/media_backup/video_transcode_worker.dart';
 
 void main() {
   test('parseVideoManifestPayload parses valid video manifest', () {
@@ -137,7 +138,8 @@ void main() {
     expect(parsed!.videoProxySha256, 'sha-v1');
   });
 
-  test('VideoKeyframeOcrWorker returns null when ffmpeg is unavailable',
+  test(
+      'VideoKeyframeOcrWorker returns null when ffmpeg and preview fallback are unavailable',
       () async {
     final result = await VideoKeyframeOcrWorker.runOnVideoBytes(
       Uint8List.fromList(const <int>[1, 2, 3]),
@@ -146,8 +148,80 @@ void main() {
       frameIntervalSeconds: 5,
       languageHints: 'device_plus_en',
       ffmpegExecutableResolver: () async => null,
+      previewExtractor: (
+        videoBytes, {
+        required sourceMimeType,
+        required maxKeyframes,
+        required frameIntervalSeconds,
+        required keyframeKind,
+      }) async {
+        return const VideoPreviewExtractResult(
+          posterBytes: null,
+          posterMimeType: 'image/jpeg',
+          keyframes: <VideoPreviewFrame>[],
+        );
+      },
     );
     expect(result, isNull);
+  });
+
+  test(
+      'VideoKeyframeOcrWorker falls back to preview extraction when ffmpeg is unavailable',
+      () async {
+    var previewCalls = 0;
+    var ocrCalls = 0;
+    final result = await VideoKeyframeOcrWorker.runOnVideoBytes(
+      Uint8List.fromList(const <int>[1, 2, 3]),
+      sourceMimeType: 'video/mp4',
+      maxFrames: 3,
+      frameIntervalSeconds: 5,
+      languageHints: 'device_plus_en',
+      ffmpegExecutableResolver: () async => null,
+      previewExtractor: (
+        videoBytes, {
+        required sourceMimeType,
+        required maxKeyframes,
+        required frameIntervalSeconds,
+        required keyframeKind,
+      }) async {
+        previewCalls += 1;
+        expect(maxKeyframes, 3);
+        expect(frameIntervalSeconds, 5);
+        return VideoPreviewExtractResult(
+          posterBytes: Uint8List.fromList(const <int>[7, 8, 9]),
+          posterMimeType: 'image/jpeg',
+          keyframes: <VideoPreviewFrame>[
+            VideoPreviewFrame(
+              index: 0,
+              bytes: Uint8List.fromList(<int>[9, 10, 11]),
+              mimeType: 'image/jpeg',
+              tMs: 1000,
+              kind: 'scene',
+            ),
+          ],
+        );
+      },
+      ocrImageFn: (bytes, {required languageHints}) async {
+        ocrCalls += 1;
+        return PlatformPdfOcrResult(
+          fullText: 'frame $ocrCalls',
+          excerpt: 'frame $ocrCalls',
+          engine: 'apple_vision',
+          isTruncated: false,
+          pageCount: 1,
+          processedPages: 1,
+        );
+      },
+    );
+
+    expect(previewCalls, 1);
+    expect(ocrCalls, 2);
+    expect(result, isNotNull);
+    expect(result!.engine, 'apple_vision');
+    expect(result.frameCount, 2);
+    expect(result.processedFrames, 2);
+    expect(result.fullText, contains('[poster]'));
+    expect(result.fullText, contains('[keyframe 1 @1000ms]'));
   });
 
   test('VideoKeyframeOcrWorker extracts frames and aggregates OCR text',

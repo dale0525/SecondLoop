@@ -16,8 +16,7 @@ fn sync_message_edit_delete_conflicts_resolve_with_lww_and_can_revive() {
     let key_a =
         auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
     let conn_a = db::open(&app_dir_a).expect("open A db");
-    let conv_a =
-        db::get_or_create_main_stream_conversation(&conn_a, &key_a).expect("main stream A");
+    let conv_a = db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("loop home A");
     let msg_a =
         db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
 

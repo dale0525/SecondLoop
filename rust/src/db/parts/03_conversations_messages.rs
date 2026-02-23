@@ -33,14 +33,14 @@ pub fn create_conversation(conn: &Connection, key: &[u8; 32], title: &str) -> Re
     })
 }
 
-pub fn get_or_create_main_stream_conversation(
+pub fn get_or_create_loop_home_conversation(
     conn: &Connection,
     key: &[u8; 32],
 ) -> Result<Conversation> {
     let existing: Option<(Vec<u8>, i64, i64)> = conn
         .query_row(
             r#"SELECT title, created_at, updated_at FROM conversations WHERE id = ?1"#,
-            params![MAIN_STREAM_CONVERSATION_ID],
+            params![LOOP_HOME_CONVERSATION_ID],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?;
@@ -50,7 +50,7 @@ pub fn get_or_create_main_stream_conversation(
         let title = String::from_utf8(title_bytes)
             .map_err(|_| anyhow!("conversation title is not valid utf-8"))?;
         return Ok(Conversation {
-            id: MAIN_STREAM_CONVERSATION_ID.to_string(),
+            id: LOOP_HOME_CONVERSATION_ID.to_string(),
             title,
             created_at_ms,
             updated_at_ms,
@@ -58,12 +58,12 @@ pub fn get_or_create_main_stream_conversation(
     }
 
     let now = now_ms();
-    let title = "Main Stream";
+    let title = "Loop";
 
     let title_blob = encrypt_bytes(key, title.as_bytes(), b"conversation.title")?;
     conn.execute(
         r#"INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)"#,
-        params![MAIN_STREAM_CONVERSATION_ID, title_blob, now, now],
+        params![LOOP_HOME_CONVERSATION_ID, title_blob, now, now],
     )?;
 
     let device_id = get_or_create_device_id(conn)?;
@@ -75,7 +75,7 @@ pub fn get_or_create_main_stream_conversation(
         "ts_ms": now,
         "type": "conversation.upsert.v1",
         "payload": {
-            "conversation_id": MAIN_STREAM_CONVERSATION_ID,
+            "conversation_id": LOOP_HOME_CONVERSATION_ID,
             "title": title,
             "created_at_ms": now,
             "updated_at_ms": now,
@@ -84,7 +84,7 @@ pub fn get_or_create_main_stream_conversation(
     insert_oplog(conn, key, &op)?;
 
     Ok(Conversation {
-        id: MAIN_STREAM_CONVERSATION_ID.to_string(),
+        id: LOOP_HOME_CONVERSATION_ID.to_string(),
         title: title.to_string(),
         created_at_ms: now,
         updated_at_ms: now,

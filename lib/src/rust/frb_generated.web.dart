@@ -17,7 +17,6 @@ import 'api/media_annotation.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
-import 'api/topic_threads.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -183,9 +182,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoCandidate> dco_decode_list_todo_candidate(dynamic raw);
 
   @protected
-  List<TopicThread> dco_decode_list_topic_thread(dynamic raw);
-
-  @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
 
   @protected
@@ -246,9 +242,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoCandidate dco_decode_todo_candidate(dynamic raw);
-
-  @protected
-  TopicThread dco_decode_topic_thread(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -430,9 +423,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  List<TopicThread> sse_decode_list_topic_thread(SseDeserializer deserializer);
-
-  @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
 
   @protected
@@ -498,9 +488,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoCandidate sse_decode_todo_candidate(SseDeserializer deserializer);
-
-  @protected
-  TopicThread sse_decode_topic_thread(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -691,10 +678,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<TodoCandidate> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_topic_thread(
-      List<TopicThread> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
 
   @protected
@@ -764,9 +747,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_todo_candidate(TodoCandidate self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_topic_thread(TopicThread self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

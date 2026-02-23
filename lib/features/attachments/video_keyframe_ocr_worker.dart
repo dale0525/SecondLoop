@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../media_backup/video_kind_classifier.dart';
+import '../media_backup/video_transcode_worker.dart';
 import 'platform_pdf_ocr.dart';
 
 const String kSecondLoopVideoManifestMimeType =
@@ -37,6 +38,14 @@ typedef VideoOcrFfmpegResolver = Future<String?> Function();
 typedef VideoOcrImageRunner = Future<PlatformPdfOcrResult?> Function(
   Uint8List bytes, {
   required String languageHints,
+});
+
+typedef VideoOcrPreviewExtractor = Future<VideoPreviewExtractResult> Function(
+  Uint8List videoBytes, {
+  required String sourceMimeType,
+  required int maxKeyframes,
+  required int frameIntervalSeconds,
+  required String keyframeKind,
 });
 
 final class VideoManifestSegmentRef {
@@ -458,15 +467,11 @@ final class VideoKeyframeOcrWorker {
     VideoOcrCommandRunner? commandRunner,
     VideoOcrFfmpegResolver? ffmpegExecutableResolver,
     VideoOcrImageRunner? ocrImageFn,
+    VideoOcrPreviewExtractor? previewExtractor,
   }) async {
     if (videoBytes.isEmpty) return null;
     final normalizedMime = sourceMimeType.trim().toLowerCase();
     if (!normalizedMime.startsWith('video/')) return null;
-
-    final ffmpegResolver =
-        ffmpegExecutableResolver ?? _resolveBundledFfmpegExecutablePath;
-    final ffmpegPath = await ffmpegResolver();
-    if (ffmpegPath == null || ffmpegPath.trim().isEmpty) return null;
 
     final run = commandRunner ?? Process.run;
     final imageOcr = ocrImageFn ?? PlatformPdfOcr.tryOcrImageBytes;
@@ -474,6 +479,22 @@ final class VideoKeyframeOcrWorker {
     final safeInterval = frameIntervalSeconds.clamp(1, 600);
     final hints =
         languageHints.trim().isEmpty ? 'device_plus_en' : languageHints.trim();
+    final preview = previewExtractor ?? _extractPreviewFramesForOcr;
+
+    final ffmpegResolver =
+        ffmpegExecutableResolver ?? _resolveBundledFfmpegExecutablePath;
+    final ffmpegPath = await ffmpegResolver();
+    if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
+      return _runOcrWithPreviewFallback(
+        videoBytes,
+        sourceMimeType: normalizedMime,
+        maxFrames: safeMaxFrames,
+        frameIntervalSeconds: safeInterval,
+        languageHints: hints,
+        imageOcr: imageOcr,
+        previewExtractor: preview,
+      );
+    }
 
     Directory? tempDir;
     try {
@@ -549,7 +570,15 @@ final class VideoKeyframeOcrWorker {
         languageHints: hints,
       );
     } catch (_) {
-      return null;
+      return _runOcrWithPreviewFallback(
+        videoBytes,
+        sourceMimeType: normalizedMime,
+        maxFrames: safeMaxFrames,
+        frameIntervalSeconds: safeInterval,
+        languageHints: hints,
+        imageOcr: imageOcr,
+        previewExtractor: preview,
+      );
     } finally {
       if (tempDir != null) {
         try {
@@ -558,6 +587,75 @@ final class VideoKeyframeOcrWorker {
           // Ignore temp cleanup failures.
         }
       }
+    }
+  }
+
+  static Future<VideoPreviewExtractResult> _extractPreviewFramesForOcr(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+    required int maxKeyframes,
+    required int frameIntervalSeconds,
+    required String keyframeKind,
+  }) {
+    return VideoTranscodeWorker.extractPreviewFrames(
+      videoBytes,
+      sourceMimeType: sourceMimeType,
+      maxKeyframes: maxKeyframes,
+      frameIntervalSeconds: frameIntervalSeconds,
+      keyframeKind: keyframeKind,
+    );
+  }
+
+  static Future<VideoKeyframeOcrResult?> _runOcrWithPreviewFallback(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+    required int maxFrames,
+    required int frameIntervalSeconds,
+    required String languageHints,
+    required VideoOcrImageRunner imageOcr,
+    required VideoOcrPreviewExtractor previewExtractor,
+  }) async {
+    try {
+      final preview = await previewExtractor(
+        videoBytes,
+        sourceMimeType: sourceMimeType,
+        maxKeyframes: maxFrames,
+        frameIntervalSeconds: frameIntervalSeconds,
+        keyframeKind: 'scene',
+      );
+
+      final seenFrames = <String>{};
+      final samples = <_VideoOcrFrameSample>[];
+
+      void addSample(Uint8List bytes, String label) {
+        if (bytes.isEmpty) return;
+        final frameSignature = base64.encode(bytes);
+        if (!seenFrames.add(frameSignature)) {
+          return;
+        }
+        samples.add(_VideoOcrFrameSample(bytes: bytes, label: label));
+      }
+
+      final posterBytes = preview.posterBytes;
+      if (posterBytes != null && posterBytes.isNotEmpty) {
+        addSample(posterBytes, '[poster]');
+      }
+
+      final remainingBudget = (maxFrames - samples.length).clamp(0, maxFrames);
+      if (remainingBudget > 0) {
+        for (final frame in preview.keyframes.take(remainingBudget)) {
+          addSample(
+              frame.bytes, '[keyframe ${frame.index + 1} @${frame.tMs}ms]');
+        }
+      }
+
+      return _runOcrOnFrameSamples(
+        samples,
+        imageOcr: imageOcr,
+        languageHints: languageHints,
+      );
+    } catch (_) {
+      return null;
     }
   }
 

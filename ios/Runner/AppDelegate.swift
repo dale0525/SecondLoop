@@ -22,6 +22,7 @@ import Vision
 
   private var locationManager: CLLocationManager?
   private var pendingLocationResult: FlutterResult?
+  private var markdownPdfExportChannel: MarkdownPdfExportChannel?
 
   override func application(
     _ application: UIApplication,
@@ -92,6 +93,26 @@ import Vision
         }
       }
 
+      let videoTranscodeChannel = FlutterMethodChannel(
+        name: "secondloop/video_transcode",
+        binaryMessenger: controller.binaryMessenger
+      )
+      videoTranscodeChannel.setMethodCallHandler { [weak self] call, result in
+        guard let self = self else {
+          result(false)
+          return
+        }
+
+        switch call.method {
+        case "extractPreviewPosterJpeg":
+          self.handleExtractPreviewPosterJpeg(call: call, result: result)
+        case "extractPreviewFramesJpeg":
+          self.handleExtractPreviewFramesJpeg(call: call, result: result)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+
       let ocrChannel = FlutterMethodChannel(
         name: "secondloop/ocr",
         binaryMessenger: controller.binaryMessenger
@@ -113,6 +134,10 @@ import Vision
           result(FlutterMethodNotImplemented)
         }
       }
+
+      markdownPdfExportChannel = MarkdownPdfExportChannel(
+        binaryMessenger: controller.binaryMessenger
+      )
     }
 
     WorkmanagerPlugin.setPluginRegistrantCallback { registry in

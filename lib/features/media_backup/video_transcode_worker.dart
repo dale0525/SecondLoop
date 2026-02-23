@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
+part 'video_transcode_worker_native_preview.dart';
+
 final class VideoTranscodeSegment {
   const VideoTranscodeSegment({
     required this.index,
@@ -109,17 +111,31 @@ final class VideoPreviewExtractResult {
       (posterBytes != null && posterBytes!.isNotEmpty) || keyframes.isNotEmpty;
 }
 
+const VideoPreviewExtractResult _kEmptyVideoPreviewExtractResult =
+    VideoPreviewExtractResult(
+  posterBytes: null,
+  posterMimeType: 'image/jpeg',
+  keyframes: <VideoPreviewFrame>[],
+);
+
 typedef VideoTranscodeCommandRunner = Future<ProcessResult> Function(
   String executable,
   List<String> arguments,
 );
 
 typedef VideoFfmpegExecutableResolver = Future<String?> Function();
+typedef VideoNativePreviewExtractor = Future<VideoPreviewExtractResult>
+    Function(
+  Uint8List videoBytes, {
+  required String sourceMimeType,
+});
 
 final class VideoTranscodeWorker {
   static const String targetMimeType = 'video/mp4';
   static const int _defaultMaxSegmentDurationSeconds = 20 * 60;
   static const int _defaultMaxSegmentBytes = 50 * 1024 * 1024;
+  static const MethodChannel _videoTranscodeChannel =
+      MethodChannel('secondloop/video_transcode');
 
   static String? _cachedBundledFfmpegExecutablePath;
 
@@ -281,15 +297,20 @@ final class VideoTranscodeWorker {
     String keyframeKind = 'scene',
     VideoTranscodeCommandRunner? commandRunner,
     VideoFfmpegExecutableResolver? ffmpegExecutableResolver,
+    VideoNativePreviewExtractor? nativePreviewExtractor,
   }) async {
     final normalizedMime = sourceMimeType.trim().toLowerCase();
     if (videoBytes.isEmpty || !normalizedMime.startsWith('video/')) {
-      return const VideoPreviewExtractResult(
-        posterBytes: null,
-        posterMimeType: 'image/jpeg',
-        keyframes: <VideoPreviewFrame>[],
-      );
+      return _kEmptyVideoPreviewExtractResult;
     }
+
+    final hasCustomMaxKeyframes = maxKeyframes != null;
+    final safeMaxKeyframes = (maxKeyframes ?? 24).clamp(1, 48);
+    final safeInterval = frameIntervalSeconds.clamp(1, 600);
+    final fallbackMaxKeyframes = hasCustomMaxKeyframes ? safeMaxKeyframes : 48;
+    final normalizedKind = keyframeKind.trim().isEmpty
+        ? 'scene'
+        : keyframeKind.trim().toLowerCase();
 
     final run = commandRunner ?? Process.run;
     final ffmpegResolver = ffmpegExecutableResolver ??
@@ -297,19 +318,14 @@ final class VideoTranscodeWorker {
         _resolveBundledFfmpegExecutablePath;
     final ffmpegPath = await ffmpegResolver();
     if (ffmpegPath == null || ffmpegPath.trim().isEmpty) {
-      return const VideoPreviewExtractResult(
-        posterBytes: null,
-        posterMimeType: 'image/jpeg',
-        keyframes: <VideoPreviewFrame>[],
+      return _extractPreviewWithNativePlatformApi(
+        videoBytes,
+        sourceMimeType: normalizedMime,
+        maxKeyframes: fallbackMaxKeyframes,
+        frameIntervalSeconds: safeInterval,
+        nativePreviewExtractor: nativePreviewExtractor,
       );
     }
-
-    final hasCustomMaxKeyframes = maxKeyframes != null;
-    final safeMaxKeyframes = (maxKeyframes ?? 24).clamp(1, 48);
-    final safeInterval = frameIntervalSeconds.clamp(1, 600);
-    final normalizedKind = keyframeKind.trim().isEmpty
-        ? 'scene'
-        : keyframeKind.trim().toLowerCase();
 
     Directory? tempDir;
     try {
@@ -462,11 +478,17 @@ final class VideoTranscodeWorker {
         keyframes: List<VideoPreviewFrame>.unmodifiable(keyframes),
       );
     } catch (_) {
-      return const VideoPreviewExtractResult(
-        posterBytes: null,
-        posterMimeType: 'image/jpeg',
-        keyframes: <VideoPreviewFrame>[],
+      final nativeFallback = await _extractPreviewWithNativePlatformApi(
+        videoBytes,
+        sourceMimeType: normalizedMime,
+        maxKeyframes: fallbackMaxKeyframes,
+        frameIntervalSeconds: safeInterval,
+        nativePreviewExtractor: nativePreviewExtractor,
       );
+      if (nativeFallback.hasAnyPosterOrKeyframe) {
+        return nativeFallback;
+      }
+      return _kEmptyVideoPreviewExtractResult;
     } finally {
       if (tempDir != null) {
         try {
@@ -476,6 +498,37 @@ final class VideoTranscodeWorker {
         }
       }
     }
+  }
+
+  static Future<VideoPreviewExtractResult> _extractPreviewWithNativePlatformApi(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+    required int maxKeyframes,
+    required int frameIntervalSeconds,
+    VideoNativePreviewExtractor? nativePreviewExtractor,
+  }) {
+    return _extractPreviewWithNativePlatformApiInternal(
+      videoBytes,
+      sourceMimeType: sourceMimeType,
+      maxKeyframes: maxKeyframes,
+      frameIntervalSeconds: frameIntervalSeconds,
+      nativePreviewExtractor: nativePreviewExtractor,
+    );
+  }
+
+  static Future<VideoPreviewExtractResult>
+      _extractPreviewWithNativePlatformChannel(
+    Uint8List videoBytes, {
+    required String sourceMimeType,
+    required int maxKeyframes,
+    required int frameIntervalSeconds,
+  }) {
+    return _extractPreviewWithNativePlatformChannelInternal(
+      videoBytes,
+      sourceMimeType: sourceMimeType,
+      maxKeyframes: maxKeyframes,
+      frameIntervalSeconds: frameIntervalSeconds,
+    );
   }
 
   static VideoTranscodeResult _fallback(Uint8List bytes, String mimeType) {

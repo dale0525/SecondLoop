@@ -13,6 +13,13 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+int _dueReviewAtMsForToday() {
+  final nowLocal = DateTime.now();
+  final startOfTodayLocal =
+      DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+  return startOfTodayLocal.toUtc().millisecondsSinceEpoch;
+}
+
 void main() {
   testWidgets('marking review todo done notifies sync engine', (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -20,6 +27,7 @@ void main() {
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final dueReviewAtMs = _dueReviewAtMsForToday();
     final backend = _ReviewQueueBackend(
       todos: <Todo>[
         Todo(
@@ -29,7 +37,7 @@ void main() {
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
           reviewStage: 0,
-          nextReviewAtMs: nowUtcMs - const Duration(hours: 1).inMilliseconds,
+          nextReviewAtMs: dueReviewAtMs,
         ),
       ],
     );
@@ -72,6 +80,7 @@ void main() {
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final dueReviewAtMs = _dueReviewAtMsForToday();
     final backend = _ReviewQueueBackend(
       todos: <Todo>[
         Todo(
@@ -81,7 +90,7 @@ void main() {
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
           reviewStage: 0,
-          nextReviewAtMs: nowUtcMs - const Duration(hours: 1).inMilliseconds,
+          nextReviewAtMs: dueReviewAtMs,
         ),
       ],
     );

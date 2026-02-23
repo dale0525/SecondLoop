@@ -21,6 +21,11 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
 
   bool _consuming = false;
 
+  Future<void> _handleChannelCall(MethodCall call) async {
+    if (call.method != 'pendingSharesChanged') return;
+    await _consumePendingShares();
+  }
+
   bool _looksLikeUrl(String raw) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return false;
@@ -36,12 +41,14 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _channel.setMethodCallHandler(_handleChannelCall);
     unawaited(_consumePendingShares());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _channel.setMethodCallHandler(null);
     super.dispose();
   }
 

@@ -1028,38 +1028,3 @@ class TodoActivity {
           sourceMessageId == other.sourceMessageId &&
           createdAtMs == other.createdAtMs;
 }
-
-class TopicThread {
-  final String id;
-  final String conversationId;
-  final String? title;
-  final PlatformInt64 createdAtMs;
-  final PlatformInt64 updatedAtMs;
-
-  const TopicThread({
-    required this.id,
-    required this.conversationId,
-    this.title,
-    required this.createdAtMs,
-    required this.updatedAtMs,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      conversationId.hashCode ^
-      title.hashCode ^
-      createdAtMs.hashCode ^
-      updatedAtMs.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TopicThread &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          conversationId == other.conversationId &&
-          title == other.title &&
-          createdAtMs == other.createdAtMs &&
-          updatedAtMs == other.updatedAtMs;
-}

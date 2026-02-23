@@ -40,7 +40,7 @@ abstract class AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key);
   Future<Conversation> createConversation(Uint8List key, String title);
 
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key);
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key);
 
   Future<List<Message>> listMessages(Uint8List key, String conversationId);
   Future<Message?> getMessageById(Uint8List key, String messageId) {

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1606 (803 per locale)
+/// Strings: 1590 (795 per locale)
 ///
-/// Built on 2026-02-23 at 09:16 UTC
+/// Built on 2026-02-23 at 15:21 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -241,7 +241,7 @@ class _StringsErrorsEn {
   String loadFailed({required Object error}) => 'Load failed: ${error}';
   String saveFailed({required Object error}) => 'Save failed: ${error}';
   String lockGateError({required Object error}) => 'LockGate error: ${error}';
-  String get missingMainStream => 'Missing Main Stream';
+  String get missingLoopHomeConversation => 'Missing Loop conversation';
 }
 
 // Path: actions
@@ -372,7 +372,7 @@ class _StringsChatEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get mainStreamTitle => 'Main Stream';
+  String get loopTitle => 'Loop';
   String get attachTooltip => 'Add attachment';
   String get attachPickMedia => 'Choose media';
   String get attachTakePhoto => 'Take photo';
@@ -428,8 +428,6 @@ class _StringsChatEn {
   String get semanticParseStatusUpdatedGeneric => 'Updated task';
   String get semanticParseStatusUndone => 'Undid auto action';
   String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
-  late final _StringsChatTopicThreadEn topicThread =
-      _StringsChatTopicThreadEn._(_root);
   late final _StringsChatTagFilterEn tagFilter =
       _StringsChatTagFilterEn._(_root);
   late final _StringsChatTagPickerEn tagPicker =
@@ -602,7 +600,7 @@ class _StringsAppTabsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get main => 'Main';
+  String get main => 'Loop';
   String get settings => 'Settings';
 }
 
@@ -1375,9 +1373,24 @@ class _StringsChatMarkdownEditorEn {
   String get exportMenu => 'Export preview';
   String get exportPng => 'Export as PNG';
   String get exportPdf => 'Export as PDF';
+  String get exportCopyClipboard => 'Copy to Clipboard';
+  String get exportCopied => 'Copied to clipboard';
   String exportDone({required Object format}) => 'Exported as ${format}';
   String exportSavedPath({required Object path}) => 'Saved to ${path}';
   String exportFailed({required Object error}) => 'Export failed: ${error}';
+  String get exportReasonNoWindowsBrowser =>
+      'No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.';
+  String get exportReasonWindowsBrowserPrint =>
+      'The browser failed to print the document on Windows. Check browser availability and retry.';
+  String get exportReasonTimeout =>
+      'The export timed out. Try reducing very large images or document size and retry.';
+  String get exportReasonRender =>
+      'The preview content could not be rendered for PDF export.';
+  String get exportReasonWrite =>
+      'Failed to generate PDF bytes. Check disk space and retry.';
+  String get exportReasonCancelled => 'The PDF export was cancelled.';
+  String get exportReasonUnsupported =>
+      'PDF export is not supported on this platform.';
   String stats({required Object lines, required Object characters}) =>
       '${lines} lines · ${characters} chars';
   String get simpleInput => 'Simple input';
@@ -1452,31 +1465,6 @@ class _StringsChatEmbeddingsConsentEn {
   String get dontShowAgain => 'Remember my choice';
   late final _StringsChatEmbeddingsConsentActionsEn actions =
       _StringsChatEmbeddingsConsentActionsEn._(_root);
-}
-
-// Path: chat.topicThread
-class _StringsChatTopicThreadEn {
-  _StringsChatTopicThreadEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get filterTooltip => 'Topic thread filter';
-  String get actionLabel => 'Topic thread';
-  String get create => 'Create topic thread';
-  String get clearFilter => 'Clear topic thread filter';
-  String get clear => 'Clear thread';
-  String get manage => 'Manage thread';
-  String get rename => 'Rename thread';
-  String get delete => 'Delete thread';
-  late final _StringsChatTopicThreadDeleteDialogEn deleteDialog =
-      _StringsChatTopicThreadDeleteDialogEn._(_root);
-  String get addMessage => 'Add this message';
-  String get removeMessage => 'Remove this message';
-  String get createDialogTitle => 'Create topic thread';
-  String get renameDialogTitle => 'Rename topic thread';
-  String get titleFieldLabel => 'Thread title (optional)';
-  String get untitled => 'Untitled topic thread';
 }
 
 // Path: chat.tagFilter
@@ -2704,19 +2692,6 @@ class _StringsChatEmbeddingsConsentActionsEn {
   String get enableCloud => 'Enable cloud embeddings';
 }
 
-// Path: chat.topicThread.deleteDialog
-class _StringsChatTopicThreadDeleteDialogEn {
-  _StringsChatTopicThreadDeleteDialogEn._(this._root);
-
-  final Translations _root; // ignore: unused_field
-
-  // Translations
-  String get title => 'Delete topic thread?';
-  String get message =>
-      'Deleting removes this thread and its message memberships.';
-  String get confirm => 'Delete';
-}
-
 // Path: chat.tagFilter.sheet
 class _StringsChatTagFilterSheetEn {
   _StringsChatTagFilterSheetEn._(this._root);
@@ -3739,7 +3714,7 @@ class _StringsErrorsZhCn extends _StringsErrorsEn {
   @override
   String lockGateError({required Object error}) => '锁定流程错误：${error}';
   @override
-  String get missingMainStream => '缺少主线对话';
+  String get missingLoopHomeConversation => '缺少记录会话';
 }
 
 // Path: actions
@@ -3935,7 +3910,7 @@ class _StringsChatZhCn extends _StringsChatEn {
 
   // Translations
   @override
-  String get mainStreamTitle => '主线';
+  String get loopTitle => '记录';
   @override
   String get attachTooltip => '添加附件';
   @override
@@ -4030,9 +4005,6 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusUndone => '已撤销自动动作';
   @override
   String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
-  @override
-  late final _StringsChatTopicThreadZhCn topicThread =
-      _StringsChatTopicThreadZhCn._(_root);
   @override
   late final _StringsChatTagFilterZhCn tagFilter =
       _StringsChatTagFilterZhCn._(_root);
@@ -4296,7 +4268,7 @@ class _StringsAppTabsZhCn extends _StringsAppTabsEn {
 
   // Translations
   @override
-  String get main => '主线';
+  String get main => '记录';
   @override
   String get settings => '设置';
 }
@@ -5474,11 +5446,30 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   @override
   String get exportPdf => '导出为 PDF';
   @override
+  String get exportCopyClipboard => '复制到剪贴板';
+  @override
+  String get exportCopied => '已复制到剪贴板';
+  @override
   String exportDone({required Object format}) => '已导出为 ${format}';
   @override
   String exportSavedPath({required Object path}) => '已保存到：${path}';
   @override
   String exportFailed({required Object error}) => '导出失败：${error}';
+  @override
+  String get exportReasonNoWindowsBrowser =>
+      '未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。';
+  @override
+  String get exportReasonWindowsBrowserPrint => 'Windows 浏览器打印失败，请确认浏览器可用后重试。';
+  @override
+  String get exportReasonTimeout => '导出超时。请减少超大图片或文档长度后重试。';
+  @override
+  String get exportReasonRender => '预览内容渲染失败，无法导出 PDF。';
+  @override
+  String get exportReasonWrite => 'PDF 写入失败，请检查磁盘空间后重试。';
+  @override
+  String get exportReasonCancelled => 'PDF 导出已取消。';
+  @override
+  String get exportReasonUnsupported => '当前平台暂不支持 PDF 导出。';
   @override
   String stats({required Object lines, required Object characters}) =>
       '${lines} 行 · ${characters} 字符';
@@ -5586,49 +5577,6 @@ class _StringsChatEmbeddingsConsentZhCn
   @override
   late final _StringsChatEmbeddingsConsentActionsZhCn actions =
       _StringsChatEmbeddingsConsentActionsZhCn._(_root);
-}
-
-// Path: chat.topicThread
-class _StringsChatTopicThreadZhCn extends _StringsChatTopicThreadEn {
-  _StringsChatTopicThreadZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get filterTooltip => '主题线程筛选';
-  @override
-  String get actionLabel => '主题线程';
-  @override
-  String get create => '新建主题线程';
-  @override
-  String get clearFilter => '清除线程筛选';
-  @override
-  String get clear => '清除线程';
-  @override
-  String get manage => '管理线程';
-  @override
-  String get rename => '重命名线程';
-  @override
-  String get delete => '删除线程';
-  @override
-  late final _StringsChatTopicThreadDeleteDialogZhCn deleteDialog =
-      _StringsChatTopicThreadDeleteDialogZhCn._(_root);
-  @override
-  String get addMessage => '加入此消息';
-  @override
-  String get removeMessage => '移除此消息';
-  @override
-  String get createDialogTitle => '新建主题线程';
-  @override
-  String get renameDialogTitle => '重命名主题线程';
-  @override
-  String get titleFieldLabel => '线程标题（可选）';
-  @override
-  String get untitled => '未命名主题线程';
 }
 
 // Path: chat.tagFilter
@@ -7479,25 +7427,6 @@ class _StringsChatEmbeddingsConsentActionsZhCn
   String get enableCloud => '开启云端向量';
 }
 
-// Path: chat.topicThread.deleteDialog
-class _StringsChatTopicThreadDeleteDialogZhCn
-    extends _StringsChatTopicThreadDeleteDialogEn {
-  _StringsChatTopicThreadDeleteDialogZhCn._(_StringsZhCn root)
-      : this._root = root,
-        super._(root);
-
-  @override
-  final _StringsZhCn _root; // ignore: unused_field
-
-  // Translations
-  @override
-  String get title => '删除主题线程？';
-  @override
-  String get message => '删除后将移除该线程及其消息归属，且无法撤销。';
-  @override
-  String get confirm => '删除';
-}
-
 // Path: chat.tagFilter.sheet
 class _StringsChatTagFilterSheetZhCn extends _StringsChatTagFilterSheetEn {
   _StringsChatTagFilterSheetZhCn._(_StringsZhCn root)
@@ -8847,7 +8776,7 @@ extension on Translations {
       case 'app.title':
         return 'SecondLoop';
       case 'app.tabs.main':
-        return 'Main';
+        return 'Loop';
       case 'app.tabs.settings':
         return 'Settings';
       case 'common.actions.cancel':
@@ -8926,8 +8855,8 @@ extension on Translations {
         return ({required Object error}) => 'Save failed: ${error}';
       case 'errors.lockGateError':
         return ({required Object error}) => 'LockGate error: ${error}';
-      case 'errors.missingMainStream':
-        return 'Missing Main Stream';
+      case 'errors.missingLoopHomeConversation':
+        return 'Missing Loop conversation';
       case 'actions.capture.title':
         return 'Turn this into a reminder?';
       case 'actions.capture.pickTime':
@@ -9788,8 +9717,8 @@ extension on Translations {
         return 'Creating…';
       case 'lock.unlocking':
         return 'Unlocking…';
-      case 'chat.mainStreamTitle':
-        return 'Main Stream';
+      case 'chat.loopTitle':
+        return 'Loop';
       case 'chat.attachTooltip':
         return 'Add attachment';
       case 'chat.attachPickMedia':
@@ -9886,12 +9815,30 @@ extension on Translations {
         return 'Export as PNG';
       case 'chat.markdownEditor.exportPdf':
         return 'Export as PDF';
+      case 'chat.markdownEditor.exportCopyClipboard':
+        return 'Copy to Clipboard';
+      case 'chat.markdownEditor.exportCopied':
+        return 'Copied to clipboard';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => 'Exported as ${format}';
       case 'chat.markdownEditor.exportSavedPath':
         return ({required Object path}) => 'Saved to ${path}';
       case 'chat.markdownEditor.exportFailed':
         return ({required Object error}) => 'Export failed: ${error}';
+      case 'chat.markdownEditor.exportReasonNoWindowsBrowser':
+        return 'No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.';
+      case 'chat.markdownEditor.exportReasonWindowsBrowserPrint':
+        return 'The browser failed to print the document on Windows. Check browser availability and retry.';
+      case 'chat.markdownEditor.exportReasonTimeout':
+        return 'The export timed out. Try reducing very large images or document size and retry.';
+      case 'chat.markdownEditor.exportReasonRender':
+        return 'The preview content could not be rendered for PDF export.';
+      case 'chat.markdownEditor.exportReasonWrite':
+        return 'Failed to generate PDF bytes. Check disk space and retry.';
+      case 'chat.markdownEditor.exportReasonCancelled':
+        return 'The PDF export was cancelled.';
+      case 'chat.markdownEditor.exportReasonUnsupported':
+        return 'PDF export is not supported on this platform.';
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} lines · ${characters} chars';
@@ -9991,40 +9938,6 @@ extension on Translations {
         return 'Undid auto action';
       case 'chat.askAiRecoveredDetached':
         return 'Recovered the completed cloud answer.';
-      case 'chat.topicThread.filterTooltip':
-        return 'Topic thread filter';
-      case 'chat.topicThread.actionLabel':
-        return 'Topic thread';
-      case 'chat.topicThread.create':
-        return 'Create topic thread';
-      case 'chat.topicThread.clearFilter':
-        return 'Clear topic thread filter';
-      case 'chat.topicThread.clear':
-        return 'Clear thread';
-      case 'chat.topicThread.manage':
-        return 'Manage thread';
-      case 'chat.topicThread.rename':
-        return 'Rename thread';
-      case 'chat.topicThread.delete':
-        return 'Delete thread';
-      case 'chat.topicThread.deleteDialog.title':
-        return 'Delete topic thread?';
-      case 'chat.topicThread.deleteDialog.message':
-        return 'Deleting removes this thread and its message memberships.';
-      case 'chat.topicThread.deleteDialog.confirm':
-        return 'Delete';
-      case 'chat.topicThread.addMessage':
-        return 'Add this message';
-      case 'chat.topicThread.removeMessage':
-        return 'Remove this message';
-      case 'chat.topicThread.createDialogTitle':
-        return 'Create topic thread';
-      case 'chat.topicThread.renameDialogTitle':
-        return 'Rename topic thread';
-      case 'chat.topicThread.titleFieldLabel':
-        return 'Thread title (optional)';
-      case 'chat.topicThread.untitled':
-        return 'Untitled topic thread';
       case 'chat.tagFilter.tooltip':
         return 'Tag filter';
       case 'chat.tagFilter.clearFilter':
@@ -10491,7 +10404,7 @@ extension on _StringsZhCn {
       case 'app.title':
         return 'SecondLoop';
       case 'app.tabs.main':
-        return '主线';
+        return '记录';
       case 'app.tabs.settings':
         return '设置';
       case 'common.actions.cancel':
@@ -10570,8 +10483,8 @@ extension on _StringsZhCn {
         return ({required Object error}) => '保存失败：${error}';
       case 'errors.lockGateError':
         return ({required Object error}) => '锁定流程错误：${error}';
-      case 'errors.missingMainStream':
-        return '缺少主线对话';
+      case 'errors.missingLoopHomeConversation':
+        return '缺少记录会话';
       case 'actions.capture.title':
         return '要把它变成提醒吗？';
       case 'actions.capture.pickTime':
@@ -11426,8 +11339,8 @@ extension on _StringsZhCn {
         return '正在创建…';
       case 'lock.unlocking':
         return '正在解锁…';
-      case 'chat.mainStreamTitle':
-        return '主线';
+      case 'chat.loopTitle':
+        return '记录';
       case 'chat.attachTooltip':
         return '添加附件';
       case 'chat.attachPickMedia':
@@ -11524,12 +11437,30 @@ extension on _StringsZhCn {
         return '导出为 PNG';
       case 'chat.markdownEditor.exportPdf':
         return '导出为 PDF';
+      case 'chat.markdownEditor.exportCopyClipboard':
+        return '复制到剪贴板';
+      case 'chat.markdownEditor.exportCopied':
+        return '已复制到剪贴板';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => '已导出为 ${format}';
       case 'chat.markdownEditor.exportSavedPath':
         return ({required Object path}) => '已保存到：${path}';
       case 'chat.markdownEditor.exportFailed':
         return ({required Object error}) => '导出失败：${error}';
+      case 'chat.markdownEditor.exportReasonNoWindowsBrowser':
+        return '未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。';
+      case 'chat.markdownEditor.exportReasonWindowsBrowserPrint':
+        return 'Windows 浏览器打印失败，请确认浏览器可用后重试。';
+      case 'chat.markdownEditor.exportReasonTimeout':
+        return '导出超时。请减少超大图片或文档长度后重试。';
+      case 'chat.markdownEditor.exportReasonRender':
+        return '预览内容渲染失败，无法导出 PDF。';
+      case 'chat.markdownEditor.exportReasonWrite':
+        return 'PDF 写入失败，请检查磁盘空间后重试。';
+      case 'chat.markdownEditor.exportReasonCancelled':
+        return 'PDF 导出已取消。';
+      case 'chat.markdownEditor.exportReasonUnsupported':
+        return '当前平台暂不支持 PDF 导出。';
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} 行 · ${characters} 字符';
@@ -11629,40 +11560,6 @@ extension on _StringsZhCn {
         return '已撤销自动动作';
       case 'chat.askAiRecoveredDetached':
         return '已恢复已完成的云端回答。';
-      case 'chat.topicThread.filterTooltip':
-        return '主题线程筛选';
-      case 'chat.topicThread.actionLabel':
-        return '主题线程';
-      case 'chat.topicThread.create':
-        return '新建主题线程';
-      case 'chat.topicThread.clearFilter':
-        return '清除线程筛选';
-      case 'chat.topicThread.clear':
-        return '清除线程';
-      case 'chat.topicThread.manage':
-        return '管理线程';
-      case 'chat.topicThread.rename':
-        return '重命名线程';
-      case 'chat.topicThread.delete':
-        return '删除线程';
-      case 'chat.topicThread.deleteDialog.title':
-        return '删除主题线程？';
-      case 'chat.topicThread.deleteDialog.message':
-        return '删除后将移除该线程及其消息归属，且无法撤销。';
-      case 'chat.topicThread.deleteDialog.confirm':
-        return '删除';
-      case 'chat.topicThread.addMessage':
-        return '加入此消息';
-      case 'chat.topicThread.removeMessage':
-        return '移除此消息';
-      case 'chat.topicThread.createDialogTitle':
-        return '新建主题线程';
-      case 'chat.topicThread.renameDialogTitle':
-        return '重命名主题线程';
-      case 'chat.topicThread.titleFieldLabel':
-        return '线程标题（可选）';
-      case 'chat.topicThread.untitled':
-        return '未命名主题线程';
       case 'chat.tagFilter.tooltip':
         return '标签筛选';
       case 'chat.tagFilter.clearFilter':

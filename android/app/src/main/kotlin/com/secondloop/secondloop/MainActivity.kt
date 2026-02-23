@@ -28,10 +28,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.io.File
-import java.io.FileOutputStream
 import kotlin.math.abs
 
 private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
+private const val kPendingSharesChangedMethod = "pendingSharesChanged"
 
 class MainActivity : FlutterFragmentActivity() {
   private val pendingShares = mutableListOf<Map<String, String>>()
@@ -40,12 +40,20 @@ class MainActivity : FlutterFragmentActivity() {
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
+  private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
+  private var markdownPdfExportChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
   }
   private val nativeAudioTranscribeChannelHandler by lazy {
     NativeAudioTranscribeChannelHandler()
+  }
+  private val markdownPdfExportChannelHandler by lazy {
+    MarkdownPdfExportChannelHandler(
+      activity = this,
+      cacheDir = cacheDir,
+    )
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -193,10 +201,28 @@ class MainActivity : FlutterFragmentActivity() {
         }
       }
 
+    videoTranscodeChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/video_transcode").apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "extractPreviewPosterJpeg" -> handleExtractPreviewPosterJpeg(call, result)
+            "extractPreviewFramesJpeg" -> handleExtractPreviewFramesJpeg(call, result)
+            else -> result.notImplemented()
+          }
+        }
+      }
+
     ocrChannel =
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/ocr").apply {
         setMethodCallHandler { call, result ->
           ocrAndPdfChannelHandler.handle(call, result)
+        }
+      }
+
+    markdownPdfExportChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/markdown_pdf_export").apply {
+        setMethodCallHandler { call, result ->
+          markdownPdfExportChannelHandler.handle(call, result)
         }
       }
   }
@@ -229,10 +255,19 @@ class MainActivity : FlutterFragmentActivity() {
       payload["filename"] = filename
     }
     pendingShares.add(payload)
+    notifyPendingSharesChanged()
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_TYPE)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_CONTENT)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_MIME_TYPE)
     intent.removeExtra(ShareReceiverActivity.EXTRA_SHARE_FILENAME)
+  }
+
+  private fun notifyPendingSharesChanged() {
+    try {
+      shareChannel?.invokeMethod(kPendingSharesChangedMethod, null)
+    } catch (_: Throwable) {
+      // ignore
+    }
   }
 
   private fun fetchAndReturnLocation(result: MethodChannel.Result) {
@@ -416,36 +451,56 @@ class MainActivity : FlutterFragmentActivity() {
     val args = call.arguments as? Map<*, *>
     val inputPath = (args?.get("input_path") as? String)?.trim().orEmpty()
     val outputPath = (args?.get("output_path") as? String)?.trim().orEmpty()
+    val maxDecodedWavBytes = when (val raw = args?.get("max_decoded_wav_bytes")) {
+      is Number -> raw.toLong()
+      is String -> raw.trim().toLongOrNull()
+      else -> null
+    }
     if (inputPath.isEmpty() || outputPath.isEmpty()) {
       result.success(false)
       return
     }
 
     Thread {
-      val ok = try {
+      var ok = false
+      var errorCode: String? = null
+      var errorMessage: String? = null
+
+      try {
         val inputFile = File(inputPath)
         if (!inputFile.exists() || !inputFile.isFile) {
-          false
+          ok = false
         } else {
-          val wavBytes = nativeAudioTranscribeChannelHandler.decodeToWavPcm16Mono16k(inputFile)
-          if (wavBytes.isEmpty()) {
-            false
-          } else {
-            val outputFile = File(outputPath)
-            outputFile.parentFile?.mkdirs()
-            if (outputFile.exists()) {
-              outputFile.delete()
-            }
-            outputFile.writeBytes(wavBytes)
-            outputFile.exists() && outputFile.length() > 0
+          val outputFile = File(outputPath)
+          val writtenBytes = nativeAudioTranscribeChannelHandler.decodeToWavPcm16Mono16k(
+            inputFile,
+            outputFile,
+            maxDecodedWavBytes = maxDecodedWavBytes,
+          )
+          ok = writtenBytes > 44 && outputFile.exists() && outputFile.length() > 44
+          if (!ok) {
+            errorCode = "audio_decode_write_failed"
+            errorMessage = "decoded_wav_write_failed"
           }
         }
-      } catch (_: Throwable) {
-        false
+      } catch (error: AudioDecodeException) {
+        val detail = error.message?.trim().orEmpty()
+        errorCode = if (detail.isEmpty()) "audio_decode_failed" else detail
+        errorMessage = detail.ifEmpty { "audio_decode_failed" }
+      } catch (error: Throwable) {
+        errorCode = "audio_decode_failed"
+        val detail = error.message?.trim().orEmpty()
+        errorMessage = detail.ifEmpty { error::class.java.simpleName }
       }
 
       runOnUiThread {
-        result.success(ok)
+        if (ok) {
+          result.success(true)
+        } else if (errorCode != null) {
+          result.error(errorCode, errorMessage ?: errorCode, null)
+        } else {
+          result.success(false)
+        }
       }
     }.start()
   }
@@ -481,6 +536,90 @@ class MainActivity : FlutterFragmentActivity() {
     }.start()
   }
 
+
+  private fun remuxAudioTrackToM4a(
+    inputPath: String,
+    outputPath: String,
+  ): Boolean {
+    val outputFile = File(outputPath)
+    var extractor: MediaExtractor? = null
+    var muxer: MediaMuxer? = null
+    var muxerStarted = false
+
+    try {
+      extractor = MediaExtractor()
+      extractor.setDataSource(inputPath)
+
+      val audioTrackIndex = selectFirstAudioTrack(extractor)
+      if (audioTrackIndex < 0) {
+        return false
+      }
+      extractor.selectTrack(audioTrackIndex)
+
+      val inputFormat = extractor.getTrackFormat(audioTrackIndex)
+      val inputMime = inputFormat.getString(MediaFormat.KEY_MIME) ?: return false
+      if (!inputMime.startsWith("audio/")) {
+        return false
+      }
+
+      muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+      val muxerTrackIndex = muxer.addTrack(inputFormat)
+      muxer.start()
+      muxerStarted = true
+
+      val maxInputSize = inputFormat
+        .getIntegerOrDefault(MediaFormat.KEY_MAX_INPUT_SIZE, 256 * 1024)
+        .coerceAtLeast(8 * 1024)
+      val sampleBuffer = java.nio.ByteBuffer.allocate(maxInputSize)
+      val bufferInfo = MediaCodec.BufferInfo()
+      var wroteAnySample = false
+
+      while (true) {
+        sampleBuffer.clear()
+        val sampleSize = extractor.readSampleData(sampleBuffer, 0)
+        if (sampleSize < 0) {
+          break
+        }
+
+        val sampleTimeUs = extractor.sampleTime
+        if (sampleTimeUs < 0L) {
+          break
+        }
+
+        bufferInfo.offset = 0
+        bufferInfo.size = sampleSize
+        bufferInfo.presentationTimeUs = sampleTimeUs
+        bufferInfo.flags = extractor.sampleFlags
+
+        muxer.writeSampleData(muxerTrackIndex, sampleBuffer, bufferInfo)
+        wroteAnySample = true
+
+        if (!extractor.advance()) {
+          break
+        }
+      }
+
+      if (!wroteAnySample) {
+        return false
+      }
+      return outputFile.exists() && outputFile.length() > 0
+    } catch (_: Throwable) {
+      return false
+    } finally {
+      try {
+        extractor?.release()
+      } catch (_: Throwable) {}
+      if (muxerStarted) {
+        try {
+          muxer?.stop()
+        } catch (_: Throwable) {}
+      }
+      try {
+        muxer?.release()
+      } catch (_: Throwable) {}
+    }
+  }
+
   private fun transcodeToM4a(
     inputPath: String,
     outputPath: String,
@@ -492,6 +631,10 @@ class MainActivity : FlutterFragmentActivity() {
     outputFile.parentFile?.mkdirs()
     if (outputFile.exists()) {
       outputFile.delete()
+    }
+
+    if (remuxAudioTrackToM4a(inputPath, outputPath)) {
+      return true
     }
 
     var extractor: MediaExtractor? = null

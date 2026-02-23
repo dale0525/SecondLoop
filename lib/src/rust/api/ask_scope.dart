@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_scoped_empty_answer`, `build_scoped_prompt`, `collect_scoped_contexts`, `emit_ask_ai_meta_if_any`, `emit_scoped_empty_answer`, `finish_ask_ai_stream`, `key_from_bytes`, `list_all_message_ids`, `list_conversation_message_ids`, `list_message_ids_by_tag_scope`, `normalize_tag_ids`, `normalize_topic_thread_id`, `stream_scoped_ask_with_provider`
+// These functions are ignored because they are not marked as `pub`: `build_scoped_empty_answer`, `build_scoped_prompt`, `collect_scoped_contexts`, `emit_ask_ai_meta_if_any`, `emit_scoped_empty_answer`, `finish_ask_ai_stream`, `key_from_bytes`, `list_all_message_ids`, `list_conversation_message_ids`, `list_message_ids_by_tag_scope`, `normalize_tag_ids`, `stream_scoped_ask_with_provider`
 // These types are ignored because they are not used by any `pub` functions: `ScopedFocus`, `TimeScope`
 
 Stream<String> ragAskAiStreamScoped(
@@ -20,7 +20,6 @@ Stream<String> ragAskAiStreamScoped(
         PlatformInt64? timeEndMs,
         required List<String> includeTagIds,
         required List<String> excludeTagIds,
-        String? topicThreadId,
         required bool strictMode,
         required String localeLanguage,
         required String localDay}) =>
@@ -35,7 +34,6 @@ Stream<String> ragAskAiStreamScoped(
         timeEndMs: timeEndMs,
         includeTagIds: includeTagIds,
         excludeTagIds: excludeTagIds,
-        topicThreadId: topicThreadId,
         strictMode: strictMode,
         localeLanguage: localeLanguage,
         localDay: localDay);
@@ -51,7 +49,6 @@ Stream<String> ragAskAiStreamCloudGatewayScoped(
         PlatformInt64? timeEndMs,
         required List<String> includeTagIds,
         required List<String> excludeTagIds,
-        String? topicThreadId,
         required bool strictMode,
         required String localeLanguage,
         required String gatewayBaseUrl,
@@ -68,7 +65,6 @@ Stream<String> ragAskAiStreamCloudGatewayScoped(
         timeEndMs: timeEndMs,
         includeTagIds: includeTagIds,
         excludeTagIds: excludeTagIds,
-        topicThreadId: topicThreadId,
         strictMode: strictMode,
         localeLanguage: localeLanguage,
         gatewayBaseUrl: gatewayBaseUrl,

@@ -11,7 +11,7 @@ fn list_messages_page_paginates_from_latest_without_gaps_or_duplicates() {
         .expect("init master password");
     let conn = db::open(&app_dir).expect("open db");
 
-    let conv = db::get_or_create_main_stream_conversation(&conn, &key).expect("main stream");
+    let conv = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
 
     for i in 1..=5 {
         db::insert_message(&conn, &key, &conv.id, "user", &format!("m{i}"))

@@ -14,13 +14,13 @@ void main() {
 
     final m1 = await backend.insertMessage(
       key,
-      'main_stream',
+      'loop_home',
       role: 'user',
       content: 'first',
     );
     final m2 = await backend.insertMessage(
       key,
-      'main_stream',
+      'loop_home',
       role: 'user',
       content: 'second',
     );
@@ -74,13 +74,13 @@ void main() {
 
     final m1 = await backend.insertMessage(
       key,
-      'main_stream',
+      'loop_home',
       role: 'user',
       content: 'first',
     );
     final m2 = await backend.insertMessage(
       key,
-      'main_stream',
+      'loop_home',
       role: 'user',
       content: 'second',
     );
