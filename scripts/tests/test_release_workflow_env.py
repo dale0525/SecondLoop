@@ -122,6 +122,21 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('ndk_package="ndk;${flutter_ndk_version}"', workflow_text)
         self.assertIn('"${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"', workflow_text)
 
+    def test_release_workflow_builds_android_release_for_arm64_only(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('export SECONDLOOP_ANDROID_TARGET_PLATFORMS="android-arm64"', workflow_text)
+
+    def test_release_workflow_runs_android_rustup_setup_before_build(self) -> None:
+        workflow_text = self._workflow_text()
+
+        setup_idx = workflow_text.find('bash scripts/setup_rustup.sh')
+        build_idx = workflow_text.find('bash scripts/build_android_release_apk.sh')
+
+        self.assertNotEqual(-1, setup_idx)
+        self.assertNotEqual(-1, build_idx)
+        self.assertLess(setup_idx, build_idx)
+
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()
 
@@ -168,6 +183,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         workflow_text = self._workflow_text()
 
         self.assertIn('$Env:CMAKE_GENERATOR = "Ninja"', workflow_text)
+
+    def test_windows_build_enables_verbose_flutter_output(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('flutter build windows --release -v @buildArgs @defines', workflow_text)
+
 
 
 if __name__ == "__main__":

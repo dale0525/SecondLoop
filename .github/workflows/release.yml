@@ -144,6 +144,9 @@ jobs:
             echo "keyAlias=${ANDROID_KEY_ALIAS}"
             echo "storeFile=app/upload-keystore.jks"
           } > android/key.properties
+      - name: Setup Rustup for Android build
+        shell: bash
+        run: bash scripts/setup_rustup.sh
       - run: flutter pub get
       - name: Build (prod)
         shell: bash
@@ -167,6 +170,7 @@ jobs:
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
+          export SECONDLOOP_ANDROID_TARGET_PLATFORMS="android-arm64"
           bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
@@ -269,7 +273,7 @@ jobs:
               "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
             )
             $Env:CMAKE_GENERATOR = "Ninja"
-            flutter build windows --release @buildArgs @defines
+            flutter build windows --release -v @buildArgs @defines
             if ($LASTEXITCODE -ne 0) {
               throw "flutter build windows failed with exit code $LASTEXITCODE"
             }
