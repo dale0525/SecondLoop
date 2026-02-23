@@ -1,14 +1,10 @@
 package com.secondloop.secondloop
 
 import android.app.Activity
-import android.os.Bundle
-import android.os.CancellationSignal
+import android.graphics.pdf.PdfDocument
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelFileDescriptor
-import android.print.PageRange
-import android.print.PrintAttributes
-import android.print.PrintDocumentAdapter
+import android.view.View
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -16,8 +12,12 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 class MarkdownPdfExportChannelHandler(
   private val activity: Activity,
@@ -224,128 +224,55 @@ class MarkdownPdfExportChannelHandler(
     finishWithError: (String, String) -> Unit,
     finishWithBytes: (ByteArray) -> Unit,
   ) {
-    val adapter = webView.createPrintDocumentAdapter("secondloop_markdown_pdf")
-    val attributes = PrintAttributes.Builder()
-      .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-      .setResolution(PrintAttributes.Resolution("secondloop_pdf", "secondloop_pdf", 600, 600))
-      .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-      .build()
+    val pageWidthPx = 595
+    val pageHeightPx = 842
+    val density = activity.resources.displayMetrics.density
+    val measuredContentHeightPx = (webView.contentHeight * density).roundToInt()
+    val contentHeightPx = max(measuredContentHeightPx, pageHeightPx)
 
-    adapter.onStart()
-    adapter.onLayout(
-      null,
-      attributes,
-      CancellationSignal(),
-      object : PrintDocumentAdapter.LayoutResultCallback() {
-        override fun onLayoutFinished(info: android.print.PrintDocumentInfo, changed: Boolean) {
-          super.onLayoutFinished(info, changed)
-          writePdfContent(
-            adapter = adapter,
-            finishWithError = finishWithError,
-            finishWithBytes = finishWithBytes,
-          )
-        }
-
-        override fun onLayoutFailed(error: CharSequence?) {
-          super.onLayoutFailed(error)
-          finishWithError(
-            "markdown_pdf_export_layout_failed",
-            error?.toString() ?: "Print layout failed",
-          )
-        }
-
-        override fun onLayoutCancelled() {
-          super.onLayoutCancelled()
-          finishWithError(
-            "markdown_pdf_export_layout_cancelled",
-            "Print layout cancelled",
-          )
-        }
-      },
-      Bundle(),
+    webView.measure(
+      View.MeasureSpec.makeMeasureSpec(pageWidthPx, View.MeasureSpec.EXACTLY),
+      View.MeasureSpec.makeMeasureSpec(contentHeightPx, View.MeasureSpec.EXACTLY),
     )
-  }
+    webView.layout(0, 0, pageWidthPx, contentHeightPx)
 
-  private fun writePdfContent(
-    adapter: PrintDocumentAdapter,
-    finishWithError: (String, String) -> Unit,
-    finishWithBytes: (ByteArray) -> Unit,
-  ) {
-    val outputFile = runCatching {
-      File.createTempFile("secondloop_markdown_", ".pdf", cacheDir)
-    }.getOrNull() ?: run {
+    val pageCount = max(1, ceil(contentHeightPx.toDouble() / pageHeightPx.toDouble()).toInt())
+
+    val pdfResult = runCatching {
+      val document = PdfDocument()
+      try {
+        for (pageIndex in 0 until pageCount) {
+          val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, pageIndex + 1)
+            .create()
+          val page = document.startPage(pageInfo)
+          val canvas = page.canvas
+
+          canvas.save()
+          canvas.translate(0f, -(pageIndex * pageHeightPx).toFloat())
+          webView.draw(canvas)
+          canvas.restore()
+
+          document.finishPage(page)
+        }
+
+        ByteArrayOutputStream().use { output ->
+          document.writeTo(output)
+          output.toByteArray()
+        }
+      } finally {
+        document.close()
+      }
+    }
+
+    val bytes = pdfResult.getOrNull()
+    if (bytes == null || bytes.isEmpty()) {
       finishWithError(
         "markdown_pdf_export_io_failed",
-        "Failed to allocate temporary PDF file",
+        pdfResult.exceptionOrNull()?.message ?: "Generated PDF is empty",
       )
       return
     }
 
-    val descriptor = runCatching {
-      ParcelFileDescriptor.open(
-        outputFile,
-        ParcelFileDescriptor.MODE_CREATE or
-          ParcelFileDescriptor.MODE_TRUNCATE or
-          ParcelFileDescriptor.MODE_READ_WRITE,
-      )
-    }.getOrNull() ?: run {
-      outputFile.delete()
-      finishWithError(
-        "markdown_pdf_export_io_failed",
-        "Failed to open temporary PDF descriptor",
-      )
-      return
-    }
-
-    adapter.onWrite(
-      arrayOf(PageRange.ALL_PAGES),
-      descriptor,
-      CancellationSignal(),
-      object : PrintDocumentAdapter.WriteResultCallback() {
-        override fun onWriteFinished(pages: Array<PageRange>) {
-          super.onWriteFinished(pages)
-          descriptor.close()
-
-          val bytes = runCatching {
-            outputFile.readBytes()
-          }.getOrNull()
-
-          outputFile.delete()
-          adapter.onFinish()
-
-          if (bytes == null || bytes.isEmpty()) {
-            finishWithError(
-              "markdown_pdf_export_io_failed",
-              "Generated PDF is empty",
-            )
-            return
-          }
-
-          finishWithBytes(bytes)
-        }
-
-        override fun onWriteFailed(error: CharSequence?) {
-          super.onWriteFailed(error)
-          descriptor.close()
-          outputFile.delete()
-          adapter.onFinish()
-          finishWithError(
-            "markdown_pdf_export_write_failed",
-            error?.toString() ?: "PDF write failed",
-          )
-        }
-
-        override fun onWriteCancelled() {
-          super.onWriteCancelled()
-          descriptor.close()
-          outputFile.delete()
-          adapter.onFinish()
-          finishWithError(
-            "markdown_pdf_export_write_cancelled",
-            "PDF write cancelled",
-          )
-        }
-      },
-    )
+    finishWithBytes(bytes)
   }
 }
