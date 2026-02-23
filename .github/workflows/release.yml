@@ -66,6 +66,27 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "ANDROID_SDK_ROOT/ANDROID_HOME is not set"
+            exit 1
+          fi
+
+          sdkmanager="${sdk_root}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager || true)"
+          fi
+          if [[ -z "${sdkmanager}" || ! -x "${sdkmanager}" ]]; then
+            echo "sdkmanager not found (checked ${sdk_root}/cmdline-tools/latest/bin/sdkmanager and PATH)"
+            exit 1
+          fi
+
+          yes | "${sdkmanager}" --sdk_root="${sdk_root}" --licenses >/dev/null
+          "${sdkmanager}" --sdk_root="${sdk_root}" --install "ndk;26.3.11579264"
       - name: Validate prod config
         shell: bash
         run: |
@@ -201,19 +222,33 @@ jobs:
       - name: Build (prod)
         shell: pwsh
         run: |
-          $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
-          if ($Env:GITHUB_REF -like "refs/tags/v*") {
-            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
-            if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
-              $buildArgs += "--build-name=$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          cmd /c subst W: /d > $null 2>&1
+          cmd /c subst W: $Env:GITHUB_WORKSPACE
+
+          $enteredWorkspace = $false
+          try {
+            Push-Location "W:\"
+            $enteredWorkspace = $true
+
+            $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
+            if ($Env:GITHUB_REF -like "refs/tags/v*") {
+              $candidate = $Env:GITHUB_REF_NAME.Substring(1)
+              if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
+                $buildArgs += "--build-name=$($Matches[1]).$($Matches[2]).$($Matches[3])"
+              }
             }
+            $defines = @(
+              "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
+              "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
+              "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
+            )
+            flutter build windows --release @buildArgs @defines
+          } finally {
+            if ($enteredWorkspace) {
+              Pop-Location
+            }
+            cmd /c subst W: /d > $null 2>&1
           }
-          $defines = @(
-            "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
-            "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
-            "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
-          )
-          flutter build windows --release @buildArgs @defines
       - name: Setup portable WiX Toolset v3
         shell: pwsh
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_wix.ps1
@@ -442,6 +477,7 @@ jobs:
             libkeybinder-3.0-dev \
             liblzma-dev \
             libsecret-1-dev \
+            libvulkan-dev \
             ninja-build \
             pkg-config \
             libpoppler-glib-dev \

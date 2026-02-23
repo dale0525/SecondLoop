@@ -103,6 +103,24 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertGreaterEqual(workflow_text.count("humbletim/install-vulkan-sdk@v1.2"), 2)
         self.assertIn("version: 1.4.309.0", workflow_text)
 
+    def test_release_workflow_installs_linux_vulkan_linker_package(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("libvulkan-dev", workflow_text)
+
+    def test_release_workflow_installs_android_ndk(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("name: Install Android NDK", workflow_text)
+        self.assertIn('ndk;26.3.11579264', workflow_text)
+
+    def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("subst W: $Env:GITHUB_WORKSPACE", workflow_text)
+        self.assertIn('Push-Location "W:\\"', workflow_text)
+        self.assertIn("subst W: /d", workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()
