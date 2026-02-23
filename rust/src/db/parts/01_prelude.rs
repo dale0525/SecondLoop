@@ -14,7 +14,7 @@ use crate::embedding::Embedder;
 use crate::vector;
 
 const DEFAULT_EMBEDDING_DIM: usize = crate::embedding::DEFAULT_EMBED_DIM;
-const MAIN_STREAM_CONVERSATION_ID: &str = "main_stream";
+const LOOP_HOME_CONVERSATION_ID: &str = "loop_home";
 const KV_ACTIVE_EMBEDDING_MODEL_NAME: &str = "embedding.active_model_name";
 const KV_ACTIVE_EMBEDDING_DIM: &str = "embedding.active_dim";
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_BASE_URL: &str = "embedding.cloud_gateway.embeddings.base_url";
@@ -71,15 +71,6 @@ pub struct TagMergeSuggestion {
 }
 
 #[derive(Clone, Debug)]
-pub struct TopicThread {
-    pub id: String,
-    pub conversation_id: String,
-    pub title: Option<String>,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
-}
-
-#[derive(Clone, Debug)]
 pub struct SimilarMessage {
     pub message: Message,
     pub distance: f64,
@@ -88,17 +79,6 @@ pub struct SimilarMessage {
 #[derive(Clone, Debug)]
 pub struct SimilarTodoThread {
     pub todo_id: String,
-    pub distance: f64,
-}
-
-#[derive(Clone, Debug)]
-pub struct SimilarAttachmentChunk {
-    pub attachment_sha256: String,
-    pub kind: String,
-    pub chunk_index: i64,
-    pub start_offset: i64,
-    pub end_offset: i64,
-    pub text: String,
     pub distance: f64,
 }
 
@@ -579,13 +559,6 @@ fn todo_activity_embeddings_table(space_id: &str) -> Result<String> {
     Ok(format!("todo_activity_embeddings__{space_id}"))
 }
 
-fn attachment_chunk_embeddings_table(space_id: &str) -> Result<String> {
-    if !is_safe_sqlite_ident(space_id) {
-        return Err(anyhow!("unsafe embedding space_id: {space_id}"));
-    }
-    Ok(format!("attachment_chunk_embeddings__{space_id}"))
-}
-
 fn ensure_vec_tables_for_space(conn: &Connection, space_id: &str, dim: usize) -> Result<()> {
     if dim == 0 || dim > 8192 {
         return Err(anyhow!("invalid embedding dim: {dim}"));
@@ -594,7 +567,6 @@ fn ensure_vec_tables_for_space(conn: &Connection, space_id: &str, dim: usize) ->
     let message_table = message_embeddings_table(space_id)?;
     let todo_table = todo_embeddings_table(space_id)?;
     let activity_table = todo_activity_embeddings_table(space_id)?;
-    let attachment_table = attachment_chunk_embeddings_table(space_id)?;
 
     if !sqlite_table_exists(conn, &message_table)? {
         conn.execute_batch(&format!(
@@ -630,19 +602,6 @@ CREATE VIRTUAL TABLE "{activity_table}" USING vec0(
 "#
         ))?;
     }
-    if !sqlite_table_exists(conn, &attachment_table)? {
-        conn.execute_batch(&format!(
-            r#"
-CREATE VIRTUAL TABLE "{attachment_table}" USING vec0(
-  embedding float[{dim}],
-  attachment_sha256 TEXT,
-  kind TEXT,
-  chunk_index INTEGER,
-  model_name TEXT
-);
-"#
-        ))?;
-    }
 
     let msg_dim = vec0_dim_from_sqlite_master(conn, &message_table)?.unwrap_or(0);
     if msg_dim != dim {
@@ -660,12 +619,6 @@ CREATE VIRTUAL TABLE "{attachment_table}" USING vec0(
     if act_dim != dim {
         return Err(anyhow!(
             "todo-activity vec0 dim mismatch: expected {dim}, got {act_dim} (table={activity_table})"
-        ));
-    }
-    let attachment_dim = vec0_dim_from_sqlite_master(conn, &attachment_table)?.unwrap_or(0);
-    if attachment_dim != dim {
-        return Err(anyhow!(
-            "attachment-chunk vec0 dim mismatch: expected {dim}, got {attachment_dim} (table={attachment_table})"
         ));
     }
 

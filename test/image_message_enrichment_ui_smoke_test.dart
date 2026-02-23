@@ -22,7 +22,7 @@ void main() {
       messages: const [
         Message(
           id: 'm1',
-          conversationId: 'main_stream',
+          conversationId: 'loop_home',
           role: 'user',
           content: '',
           createdAtMs: 123,
@@ -61,8 +61,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'main_stream',
-                  title: 'Main Stream',
+                  id: 'loop_home',
+                  title: 'Loop',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -166,7 +166,7 @@ final class _Backend extends AppBackend implements AttachmentsBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) =>
       throw UnimplementedError();
 
   @override

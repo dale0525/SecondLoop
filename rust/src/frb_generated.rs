@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1880590734;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -849116207;
 
 // Section: executor
 
@@ -73,7 +73,6 @@ fn wire__crate__api__ask_scope__rag_ask_ai_stream_cloud_gateway_scoped_impl(
             let api_time_end_ms = <Option<i64>>::sse_decode(&mut deserializer);
             let api_include_tag_ids = <Vec<String>>::sse_decode(&mut deserializer);
             let api_exclude_tag_ids = <Vec<String>>::sse_decode(&mut deserializer);
-            let api_topic_thread_id = <Option<String>>::sse_decode(&mut deserializer);
             let api_strict_mode = <bool>::sse_decode(&mut deserializer);
             let api_locale_language = <String>::sse_decode(&mut deserializer);
             let api_gateway_base_url = <String>::sse_decode(&mut deserializer);
@@ -97,7 +96,6 @@ fn wire__crate__api__ask_scope__rag_ask_ai_stream_cloud_gateway_scoped_impl(
                         api_time_end_ms,
                         api_include_tag_ids,
                         api_exclude_tag_ids,
-                        api_topic_thread_id,
                         api_strict_mode,
                         api_locale_language,
                         api_gateway_base_url,
@@ -142,7 +140,6 @@ fn wire__crate__api__ask_scope__rag_ask_ai_stream_scoped_impl(
             let api_time_end_ms = <Option<i64>>::sse_decode(&mut deserializer);
             let api_include_tag_ids = <Vec<String>>::sse_decode(&mut deserializer);
             let api_exclude_tag_ids = <Vec<String>>::sse_decode(&mut deserializer);
-            let api_topic_thread_id = <Option<String>>::sse_decode(&mut deserializer);
             let api_strict_mode = <bool>::sse_decode(&mut deserializer);
             let api_locale_language = <String>::sse_decode(&mut deserializer);
             let api_local_day = <String>::sse_decode(&mut deserializer);
@@ -164,7 +161,6 @@ fn wire__crate__api__ask_scope__rag_ask_ai_stream_scoped_impl(
                         api_time_end_ms,
                         api_include_tag_ids,
                         api_exclude_tag_ids,
-                        api_topic_thread_id,
                         api_strict_mode,
                         api_locale_language,
                         api_local_day,
@@ -1753,7 +1749,7 @@ fn wire__crate__api__core__db_get_or_create_device_id_impl(
         },
     )
 }
-fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+fn wire__crate__api__core__db_get_or_create_loop_home_conversation_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1761,7 +1757,7 @@ fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_get_or_create_main_stream_conversation",
+            debug_name: "db_get_or_create_loop_home_conversation",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1780,10 +1776,7 @@ fn wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
-                    crate::api::core::db_get_or_create_main_stream_conversation(
-                        api_app_dir,
-                        api_key,
-                    )
+                    crate::api::core::db_get_or_create_loop_home_conversation(api_app_dir, api_key)
                 })())
             }
         },
@@ -6949,240 +6942,6 @@ fn wire__crate__api__tags__db_upsert_tag_impl(
         },
     )
 }
-fn wire__crate__api__topic_threads__db_create_topic_thread_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_create_topic_thread",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_conversation_id = <String>::sse_decode(&mut deserializer);
-            let api_title = <Option<String>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::topic_threads::db_create_topic_thread(
-                        api_app_dir,
-                        api_key,
-                        api_conversation_id,
-                        api_title,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__topic_threads__db_delete_topic_thread_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_delete_topic_thread",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_thread_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::topic_threads::db_delete_topic_thread(
-                        api_app_dir,
-                        api_key,
-                        api_thread_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__topic_threads__db_list_topic_thread_message_ids_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_list_topic_thread_message_ids",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_thread_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::topic_threads::db_list_topic_thread_message_ids(
-                        api_app_dir,
-                        api_key,
-                        api_thread_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__topic_threads__db_list_topic_threads_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_list_topic_threads",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_conversation_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::topic_threads::db_list_topic_threads(
-                        api_app_dir,
-                        api_key,
-                        api_conversation_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__topic_threads__db_set_topic_thread_message_ids_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_set_topic_thread_message_ids",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_thread_id = <String>::sse_decode(&mut deserializer);
-            let api_message_ids = <Vec<String>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::topic_threads::db_set_topic_thread_message_ids(
-                        api_app_dir,
-                        api_key,
-                        api_thread_id,
-                        api_message_ids,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__topic_threads__db_update_topic_thread_title_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "db_update_topic_thread_title",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_thread_id = <String>::sse_decode(&mut deserializer);
-            let api_title = <Option<String>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::topic_threads::db_update_topic_thread_title(
-                        api_app_dir,
-                        api_key,
-                        api_thread_id,
-                        api_title,
-                    )
-                })())
-            }
-        },
-    )
-}
 
 // Section: dart2rust
 
@@ -7756,18 +7515,6 @@ impl SseDecode for Vec<crate::semantic_parse::TodoCandidate> {
     }
 }
 
-impl SseDecode for Vec<crate::db::TopicThread> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::db::TopicThread>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for crate::db::LlmProfile {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8124,24 +7871,6 @@ impl SseDecode for crate::semantic_parse::TodoCandidate {
     }
 }
 
-impl SseDecode for crate::db::TopicThread {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <String>::sse_decode(deserializer);
-        let mut var_conversationId = <String>::sse_decode(deserializer);
-        let mut var_title = <Option<String>>::sse_decode(deserializer);
-        let mut var_createdAtMs = <i64>::sse_decode(deserializer);
-        let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
-        return crate::db::TopicThread {
-            id: var_id,
-            conversation_id: var_conversationId,
-            title: var_title,
-            created_at_ms: var_createdAtMs,
-            updated_at_ms: var_updatedAtMs,
-        };
-    }
-}
-
 impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8393,7 +8122,7 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__core__db_get_or_create_main_stream_conversation_impl(
+        43 => wire__crate__api__core__db_get_or_create_loop_home_conversation_impl(
             port,
             ptr,
             rust_vec_len,
@@ -9001,42 +8730,6 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         166 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
         167 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
-        168 => wire__crate__api__topic_threads__db_create_topic_thread_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        169 => wire__crate__api__topic_threads__db_delete_topic_thread_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        170 => wire__crate__api__topic_threads__db_list_topic_thread_message_ids_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        171 => wire__crate__api__topic_threads__db_list_topic_threads_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        172 => wire__crate__api__topic_threads__db_set_topic_thread_message_ids_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        173 => wire__crate__api__topic_threads__db_update_topic_thread_title_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         _ => unreachable!(),
     }
 }
@@ -9667,25 +9360,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::semantic_parse::TodoCandidate>
         self
     }
 }
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::TopicThread {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.id.into_into_dart().into_dart(),
-            self.conversation_id.into_into_dart().into_dart(),
-            self.title.into_into_dart().into_dart(),
-            self.created_at_ms.into_into_dart().into_dart(),
-            self.updated_at_ms.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::TopicThread {}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::TopicThread> for crate::db::TopicThread {
-    fn into_into_dart(self) -> crate::db::TopicThread {
-        self
-    }
-}
 
 impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10097,16 +9771,6 @@ impl SseEncode for Vec<crate::semantic_parse::TodoCandidate> {
     }
 }
 
-impl SseEncode for Vec<crate::db::TopicThread> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::db::TopicThread>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for crate::db::LlmProfile {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -10336,17 +10000,6 @@ impl SseEncode for crate::semantic_parse::TodoCandidate {
         <String>::sse_encode(self.title, serializer);
         <String>::sse_encode(self.status, serializer);
         <Option<String>>::sse_encode(self.due_local_iso, serializer);
-    }
-}
-
-impl SseEncode for crate::db::TopicThread {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.id, serializer);
-        <String>::sse_encode(self.conversation_id, serializer);
-        <Option<String>>::sse_encode(self.title, serializer);
-        <i64>::sse_encode(self.created_at_ms, serializer);
-        <i64>::sse_encode(self.updated_at_ms, serializer);
     }
 }
 

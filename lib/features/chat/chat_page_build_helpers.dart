@@ -168,6 +168,13 @@ Widget _buildComposerInlineButton(
 }
 
 extension _ChatPageStateComposerUi on _ChatPageState {
+  Widget _buildAttachmentSendFeedbackBanner(BuildContext context) {
+    return AttachmentSendFeedbackBanner(
+      key: const ValueKey('chat_attachment_send_feedback'),
+      text: context.t.sync.progressDialog.uploadingMedia,
+    );
+  }
+
   Widget _buildCompactAttachButton(
     BuildContext context, {
     bool includeLeadingPadding = true,

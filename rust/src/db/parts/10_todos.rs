@@ -429,10 +429,10 @@ pub fn append_todo_note(
         }
 
         let conversation_id =
-            conversation_id.unwrap_or_else(|| MAIN_STREAM_CONVERSATION_ID.to_string());
-        if conversation_id == MAIN_STREAM_CONVERSATION_ID {
-            // Ensure the main stream exists before inserting.
-            get_or_create_main_stream_conversation(conn, key)?;
+            conversation_id.unwrap_or_else(|| LOOP_HOME_CONVERSATION_ID.to_string());
+        if conversation_id == LOOP_HOME_CONVERSATION_ID {
+            // Ensure the loop home exists before inserting.
+            get_or_create_loop_home_conversation(conn, key)?;
         }
 
         let msg = insert_message(conn, key, &conversation_id, "user", content)?;

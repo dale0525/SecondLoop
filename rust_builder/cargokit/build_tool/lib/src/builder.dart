@@ -202,20 +202,73 @@ class RustBuilder {
     String manifestPath, {
     required Map<String, String> environment,
   }) {
-    _runCargoCommand(
-      [
-        'clean',
-        '--manifest-path',
-        manifestPath,
-        '-p',
-        'libsqlite3-sys',
-        '--target',
-        target.rust,
-        '--target-dir',
-        this.environment.targetTempDir,
+    try {
+      _runCargoCommand(
+        [
+          'clean',
+          '--manifest-path',
+          manifestPath,
+          '-p',
+          'libsqlite3-sys',
+          '--target',
+          target.rust,
+          '--target-dir',
+          this.environment.targetTempDir,
+        ],
+        environment: environment,
+      );
+    } on CommandFailedException catch (error) {
+      _log.warning(
+        'cargo clean -p libsqlite3-sys failed during bindgen recovery: '
+        '${error.result.stderr}',
+      );
+    }
+
+    _purgeStaleLibsqliteBuildArtifacts();
+  }
+
+  void _purgeStaleLibsqliteBuildArtifacts() {
+    final targetRoot = path.join(environment.targetTempDir, target.rust);
+    final profileRoot =
+        path.join(targetRoot, environment.configuration.rustName);
+
+    final hostProfileRoots = <String>{
+      path.join(environment.targetTempDir, environment.configuration.rustName),
+      path.join(environment.targetTempDir, 'release'),
+      path.join(environment.targetTempDir, 'debug'),
+    };
+
+    final candidateDirs = <String>{
+      path.join(profileRoot, 'build'),
+      path.join(profileRoot, '.fingerprint'),
+      path.join(profileRoot, 'deps'),
+      for (final hostRoot in hostProfileRoots) ...[
+        path.join(hostRoot, 'build'),
+        path.join(hostRoot, '.fingerprint'),
+        path.join(hostRoot, 'deps'),
       ],
-      environment: environment,
-    );
+    };
+
+    for (final dirPath in candidateDirs) {
+      _deleteLibsqliteArtifactsInDirectory(dirPath);
+    }
+  }
+
+  void _deleteLibsqliteArtifactsInDirectory(String dirPath) {
+    final dir = Directory(dirPath);
+    if (!dir.existsSync()) return;
+
+    for (final entry in dir.listSync(followLinks: false)) {
+      final name = path.basename(entry.path).toLowerCase();
+      final isLibsqliteArtifact =
+          name.contains('libsqlite3-sys') || name.contains('libsqlite3_sys');
+      if (!isLibsqliteArtifact) continue;
+      try {
+        entry.deleteSync(recursive: true);
+      } catch (_) {
+        // Best-effort cleanup only.
+      }
+    }
   }
 
   void _runCargoCommand(

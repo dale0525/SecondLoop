@@ -106,8 +106,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     if (_usePagination &&
         _selectedTagFilterIds.isEmpty &&
-        _selectedTagExcludeIds.isEmpty &&
-        _activeTopicThreadId == null) {
+        _selectedTagExcludeIds.isEmpty) {
       final page = await backend.listMessagesPage(
         sessionKey,
         widget.conversation.id,
@@ -127,11 +126,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
 
     final list = await backend.listMessages(sessionKey, widget.conversation.id);
-    final tagFiltered = await _filterMessagesBySelectedTags(sessionKey, list);
-    final filtered = await _filterMessagesByActiveTopicThread(
-      sessionKey,
-      tagFiltered,
-    );
+    final filtered = await _filterMessagesBySelectedTags(sessionKey, list);
 
     if (_usePagination) {
       if (mounted) {
@@ -153,9 +148,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
   Future<void> _loadOlderMessages() async {
     if (!_usePagination) return;
-    if (_selectedTagFilterIds.isNotEmpty ||
-        _selectedTagExcludeIds.isNotEmpty ||
-        _activeTopicThreadId != null) {
+    if (_selectedTagFilterIds.isNotEmpty || _selectedTagExcludeIds.isNotEmpty) {
       return;
     }
     if (_loadingMoreMessages || !_hasMoreMessages) return;
@@ -710,7 +703,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_recordingAudio) return;
     if (!_supportsCamera) return;
 
-    _setState(() => _sending = true);
+    _setState(() {
+      _sending = true;
+      _showAttachmentSendFeedback = true;
+    });
     try {
       final picked = await ImagePicker().pickImage(
         source: ImageSource.camera,
@@ -805,7 +801,12 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         ),
       );
     } finally {
-      if (mounted) _setState(() => _sending = false);
+      if (mounted) {
+        _setState(() {
+          _sending = false;
+          _showAttachmentSendFeedback = false;
+        });
+      }
     }
   }
 
@@ -814,7 +815,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_asking) return;
     if (_recordingAudio) return;
 
-    _setState(() => _sending = true);
+    _setState(() {
+      _sending = true;
+      _showAttachmentSendFeedback = true;
+    });
     try {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.any,
@@ -849,7 +853,12 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         ),
       );
     } finally {
-      if (mounted) _setState(() => _sending = false);
+      if (mounted) {
+        _setState(() {
+          _sending = false;
+          _showAttachmentSendFeedback = false;
+        });
+      }
     }
   }
 

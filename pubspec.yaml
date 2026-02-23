@@ -74,6 +74,8 @@ dependencies:
   menu_base: ^0.1.1
   syncfusion_flutter_pdf: ^29.1.38
   just_audio_windows: ^0.2.2
+  flutter_math_fork: 0.7.2
+  super_clipboard: ^0.9.1
 
 dependency_overrides:
   just_audio_windows:
@@ -118,6 +120,8 @@ flutter:
     - assets/ocr/desktop_runtime/models/
     - assets/ocr/desktop_runtime/onnxruntime/
     - assets/ocr/desktop_runtime/whisper/
+    - assets/third_party/katex/
+    - assets/third_party/katex/fonts/
     - assets/icon/tray_icon.png
     - assets/icon/tray_icon.ico
 

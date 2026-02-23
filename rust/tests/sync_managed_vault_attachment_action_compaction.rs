@@ -205,7 +205,7 @@ fn managed_vault_push_skips_redundant_attachment_upload_when_same_batch_deletes_
     let conn = db::open(&app_dir).expect("open db");
 
     let conversation =
-        db::get_or_create_main_stream_conversation(&conn, &key).expect("main conversation");
+        db::get_or_create_loop_home_conversation(&conn, &key).expect("main conversation");
     let message =
         db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert message");
     let attachment = db::insert_attachment(&conn, &key, &app_dir, b"image", "image/png")

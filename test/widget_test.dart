@@ -13,7 +13,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('First launch goes directly to main stream',
+  testWidgets('First launch goes directly to loop home',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -21,11 +21,11 @@ void main() {
     await tester.pumpWidget(MyApp(backend: backend));
     for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 100));
-      if (find.text('Main Stream').evaluate().isNotEmpty) break;
+      if (find.text('Loop').evaluate().isNotEmpty) break;
     }
 
     expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Main Stream'), findsWidgets);
+    expect(find.text('Loop'), findsWidgets);
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('deferred_session_key_b64_v1'), isNotEmpty);
@@ -102,8 +102,8 @@ class FakeBackend extends AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async => const [];
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
-      createConversation(key, 'Main Stream');
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
+      createConversation(key, 'Loop');
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async =>

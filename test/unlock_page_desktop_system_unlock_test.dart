@@ -95,7 +95,7 @@ final class _SavedKeyBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) =>
       throw UnimplementedError();
 
   @override

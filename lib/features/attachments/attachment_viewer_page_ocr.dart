@@ -160,18 +160,59 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       final ocrExcerpt = _truncateUtf8(ocrFullText, 8 * 1024);
       final ocrEngine = _dominantString(ocrEngines);
 
-      final transcriptPayload = await _loadAttachmentAnnotationPayloadBySha(
-        backend,
-        sessionKey,
-        manifest.audioSha256,
-      );
-      final transcriptFull =
-          (transcriptPayload?['transcript_full'] ?? '').toString().trim();
-      final transcriptExcerptRaw =
-          (transcriptPayload?['transcript_excerpt'] ?? '').toString().trim();
-      final transcriptExcerpt = transcriptExcerptRaw.isNotEmpty
-          ? transcriptExcerptRaw
-          : _truncateUtf8(transcriptFull, 8 * 1024);
+      final segmentTranscriptFullParts = <String>[];
+      final segmentTranscriptExcerptParts = <String>[];
+
+      for (final segment in manifest.segments) {
+        final segmentPayload = await _loadAttachmentAnnotationPayloadBySha(
+          backend,
+          sessionKey,
+          segment.sha256,
+        );
+        final segmentTranscriptFull =
+            (segmentPayload?['transcript_full'] ?? '').toString().trim();
+        final segmentTranscriptExcerptRaw =
+            (segmentPayload?['transcript_excerpt'] ?? '').toString().trim();
+        final segmentTranscriptExcerpt = segmentTranscriptExcerptRaw.isNotEmpty
+            ? segmentTranscriptExcerptRaw
+            : _truncateUtf8(segmentTranscriptFull, 8 * 1024);
+        if (segmentTranscriptFull.isEmpty && segmentTranscriptExcerpt.isEmpty) {
+          continue;
+        }
+        segmentTranscriptFullParts.add(
+          segmentTranscriptFull.isNotEmpty
+              ? segmentTranscriptFull
+              : segmentTranscriptExcerpt,
+        );
+        segmentTranscriptExcerptParts.add(
+          segmentTranscriptExcerpt.isNotEmpty
+              ? segmentTranscriptExcerpt
+              : _truncateUtf8(segmentTranscriptFull, 8 * 1024),
+        );
+      }
+
+      var transcriptFull = segmentTranscriptFullParts.join('\n\n').trim();
+      var transcriptExcerpt = segmentTranscriptExcerptParts.join('\n\n').trim();
+      if (transcriptExcerpt.isEmpty) {
+        transcriptExcerpt = _truncateUtf8(transcriptFull, 8 * 1024);
+      }
+
+      if (transcriptFull.isEmpty && transcriptExcerpt.isEmpty) {
+        final transcriptPayload = await _loadAttachmentAnnotationPayloadBySha(
+          backend,
+          sessionKey,
+          manifest.audioSha256,
+        );
+        final linkedTranscriptFull =
+            (transcriptPayload?['transcript_full'] ?? '').toString().trim();
+        final linkedTranscriptExcerptRaw =
+            (transcriptPayload?['transcript_excerpt'] ?? '').toString().trim();
+        final linkedTranscriptExcerpt = linkedTranscriptExcerptRaw.isNotEmpty
+            ? linkedTranscriptExcerptRaw
+            : _truncateUtf8(linkedTranscriptFull, 8 * 1024);
+        transcriptFull = linkedTranscriptFull;
+        transcriptExcerpt = linkedTranscriptExcerpt;
+      }
 
       final readableTextFull = _joinNonEmptyBlocks([
         transcriptFull,

@@ -155,13 +155,13 @@ pub fn db_create_conversation(
 }
 
 #[flutter_rust_bridge::frb]
-pub fn db_get_or_create_main_stream_conversation(
+pub fn db_get_or_create_loop_home_conversation(
     app_dir: String,
     key: Vec<u8>,
 ) -> Result<db::Conversation> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::get_or_create_main_stream_conversation(&conn, &key)
+    db::get_or_create_loop_home_conversation(&conn, &key)
 }
 
 #[flutter_rust_bridge::frb]

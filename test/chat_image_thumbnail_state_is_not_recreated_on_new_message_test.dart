@@ -15,7 +15,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-    'Chat image thumbnail state is not recreated when a new message is inserted (main stream)',
+    'Chat image thumbnail state is not recreated when a new message is inserted (loop home)',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
 
@@ -23,7 +23,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm1',
-            conversationId: 'main_stream',
+            conversationId: 'loop_home',
             role: 'user',
             content: 'Photo',
             createdAtMs: 0,
@@ -44,8 +44,8 @@ void main() {
       );
 
       const conversation = Conversation(
-        id: 'main_stream',
-        title: 'Main Stream',
+        id: 'loop_home',
+        title: 'Loop',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

@@ -11,7 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_backend.dart';
 
 void main() {
-  test('ShareIngest drains url+file items into Main Stream with attachments',
+  test('ShareIngest drains url+file items into Loop Home with attachments',
       () async {
     SharedPreferences.setMockInitialValues({});
 

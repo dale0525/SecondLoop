@@ -124,8 +124,8 @@ Widget _wrapChat({required AppBackend backend}) {
           lock: () {},
           child: const ChatPage(
             conversation: Conversation(
-              id: 'main_stream',
-              title: 'Main Stream',
+              id: 'loop_home',
+              title: 'Loop',
               createdAtMs: 0,
               updatedAtMs: 0,
             ),
@@ -189,7 +189,7 @@ final class _Backend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override
