@@ -9,6 +9,11 @@ private let kMarkdownPdfTopMargin: CGFloat = 48
 private let kMarkdownPdfBottomMargin: CGFloat = 64
 private let kMarkdownPdfHorizontalMargin: CGFloat = 54
 
+private enum PdfLuminanceSampleRegion {
+  case fullPage
+  case contentCore
+}
+
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
   private var activeTasks: [UUID: MarkdownPdfExportTask] = [:]
@@ -476,26 +481,39 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     let pagesToCheck = min(originalDocument.numberOfPages, 3)
-    if pagesToCheck <= 0 {
-      return false
-    }
-
+    var eligiblePageCount = 0
     var suspiciousPageCount = 0
+
     for pageIndex in 1 ... pagesToCheck {
       guard let originalPage = originalDocument.page(at: pageIndex),
             let rebuiltPage = rebuiltDocument.page(at: pageIndex),
-            let originalVariance = estimatePageLuminanceVariance(originalPage),
-            let rebuiltVariance = estimatePageLuminanceVariance(rebuiltPage) else {
+            let originalCoreVariance = estimatePageLuminanceVariance(
+              originalPage,
+              sampleRegion: .contentCore
+            ),
+            let rebuiltCoreVariance = estimatePageLuminanceVariance(
+              rebuiltPage,
+              sampleRegion: .contentCore
+            ) else {
         continue
       }
 
-      let threshold = max(1.0, originalVariance * 0.18)
-      if originalVariance > 4.0 && rebuiltVariance < threshold {
+      guard originalCoreVariance > 5.0 else {
+        continue
+      }
+
+      eligiblePageCount += 1
+      let coreThreshold = max(0.6, originalCoreVariance * 0.05)
+      if rebuiltCoreVariance < coreThreshold {
         suspiciousPageCount += 1
       }
     }
 
-    return suspiciousPageCount > 0
+    guard eligiblePageCount > 0 else {
+      return false
+    }
+
+    return suspiciousPageCount == eligiblePageCount
   }
 
   private func loadPdfDocument(data: Data) -> CGPDFDocument? {
@@ -506,7 +524,10 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     return CGPDFDocument(provider)
   }
 
-  private func estimatePageLuminanceVariance(_ page: CGPDFPage) -> Double? {
+  private func estimatePageLuminanceVariance(
+    _ page: CGPDFPage,
+    sampleRegion: PdfLuminanceSampleRegion = .fullPage
+  ) -> Double? {
     let sampleWidth = 96
     let sampleHeight = 136
     var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
@@ -550,21 +571,45 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       return nil
     }
 
-    let pixelCount = sampleWidth * sampleHeight
+    let xInset: Int
+    let yInset: Int
+    switch sampleRegion {
+    case .fullPage:
+      xInset = 0
+      yInset = 0
+    case .contentCore:
+      xInset = Int(Double(sampleWidth) * 0.2)
+      yInset = Int(Double(sampleHeight) * 0.15)
+    }
+
+    let xStart = max(0, min(sampleWidth - 1, xInset))
+    let xEnd = max(xStart + 1, sampleWidth - xInset)
+    let yStart = max(0, min(sampleHeight - 1, yInset))
+    let yEnd = max(yStart + 1, sampleHeight - yInset)
 
     var sum = 0.0
     var sumSquares = 0.0
-    for index in stride(from: 0, to: pixels.count, by: 4) {
-      let red = Double(pixels[index])
-      let green = Double(pixels[index + 1])
-      let blue = Double(pixels[index + 2])
-      let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-      sum += luminance
-      sumSquares += luminance * luminance
+    var sampledPixels = 0
+
+    for y in yStart ..< yEnd {
+      for x in xStart ..< xEnd {
+        let index = (y * sampleWidth + x) * 4
+        let red = Double(pixels[index])
+        let green = Double(pixels[index + 1])
+        let blue = Double(pixels[index + 2])
+        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        sum += luminance
+        sumSquares += luminance * luminance
+        sampledPixels += 1
+      }
     }
 
-    let mean = sum / Double(pixelCount)
-    let variance = (sumSquares / Double(pixelCount)) - (mean * mean)
+    guard sampledPixels > 0 else {
+      return nil
+    }
+
+    let mean = sum / Double(sampledPixels)
+    let variance = (sumSquares / Double(sampledPixels)) - (mean * mean)
     return variance < 0 ? 0 : variance
   }
 
