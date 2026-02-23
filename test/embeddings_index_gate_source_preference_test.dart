@@ -9,7 +9,9 @@ import 'package:secondloop/core/ai/embeddings_index_gate.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_store.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -113,6 +115,59 @@ void main() {
     expect(backend.calls, contains('byok'));
     expect(backend.calls, isNot(contains('cloud')));
   });
+
+  testWidgets(
+      'Embeddings gate avoids loading stored cloud session on cold start',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_source_preference_v1': 'cloud',
+      'embeddings_data_consent_v1': true,
+    });
+
+    final backend = _FakeEmbeddingsNativeBackend(
+      embeddingProfiles: const <EmbeddingProfile>[],
+    );
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final cloudAuth = CloudAuthControllerImpl(
+      identityToolkit: _NeverCalledIdentityToolkit(),
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CloudAuthScope(
+          controller: cloudAuth,
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'gpt-test',
+          ),
+          child: SubscriptionScope(
+            controller: _FakeSubscriptionStatusController(
+              SubscriptionStatus.entitled,
+            ),
+            child: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const EmbeddingsIndexGate(child: SizedBox.shrink()),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.calls, contains('local'));
+    expect(backend.calls, isNot(contains('cloud')));
+    expect(store.loadCalls, 0);
+  });
 }
 
 final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
@@ -210,4 +265,63 @@ final class _FakeSubscriptionStatusController extends ChangeNotifier
 
   @override
   SubscriptionStatus get status => _status;
+}
+
+final class _InMemoryCloudAuthStore implements CloudAuthStore {
+  _InMemoryCloudAuthStore(this._session);
+
+  CloudAuthStoredSession? _session;
+  int loadCalls = 0;
+
+  @override
+  Future<CloudAuthStoredSession?> load() async {
+    loadCalls += 1;
+    return _session;
+  }
+
+  @override
+  Future<void> save(CloudAuthStoredSession session) async {
+    _session = session;
+  }
+
+  @override
+  Future<void> clear() async {
+    _session = null;
+  }
+}
+
+final class _NeverCalledIdentityToolkit implements FirebaseIdentityToolkit {
+  @override
+  Future<FirebaseAuthTokens> signInWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseAuthTokens> signUpWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseAuthTokens> refreshIdToken({required String refreshToken}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseUserInfo> lookup({required String idToken}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> sendOobCode({
+    required String requestType,
+    required String idToken,
+  }) {
+    throw UnimplementedError();
+  }
 }

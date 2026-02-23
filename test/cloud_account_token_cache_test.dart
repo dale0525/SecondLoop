@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_store.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
+import 'package:secondloop/core/subscription/cloud_subscription_controller.dart';
 
 void main() {
   test('CloudAuthController caches idToken and refreshes when expired',
@@ -97,6 +99,30 @@ void main() {
 
   test('background token read returns null for missing controller', () async {
     expect(await readCloudIdTokenForBackground(null), isNull);
+  });
+
+  test('startup subscription refresh keeps keychain untouched before unlock',
+      () async {
+    final clock = _FakeClockMs(1000);
+    final toolkit = _FakeIdentityToolkit(clock: clock);
+    final store = _InMemoryCloudAuthStore();
+
+    final auth = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: clock.nowMs,
+    );
+
+    final subscriptions = CloudSubscriptionController(
+      idTokenGetter: () => readCloudIdTokenForBackground(auth),
+      cloudGatewayBaseUrl: 'https://gateway.secondloop.test',
+    );
+    addTearDown(subscriptions.dispose);
+
+    await subscriptions.refresh();
+
+    expect(subscriptions.status, SubscriptionStatus.unknown);
+    expect(store.loadCalls, 0);
   });
 }
 
