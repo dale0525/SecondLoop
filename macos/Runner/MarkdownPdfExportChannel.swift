@@ -5,18 +5,6 @@ import WebKit
 private let kMarkdownPdfMethod = "exportMarkdownHtmlToPdf"
 private let kMarkdownPdfPageWidth: CGFloat = 595.2
 private let kMarkdownPdfPageHeight: CGFloat = 841.8
-private let kMarkdownPdfTopMargin: CGFloat = 48
-private let kMarkdownPdfBottomMargin: CGFloat = 64
-private let kMarkdownPdfHorizontalMargin: CGFloat = 54
-
-private struct PdfDetectedMargins {
-  let top: CGFloat
-  let bottom: CGFloat
-  let left: CGFloat
-  let right: CGFloat
-
-  static let zero = PdfDetectedMargins(top: 0, bottom: 0, left: 0, right: 0)
-}
 
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
@@ -51,10 +39,7 @@ final class MarkdownPdfExportChannel {
       return
     }
 
-    let task = MarkdownPdfExportTask(
-      html: html,
-      pageBackgroundColorHex: args["pageBackgroundColorHex"] as? String
-    ) { [weak self] id in
+    let task = MarkdownPdfExportTask(html: html) { [weak self] id in
       self?.activeTasks.removeValue(forKey: id)
     }
     activeTasks[task.id] = task
@@ -66,7 +51,6 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
   let id = UUID()
 
   private let html: String
-  private let pageBackgroundColorHex: String?
   private let onFinished: (UUID) -> Void
 
   private var result: FlutterResult?
@@ -77,11 +61,9 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
   init(
     html: String,
-    pageBackgroundColorHex: String?,
     onFinished: @escaping (UUID) -> Void
   ) {
     self.html = html
-    self.pageBackgroundColorHex = pageBackgroundColorHex
     self.onFinished = onFinished
     super.init()
   }
@@ -231,10 +213,10 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     let printInfo = NSPrintInfo()
     printInfo.paperSize = NSSize(width: kMarkdownPdfPageWidth, height: kMarkdownPdfPageHeight)
-    printInfo.topMargin = kMarkdownPdfTopMargin
-    printInfo.bottomMargin = kMarkdownPdfBottomMargin
-    printInfo.leftMargin = kMarkdownPdfHorizontalMargin
-    printInfo.rightMargin = kMarkdownPdfHorizontalMargin
+    printInfo.topMargin = 0
+    printInfo.bottomMargin = 0
+    printInfo.leftMargin = 0
+    printInfo.rightMargin = 0
     printInfo.horizontalPagination = .automatic
     printInfo.verticalPagination = .automatic
     printInfo.isVerticallyCentered = false
@@ -319,14 +301,13 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      guard let self = self else { return }
-
       let data = try? Data(contentsOf: outputUrl)
       try? FileManager.default.removeItem(at: outputUrl)
 
-      guard let data, !data.isEmpty else {
-        DispatchQueue.main.async { [weak self] in
-          guard let self = self else { return }
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+
+        guard let data, !data.isEmpty else {
           self.complete(
             failure: FlutterError(
               code: "markdown_pdf_export_io_failed",
@@ -334,329 +315,12 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
               details: nil
             )
           )
+          return
         }
-        return
-      }
 
-      let rebuiltData = self.applyPageBackgroundIfNeeded(pdfData: data)
-      DispatchQueue.main.async { [weak self] in
-        guard let self = self else { return }
-        self.complete(success: rebuiltData)
+        self.complete(success: data)
       }
     }
-  }
-
-
-  private func applyPageBackgroundIfNeeded(pdfData: Data) -> Data {
-    guard let pageBackgroundColor = parsePageBackgroundColor() else {
-      return pdfData
-    }
-
-    guard let provider = CGDataProvider(data: pdfData as CFData),
-          let sourceDocument = CGPDFDocument(provider),
-          sourceDocument.numberOfPages > 0 else {
-      return pdfData
-    }
-
-    let outputData = NSMutableData()
-    guard let consumer = CGDataConsumer(data: outputData as CFMutableData),
-          let context = CGContext(consumer: consumer, mediaBox: nil, nil) else {
-      return pdfData
-    }
-
-    for pageIndex in 1 ... sourceDocument.numberOfPages {
-      guard let page = sourceDocument.page(at: pageIndex) else {
-        continue
-      }
-
-      var mediaBox = page.getBoxRect(.mediaBox)
-      if mediaBox.width <= 0 || mediaBox.height <= 0 {
-        mediaBox = CGRect(
-          x: 0,
-          y: 0,
-          width: kMarkdownPdfPageWidth,
-          height: kMarkdownPdfPageHeight
-        )
-      }
-
-      context.beginPDFPage([kCGPDFContextMediaBox as String: mediaBox] as CFDictionary)
-
-      context.saveGState()
-      context.setBlendMode(.normal)
-      context.setFillColor(pageBackgroundColor.cgColor)
-      context.fill(mediaBox)
-      context.restoreGState()
-
-      context.saveGState()
-      context.setBlendMode(.normal)
-      let drawingTransform = page.getDrawingTransform(
-        .mediaBox,
-        rect: mediaBox,
-        rotate: 0,
-        preserveAspectRatio: false
-      )
-      context.concatenate(drawingTransform)
-      context.drawPDFPage(page)
-      context.restoreGState()
-
-      let detectedMargins = detectWhitePageMargins(page: page, mediaBox: mediaBox)
-
-      context.saveGState()
-      context.setBlendMode(.normal)
-      context.setFillColor(pageBackgroundColor.cgColor)
-      fillPageMargins(
-        context: context,
-        mediaBox: mediaBox,
-        margins: detectedMargins
-      )
-      context.restoreGState()
-
-      context.endPDFPage()
-    }
-
-    context.closePDF()
-    let rebuilt = outputData as Data
-    return rebuilt.isEmpty ? pdfData : rebuilt
-  }
-
-  private func fillPageMargins(
-    context: CGContext,
-    mediaBox: CGRect,
-    margins: PdfDetectedMargins
-  ) {
-    if margins.top <= 0 && margins.bottom <= 0 && margins.left <= 0 && margins.right <= 0 {
-      return
-    }
-
-    let pageWidth = max(mediaBox.width, 1)
-    let pageHeight = max(mediaBox.height, 1)
-
-    func normalizeMargin(_ value: CGFloat, limit: CGFloat) -> CGFloat {
-      let clamped = max(0, min(limit * 0.48, value))
-      guard clamped > 0 else {
-        return 0
-      }
-      return min(limit * 0.48, ceil(clamped * 2) / 2)
-    }
-
-    let leftMargin = normalizeMargin(margins.left, limit: pageWidth)
-    let rightMargin = normalizeMargin(margins.right, limit: pageWidth)
-    let topMargin = normalizeMargin(margins.top, limit: pageHeight)
-    let bottomMargin = normalizeMargin(margins.bottom, limit: pageHeight)
-
-    if topMargin > 0 {
-      context.fill(
-        CGRect(
-          x: mediaBox.minX,
-          y: mediaBox.maxY - topMargin,
-          width: pageWidth,
-          height: topMargin
-        )
-      )
-    }
-
-    if bottomMargin > 0 {
-      context.fill(
-        CGRect(
-          x: mediaBox.minX,
-          y: mediaBox.minY,
-          width: pageWidth,
-          height: bottomMargin
-        )
-      )
-    }
-
-    if leftMargin > 0 {
-      context.fill(
-        CGRect(
-          x: mediaBox.minX,
-          y: mediaBox.minY,
-          width: leftMargin,
-          height: pageHeight
-        )
-      )
-    }
-
-    if rightMargin > 0 {
-      context.fill(
-        CGRect(
-          x: mediaBox.maxX - rightMargin,
-          y: mediaBox.minY,
-          width: rightMargin,
-          height: pageHeight
-        )
-      )
-    }
-  }
-
-  private func detectWhitePageMargins(page: CGPDFPage, mediaBox: CGRect) -> PdfDetectedMargins {
-    let sampleWidth = 300
-    let sampleHeight = 420
-    var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-
-    let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
-      guard let baseAddress = buffer.baseAddress,
-            let bitmapContext = CGContext(
-              data: baseAddress,
-              width: sampleWidth,
-              height: sampleHeight,
-              bitsPerComponent: 8,
-              bytesPerRow: sampleWidth * 4,
-              space: colorSpace,
-              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else {
-        return false
-      }
-
-      let bounds = CGRect(
-        x: 0,
-        y: 0,
-        width: CGFloat(sampleWidth),
-        height: CGFloat(sampleHeight)
-      )
-      bitmapContext.setFillColor(NSColor.white.cgColor)
-      bitmapContext.fill(bounds)
-      let transform = page.getDrawingTransform(
-        .mediaBox,
-        rect: bounds,
-        rotate: 0,
-        preserveAspectRatio: false
-      )
-      bitmapContext.concatenate(transform)
-      bitmapContext.drawPDFPage(page)
-      return true
-    }
-
-    guard rendered else {
-      return .zero
-    }
-
-    func pixelComponents(x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8) {
-      let index = (y * sampleWidth + x) * 4
-      return (
-        red: pixels[index],
-        green: pixels[index + 1],
-        blue: pixels[index + 2]
-      )
-    }
-
-    func luminance(red: UInt8, green: UInt8, blue: UInt8) -> Double {
-      0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
-    }
-
-    func isMostlyWhiteColumn(_ x: Int) -> Bool {
-      var nearWhiteCount = 0
-      var luminanceSum = 0.0
-
-      for y in 0 ..< sampleHeight {
-        let components = pixelComponents(x: x, y: y)
-        luminanceSum += luminance(
-          red: components.red,
-          green: components.green,
-          blue: components.blue
-        )
-
-        if components.red >= 240 && components.green >= 240 && components.blue >= 240 {
-          nearWhiteCount += 1
-        }
-      }
-
-      let nearWhiteRatio = Double(nearWhiteCount) / Double(sampleHeight)
-      let meanLuminance = luminanceSum / Double(sampleHeight)
-      return nearWhiteRatio >= 0.96 || (nearWhiteRatio >= 0.9 && meanLuminance >= 248) ||
-        meanLuminance >= 251.5
-    }
-
-    func isMostlyWhiteRow(_ y: Int) -> Bool {
-      var nearWhiteCount = 0
-      var luminanceSum = 0.0
-
-      for x in 0 ..< sampleWidth {
-        let components = pixelComponents(x: x, y: y)
-        luminanceSum += luminance(
-          red: components.red,
-          green: components.green,
-          blue: components.blue
-        )
-
-        if components.red >= 240 && components.green >= 240 && components.blue >= 240 {
-          nearWhiteCount += 1
-        }
-      }
-
-      let nearWhiteRatio = Double(nearWhiteCount) / Double(sampleWidth)
-      let meanLuminance = luminanceSum / Double(sampleWidth)
-      return nearWhiteRatio >= 0.96 || (nearWhiteRatio >= 0.9 && meanLuminance >= 248) ||
-        meanLuminance >= 251.5
-    }
-
-    var leftColumns = 0
-    while leftColumns < sampleWidth / 2 && isMostlyWhiteColumn(leftColumns) {
-      leftColumns += 1
-    }
-
-    var rightColumns = 0
-    while rightColumns < sampleWidth / 2 && isMostlyWhiteColumn(sampleWidth - rightColumns - 1) {
-      rightColumns += 1
-    }
-
-    var topRows = 0
-    while topRows < sampleHeight / 2 && isMostlyWhiteRow(sampleHeight - topRows - 1) {
-      topRows += 1
-    }
-
-    var bottomRows = 0
-    while bottomRows < sampleHeight / 2 && isMostlyWhiteRow(bottomRows) {
-      bottomRows += 1
-    }
-
-    let widthScale = mediaBox.width / CGFloat(sampleWidth)
-    let heightScale = mediaBox.height / CGFloat(sampleHeight)
-
-    func convertMargin(_ value: Int, scale: CGFloat) -> CGFloat {
-      let points = CGFloat(value) * scale
-      guard points >= 0.5 else {
-        return 0
-      }
-      return ceil(points * 2) / 2
-    }
-
-    return PdfDetectedMargins(
-      top: convertMargin(topRows, scale: heightScale),
-      bottom: convertMargin(bottomRows, scale: heightScale),
-      left: convertMargin(leftColumns, scale: widthScale),
-      right: convertMargin(rightColumns, scale: widthScale)
-    )
-  }
-
-  private func parsePageBackgroundColor() -> NSColor? {
-    guard let rawValue = pageBackgroundColorHex?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !rawValue.isEmpty else {
-      return nil
-    }
-
-    let normalized = rawValue.hasPrefix("#") ? String(rawValue.dropFirst()) : rawValue
-    if normalized.count != 6 && normalized.count != 8 {
-      return nil
-    }
-
-    guard let value = UInt32(normalized, radix: 16) else {
-      return nil
-    }
-
-    if normalized.count == 6 {
-      let red = CGFloat((value >> 16) & 0xff) / 255.0
-      let green = CGFloat((value >> 8) & 0xff) / 255.0
-      let blue = CGFloat(value & 0xff) / 255.0
-      return NSColor(red: red, green: green, blue: blue, alpha: 1)
-    }
-
-    let alpha = CGFloat((value >> 24) & 0xff) / 255.0
-    let red = CGFloat((value >> 16) & 0xff) / 255.0
-    let green = CGFloat((value >> 8) & 0xff) / 255.0
-    let blue = CGFloat(value & 0xff) / 255.0
-    return NSColor(red: red, green: green, blue: blue, alpha: alpha)
   }
 
   private func complete(success data: Data) {
