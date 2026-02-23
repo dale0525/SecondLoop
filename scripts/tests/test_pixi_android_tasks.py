@@ -11,6 +11,7 @@ ANDROID_RUN_SCRIPT = REPO_ROOT / "scripts/run_android_with_auto_emulator.sh"
 RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
 SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
 ANDROID_BUILD_GRADLE = REPO_ROOT / "android/app/build.gradle"
+ANDROID_MANIFEST = REPO_ROOT / "android/app/src/main/AndroidManifest.xml"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -52,6 +53,20 @@ class PixiAndroidTasksTests(unittest.TestCase):
                     "SECONDLOOP_APP_ID=com.secondloop.secondloopdev",
                     command,
                 )
+
+    def test_android_local_dev_tasks_use_dev_app_name(self) -> None:
+        tasks = self._load_tasks()
+
+        for task_name in [
+            "run-android",
+            "build-android-apk",
+            "run-android-cn",
+            "build-android-apk-cn",
+        ]:
+            with self.subTest(task=task_name):
+                task = tasks[task_name]
+                command = task.get("cmd", "")
+                self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
 
     def test_auto_emulator_script_checks_for_existing_android_devices(self) -> None:
         script = ANDROID_RUN_SCRIPT.read_text(encoding="utf-8")
@@ -123,6 +138,18 @@ class PixiAndroidTasksTests(unittest.TestCase):
 
         self.assertIn('System.getenv("SECONDLOOP_APP_ID")', gradle_file)
         self.assertIn("applicationId secondloopApplicationId", gradle_file)
+
+    def test_android_gradle_application_name_supports_dev_override(self) -> None:
+        gradle_file = ANDROID_BUILD_GRADLE.read_text(encoding="utf-8")
+
+        self.assertIn('System.getenv("SECONDLOOP_APP_NAME")', gradle_file)
+        self.assertIn('if (secondloopApplicationId == "com.secondloop.secondloopdev")', gradle_file)
+        self.assertIn('manifestPlaceholders += [appName: secondloopApplicationName]', gradle_file)
+
+    def test_android_manifest_uses_app_name_placeholder(self) -> None:
+        manifest_file = ANDROID_MANIFEST.read_text(encoding="utf-8")
+
+        self.assertIn('android:label="${appName}"', manifest_file)
 
 
 if __name__ == "__main__":

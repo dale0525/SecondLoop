@@ -44,6 +44,15 @@ if (secondloopApplicationId == null || secondloopApplicationId.trim().isEmpty())
     secondloopApplicationId = "com.secondloop.secondloop"
 }
 
+def secondloopApplicationName = System.getenv("SECONDLOOP_APP_NAME")
+if (secondloopApplicationName == null || secondloopApplicationName.trim().isEmpty()) {
+    if (secondloopApplicationId == "com.secondloop.secondloopdev") {
+        secondloopApplicationName = "SecondLoop Dev"
+    } else {
+        secondloopApplicationName = "SecondLoop"
+    }
+}
+
 android {
     namespace "com.secondloop.secondloop"
     compileSdkVersion 35
@@ -80,6 +89,7 @@ android {
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        manifestPlaceholders += [appName: secondloopApplicationName]
 
         if (isReleaseBuildRequested) {
             ndk {

@@ -13,6 +13,15 @@ if("${SECONDLOOP_APP_ID}" STREQUAL "")
 endif()
 set(APPLICATION_ID "${SECONDLOOP_APP_ID}")
 
+set(SECONDLOOP_APP_NAME "$ENV{SECONDLOOP_APP_NAME}")
+if("${SECONDLOOP_APP_NAME}" STREQUAL "")
+  if("${SECONDLOOP_APP_ID}" STREQUAL "com.secondloop.secondloopdev")
+    set(SECONDLOOP_APP_NAME "SecondLoop Dev")
+  else()
+    set(SECONDLOOP_APP_NAME "SecondLoop")
+  endif()
+endif()
+
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
 cmake_policy(SET CMP0063 NEW)
@@ -60,6 +69,7 @@ pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 pkg_check_modules(POPPLER QUIET IMPORTED_TARGET poppler-glib)
 
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
+add_definitions(-DSECONDLOOP_APP_NAME=\"${SECONDLOOP_APP_NAME}\")
 
 # Define the application target. To change its name, change BINARY_NAME above,
 # not the value here, or `flutter run` will no longer work.

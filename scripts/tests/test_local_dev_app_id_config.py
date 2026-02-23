@@ -19,6 +19,8 @@ NOTIFICATION_SCHEDULER_DART = (
 )
 SYNC_DESKTOP_RUNTIME_TOOL = REPO_ROOT / "tools/sync_desktop_runtime_to_appdir.dart"
 RUN_WINDOWS_SCRIPT = REPO_ROOT / "scripts/run_windows.ps1"
+WINDOWS_CMAKE = REPO_ROOT / "windows/runner/CMakeLists.txt"
+WINDOWS_MAIN = REPO_ROOT / "windows/runner/main.cpp"
 
 
 class LocalDevAppIdConfigTests(unittest.TestCase):
@@ -34,6 +36,14 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
 
         self.assertIn("export SECONDLOOP_APP_ID=com.secondloop.secondloopdev", command)
 
+    def test_run_macos_task_exports_dev_app_name(self) -> None:
+        pixi_config = self._load_pixi_config()
+
+        run_macos = pixi_config["target"]["osx-arm64"]["tasks"]["run-macos"]
+        command = run_macos.get("cmd", "")
+
+        self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
+
     def test_run_linux_task_exports_dev_app_id(self) -> None:
         pixi_config = self._load_pixi_config()
 
@@ -41,6 +51,14 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
         command = run_linux.get("cmd", "")
 
         self.assertIn("export SECONDLOOP_APP_ID=com.secondloop.secondloopdev", command)
+
+    def test_run_linux_task_exports_dev_app_name(self) -> None:
+        pixi_config = self._load_pixi_config()
+
+        run_linux = pixi_config["target"]["linux-64"]["tasks"]["run-linux"]
+        command = run_linux.get("cmd", "")
+
+        self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
 
     def test_flutter_with_defines_supports_secondloop_app_id_define(self) -> None:
         script = FLUTTER_WITH_DEFINES_SCRIPT.read_text(encoding="utf-8")
@@ -51,6 +69,11 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
         info_plist = IOS_INFO_PLIST.read_text(encoding="utf-8")
 
         self.assertIn("$(PRODUCT_BUNDLE_IDENTIFIER).backgroundSync", info_plist)
+
+    def test_ios_info_plist_supports_secondloop_app_name_override(self) -> None:
+        info_plist = IOS_INFO_PLIST.read_text(encoding="utf-8")
+
+        self.assertIn('$(SECONDLOOP_APP_NAME:default=SecondLoop)', info_plist)
 
     def test_ios_project_bundle_id_supports_secondloop_app_id_override(self) -> None:
         project = IOS_PROJECT.read_text(encoding="utf-8")
@@ -74,10 +97,25 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
             app_info,
         )
 
+    def test_macos_product_name_supports_secondloop_app_name_override(self) -> None:
+        app_info = MACOS_APP_INFO.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "PRODUCT_NAME = $(SECONDLOOP_APP_NAME:default=SecondLoop)",
+            app_info,
+        )
+
     def test_linux_application_id_supports_secondloop_app_id_override(self) -> None:
         cmake_file = LINUX_CMAKE.read_text(encoding="utf-8")
 
         self.assertIn('$ENV{SECONDLOOP_APP_ID}', cmake_file)
+
+    def test_linux_application_name_supports_secondloop_app_name_override(self) -> None:
+        cmake_file = LINUX_CMAKE.read_text(encoding="utf-8")
+
+        self.assertIn('$ENV{SECONDLOOP_APP_NAME}', cmake_file)
+        self.assertIn('add_definitions(-DSECONDLOOP_APP_NAME=', cmake_file)
+        self.assertIn('${SECONDLOOP_APP_NAME}', cmake_file)
 
     def test_background_sync_task_id_uses_secondloop_app_id_define(self) -> None:
         background_sync = BACKGROUND_SYNC_DART.read_text(encoding="utf-8")
@@ -96,6 +134,21 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
 
         self.assertIn("SECONDLOOP_APP_ID", script)
         self.assertIn("--dart-define=SECONDLOOP_APP_ID=", script)
+
+    def test_windows_script_defaults_dev_app_name(self) -> None:
+        script = RUN_WINDOWS_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("SECONDLOOP_APP_NAME", script)
+        self.assertIn("SecondLoop Dev", script)
+        self.assertIn("--dart-define=SECONDLOOP_APP_NAME=", script)
+
+    def test_windows_window_title_supports_secondloop_app_name_override(self) -> None:
+        cmake_file = WINDOWS_CMAKE.read_text(encoding="utf-8")
+        main_file = WINDOWS_MAIN.read_text(encoding="utf-8")
+
+        self.assertIn('$ENV{SECONDLOOP_APP_NAME}', cmake_file)
+        self.assertIn('SECONDLOOP_WINDOW_TITLE', cmake_file)
+        self.assertIn('window.Create(SECONDLOOP_WINDOW_TITLE, origin, size)', main_file)
 
     def test_sync_desktop_runtime_tool_reads_secondloop_app_id_from_env(self) -> None:
         tool = SYNC_DESKTOP_RUNTIME_TOOL.read_text(encoding="utf-8")
