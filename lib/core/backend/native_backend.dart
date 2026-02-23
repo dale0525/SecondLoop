@@ -81,9 +81,10 @@ class NativeAppBackend
   static const _kAutoUnlockEnabled = 'auto_unlock_enabled';
   static const _kSessionKeyB64 = 'session_key_b64';
 
-  static const _kLegacyPrefsAutoUnlockEnabled = 'auto_unlock_enabled_v1';
-  static const _kLegacyPrefsSessionKeyB64 = 'session_key_b64_v1';
   static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
+
+  bool get _isMacNoKeychain =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
   static Future<String> _defaultAppDirProvider() async {
     final dir = await getApplicationSupportDirectory();
@@ -112,6 +113,8 @@ class NativeAppBackend
 
   @override
   Future<bool> readAutoUnlockEnabled() async {
+    if (_isMacNoKeychain) return false;
+
     final value = await _secureBlobStore.readValue(_kAutoUnlockEnabled);
     if (value != null) return value == '1';
 
@@ -125,6 +128,8 @@ class NativeAppBackend
 
   @override
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {
+    if (_isMacNoKeychain) return;
+
     final updates = <String, String?>{
       _kAutoUnlockEnabled: enabled ? '1' : '0',
     };
@@ -136,6 +141,8 @@ class NativeAppBackend
 
   @override
   Future<Uint8List?> loadSavedSessionKey() async {
+    if (_isMacNoKeychain) return null;
+
     var b64 = await _secureBlobStore.readValue(_kSessionKeyB64);
     if (b64 == null || b64.isEmpty) {
       final legacy = await _secureBlobStore.readKey(_kSessionKeyB64);
@@ -143,24 +150,6 @@ class NativeAppBackend
         await _secureBlobStore.update({_kSessionKeyB64: legacy});
         await _secureBlobStore.deleteKey(_kSessionKeyB64);
         b64 = legacy;
-      }
-    }
-    if ((b64 == null || b64.isEmpty) &&
-        !kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      final prefs = await SharedPreferences.getInstance();
-      final legacyPrefs = prefs.getString(_kLegacyPrefsSessionKeyB64);
-      if (legacyPrefs != null && legacyPrefs.isNotEmpty) {
-        try {
-          final bytes = base64Decode(legacyPrefs);
-          final key = Uint8List.fromList(bytes);
-          await saveSessionKey(key);
-          return key;
-        } catch (_) {
-          await prefs.remove(_kLegacyPrefsSessionKeyB64);
-          await prefs.remove(_kLegacyPrefsAutoUnlockEnabled);
-          return null;
-        }
       }
     }
     if (b64 == null || b64.isEmpty) return null;
@@ -176,26 +165,19 @@ class NativeAppBackend
 
   @override
   Future<void> saveSessionKey(Uint8List key) async {
+    if (_isMacNoKeychain) return;
+
     await _secureBlobStore.update({
       _kSessionKeyB64: base64Encode(key),
       _kAutoUnlockEnabled: '1',
     });
-
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kLegacyPrefsSessionKeyB64);
-      await prefs.remove(_kLegacyPrefsAutoUnlockEnabled);
-    }
   }
 
   @override
   Future<void> clearSavedSessionKey() async {
-    await _secureBlobStore.update({_kSessionKeyB64: null});
+    if (_isMacNoKeychain) return;
 
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kLegacyPrefsSessionKeyB64);
-    }
+    await _secureBlobStore.update({_kSessionKeyB64: null});
   }
 
   @override

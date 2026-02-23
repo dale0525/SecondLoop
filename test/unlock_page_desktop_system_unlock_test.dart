@@ -13,7 +13,7 @@ void main() {
   testWidgets(
       'UnlockPage (desktop): defaults to system unlock and uses saved session key',
       (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       SharedPreferences.setMockInitialValues({
         'app_lock_enabled_v1': true,

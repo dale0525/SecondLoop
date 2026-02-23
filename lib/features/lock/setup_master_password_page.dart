@@ -37,8 +37,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
 
   bool _defaultSystemUnlockEnabled() {
     if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows;
+    return defaultTargetPlatform == TargetPlatform.windows;
   }
 
   Future<void> _submit() async {
@@ -71,7 +70,10 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
       final systemUnlockEnabled =
           prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
               _defaultSystemUnlockEnabled();
-      final shouldPersist = !appLockEnabled || systemUnlockEnabled;
+      final isMacNoKeychain =
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+      final shouldPersist =
+          !isMacNoKeychain && (!appLockEnabled || systemUnlockEnabled);
 
       await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
 

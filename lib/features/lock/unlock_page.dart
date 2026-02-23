@@ -39,8 +39,7 @@ class _UnlockPageState extends State<UnlockPage> {
 
   bool _defaultSystemUnlockEnabled() {
     if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows;
+    return defaultTargetPlatform == TargetPlatform.windows;
   }
 
   Future<void> _loadUnlockPrefs() async {
@@ -81,7 +80,10 @@ class _UnlockPageState extends State<UnlockPage> {
       final systemUnlockEnabled =
           prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
               _defaultSystemUnlockEnabled();
-      final shouldPersist = !appLockEnabled || systemUnlockEnabled;
+      final isMacNoKeychain =
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+      final shouldPersist =
+          !isMacNoKeychain && (!appLockEnabled || systemUnlockEnabled);
 
       if (shouldPersist) {
         await backend.saveSessionKey(key);
@@ -149,9 +151,8 @@ class _UnlockPageState extends State<UnlockPage> {
     final biometricEnabled = _biometricUnlockEnabled ?? false;
     final isMobile = defaultTargetPlatform == TargetPlatform.iOS ||
         defaultTargetPlatform == TargetPlatform.android;
-    final isDesktop = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows);
+    final isDesktop =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     final showSystemUnlock = biometricEnabled && (isMobile || isDesktop);
     final systemUnlockLabel = isMobile
         ? context.t.settings.systemUnlock.titleMobile

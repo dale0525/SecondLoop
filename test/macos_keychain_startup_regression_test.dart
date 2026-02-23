@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +36,29 @@ void main() {
 
     expect(subscriptions.status, SubscriptionStatus.unknown);
     expect(store.loadCalls, 0);
+  });
+
+  test('macOS startup uses prefs-backed cloud auth without keychain access',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    SharedPreferences.setMockInitialValues({
+      'cloud_uid_v1': 'uid_1',
+      'cloud_refresh_token_v1': 'refresh_1',
+    });
+
+    final toolkit = _RefreshingIdentityToolkit();
+    final auth = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      nowMs: () => 1000,
+    );
+
+    final token = await auth.getIdToken();
+
+    expect(token, 'id_token_1');
+    expect(auth.uid, 'uid_1');
+    expect(toolkit.refreshCalls, 1);
   });
 
   testWidgets(
@@ -111,6 +133,54 @@ final class _InMemoryCloudAuthStore implements CloudAuthStore {
   @override
   Future<void> clear() async {
     _session = null;
+  }
+}
+
+final class _RefreshingIdentityToolkit implements FirebaseIdentityToolkit {
+  int refreshCalls = 0;
+
+  @override
+  Future<FirebaseAuthTokens> refreshIdToken(
+      {required String refreshToken}) async {
+    refreshCalls += 1;
+    if (refreshToken != 'refresh_1') {
+      throw StateError('unexpected_refresh_token');
+    }
+    return const FirebaseAuthTokens(
+      idToken: 'id_token_1',
+      refreshToken: 'refresh_1',
+      uid: 'uid_1',
+      expiresAtMs: 1 << 30,
+    );
+  }
+
+  @override
+  Future<FirebaseAuthTokens> signInWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseAuthTokens> signUpWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseUserInfo> lookup({required String idToken}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> sendOobCode({
+    required String requestType,
+    required String idToken,
+  }) {
+    throw UnimplementedError();
   }
 }
 

@@ -6,7 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 
 void main() {
-  test('macOS: session key persists in secure storage (not prefs)', () async {
+  test('macOS: session key is never persisted and keychain remains untouched',
+      () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
 
@@ -17,18 +18,13 @@ void main() {
 
     final key = Uint8List.fromList(List<int>.filled(32, 7));
     await backend.saveSessionKey(key);
+    final loaded = await backend.loadSavedSessionKey();
+    await backend.clearSavedSessionKey();
 
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('session_key_b64_v1'), isNull);
-    expect(prefs.getBool('auto_unlock_enabled_v1'), isNull);
-
-    final freshBackend = NativeAppBackend(secureStorage: secureStorage);
-    final loaded = await freshBackend.loadSavedSessionKey();
-    expect(loaded, isNotNull);
-    expect(loaded, orderedEquals(key));
-
-    expect(secureStorage.readCalls, greaterThan(0));
-    expect(secureStorage.writeCalls, greaterThan(0));
+    expect(loaded, isNull);
+    expect(secureStorage.readCalls, 0);
+    expect(secureStorage.writeCalls, 0);
+    expect(secureStorage.deleteCalls, 0);
   });
 }
 

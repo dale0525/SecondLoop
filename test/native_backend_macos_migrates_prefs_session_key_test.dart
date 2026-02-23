@@ -8,14 +8,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 
 void main() {
-  test('macOS: migrates legacy prefs session key into secure storage',
+  test('macOS: ignores legacy prefs session key and keeps keychain untouched',
       () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
 
     final key = Uint8List.fromList(List<int>.filled(32, 7));
+    final legacyValue = base64Encode(key);
     SharedPreferences.setMockInitialValues({
-      'session_key_b64_v1': base64Encode(key),
+      'session_key_b64_v1': legacyValue,
       'auto_unlock_enabled_v1': true,
     });
 
@@ -23,12 +24,13 @@ void main() {
     final backend = NativeAppBackend(secureStorage: storage);
 
     final loaded = await backend.loadSavedSessionKey();
-    expect(loaded, isNotNull);
-    expect(loaded, orderedEquals(key));
-    expect(storage.writeCalls, greaterThan(0));
+    expect(loaded, isNull);
+    expect(storage.readCalls, 0);
+    expect(storage.writeCalls, 0);
+    expect(storage.deleteCalls, 0);
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('session_key_b64_v1'), isNull);
+    expect(prefs.getString('session_key_b64_v1'), legacyValue);
   });
 }
 

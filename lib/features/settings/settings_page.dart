@@ -159,8 +159,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   bool _defaultSystemUnlockEnabled() {
     if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows;
+    return defaultTargetPlatform == TargetPlatform.windows;
   }
 
   bool _isDesktopPlatform() {
@@ -549,7 +548,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       final biometricEnabled =
           _biometricUnlockEnabled ?? _defaultSystemUnlockEnabled();
-      final shouldPersist = !enabled || biometricEnabled;
+      final isMacNoKeychain =
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+      final shouldPersist = !isMacNoKeychain && (!enabled || biometricEnabled);
       if (shouldPersist) {
         await backend.saveSessionKey(sessionKey);
       } else {
