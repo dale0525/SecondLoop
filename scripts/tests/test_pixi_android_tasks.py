@@ -11,6 +11,7 @@ ANDROID_RUN_SCRIPT = REPO_ROOT / "scripts/run_android_with_auto_emulator.sh"
 RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
 SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
 FLUTTER_WITH_DEFINES_SCRIPT = REPO_ROOT / "scripts/flutter_with_defines.sh"
+BUILD_ANDROID_RELEASE_APK_SCRIPT = REPO_ROOT / "scripts/build_android_release_apk.sh"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -101,6 +102,14 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn("dart pub global list", script)
         self.assertIn('command -v flutter', script)
         self.assertIn('No active package fvm', script)
+
+    def test_android_release_script_supports_target_platform_override(self) -> None:
+        script = BUILD_ANDROID_RELEASE_APK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('SECONDLOOP_ANDROID_TARGET_PLATFORMS', script)
+        self.assertIn('android-arm,android-arm64', script)
+        self.assertIn('--target-platform "${target_platforms}"', script)
+
 
 
 if __name__ == "__main__":
