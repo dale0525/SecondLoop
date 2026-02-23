@@ -85,10 +85,23 @@ jobs:
             exit 1
           fi
 
+          flutter_gradle="${FLUTTER_ROOT}/packages/flutter_tools/gradle/src/main/groovy/flutter.groovy"
+          if [[ ! -f "${flutter_gradle}" ]]; then
+            echo "Unable to locate Flutter gradle config at ${flutter_gradle}"
+            exit 1
+          fi
+
+          flutter_ndk_version="$(sed -nE 's/^[[:space:]]*ndkVersion[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "${flutter_gradle}" | head -n1)"
+          if [[ -z "${flutter_ndk_version}" ]]; then
+            echo "Failed to parse ndkVersion from ${flutter_gradle}"
+            exit 1
+          fi
+          ndk_package="ndk;${flutter_ndk_version}"
+
           set +o pipefail
           yes | "${sdkmanager}" --sdk_root="${sdk_root}" --licenses >/dev/null
           set -o pipefail
-          "${sdkmanager}" --sdk_root="${sdk_root}" --install "ndk;26.3.11579264"
+          "${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"
       - name: Validate prod config
         shell: bash
         run: |
@@ -237,6 +250,11 @@ jobs:
           try {
             Push-Location "W:\"
             $enteredWorkspace = $true
+
+            $Env:CARGOKIT_TARGET_TEMP_DIR = 'W:\ck'
+            $Env:CARGOKIT_TOOL_TEMP_DIR = 'W:\ck\tool'
+            New-Item -ItemType Directory -Path $Env:CARGOKIT_TARGET_TEMP_DIR -Force | Out-Null
+            New-Item -ItemType Directory -Path $Env:CARGOKIT_TOOL_TEMP_DIR -Force | Out-Null
 
             $buildArgs = @("--build-number=$Env:GITHUB_RUN_NUMBER")
             if ($Env:GITHUB_REF -like "refs/tags/v*") {

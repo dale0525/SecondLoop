@@ -49,6 +49,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         script_path = Path(__file__).resolve().parents[2] / "scripts/package_macos_dmg.sh"
         return script_path.read_text(encoding="utf-8")
 
+    def _cargokit_cmake_text(self) -> str:
+        cmake_path = Path(__file__).resolve().parents[2] / "rust_builder/cargokit/cmake/cargokit.cmake"
+        return cmake_path.read_text(encoding="utf-8")
+
     def test_publish_job_forwards_extended_llm_env(self) -> None:
         env_keys = self._publish_env_keys()
         self.assertIn("RELEASE_LLM_API_KEY", env_keys)
@@ -112,7 +116,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         workflow_text = self._workflow_text()
 
         self.assertIn("name: Install Android NDK", workflow_text)
-        self.assertIn('ndk;26.3.11579264', workflow_text)
+        self.assertIn('flutter_gradle="${FLUTTER_ROOT}/packages/flutter_tools/gradle/src/main/groovy/flutter.groovy"', workflow_text)
+        self.assertIn('flutter_ndk_version="$(sed -nE', workflow_text)
+        self.assertIn('ndk_package="ndk;${flutter_ndk_version}"', workflow_text)
+        self.assertIn('"${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"', workflow_text)
 
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()
@@ -121,6 +128,18 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('Push-Location "W:\\"', workflow_text)
         self.assertIn("subst W: /d", workflow_text)
 
+    def test_windows_build_sets_short_cargokit_temp_paths(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("$Env:CARGOKIT_TARGET_TEMP_DIR = 'W:\\ck'", workflow_text)
+        self.assertIn("$Env:CARGOKIT_TOOL_TEMP_DIR = 'W:\\ck\\tool'", workflow_text)
+
+    def test_cargokit_cmake_allows_temp_dir_env_overrides(self) -> None:
+        cmake_text = self._cargokit_cmake_text()
+
+        self.assertIn('$ENV{CARGOKIT_TARGET_TEMP_DIR}', cmake_text)
+        self.assertIn('$ENV{CARGOKIT_TOOL_TEMP_DIR}', cmake_text)
+        self.assertIn('CARGOKIT_TOOL_TEMP_DIR=${CARGOKIT_TOOL_TEMP_DIR}', cmake_text)
 
     def test_android_ndk_install_handles_yes_pipefail(self) -> None:
         workflow_text = self._workflow_text()
