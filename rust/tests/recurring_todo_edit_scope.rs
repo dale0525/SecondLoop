@@ -22,6 +22,42 @@ fn recurrence_rule(conn: &rusqlite::Connection, todo_id: &str) -> String {
 }
 
 #[test]
+fn non_recurring_todo_without_due_can_set_due_with_scope() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:no:due",
+        "Task without due",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let updated = db::update_todo_due_with_scope(
+        &conn,
+        &key,
+        "todo:no:due",
+        due_ms(2),
+        db::TodoRecurrenceEditScope::ThisAndFuture,
+    )
+    .expect("update due with scope");
+
+    assert_eq!(updated.due_at_ms, Some(due_ms(2)));
+
+    let reloaded = db::get_todo(&conn, &key, "todo:no:due").expect("reload todo");
+    assert_eq!(reloaded.due_at_ms, Some(due_ms(2)));
+}
+
+#[test]
 fn this_and_future_shifts_current_and_following_occurrences_only() {
     let temp = tempfile::tempdir().expect("tempdir");
     let app_dir = temp.path().join("secondloop");
