@@ -5,10 +5,15 @@ import WebKit
 private let kMarkdownPdfMethod = "exportMarkdownHtmlToPdf"
 private let kMarkdownPdfPageWidth: CGFloat = 595.2
 private let kMarkdownPdfPageHeight: CGFloat = 841.8
-private let kMarkdownPdfTopMargin: CGFloat = 48
-private let kMarkdownPdfBottomMargin: CGFloat = 64
-private let kMarkdownPdfHorizontalMargin: CGFloat = 54
 
+private struct PdfDetectedMargins {
+  let top: CGFloat
+  let bottom: CGFloat
+  let left: CGFloat
+  let right: CGFloat
+
+  static let zero = PdfDetectedMargins(top: 0, bottom: 0, left: 0, right: 0)
+}
 
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
@@ -391,10 +396,16 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       context.drawPDFPage(page)
       context.restoreGState()
 
+      let detectedMargins = detectWhitePageMargins(page: page, mediaBox: mediaBox)
+
       context.saveGState()
       context.setBlendMode(.normal)
       context.setFillColor(pageBackgroundColor.cgColor)
-      fillPageMargins(context: context, mediaBox: mediaBox)
+      fillPageMargins(
+        context: context,
+        mediaBox: mediaBox,
+        margins: detectedMargins
+      )
       context.restoreGState()
 
       context.endPDFPage()
@@ -405,17 +416,22 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     return rebuilt.isEmpty ? pdfData : rebuilt
   }
 
-  private func fillPageMargins(context: CGContext, mediaBox: CGRect) {
+  private func fillPageMargins(
+    context: CGContext,
+    mediaBox: CGRect,
+    margins: PdfDetectedMargins
+  ) {
+    if margins.top <= 0 && margins.bottom <= 0 && margins.left <= 0 && margins.right <= 0 {
+      return
+    }
+
     let pageWidth = max(mediaBox.width, 1)
     let pageHeight = max(mediaBox.height, 1)
 
-    let horizontalScale = pageWidth / kMarkdownPdfPageWidth
-    let verticalScale = pageHeight / kMarkdownPdfPageHeight
-
-    let leftMargin = max(0, min(pageWidth * 0.45, kMarkdownPdfHorizontalMargin * horizontalScale))
-    let rightMargin = max(0, min(pageWidth * 0.45, kMarkdownPdfHorizontalMargin * horizontalScale))
-    let topMargin = max(0, min(pageHeight * 0.45, kMarkdownPdfTopMargin * verticalScale))
-    let bottomMargin = max(0, min(pageHeight * 0.45, kMarkdownPdfBottomMargin * verticalScale))
+    let leftMargin = max(0, min(pageWidth * 0.48, margins.left))
+    let rightMargin = max(0, min(pageWidth * 0.48, margins.right))
+    let topMargin = max(0, min(pageHeight * 0.48, margins.top))
+    let bottomMargin = max(0, min(pageHeight * 0.48, margins.bottom))
 
     if topMargin > 0 {
       context.fill(
@@ -460,6 +476,125 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
         )
       )
     }
+  }
+
+  private func detectWhitePageMargins(page: CGPDFPage, mediaBox: CGRect) -> PdfDetectedMargins {
+    let sampleWidth = 240
+    let sampleHeight = 340
+    var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+
+    let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+      guard let baseAddress = buffer.baseAddress,
+            let bitmapContext = CGContext(
+              data: baseAddress,
+              width: sampleWidth,
+              height: sampleHeight,
+              bitsPerComponent: 8,
+              bytesPerRow: sampleWidth * 4,
+              space: colorSpace,
+              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+        return false
+      }
+
+      let bounds = CGRect(
+        x: 0,
+        y: 0,
+        width: CGFloat(sampleWidth),
+        height: CGFloat(sampleHeight)
+      )
+      bitmapContext.setFillColor(NSColor.white.cgColor)
+      bitmapContext.fill(bounds)
+      let transform = page.getDrawingTransform(
+        .mediaBox,
+        rect: bounds,
+        rotate: 0,
+        preserveAspectRatio: false
+      )
+      bitmapContext.concatenate(transform)
+      bitmapContext.drawPDFPage(page)
+      return true
+    }
+
+    guard rendered else {
+      return .zero
+    }
+
+    let maxNonWhiteInColumn = max(1, Int(Double(sampleHeight) * 0.012))
+    let maxNonWhiteInRow = max(1, Int(Double(sampleWidth) * 0.012))
+
+    func isNearWhitePixel(x: Int, y: Int) -> Bool {
+      let index = (y * sampleWidth + x) * 4
+      let red = pixels[index]
+      let green = pixels[index + 1]
+      let blue = pixels[index + 2]
+      return red >= 246 && green >= 246 && blue >= 246
+    }
+
+    func isMostlyWhiteColumn(_ x: Int) -> Bool {
+      var nonWhite = 0
+      for y in 0 ..< sampleHeight {
+        if !isNearWhitePixel(x: x, y: y) {
+          nonWhite += 1
+          if nonWhite > maxNonWhiteInColumn {
+            return false
+          }
+        }
+      }
+      return true
+    }
+
+    func isMostlyWhiteRow(_ y: Int) -> Bool {
+      var nonWhite = 0
+      for x in 0 ..< sampleWidth {
+        if !isNearWhitePixel(x: x, y: y) {
+          nonWhite += 1
+          if nonWhite > maxNonWhiteInRow {
+            return false
+          }
+        }
+      }
+      return true
+    }
+
+    var leftColumns = 0
+    while leftColumns < sampleWidth / 2 && isMostlyWhiteColumn(leftColumns) {
+      leftColumns += 1
+    }
+
+    var rightColumns = 0
+    while rightColumns < sampleWidth / 2 && isMostlyWhiteColumn(sampleWidth - rightColumns - 1) {
+      rightColumns += 1
+    }
+
+    var topRows = 0
+    while topRows < sampleHeight / 2 && isMostlyWhiteRow(sampleHeight - topRows - 1) {
+      topRows += 1
+    }
+
+    var bottomRows = 0
+    while bottomRows < sampleHeight / 2 && isMostlyWhiteRow(bottomRows) {
+      bottomRows += 1
+    }
+
+    let widthScale = mediaBox.width / CGFloat(sampleWidth)
+    let heightScale = mediaBox.height / CGFloat(sampleHeight)
+
+    func convertMargin(_ value: Int, scale: CGFloat) -> CGFloat {
+      let points = CGFloat(value) * scale
+      if points < 0.6 {
+        return 0
+      }
+      return points
+    }
+
+    return PdfDetectedMargins(
+      top: convertMargin(topRows, scale: heightScale),
+      bottom: convertMargin(bottomRows, scale: heightScale),
+      left: convertMargin(leftColumns, scale: widthScale),
+      right: convertMargin(rightColumns, scale: widthScale)
+    )
   }
 
   private func parsePageBackgroundColor() -> NSColor? {
