@@ -85,7 +85,9 @@ jobs:
             exit 1
           fi
 
+          set +o pipefail
           yes | "${sdkmanager}" --sdk_root="${sdk_root}" --licenses >/dev/null
+          set -o pipefail
           "${sdkmanager}" --sdk_root="${sdk_root}" --install "ndk;26.3.11579264"
       - name: Validate prod config
         shell: bash
@@ -219,6 +221,12 @@ jobs:
       - name: Prepare bundled FFmpeg
         shell: pwsh
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows --source-bin "C:\ProgramData\chocolatey\bin\ffmpeg.exe"
+      - name: Ensure Ninja is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja --yes --no-progress
+          }
       - name: Build (prod)
         shell: pwsh
         run: |
@@ -242,7 +250,11 @@ jobs:
               "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
               "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
             )
+            $Env:CMAKE_GENERATOR = "Ninja"
             flutter build windows --release @buildArgs @defines
+            if ($LASTEXITCODE -ne 0) {
+              throw "flutter build windows failed with exit code $LASTEXITCODE"
+            }
           } finally {
             if ($enteredWorkspace) {
               Pop-Location

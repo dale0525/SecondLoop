@@ -122,5 +122,29 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("subst W: /d", workflow_text)
 
 
+    def test_android_ndk_install_handles_yes_pipefail(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('set +o pipefail', workflow_text)
+        self.assertIn('set -o pipefail', workflow_text)
+
+    def test_windows_build_step_fails_on_flutter_build_error(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('if ($LASTEXITCODE -ne 0)', workflow_text)
+        self.assertIn('throw "flutter build windows failed with exit code $LASTEXITCODE"', workflow_text)
+
+    def test_windows_whisper_dependency_enables_vulkan_backend(self) -> None:
+        cargo_text = (Path(__file__).resolve().parents[2] / 'rust/Cargo.toml').read_text(encoding='utf-8')
+
+        self.assertIn('[target.\'cfg(any(target_os = "windows", target_os = "linux"))\'.dependencies]', cargo_text)
+        self.assertIn('whisper-rs = { version = "0.15.1", default-features = false, features = ["vulkan"] }', cargo_text)
+
+    def test_windows_build_sets_ninja_generator_for_rust_cmake(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('$Env:CMAKE_GENERATOR = "Ninja"', workflow_text)
+
+
 if __name__ == "__main__":
     unittest.main()
