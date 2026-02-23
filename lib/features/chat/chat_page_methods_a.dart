@@ -566,7 +566,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       for (final activity in activities) {
         if (activity.sourceMessageId != message.id) continue;
         final todo = todosById[activity.todoId];
-        if (todo != null) return (todo: todo, isSourceEntry: false);
+        if (todo == null || todo.status == 'dismissed') continue;
+        return (todo: todo, isSourceEntry: false);
       }
     } catch (_) {
       // ignore
@@ -695,6 +696,24 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
     final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final linkedMessageIds = <String>{message.id};
+
+    try {
+      final activities = await backend.listTodoActivities(
+        sessionKey,
+        linkedTodo.id,
+      );
+      for (final activity in activities) {
+        final sourceMessageId = activity.sourceMessageId?.trim();
+        if (sourceMessageId == null || sourceMessageId.isEmpty) {
+          continue;
+        }
+        linkedMessageIds.add(sourceMessageId);
+      }
+    } catch (_) {
+      // ignore
+    }
+
     try {
       await backend.upsertTodo(
         sessionKey,
@@ -711,14 +730,16 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return;
     }
 
-    try {
-      await backend.markSemanticParseJobUndone(
-        sessionKey,
-        messageId: message.id,
-        nowMs: nowMs,
-      );
-    } catch (_) {
-      // ignore
+    for (final linkedMessageId in linkedMessageIds) {
+      try {
+        await backend.markSemanticParseJobUndone(
+          sessionKey,
+          messageId: linkedMessageId,
+          nowMs: nowMs,
+        );
+      } catch (_) {
+        // ignore
+      }
     }
 
     if (!mounted) return;

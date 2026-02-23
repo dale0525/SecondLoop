@@ -98,6 +98,15 @@ final class ChatTodoMessageTypeBadgesTestBackend extends TestAppBackend {
   }
 
   @override
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      _todoActivities
+          .where((activity) => activity.todoId == todoId)
+          .toList(growable: false);
+
+  @override
   Future<List<TodoActivity>> listTodoActivitiesInRange(
     Uint8List key, {
     required int startAtMsInclusive,

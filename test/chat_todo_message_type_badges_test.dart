@@ -814,7 +814,6 @@ void main() {
       );
     },
   );
-
   testWidgets(
     'linked todo messages still show markers without semantic jobs',
     (tester) async {
