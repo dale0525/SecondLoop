@@ -431,10 +431,18 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     let pageWidth = max(mediaBox.width, 1)
     let pageHeight = max(mediaBox.height, 1)
 
-    let leftMargin = max(0, min(pageWidth * 0.48, margins.left))
-    let rightMargin = max(0, min(pageWidth * 0.48, margins.right))
-    let topMargin = max(0, min(pageHeight * 0.48, margins.top))
-    let bottomMargin = max(0, min(pageHeight * 0.48, margins.bottom))
+    func normalizeMargin(_ value: CGFloat, limit: CGFloat) -> CGFloat {
+      let clamped = max(0, min(limit * 0.48, value))
+      guard clamped > 0 else {
+        return 0
+      }
+      return min(limit * 0.48, ceil(clamped * 2) / 2)
+    }
+
+    let leftMargin = normalizeMargin(margins.left, limit: pageWidth)
+    let rightMargin = normalizeMargin(margins.right, limit: pageWidth)
+    let topMargin = normalizeMargin(margins.top, limit: pageHeight)
+    let bottomMargin = normalizeMargin(margins.bottom, limit: pageHeight)
 
     if topMargin > 0 {
       context.fill(
@@ -482,8 +490,8 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
   }
 
   private func detectWhitePageMargins(page: CGPDFPage, mediaBox: CGRect) -> PdfDetectedMargins {
-    let sampleWidth = 240
-    let sampleHeight = 340
+    let sampleWidth = 300
+    let sampleHeight = 420
     var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
     let colorSpace = CGColorSpaceCreateDeviceRGB()
 
@@ -524,41 +532,63 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       return .zero
     }
 
-    let maxNonWhiteInColumn = max(1, Int(Double(sampleHeight) * 0.012))
-    let maxNonWhiteInRow = max(1, Int(Double(sampleWidth) * 0.012))
-
-    func isNearWhitePixel(x: Int, y: Int) -> Bool {
+    func pixelComponents(x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8) {
       let index = (y * sampleWidth + x) * 4
-      let red = pixels[index]
-      let green = pixels[index + 1]
-      let blue = pixels[index + 2]
-      return red >= 246 && green >= 246 && blue >= 246
+      return (
+        red: pixels[index],
+        green: pixels[index + 1],
+        blue: pixels[index + 2]
+      )
+    }
+
+    func luminance(red: UInt8, green: UInt8, blue: UInt8) -> Double {
+      0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
     }
 
     func isMostlyWhiteColumn(_ x: Int) -> Bool {
-      var nonWhite = 0
+      var nearWhiteCount = 0
+      var luminanceSum = 0.0
+
       for y in 0 ..< sampleHeight {
-        if !isNearWhitePixel(x: x, y: y) {
-          nonWhite += 1
-          if nonWhite > maxNonWhiteInColumn {
-            return false
-          }
+        let components = pixelComponents(x: x, y: y)
+        luminanceSum += luminance(
+          red: components.red,
+          green: components.green,
+          blue: components.blue
+        )
+
+        if components.red >= 240 && components.green >= 240 && components.blue >= 240 {
+          nearWhiteCount += 1
         }
       }
-      return true
+
+      let nearWhiteRatio = Double(nearWhiteCount) / Double(sampleHeight)
+      let meanLuminance = luminanceSum / Double(sampleHeight)
+      return nearWhiteRatio >= 0.96 || (nearWhiteRatio >= 0.9 && meanLuminance >= 248) ||
+        meanLuminance >= 251.5
     }
 
     func isMostlyWhiteRow(_ y: Int) -> Bool {
-      var nonWhite = 0
+      var nearWhiteCount = 0
+      var luminanceSum = 0.0
+
       for x in 0 ..< sampleWidth {
-        if !isNearWhitePixel(x: x, y: y) {
-          nonWhite += 1
-          if nonWhite > maxNonWhiteInRow {
-            return false
-          }
+        let components = pixelComponents(x: x, y: y)
+        luminanceSum += luminance(
+          red: components.red,
+          green: components.green,
+          blue: components.blue
+        )
+
+        if components.red >= 240 && components.green >= 240 && components.blue >= 240 {
+          nearWhiteCount += 1
         }
       }
-      return true
+
+      let nearWhiteRatio = Double(nearWhiteCount) / Double(sampleWidth)
+      let meanLuminance = luminanceSum / Double(sampleWidth)
+      return nearWhiteRatio >= 0.96 || (nearWhiteRatio >= 0.9 && meanLuminance >= 248) ||
+        meanLuminance >= 251.5
     }
 
     var leftColumns = 0
@@ -586,10 +616,10 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     func convertMargin(_ value: Int, scale: CGFloat) -> CGFloat {
       let points = CGFloat(value) * scale
-      if points < 0.6 {
+      guard points >= 0.5 else {
         return 0
       }
-      return points
+      return ceil(points * 2) / 2
     }
 
     return PdfDetectedMargins(
