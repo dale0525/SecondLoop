@@ -82,6 +82,9 @@ body {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+html {
+  background: ${_toCssColor(theme.panelColor)};
+}
 @media print {
   * {
     -webkit-print-color-adjust: exact;
@@ -89,6 +92,8 @@ body {
   }
 }
 body {
+  position: relative;
+  z-index: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   font-size: 13px;
   line-height: 1.45;
@@ -96,6 +101,14 @@ body {
   background: ${_toCssColor(theme.panelColor)};
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: ${_toCssColor(theme.panelColor)};
+  z-index: -1;
+  pointer-events: none;
 }
 a {
   color: ${_toCssColor(theme.linkColor)};

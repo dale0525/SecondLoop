@@ -54,6 +54,8 @@ void main() {
 
     expect(html, contains('print-color-adjust: exact'));
     expect(html, contains('-webkit-print-color-adjust: exact'));
+    expect(html, contains('body::before'));
+    expect(html, contains('position: fixed'));
   });
 
   test('PDF HTML export paints @page background with theme panel color',
