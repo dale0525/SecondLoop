@@ -381,6 +381,13 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
       context.saveGState()
       context.setBlendMode(.normal)
+      let drawingTransform = page.getDrawingTransform(
+        .mediaBox,
+        rect: mediaBox,
+        rotate: 0,
+        preserveAspectRatio: false
+      )
+      context.concatenate(drawingTransform)
       context.drawPDFPage(page)
       context.restoreGState()
 
