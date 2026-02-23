@@ -239,7 +239,7 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     pendingPdfOutputUrl = outputUrl
 
     if let hostWindow = MarkdownPdfExportTask.resolveHostWindow() {
-      operation.runOperationModal(
+      operation.runModal(
         for: hostWindow,
         delegate: self,
         didRun: #selector(printOperationDidRun(_:success:contextInfo:)),
