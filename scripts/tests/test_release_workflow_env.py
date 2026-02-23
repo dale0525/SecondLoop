@@ -134,11 +134,16 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('if ($LASTEXITCODE -ne 0)', workflow_text)
         self.assertIn('throw "flutter build windows failed with exit code $LASTEXITCODE"', workflow_text)
 
-    def test_windows_whisper_dependency_does_not_force_vulkan(self) -> None:
+    def test_windows_whisper_dependency_enables_vulkan_backend(self) -> None:
         cargo_text = (Path(__file__).resolve().parents[2] / 'rust/Cargo.toml').read_text(encoding='utf-8')
 
-        self.assertIn('[target.\'cfg(target_os = "windows")\'.dependencies]', cargo_text)
-        self.assertIn('whisper-rs = { version = "0.15.1", default-features = false }', cargo_text)
+        self.assertIn('[target.\'cfg(any(target_os = "windows", target_os = "linux"))\'.dependencies]', cargo_text)
+        self.assertIn('whisper-rs = { version = "0.15.1", default-features = false, features = ["vulkan"] }', cargo_text)
+
+    def test_windows_build_sets_ninja_generator_for_rust_cmake(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('$Env:CMAKE_GENERATOR = "Ninja"', workflow_text)
 
 
 if __name__ == "__main__":
