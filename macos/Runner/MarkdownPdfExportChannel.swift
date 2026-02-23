@@ -5,6 +5,9 @@ import WebKit
 private let kMarkdownPdfMethod = "exportMarkdownHtmlToPdf"
 private let kMarkdownPdfPageWidth: CGFloat = 595.2
 private let kMarkdownPdfPageHeight: CGFloat = 841.8
+private let kMarkdownPdfTopMargin: CGFloat = 48
+private let kMarkdownPdfBottomMargin: CGFloat = 64
+private let kMarkdownPdfHorizontalMargin: CGFloat = 54
 
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
@@ -379,6 +382,15 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
       context.fill(pageRect)
       context.restoreGState()
 
+      context.saveGState()
+      context.setBlendMode(.normal)
+      context.setFillColor(pageBackgroundColor.cgColor)
+      fillPageMargins(
+        context: context,
+        mediaBox: pageRect
+      )
+      context.restoreGState()
+
       context.endPDFPage()
     }
 
@@ -393,6 +405,63 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     return rebuilt
+  }
+
+  private func fillPageMargins(context: CGContext, mediaBox: CGRect) {
+    let pageWidth = max(mediaBox.width, 1)
+    let pageHeight = max(mediaBox.height, 1)
+
+    let horizontalScale = pageWidth / kMarkdownPdfPageWidth
+    let verticalScale = pageHeight / kMarkdownPdfPageHeight
+
+    let leftMargin = max(0, min(pageWidth * 0.45, kMarkdownPdfHorizontalMargin * horizontalScale))
+    let rightMargin = max(0, min(pageWidth * 0.45, kMarkdownPdfHorizontalMargin * horizontalScale))
+    let topMargin = max(0, min(pageHeight * 0.45, kMarkdownPdfTopMargin * verticalScale))
+    let bottomMargin = max(0, min(pageHeight * 0.45, kMarkdownPdfBottomMargin * verticalScale))
+
+    if topMargin > 0 {
+      context.fill(
+        CGRect(
+          x: mediaBox.minX,
+          y: mediaBox.maxY - topMargin,
+          width: pageWidth,
+          height: topMargin
+        )
+      )
+    }
+
+    if bottomMargin > 0 {
+      context.fill(
+        CGRect(
+          x: mediaBox.minX,
+          y: mediaBox.minY,
+          width: pageWidth,
+          height: bottomMargin
+        )
+      )
+    }
+
+    if leftMargin > 0 {
+      context.fill(
+        CGRect(
+          x: mediaBox.minX,
+          y: mediaBox.minY,
+          width: leftMargin,
+          height: pageHeight
+        )
+      )
+    }
+
+    if rightMargin > 0 {
+      context.fill(
+        CGRect(
+          x: mediaBox.maxX - rightMargin,
+          y: mediaBox.minY,
+          width: rightMargin,
+          height: pageHeight
+        )
+      )
+    }
   }
 
   private func shouldFallbackToOriginalPdf(
