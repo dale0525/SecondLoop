@@ -468,19 +468,34 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     originalPdfData: Data,
     rebuiltPdfData: Data
   ) -> Bool {
-    guard rebuiltPdfData.count < originalPdfData.count,
-          let originalDocument = loadPdfDocument(data: originalPdfData),
+    guard let originalDocument = loadPdfDocument(data: originalPdfData),
           let rebuiltDocument = loadPdfDocument(data: rebuiltPdfData),
           originalDocument.numberOfPages > 0,
-          rebuiltDocument.numberOfPages == originalDocument.numberOfPages,
-          let originalFirstPage = originalDocument.page(at: 1),
-          let rebuiltFirstPage = rebuiltDocument.page(at: 1),
-          let originalVariance = estimatePageLuminanceVariance(originalFirstPage),
-          let rebuiltVariance = estimatePageLuminanceVariance(rebuiltFirstPage) else {
+          rebuiltDocument.numberOfPages == originalDocument.numberOfPages else {
       return false
     }
 
-    return originalVariance > 20 && rebuiltVariance < originalVariance * 0.08
+    let pagesToCheck = min(originalDocument.numberOfPages, 3)
+    if pagesToCheck <= 0 {
+      return false
+    }
+
+    var suspiciousPageCount = 0
+    for pageIndex in 1 ... pagesToCheck {
+      guard let originalPage = originalDocument.page(at: pageIndex),
+            let rebuiltPage = rebuiltDocument.page(at: pageIndex),
+            let originalVariance = estimatePageLuminanceVariance(originalPage),
+            let rebuiltVariance = estimatePageLuminanceVariance(rebuiltPage) else {
+        continue
+      }
+
+      let threshold = max(1.0, originalVariance * 0.18)
+      if originalVariance > 4.0 && rebuiltVariance < threshold {
+        suspiciousPageCount += 1
+      }
+    }
+
+    return suspiciousPageCount > 0
   }
 
   private func loadPdfDocument(data: Data) -> CGPDFDocument? {
