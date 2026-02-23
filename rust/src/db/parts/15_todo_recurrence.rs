@@ -404,9 +404,6 @@ pub fn update_todo_due_with_scope(
     conn.execute_batch("BEGIN IMMEDIATE;")?;
     let result: Result<Todo> = (|| {
         let current = get_todo(conn, key, todo_id)?;
-        let current_due_at_ms = current
-            .due_at_ms
-            .ok_or_else(|| anyhow!("todo has no due_at_ms, cannot apply scoped due edit"))?;
 
         let mut apply_scope = scope;
         let current_meta = get_todo_recurrence_meta(conn, todo_id)?;
@@ -428,6 +425,9 @@ pub fn update_todo_due_with_scope(
                 current.last_review_at_ms,
             )?,
             TodoRecurrenceEditScope::ThisAndFuture | TodoRecurrenceEditScope::WholeSeries => {
+                let current_due_at_ms = current
+                    .due_at_ms
+                    .ok_or_else(|| anyhow!("todo has no due_at_ms, cannot apply scoped due edit"))?;
                 let meta = current_meta.ok_or_else(|| anyhow!("todo recurrence metadata missing"))?;
                 let delta = due_at_ms
                     .checked_sub(current_due_at_ms)
