@@ -307,13 +307,14 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     }
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self = self else { return }
+
       let data = try? Data(contentsOf: outputUrl)
       try? FileManager.default.removeItem(at: outputUrl)
 
-      DispatchQueue.main.async {
-        guard let self = self else { return }
-
-        guard let data, !data.isEmpty else {
+      guard let data, !data.isEmpty else {
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self else { return }
           self.complete(
             failure: FlutterError(
               code: "markdown_pdf_export_io_failed",
@@ -321,10 +322,14 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
               details: nil
             )
           )
-          return
         }
+        return
+      }
 
-        self.complete(success: self.applyPageBackgroundIfNeeded(pdfData: data))
+      let rebuiltData = self.applyPageBackgroundIfNeeded(pdfData: data)
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        self.complete(success: rebuiltData)
       }
     }
   }
@@ -352,18 +357,26 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
         continue
       }
 
-      let mediaBox = page.getBoxRect(.mediaBox)
-      context.beginPDFPage([kCGPDFContextMediaBox as String: mediaBox] as CFDictionary)
+      let sourceBox = page.getBoxRect(.mediaBox)
+      let pageRect = CGRect(origin: .zero, size: sourceBox.size)
+      context.beginPDFPage([kCGPDFContextMediaBox as String: pageRect] as CFDictionary)
 
       context.saveGState()
       context.setBlendMode(.normal)
+      let drawingTransform = page.getDrawingTransform(
+        .mediaBox,
+        rect: pageRect,
+        rotate: 0,
+        preserveAspectRatio: false
+      )
+      context.concatenate(drawingTransform)
       context.drawPDFPage(page)
       context.restoreGState()
 
       context.saveGState()
       context.setBlendMode(.destinationOver)
       context.setFillColor(pageBackgroundColor.cgColor)
-      context.fill(mediaBox)
+      context.fill(pageRect)
       context.restoreGState()
 
       context.endPDFPage()
@@ -371,7 +384,104 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     context.closePDF()
     let rebuilt = outputData as Data
-    return rebuilt.isEmpty ? pdfData : rebuilt
+    if rebuilt.isEmpty {
+      return pdfData
+    }
+
+    if shouldFallbackToOriginalPdf(originalPdfData: pdfData, rebuiltPdfData: rebuilt) {
+      return pdfData
+    }
+
+    return rebuilt
+  }
+
+  private func shouldFallbackToOriginalPdf(
+    originalPdfData: Data,
+    rebuiltPdfData: Data
+  ) -> Bool {
+    guard rebuiltPdfData.count < originalPdfData.count,
+          let originalDocument = loadPdfDocument(data: originalPdfData),
+          let rebuiltDocument = loadPdfDocument(data: rebuiltPdfData),
+          originalDocument.numberOfPages > 0,
+          rebuiltDocument.numberOfPages == originalDocument.numberOfPages,
+          let originalFirstPage = originalDocument.page(at: 1),
+          let rebuiltFirstPage = rebuiltDocument.page(at: 1),
+          let originalVariance = estimatePageLuminanceVariance(originalFirstPage),
+          let rebuiltVariance = estimatePageLuminanceVariance(rebuiltFirstPage) else {
+      return false
+    }
+
+    return originalVariance > 20 && rebuiltVariance < originalVariance * 0.08
+  }
+
+  private func loadPdfDocument(data: Data) -> CGPDFDocument? {
+    guard let provider = CGDataProvider(data: data as CFData) else {
+      return nil
+    }
+
+    return CGPDFDocument(provider)
+  }
+
+  private func estimatePageLuminanceVariance(_ page: CGPDFPage) -> Double? {
+    let sampleWidth = 96
+    let sampleHeight = 136
+    var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+
+    let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+      guard let baseAddress = buffer.baseAddress,
+            let bitmapContext = CGContext(
+              data: baseAddress,
+              width: sampleWidth,
+              height: sampleHeight,
+              bitsPerComponent: 8,
+              bytesPerRow: sampleWidth * 4,
+              space: colorSpace,
+              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+        return false
+      }
+
+      let bounds = CGRect(
+        x: 0,
+        y: 0,
+        width: CGFloat(sampleWidth),
+        height: CGFloat(sampleHeight)
+      )
+      bitmapContext.setFillColor(NSColor.white.cgColor)
+      bitmapContext.fill(bounds)
+
+      let transform = page.getDrawingTransform(
+        .mediaBox,
+        rect: bounds,
+        rotate: 0,
+        preserveAspectRatio: true
+      )
+      bitmapContext.concatenate(transform)
+      bitmapContext.drawPDFPage(page)
+      return true
+    }
+
+    guard rendered else {
+      return nil
+    }
+
+    let pixelCount = sampleWidth * sampleHeight
+
+    var sum = 0.0
+    var sumSquares = 0.0
+    for index in stride(from: 0, to: pixels.count, by: 4) {
+      let red = Double(pixels[index])
+      let green = Double(pixels[index + 1])
+      let blue = Double(pixels[index + 2])
+      let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+      sum += luminance
+      sumSquares += luminance * luminance
+    }
+
+    let mean = sum / Double(pixelCount)
+    let variance = (sumSquares / Double(pixelCount)) - (mean * mean)
+    return variance < 0 ? 0 : variance
   }
 
   private func parsePageBackgroundColor() -> NSColor? {
