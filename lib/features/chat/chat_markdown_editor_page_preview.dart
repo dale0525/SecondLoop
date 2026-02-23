@@ -31,30 +31,29 @@ mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
             return ValueListenableBuilder<TextEditingValue>(
               valueListenable: _controller,
               builder: (context, value, child) {
-                final normalized = sanitizeChatMarkdown(value.text);
-                final styleSheet = _exportRenderMode
-                    ? previewTheme.buildExportStyleSheet(theme)
-                    : previewTheme.buildStyleSheet(theme);
+                final normalized = normalizeChatMarkdownForPreview(value.text);
 
                 if (normalized.trim().isEmpty) {
                   return _buildEmptyPreviewState(theme, previewTheme);
                 }
 
-                final markdown = MarkdownBody(
-                  data: normalized,
+                final markdown = buildChatMarkdownPreviewBody(
+                  context,
+                  text: normalized,
                   selectable: !_exportRenderMode,
-                  softLineBreak: true,
-                  styleSheet: styleSheet,
+                  preset: _themePreset,
+                  density: _exportRenderMode
+                      ? ChatMarkdownPreviewDensity.compact
+                      : ChatMarkdownPreviewDensity.regular,
                 );
 
                 if (_exportRenderMode) {
                   return _buildExportPreviewSurface(
                     constraints,
                     markdown,
-                    previewTheme,
                   );
                 }
-                return _buildInteractivePreviewSurface(markdown, previewTheme);
+                return _buildInteractivePreviewSurface(markdown);
               },
             );
           },
@@ -103,28 +102,17 @@ mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
 
   Widget _buildInteractivePreviewSurface(
     Widget markdown,
-    ChatMarkdownPreviewTheme previewTheme,
   ) {
     return Scrollbar(
       controller: _previewScrollController,
       child: SingleChildScrollView(
         controller: _previewScrollController,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: previewTheme.panelColor,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: previewTheme.borderColor),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-            child: RepaintBoundary(
-              key: _previewRepaintBoundaryKey,
-              child: DecoratedBox(
-                decoration: BoxDecoration(color: previewTheme.panelColor),
-                child: markdown,
-              ),
-            ),
+        child: ChatMarkdownPreviewPanel(
+          preset: _themePreset,
+          child: RepaintBoundary(
+            key: _previewRepaintBoundaryKey,
+            child: markdown,
           ),
         ),
       ),
@@ -134,7 +122,6 @@ mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
   Widget _buildExportPreviewSurface(
     BoxConstraints constraints,
     Widget markdown,
-    ChatMarkdownPreviewTheme previewTheme,
   ) {
     final maxWidth =
         constraints.maxWidth.isFinite ? constraints.maxWidth : 960.0;
@@ -150,7 +137,12 @@ mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
           child: RepaintBoundary(
             key: _previewRepaintBoundaryKey,
             child: DecoratedBox(
-              decoration: BoxDecoration(color: previewTheme.canvasColor),
+              decoration: BoxDecoration(
+                color: chatMarkdownPreviewCanvasColor(
+                  context,
+                  preset: _themePreset,
+                ),
+              ),
               child: SizedBox(
                 width: exportContentWidth,
                 child: Padding(

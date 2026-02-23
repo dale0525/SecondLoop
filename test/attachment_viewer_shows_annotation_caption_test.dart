@@ -437,14 +437,17 @@ void main() {
     await tester.tap(editFinder);
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
+        findsOneWidget);
+
     final editFieldFinder =
-        find.byKey(const ValueKey('attachment_text_full_field'));
+        find.byKey(const ValueKey('chat_markdown_editor_input'));
     await tester.ensureVisible(editFieldFinder);
     await tester.pumpAndSettle();
 
     await tester.enterText(editFieldFinder, '# New full markdown');
 
-    final saveFinder = find.byKey(const ValueKey('attachment_text_full_save'));
+    final saveFinder = find.byKey(const ValueKey('chat_markdown_editor_save'));
     await tester.ensureVisible(saveFinder);
     await tester.pumpAndSettle();
 

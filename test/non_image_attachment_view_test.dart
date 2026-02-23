@@ -238,12 +238,14 @@ void main() {
     await tester
         .tap(find.byKey(const ValueKey('attachment_text_full_edit')).first);
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
+        findsOneWidget);
     await tester.enterText(
-      find.byKey(const ValueKey('attachment_text_full_field')).first,
+      find.byKey(const ValueKey('chat_markdown_editor_input')).first,
       '## Updated full',
     );
     await tester
-        .tap(find.byKey(const ValueKey('attachment_text_full_save')).first);
+        .tap(find.byKey(const ValueKey('chat_markdown_editor_save')).first);
     await tester.pumpAndSettle();
 
     expect(savedFull, '## Updated full');

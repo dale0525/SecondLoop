@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_text_editor_card.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets(
       'AttachmentTextEditorCard markdown display enables soft line breaks and normalizes escaped newlines',
@@ -87,5 +89,47 @@ void main() {
     expect(codeblockDecoration!.color, isNotNull);
     expect(codeblockDecoration.color,
         isNot(equals(darkTheme.colorScheme.surface)));
+  });
+
+  testWidgets(
+      'AttachmentTextEditorCard markdown edit uses full markdown editor',
+      (tester) async {
+    String? saved;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentTextEditorCard(
+              fieldKeyPrefix: 'attachment_text_full',
+              text: 'before',
+              emptyText: 'None',
+              markdown: true,
+              showLabel: false,
+              onSave: (value) async {
+                saved = value;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('attachment_text_full_edit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat_markdown_editor_page')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')),
+        findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('chat_markdown_editor_input')),
+      '# Updated',
+    );
+    await tester.tap(find.byKey(const ValueKey('chat_markdown_editor_save')));
+    await tester.pumpAndSettle();
+
+    expect(saved, '# Updated');
   });
 }

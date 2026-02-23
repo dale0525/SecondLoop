@@ -310,29 +310,32 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     String content, {
     required bool isDesktopPlatform,
   }) {
-    final normalized = sanitizeChatMarkdown(content);
-    final markdown = MarkdownBody(
-      data: normalized,
+    final markdown = buildChatMarkdownPreviewBody(
+      context,
+      text: content,
       selectable: false,
-      softLineBreak: true,
-      styleSheet: slMarkdownStyleSheet(context),
       onTapLink: (text, href, title) =>
           unawaited(_handleMessageMarkdownTapLink(href)),
     );
-    if (!isDesktopPlatform) return markdown;
+
+    final preview = ChatMarkdownPreviewPanel(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+      child: markdown,
+    );
+
+    if (!isDesktopPlatform) return preview;
 
     return SelectionArea(
       contextMenuBuilder: (context, selectableRegionState) =>
           const SizedBox.shrink(),
-      child: markdown,
+      child: preview,
     );
   }
 
   Future<void> _openMessageViewer(String content) async {
     await _pushRouteFromChat(
       MaterialPageRoute(
-        builder: (context) =>
-            MessageViewerPage(content: sanitizeChatMarkdown(content)),
+        builder: (context) => MessageViewerPage(content: content),
       ),
     );
   }
@@ -340,14 +343,11 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<void> _openMarkdownEditor() async {
     if (_isComposerBusy) return;
 
-    final result = await _pushRouteFromChat<ChatMarkdownEditorResult>(
-      MaterialPageRoute(
-        builder: (context) => ChatMarkdownEditorPage(
-          initialText: _controller.text,
-          allowPlainMode: true,
-          initialMode: ChatEditorMode.markdown,
-        ),
-      ),
+    final result = await openChatMarkdownEditor(
+      context,
+      initialText: _controller.text,
+      allowPlainMode: true,
+      routePusher: (route) => _pushRouteFromChat(route),
     );
     if (!mounted || result == null) return;
 

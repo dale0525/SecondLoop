@@ -35,20 +35,9 @@ extension _ChatPageStateMethodsPAttachmentLinks on _ChatPageState {
   }
 
   Future<void> _handleMessageMarkdownTapLink(String? href) async {
-    final target = href?.trim();
-    if (target == null || target.isEmpty) {
-      return;
-    }
-
-    final handledInApp = await _openAttachmentFromDeepLink(target);
-    if (handledInApp) {
-      return;
-    }
-
-    final uri = Uri.tryParse(target);
-    if (uri == null) {
-      return;
-    }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await handleChatMarkdownTapLink(
+      href,
+      handleInApp: _openAttachmentFromDeepLink,
+    );
   }
 }

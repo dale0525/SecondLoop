@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,13 +22,12 @@ import '../../../ui/sl_button.dart';
 import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_focus_ring.dart';
 import '../../../ui/sl_icon_button.dart';
-import '../../../ui/sl_markdown_style.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
 import '../../attachments/attachment_viewer_page.dart';
-import '../../chat/chat_markdown_sanitizer.dart';
-import '../../chat/chat_markdown_editor_page.dart';
+import '../../chat/chat_markdown_editor_launcher.dart';
+import '../../chat/chat_markdown_preview.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';
@@ -530,11 +528,12 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
           activity.activityType == 'summary' ||
           (activity.activityType != 'status_change' && text.contains('\n'));
       if (isMarkdown) {
-        return MarkdownBody(
-          data: text,
-          selectable: true,
-          styleSheet: slMarkdownStyleSheet(
+        return ChatMarkdownPreviewPanel(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+          child: buildChatMarkdownPreviewBody(
             context,
+            text: text,
+            selectable: true,
             bodyStyle: theme.textTheme.bodyLarge,
           ),
         );

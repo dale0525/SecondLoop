@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
@@ -11,8 +9,8 @@ import '../../core/session/session_scope.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../../i18n/strings.g.dart';
-import '../../ui/sl_markdown_style.dart';
-import 'chat_markdown_sanitizer.dart';
+import 'chat_markdown_link_handler.dart';
+import 'chat_markdown_preview.dart';
 
 class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({required this.content, super.key});
@@ -60,26 +58,15 @@ class MessageViewerPage extends StatelessWidget {
     BuildContext context,
     String? href,
   ) async {
-    final target = href?.trim();
-    if (target == null || target.isEmpty) {
-      return;
-    }
-
-    final openedInApp = await _openAttachmentDeepLink(context, target);
-    if (openedInApp) {
-      return;
-    }
-
-    final uri = Uri.tryParse(target);
-    if (uri == null) {
-      return;
-    }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await handleChatMarkdownTapLink(
+      href,
+      handleInApp: (target) => _openAttachmentDeepLink(context, target),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final normalized = sanitizeChatMarkdown(content);
+    final normalized = normalizeChatMarkdownForPreview(content);
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
       appBar: AppBar(
@@ -106,12 +93,27 @@ class MessageViewerPage extends StatelessWidget {
           ),
         ],
       ),
-      body: Markdown(
-        data: normalized,
-        selectable: true,
-        styleSheet: slMarkdownStyleSheet(context),
-        onTapLink: (text, href, title) =>
-            unawaited(_handleTapLink(context, href)),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          color: chatMarkdownPreviewCanvasColor(context),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Scrollbar(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+              child: ChatMarkdownPreviewPanel(
+                child: buildChatMarkdownPreviewBody(
+                  context,
+                  text: normalized,
+                  selectable: true,
+                  onTapLink: (text, href, title) =>
+                      unawaited(_handleTapLink(context, href)),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
