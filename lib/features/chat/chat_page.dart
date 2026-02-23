@@ -82,7 +82,6 @@ import '../settings/settings_page.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_editor_launcher.dart';
-import 'chat_markdown_link_handler.dart';
 import 'chat_markdown_preview.dart';
 import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';

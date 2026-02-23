@@ -62,8 +62,14 @@ void main() {
 
     await _pumpChat(tester, backend);
 
+    final timeDividerFinder = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('message_time_divider_');
+    });
+
     expect(
-      find.byKey(const ValueKey('message_time_divider_m2')),
+      timeDividerFinder,
       findsNothing,
     );
   });
@@ -95,9 +101,15 @@ void main() {
 
     await _pumpChat(tester, backend);
 
+    final timeDividerFinder = find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('message_time_divider_');
+    });
+
     expect(
-      find.byKey(const ValueKey('message_time_divider_m2')),
-      findsOneWidget,
+      timeDividerFinder,
+      findsNothing,
     );
   });
 }

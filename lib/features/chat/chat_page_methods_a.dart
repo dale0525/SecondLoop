@@ -303,8 +303,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       context,
       text: content,
       selectable: false,
-      onTapLink: (text, href, title) =>
-          unawaited(_handleMessageMarkdownTapLink(href)),
     );
 
     final preview = ChatMarkdownPreviewPanel(

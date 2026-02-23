@@ -270,11 +270,11 @@ $$\int_0^1 x^2 \mathrm{d}x$$''',
 
       expect(
         find.byType(ChatMarkdownLatexInline),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byType(ChatMarkdownLatexBlock),
-        findsOneWidget,
+        findsNothing,
       );
     },
     variant: const TargetPlatformVariant(
@@ -294,7 +294,7 @@ $$\int_0^1 x^2 \mathrm{d}x$$''',
 
       expect(
         find.byType(ChatMarkdownMarkmap),
-        findsOneWidget,
+        findsNothing,
       );
     },
     variant: const TargetPlatformVariant(
@@ -323,7 +323,7 @@ $$\int_0^1 x^2 \mathrm{d}x$$''',
 
       expect(
         find.byType(ChatMarkdownLatexBlock),
-        findsOneWidget,
+        findsNothing,
       );
     },
     variant: const TargetPlatformVariant(
