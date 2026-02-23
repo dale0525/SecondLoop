@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1574 (787 per locale)
+/// Strings: 1588 (794 per locale)
 ///
-/// Built on 2026-02-22 at 05:51 UTC
+/// Built on 2026-02-22 at 15:39 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1377,6 +1377,19 @@ class _StringsChatMarkdownEditorEn {
   String exportDone({required Object format}) => 'Exported as ${format}';
   String exportSavedPath({required Object path}) => 'Saved to ${path}';
   String exportFailed({required Object error}) => 'Export failed: ${error}';
+  String get exportReasonNoWindowsBrowser =>
+      'No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.';
+  String get exportReasonWindowsBrowserPrint =>
+      'The browser failed to print the document on Windows. Check browser availability and retry.';
+  String get exportReasonTimeout =>
+      'The export timed out. Try reducing very large images or document size and retry.';
+  String get exportReasonRender =>
+      'The preview content could not be rendered for PDF export.';
+  String get exportReasonWrite =>
+      'Failed to generate PDF bytes. Check disk space and retry.';
+  String get exportReasonCancelled => 'The PDF export was cancelled.';
+  String get exportReasonUnsupported =>
+      'PDF export is not supported on this platform.';
   String stats({required Object lines, required Object characters}) =>
       '${lines} lines · ${characters} chars';
   String get simpleInput => 'Simple input';
@@ -5439,6 +5452,21 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   String exportSavedPath({required Object path}) => '已保存到：${path}';
   @override
   String exportFailed({required Object error}) => '导出失败：${error}';
+  @override
+  String get exportReasonNoWindowsBrowser =>
+      '未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。';
+  @override
+  String get exportReasonWindowsBrowserPrint => 'Windows 浏览器打印失败，请确认浏览器可用后重试。';
+  @override
+  String get exportReasonTimeout => '导出超时。请减少超大图片或文档长度后重试。';
+  @override
+  String get exportReasonRender => '预览内容渲染失败，无法导出 PDF。';
+  @override
+  String get exportReasonWrite => 'PDF 写入失败，请检查磁盘空间后重试。';
+  @override
+  String get exportReasonCancelled => 'PDF 导出已取消。';
+  @override
+  String get exportReasonUnsupported => '当前平台暂不支持 PDF 导出。';
   @override
   String stats({required Object lines, required Object characters}) =>
       '${lines} 行 · ${characters} 字符';
@@ -9792,6 +9820,20 @@ extension on Translations {
         return ({required Object path}) => 'Saved to ${path}';
       case 'chat.markdownEditor.exportFailed':
         return ({required Object error}) => 'Export failed: ${error}';
+      case 'chat.markdownEditor.exportReasonNoWindowsBrowser':
+        return 'No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.';
+      case 'chat.markdownEditor.exportReasonWindowsBrowserPrint':
+        return 'The browser failed to print the document on Windows. Check browser availability and retry.';
+      case 'chat.markdownEditor.exportReasonTimeout':
+        return 'The export timed out. Try reducing very large images or document size and retry.';
+      case 'chat.markdownEditor.exportReasonRender':
+        return 'The preview content could not be rendered for PDF export.';
+      case 'chat.markdownEditor.exportReasonWrite':
+        return 'Failed to generate PDF bytes. Check disk space and retry.';
+      case 'chat.markdownEditor.exportReasonCancelled':
+        return 'The PDF export was cancelled.';
+      case 'chat.markdownEditor.exportReasonUnsupported':
+        return 'PDF export is not supported on this platform.';
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} lines · ${characters} chars';
@@ -11398,6 +11440,20 @@ extension on _StringsZhCn {
         return ({required Object path}) => '已保存到：${path}';
       case 'chat.markdownEditor.exportFailed':
         return ({required Object error}) => '导出失败：${error}';
+      case 'chat.markdownEditor.exportReasonNoWindowsBrowser':
+        return '未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。';
+      case 'chat.markdownEditor.exportReasonWindowsBrowserPrint':
+        return 'Windows 浏览器打印失败，请确认浏览器可用后重试。';
+      case 'chat.markdownEditor.exportReasonTimeout':
+        return '导出超时。请减少超大图片或文档长度后重试。';
+      case 'chat.markdownEditor.exportReasonRender':
+        return '预览内容渲染失败，无法导出 PDF。';
+      case 'chat.markdownEditor.exportReasonWrite':
+        return 'PDF 写入失败，请检查磁盘空间后重试。';
+      case 'chat.markdownEditor.exportReasonCancelled':
+        return 'PDF 导出已取消。';
+      case 'chat.markdownEditor.exportReasonUnsupported':
+        return '当前平台暂不支持 PDF 导出。';
       case 'chat.markdownEditor.stats':
         return ({required Object lines, required Object characters}) =>
             '${lines} 行 · ${characters} 字符';

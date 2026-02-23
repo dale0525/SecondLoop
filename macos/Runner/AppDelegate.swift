@@ -22,6 +22,7 @@ class AppDelegate: FlutterAppDelegate {
   private var didConfigureMethodChannels = false
   private var methodChannelSetupAttempt = 0
   private static let maxMethodChannelSetupAttempt = 20
+  private var markdownPdfExportChannel: MarkdownPdfExportChannel?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
@@ -109,6 +110,10 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+
+    markdownPdfExportChannel = MarkdownPdfExportChannel(
+      binaryMessenger: controller.engine.binaryMessenger
+    )
 
     let launchAtStartupChannel = FlutterMethodChannel(
       name: "launch_at_startup",

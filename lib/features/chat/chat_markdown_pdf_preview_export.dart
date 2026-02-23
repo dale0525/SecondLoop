@@ -9,19 +9,27 @@ const double _kMaxPreviewRasterDimension = 24000;
 const int _kPaginationSearchWindowRows = 220;
 const int _kPaginationWhitespaceBandRadius = 3;
 const double _kPaginationMinFillRatio = 0.72;
-const double _kPaginationMaxStretchRatio = 1.35;
-const double _kPaginationWhitespaceRowScore = 12;
-const double _kPaginationWhitespaceBandScore = 18;
+const double _kPaginationMaxStretchRatio = 1.12;
+const double _kPaginationWhitespaceRowScore = 8;
+const double _kPaginationWhitespaceBandScore = 13;
 const double _kPaginationProtectedMinFillRatio = 0.55;
-const double _kPaginationProtectedMaxStretchRatio = 1.95;
+const double _kPaginationProtectedMaxStretchRatio = 1.3;
 const double _kProtectedRowCoverageDiffThreshold = 10;
-const double _kProtectedRowCoverageThreshold = 0.2;
-const int _kProtectedRangeMaxGapRows = 12;
-const int _kProtectedRangeMinHeightRows = 46;
+const double _kProtectedRowCoverageThreshold = 0.16;
+const double _kProtectedRowMaxInkRunCoverageThreshold = 0.08;
+const int _kProtectedRangeMaxGapRows = 20;
+const int _kProtectedRangeMinHeightRows = 30;
 const int _kProtectedRangePaddingRows = 2;
 
-bool shouldUsePreviewBasedPdfRender(String markdown) {
-  return true;
+typedef MarkdownPreviewPdfSlice = ({
+  double logicalOffset,
+  double logicalHeight,
+  double drawWidth,
+  double drawHeight,
+});
+
+bool shouldUsePreviewBasedPdfRender(String _) {
+  return false;
 }
 
 double resolveMarkdownPreviewExportPixelRatio({
@@ -278,6 +286,92 @@ List<double> computeMarkdownPreviewPdfPageOffsets({
   return offsets;
 }
 
+List<MarkdownPreviewPdfSlice> buildMarkdownPreviewPdfSlices({
+  required List<double> pageOffsets,
+  required double sourceLogicalWidth,
+  required double sourceLogicalHeight,
+  required double contentWidth,
+  required double contentHeight,
+}) {
+  if (sourceLogicalWidth <= 0 ||
+      sourceLogicalHeight <= 0 ||
+      contentWidth <= 0 ||
+      contentHeight <= 0) {
+    return const <MarkdownPreviewPdfSlice>[];
+  }
+
+  final logicalPerContentPoint = sourceLogicalWidth / contentWidth;
+  if (!logicalPerContentPoint.isFinite || logicalPerContentPoint <= 0) {
+    return const <MarkdownPreviewPdfSlice>[];
+  }
+
+  final scaledContentHeight = sourceLogicalHeight / logicalPerContentPoint;
+  if (!scaledContentHeight.isFinite || scaledContentHeight <= 0) {
+    return const <MarkdownPreviewPdfSlice>[];
+  }
+
+  const offsetEpsilon = 0.01;
+  final sortedOffsets = <double>[0];
+  for (final rawOffset in pageOffsets) {
+    if (!rawOffset.isFinite) {
+      continue;
+    }
+
+    final offset = rawOffset.clamp(0, scaledContentHeight).toDouble();
+    if (offset <= sortedOffsets.last + offsetEpsilon) {
+      continue;
+    }
+    sortedOffsets.add(offset);
+  }
+
+  if (sortedOffsets.last < scaledContentHeight - offsetEpsilon) {
+    sortedOffsets.add(scaledContentHeight);
+  }
+
+  final slices = <MarkdownPreviewPdfSlice>[];
+  for (var index = 0; index + 1 < sortedOffsets.length; index += 1) {
+    final startContentOffset = sortedOffsets[index];
+    final endContentOffset = sortedOffsets[index + 1];
+    final contentSliceHeight = endContentOffset - startContentOffset;
+    if (contentSliceHeight <= offsetEpsilon) {
+      continue;
+    }
+
+    var cursorContentOffset = startContentOffset;
+    var remainingContentHeight = contentSliceHeight;
+
+    while (remainingContentHeight > offsetEpsilon) {
+      final chunkContentHeight =
+          math.min(contentHeight, remainingContentHeight);
+      final logicalOffset = cursorContentOffset * logicalPerContentPoint;
+      final availableLogicalHeight = sourceLogicalHeight - logicalOffset;
+      if (!logicalOffset.isFinite || availableLogicalHeight <= offsetEpsilon) {
+        break;
+      }
+
+      final logicalHeight = math.min(
+        availableLogicalHeight,
+        chunkContentHeight * logicalPerContentPoint,
+      );
+      if (!logicalHeight.isFinite || logicalHeight <= offsetEpsilon) {
+        break;
+      }
+
+      slices.add((
+        logicalOffset: logicalOffset,
+        logicalHeight: logicalHeight,
+        drawWidth: contentWidth,
+        drawHeight: chunkContentHeight,
+      ));
+
+      cursorContentOffset += chunkContentHeight;
+      remainingContentHeight -= chunkContentHeight;
+    }
+  }
+
+  return slices;
+}
+
 List<double> _buildLinearPageOffsets({
   required double scaledHeight,
   required double pageHeight,
@@ -340,7 +434,14 @@ List<({int start, int end})> _detectProtectedRowRanges(
       background: background,
       diffThreshold: _kProtectedRowCoverageDiffThreshold,
     );
-    activeRows[row] = coverage >= _kProtectedRowCoverageThreshold;
+    final maxInkRunCoverage = _rowMaxInkRunCoverage(
+      image,
+      row: row,
+      background: background,
+      diffThreshold: _kProtectedRowCoverageDiffThreshold,
+    );
+    activeRows[row] = coverage >= _kProtectedRowCoverageThreshold ||
+        maxInkRunCoverage >= _kProtectedRowMaxInkRunCoverageThreshold;
   }
 
   final ranges = <({int start, int end})>[];
@@ -627,6 +728,38 @@ double _rowInkScore(
     return 0;
   }
   return score / sampled;
+}
+
+double _rowMaxInkRunCoverage(
+  img.Image image, {
+  required int row,
+  required ({double r, double g, double b}) background,
+  required double diffThreshold,
+}) {
+  if (image.width <= 0) {
+    return 0;
+  }
+
+  var currentRun = 0;
+  var maxRun = 0;
+
+  for (var x = 0; x < image.width; x += 1) {
+    final pixel = image.getPixel(x, row);
+    final diff = (pixel.r - background.r).abs() +
+        (pixel.g - background.g).abs() +
+        (pixel.b - background.b).abs();
+    if (diff > diffThreshold) {
+      currentRun += 1;
+      if (currentRun > maxRun) {
+        maxRun = currentRun;
+      }
+      continue;
+    }
+
+    currentRun = 0;
+  }
+
+  return maxRun / image.width;
 }
 
 double _rowInkCoverage(

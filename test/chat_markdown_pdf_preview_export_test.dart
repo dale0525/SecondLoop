@@ -3,10 +3,27 @@ import 'package:image/image.dart' as img;
 import 'package:secondloop/features/chat/chat_markdown_pdf_preview_export.dart';
 
 void main() {
-  test('Preview-based PDF render is enabled for plain markdown too', () {
+  test('Preview-based PDF render uses vector path for plain markdown', () {
     const plainMarkdown = '# Title\n\nRegular paragraph with **bold** text.';
 
-    expect(shouldUsePreviewBasedPdfRender(plainMarkdown), isTrue);
+    expect(shouldUsePreviewBasedPdfRender(plainMarkdown), isFalse);
+  });
+
+  test('Preview-based PDF render is disabled for rich markdown blocks', () {
+    const richMarkdown = r'''
+# Math
+
+$$
+\begin{bmatrix}
+1 & 2\\
+3 & 4
+\end{bmatrix}
+$$
+
+![diagram](https://example.com/diagram.png)
+''';
+
+    expect(shouldUsePreviewBasedPdfRender(richMarkdown), isFalse);
   });
 
   test('Export pixel ratio scales up narrow previews for better quality', () {
@@ -47,6 +64,51 @@ void main() {
     );
 
     expect(ratio, greaterThanOrEqualTo(1.4));
+  });
+
+  test(
+      'buildMarkdownPreviewPdfSlices keeps continuous coverage for stretched breaks',
+      () {
+    final slices = buildMarkdownPreviewPdfSlices(
+      pageOffsets: const <double>[0, 130, 260],
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 400,
+      contentWidth: 100,
+      contentHeight: 100,
+    );
+
+    expect(slices, hasLength(6));
+    _expectSliceCoverage(
+      slices,
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 400,
+      contentWidth: 100,
+    );
+  });
+
+  test(
+      'buildMarkdownPreviewPdfSlices splits oversized slices into full-width pages',
+      () {
+    final slices = buildMarkdownPreviewPdfSlices(
+      pageOffsets: const <double>[0, 160, 310],
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 420,
+      contentWidth: 100,
+      contentHeight: 100,
+    );
+
+    expect(slices, hasLength(6));
+    for (final slice in slices) {
+      expect(slice.drawWidth, 100);
+      expect(slice.drawHeight, lessThanOrEqualTo(100));
+    }
+
+    _expectSliceCoverage(
+      slices,
+      sourceLogicalWidth: 100,
+      sourceLogicalHeight: 420,
+      contentWidth: 100,
+    );
   });
 
   test('Preview PDF pagination avoids splitting dense formula regions', () {
@@ -118,6 +180,30 @@ void main() {
     expect(offsets[1], isNot(inInclusiveRange(250.0, 520.0)));
   });
 
+  test('Preview PDF pagination avoids splitting narrow matrix-style blocks',
+      () {
+    final image = img.Image(width: 240, height: 900);
+    _fill(image, r: 245, g: 245, b: 245);
+    _drawNarrowMatrixLikeBlock(
+      image,
+      top: 260,
+      bottom: 620,
+      left: 102,
+      right: 138,
+    );
+
+    final offsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: img.encodePng(image),
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 320,
+    );
+
+    expect(offsets.length, greaterThan(1));
+    expect(offsets[1], isNot(inInclusiveRange(260.0, 620.0)));
+  });
+
   test('Preview PDF pagination avoids splitting image-like content blocks', () {
     final image = img.Image(width: 200, height: 740);
     _fill(image, r: 245, g: 245, b: 245);
@@ -133,6 +219,30 @@ void main() {
 
     expect(offsets.length, greaterThan(1));
     expect(offsets[1], isNot(inInclusiveRange(180.0, 420.0)));
+  });
+
+  test('Preview PDF pagination avoids splitting narrow centered image blocks',
+      () {
+    final image = img.Image(width: 240, height: 900);
+    _fill(image, r: 245, g: 245, b: 245);
+    _drawNarrowImageLikeBlock(
+      image,
+      top: 260,
+      bottom: 680,
+      left: 98,
+      right: 142,
+    );
+
+    final offsets = computeMarkdownPreviewPdfPageOffsets(
+      pngBytes: img.encodePng(image),
+      sourceWidth: image.width.toDouble(),
+      sourceHeight: image.height.toDouble(),
+      contentWidth: image.width.toDouble(),
+      contentHeight: 340,
+    );
+
+    expect(offsets.length, greaterThan(1));
+    expect(offsets[1], isNot(inInclusiveRange(260.0, 680.0)));
   });
 
   test('Async pagination computation keeps parity with sync result', () async {
@@ -229,4 +339,72 @@ void _drawImageLikeBlock(
       }
     }
   }
+}
+
+void _drawNarrowMatrixLikeBlock(
+  img.Image image, {
+  required int top,
+  required int bottom,
+  required int left,
+  required int right,
+}) {
+  for (var y = top; y < bottom; y += 1) {
+    if ((y - top) % 14 > 2) {
+      continue;
+    }
+
+    for (var x = left; x < right; x += 1) {
+      image.setPixelRgb(x, y, 24, 24, 24);
+    }
+
+    image.setPixelRgb(left, y, 24, 24, 24);
+    image.setPixelRgb(right - 1, y, 24, 24, 24);
+  }
+}
+
+void _drawNarrowImageLikeBlock(
+  img.Image image, {
+  required int top,
+  required int bottom,
+  required int left,
+  required int right,
+}) {
+  for (var y = top; y < bottom; y += 1) {
+    for (var x = left; x < right; x += 1) {
+      final value = ((x * 37 + y * 17) % 160) + 60;
+      image.setPixelRgb(
+        x,
+        y,
+        value,
+        (value + 40) % 255,
+        (value + 80) % 255,
+      );
+    }
+
+    if ((y - top) % 37 == 0) {
+      for (var x = left; x < right; x += 1) {
+        image.setPixelRgb(x, y, 245, 245, 245);
+      }
+    }
+  }
+}
+
+void _expectSliceCoverage(
+  List<MarkdownPreviewPdfSlice> slices, {
+  required double sourceLogicalWidth,
+  required double sourceLogicalHeight,
+  required double contentWidth,
+}) {
+  final contentPerLogical = contentWidth / sourceLogicalWidth;
+  final expectedTotalContentHeight = sourceLogicalHeight * contentPerLogical;
+
+  var cursor = 0.0;
+  for (final slice in slices) {
+    final start = slice.logicalOffset * contentPerLogical;
+    final height = slice.logicalHeight * contentPerLogical;
+    expect((start - cursor).abs(), lessThan(0.05));
+    cursor = start + height;
+  }
+
+  expect((cursor - expectedTotalContentHeight).abs(), lessThan(0.05));
 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tools/prepare_desktop_runtime_hash_lib.dart';
@@ -60,5 +61,51 @@ CertUtil: -hashfile command completed successfully.
       ),
       'ch_PP-OCRv5_mobile_det.onnx',
     );
+  });
+
+  test('resolveInstalledRuntimeTagForTest returns runtime tag from marker',
+      () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'prepare_runtime_marker',
+    );
+    final markerFile = File(
+      runtime.joinForTest(
+          tempDir.path, '_secondloop_desktop_runtime_release.json'),
+    );
+    await markerFile.writeAsString(
+      '{"runtime_tag":"desktop-runtime-v0.2.1","repo":"dale0525/SecondLoop"}',
+    );
+
+    final resolved = await runtime.resolveInstalledRuntimeTagForTest(
+      outputDirPath: tempDir.path,
+      repository: 'dale0525/SecondLoop',
+    );
+
+    expect(resolved, 'desktop-runtime-v0.2.1');
+
+    await tempDir.delete(recursive: true);
+  });
+
+  test('resolveInstalledRuntimeTagForTest ignores marker from other repository',
+      () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'prepare_runtime_marker_repo',
+    );
+    final markerFile = File(
+      runtime.joinForTest(
+          tempDir.path, '_secondloop_desktop_runtime_release.json'),
+    );
+    await markerFile.writeAsString(
+      '{"runtime_tag":"desktop-runtime-v0.2.1","repo":"other/repo"}',
+    );
+
+    final resolved = await runtime.resolveInstalledRuntimeTagForTest(
+      outputDirPath: tempDir.path,
+      repository: 'dale0525/SecondLoop',
+    );
+
+    expect(resolved, isNull);
+
+    await tempDir.delete(recursive: true);
   });
 }

@@ -839,7 +839,14 @@
       "exportDone": "Exported as $format",
       "exportSavedPath": "Saved to $path",
       "exportFailed": "Export failed: $error",
-      "stats": "$lines lines · $characters chars",
+
+  "exportReasonNoWindowsBrowser": "No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.",
+  "exportReasonWindowsBrowserPrint": "The browser failed to print the document on Windows. Check browser availability and retry.",
+  "exportReasonTimeout": "The export timed out. Try reducing very large images or document size and retry.",
+  "exportReasonRender": "The preview content could not be rendered for PDF export.",
+  "exportReasonWrite": "Failed to generate PDF bytes. Check disk space and retry.",
+  "exportReasonCancelled": "The PDF export was cancelled.",
+  "exportReasonUnsupported": "PDF export is not supported on this platform.",      "stats": "$lines lines · $characters chars",
       "simpleInput": "Simple input",
       "actions": {
         "heading": "Heading",
