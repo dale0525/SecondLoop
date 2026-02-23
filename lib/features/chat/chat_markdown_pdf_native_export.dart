@@ -21,6 +21,7 @@ bool isNativeMarkdownPdfExportSupported() {
 
 Future<Uint8List> exportMarkdownHtmlToPdfBytes({
   required String html,
+  String? pageBackgroundColorHex,
 }) async {
   if (kIsWeb) {
     throw UnsupportedError('Native markdown PDF export is unavailable on web');
@@ -30,15 +31,20 @@ Future<Uint8List> exportMarkdownHtmlToPdfBytes({
     return _exportMarkdownHtmlToPdfBytesOnWindows(html: html);
   }
 
-  return _exportMarkdownHtmlToPdfBytesViaMethodChannel(html: html);
+  return _exportMarkdownHtmlToPdfBytesViaMethodChannel(
+    html: html,
+    pageBackgroundColorHex: pageBackgroundColorHex,
+  );
 }
 
 Future<Uint8List> _exportMarkdownHtmlToPdfBytesViaMethodChannel({
   required String html,
+  String? pageBackgroundColorHex,
 }) async {
-  final payload = <String, Object>{
-    'html': html,
-  };
+  final payload = _buildNativeMarkdownPdfPayload(
+    html: html,
+    pageBackgroundColorHex: pageBackgroundColorHex,
+  );
 
   final bytes = await _kMarkdownPdfExportChannel.invokeMethod<Uint8List>(
     'exportMarkdownHtmlToPdf',
@@ -51,6 +57,50 @@ Future<Uint8List> _exportMarkdownHtmlToPdfBytesViaMethodChannel({
 
   return bytes;
 }
+
+Map<String, Object> _buildNativeMarkdownPdfPayload({
+  required String html,
+  String? pageBackgroundColorHex,
+}) {
+  final payload = <String, Object>{
+    'html': html,
+  };
+
+  final normalizedColorHex = _normalizePageBackgroundColorHex(
+    pageBackgroundColorHex,
+  );
+  if (normalizedColorHex != null) {
+    payload['pageBackgroundColorHex'] = normalizedColorHex;
+  }
+
+  return payload;
+}
+
+String? _normalizePageBackgroundColorHex(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+
+  final match = RegExp(r'^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$').firstMatch(
+    trimmed,
+  );
+  if (match == null) {
+    return null;
+  }
+
+  return '#${match.group(1)!.toLowerCase()}';
+}
+
+@visibleForTesting
+Map<String, Object> buildNativeMarkdownPdfPayloadForTest({
+  required String html,
+  String? pageBackgroundColorHex,
+}) =>
+    _buildNativeMarkdownPdfPayload(
+      html: html,
+      pageBackgroundColorHex: pageBackgroundColorHex,
+    );
 
 Future<Uint8List> _exportMarkdownHtmlToPdfBytesOnWindows({
   required String html,

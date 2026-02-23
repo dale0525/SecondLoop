@@ -20,6 +20,9 @@ final RegExp _kPdfImageLinePattern = RegExp(
   r'^\s*!\[([^\]]*)\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)\s*$',
 );
 
+String _formatPdfExportColorHex(Color color) =>
+    '#${color.value.toRadixString(16).padLeft(8, '0').toLowerCase()}';
+
 mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   bool get _exporting;
   set _exporting(bool value);
@@ -260,7 +263,11 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         theme: previewTheme,
         emptyFallback: context.t.chat.markdownEditor.emptyPreview,
       );
-      return exportMarkdownHtmlToPdfBytes(html: html);
+      return exportMarkdownHtmlToPdfBytes(
+        html: html,
+        pageBackgroundColorHex:
+            _formatPdfExportColorHex(previewTheme.panelColor),
+      );
     }
 
     return _buildPdfWithVectorRenderer();

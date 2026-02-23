@@ -30,4 +30,26 @@ void main() {
     expect(args, contains(r'--print-to-pdf=C:\Temp\out.pdf'));
     expect(args.last, 'file:///C:/Temp/in.html');
   });
+
+  test(
+      'Native export payload includes normalized page background color when set',
+      () {
+    final payload = buildNativeMarkdownPdfPayloadForTest(
+      html: '<p>hello</p>',
+      pageBackgroundColorHex: 'FFF8F3E8',
+    );
+
+    expect(payload['html'], '<p>hello</p>');
+    expect(payload['pageBackgroundColorHex'], '#fff8f3e8');
+  });
+
+  test('Native export payload omits invalid page background color', () {
+    final payload = buildNativeMarkdownPdfPayloadForTest(
+      html: '<p>hello</p>',
+      pageBackgroundColorHex: 'not-a-color',
+    );
+
+    expect(payload['html'], '<p>hello</p>');
+    expect(payload.containsKey('pageBackgroundColorHex'), isFalse);
+  });
 }

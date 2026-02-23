@@ -39,7 +39,10 @@ final class MarkdownPdfExportChannel {
       return
     }
 
-    let task = MarkdownPdfExportTask(html: html) { [weak self] id in
+    let task = MarkdownPdfExportTask(
+      html: html,
+      pageBackgroundColorHex: args["pageBackgroundColorHex"] as? String
+    ) { [weak self] id in
       self?.activeTasks.removeValue(forKey: id)
     }
     activeTasks[task.id] = task
@@ -51,6 +54,7 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
   let id = UUID()
 
   private let html: String
+  private let pageBackgroundColorHex: String?
   private let onFinished: (UUID) -> Void
 
   private var result: FlutterResult?
@@ -61,9 +65,11 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
   init(
     html: String,
+    pageBackgroundColorHex: String?,
     onFinished: @escaping (UUID) -> Void
   ) {
     self.html = html
+    self.pageBackgroundColorHex = pageBackgroundColorHex
     self.onFinished = onFinished
     super.init()
   }
@@ -318,9 +324,75 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
           return
         }
 
-        self.complete(success: data)
+        self.complete(success: self.applyPageBackgroundIfNeeded(pdfData: data))
       }
     }
+  }
+
+
+  private func applyPageBackgroundIfNeeded(pdfData: Data) -> Data {
+    guard let pageBackgroundColor = parsePageBackgroundColor() else {
+      return pdfData
+    }
+
+    guard let provider = CGDataProvider(data: pdfData as CFData),
+          let sourceDocument = CGPDFDocument(provider),
+          sourceDocument.numberOfPages > 0 else {
+      return pdfData
+    }
+
+    let outputData = NSMutableData()
+    guard let consumer = CGDataConsumer(data: outputData as CFMutableData),
+          let context = CGContext(consumer: consumer, mediaBox: nil, nil) else {
+      return pdfData
+    }
+
+    for pageIndex in 1 ... sourceDocument.numberOfPages {
+      guard let page = sourceDocument.page(at: pageIndex) else {
+        continue
+      }
+
+      let mediaBox = page.getBoxRect(.mediaBox)
+      context.beginPDFPage([kCGPDFContextMediaBox as String: mediaBox] as CFDictionary)
+      context.drawPDFPage(page)
+      context.setBlendMode(.destinationOver)
+      context.setFillColor(pageBackgroundColor.cgColor)
+      context.fill(mediaBox)
+      context.endPDFPage()
+    }
+
+    context.closePDF()
+    let rebuilt = outputData as Data
+    return rebuilt.isEmpty ? pdfData : rebuilt
+  }
+
+  private func parsePageBackgroundColor() -> NSColor? {
+    guard let rawValue = pageBackgroundColorHex?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !rawValue.isEmpty else {
+      return nil
+    }
+
+    let normalized = rawValue.hasPrefix("#") ? String(rawValue.dropFirst()) : rawValue
+    if normalized.count != 6 && normalized.count != 8 {
+      return nil
+    }
+
+    guard let value = UInt32(normalized, radix: 16) else {
+      return nil
+    }
+
+    if normalized.count == 6 {
+      let red = CGFloat((value >> 16) & 0xff) / 255.0
+      let green = CGFloat((value >> 8) & 0xff) / 255.0
+      let blue = CGFloat(value & 0xff) / 255.0
+      return NSColor(red: red, green: green, blue: blue, alpha: 1)
+    }
+
+    let alpha = CGFloat((value >> 24) & 0xff) / 255.0
+    let red = CGFloat((value >> 16) & 0xff) / 255.0
+    let green = CGFloat((value >> 8) & 0xff) / 255.0
+    let blue = CGFloat(value & 0xff) / 255.0
+    return NSColor(red: red, green: green, blue: blue, alpha: alpha)
   }
 
   private func complete(success data: Data) {
