@@ -118,6 +118,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("name: Install Android NDK", workflow_text)
         self.assertIn('flutter_gradle="${FLUTTER_ROOT}/packages/flutter_tools/gradle/src/main/groovy/flutter.groovy"', workflow_text)
         self.assertIn('flutter_ndk_version="$(sed -nE', workflow_text)
+        self.assertIn('s/^.*ndkVersion[[:space:]]*=[[:space:]]*"([^"]+)".*/\\1/p', workflow_text)
         self.assertIn('ndk_package="ndk;${flutter_ndk_version}"', workflow_text)
         self.assertIn('"${sdkmanager}" --sdk_root="${sdk_root}" --install "${ndk_package}"', workflow_text)
 
@@ -139,6 +140,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn('$ENV{CARGOKIT_TARGET_TEMP_DIR}', cmake_text)
         self.assertIn('$ENV{CARGOKIT_TOOL_TEMP_DIR}', cmake_text)
+        self.assertIn('string(REPLACE', cmake_text)
+        self.assertIn('CARGOKIT_TEMP_DIR "${CARGOKIT_TEMP_DIR}")', cmake_text)
+        self.assertIn('CARGOKIT_TOOL_TEMP_DIR "${CARGOKIT_TOOL_TEMP_DIR}")', cmake_text)
+        self.assertNotIn('file(TO_CMAKE_PATH', cmake_text)
         self.assertIn('CARGOKIT_TOOL_TEMP_DIR=${CARGOKIT_TOOL_TEMP_DIR}', cmake_text)
 
     def test_android_ndk_install_handles_yes_pipefail(self) -> None:
