@@ -5,10 +5,17 @@ import 'package:flutter/widgets.dart';
 import '../../features/actions/todo/message_action_resolver.dart';
 
 class AiSemanticDecision {
-  const AiSemanticDecision({required this.decision, required this.confidence});
+  const AiSemanticDecision({
+    required this.decision,
+    required this.confidence,
+    this.suggestedTags = const <String>[],
+    double? tagConfidence,
+  }) : tagConfidence = tagConfidence ?? confidence;
 
   final MessageActionDecision decision;
   final double confidence;
+  final List<String> suggestedTags;
+  final double tagConfidence;
 }
 
 class AiSemanticTimeWindow {
@@ -26,6 +33,8 @@ class AiSemanticTimeWindow {
 }
 
 class AiSemanticParse {
+  static const int _maxSuggestedTagsPerDecision = 3;
+
   static String? _extractFirstJsonObject(String raw) {
     final start = raw.indexOf('{');
     if (start == -1) return null;
@@ -76,6 +85,66 @@ class AiSemanticParse {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value.trim());
     return null;
+  }
+
+  static String? _normalizeSuggestedTag(String raw) {
+    final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+    if (collapsed.isEmpty) return null;
+    return collapsed;
+  }
+
+  static void _collectSuggestedTagsFromValue(
+    Object? value,
+    List<String> out,
+    Set<String> seen,
+  ) {
+    if (value == null || out.length >= _maxSuggestedTagsPerDecision) {
+      return;
+    }
+
+    if (value is String) {
+      final normalized = _normalizeSuggestedTag(value);
+      if (normalized != null && seen.add(normalized)) {
+        out.add(normalized);
+      }
+      return;
+    }
+
+    if (value is List) {
+      for (final item in value) {
+        _collectSuggestedTagsFromValue(item, out, seen);
+        if (out.length >= _maxSuggestedTagsPerDecision) break;
+      }
+      return;
+    }
+
+    if (value is! Map) return;
+
+    final map = Map<Object?, Object?>.from(value);
+    for (final key in const ['tag', 'name', 'label', 'value', 'key']) {
+      final tagValue = map[key];
+      if (tagValue is! String) continue;
+      _collectSuggestedTagsFromValue(tagValue, out, seen);
+      if (out.length >= _maxSuggestedTagsPerDecision) break;
+      return;
+    }
+  }
+
+  static List<String> _suggestedTags(Map<String, Object?> json) {
+    final out = <String>[];
+    final seen = <String>{};
+
+    for (final key in const [
+      'suggested_tags',
+      'suggestedTags',
+      'tags',
+      'tag'
+    ]) {
+      _collectSuggestedTagsFromValue(json[key], out, seen);
+      if (out.length >= _maxSuggestedTagsPerDecision) break;
+    }
+
+    return out;
   }
 
   static String _normalizeFullWidthDigits(String value) {
@@ -487,6 +556,13 @@ class AiSemanticParse {
     final confidenceRaw = _doubleField(map, 'confidence') ?? 0.0;
     final confidence =
         confidenceRaw.isFinite ? confidenceRaw.clamp(0.0, 1.0).toDouble() : 0.0;
+    final suggestedTags = _suggestedTags(map);
+    final tagConfidenceRaw = _doubleField(map, 'tag_confidence') ??
+        _doubleField(map, 'tagConfidence') ??
+        confidence;
+    final tagConfidence = tagConfidenceRaw.isFinite
+        ? tagConfidenceRaw.clamp(0.0, 1.0).toDouble()
+        : confidence;
     final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
 
     switch (kind) {
@@ -502,6 +578,8 @@ class AiSemanticParse {
           decision: MessageActionFollowUpDecision(
               todoId: todoId, newStatus: newStatus),
           confidence: confidence,
+          suggestedTags: suggestedTags,
+          tagConfidence: tagConfidence,
         );
       case 'create':
         final title = _stringField(map, 'title');
@@ -541,11 +619,15 @@ class AiSemanticParse {
             recurrenceRule: recurrenceRule,
           ),
           confidence: confidence,
+          suggestedTags: suggestedTags,
+          tagConfidence: tagConfidence,
         );
       case 'none':
         return AiSemanticDecision(
           decision: const MessageActionNoneDecision(),
           confidence: confidence,
+          suggestedTags: suggestedTags,
+          tagConfidence: tagConfidence,
         );
     }
 

@@ -124,6 +124,20 @@ void main() {
     expect(parsed!.decision, isA<MessageActionFollowUpDecision>());
   });
 
+  test('parses suggested tags and tag confidence', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"none","confidence":0.2,"suggested_tags":["Work","finance","work"],"tag_confidence":0.95}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.suggestedTags, equals(const <String>['work', 'finance']));
+    expect(parsed.tagConfidence, closeTo(0.95, 1e-9));
+  });
+
   test('parses ask-ai time window JSON', () {
     final now = DateTime(2026, 2, 4, 12, 0);
     final parsed = AiSemanticParse.tryParseAskAiTimeWindow(

@@ -2,7 +2,7 @@ use anyhow::Result;
 use secondloop_rust::auth;
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::llm::ChatDelta;
-use secondloop_rust::{db, rag};
+use secondloop_rust::{db, embedding, rag};
 
 #[derive(Default)]
 struct CaptureProvider {
@@ -37,6 +37,7 @@ fn ask_ai_prompt_includes_attachment_resources_and_strict_citation_contract() {
 
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("set model");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
     let message = db::insert_message(&conn, &key, &conversation.id, "user", "status update")
