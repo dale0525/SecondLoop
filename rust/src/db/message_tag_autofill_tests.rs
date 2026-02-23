@@ -103,7 +103,7 @@ fn chinese_keyword_message_auto_applies_system_tag() {
     let conn = open(dir.path()).expect("open");
 
     let key = [29u8; 32];
-    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
     let message = insert_message(
         &conn,
         &key,
