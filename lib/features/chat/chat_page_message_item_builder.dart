@@ -20,9 +20,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
     required bool isDesktopPlatform,
   }) {
     return (context, index) {
-      bool isTransientPendingMessageId(String id) =>
-          id.startsWith('pending_') && id != _kFailedAskMessageId;
-
       Message? messageAt(int targetIndex) {
         if (_usePagination) {
           if (targetIndex < extraCount) {
@@ -160,25 +157,22 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
       }
 
       final itemCount = messages.length + extraCount;
-      final dayLocal = _messageLocalDay(stableMsg.createdAtMs);
-      var showDateDivider = false;
-      if (dayLocal != null && !isTransientPendingMessageId(stableMsg.id)) {
-        final step = _usePagination ? 1 : -1;
-        var neighborIndex = index + step;
-        DateTime? neighborDay;
-        while (neighborIndex >= 0 && neighborIndex < itemCount) {
-          final neighborMsg = messageAt(neighborIndex);
-          if (neighborMsg == null) break;
-          final neighborDayLocal = _messageLocalDay(neighborMsg.createdAtMs);
-          if (neighborDayLocal != null &&
-              !isTransientPendingMessageId(neighborMsg.id)) {
-            neighborDay = neighborDayLocal;
-            break;
-          }
-          neighborIndex += step;
-        }
-        showDateDivider = neighborDay == null || neighborDay != dayLocal;
-      }
+      final dividerState = _resolveMessageDividerState(
+        index: index,
+        stableMsg: stableMsg,
+        itemCount: itemCount,
+        messageAt: messageAt,
+      );
+      final dayLocal = dividerState.dayLocal;
+      final showDateDivider = dividerState.showDateDivider;
+      final showTimeDivider = dividerState.showTimeDivider;
+      final interleavedDivider = _buildInterleavedMessageDivider(
+        context: context,
+        stableMsg: stableMsg,
+        dayLocal: dayLocal,
+        showDateDivider: showDateDivider,
+        showTimeDivider: showTimeDivider,
+      );
 
       final isUser = stableMsg.role == 'user';
       final bubbleShape = RoundedRectangleBorder(
@@ -194,7 +188,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
       final bubbleColor =
           isUser ? colorScheme.primaryContainer : tokens.surface2;
 
-      final isPending = isTransientPendingMessageId(stableMsg.id);
+      final isPending = _isTransientPendingMessageId(stableMsg.id);
       final isPendingAssistant = stableMsg.id == 'pending_assistant';
       final showAskAiWaitingIndicator = isPendingAssistant &&
           pendingFailureMessage == null &&
@@ -387,17 +381,12 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
-                  vertical: 12,
+                  vertical: 10,
                 ),
                 child: Stack(
                   children: [
                     Padding(
-                      padding: EdgeInsets.only(
-                        right:
-                            (!isPending && stableMsg.createdAtMs > 0) ? 54 : 0,
-                        bottom:
-                            (!isPending && stableMsg.createdAtMs > 0) ? 16 : 0,
-                      ),
+                      padding: EdgeInsets.zero,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,28 +811,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                         ],
                       ),
                     ),
-                    if (!isPending && stableMsg.createdAtMs > 0)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Text(
-                          _formatMessageTimestamp(
-                            context,
-                            stableMsg.createdAtMs,
-                          ),
-                          key: ValueKey(
-                            'message_timestamp_${stableMsg.id}',
-                          ),
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: isUser
-                                        ? colorScheme.onPrimaryContainer
-                                            .withOpacity(0.62)
-                                        : colorScheme.onSurfaceVariant
-                                            .withOpacity(0.78),
-                                  ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -861,17 +828,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (showDateDivider && dayLocal != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: _buildMessageDateDividerChip(
-                  context,
-                  dayLocal,
-                  key: ValueKey(
-                    'message_date_divider_${stableMsg.id}',
-                  ),
-                ),
-              ),
+            if (interleavedDivider != null) interleavedDivider,
             MouseRegion(
               onEnter: isPending
                   ? null

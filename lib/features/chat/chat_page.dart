@@ -110,6 +110,7 @@ part 'chat_page_methods_o_focus_routing.dart';
 part 'chat_page_methods_p_attachment_links.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
+part 'chat_page_message_item_footer.dart';
 part 'chat_page_todo_message_badge.dart';
 part 'chat_page_message_bubble_detail.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
@@ -137,6 +138,7 @@ const _kFailedAskMessageId = 'pending_failed_user';
 const _kCollapsedMessageHeight = 280.0;
 const _kLongMessageRuneThreshold = 600;
 const _kLongMessageLineThreshold = 12;
+const _kMessageTimeDividerGap = Duration(minutes: 5);
 const _kMessagePageSize = 60;
 const _kLoadMoreThresholdPx = 200.0;
 const _kBottomThresholdPx = 60.0;
@@ -286,15 +288,23 @@ String _formatMessageDateDividerLabel(
   return localizations.formatShortMonthDay(dayLocal);
 }
 
+String _formatMessageDateTimeDividerLabel(BuildContext context, int ms) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+  final day = DateTime(dt.year, dt.month, dt.day);
+  return '${_formatMessageDateDividerLabel(context, day)} ${_formatMessageTimestamp(context, ms)}';
+}
+
 Widget _buildMessageDateDividerChip(
   BuildContext context,
   DateTime dayLocal, {
   required Key key,
+  String? overrideLabel,
 }) {
   final tokens = SlTokens.of(context);
   final colorScheme = Theme.of(context).colorScheme;
   final isDark = Theme.of(context).brightness == Brightness.dark;
-  final label = _formatMessageDateDividerLabel(context, dayLocal);
+  final label =
+      overrideLabel ?? _formatMessageDateDividerLabel(context, dayLocal);
 
   return Center(
     child: Container(
@@ -314,6 +324,39 @@ Widget _buildMessageDateDividerChip(
                 isDark ? 0.9 : 0.82,
               ),
               fontWeight: FontWeight.w600,
+            ),
+      ),
+    ),
+  );
+}
+
+Widget _buildMessageTimeDividerChip(
+  BuildContext context,
+  int ms, {
+  required Key key,
+}) {
+  final tokens = SlTokens.of(context);
+  final colorScheme = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+  return Center(
+    child: Container(
+      key: key,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: tokens.surface.withOpacity(isDark ? 0.62 : 0.78),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: tokens.borderSubtle.withOpacity(isDark ? 0.68 : 0.9),
+        ),
+      ),
+      child: Text(
+        _formatMessageTimestamp(context, ms),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant.withOpacity(
+                isDark ? 0.88 : 0.78,
+              ),
+              fontWeight: FontWeight.w500,
             ),
       ),
     ),
