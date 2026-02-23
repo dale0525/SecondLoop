@@ -9,10 +9,6 @@ private let kMarkdownPdfTopMargin: CGFloat = 48
 private let kMarkdownPdfBottomMargin: CGFloat = 64
 private let kMarkdownPdfHorizontalMargin: CGFloat = 54
 
-private enum PdfLuminanceSampleRegion {
-  case fullPage
-  case contentCore
-}
 
 final class MarkdownPdfExportChannel {
   private let channel: FlutterMethodChannel
@@ -365,35 +361,33 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
         continue
       }
 
-      let sourceBox = page.getBoxRect(.mediaBox)
-      let pageRect = CGRect(origin: .zero, size: sourceBox.size)
-      context.beginPDFPage([kCGPDFContextMediaBox as String: pageRect] as CFDictionary)
+      var mediaBox = page.getBoxRect(.mediaBox)
+      if mediaBox.width <= 0 || mediaBox.height <= 0 {
+        mediaBox = CGRect(
+          x: 0,
+          y: 0,
+          width: kMarkdownPdfPageWidth,
+          height: kMarkdownPdfPageHeight
+        )
+      }
+
+      context.beginPDFPage([kCGPDFContextMediaBox as String: mediaBox] as CFDictionary)
 
       context.saveGState()
       context.setBlendMode(.normal)
-      let drawingTransform = page.getDrawingTransform(
-        .mediaBox,
-        rect: pageRect,
-        rotate: 0,
-        preserveAspectRatio: false
-      )
-      context.concatenate(drawingTransform)
+      context.setFillColor(pageBackgroundColor.cgColor)
+      context.fill(mediaBox)
+      context.restoreGState()
+
+      context.saveGState()
+      context.setBlendMode(.normal)
       context.drawPDFPage(page)
       context.restoreGState()
 
       context.saveGState()
-      context.setBlendMode(.destinationOver)
-      context.setFillColor(pageBackgroundColor.cgColor)
-      context.fill(pageRect)
-      context.restoreGState()
-
-      context.saveGState()
       context.setBlendMode(.normal)
       context.setFillColor(pageBackgroundColor.cgColor)
-      fillPageMargins(
-        context: context,
-        mediaBox: pageRect
-      )
+      fillPageMargins(context: context, mediaBox: mediaBox)
       context.restoreGState()
 
       context.endPDFPage()
@@ -401,15 +395,7 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
 
     context.closePDF()
     let rebuilt = outputData as Data
-    if rebuilt.isEmpty {
-      return pdfData
-    }
-
-    if shouldFallbackToOriginalPdf(originalPdfData: pdfData, rebuiltPdfData: rebuilt) {
-      return pdfData
-    }
-
-    return rebuilt
+    return rebuilt.isEmpty ? pdfData : rebuilt
   }
 
   private func fillPageMargins(context: CGContext, mediaBox: CGRect) {
@@ -467,151 +453,6 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
         )
       )
     }
-  }
-
-  private func shouldFallbackToOriginalPdf(
-    originalPdfData: Data,
-    rebuiltPdfData: Data
-  ) -> Bool {
-    guard let originalDocument = loadPdfDocument(data: originalPdfData),
-          let rebuiltDocument = loadPdfDocument(data: rebuiltPdfData),
-          originalDocument.numberOfPages > 0,
-          rebuiltDocument.numberOfPages == originalDocument.numberOfPages else {
-      return false
-    }
-
-    let pagesToCheck = min(originalDocument.numberOfPages, 3)
-    var eligiblePageCount = 0
-    var suspiciousPageCount = 0
-
-    for pageIndex in 1 ... pagesToCheck {
-      guard let originalPage = originalDocument.page(at: pageIndex),
-            let rebuiltPage = rebuiltDocument.page(at: pageIndex),
-            let originalCoreVariance = estimatePageLuminanceVariance(
-              originalPage,
-              sampleRegion: .contentCore
-            ),
-            let rebuiltCoreVariance = estimatePageLuminanceVariance(
-              rebuiltPage,
-              sampleRegion: .contentCore
-            ) else {
-        continue
-      }
-
-      guard originalCoreVariance > 5.0 else {
-        continue
-      }
-
-      eligiblePageCount += 1
-      let coreThreshold = max(0.6, originalCoreVariance * 0.05)
-      let isCollapsedCore = rebuiltCoreVariance < coreThreshold && rebuiltCoreVariance < 0.22
-      if isCollapsedCore {
-        suspiciousPageCount += 1
-      }
-    }
-
-    guard eligiblePageCount > 1 else {
-      return false
-    }
-
-    return suspiciousPageCount == eligiblePageCount
-  }
-
-  private func loadPdfDocument(data: Data) -> CGPDFDocument? {
-    guard let provider = CGDataProvider(data: data as CFData) else {
-      return nil
-    }
-
-    return CGPDFDocument(provider)
-  }
-
-  private func estimatePageLuminanceVariance(
-    _ page: CGPDFPage,
-    sampleRegion: PdfLuminanceSampleRegion = .fullPage
-  ) -> Double? {
-    let sampleWidth = 96
-    let sampleHeight = 136
-    var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-
-    let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
-      guard let baseAddress = buffer.baseAddress,
-            let bitmapContext = CGContext(
-              data: baseAddress,
-              width: sampleWidth,
-              height: sampleHeight,
-              bitsPerComponent: 8,
-              bytesPerRow: sampleWidth * 4,
-              space: colorSpace,
-              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else {
-        return false
-      }
-
-      let bounds = CGRect(
-        x: 0,
-        y: 0,
-        width: CGFloat(sampleWidth),
-        height: CGFloat(sampleHeight)
-      )
-      bitmapContext.setFillColor(NSColor.white.cgColor)
-      bitmapContext.fill(bounds)
-
-      let transform = page.getDrawingTransform(
-        .mediaBox,
-        rect: bounds,
-        rotate: 0,
-        preserveAspectRatio: true
-      )
-      bitmapContext.concatenate(transform)
-      bitmapContext.drawPDFPage(page)
-      return true
-    }
-
-    guard rendered else {
-      return nil
-    }
-
-    let xInset: Int
-    let yInset: Int
-    switch sampleRegion {
-    case .fullPage:
-      xInset = 0
-      yInset = 0
-    case .contentCore:
-      xInset = Int(Double(sampleWidth) * 0.2)
-      yInset = Int(Double(sampleHeight) * 0.15)
-    }
-
-    let xStart = max(0, min(sampleWidth - 1, xInset))
-    let xEnd = max(xStart + 1, sampleWidth - xInset)
-    let yStart = max(0, min(sampleHeight - 1, yInset))
-    let yEnd = max(yStart + 1, sampleHeight - yInset)
-
-    var sum = 0.0
-    var sumSquares = 0.0
-    var sampledPixels = 0
-
-    for y in yStart ..< yEnd {
-      for x in xStart ..< xEnd {
-        let index = (y * sampleWidth + x) * 4
-        let red = Double(pixels[index])
-        let green = Double(pixels[index + 1])
-        let blue = Double(pixels[index + 2])
-        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-        sum += luminance
-        sumSquares += luminance * luminance
-        sampledPixels += 1
-      }
-    }
-
-    guard sampledPixels > 0 else {
-      return nil
-    }
-
-    let mean = sum / Double(sampledPixels)
-    let variance = (sumSquares / Double(sampledPixels)) - (mean * mean)
-    return variance < 0 ? 0 : variance
   }
 
   private func parsePageBackgroundColor() -> NSColor? {
