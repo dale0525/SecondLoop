@@ -63,11 +63,12 @@ void main() {
     final backend = _AskScopeActionBackend();
 
     await _pumpChatPage(tester, backend: backend);
+    await _setThreadFocus(tester);
     await _askWithQuestion(tester, 'Generate weekly report');
 
     expect(backend.invocations, hasLength(1));
     expect(backend.invocations.first.routeKind, 'time_window');
-    expect(backend.invocations.first.thisThreadOnly, isFalse);
+    expect(backend.invocations.first.thisThreadOnly, isTrue);
 
     await tester.tap(
       find.byKey(const ValueKey('ask_scope_empty_action_switchScopeToAll')),
@@ -95,8 +96,8 @@ Future<void> _pumpChatPage(
             lock: () {},
             child: const ChatPage(
               conversation: Conversation(
-                id: 'loop_home',
-                title: 'Loop',
+                id: 'main_stream',
+                title: 'Main Stream',
                 createdAtMs: 0,
                 updatedAtMs: 0,
               ),
@@ -130,6 +131,20 @@ Future<void> _askWithQuestion(WidgetTester tester, String question) async {
     find.byKey(const ValueKey('ask_scope_empty_action_switchScopeToAll')),
     findsOneWidget,
   );
+}
+
+Future<void> _setThreadFocus(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('chat_filter_menu')));
+  await tester.pumpAndSettle();
+
+  final enOption = find.text('Focus: This thread');
+  final zhOption = find.text('聚焦：当前对话');
+  if (enOption.evaluate().isNotEmpty) {
+    await tester.tap(enOption.last);
+  } else {
+    await tester.tap(zhOption.last);
+  }
+  await tester.pumpAndSettle();
 }
 
 final class _AskScopeActionBackend extends TestAppBackend {

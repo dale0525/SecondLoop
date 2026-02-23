@@ -687,7 +687,40 @@ PRAGMA user_version = 23;
     }
 
     if user_version < 24 {
-        // v24: tag merge suggestion feedback learning.
+        // v24: topic threads + thread message relations.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS topic_threads (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  title BLOB,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_topic_threads_conversation_updated
+  ON topic_threads(conversation_id, updated_at_ms DESC, id ASC);
+
+CREATE TABLE IF NOT EXISTS topic_thread_messages (
+  thread_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (thread_id, message_id),
+  FOREIGN KEY(thread_id) REFERENCES topic_threads(id) ON DELETE CASCADE,
+  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_topic_thread_messages_message_id
+  ON topic_thread_messages(message_id);
+CREATE INDEX IF NOT EXISTS idx_topic_thread_messages_thread_id
+  ON topic_thread_messages(thread_id);
+PRAGMA user_version = 24;
+"#,
+        )?;
+        user_version = 24;
+    }
+
+    if user_version < 25 {
+        // v25: tag merge suggestion feedback learning.
         conn.execute_batch(
             r#"
 CREATE TABLE IF NOT EXISTS tag_merge_feedback (
@@ -702,14 +735,14 @@ CREATE TABLE IF NOT EXISTS tag_merge_feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_tag_merge_feedback_reason
   ON tag_merge_feedback(reason, updated_at_ms DESC);
-PRAGMA user_version = 24;
+PRAGMA user_version = 25;
 "#,
         )?;
-        user_version = 24;
+        user_version = 25;
     }
 
-    if user_version < 25 {
-        // v25: message tag autofill shadow-mode jobs + event logs.
+    if user_version < 26 {
+        // v26: message tag autofill shadow-mode jobs + event logs.
         conn.execute_batch(
             r#"
 CREATE TABLE IF NOT EXISTS message_tag_autofill_jobs (
@@ -742,7 +775,46 @@ CREATE TABLE IF NOT EXISTS message_tag_autofill_events (
 );
 CREATE INDEX IF NOT EXISTS idx_message_tag_autofill_events_message
   ON message_tag_autofill_events(message_id, created_at_ms DESC);
-PRAGMA user_version = 25;
+PRAGMA user_version = 26;
+"#,
+        )?;
+    }
+
+    if user_version < 27 {
+        // v27: attachment text chunk index metadata (local-only derived index).
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_text_chunks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attachment_sha256 TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  text_len INTEGER NOT NULL,
+  needs_embedding INTEGER NOT NULL DEFAULT 1,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  UNIQUE(attachment_sha256, kind, chunk_index),
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_chunks_attachment
+  ON attachment_text_chunks(attachment_sha256, kind, chunk_index);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_chunks_updated_at_ms
+  ON attachment_text_chunks(updated_at_ms);
+
+CREATE TABLE IF NOT EXISTS attachment_chunk_index_state (
+  attachment_sha256 TEXT PRIMARY KEY,
+  source_kind TEXT NOT NULL,
+  source_fingerprint TEXT NOT NULL,
+  chunk_count INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_chunk_index_state_updated_at_ms
+  ON attachment_chunk_index_state(updated_at_ms);
+
+PRAGMA user_version = 27;
 "#,
         )?;
     }
@@ -794,6 +866,8 @@ DELETE FROM message_embeddings;
 DELETE FROM todo_embeddings;
 DELETE FROM todo_activity_embeddings;
 DELETE FROM semantic_parse_jobs;
+DELETE FROM topic_thread_messages;
+DELETE FROM topic_threads;
 DELETE FROM tag_merge_feedback;
 DELETE FROM message_tag_autofill_events;
 DELETE FROM message_tag_autofill_jobs;
@@ -805,6 +879,8 @@ DELETE FROM attachment_exif;
 DELETE FROM attachment_metadata;
 DELETE FROM attachment_places;
 DELETE FROM attachment_annotations;
+DELETE FROM attachment_chunk_index_state;
+DELETE FROM attachment_text_chunks;
 DELETE FROM attachment_deletions;
 DELETE FROM attachments;
 DELETE FROM messages;

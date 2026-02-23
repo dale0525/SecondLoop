@@ -117,8 +117,8 @@ final class ShareIngest {
 
   static Future<bool> hasPendingPayloads() async {
     final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getStringList(_queueKey);
-    return current != null && current.isNotEmpty;
+    final current = prefs.getStringList(_queueKey) ?? const <String>[];
+    return current.isNotEmpty;
   }
 
   static Future<int> drainQueue(
@@ -170,7 +170,8 @@ final class ShareIngest {
           }
           try {
             conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
+                (await backend.getOrCreateMainStreamConversation(sessionKey))
+                    .id;
             await backend.insertMessage(
               sessionKey,
               conversationId,
@@ -201,7 +202,8 @@ final class ShareIngest {
             }
 
             conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
+                (await backend.getOrCreateMainStreamConversation(sessionKey))
+                    .id;
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,
@@ -259,7 +261,8 @@ final class ShareIngest {
               continue;
             }
             conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
+                (await backend.getOrCreateMainStreamConversation(sessionKey))
+                    .id;
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,
@@ -315,7 +318,8 @@ final class ShareIngest {
             }
 
             conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
+                (await backend.getOrCreateMainStreamConversation(sessionKey))
+                    .id;
             final message = await backend.insertMessage(
               sessionKey,
               conversationId,

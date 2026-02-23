@@ -76,8 +76,8 @@ void main() {
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
 
     const conversation = Conversation(
-      id: 'loop_home',
-      title: 'Loop',
+      id: 'main_stream',
+      title: 'Main Stream',
       createdAtMs: 0,
       updatedAtMs: 0,
     );
@@ -143,7 +143,7 @@ final class _Backend extends TestAppBackend {
       : _messages = <Message>[
           const Message(
             id: 'm1',
-            conversationId: 'loop_home',
+            conversationId: 'main_stream',
             role: 'user',
             content: 'chat_sync_marker_000',
             createdAtMs: 0,
@@ -154,7 +154,7 @@ final class _Backend extends TestAppBackend {
           initialMessages: const [
             Message(
               id: 'm1',
-              conversationId: 'loop_home',
+              conversationId: 'main_stream',
               role: 'user',
               content: 'chat_sync_marker_000',
               createdAtMs: 0,

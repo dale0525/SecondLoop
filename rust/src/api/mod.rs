@@ -13,3 +13,4 @@ pub mod media_annotation;
 pub mod simple;
 pub mod sync_progress;
 pub mod tags;
+pub mod topic_threads;

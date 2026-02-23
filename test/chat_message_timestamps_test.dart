@@ -37,7 +37,7 @@ void main() {
               child: const ChatPage(
                 conversation: Conversation(
                   id: 'c1',
-                  title: 'Loop',
+                  title: 'Chat',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -104,7 +104,7 @@ final class _Backend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
       throw UnimplementedError();
 
   @override

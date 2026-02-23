@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 final class QuickCaptureController extends ChangeNotifier {
   bool _visible = false;
   bool _reopenMainWindowOnHide = false;
-  bool _openChatRequested = false;
+  bool _openMainStreamRequested = false;
 
   bool get visible => _visible;
 
@@ -15,13 +15,13 @@ final class QuickCaptureController extends ChangeNotifier {
 
   void hide({
     bool reopenMainWindow = false,
-    bool openChat = false,
+    bool openMainStream = false,
   }) {
     _reopenMainWindowOnHide = reopenMainWindow;
-    _openChatRequested = openChat;
+    _openMainStreamRequested = openMainStream;
 
     if (!_visible) {
-      if (reopenMainWindow || openChat) {
+      if (reopenMainWindow || openMainStream) {
         notifyListeners();
       }
       return;
@@ -37,10 +37,10 @@ final class QuickCaptureController extends ChangeNotifier {
     return shouldReopen;
   }
 
-  bool consumeOpenChatRequest() {
-    final shouldOpenChat = _openChatRequested;
-    _openChatRequested = false;
-    return shouldOpenChat;
+  bool consumeOpenMainStreamRequest() {
+    final shouldOpenMainStream = _openMainStreamRequested;
+    _openMainStreamRequested = false;
+    return shouldOpenMainStream;
   }
 
   void toggle() => _visible ? hide() : show();

@@ -23,7 +23,7 @@ void main() {
         initialMessages: const [
           Message(
             id: 'm1',
-            conversationId: 'loop_home',
+            conversationId: 'main_stream',
             role: 'user',
             content: 'hello',
             createdAtMs: 0,
@@ -33,8 +33,8 @@ void main() {
       );
 
       const conversation = Conversation(
-        id: 'loop_home',
-        title: 'Loop',
+        id: 'main_stream',
+        title: 'Main Stream',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

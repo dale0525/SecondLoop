@@ -20,7 +20,6 @@ void main() {
     await tester.pumpWidget(MyApp(backend: backend));
     await tester.pumpAndSettle();
 
-    expect(find.text('记录'), findsWidgets);
     expect(find.text('设置'), findsWidgets);
   });
 }
@@ -29,8 +28,8 @@ final class _AutoUnlockedBackend extends AppBackend {
   Uint8List? _savedKey = Uint8List.fromList(List<int>.filled(32, 1));
 
   static const _mainStream = Conversation(
-    id: 'loop_home',
-    title: 'Loop',
+    id: 'main_stream',
+    title: 'Main Stream',
     createdAtMs: 0,
     updatedAtMs: 0,
   );
@@ -80,7 +79,7 @@ final class _AutoUnlockedBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       _mainStream;
 
   @override

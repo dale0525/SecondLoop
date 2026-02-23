@@ -10,8 +10,8 @@ extension _ChatPageStateBuild on _ChatPageState {
         useCompactComposer ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
     final isMobileKeyboardVisible =
         useCompactComposer && keyboardInsetBottom > 0;
-    final title = widget.conversation.id == 'loop_home'
-        ? context.t.chat.loopTitle
+    final title = widget.conversation.id == 'main_stream'
+        ? context.t.chat.mainStreamTitle
         : widget.conversation.title;
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =
@@ -21,6 +21,25 @@ extension _ChatPageStateBuild on _ChatPageState {
       appBar: AppBar(
         title: Text(title),
         actions: [
+          PopupMenuButton<bool>(
+            initialValue: _thisThreadOnly,
+            onSelected: (value) => _setState(() => _thisThreadOnly = value),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: false,
+                child: Text(context.t.chat.focus.allMemories),
+              ),
+              PopupMenuItem(
+                value: true,
+                child: Text(context.t.chat.focus.thisThread),
+              ),
+            ],
+            tooltip: context.t.chat.focus.tooltip,
+            child: const SlIconButtonFrame(
+              key: ValueKey('chat_filter_menu'),
+              icon: Icons.filter_alt_rounded,
+            ),
+          ),
           IconButton(
             key: const ValueKey('chat_tag_filter_button'),
             tooltip: _tagFilterTooltip(locale),
@@ -78,6 +97,7 @@ extension _ChatPageStateBuild on _ChatPageState {
       body: Column(
         children: [
           _buildSelectedTagFilterBar(),
+          _buildActiveTopicThreadBar(),
           if (!isMobileKeyboardVisible) ...[
             FutureBuilder<_TodoAgendaSummary>(
               future: _agendaFuture,
@@ -381,16 +401,6 @@ extension _ChatPageStateBuild on _ChatPageState {
               ),
             ),
           _buildAskScopeEmptyCard(),
-          if (_showAttachmentSendFeedback)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: _buildAttachmentSendFeedbackBanner(context),
-                ),
-              ),
-            ),
           AnimatedPadding(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,

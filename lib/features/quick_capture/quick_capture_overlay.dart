@@ -128,11 +128,11 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
 
   void _dismiss({
     bool reopenMainWindow = false,
-    bool openChat = false,
+    bool openMainStream = false,
   }) =>
       QuickCaptureScope.of(context).hide(
         reopenMainWindow: reopenMainWindow,
-        openChat: openChat,
+        openMainStream: openMainStream,
       );
 
   Future<void> _submit() async {
@@ -147,7 +147,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
       final conversation =
-          await backend.getOrCreateLoopHomeConversation(sessionKey);
+          await backend.getOrCreateMainStreamConversation(sessionKey);
 
       final message = await backend.insertMessage(
         sessionKey,
@@ -216,7 +216,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         }
       }
 
-      _dismiss(reopenMainWindow: true, openChat: true);
+      _dismiss(reopenMainWindow: true, openMainStream: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

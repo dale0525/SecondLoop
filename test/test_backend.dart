@@ -7,7 +7,8 @@ import 'package:secondloop/src/rust/db.dart';
 class TestAppBackend extends AppBackend {
   TestAppBackend({List<Message>? initialMessages})
       : _messagesByConversation = <String, List<Message>>{
-          'loop_home': List<Message>.from(initialMessages ?? const <Message>[])
+          'main_stream':
+              List<Message>.from(initialMessages ?? const <Message>[])
         };
 
   final Map<String, List<Message>> _messagesByConversation;
@@ -48,8 +49,8 @@ class TestAppBackend extends AppBackend {
   Future<List<Conversation>> listConversations(Uint8List key) async =>
       const <Conversation>[
         Conversation(
-          id: 'loop_home',
-          title: 'Loop',
+          id: 'main_stream',
+          title: 'Main Stream',
           createdAtMs: 0,
           updatedAtMs: 0,
         ),
@@ -60,10 +61,10 @@ class TestAppBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       const Conversation(
-        id: 'loop_home',
-        title: 'Loop',
+        id: 'main_stream',
+        title: 'Main Stream',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

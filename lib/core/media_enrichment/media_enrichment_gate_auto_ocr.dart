@@ -476,8 +476,7 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
           runningPayload: runningPayload,
           audioSha256: manifest.audioSha256,
           linkedAudioPayload: linkedAudioPayload,
-          allowDeferForMissingLinkedAudio:
-              audioTranscribeEnabled && manifest.keyframes.isEmpty,
+          allowDeferForMissingLinkedAudio: audioTranscribeEnabled,
         );
         if (transcriptSeed.shouldDeferForLinkedAudio) {
           final queuedPayload = Map<String, Object?>.from(runningPayload);

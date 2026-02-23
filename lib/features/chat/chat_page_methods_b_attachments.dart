@@ -150,7 +150,6 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
 
     _setState(() {
       _sending = true;
-      _showAttachmentSendFeedback = true;
       _desktopDropActive = false;
     });
     try {
@@ -179,7 +178,6 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       if (mounted) {
         _setState(() {
           _sending = false;
-          _showAttachmentSendFeedback = false;
         });
       }
     }

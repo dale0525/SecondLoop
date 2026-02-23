@@ -56,7 +56,7 @@ void main() {
 
     final sentMessages = await backend.listMessages(
       Uint8List.fromList(List<int>.filled(32, 1)),
-      'loop_home',
+      'main_stream',
     );
     expect(sentMessages, hasLength(1));
     expect(sentMessages.single.content, '## Updated\n\n- item');
@@ -98,8 +98,8 @@ Widget _wrapChat({required AppBackend backend}) {
           lock: () {},
           child: const ChatPage(
             conversation: Conversation(
-              id: 'loop_home',
-              title: 'Loop',
+              id: 'main_stream',
+              title: 'Main Stream',
               createdAtMs: 0,
               updatedAtMs: 0,
             ),

@@ -52,7 +52,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -85,89 +85,6 @@ void main() {
     }
   });
 
-  testWidgets(
-      'Android: shows immediate attachment feedback while file is being processed',
-      (tester) async {
-    final oldPlatform = debugDefaultTargetPlatformOverride;
-    FilePicker? oldPicker;
-    try {
-      oldPicker = FilePicker.platform;
-    } catch (_) {
-      oldPicker = null;
-    }
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    try {
-      final backend = _TestBackend()
-        ..insertAttachmentDelay = const Duration(seconds: 1);
-      final picker = _TestFilePicker(
-        result: FilePickerResult([
-          PlatformFile(
-            name: 'big-report.txt',
-            size: 5,
-            bytes: Uint8List.fromList(const <int>[104, 101, 108, 108, 111]),
-          ),
-        ]),
-      );
-      FilePicker.platform = picker;
-
-      await tester.pumpWidget(
-        wrapWithI18n(
-          MaterialApp(
-            home: AppBackendScope(
-              backend: backend,
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: const ChatPage(
-                  conversation: Conversation(
-                    id: 'c1',
-                    title: 'Loop',
-                    createdAtMs: 0,
-                    updatedAtMs: 0,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('chat_attach')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('chat_attach_pick_media')));
-      await tester.pump();
-
-      await _pumpUntil(
-        tester,
-        () => backend.insertAttachmentStartedCalls >= 1,
-        maxTicks: 20,
-        step: const Duration(milliseconds: 20),
-      );
-
-      expect(
-        find.byKey(const ValueKey('chat_attachment_send_feedback')),
-        findsOneWidget,
-      );
-
-      await _pumpUntil(
-        tester,
-        () => backend.insertAttachmentCompletedCalls >= 1,
-        maxTicks: 120,
-        step: const Duration(milliseconds: 20),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('chat_attachment_send_feedback')),
-        findsNothing,
-      );
-    } finally {
-      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
-      debugDefaultTargetPlatformOverride = oldPlatform;
-    }
-  });
-
   testWidgets('Android: attach sheet shows record audio option',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
@@ -185,7 +102,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -241,7 +158,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -310,7 +227,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -372,7 +289,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -412,86 +329,6 @@ void main() {
     }
   });
 
-  testWidgets(
-      'Desktop: shows immediate attachment feedback while file is being processed',
-      (tester) async {
-    final oldPlatform = debugDefaultTargetPlatformOverride;
-    FilePicker? oldPicker;
-    try {
-      oldPicker = FilePicker.platform;
-    } catch (_) {
-      oldPicker = null;
-    }
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    try {
-      final backend = _TestBackend()
-        ..insertAttachmentDelay = const Duration(seconds: 1);
-      final picker = _TestFilePicker(
-        result: FilePickerResult([
-          PlatformFile(
-            name: 'scan.pdf',
-            size: 5,
-            bytes: Uint8List.fromList(const <int>[1, 2, 3, 4, 5]),
-          ),
-        ]),
-      );
-      FilePicker.platform = picker;
-
-      await tester.pumpWidget(
-        wrapWithI18n(
-          MaterialApp(
-            home: AppBackendScope(
-              backend: backend,
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: const ChatPage(
-                  conversation: Conversation(
-                    id: 'c1',
-                    title: 'Loop',
-                    createdAtMs: 0,
-                    updatedAtMs: 0,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('chat_attach')));
-      await tester.pump();
-      await _pumpUntil(
-        tester,
-        () => backend.insertAttachmentStartedCalls >= 1,
-        maxTicks: 20,
-        step: const Duration(milliseconds: 20),
-      );
-
-      expect(
-        find.byKey(const ValueKey('chat_attachment_send_feedback')),
-        findsOneWidget,
-      );
-
-      await _pumpUntil(
-        tester,
-        () => backend.insertAttachmentCompletedCalls >= 1,
-        maxTicks: 120,
-        step: const Duration(milliseconds: 20),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('chat_attachment_send_feedback')),
-        findsNothing,
-      );
-    } finally {
-      FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
-      debugDefaultTargetPlatformOverride = oldPlatform;
-    }
-  });
-
   testWidgets('Desktop: sending URL creates URL attachment', (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -508,7 +345,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -556,7 +393,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -638,7 +475,7 @@ void main() {
                 child: const ChatPage(
                   conversation: Conversation(
                     id: 'c1',
-                    title: 'Loop',
+                    title: 'Chat',
                     createdAtMs: 0,
                     updatedAtMs: 0,
                   ),
@@ -713,7 +550,7 @@ void main() {
                   child: const ChatPage(
                     conversation: Conversation(
                       id: 'c1',
-                      title: 'Loop',
+                      title: 'Chat',
                       createdAtMs: 0,
                       updatedAtMs: 0,
                     ),
@@ -792,7 +629,7 @@ void main() {
                   child: const ChatPage(
                     conversation: Conversation(
                       id: 'c1',
-                      title: 'Loop',
+                      title: 'Chat',
                       createdAtMs: 0,
                       updatedAtMs: 0,
                     ),

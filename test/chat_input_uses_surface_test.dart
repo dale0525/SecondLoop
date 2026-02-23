@@ -27,8 +27,8 @@ void main() {
               lock: () {},
               child: const ChatPage(
                 conversation: Conversation(
-                  id: 'loop_home',
-                  title: 'Loop',
+                  id: 'main_stream',
+                  title: 'Main Stream',
                   createdAtMs: 0,
                   updatedAtMs: 0,
                 ),
@@ -56,7 +56,18 @@ void main() {
       findsOneWidget,
     );
 
-    expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_filter_menu')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('chat_filter_menu'))),
+      const Size(40, 40),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat_filter_menu')),
+        matching: find.byIcon(Icons.filter_alt_rounded),
+      ),
+      findsOneWidget,
+    );
 
     expect(find.byKey(const ValueKey('chat_send')), findsNothing);
     expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
@@ -145,7 +156,7 @@ final class _Backend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) =>
       throw UnimplementedError();
 
   @override

@@ -2,7 +2,7 @@
   "app": {
     "title": "SecondLoop",
     "tabs": {
-      "main": "Loop",
+      "main": "Main",
       "settings": "Settings"
     }
   },
@@ -53,7 +53,7 @@
     "loadFailed": "Load failed: $error",
     "saveFailed": "Save failed: $error",
     "lockGateError": "LockGate error: $error",
-    "missingLoopHomeConversation": "Missing Loop conversation"
+    "missingMainStream": "Missing Main Stream"
   },
   "actions": {
     "capture": {
@@ -778,7 +778,7 @@
     "unlocking": "Unlocking…"
   },
   "chat": {
-    "loopTitle": "Loop",
+    "mainStreamTitle": "Main Stream",
     "attachTooltip": "Add attachment",
     "attachPickMedia": "Choose media",
     "attachTakePhoto": "Take photo",
@@ -834,19 +834,10 @@
       "exportMenu": "Export preview",
       "exportPng": "Export as PNG",
       "exportPdf": "Export as PDF",
-      "exportCopyClipboard": "Copy to Clipboard",
-      "exportCopied": "Copied to clipboard",
       "exportDone": "Exported as $format",
       "exportSavedPath": "Saved to $path",
       "exportFailed": "Export failed: $error",
-
-  "exportReasonNoWindowsBrowser": "No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.",
-  "exportReasonWindowsBrowserPrint": "The browser failed to print the document on Windows. Check browser availability and retry.",
-  "exportReasonTimeout": "The export timed out. Try reducing very large images or document size and retry.",
-  "exportReasonRender": "The preview content could not be rendered for PDF export.",
-  "exportReasonWrite": "Failed to generate PDF bytes. Check disk space and retry.",
-  "exportReasonCancelled": "The PDF export was cancelled.",
-  "exportReasonUnsupported": "PDF export is not supported on this platform.",      "stats": "$lines lines · $characters chars",
+      "stats": "$lines lines · $characters chars",
       "simpleInput": "Simple input",
       "actions": {
         "heading": "Heading",
@@ -916,6 +907,27 @@
     "semanticParseStatusUpdatedGeneric": "Updated task",
     "semanticParseStatusUndone": "Undid auto action",
     "askAiRecoveredDetached": "Recovered the completed cloud answer.",
+    "topicThread": {
+      "filterTooltip": "Topic thread filter",
+      "actionLabel": "Topic thread",
+      "create": "Create topic thread",
+      "clearFilter": "Clear topic thread filter",
+      "clear": "Clear thread",
+      "manage": "Manage thread",
+      "rename": "Rename thread",
+      "delete": "Delete thread",
+      "deleteDialog": {
+        "title": "Delete topic thread?",
+        "message": "Deleting removes this thread and its message memberships.",
+        "confirm": "Delete"
+      },
+      "addMessage": "Add this message",
+      "removeMessage": "Remove this message",
+      "createDialogTitle": "Create topic thread",
+      "renameDialogTitle": "Rename topic thread",
+      "titleFieldLabel": "Thread title (optional)",
+      "untitled": "Untitled topic thread"
+    },
     "tagFilter": {
       "tooltip": "Tag filter",
       "clearFilter": "Clear tag filter",

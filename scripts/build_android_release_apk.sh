@@ -93,7 +93,5 @@ for relative_path in "${placeholder_files[@]}"; do
   echo "android-release-apk: replaced ${relative_path} with tiny placeholder"
 done
 
-target_platforms="${SECONDLOOP_ANDROID_TARGET_PLATFORMS:-android-arm,android-arm64}"
-
 bash "${repo_root}/scripts/flutter_with_defines.sh" \
-  build apk --release --target-platform "${target_platforms}" "$@"
+  build apk --release --target-platform android-arm,android-arm64 "$@"

@@ -2,7 +2,7 @@
   "app": {
     "title": "SecondLoop",
     "tabs": {
-      "main": "记录",
+      "main": "主线",
       "settings": "设置"
     }
   },
@@ -53,7 +53,7 @@
     "loadFailed": "加载失败：$error",
     "saveFailed": "保存失败：$error",
     "lockGateError": "锁定流程错误：$error",
-    "missingLoopHomeConversation": "缺少记录会话"
+    "missingMainStream": "缺少主线对话"
   },
   "actions": {
     "capture": {
@@ -778,7 +778,7 @@
     "unlocking": "正在解锁…"
   },
   "chat": {
-    "loopTitle": "记录",
+    "mainStreamTitle": "主线",
     "attachTooltip": "添加附件",
     "attachPickMedia": "选择媒体文件",
     "attachTakePhoto": "拍照",
@@ -834,19 +834,10 @@
       "exportMenu": "导出预览",
       "exportPng": "导出为 PNG",
       "exportPdf": "导出为 PDF",
-      "exportCopyClipboard": "复制到剪贴板",
-      "exportCopied": "已复制到剪贴板",
       "exportDone": "已导出为 $format",
       "exportSavedPath": "已保存到：$path",
       "exportFailed": "导出失败：$error",
-
-  "exportReasonNoWindowsBrowser": "未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。",
-  "exportReasonWindowsBrowserPrint": "Windows 浏览器打印失败，请确认浏览器可用后重试。",
-  "exportReasonTimeout": "导出超时。请减少超大图片或文档长度后重试。",
-  "exportReasonRender": "预览内容渲染失败，无法导出 PDF。",
-  "exportReasonWrite": "PDF 写入失败，请检查磁盘空间后重试。",
-  "exportReasonCancelled": "PDF 导出已取消。",
-  "exportReasonUnsupported": "当前平台暂不支持 PDF 导出。",      "stats": "$lines 行 · $characters 字符",
+      "stats": "$lines 行 · $characters 字符",
       "simpleInput": "简易输入",
       "actions": {
         "heading": "标题",
@@ -916,6 +907,27 @@
     "semanticParseStatusUpdatedGeneric": "已更新待办",
     "semanticParseStatusUndone": "已撤销自动动作",
     "askAiRecoveredDetached": "已恢复已完成的云端回答。",
+    "topicThread": {
+      "filterTooltip": "主题线程筛选",
+      "actionLabel": "主题线程",
+      "create": "新建主题线程",
+      "clearFilter": "清除线程筛选",
+      "clear": "清除线程",
+      "manage": "管理线程",
+      "rename": "重命名线程",
+      "delete": "删除线程",
+      "deleteDialog": {
+        "title": "删除主题线程？",
+        "message": "删除后将移除该线程及其消息归属，且无法撤销。",
+        "confirm": "删除"
+      },
+      "addMessage": "加入此消息",
+      "removeMessage": "移除此消息",
+      "createDialogTitle": "新建主题线程",
+      "renameDialogTitle": "重命名主题线程",
+      "titleFieldLabel": "线程标题（可选）",
+      "untitled": "未命名主题线程"
+    },
     "tagFilter": {
       "tooltip": "标签筛选",
       "clearFilter": "清空标签筛选",

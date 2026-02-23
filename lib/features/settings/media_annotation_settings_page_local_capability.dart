@@ -12,37 +12,14 @@ extension _MediaAnnotationSettingsPageLocalCapabilityExtension
     });
   }
 
-  bool _shouldShowDesktopLocalCapabilityCard() {
-    final platform = Theme.of(context).platform;
-    return platform != TargetPlatform.android && platform != TargetPlatform.iOS;
-  }
-
-  BuildContext? _localCapabilityCardFocusContext() {
-    if (_shouldShowWhisperRuntimeCard()) {
-      return _localCapabilityCardAnchorKey.currentContext;
-    }
-    if (_shouldShowDesktopLocalCapabilityCard()) {
-      return _desktopLocalCapabilityCardAnchorKey.currentContext;
-    }
-    return null;
-  }
-
-  bool _expectsLocalCapabilityCardFocusTarget() {
-    return _shouldShowWhisperRuntimeCard() ||
-        _shouldShowDesktopLocalCapabilityCard();
-  }
-
-  Future<void> _scrollToLocalCapabilityCard({int attempt = 0}) async {
+  Future<void> _scrollToLocalCapabilityCard() async {
     if (!mounted) return;
 
-    final targetContext = _localCapabilityCardFocusContext();
+    final targetContext = _localCapabilityCardAnchorKey.currentContext;
     if (targetContext == null) {
-      if (!_expectsLocalCapabilityCardFocusTarget() || attempt >= 90) {
-        return;
-      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        unawaited(_scrollToLocalCapabilityCard(attempt: attempt + 1));
+        unawaited(_scrollToLocalCapabilityCard());
       });
       return;
     }

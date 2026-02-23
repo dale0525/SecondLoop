@@ -669,10 +669,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         return context.t.sync.progressDialog.preparing;
       }
       if (supportsOcr && showNeedsOcrState) {
-        if (isPdf) {
-          return context.t.attachments.content.needsOcrSubtitle;
-        }
-        return context.t.sync.progressDialog.preparing;
+        return context.t.attachments.content.needsOcrSubtitle;
       }
       return '';
     }();
@@ -838,7 +835,6 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                     builder: (context, snapshot) {
                       final manifest = snapshot.data;
                       if (manifest == null) return const SizedBox.shrink();
-
                       return _buildVideoManifestPreviewCard(
                         context,
                         manifest,

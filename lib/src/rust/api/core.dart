@@ -46,9 +46,9 @@ Future<Conversation> dbCreateConversation(
     RustLib.instance.api.crateApiCoreDbCreateConversation(
         appDir: appDir, key: key, title: title);
 
-Future<Conversation> dbGetOrCreateLoopHomeConversation(
+Future<Conversation> dbGetOrCreateMainStreamConversation(
         {required String appDir, required List<int> key}) =>
-    RustLib.instance.api.crateApiCoreDbGetOrCreateLoopHomeConversation(
+    RustLib.instance.api.crateApiCoreDbGetOrCreateMainStreamConversation(
         appDir: appDir, key: key);
 
 Future<List<Message>> dbListMessages(

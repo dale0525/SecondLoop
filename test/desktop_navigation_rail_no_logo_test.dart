@@ -86,10 +86,10 @@ final class _Backend extends AppBackend {
       );
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       const Conversation(
-        id: 'loop_home',
-        title: 'Loop',
+        id: 'main_stream',
+        title: 'Main Stream',
         createdAtMs: 0,
         updatedAtMs: 0,
       );

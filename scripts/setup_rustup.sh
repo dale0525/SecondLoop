@@ -33,10 +33,10 @@ patch_whisper_rs_sys_build_script() {
   local build_rs_files=()
   while IFS= read -r -d '' file; do
     build_rs_files+=("$file")
-  done < <(find "$registry_root" -type f -path '*/whisper-rs-sys-0.14*/build.rs' -print0 2>/dev/null)
+  done < <(find "$registry_root" -type f -path '*/whisper-rs-sys-0.14.1/build.rs' -print0 2>/dev/null)
 
   if [[ ${#build_rs_files[@]} -eq 0 ]]; then
-    echo "setup-rustup: whisper-rs-sys-0.14*/build.rs not found in cargo registry" >&2
+    echo "setup-rustup: whisper-rs-sys-0.14.1/build.rs not found in cargo registry" >&2
     return 0
   fi
 

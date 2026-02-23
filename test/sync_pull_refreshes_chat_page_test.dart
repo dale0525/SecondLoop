@@ -27,8 +27,8 @@ void main() {
     engine.start();
 
     const conversation = Conversation(
-      id: 'loop_home',
-      title: 'Loop',
+      id: 'main_stream',
+      title: 'Main Stream',
       createdAtMs: 0,
       updatedAtMs: 0,
     );
@@ -86,7 +86,7 @@ final class _SyncingRunner implements SyncRunner {
     backend.addRemoteMessage(
       const Message(
         id: 'm1',
-        conversationId: 'loop_home',
+        conversationId: 'main_stream',
         role: 'user',
         content: 'hello from device A',
         createdAtMs: 0,
@@ -145,7 +145,7 @@ final class _MutableBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       throw UnimplementedError();
 
   @override

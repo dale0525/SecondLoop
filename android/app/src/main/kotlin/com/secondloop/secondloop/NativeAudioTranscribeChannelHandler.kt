@@ -4,8 +4,8 @@ import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
@@ -13,65 +13,38 @@ import kotlin.math.roundToInt
 
 private const val kTargetSampleRate = 16_000
 private const val kTargetChannelCount = 1
-private const val kDefaultMaxDecodedWavBytes = 96 * 1024 * 1024
 
-class AudioDecodeException(
+private data class DecodedPcmAudio(
+  val bytes: ByteArray,
+  val durationMs: Int,
+)
+
+private class AudioDecodeException(
   override val message: String,
 ) : RuntimeException(message)
 
 class NativeAudioTranscribeChannelHandler {
-  fun decodeToWavPcm16Mono16k(
-    audioFile: File,
-    outputFile: File,
-    maxDecodedWavBytes: Long? = null,
-  ): Int {
+  fun decodeToWavPcm16Mono16k(audioFile: File): ByteArray {
     if (!audioFile.exists() || !audioFile.isFile) {
-      return 0
+      return ByteArray(0)
     }
 
-    outputFile.parentFile?.mkdirs()
-    if (outputFile.exists()) {
-      outputFile.delete()
+    val pcmAudio = decodeAudioToPcm16Mono16k(audioFile)
+    if (pcmAudio.bytes.isEmpty()) {
+      return ByteArray(0)
     }
 
-    RandomAccessFile(outputFile, "rw").use { output ->
-      output.setLength(0)
-      output.write(ByteArray(44))
-
-      val dataLength = decodeAudioToPcm16Mono16k(
-        audioFile,
-        maxDecodedWavBytes = maxDecodedWavBytes,
-        onPcmChunk = { pcmChunk ->
-          output.write(pcmChunk)
-        },
-      )
-      if (dataLength <= 0) {
-        throw AudioDecodeException("audio_decode_empty")
-      }
-
-      writeWavHeader(output, dataLength)
-      output.fd.sync()
-      return 44 + dataLength
-    }
+    return pcm16Mono16kToWav(pcmAudio.bytes)
   }
 
-  private fun decodeAudioToPcm16Mono16k(
-    audioFile: File,
-    maxDecodedWavBytes: Long? = null,
-    onPcmChunk: (ByteArray) -> Unit,
-  ): Int {
+  private fun decodeAudioToPcm16Mono16k(audioFile: File): DecodedPcmAudio {
     val extractor = MediaExtractor()
+    val output = ByteArrayOutputStream()
 
     var codec: MediaCodec? = null
     var sourceSampleRate = kTargetSampleRate
     var sourceChannelCount = kTargetChannelCount
     var sourceEncoding = AudioFormat.ENCODING_PCM_16BIT
-    var totalPcmBytes = 0
-    val decodeByteLimit = when {
-      maxDecodedWavBytes == null -> kDefaultMaxDecodedWavBytes.toLong()
-      maxDecodedWavBytes <= 0L -> Long.MAX_VALUE
-      else -> maxDecodedWavBytes
-    }
 
     try {
       extractor.setDataSource(audioFile.absolutePath)
@@ -84,22 +57,6 @@ class NativeAudioTranscribeChannelHandler {
       val format = extractor.getTrackFormat(trackIndex)
       val mimeType = format.getString(MediaFormat.KEY_MIME)
         ?: throw AudioDecodeException("audio_decode_missing_mime")
-
-      sourceSampleRate = format.intOrDefault(
-        MediaFormat.KEY_SAMPLE_RATE,
-        sourceSampleRate,
-      )
-      sourceChannelCount = max(
-        1,
-        format.intOrDefault(
-          MediaFormat.KEY_CHANNEL_COUNT,
-          sourceChannelCount,
-        ),
-      )
-      sourceEncoding = format.intOrDefault(
-        MediaFormat.KEY_PCM_ENCODING,
-        sourceEncoding,
-      )
 
       codec = MediaCodec.createDecoderByType(mimeType)
       codec.configure(format, null, null, 0)
@@ -145,23 +102,9 @@ class NativeAudioTranscribeChannelHandler {
             if (outputBuffer != null && bufferInfo.size > 0) {
               outputBuffer.position(bufferInfo.offset)
               outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-
-              val decodedChunk = ByteArray(bufferInfo.size)
-              outputBuffer.get(decodedChunk)
-              val pcmChunk = decodeChunkToTargetPcm(
-                decodedChunk,
-                sourceSampleRate = sourceSampleRate,
-                sourceChannelCount = sourceChannelCount,
-                sourceEncoding = sourceEncoding,
-              )
-              if (pcmChunk.isNotEmpty()) {
-                val nextLength = totalPcmBytes.toLong() + pcmChunk.size.toLong()
-                if (nextLength > decodeByteLimit) {
-                  throw AudioDecodeException("audio_decode_too_long")
-                }
-                onPcmChunk(pcmChunk)
-                totalPcmBytes = nextLength.toInt()
-              }
+              val chunk = ByteArray(bufferInfo.size)
+              outputBuffer.get(chunk)
+              output.write(chunk)
             }
             codec.releaseOutputBuffer(outputBufferIndex, false)
             if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
@@ -191,8 +134,6 @@ class NativeAudioTranscribeChannelHandler {
       }
     } catch (error: AudioDecodeException) {
       throw error
-    } catch (_: OutOfMemoryError) {
-      throw AudioDecodeException("audio_decode_oom")
     } catch (_: Throwable) {
       throw AudioDecodeException("audio_decode_failed")
     } finally {
@@ -205,59 +146,32 @@ class NativeAudioTranscribeChannelHandler {
       try {
         extractor.release()
       } catch (_: Throwable) {}
+      try {
+        output.close()
+      } catch (_: Throwable) {}
     }
 
-    if (totalPcmBytes <= 0) {
+    val decoded = output.toByteArray()
+    if (decoded.isEmpty()) {
       throw AudioDecodeException("audio_decode_empty")
-    }
-
-    return totalPcmBytes
-  }
-
-  private fun decodeChunkToTargetPcm(
-    chunkBytes: ByteArray,
-    sourceSampleRate: Int,
-    sourceChannelCount: Int,
-    sourceEncoding: Int,
-  ): ByteArray {
-    if (chunkBytes.isEmpty()) {
-      return ByteArray(0)
-    }
-
-    val normalizedChannelCount = max(1, sourceChannelCount)
-
-    if (sourceEncoding == AudioFormat.ENCODING_PCM_16BIT &&
-      sourceSampleRate == kTargetSampleRate &&
-      normalizedChannelCount == kTargetChannelCount
-    ) {
-      val trimmedLength = chunkBytes.size - (chunkBytes.size % 2)
-      if (trimmedLength <= 0) {
-        return ByteArray(0)
-      }
-      if (trimmedLength == chunkBytes.size) {
-        return chunkBytes
-      }
-      return chunkBytes.copyOf(trimmedLength)
     }
 
     val monoFloat = when (sourceEncoding) {
       AudioFormat.ENCODING_PCM_16BIT -> pcm16ToMonoFloat(
-        chunkBytes,
-        chunkBytes.size,
-        normalizedChannelCount,
+        decoded,
+        sourceChannelCount,
       )
 
       AudioFormat.ENCODING_PCM_FLOAT -> pcmFloatToMonoFloat(
-        chunkBytes,
-        chunkBytes.size,
-        normalizedChannelCount,
+        decoded,
+        sourceChannelCount,
       )
 
       else -> throw AudioDecodeException("audio_decode_pcm_encoding_unsupported")
     }
 
     if (monoFloat.isEmpty()) {
-      return ByteArray(0)
+      throw AudioDecodeException("audio_decode_pcm_empty")
     }
 
     val normalized = if (sourceSampleRate == kTargetSampleRate) {
@@ -267,10 +181,15 @@ class NativeAudioTranscribeChannelHandler {
     }
 
     if (normalized.isEmpty()) {
-      return ByteArray(0)
+      throw AudioDecodeException("audio_decode_resample_empty")
     }
 
-    return monoFloatToPcm16(normalized)
+    val pcmBytes = monoFloatToPcm16(normalized)
+    val durationMs = ((normalized.size.toLong() * 1000L) / kTargetSampleRate)
+      .toInt()
+      .coerceAtLeast(1)
+
+    return DecodedPcmAudio(bytes = pcmBytes, durationMs = durationMs)
   }
 
   private fun selectAudioTrack(extractor: MediaExtractor): Int {
@@ -286,25 +205,29 @@ class NativeAudioTranscribeChannelHandler {
 
   private fun pcm16ToMonoFloat(
     pcmBytes: ByteArray,
-    byteLength: Int,
     channelCount: Int,
   ): FloatArray {
-    if (byteLength <= 0 || channelCount <= 0) return FloatArray(0)
+    if (pcmBytes.isEmpty() || channelCount <= 0) return FloatArray(0)
 
-    val shortCount = byteLength / 2
+    val shortCount = pcmBytes.size / 2
     if (shortCount == 0) return FloatArray(0)
+
+    val samples = ShortArray(shortCount)
+    ByteBuffer.wrap(pcmBytes)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .asShortBuffer()
+      .get(samples)
 
     val frameCount = shortCount / channelCount
     if (frameCount == 0) return FloatArray(0)
 
     val mono = FloatArray(frameCount)
-    val shortBuffer = ByteBuffer.wrap(pcmBytes, 0, shortCount * 2)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .asShortBuffer()
+    var sampleIndex = 0
     for (frame in 0 until frameCount) {
       var sum = 0f
       for (channel in 0 until channelCount) {
-        sum += shortBuffer.get().toFloat() / Short.MAX_VALUE.toFloat()
+        sum += samples[sampleIndex].toFloat() / Short.MAX_VALUE.toFloat()
+        sampleIndex += 1
       }
       mono[frame] = sum / channelCount.toFloat()
     }
@@ -314,25 +237,29 @@ class NativeAudioTranscribeChannelHandler {
 
   private fun pcmFloatToMonoFloat(
     pcmBytes: ByteArray,
-    byteLength: Int,
     channelCount: Int,
   ): FloatArray {
-    if (byteLength <= 0 || channelCount <= 0) return FloatArray(0)
+    if (pcmBytes.isEmpty() || channelCount <= 0) return FloatArray(0)
 
-    val floatCount = byteLength / 4
+    val floatCount = pcmBytes.size / 4
     if (floatCount == 0) return FloatArray(0)
+
+    val samples = FloatArray(floatCount)
+    ByteBuffer.wrap(pcmBytes)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .asFloatBuffer()
+      .get(samples)
 
     val frameCount = floatCount / channelCount
     if (frameCount == 0) return FloatArray(0)
 
     val mono = FloatArray(frameCount)
-    val floatBuffer = ByteBuffer.wrap(pcmBytes, 0, floatCount * 4)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .asFloatBuffer()
+    var sampleIndex = 0
     for (frame in 0 until frameCount) {
       var sum = 0f
       for (channel in 0 until channelCount) {
-        sum += floatBuffer.get()
+        sum += samples[sampleIndex]
+        sampleIndex += 1
       }
       mono[frame] = sum / channelCount.toFloat()
     }
@@ -381,38 +308,41 @@ class NativeAudioTranscribeChannelHandler {
     return buffer.array()
   }
 
-  private fun writeWavHeader(output: RandomAccessFile, dataLength: Int) {
+  private fun pcm16Mono16kToWav(pcmBytes: ByteArray): ByteArray {
+    if (pcmBytes.isEmpty()) return ByteArray(0)
+
+    val dataLength = pcmBytes.size
     val byteRate = kTargetSampleRate * kTargetChannelCount * 2
     val blockAlign = kTargetChannelCount * 2
-    val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+    val buffer = ByteBuffer.allocate(44 + dataLength)
+      .order(ByteOrder.LITTLE_ENDIAN)
 
-    header.put("RIFF".toByteArray(Charsets.US_ASCII))
-    header.putInt(dataLength + 36)
-    header.put("WAVE".toByteArray(Charsets.US_ASCII))
-    header.put("fmt ".toByteArray(Charsets.US_ASCII))
-    header.putInt(16)
-    header.putShort(1.toShort())
-    header.putShort(kTargetChannelCount.toShort())
-    header.putInt(kTargetSampleRate)
-    header.putInt(byteRate)
-    header.putShort(blockAlign.toShort())
-    header.putShort(16.toShort())
-    header.put("data".toByteArray(Charsets.US_ASCII))
-    header.putInt(dataLength)
+    buffer.put("RIFF".toByteArray(Charsets.US_ASCII))
+    buffer.putInt(dataLength + 36)
+    buffer.put("WAVE".toByteArray(Charsets.US_ASCII))
+    buffer.put("fmt ".toByteArray(Charsets.US_ASCII))
+    buffer.putInt(16)
+    buffer.putShort(1.toShort())
+    buffer.putShort(kTargetChannelCount.toShort())
+    buffer.putInt(kTargetSampleRate)
+    buffer.putInt(byteRate)
+    buffer.putShort(blockAlign.toShort())
+    buffer.putShort(16.toShort())
+    buffer.put("data".toByteArray(Charsets.US_ASCII))
+    buffer.putInt(dataLength)
+    buffer.put(pcmBytes)
 
-    output.seek(0)
-    output.write(header.array())
+    return buffer.array()
   }
 
   private fun MediaFormat.intOrDefault(
     key: String,
-    defaultValue: Int,
+    fallback: Int,
   ): Int {
-    if (!containsKey(key)) return defaultValue
-    return try {
+    return if (containsKey(key)) {
       getInteger(key)
-    } catch (_: Throwable) {
-      defaultValue
+    } else {
+      fallback
     }
   }
 }

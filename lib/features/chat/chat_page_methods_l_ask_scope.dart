@@ -29,7 +29,8 @@ extension _ChatPageStateMethodsLAskScope on _ChatPageState {
     final hasTimeWindow = timeStartMs != null && timeEndMs != null;
     final hasScopedConstraints = hasTimeWindow ||
         _selectedTagFilterIds.isNotEmpty ||
-        _selectedTagExcludeIds.isNotEmpty;
+        _selectedTagExcludeIds.isNotEmpty ||
+        _activeTopicThreadId != null;
     if (!hasScopedConstraints) {
       return null;
     }
@@ -41,6 +42,7 @@ extension _ChatPageStateMethodsLAskScope on _ChatPageState {
 
     final includeTagIds = _selectedTagFilterIds.toList(growable: false);
     final excludeTagIds = _selectedTagExcludeIds.toList(growable: false);
+    final topicThreadId = _activeTopicThreadId;
     final localeLanguage = Localizations.localeOf(context).languageCode;
 
     if (route == AskAiRouteKind.cloudGateway) {
@@ -55,6 +57,7 @@ extension _ChatPageStateMethodsLAskScope on _ChatPageState {
         timeEndMs: timeEndMs,
         includeTagIds: includeTagIds,
         excludeTagIds: excludeTagIds,
+        topicThreadId: topicThreadId,
         strictMode: true,
         localeLanguage: localeLanguage,
         gatewayBaseUrl: cloudGatewayConfig.baseUrl,
@@ -74,6 +77,7 @@ extension _ChatPageStateMethodsLAskScope on _ChatPageState {
       timeEndMs: timeEndMs,
       includeTagIds: includeTagIds,
       excludeTagIds: excludeTagIds,
+      topicThreadId: topicThreadId,
       strictMode: true,
       localeLanguage: localeLanguage,
       localDay: _askScopeLocalDay(DateTime.now()),

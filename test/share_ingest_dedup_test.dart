@@ -27,8 +27,8 @@ final class _CaptureBackend extends AppBackend {
   final List<String> insertedContents = <String>[];
 
   static const _mainStream = Conversation(
-    id: 'loop_home',
-    title: 'Loop',
+    id: 'main_stream',
+    title: 'Main Stream',
     createdAtMs: 0,
     updatedAtMs: 0,
   );
@@ -74,7 +74,7 @@ final class _CaptureBackend extends AppBackend {
       throw UnimplementedError();
 
   @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
+  Future<Conversation> getOrCreateMainStreamConversation(Uint8List key) async =>
       _mainStream;
 
   @override

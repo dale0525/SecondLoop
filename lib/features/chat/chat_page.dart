@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -43,6 +42,7 @@ import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/db.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_focus_ring.dart';
+import '../../ui/sl_icon_button_frame.dart';
 import '../../ui/sl_icon_button.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
 import '../../ui/sl_markdown_style.dart';
@@ -68,8 +68,8 @@ import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
-import '../attachments/attachment_send_feedback_banner.dart';
 import '../attachments/attachment_viewer_page.dart';
+import '../attachments/attachment_deeplink.dart';
 import '../attachments/platform_exif_metadata.dart';
 import '../media_backup/audio_transcode_policy.dart';
 // ignore: unused_import
@@ -78,6 +78,7 @@ import '../tags/tag_filter_sheet.dart';
 import '../tags/tag_localization.dart';
 import '../tags/tag_picker.dart';
 import '../tags/tag_repository.dart';
+import '../topic_threads/topic_thread_repository.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
@@ -100,13 +101,14 @@ part 'chat_page_methods_e.dart';
 part 'chat_page_methods_i_detached_jobs.dart';
 part 'chat_page_methods_j_message_edit.dart';
 part 'chat_page_methods_f_audio_recording.dart';
-part 'chat_page_methods_f_audio_recording_stitching.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_methods_k_tags.dart';
 part 'chat_page_methods_l_ask_scope.dart';
 part 'chat_page_methods_m_ask_scope_empty_card.dart';
+part 'chat_page_methods_n_topic_threads.dart';
 part 'chat_page_methods_o_focus_routing.dart';
+part 'chat_page_methods_p_attachment_links.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_todo_message_badge.dart';
@@ -324,12 +326,14 @@ class ChatPage extends StatefulWidget {
     required this.conversation,
     this.isTabActive = true,
     this.tagRepository = const TagRepository(),
+    this.topicThreadRepository = const TopicThreadRepository(),
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
   final TagRepository tagRepository;
+  final TopicThreadRepository topicThreadRepository;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -353,6 +357,8 @@ class _ChatPageState extends State<ChatPage> {
   final Map<String, _AttachmentEnrichment> _attachmentEnrichmentCacheBySha256 =
       <String, _AttachmentEnrichment>{};
   TagRepository get _tagRepository => widget.tagRepository;
+  TopicThreadRepository get _topicThreadRepository =>
+      widget.topicThreadRepository;
   final Set<String> _selectedTagFilterIds = <String>{};
   final Map<String, Tag> _selectedTagFilterTagById = <String, Tag>{};
   final Set<String> _selectedTagExcludeIds = <String>{};
@@ -364,12 +370,13 @@ class _ChatPageState extends State<ChatPage> {
   bool _isAtBottom = true;
   bool _hasUnseenNewMessages = false;
   bool _sending = false;
-  bool _showAttachmentSendFeedback = false;
   bool _asking = false;
   bool _stopRequested = false;
   bool _desktopDropActive = false;
   bool _recordingAudio = false;
   bool _thisThreadOnly = false;
+  String? _activeTopicThreadId;
+  TopicThread? _activeTopicThread;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
   bool _composerAskAiRouteLoading = true;
@@ -414,7 +421,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  bool get _usePagination => widget.conversation.id == 'loop_home';
+  bool get _usePagination => widget.conversation.id == 'main_stream';
   bool get _isDesktopPlatform =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
@@ -662,6 +669,7 @@ enum _MessageAction {
   openTodo,
   edit,
   tags,
+  topicThread,
   linkTodo,
   delete,
 }

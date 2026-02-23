@@ -47,31 +47,6 @@ List<_PdfMarkdownBlock> _parseMarkdownBlocks(String markdown) {
       continue;
     }
 
-    final latexOpeningMatch = _kPdfLatexBlockOpeningPattern.firstMatch(line);
-    if (latexOpeningMatch != null) {
-      final consumed = _consumeLatexBlock(lines, startIndex: index);
-      if (consumed.text.isNotEmpty) {
-        blocks.add(_PdfMarkdownBlock.latex(consumed.text));
-      }
-      index = consumed.nextIndex;
-      continue;
-    }
-
-    final imageMatch = _kPdfImageLinePattern.firstMatch(line);
-    if (imageMatch != null) {
-      final imageAlt = _stripInlineMarkdownSyntax(
-        imageMatch.group(1) ?? '',
-        stripEmphasis: false,
-      );
-      final imageSource = _normalizePdfImageSource(imageMatch.group(2) ?? '');
-      if (imageSource.isNotEmpty) {
-        blocks
-            .add(_PdfMarkdownBlock.image(source: imageSource, text: imageAlt));
-      }
-      index += 1;
-      continue;
-    }
-
     if (_kPdfHorizontalRulePattern.hasMatch(line.trim())) {
       blocks.add(const _PdfMarkdownBlock.horizontalRule());
       index += 1;
@@ -123,59 +98,6 @@ List<_PdfMarkdownBlock> _parseMarkdownBlocks(String markdown) {
   }
 
   return (nextIndex: index, text: collected.join('\n').trimRight());
-}
-
-({int nextIndex, String text}) _consumeLatexBlock(
-  List<String> lines, {
-  required int startIndex,
-}) {
-  final openingMatch = _kPdfLatexBlockOpeningPattern.firstMatch(
-    lines[startIndex],
-  );
-  if (openingMatch == null) {
-    return (nextIndex: startIndex + 1, text: '');
-  }
-
-  final inlineTail = openingMatch.group(1) ?? '';
-  if (inlineTail.trim().isNotEmpty) {
-    final inlineClose = _kPdfLatexBlockClosingPattern.firstMatch(inlineTail);
-    if (inlineClose != null) {
-      final singleLine = (inlineClose.group(1) ?? '').trim();
-      return (nextIndex: startIndex + 1, text: singleLine);
-    }
-  }
-
-  final collected = <String>[];
-  if (inlineTail.trim().isNotEmpty) {
-    collected.add(inlineTail);
-  }
-
-  var index = startIndex + 1;
-  while (index < lines.length) {
-    final line = lines[index];
-    final closing = _kPdfLatexBlockClosingPattern.firstMatch(line);
-    if (closing != null) {
-      final beforeClosing = closing.group(1) ?? '';
-      if (beforeClosing.trim().isNotEmpty) {
-        collected.add(beforeClosing);
-      }
-      index += 1;
-      break;
-    }
-
-    collected.add(line);
-    index += 1;
-  }
-
-  return (nextIndex: index, text: collected.join('\n').trimRight());
-}
-
-String _normalizePdfImageSource(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.startsWith('<') && trimmed.endsWith('>') && trimmed.length > 2) {
-    return trimmed.substring(1, trimmed.length - 1).trim();
-  }
-  return trimmed;
 }
 
 ({int nextIndex, String text}) _consumeQuoteBlock(
@@ -314,8 +236,6 @@ String _normalizePdfImageSource(String raw) {
 
     final isBlockBoundary = _kPdfHeadingPattern.hasMatch(line) ||
         _kPdfFencedCodePattern.hasMatch(line) ||
-        _kPdfLatexBlockOpeningPattern.hasMatch(line) ||
-        _kPdfImageLinePattern.hasMatch(line) ||
         _kPdfHorizontalRulePattern.hasMatch(line.trim()) ||
         _kPdfQuotePattern.hasMatch(line) ||
         _isListStarterLine(line);

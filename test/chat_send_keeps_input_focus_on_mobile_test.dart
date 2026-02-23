@@ -19,8 +19,8 @@ void main() {
 
     final backend = TestAppBackend();
     const conversation = Conversation(
-      id: 'loop_home',
-      title: 'Loop',
+      id: 'main_stream',
+      title: 'Main Stream',
       createdAtMs: 0,
       updatedAtMs: 0,
     );

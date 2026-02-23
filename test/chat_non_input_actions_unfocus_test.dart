@@ -71,8 +71,8 @@ Widget _wrapChat({required AppBackend backend}) {
           lock: () {},
           child: const ChatPage(
             conversation: Conversation(
-              id: 'loop_home',
-              title: 'Loop',
+              id: 'main_stream',
+              title: 'Main Stream',
               createdAtMs: 0,
               updatedAtMs: 0,
             ),

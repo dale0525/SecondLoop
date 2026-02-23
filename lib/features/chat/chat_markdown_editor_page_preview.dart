@@ -45,12 +45,6 @@ mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
                   selectable: !_exportRenderMode,
                   softLineBreak: true,
                   styleSheet: styleSheet,
-                  blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
-                  inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
-                  builders: buildChatMarkdownElementBuilders(
-                    previewTheme: previewTheme,
-                    exportRenderMode: _exportRenderMode,
-                  ),
                 );
 
                 if (_exportRenderMode) {

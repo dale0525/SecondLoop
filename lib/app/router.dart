@@ -13,7 +13,7 @@ import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
 
 enum AppTab {
-  chat(Icons.chat_bubble_outline, Icons.chat_bubble),
+  mainStream(Icons.chat_bubble_outline, Icons.chat_bubble),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
@@ -22,7 +22,7 @@ enum AppTab {
   final IconData selectedIcon;
 
   String label(BuildContext context) => switch (this) {
-        AppTab.chat => context.t.app.tabs.main,
+        AppTab.mainStream => context.t.app.tabs.main,
         AppTab.settings => context.t.app.tabs.settings,
       };
 }
@@ -56,8 +56,8 @@ class _AppShellState extends State<AppShell> {
     final controller = _quickCaptureController;
     if (controller == null) return;
 
-    final shouldOpenChat = controller.consumeOpenChatRequest();
-    if (!shouldOpenChat || _selectedIndex == 0 || !mounted) {
+    final shouldOpenMainStream = controller.consumeOpenMainStreamRequest();
+    if (!shouldOpenMainStream || _selectedIndex == 0 || !mounted) {
       return;
     }
 
@@ -82,11 +82,11 @@ class _AppShellState extends State<AppShell> {
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
-                  _ChatTab(isActive: _selectedIndex == 0),
+                  _MainStreamTab(isActive: _selectedIndex == 0),
                   const _SettingsTab(),
                 ],
               )
-            : const _ChatTab(isActive: true);
+            : const _MainStreamTab(isActive: true);
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
@@ -155,22 +155,22 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-final class _ChatTab extends StatefulWidget {
-  const _ChatTab({required this.isActive});
+final class _MainStreamTab extends StatefulWidget {
+  const _MainStreamTab({required this.isActive});
 
   final bool isActive;
 
   @override
-  State<_ChatTab> createState() => _ChatTabState();
+  State<_MainStreamTab> createState() => _MainStreamTabState();
 }
 
-final class _ChatTabState extends State<_ChatTab> {
+final class _MainStreamTabState extends State<_MainStreamTab> {
   Future<Conversation>? _conversationFuture;
 
   Future<Conversation> _load() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.getOrCreateLoopHomeConversation(sessionKey);
+    return backend.getOrCreateMainStreamConversation(sessionKey);
   }
 
   @override
@@ -199,8 +199,7 @@ final class _ChatTabState extends State<_ChatTab> {
         final conversation = snapshot.data;
         if (conversation == null) {
           return Scaffold(
-            body: Center(
-                child: Text(context.t.errors.missingLoopHomeConversation)),
+            body: Center(child: Text(context.t.errors.missingMainStream)),
           );
         }
         return ChatPage(

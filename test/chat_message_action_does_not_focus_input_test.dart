@@ -18,7 +18,7 @@ void main() {
       initialMessages: const [
         Message(
           id: 'm1',
-          conversationId: 'loop_home',
+          conversationId: 'main_stream',
           role: 'user',
           content: 'hello',
           createdAtMs: 1,
