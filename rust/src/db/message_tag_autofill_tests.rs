@@ -98,6 +98,41 @@ fn default_mode_allows_high_confidence_autofill_to_write_message_tag() {
 }
 
 #[test]
+fn chinese_keyword_message_auto_applies_system_tag() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let key = [29u8; 32];
+    let conversation = get_or_create_main_stream_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "今天的项目会议纪要和工作安排",
+    )
+    .expect("insert message");
+
+    let message_tags = list_message_tags(&conn, &key, &message.id).expect("message tags");
+    assert!(
+        message_tags.iter().any(|tag| tag.name == "work"),
+        "expected applied system tag `work` for Chinese keywords, got: {message_tags:?}"
+    );
+
+    let applied_events: i64 = conn
+        .query_row(
+            r#"SELECT COUNT(*) FROM message_tag_autofill_events WHERE message_id = ?1 AND applied = 1"#,
+            params![message.id],
+            |row| row.get(0),
+        )
+        .expect("applied events");
+    assert!(
+        applied_events > 0,
+        "expected at least one applied autofill event for Chinese message"
+    );
+}
+
+#[test]
 fn attachment_annotation_enqueues_and_processes_autofill_for_linked_messages() {
     let dir = tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

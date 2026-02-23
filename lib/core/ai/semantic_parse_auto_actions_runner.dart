@@ -12,6 +12,7 @@ import '../../features/actions/settings/actions_settings_store.dart';
 import '../../features/actions/todo/message_action_resolver.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../../features/actions/todo/todo_linking.dart';
+import '../../features/tags/tag_repository.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart' as rust_semantic;
 import '../backend/app_backend.dart';
@@ -122,6 +123,11 @@ abstract class SemanticParseAutoActionsStore {
   Future<void> markJobCanceled({
     required String messageId,
     required int nowMs,
+  });
+
+  Future<int> applySemanticTags({
+    required String messageId,
+    required List<String> suggestedTags,
   });
 
   Future<String> upsertTodoFromMessage({
@@ -293,6 +299,17 @@ final class SemanticParseAutoActionsRunner {
             candidates: candidates,
           );
           parsed = AiSemanticDecision(decision: localDecision, confidence: 1.0);
+        }
+
+        if (parsed.suggestedTags.isNotEmpty &&
+            parsed.tagConfidence >= settings.minAutoConfidence) {
+          final appliedSemanticTagCount = await store.applySemanticTags(
+            messageId: job.messageId,
+            suggestedTags: parsed.suggestedTags,
+          );
+          if (appliedSemanticTagCount > 0) {
+            didMutateAny = true;
+          }
         }
 
         if (parsed.confidence < settings.minAutoConfidence) {
@@ -484,15 +501,19 @@ final class BackendSemanticParseAutoActionsStore
   BackendSemanticParseAutoActionsStore({
     required AppBackend backend,
     required Uint8List sessionKey,
+    TagRepository tagRepository = const TagRepository(),
   })  : _backend = backend,
-        _sessionKey = Uint8List.fromList(sessionKey);
+        _sessionKey = Uint8List.fromList(sessionKey),
+        _tagRepository = tagRepository;
 
   final AppBackend _backend;
   final Uint8List _sessionKey;
+  final TagRepository _tagRepository;
 
   static const int _kMaxAttachmentSemanticSnippets = 10;
   static const int _kMaxAttachmentSnippetRunes = 320;
   static const int _kMaxSemanticAnalysisRunes = 2400;
+  static const int _kMaxSemanticTagsPerMessage = 3;
   static const List<String> _kAttachmentSemanticPayloadKeys = <String>[
     'caption_long',
     'summary',
@@ -659,6 +680,12 @@ final class BackendSemanticParseAutoActionsStore
     return String.fromCharCodes(runes.take(maxRunes));
   }
 
+  static String? _normalizeSemanticTagName(String raw) {
+    final normalized = raw.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    return normalized;
+  }
+
   @override
   Future<List<SemanticParseTodoCandidate>> listOpenTodoCandidates({
     required String query,
@@ -778,6 +805,46 @@ final class BackendSemanticParseAutoActionsStore
       messageId: messageId,
       nowMs: nowMs,
     );
+  }
+
+  @override
+  Future<int> applySemanticTags({
+    required String messageId,
+    required List<String> suggestedTags,
+  }) async {
+    final dedupedTagNames = <String>[];
+    final seenTagNames = <String>{};
+
+    for (final rawTag in suggestedTags) {
+      final normalized = _normalizeSemanticTagName(rawTag);
+      if (normalized == null || !seenTagNames.add(normalized)) continue;
+      dedupedTagNames.add(normalized);
+      if (dedupedTagNames.length >= _kMaxSemanticTagsPerMessage) break;
+    }
+
+    if (dedupedTagNames.isEmpty) {
+      return 0;
+    }
+
+    final existingMessageTags =
+        await _tagRepository.listMessageTags(_sessionKey, messageId);
+    final nextTagIds = existingMessageTags.map((tag) => tag.id).toSet();
+
+    var appliedCount = 0;
+    for (final tagName in dedupedTagNames) {
+      final tag = await _tagRepository.upsertTag(_sessionKey, tagName);
+      if (nextTagIds.add(tag.id)) {
+        appliedCount += 1;
+      }
+    }
+
+    if (appliedCount == 0) {
+      return 0;
+    }
+
+    final sortedTagIds = nextTagIds.toList(growable: false)..sort();
+    await _tagRepository.setMessageTags(_sessionKey, messageId, sortedTagIds);
+    return appliedCount;
   }
 
   @override

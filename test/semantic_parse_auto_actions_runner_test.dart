@@ -303,6 +303,48 @@ void main() {
     expect(store.updatedStatusByTodoId['todo:existing'], 'done');
     expect(store.lastSucceeded?.appliedActionKind, 'followup');
   });
+
+  test('runner auto-applies semantic tags when tag confidence is high',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:tag_only',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:tag_only': '今天把报销单整理完了'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"none","confidence":0.2,"suggested_tags":["work","Finance","work"],"tag_confidence":0.96}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isTrue);
+    expect(store.appliedSemanticTagsByMessage['msg:tag_only'],
+        equals(const <String>['work', 'finance']));
+    expect(store.lastSucceeded?.appliedActionKind, 'none');
+  });
 }
 
 final class _FakeStore implements SemanticParseAutoActionsStore {
@@ -334,6 +376,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
 
   final List<String> createdTodoIds = <String>[];
   final Map<String, String> updatedStatusByTodoId = <String, String>{};
+  final Map<String, List<String>> appliedSemanticTagsByMessage =
+      <String, List<String>>{};
   SemanticParseJobSucceededArgs? lastSucceeded;
   SemanticParseJobFailedArgs? lastFailed;
   String? lastRecurrenceRuleJson;
@@ -391,6 +435,24 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String messageId,
     required int nowMs,
   }) async {}
+
+  @override
+  Future<int> applySemanticTags({
+    required String messageId,
+    required List<String> suggestedTags,
+  }) async {
+    final deduped = <String>[];
+    final seen = <String>{};
+    for (final raw in suggestedTags) {
+      final normalized = raw.trim().toLowerCase();
+      if (normalized.isEmpty || !seen.add(normalized)) continue;
+      deduped.add(normalized);
+    }
+    if (deduped.isEmpty) return 0;
+
+    appliedSemanticTagsByMessage[messageId] = deduped;
+    return deduped.length;
+  }
 
   @override
   Future<String> upsertTodoFromMessage({

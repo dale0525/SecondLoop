@@ -87,9 +87,19 @@ fn direct_system_key_token_match(content: &str) -> Option<&'static str> {
     }
 
     let tokens = normalized.split_whitespace().collect::<Vec<_>>();
-    SYSTEM_TAG_KEYS
+    if let Some(key) = SYSTEM_TAG_KEYS
         .into_iter()
         .find(|key| normalized == *key || tokens.contains(key))
+    {
+        return Some(key);
+    }
+
+    let has_non_ascii = !normalized.is_ascii();
+    if !has_non_ascii {
+        return None;
+    }
+
+    map_to_system_key(&normalized)
 }
 
 fn list_attachment_suggested_tags_for_autofill(

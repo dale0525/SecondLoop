@@ -95,7 +95,9 @@ fn build_message_action_prompt(
     out.push_str("  \"recurrence\": { // only when kind=create\n");
     out.push_str("    \"freq\": \"daily\" | \"weekly\" | \"monthly\" | \"yearly\",\n");
     out.push_str("    \"interval\": number // >=1\n");
-    out.push_str("  } | null\n");
+    out.push_str("  } | null,\n");
+    out.push_str("  \"suggested_tags\": string[], // 0..3 normalized tags for this message\n");
+    out.push_str("  \"tag_confidence\": number // 0..1 confidence for suggested_tags\n");
     out.push_str("}\n\n");
 
     out.push_str("Constraints:\n");
@@ -118,7 +120,14 @@ fn build_message_action_prompt(
     );
     out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n");
     out.push_str(
-        "- status/new_status MUST use canonical enum values even if user text is non-English.\n\n",
+        "- status/new_status MUST use canonical enum values even if user text is non-English.\n",
+    );
+    out.push_str("- suggested_tags MUST contain at most 3 concise tags.\n");
+    out.push_str(
+        "- Prefer these canonical tags when relevant: work|personal|family|health|finance|study|travel|social|home|hobby.\n",
+    );
+    out.push_str(
+        "- If no useful tag is inferred, return suggested_tags as [] and tag_confidence as 0.\n\n",
     );
 
     out.push_str(&format!("now_local_iso: {now_local_iso}\n"));
@@ -288,6 +297,7 @@ mod tests {
         assert!(prompt.contains("taxes"));
         assert!(prompt.contains("day_end_minutes"));
         assert!(prompt.contains("\"recurrence\""));
+        assert!(prompt.contains("\"suggested_tags\""));
         assert!(prompt.contains("message may be in any language"));
     }
 
