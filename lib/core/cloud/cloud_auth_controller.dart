@@ -46,7 +46,7 @@ final class CloudAuthControllerImpl extends ChangeNotifier
     CloudAuthStore? store,
     int Function()? nowMs,
   })  : _identityToolkit = identityToolkit,
-        _store = store ?? SecureCloudAuthStore(),
+        _store = store ?? createDefaultCloudAuthStore(),
         _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final FirebaseIdentityToolkit _identityToolkit;

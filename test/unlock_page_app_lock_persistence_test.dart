@@ -95,9 +95,9 @@ void main() {
   });
 
   testWidgets(
-      'unlock: desktop auto lock on (default system unlock) -> persists session key',
+      'unlock: windows desktop auto lock on (default system unlock) -> persists session key',
       (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       SharedPreferences.setMockInitialValues({
         'app_lock_enabled_v1': true,
@@ -124,6 +124,42 @@ void main() {
 
       expect(backend.saveSessionKeyCalls, 1);
       expect(backend.clearSavedSessionKeyCalls, 0);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('unlock: macOS auto lock on does not persist session key',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      SharedPreferences.setMockInitialValues({
+        'app_lock_enabled_v1': true,
+      });
+
+      final backend = _CountingBackend();
+
+      await tester.pumpWidget(
+        AppBackendScope(
+          backend: backend,
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: UnlockPage(onUnlocked: _noop),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Use system unlock'), findsNothing);
+
+      await tester.enterText(
+          find.byKey(const ValueKey('unlock_password')), 'pw');
+      await tester.tap(find.byKey(const ValueKey('unlock_continue')));
+      await tester.pumpAndSettle();
+
+      expect(backend.saveSessionKeyCalls, 0);
+      expect(backend.clearSavedSessionKeyCalls, 1);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

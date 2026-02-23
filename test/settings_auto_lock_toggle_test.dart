@@ -140,9 +140,9 @@ void main() {
   });
 
   testWidgets(
-      'Settings (desktop): enabling Auto lock keeps saved key (default system unlock)',
+      'Settings (windows desktop): enabling Auto lock keeps saved key (default system unlock)',
       (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       SharedPreferences.setMockInitialValues({
         'app_lock_enabled_v1': false,

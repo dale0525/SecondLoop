@@ -423,13 +423,13 @@ final class SyncConfigStore {
 
     final isMac =
         Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
-    final allowKeychainRead = !isMac;
+    if (isMac) {
+      return <String, String>{};
+    }
+
     final secure = SecureBlobStore(
       storage: _unusedLegacySecureStorage ?? const FlutterSecureStorage(),
     );
-    if (!allowKeychainRead && !secure.isLoaded) {
-      return <String, String>{};
-    }
 
     Map<String, String> legacy;
     try {

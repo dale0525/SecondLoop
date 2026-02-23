@@ -11,9 +11,8 @@ extension _SettingsPageBuild on _SettingsPageState {
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows ||
             defaultTargetPlatform == TargetPlatform.linux);
-    final isDesktop = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows);
+    final isDesktop =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     final isZh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
