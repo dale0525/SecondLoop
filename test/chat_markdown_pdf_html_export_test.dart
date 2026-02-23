@@ -58,7 +58,8 @@ void main() {
     expect(html, contains('position: fixed'));
   });
 
-  test('PDF HTML export removes page margins to avoid white borders', () async {
+  test('PDF HTML export clones content padding on each page fragment',
+      () async {
     final html = await buildChatMarkdownPdfHtmlDocument(
       markdown: 'Theme check',
       theme: buildTheme(),
@@ -72,7 +73,11 @@ void main() {
   margin: 0;
   background:'''),
     );
+    expect(html, contains('.sl-pdf-content'));
     expect(html, contains('padding: 48px 54px 64px 54px;'));
+    expect(html, contains('-webkit-box-decoration-break: clone;'));
+    expect(html, contains('box-decoration-break: clone;'));
+    expect(html, contains('<main class="sl-pdf-content">'));
   });
 
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {

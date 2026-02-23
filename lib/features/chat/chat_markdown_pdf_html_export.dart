@@ -94,7 +94,6 @@ html {
 body {
   position: relative;
   z-index: 0;
-  padding: 48px 54px 64px 54px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   font-size: 13px;
   line-height: 1.45;
@@ -110,6 +109,11 @@ body::before {
   background: ${_toCssColor(theme.panelColor)};
   z-index: -1;
   pointer-events: none;
+}
+.sl-pdf-content {
+  padding: 48px 54px 64px 54px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 a {
   color: ${_toCssColor(theme.linkColor)};
@@ -373,7 +377,9 @@ window.__SECONDLOOP_PDF_READY__ = false;
 </script>
 </head>
 <body>
+<main class="sl-pdf-content">
 $transformedHtml
+</main>
 </body>
 </html>''';
 }
