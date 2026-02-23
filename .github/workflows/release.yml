@@ -269,11 +269,20 @@ jobs:
         shell: pwsh
         run: |
           cmd /c subst W: /d > $null 2>&1
-          cmd /c subst W: $Env:GITHUB_WORKSPACE
+          $workspaceParent = Split-Path -Parent $Env:GITHUB_WORKSPACE
+          $workspaceLeaf = Split-Path -Leaf $Env:GITHUB_WORKSPACE
+          if ([string]::IsNullOrWhiteSpace($workspaceParent) -or [string]::IsNullOrWhiteSpace($workspaceLeaf)) {
+            throw "Unable to resolve workspace path segments from $Env:GITHUB_WORKSPACE"
+          }
+          cmd /c subst W: $workspaceParent
+          $shortWorkspacePath = "W:\$workspaceLeaf"
 
           $enteredWorkspace = $false
           try {
-            Push-Location "W:\"
+            if (-not (Test-Path -LiteralPath $shortWorkspacePath)) {
+              throw "Short workspace path not found: $shortWorkspacePath"
+            }
+            Push-Location $shortWorkspacePath
             $enteredWorkspace = $true
 
             $Env:CARGOKIT_TARGET_TEMP_DIR = 'W:\ck'

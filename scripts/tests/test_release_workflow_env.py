@@ -156,8 +156,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn("subst W: $Env:GITHUB_WORKSPACE", workflow_text)
-        self.assertIn('Push-Location "W:\\"', workflow_text)
+        self.assertIn('$workspaceParent = Split-Path -Parent $Env:GITHUB_WORKSPACE', workflow_text)
+        self.assertIn('$workspaceLeaf = Split-Path -Leaf $Env:GITHUB_WORKSPACE', workflow_text)
+        self.assertIn('subst W: $workspaceParent', workflow_text)
+        self.assertIn('$shortWorkspacePath = "W:\\$workspaceLeaf"', workflow_text)
+        self.assertIn('Push-Location $shortWorkspacePath', workflow_text)
+        self.assertNotIn('Push-Location "W:\\"', workflow_text)
         self.assertIn("subst W: /d", workflow_text)
 
     def test_windows_build_sets_short_cargokit_temp_paths(self) -> None:
