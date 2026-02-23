@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -18,20 +17,11 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
-import '../audio_transcribe/audio_transcribe_runner.dart';
+import '../attachments/attachment_ingest_pipeline.dart';
+import '../attachments/attachment_send_feedback_banner.dart';
+import '../attachments/platform_exif_metadata.dart';
 import '../media_backup/audio_transcode_policy.dart';
-import '../media_backup/audio_transcode_worker.dart';
-import '../media_backup/image_compression.dart';
-import '../media_backup/video_proxy_segment_policy.dart';
-import '../media_backup/video_transcode_worker.dart';
 import 'share_ingest.dart';
-
-const int _kVideoProxySegmentDurationSeconds = 20 * 60;
-const int _kVideoProxySegmentDurationMs =
-    _kVideoProxySegmentDurationSeconds * 1000;
-const int _kVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
-const int _kVideoProxyMaxDurationMs = 60 * 60 * 1000;
-const int _kVideoProxyMaxBytes = 200 * 1024 * 1024;
 
 final class ShareIngestGate extends StatefulWidget {
   const ShareIngestGate({required this.child, super.key});
@@ -130,6 +120,24 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     );
   }
 
+  Future<void> _maybeEnqueueAttachmentPlaceEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256, {
+    required String lang,
+  }) async {
+    try {
+      await backend.enqueueAttachmentPlace(
+        sessionKey,
+        attachmentSha256: attachmentSha256,
+        lang: lang,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
   Future<void> _maybeEnqueueAttachmentAnnotationEnrichment(
     NativeAppBackend backend,
     Uint8List sessionKey,
@@ -159,7 +167,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     required String mimeType,
   }) async {
     final normalizedMimeType = mimeType.trim().toLowerCase();
-    final canTranscribe = looksLikeAudioMimeType(normalizedMimeType) ||
+    final canTranscribe = normalizedMimeType.startsWith('audio/') ||
         normalizedMimeType.startsWith('video/');
     if (!canTranscribe) return;
 
@@ -170,7 +178,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     } catch (_) {
       config = null;
     }
-    if (config == null || !config.audioTranscribeEnabled) return;
+    if (!(config?.audioTranscribeEnabled ?? true)) return;
 
     await backend.enqueueAttachmentAnnotation(
       sessionKey,
@@ -208,20 +216,17 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         contentConfig = null;
       }
 
-      int sanitizeVideoProxyLimit(int value, int fallback) {
-        if (value <= 0) return fallback;
-        return value;
-      }
-
       final videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
-      final configuredVideoProxyMaxDurationMs = sanitizeVideoProxyLimit(
-        (contentConfig?.videoProxyMaxDurationMs ?? _kVideoProxyMaxDurationMs)
+      final configuredVideoProxyMaxDurationMs = sanitizeAttachmentIngestLimit(
+        (contentConfig?.videoProxyMaxDurationMs ??
+                kAttachmentVideoProxyMaxDurationMs)
             .toInt(),
-        _kVideoProxyMaxDurationMs,
+        kAttachmentVideoProxyMaxDurationMs,
       );
-      final configuredVideoProxyMaxBytes = sanitizeVideoProxyLimit(
-        (contentConfig?.videoProxyMaxBytes ?? _kVideoProxyMaxBytes).toInt(),
-        _kVideoProxyMaxBytes,
+      final configuredVideoProxyMaxBytes = sanitizeAttachmentIngestLimit(
+        (contentConfig?.videoProxyMaxBytes ?? kAttachmentVideoProxyMaxBytes)
+            .toInt(),
+        kAttachmentVideoProxyMaxBytes,
       );
 
       Future<String> Function(String path, String mimeType, String? filename)?
@@ -250,341 +255,100 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         };
 
         onUrlManifest = (url) async {
-          final manifest = jsonEncode({
-            'schema': 'secondloop.url_manifest.v1',
-            'url': url.trim(),
-          });
-          final bytes = Uint8List.fromList(utf8.encode(manifest));
           final attachment = await backend.insertAttachment(
             sessionKey,
-            bytes: bytes,
-            mimeType: 'application/x.secondloop.url+json',
+            bytes: buildUrlManifestAttachmentBytes(url),
+            mimeType: kSecondLoopUrlManifestMimeType,
           );
           return attachment.sha256;
         };
 
-        onFile = (path, mimeType, filename) async {
+        onFile = (path, mimeType, _) async {
           final bytes = await compute(_readFileBytes, path);
           final normalizedMimeType = mimeType.trim();
-
-          if (normalizedMimeType.startsWith('video/')) {
-            if (!videoProxyEnabled) {
-              final attachment = await backend.insertAttachment(
-                sessionKey,
-                bytes: bytes,
-                mimeType: normalizedMimeType,
-              );
-              unawaited(_maybeEnqueueCloudMediaBackup(
-                backend,
-                sessionKey,
-                attachment.sha256,
-              ));
-
-              try {
-                await File(path).delete();
-              } catch (_) {
-                // ignore
-              }
-
-              return attachment.sha256;
-            }
-
-            final videoProxy =
-                await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
-              bytes,
-              sourceMimeType: normalizedMimeType,
-              maxSegmentDurationSeconds: _kVideoProxySegmentDurationSeconds,
-              maxSegmentBytes: _kVideoProxySegmentMaxBytes,
-            );
-            final selectedSegments =
-                selectVideoProxySegments(videoProxy.segments);
-
-            if (!selectedSegments.hasSegments) {
-              throw StateError('video_proxy_segments_empty');
-            }
-
-            final videoSegments =
-                <({int index, String sha256, String mimeType})>[];
-            for (final segment in selectedSegments.segments) {
-              final segmentAttachment = await backend.insertAttachment(
-                sessionKey,
-                bytes: segment.bytes,
-                mimeType: segment.mimeType,
-              );
-              videoSegments.add(
-                (
-                  index: segment.index,
-                  sha256: segmentAttachment.sha256,
-                  mimeType: segmentAttachment.mimeType,
-                ),
-              );
-              unawaited(_maybeEnqueueCloudMediaBackup(
-                backend,
-                sessionKey,
-                segmentAttachment.sha256,
-              ));
-            }
-
-            final primarySegment = selectedSegments.segments.first;
-            final primaryVideo = videoSegments.first;
-
-            String? posterSha256;
-            String? posterMimeType;
-            final keyframeRefs = <({
-              int index,
-              String sha256,
-              String mimeType,
-              int tMs,
-              String kind
-            })>[];
-            final preview = await VideoTranscodeWorker.extractPreviewFrames(
-              primarySegment.bytes,
-              sourceMimeType: primarySegment.mimeType,
-            );
-            const resolvedKeyframeKind = 'scene';
-            final posterBytes = preview.posterBytes;
-            if (posterBytes != null && posterBytes.isNotEmpty) {
-              final posterAttachment = await backend.insertAttachment(
-                sessionKey,
-                bytes: posterBytes,
-                mimeType: preview.posterMimeType,
-              );
-              posterSha256 = posterAttachment.sha256;
-              posterMimeType = posterAttachment.mimeType;
-              unawaited(_maybeEnqueueCloudMediaBackup(
-                backend,
-                sessionKey,
-                posterAttachment.sha256,
-              ));
-            }
-
-            for (final frame in preview.keyframes) {
-              final frameAttachment = await backend.insertAttachment(
-                sessionKey,
-                bytes: frame.bytes,
-                mimeType: frame.mimeType,
-              );
-              keyframeRefs.add(
-                (
-                  index: frame.index,
-                  sha256: frameAttachment.sha256,
-                  mimeType: frameAttachment.mimeType,
-                  tMs: frame.tMs,
-                  kind: resolvedKeyframeKind,
-                ),
-              );
-              unawaited(_maybeEnqueueCloudMediaBackup(
-                backend,
-                sessionKey,
-                frameAttachment.sha256,
-              ));
-            }
-
-            String? audioSha256;
-            String? audioMimeType;
-            final shouldExtractVideoAudio = useLocalAudioTranscode ||
-                defaultTargetPlatform == TargetPlatform.android ||
-                defaultTargetPlatform == TargetPlatform.iOS;
-            if (shouldExtractVideoAudio) {
-              final audioProxy =
-                  await AudioTranscodeWorker.transcodeVideoAudioForManifest(
-                bytes,
-                originalMimeType: normalizedMimeType,
-                primarySegmentBytes: primarySegment.bytes,
-                primarySegmentMimeType: primarySegment.mimeType,
-              );
-              if (audioProxy.didTranscode &&
-                  audioProxy.bytes.isNotEmpty &&
-                  looksLikeAudioMimeType(audioProxy.mimeType)) {
-                final audioAttachment = await backend.insertAttachment(
-                  sessionKey,
-                  bytes: audioProxy.bytes,
-                  mimeType: audioProxy.mimeType,
-                );
-                audioSha256 = audioAttachment.sha256;
-                audioMimeType = audioAttachment.mimeType;
-                unawaited(_maybeEnqueueCloudMediaBackup(
-                  backend,
-                  sessionKey,
-                  audioAttachment.sha256,
-                ));
-              }
-            }
-
-            final queuedTranscriptShas = <String>{};
-            Future<void> enqueueVideoTranscriptJob(
-              String sha256,
-              String mimeType,
-            ) async {
-              final normalizedSha = sha256.trim();
-              if (normalizedSha.isEmpty) return;
-              if (!queuedTranscriptShas.add(normalizedSha)) return;
-              await _maybeEnqueueAudioTranscribeEnrichment(
-                backend,
-                sessionKey,
-                normalizedSha,
-                mimeType: mimeType,
-              );
-            }
-
-            for (final segment in videoSegments) {
-              unawaited(
-                enqueueVideoTranscriptJob(segment.sha256, segment.mimeType)
-                    .catchError((_) {}),
-              );
-            }
-
-            audioSha256 ??= primaryVideo.sha256;
-            audioMimeType ??= primaryVideo.mimeType;
-
-            unawaited(
-              enqueueVideoTranscriptJob(audioSha256, audioMimeType)
-                  .catchError((_) {}),
-            );
-
-            final manifest = jsonEncode({
-              ...buildVideoManifestPayload(
-                videoSha256: primaryVideo.sha256,
-                videoMimeType: primaryVideo.mimeType,
-                videoProxySha256: primaryVideo.sha256,
-                posterSha256: posterSha256,
-                posterMimeType: posterMimeType,
-                keyframes: keyframeRefs,
-                audioSha256: audioSha256,
-                audioMimeType: audioMimeType,
-                segmentCount: videoSegments.length,
-                videoSegments: videoSegments,
+          try {
+            return await ingestFileAttachmentBytes(
+              backend: backend,
+              sessionKey: sessionKey,
+              rawBytes: bytes,
+              mimeType: normalizedMimeType,
+              options: FileAttachmentIngestOptions(
+                useLocalAudioTranscode: useLocalAudioTranscode,
+                videoProxyEnabled: videoProxyEnabled,
                 videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
                 videoProxyMaxBytes: configuredVideoProxyMaxBytes,
-                videoProxyTotalBytes: selectedSegments.totalBytes,
-                videoProxyTruncated: selectedSegments.isTruncated,
               ),
-            });
-            final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
-            final manifestAttachment = await backend.insertAttachment(
-              sessionKey,
-              bytes: manifestBytes,
-              mimeType: 'application/x.secondloop.video+json',
-            );
-
-            try {
-              final nowMs = DateTime.now().millisecondsSinceEpoch;
-              final initialPayload = buildInitialVideoExtractPayload(
-                manifestMimeType: 'application/x.secondloop.video+json',
-                originalSha256: primaryVideo.sha256,
-                originalMimeType: primaryVideo.mimeType,
-                audioSha256: audioSha256,
-                audioMimeType: audioMimeType,
-                segmentCount: videoSegments.length,
-              );
-              await backend.markAttachmentAnnotationOkJson(
-                sessionKey,
-                attachmentSha256: manifestAttachment.sha256,
-                lang: 'und',
-                modelName: 'video_extract.v1',
-                payloadJson: jsonEncode(initialPayload),
-                nowMs: nowMs,
-              );
-            } catch (_) {
-              // ignore
-            }
-
-            try {
-              await File(path).delete();
-            } catch (_) {
-              // ignore
-            }
-
-            return manifestAttachment.sha256;
-          }
-
-          if (normalizedMimeType.startsWith('audio/')) {
-            final proxy = useLocalAudioTranscode
-                ? await AudioTranscodeWorker.transcodeToM4aProxy(
-                    bytes,
-                    sourceMimeType: normalizedMimeType,
-                  )
-                : AudioTranscodeResult(
-                    bytes: bytes,
-                    mimeType: normalizedMimeType,
-                    didTranscode: false,
-                  );
-            final attachment = await backend.insertAttachment(
-              sessionKey,
-              bytes: proxy.bytes,
-              mimeType: proxy.mimeType,
-            );
-            unawaited(_maybeEnqueueCloudMediaBackup(
-              backend,
-              sessionKey,
-              attachment.sha256,
-            ));
-            unawaited(
-              _maybeEnqueueAudioTranscribeEnrichment(
+              onBackupCandidate: (attachmentSha256) =>
+                  _maybeEnqueueCloudMediaBackup(
                 backend,
                 sessionKey,
-                attachment.sha256,
-                mimeType: proxy.mimeType,
-              ).catchError((_) {}),
+                attachmentSha256,
+              ),
+              onMaybeEnqueueAudioTranscribe:
+                  (attachmentSha256, candidateMimeType) =>
+                      _maybeEnqueueAudioTranscribeEnrichment(
+                backend,
+                sessionKey,
+                attachmentSha256,
+                mimeType: candidateMimeType,
+              ),
             );
-
+          } finally {
             try {
               await File(path).delete();
             } catch (_) {
               // ignore
             }
-
-            return attachment.sha256;
           }
-
-          final attachment = await backend.insertAttachment(
-            sessionKey,
-            bytes: bytes,
-            mimeType: normalizedMimeType,
-          );
-          unawaited(_maybeEnqueueCloudMediaBackup(
-            backend,
-            sessionKey,
-            attachment.sha256,
-          ));
-
-          try {
-            await File(path).delete();
-          } catch (_) {
-            // ignore
-          }
-
-          return attachment.sha256;
         };
 
         onImage = (path, mimeType, _) async {
           final bytes = await compute(_readFileBytes, path);
-          final compressed =
-              await compressImageForStorage(bytes, mimeType: mimeType);
-          final attachment = await backend.insertAttachment(
-            sessionKey,
-            bytes: compressed.bytes,
-            mimeType: compressed.mimeType,
-          );
-          unawaited(_maybeEnqueueCloudMediaBackup(
-            backend,
-            sessionKey,
-            attachment.sha256,
-          ));
-          unawaited(
-            _maybeEnqueueAttachmentAnnotationEnrichment(
-              backend,
-              sessionKey,
-              attachment.sha256,
-              lang: lang,
-            ).catchError((_) {}),
-          );
+          PlatformExifMetadata? platformExif;
           try {
-            await File(path).delete();
+            platformExif =
+                await PlatformExifReader.tryReadImageMetadataFromPath(path);
           } catch (_) {
-            // ignore
+            platformExif = null;
           }
-          return attachment.sha256;
+
+          try {
+            final ingested = await ingestImageAttachmentBytes(
+              backend: backend,
+              sessionKey: sessionKey,
+              rawBytes: bytes,
+              inferredMimeType: mimeType,
+              lang: lang,
+              platformExif: platformExif,
+              onBackupCandidate: (attachmentSha256) =>
+                  _maybeEnqueueCloudMediaBackup(
+                backend,
+                sessionKey,
+                attachmentSha256,
+              ),
+              onMaybeEnqueuePlace: (attachmentSha256, lang) =>
+                  _maybeEnqueueAttachmentPlaceEnrichment(
+                backend,
+                sessionKey,
+                attachmentSha256,
+                lang: lang,
+              ),
+              onMaybeEnqueueAnnotation: (attachmentSha256, lang) =>
+                  _maybeEnqueueAttachmentAnnotationEnrichment(
+                backend,
+                sessionKey,
+                attachmentSha256,
+                lang: lang,
+              ),
+            );
+            return ingested.attachmentSha256;
+          } finally {
+            try {
+              await File(path).delete();
+            } catch (_) {
+              // ignore
+            }
+          }
         };
       }
 
@@ -607,8 +371,6 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -629,52 +391,8 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                       : ConstrainedBox(
                           key: const ValueKey('share_ingest_feedback'),
                           constraints: const BoxConstraints(maxWidth: 460),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: colorScheme.shadow.withOpacity(0.14),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      color: colorScheme.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      context.t.sync.progressDialog.preparing,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurface,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          child: AttachmentSendFeedbackBanner(
+                            text: context.t.sync.progressDialog.uploadingMedia,
                           ),
                         ),
                 ),
@@ -688,94 +406,3 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
 }
 
 Uint8List _readFileBytes(String path) => File(path).readAsBytesSync();
-
-Map<String, Object?> buildInitialVideoExtractPayload({
-  required String manifestMimeType,
-  required String originalSha256,
-  required String originalMimeType,
-  required int segmentCount,
-  String? audioSha256,
-  String? audioMimeType,
-}) {
-  return <String, Object?>{
-    'schema': 'secondloop.video_extract.v1',
-    'mime_type': manifestMimeType,
-    'original_sha256': originalSha256,
-    'original_mime_type': originalMimeType,
-    'needs_ocr': true,
-    'ocr_auto_status': 'queued',
-    'video_segment_count': segmentCount,
-    'video_processed_segment_count': 0,
-    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
-      'audio_sha256': audioSha256,
-    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
-      'audio_mime_type': audioMimeType,
-  };
-}
-
-Map<String, Object?> buildVideoManifestPayload({
-  required String videoSha256,
-  required String videoMimeType,
-  String? videoProxySha256,
-  String? posterSha256,
-  String? posterMimeType,
-  List<({int index, String sha256, String mimeType, int tMs, String kind})>?
-      keyframes,
-  String? audioSha256,
-  String? audioMimeType,
-  int? segmentCount,
-  List<({int index, String sha256, String mimeType})>? videoSegments,
-  int videoProxyMaxDurationMs = _kVideoProxyMaxDurationMs,
-  int videoProxyMaxBytes = _kVideoProxyMaxBytes,
-  int? videoProxyTotalBytes,
-  bool videoProxyTruncated = false,
-}) {
-  return <String, Object?>{
-    'schema': 'secondloop.video_manifest.v2',
-    'video_sha256': videoSha256,
-    'video_mime_type': videoMimeType,
-    // Backward-compatible fields for readers that still expect v1 keys.
-    'original_sha256': videoSha256,
-    'original_mime_type': videoMimeType,
-    if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
-      'video_proxy_sha256': videoProxySha256,
-    if (posterSha256 != null && posterSha256.trim().isNotEmpty)
-      'poster_sha256': posterSha256,
-    if (posterMimeType != null && posterMimeType.trim().isNotEmpty)
-      'poster_mime_type': posterMimeType,
-    if (keyframes != null && keyframes.isNotEmpty)
-      'keyframes': keyframes
-          .map(
-            (frame) => <String, Object?>{
-              'index': frame.index,
-              'sha256': frame.sha256,
-              'mime_type': frame.mimeType,
-              't_ms': frame.tMs,
-              'kind': frame.kind,
-            },
-          )
-          .toList(growable: false),
-    if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
-    'segment_max_duration_ms': _kVideoProxySegmentDurationMs,
-    'segment_max_bytes': _kVideoProxySegmentMaxBytes,
-    'video_proxy_max_duration_ms': videoProxyMaxDurationMs,
-    'video_proxy_max_bytes': videoProxyMaxBytes,
-    if (videoProxyTotalBytes != null && videoProxyTotalBytes > 0)
-      'video_proxy_total_bytes': videoProxyTotalBytes,
-    if (videoProxyTruncated) 'video_proxy_truncated': true,
-    if (videoSegments != null && videoSegments.isNotEmpty)
-      'video_segments': videoSegments
-          .map(
-            (segment) => <String, Object?>{
-              'index': segment.index,
-              'sha256': segment.sha256,
-              'mime_type': segment.mimeType,
-            },
-          )
-          .toList(growable: false),
-    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
-      'audio_sha256': audioSha256,
-    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
-      'audio_mime_type': audioMimeType,
-  };
-}

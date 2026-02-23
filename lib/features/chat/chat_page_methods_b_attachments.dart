@@ -1,107 +1,5 @@
 part of 'chat_page.dart';
 
-const String _kSecondLoopUrlManifestMimeType =
-    'application/x.secondloop.url+json';
-const String kSecondLoopVideoManifestMimeType =
-    'application/x.secondloop.video+json';
-const String _kSecondLoopUrlManifestSchema = 'secondloop.url_manifest.v1';
-const int _kChatVideoProxySegmentDurationSeconds = 20 * 60;
-const int _kChatVideoProxySegmentDurationMs =
-    _kChatVideoProxySegmentDurationSeconds * 1000;
-const int _kChatVideoProxySegmentMaxBytes = 50 * 1024 * 1024;
-const int _kChatVideoProxyMaxDurationMs = 60 * 60 * 1000;
-const int _kChatVideoProxyMaxBytes = 200 * 1024 * 1024;
-
-Map<String, Object?> _buildInitialVideoExtractPayload({
-  required String manifestMimeType,
-  required String originalSha256,
-  required String originalMimeType,
-  required int segmentCount,
-  String? audioSha256,
-  String? audioMimeType,
-}) {
-  return <String, Object?>{
-    'schema': 'secondloop.video_extract.v1',
-    'mime_type': manifestMimeType,
-    'original_sha256': originalSha256,
-    'original_mime_type': originalMimeType,
-    'needs_ocr': true,
-    'ocr_auto_status': 'queued',
-    'video_segment_count': segmentCount,
-    'video_processed_segment_count': 0,
-    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
-      'audio_sha256': audioSha256,
-    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
-      'audio_mime_type': audioMimeType,
-  };
-}
-
-Map<String, Object?> buildVideoManifestPayload({
-  required String videoSha256,
-  required String videoMimeType,
-  String? videoProxySha256,
-  String? posterSha256,
-  String? posterMimeType,
-  List<({int index, String sha256, String mimeType, int tMs, String kind})>?
-      keyframes,
-  String? audioSha256,
-  String? audioMimeType,
-  int? segmentCount,
-  List<({int index, String sha256, String mimeType})>? videoSegments,
-  int videoProxyMaxDurationMs = _kChatVideoProxyMaxDurationMs,
-  int videoProxyMaxBytes = _kChatVideoProxyMaxBytes,
-  int? videoProxyTotalBytes,
-  bool videoProxyTruncated = false,
-}) {
-  return <String, Object?>{
-    'schema': 'secondloop.video_manifest.v2',
-    'video_sha256': videoSha256,
-    'video_mime_type': videoMimeType,
-    'original_sha256': videoSha256,
-    'original_mime_type': videoMimeType,
-    if (videoProxySha256 != null && videoProxySha256.trim().isNotEmpty)
-      'video_proxy_sha256': videoProxySha256,
-    if (posterSha256 != null && posterSha256.trim().isNotEmpty)
-      'poster_sha256': posterSha256,
-    if (posterMimeType != null && posterMimeType.trim().isNotEmpty)
-      'poster_mime_type': posterMimeType,
-    if (keyframes != null && keyframes.isNotEmpty)
-      'keyframes': keyframes
-          .map(
-            (frame) => <String, Object?>{
-              'index': frame.index,
-              'sha256': frame.sha256,
-              'mime_type': frame.mimeType,
-              't_ms': frame.tMs,
-              'kind': frame.kind,
-            },
-          )
-          .toList(growable: false),
-    if (segmentCount != null && segmentCount > 0) 'segment_count': segmentCount,
-    'segment_max_duration_ms': _kChatVideoProxySegmentDurationMs,
-    'segment_max_bytes': _kChatVideoProxySegmentMaxBytes,
-    'video_proxy_max_duration_ms': videoProxyMaxDurationMs,
-    'video_proxy_max_bytes': videoProxyMaxBytes,
-    if (videoProxyTotalBytes != null && videoProxyTotalBytes > 0)
-      'video_proxy_total_bytes': videoProxyTotalBytes,
-    if (videoProxyTruncated) 'video_proxy_truncated': true,
-    if (videoSegments != null && videoSegments.isNotEmpty)
-      'video_segments': videoSegments
-          .map(
-            (segment) => <String, Object?>{
-              'index': segment.index,
-              'sha256': segment.sha256,
-              'mime_type': segment.mimeType,
-            },
-          )
-          .toList(growable: false),
-    if (audioSha256 != null && audioSha256.trim().isNotEmpty)
-      'audio_sha256': audioSha256,
-    if (audioMimeType != null && audioMimeType.trim().isNotEmpty)
-      'audio_mime_type': audioMimeType,
-  };
-}
-
 extension _ChatPageStateMethodsBAttachments on _ChatPageState {
   bool _looksLikeHttpUrlText(String raw) {
     final trimmed = raw.trim();
@@ -185,15 +83,10 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     final syncEngine = SyncEngineScope.maybeOf(context);
 
     try {
-      final manifest = jsonEncode({
-        'schema': _kSecondLoopUrlManifestSchema,
-        'url': trimmed,
-      });
-      final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
       final attachment = await backend.insertAttachment(
         sessionKey,
-        bytes: manifestBytes,
-        mimeType: _kSecondLoopUrlManifestMimeType,
+        bytes: buildUrlManifestAttachmentBytes(trimmed),
+        mimeType: kSecondLoopUrlManifestMimeType,
       );
       final message = await backend.insertMessage(
         sessionKey,
@@ -390,9 +283,11 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
         _refreshAfterAttachmentMutation();
       }
 
-      String shaToLink;
-      final backupShas = <String>[];
-      if (normalizedMimeType.startsWith('video/')) {
+      var videoProxyEnabled = true;
+      var configuredVideoProxyMaxDurationMs =
+          kAttachmentVideoProxyMaxDurationMs;
+      var configuredVideoProxyMaxBytes = kAttachmentVideoProxyMaxBytes;
+      if (normalizedMimeType.toLowerCase().startsWith('video/')) {
         ContentEnrichmentConfig? contentConfig;
         try {
           contentConfig = await const RustContentEnrichmentConfigStore()
@@ -401,255 +296,44 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           contentConfig = null;
         }
 
-        int sanitizeVideoProxyLimit(int value, int fallback) {
-          if (value <= 0) return fallback;
-          return value;
-        }
-
-        final videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
-        final configuredVideoProxyMaxDurationMs = sanitizeVideoProxyLimit(
+        videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
+        configuredVideoProxyMaxDurationMs = sanitizeAttachmentIngestLimit(
           (contentConfig?.videoProxyMaxDurationMs ??
-                  _kChatVideoProxyMaxDurationMs)
+                  kAttachmentVideoProxyMaxDurationMs)
               .toInt(),
-          _kChatVideoProxyMaxDurationMs,
+          kAttachmentVideoProxyMaxDurationMs,
         );
-        final configuredVideoProxyMaxBytes = sanitizeVideoProxyLimit(
-          (contentConfig?.videoProxyMaxBytes ?? _kChatVideoProxyMaxBytes)
+        configuredVideoProxyMaxBytes = sanitizeAttachmentIngestLimit(
+          (contentConfig?.videoProxyMaxBytes ?? kAttachmentVideoProxyMaxBytes)
               .toInt(),
-          _kChatVideoProxyMaxBytes,
+          kAttachmentVideoProxyMaxBytes,
         );
-
-        if (!videoProxyEnabled) {
-          final attachment = await backend.insertAttachment(
-            sessionKey,
-            bytes: rawBytes,
-            mimeType: normalizedMimeType,
-          );
-          shaToLink = attachment.sha256;
-          backupShas.add(attachment.sha256);
-        } else {
-          final videoProxy =
-              await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
-            rawBytes,
-            sourceMimeType: normalizedMimeType,
-            maxSegmentDurationSeconds: _kChatVideoProxySegmentDurationSeconds,
-            maxSegmentBytes: _kChatVideoProxySegmentMaxBytes,
-          );
-          final selectedSegments =
-              selectVideoProxySegments(videoProxy.segments);
-          if (!selectedSegments.hasSegments) {
-            throw StateError('video_proxy_segments_empty');
-          }
-
-          final videoSegments =
-              <({int index, String sha256, String mimeType})>[];
-          for (final segment in selectedSegments.segments) {
-            final segmentAttachment = await backend.insertAttachment(
-              sessionKey,
-              bytes: segment.bytes,
-              mimeType: segment.mimeType,
-            );
-            videoSegments.add(
-              (
-                index: segment.index,
-                sha256: segmentAttachment.sha256,
-                mimeType: segmentAttachment.mimeType,
-              ),
-            );
-            backupShas.add(segmentAttachment.sha256);
-          }
-
-          final primarySegment = selectedSegments.segments.first;
-          final primaryVideo = videoSegments.first;
-
-          String? posterSha256;
-          String? posterMimeType;
-          final keyframeRefs = <({
-            int index,
-            String sha256,
-            String mimeType,
-            int tMs,
-            String kind
-          })>[];
-          final preview = await VideoTranscodeWorker.extractPreviewFrames(
-            primarySegment.bytes,
-            sourceMimeType: primarySegment.mimeType,
-          );
-          const resolvedKeyframeKind = 'scene';
-          final posterBytes = preview.posterBytes;
-          if (posterBytes != null && posterBytes.isNotEmpty) {
-            final posterAttachment = await backend.insertAttachment(
-              sessionKey,
-              bytes: posterBytes,
-              mimeType: preview.posterMimeType,
-            );
-            posterSha256 = posterAttachment.sha256;
-            posterMimeType = posterAttachment.mimeType;
-            backupShas.add(posterAttachment.sha256);
-          }
-
-          for (final frame in preview.keyframes) {
-            final frameAttachment = await backend.insertAttachment(
-              sessionKey,
-              bytes: frame.bytes,
-              mimeType: frame.mimeType,
-            );
-            keyframeRefs.add(
-              (
-                index: frame.index,
-                sha256: frameAttachment.sha256,
-                mimeType: frameAttachment.mimeType,
-                tMs: frame.tMs,
-                kind: resolvedKeyframeKind,
-              ),
-            );
-            backupShas.add(frameAttachment.sha256);
-          }
-
-          String? audioSha256;
-          String? audioMimeType;
-          final shouldExtractVideoAudio = useLocalAudioTranscode ||
-              defaultTargetPlatform == TargetPlatform.android ||
-              defaultTargetPlatform == TargetPlatform.iOS;
-          if (shouldExtractVideoAudio) {
-            final audioProxy =
-                await AudioTranscodeWorker.transcodeVideoAudioForManifest(
-              rawBytes,
-              originalMimeType: normalizedMimeType,
-              primarySegmentBytes: primarySegment.bytes,
-              primarySegmentMimeType: primarySegment.mimeType,
-            );
-            if (audioProxy.didTranscode &&
-                audioProxy.bytes.isNotEmpty &&
-                audioProxy.mimeType.trim().toLowerCase().startsWith('audio/')) {
-              final audioAttachment = await backend.insertAttachment(
-                sessionKey,
-                bytes: audioProxy.bytes,
-                mimeType: audioProxy.mimeType,
-              );
-              audioSha256 = audioAttachment.sha256;
-              audioMimeType = audioAttachment.mimeType;
-              backupShas.add(audioAttachment.sha256);
-            }
-          }
-
-          final queuedTranscriptShas = <String>{};
-          Future<void> enqueueVideoTranscriptJob(
-            String sha256,
-            String mimeType,
-          ) async {
-            final normalizedSha = sha256.trim();
-            if (normalizedSha.isEmpty) return;
-            if (!queuedTranscriptShas.add(normalizedSha)) return;
-            await _maybeEnqueueAudioTranscribeEnrichment(
-              backend,
-              sessionKey,
-              normalizedSha,
-              mimeType: mimeType,
-            );
-          }
-
-          for (final segment in videoSegments) {
-            unawaited(
-              enqueueVideoTranscriptJob(segment.sha256, segment.mimeType)
-                  .catchError((_) {}),
-            );
-          }
-
-          audioSha256 ??= primaryVideo.sha256;
-          audioMimeType ??= primaryVideo.mimeType;
-
-          unawaited(
-            enqueueVideoTranscriptJob(audioSha256, audioMimeType)
-                .catchError((_) {}),
-          );
-
-          final manifest = jsonEncode({
-            ...buildVideoManifestPayload(
-              videoSha256: primaryVideo.sha256,
-              videoMimeType: primaryVideo.mimeType,
-              videoProxySha256: primaryVideo.sha256,
-              posterSha256: posterSha256,
-              posterMimeType: posterMimeType,
-              keyframes: keyframeRefs,
-              audioSha256: audioSha256,
-              audioMimeType: audioMimeType,
-              segmentCount: videoSegments.length,
-              videoSegments: videoSegments,
-              videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
-              videoProxyMaxBytes: configuredVideoProxyMaxBytes,
-              videoProxyTotalBytes: selectedSegments.totalBytes,
-              videoProxyTruncated: selectedSegments.isTruncated,
-            ),
-          });
-          final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
-          final manifestAttachment = await backend.insertAttachment(
-            sessionKey,
-            bytes: manifestBytes,
-            mimeType: kSecondLoopVideoManifestMimeType,
-          );
-
-          try {
-            final nowMs = DateTime.now().millisecondsSinceEpoch;
-            final initialPayload = _buildInitialVideoExtractPayload(
-              manifestMimeType: kSecondLoopVideoManifestMimeType,
-              originalSha256: primaryVideo.sha256,
-              originalMimeType: primaryVideo.mimeType,
-              audioSha256: audioSha256,
-              audioMimeType: audioMimeType,
-              segmentCount: videoSegments.length,
-            );
-            await backend.markAttachmentAnnotationOkJson(
-              sessionKey,
-              attachmentSha256: manifestAttachment.sha256,
-              lang: 'und',
-              modelName: 'video_extract.v1',
-              payloadJson: jsonEncode(initialPayload),
-              nowMs: nowMs,
-            );
-          } catch (_) {
-            // ignore
-          }
-
-          shaToLink = manifestAttachment.sha256;
-        }
-      } else if (normalizedMimeType.startsWith('audio/')) {
-        final proxy = useLocalAudioTranscode
-            ? await AudioTranscodeWorker.transcodeToM4aProxy(
-                rawBytes,
-                sourceMimeType: normalizedMimeType,
-              )
-            : AudioTranscodeResult(
-                bytes: rawBytes,
-                mimeType: normalizedMimeType,
-                didTranscode: false,
-              );
-        final attachment = await backend.insertAttachment(
-          sessionKey,
-          bytes: proxy.bytes,
-          mimeType: proxy.mimeType,
-        );
-        shaToLink = attachment.sha256;
-        backupShas.add(attachment.sha256);
-      } else {
-        final attachment = await backend.insertAttachment(
-          sessionKey,
-          bytes: rawBytes,
-          mimeType: normalizedMimeType,
-        );
-        shaToLink = attachment.sha256;
-        backupShas.add(attachment.sha256);
       }
 
-      for (final backupSha in backupShas.toSet()) {
-        unawaited(
-          _maybeEnqueueCloudMediaBackup(
-            backend,
-            sessionKey,
-            backupSha,
-          ),
-        );
-      }
+      final shaToLink = await ingestFileAttachmentBytes(
+        backend: backend,
+        sessionKey: sessionKey,
+        rawBytes: rawBytes,
+        mimeType: normalizedMimeType,
+        options: FileAttachmentIngestOptions(
+          useLocalAudioTranscode: useLocalAudioTranscode,
+          videoProxyEnabled: videoProxyEnabled,
+          videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
+          videoProxyMaxBytes: configuredVideoProxyMaxBytes,
+        ),
+        onBackupCandidate: (backupSha) => _maybeEnqueueCloudMediaBackup(
+          backend,
+          sessionKey,
+          backupSha,
+        ),
+        onMaybeEnqueueAudioTranscribe: (attachmentSha, candidateMimeType) =>
+            _maybeEnqueueAudioTranscribeEnrichment(
+          backend,
+          sessionKey,
+          attachmentSha,
+          mimeType: candidateMimeType,
+        ),
+      );
 
       await backend.linkAttachmentToMessage(
         sessionKey,

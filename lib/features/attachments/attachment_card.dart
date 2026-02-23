@@ -46,6 +46,7 @@ class AttachmentCard extends StatelessWidget {
         final meta = cardData?.metadata;
         final displayTitle = _resolveDisplayTitle(attachment, meta);
         final isOcrRunning = cardData?.ocrRunning ?? false;
+        final autoOcrStatus = cardData?.autoOcrStatus ?? '';
         final annotationStatus =
             annotationJob?.status.trim().toLowerCase() ?? '';
         final preparingText = context.t.sync.progressDialog.preparing;
@@ -55,6 +56,8 @@ class AttachmentCard extends StatelessWidget {
           preparingText: preparingText,
           ocrRunningText: context.t.attachments.content.ocrRunning,
           failedText: context.t.chat.semanticParseStatusFailed,
+          canceledText: context.t.chat.semanticParseStatusCanceled,
+          autoOcrStatus: autoOcrStatus,
         );
         final subtitle = _resolveDisplaySummary(
           meta,
@@ -63,6 +66,10 @@ class AttachmentCard extends StatelessWidget {
           fallback: fallbackSubtitle,
         );
         final showProcessingIndicator = annotationStatus == 'pending' ||
+            annotationStatus == 'running' ||
+            autoOcrStatus == 'running' ||
+            autoOcrStatus == 'queued' ||
+            autoOcrStatus == 'retrying' ||
             isOcrRunning ||
             subtitle == preparingText;
         final icon = _resolveIcon(attachment.mimeType);
@@ -186,10 +193,12 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
     metadataFuture,
     summaryFuture,
   ]);
+  final payloadSummary = values[1] as _AttachmentCardPayloadSummary;
   return _AttachmentCardData(
     metadata: values[0] as AttachmentMetadata?,
-    extractedSummary: (values[1] as _AttachmentCardPayloadSummary).summary,
-    ocrRunning: (values[1] as _AttachmentCardPayloadSummary).ocrRunning,
+    extractedSummary: payloadSummary.summary,
+    ocrRunning: payloadSummary.ocrRunning,
+    autoOcrStatus: payloadSummary.autoOcrStatus,
   );
 }
 
@@ -199,13 +208,25 @@ String resolveAttachmentCardFallbackSubtitle({
   required String preparingText,
   required String ocrRunningText,
   required String failedText,
+  required String canceledText,
+  String? autoOcrStatus,
 }) {
   final normalizedStatus = (jobStatus ?? '').trim().toLowerCase();
-  if (normalizedStatus == 'failed') {
+  final normalizedAutoStatus = (autoOcrStatus ?? '').trim().toLowerCase();
+
+  if (normalizedStatus == 'failed' || normalizedAutoStatus == 'failed') {
     return failedText;
   }
-  if (normalizedStatus == 'pending') {
+  if (normalizedStatus == 'canceled') {
+    return canceledText;
+  }
+  if (normalizedStatus == 'pending' || normalizedStatus == 'running') {
     return preparingText;
+  }
+  if (normalizedAutoStatus == 'queued' ||
+      normalizedAutoStatus == 'running' ||
+      normalizedAutoStatus == 'retrying') {
+    return ocrRunningText;
   }
   if (ocrRunning) {
     return ocrRunningText;
@@ -213,13 +234,16 @@ String resolveAttachmentCardFallbackSubtitle({
   return preparingText;
 }
 
+String attachmentCardAutoOcrStatusFromPayload(Map<String, Object?> payload) {
+  return (payload['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
+}
+
 bool _isAttachmentOcrRunning(Map<String, Object?> payload) {
   return attachmentCardOcrInProgressFromPayload(payload);
 }
 
 bool attachmentCardOcrInProgressFromPayload(Map<String, Object?> payload) {
-  final status =
-      (payload['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
+  final status = attachmentCardAutoOcrStatusFromPayload(payload);
   if (status == 'running' || status == 'queued' || status == 'retrying') {
     return true;
   }
@@ -257,6 +281,7 @@ Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
       return const _AttachmentCardPayloadSummary(
         summary: null,
         ocrRunning: false,
+        autoOcrStatus: '',
       );
     }
 
@@ -265,6 +290,7 @@ Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
       return const _AttachmentCardPayloadSummary(
         summary: null,
         ocrRunning: false,
+        autoOcrStatus: '',
       );
     }
     final payload = Map<String, Object?>.from(decoded);
@@ -272,10 +298,14 @@ Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
     return _AttachmentCardPayloadSummary(
       summary: summary,
       ocrRunning: _isAttachmentOcrRunning(payload),
+      autoOcrStatus: attachmentCardAutoOcrStatusFromPayload(payload),
     );
   } catch (_) {
     return const _AttachmentCardPayloadSummary(
-        summary: null, ocrRunning: false);
+      summary: null,
+      ocrRunning: false,
+      autoOcrStatus: '',
+    );
   }
 }
 
@@ -375,19 +405,23 @@ final class _AttachmentCardData {
     required this.metadata,
     required this.extractedSummary,
     required this.ocrRunning,
+    required this.autoOcrStatus,
   });
 
   final AttachmentMetadata? metadata;
   final String? extractedSummary;
   final bool ocrRunning;
+  final String autoOcrStatus;
 }
 
 final class _AttachmentCardPayloadSummary {
   const _AttachmentCardPayloadSummary({
     required this.summary,
     required this.ocrRunning,
+    required this.autoOcrStatus,
   });
 
   final String? summary;
   final bool ocrRunning;
+  final String autoOcrStatus;
 }

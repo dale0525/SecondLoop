@@ -7,7 +7,7 @@ import 'package:secondloop/core/media_enrichment/media_enrichment_gate.dart';
 import 'package:secondloop/features/attachments/attachment_detail_text_content.dart';
 import 'package:secondloop/features/attachments/non_image_attachment_view.dart';
 import 'package:secondloop/features/attachments/video_keyframe_ocr_worker.dart';
-import 'package:secondloop/features/share/share_ingest_gate.dart';
+import 'package:secondloop/features/attachments/attachment_ingest_pipeline.dart';
 
 void main() {
   ParsedVideoManifest parseManifest(Map<String, Object?> payload) {
