@@ -10,6 +10,7 @@ PIXI_TOML = REPO_ROOT / "pixi.toml"
 ANDROID_RUN_SCRIPT = REPO_ROOT / "scripts/run_android_with_auto_emulator.sh"
 RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
 SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
+FLUTTER_WITH_DEFINES_SCRIPT = REPO_ROOT / "scripts/flutter_with_defines.sh"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -90,9 +91,16 @@ class PixiAndroidTasksTests(unittest.TestCase):
     def test_setup_rustup_patches_whisper_rs_sys_cross_compile_link_logic(self) -> None:
         script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('whisper-rs-sys-0.14.1/build.rs', script)
+        self.assertIn('whisper-rs-sys-0.14*/build.rs', script)
         self.assertIn('target.contains("apple-darwin")', script)
         self.assertIn('cfg!(feature = "openblas")', script)
+
+    def test_flutter_with_defines_falls_back_to_flutter_when_fvm_is_missing(self) -> None:
+        script = FLUTTER_WITH_DEFINES_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("dart pub global list", script)
+        self.assertIn('command -v flutter', script)
+        self.assertIn('No active package fvm', script)
 
 
 if __name__ == "__main__":

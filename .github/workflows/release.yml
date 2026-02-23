@@ -164,6 +164,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.1"
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
       - name: Validate prod config
         shell: pwsh
         run: |
@@ -347,6 +352,11 @@ jobs:
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
           )
+          # whisper-rs currently enables i8mm code paths under certain Apple/Clang combinations
+          # that are not always safe on hosted runners. Undefine the macro so ggml falls back.
+          export CFLAGS="${CFLAGS-} -U__ARM_FEATURE_MATMUL_INT8"
+          export CXXFLAGS="${CXXFLAGS-} -U__ARM_FEATURE_MATMUL_INT8"
+
           # flutter build macos defaults to code signing and fails on CI without Apple certs.
           # Use config-only to generate build settings (build name/number + dart-defines),
           # then build with xcodebuild while explicitly disabling code signing.
@@ -410,6 +420,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.85.1"
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
       - name: Install Linux build dependencies
         shell: bash
         run: |
