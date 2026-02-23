@@ -18,6 +18,7 @@ import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
 import '../attachments/attachment_metadata_store.dart';
+import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../content_enrichment/content_enrichment_config_store.dart';
 import '../content_enrichment/docx_ocr.dart';
@@ -228,7 +229,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       String? idToken;
       try {
-        idToken = await cloudAuthScope?.controller.getIdToken();
+        idToken = await readCloudIdTokenForBackground(
+          cloudAuthScope?.controller,
+        );
       } catch (_) {
         idToken = null;
       }

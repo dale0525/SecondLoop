@@ -379,7 +379,7 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
     String? idToken;
     try {
-      idToken = await controller.getIdToken();
+      idToken = await readCloudIdTokenForBackground(controller);
     } catch (_) {
       idToken = null;
     }

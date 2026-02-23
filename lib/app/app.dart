@@ -70,7 +70,7 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
   );
   late final CloudSubscriptionController _subscriptionController =
       CloudSubscriptionController(
-    idTokenGetter: _cloudAuthController.getIdToken,
+    idTokenGetter: () => readCloudIdTokenForBackground(_cloudAuthController),
     cloudGatewayBaseUrl: CloudGatewayConfig.defaultConfig.baseUrl,
   );
 
