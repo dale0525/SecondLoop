@@ -56,6 +56,23 @@ void main() {
     expect(html, contains('-webkit-print-color-adjust: exact'));
   });
 
+  test('PDF HTML export paints @page background with theme panel color',
+      () async {
+    final html = await buildChatMarkdownPdfHtmlDocument(
+      markdown: 'Theme check',
+      theme: buildTheme(),
+      emptyFallback: 'Empty',
+    );
+
+    expect(
+      html,
+      contains('''@page {
+  size: A4;
+  margin: 48px 54px 64px 54px;
+  background:'''),
+    );
+  });
+
   test('PDF HTML export rewrites latex nodes for KaTeX rendering', () async {
     const markdown = r'''
 Inline $x^2$ and block:

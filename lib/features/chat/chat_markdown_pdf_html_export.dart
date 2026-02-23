@@ -67,6 +67,7 @@ ${katexAssets.css}
 @page {
   size: A4;
   margin: 48px 54px 64px 54px;
+  background: ${_toCssColor(theme.panelColor)};
 }
 :root {
   color-scheme: only light;
