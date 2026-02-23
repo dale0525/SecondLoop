@@ -123,6 +123,17 @@ extension _ChatPageStateBuild on _ChatPageState {
                 );
               },
             ),
+            FutureBuilder<_TodoAgendaSummary>(
+              future: _agendaFuture,
+              builder: (context, snapshot) {
+                final summary =
+                    snapshot.data ?? const _TodoAgendaSummary.empty();
+                return TodoUndeterminedBanner(
+                  count: summary.undeterminedCount,
+                  previewTodos: summary.undeterminedPreviewTodos,
+                );
+              },
+            ),
             FutureBuilder<int>(
               future: _reviewCountFuture,
               builder: (context, snapshot) {

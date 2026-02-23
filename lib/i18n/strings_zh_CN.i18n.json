@@ -162,6 +162,7 @@
       "title": "待办",
       "summary": "今天 $due 条 · 逾期 $overdue 条",
       "upcomingSummary": "接下来 $count 条",
+      "undeterminedSummary": "未排期 $count 条",
       "viewAll": "查看全部",
       "empty": "暂无待办"
     },

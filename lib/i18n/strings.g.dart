@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1604 (802 per locale)
+/// Strings: 1606 (803 per locale)
 ///
-/// Built on 2026-02-20 at 02:51 UTC
+/// Built on 2026-02-23 at 09:16 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -837,6 +837,7 @@ class _StringsActionsAgendaEn {
   String summary({required Object due, required Object overdue}) =>
       'Today ${due} • Overdue ${overdue}';
   String upcomingSummary({required Object count}) => 'Upcoming ${count}';
+  String undeterminedSummary({required Object count}) => '${count} unscheduled';
   String get viewAll => 'View all';
   String get empty => 'No scheduled tasks';
 }
@@ -4668,6 +4669,8 @@ class _StringsActionsAgendaZhCn extends _StringsActionsAgendaEn {
       '今天 ${due} 条 · 逾期 ${overdue} 条';
   @override
   String upcomingSummary({required Object count}) => '接下来 ${count} 条';
+  @override
+  String undeterminedSummary({required Object count}) => '未排期 ${count} 条';
   @override
   String get viewAll => '查看全部';
   @override
@@ -9070,6 +9073,8 @@ extension on Translations {
             'Today ${due} • Overdue ${overdue}';
       case 'actions.agenda.upcomingSummary':
         return ({required Object count}) => 'Upcoming ${count}';
+      case 'actions.agenda.undeterminedSummary':
+        return ({required Object count}) => '${count} unscheduled';
       case 'actions.agenda.viewAll':
         return 'View all';
       case 'actions.agenda.empty':
@@ -10711,6 +10716,8 @@ extension on _StringsZhCn {
             '今天 ${due} 条 · 逾期 ${overdue} 条';
       case 'actions.agenda.upcomingSummary':
         return ({required Object count}) => '接下来 ${count} 条';
+      case 'actions.agenda.undeterminedSummary':
+        return ({required Object count}) => '未排期 ${count} 条';
       case 'actions.agenda.viewAll':
         return '查看全部';
       case 'actions.agenda.empty':

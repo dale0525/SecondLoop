@@ -88,6 +88,9 @@ void main() {
       ),
       findsOneWidget,
     );
+
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
   });
 }
 

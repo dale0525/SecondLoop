@@ -7,6 +7,69 @@ import '../../../src/rust/db.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 
+class TodoUndeterminedBanner extends StatelessWidget {
+  const TodoUndeterminedBanner({
+    required this.count,
+    required this.previewTodos,
+    super.key,
+  });
+
+  final int count;
+  final List<Todo> previewTodos;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return const SizedBox.shrink();
+
+    final tokens = SlTokens.of(context);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final nextTitle = previewTodos.isEmpty ? null : previewTodos.first.title;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: SlSurface(
+        key: const ValueKey('todo_undetermined_banner'),
+        color: tokens.surface2,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.pending_actions_rounded, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t.actions.agenda.undeterminedSummary(count: count),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (nextTitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      nextTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class TodoAgendaBanner extends StatefulWidget {
   const TodoAgendaBanner({
     required this.dueCount,

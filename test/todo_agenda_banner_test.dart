@@ -12,6 +12,59 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets('Todo undetermined banner shows unscheduled todos',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: [
+        const Todo(
+          id: 'todo:inbox',
+          title: '梳理季度复盘要点',
+          dueAtMs: null,
+          status: 'inbox',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              theme: ThemeData(
+                useMaterial3: true,
+                splashFactory: InkRipple.splashFactory,
+              ),
+              home: const ChatPage(
+                conversation: Conversation(
+                  id: 'main_stream',
+                  title: 'Main Stream',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('todo_undetermined_banner')), findsOneWidget);
+    expect(find.text('梳理季度复盘要点'), findsOneWidget);
+  });
+
   testWidgets('Todo agenda banner shows scheduled todos due today/overdue',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
