@@ -56,6 +56,8 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
   private var result: FlutterResult?
   private var timeoutWorkItem: DispatchWorkItem?
   private var webView: WKWebView?
+  private var pendingPrintOperation: NSPrintOperation?
+  private var pendingPdfOutputUrl: URL?
 
   init(
     html: String,
@@ -233,37 +235,92 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     operation.showsProgressPanel = false
     operation.canSpawnSeparateThread = true
 
-    let didRun = operation.run()
-    if didRun,
-       let data = waitForPdfFileData(at: outputUrl) {
-      try? FileManager.default.removeItem(at: outputUrl)
-      complete(success: data)
+    pendingPrintOperation = operation
+    pendingPdfOutputUrl = outputUrl
+
+    if let hostWindow = MarkdownPdfExportTask.resolveHostWindow() {
+      operation.runOperationModal(
+        for: hostWindow,
+        delegate: self,
+        didRun: #selector(printOperationDidRun(_:success:contextInfo:)),
+        contextInfo: nil
+      )
       return
     }
 
-    try? FileManager.default.removeItem(at: outputUrl)
-    complete(
-      failure: FlutterError(
-        code: "markdown_pdf_export_io_failed",
-        message: "Failed to generate PDF bytes",
-        details: nil
-      )
-    )
+    let didRun = operation.run()
+    finalizePrintOperation(success: didRun)
   }
 
-  private func waitForPdfFileData(at outputUrl: URL) -> Data? {
-    let maxAttempts = 20
-    for attempt in 0 ... maxAttempts {
-      if let data = try? Data(contentsOf: outputUrl), !data.isEmpty {
-        return data
-      }
+  @objc
+  private func printOperationDidRun(
+    _ operation: NSPrintOperation,
+    success: Bool,
+    contextInfo: UnsafeMutableRawPointer?
+  ) {
+    finalizePrintOperation(success: success, completedOperation: operation)
+  }
 
-      if attempt < maxAttempts {
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-      }
+  private func finalizePrintOperation(
+    success: Bool,
+    completedOperation: NSPrintOperation? = nil
+  ) {
+    if let completedOperation,
+       let pendingPrintOperation,
+       completedOperation !== pendingPrintOperation {
+      return
     }
 
-    return nil
+    let outputUrl = pendingPdfOutputUrl
+    pendingPrintOperation = nil
+    pendingPdfOutputUrl = nil
+
+    guard success else {
+      if let outputUrl {
+        try? FileManager.default.removeItem(at: outputUrl)
+      }
+      complete(
+        failure: FlutterError(
+          code: "markdown_pdf_export_io_failed",
+          message: "Failed to generate PDF bytes",
+          details: nil
+        )
+      )
+      return
+    }
+
+    guard let outputUrl else {
+      complete(
+        failure: FlutterError(
+          code: "markdown_pdf_export_io_failed",
+          message: "Missing PDF output path",
+          details: nil
+        )
+      )
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      let data = try? Data(contentsOf: outputUrl)
+      try? FileManager.default.removeItem(at: outputUrl)
+
+      DispatchQueue.main.async {
+        guard let self = self else { return }
+
+        guard let data, !data.isEmpty else {
+          self.complete(
+            failure: FlutterError(
+              code: "markdown_pdf_export_io_failed",
+              message: "Generated PDF is empty",
+              details: nil
+            )
+          )
+          return
+        }
+
+        self.complete(success: data)
+      }
+    }
   }
 
   private func complete(success data: Data) {
@@ -284,22 +341,31 @@ private final class MarkdownPdfExportTask: NSObject, WKNavigationDelegate {
     finish()
   }
 
+  private static func resolveHostWindow() -> NSWindow? {
+    if let keyWindow = NSApplication.shared.windows.first(where: { $0.isKeyWindow }) {
+      return keyWindow
+    }
+
+    if let mainWindow = NSApplication.shared.mainWindow {
+      return mainWindow
+    }
+
+    return NSApplication.shared.windows.first
+  }
+
   private static func resolveHostView() -> NSView? {
-    if let keyWindow = NSApplication.shared.windows.first(where: { $0.isKeyWindow }),
-       let contentView = keyWindow.contentView {
-      return contentView
-    }
-
-    if let mainContentView = NSApplication.shared.mainWindow?.contentView {
-      return mainContentView
-    }
-
-    return NSApplication.shared.windows.first?.contentView
+    resolveHostWindow()?.contentView
   }
 
   private func finish() {
     timeoutWorkItem?.cancel()
     timeoutWorkItem = nil
+
+    if let outputUrl = pendingPdfOutputUrl {
+      try? FileManager.default.removeItem(at: outputUrl)
+    }
+    pendingPrintOperation = nil
+    pendingPdfOutputUrl = nil
 
     webView?.navigationDelegate = nil
     webView?.removeFromSuperview()
