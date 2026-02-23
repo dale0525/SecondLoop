@@ -11,6 +11,7 @@ void main() {
       preparingText: 'Preparing...',
       ocrRunningText: 'OCR running...',
       failedText: 'Failed',
+      canceledText: 'Canceled',
     );
 
     expect(subtitle, 'Failed');
@@ -24,6 +25,7 @@ void main() {
       preparingText: 'Preparing...',
       ocrRunningText: 'OCR running...',
       failedText: 'Failed',
+      canceledText: 'Canceled',
     );
 
     expect(subtitle, 'Preparing...');
@@ -37,9 +39,37 @@ void main() {
       preparingText: 'Preparing...',
       ocrRunningText: 'OCR running...',
       failedText: 'Failed',
+      canceledText: 'Canceled',
     );
 
     expect(subtitle, 'OCR running...');
+  });
+
+  test('attachment card fallback shows failed when auto OCR failed', () {
+    final subtitle = resolveAttachmentCardFallbackSubtitle(
+      ocrRunning: false,
+      jobStatus: null,
+      preparingText: 'Preparing...',
+      ocrRunningText: 'OCR running...',
+      failedText: 'Failed',
+      canceledText: 'Canceled',
+      autoOcrStatus: 'failed',
+    );
+
+    expect(subtitle, 'Failed');
+  });
+
+  test('attachment card fallback shows canceled label for canceled job', () {
+    final subtitle = resolveAttachmentCardFallbackSubtitle(
+      ocrRunning: false,
+      jobStatus: 'canceled',
+      preparingText: 'Preparing...',
+      ocrRunningText: 'OCR running...',
+      failedText: 'Failed',
+      canceledText: 'Canceled',
+    );
+
+    expect(subtitle, 'Canceled');
   });
 
   test('attachment card summary uses transcript excerpt when present', () {

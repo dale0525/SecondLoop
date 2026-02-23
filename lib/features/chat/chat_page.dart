@@ -67,15 +67,13 @@ import '../actions/todo/todo_thread_match.dart';
 import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
+import '../attachments/attachment_ingest_pipeline.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../attachments/attachment_deeplink.dart';
-import '../attachments/image_exif_metadata.dart';
 import '../attachments/platform_exif_metadata.dart';
 import '../media_backup/audio_transcode_policy.dart';
+// ignore: unused_import
 import '../media_backup/audio_transcode_worker.dart';
-import '../media_backup/image_compression.dart';
-import '../media_backup/video_proxy_segment_policy.dart';
-import '../media_backup/video_transcode_worker.dart';
 import '../tags/tag_filter_sheet.dart';
 import '../tags/tag_localization.dart';
 import '../tags/tag_picker.dart';

@@ -156,6 +156,48 @@ void main() {
     expect(find.text('None'), findsOneWidget);
   });
 
+  testWidgets(
+      'NonImageAttachmentView shows failed preview status for failed annotation job',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-failed',
+      mimeType: 'application/pdf',
+      path: 'attachments/sha-failed.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+            displayTitle: 'PDF attachment',
+            initialAnnotationPayload: null,
+            annotationJob: const AttachmentAnnotationJob(
+              attachmentSha256: 'sha-failed',
+              status: 'failed',
+              lang: 'en',
+              attempts: 1,
+              createdAtMs: 0,
+              updatedAtMs: 0,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final allText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data ?? '')
+        .join('\n')
+        .toLowerCase();
+    final hasFailedLabel = allText.contains('fail') || allText.contains('失败');
+    expect(hasFailedLabel, isTrue);
+  });
+
   testWidgets('NonImageAttachmentView supports manual edit on full only',
       (tester) async {
     const attachment = Attachment(

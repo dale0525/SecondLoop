@@ -188,6 +188,7 @@ class NonImageAttachmentView extends StatefulWidget {
     this.initialMetadata,
     this.annotationPayloadFuture,
     this.initialAnnotationPayload,
+    this.annotationJob,
     this.onRunOcr,
     this.ocrRunning = false,
     this.ocrStatusText,
@@ -204,6 +205,7 @@ class NonImageAttachmentView extends StatefulWidget {
   final AttachmentMetadata? initialMetadata;
   final Future<Map<String, Object?>?>? annotationPayloadFuture;
   final Map<String, Object?>? initialAnnotationPayload;
+  final AttachmentAnnotationJob? annotationJob;
   final Future<void> Function()? onRunOcr;
   final bool ocrRunning;
   final String? ocrStatusText;
@@ -610,6 +612,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     required Attachment attachment,
     required Map<String, Object?>? payload,
     required Future<void> Function()? onRunOcr,
+    required AttachmentAnnotationJob? annotationJob,
     required bool ocrRunning,
     required String? ocrStatusText,
     required String ocrLanguageHints,
@@ -624,8 +627,16 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final ocrStatus = (ocrStatusText ?? '').trim();
     final autoOcrStatus =
         (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
-    final autoOcrRunning = autoOcrStatus == 'running';
-    final ocrInProgress = ocrRunning || autoOcrRunning;
+    final annotationJobStatus =
+        (annotationJob?.status ?? '').toString().trim().toLowerCase();
+    final annotationPending =
+        annotationJobStatus == 'pending' || annotationJobStatus == 'running';
+    final annotationFailed = annotationJobStatus == 'failed';
+    final annotationCanceled = annotationJobStatus == 'canceled';
+    final autoOcrRunning = autoOcrStatus == 'running' ||
+        autoOcrStatus == 'queued' ||
+        autoOcrStatus == 'retrying';
+    final ocrInProgress = ocrRunning || autoOcrRunning || annotationPending;
 
     final mime = attachment.mimeType.trim().toLowerCase();
     final isPdf = mime == 'application/pdf';
@@ -640,17 +651,20 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final hasOcrEngine =
         (payload?['ocr_engine'] ?? '').toString().trim().isNotEmpty;
     final showNeedsOcrState = needsOcr || (!hasFullText && !hasOcrEngine);
-    final showPreparingTextState = !hasFullText &&
-        (ocrInProgress ||
-            autoOcrStatus == 'queued' ||
-            autoOcrStatus == 'retrying' ||
-            payload == null);
+    final showPreparingTextState =
+        !hasFullText && (ocrInProgress || payload == null);
 
     final hasPreviewSignal = ocrStatus.isNotEmpty ||
         showPreparingTextState ||
+        annotationFailed ||
+        annotationCanceled ||
         (supportsOcr && showNeedsOcrState);
     final previewHint = () {
       if (ocrStatus.isNotEmpty) return ocrStatus;
+      if (annotationFailed) return context.t.chat.semanticParseStatusFailed;
+      if (annotationCanceled) {
+        return context.t.chat.semanticParseStatusCanceled;
+      }
       if (showPreparingTextState) {
         return context.t.sync.progressDialog.preparing;
       }
@@ -860,6 +874,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         attachment: widget.attachment,
         payload: payload,
         onRunOcr: widget.onRunOcr,
+        annotationJob: widget.annotationJob,
         ocrRunning: widget.ocrRunning,
         ocrStatusText: widget.ocrStatusText,
         ocrLanguageHints: widget.ocrLanguageHints,

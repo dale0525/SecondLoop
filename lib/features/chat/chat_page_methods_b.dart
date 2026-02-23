@@ -848,59 +848,38 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     final syncEngine = SyncEngineScope.maybeOf(context);
     final lang = Localizations.localeOf(context).toLanguageTag();
 
-    final compressed =
-        await compressImageForStorage(rawBytes, mimeType: inferredMimeType);
-    final rawExif = tryReadImageExifMetadata(rawBytes);
-    final storedExif = tryReadImageExifMetadata(compressed.bytes);
-    final capturedAtMs = platformExif?.capturedAtMsUtc ??
-        rawExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
-        storedExif?.capturedAt?.toUtc().millisecondsSinceEpoch ??
-        fallbackCapturedAtMs;
-
-    (double, double)? pickLatLon(ImageExifMetadata? meta) {
-      final lat = meta?.latitude;
-      final lon = meta?.longitude;
-      if (lat == null || lon == null) return null;
-      if (lat == 0.0 && lon == 0.0) return null;
-      if (lat.isNaN || lon.isNaN) return null;
-      return (lat, lon);
-    }
-
-    final latLon = pickLatLon(platformExif?.toImageExifMetadata()) ??
-        pickLatLon(rawExif) ??
-        pickLatLon(storedExif);
-    final latitude = latLon?.$1;
-    final longitude = latLon?.$2;
-
-    final attachment = await backend.insertAttachment(
-      sessionKey,
-      bytes: compressed.bytes,
-      mimeType: compressed.mimeType,
-    );
-    if (capturedAtMs != null || latitude != null || longitude != null) {
-      await backend.upsertAttachmentExifMetadata(
+    final ingested = await ingestImageAttachmentBytes(
+      backend: backend,
+      sessionKey: sessionKey,
+      rawBytes: rawBytes,
+      inferredMimeType: inferredMimeType,
+      lang: lang,
+      fallbackCapturedAtMs: fallbackCapturedAtMs,
+      platformExif: platformExif,
+      onBackupCandidate: (attachmentSha256) => _maybeEnqueueCloudMediaBackup(
+        backend,
         sessionKey,
-        sha256: attachment.sha256,
-        capturedAtMs: capturedAtMs,
-        latitude: latitude,
-        longitude: longitude,
-      );
-    }
-    if (latitude != null && longitude != null) {
-      unawaited(
-        _maybeEnqueueAttachmentPlaceEnrichment(
-          backend,
-          sessionKey,
-          attachment.sha256,
-          lang: lang,
-        ),
-      );
-    }
-    unawaited(_maybeEnqueueCloudMediaBackup(
-      backend,
-      sessionKey,
-      attachment.sha256,
-    ));
+        attachmentSha256,
+      ),
+      onMaybeEnqueuePlace: (attachmentSha256, lang) =>
+          _maybeEnqueueAttachmentPlaceEnrichment(
+        backend,
+        sessionKey,
+        attachmentSha256,
+        lang: lang,
+      ),
+      onMaybeEnqueueAnnotation: (attachmentSha256, lang) =>
+          _maybeEnqueueAttachmentAnnotationEnrichment(
+        backend,
+        sessionKey,
+        attachmentSha256,
+        lang: lang,
+      ),
+    );
+
+    final attachmentSha256 = ingested.attachmentSha256;
+    final capturedAtMs = ingested.capturedAtMs;
+
     final message = await backend.insertMessage(
       sessionKey,
       widget.conversation.id,
@@ -910,30 +889,21 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     await backend.linkAttachmentToMessage(
       sessionKey,
       message.id,
-      attachmentSha256: attachment.sha256,
+      attachmentSha256: attachmentSha256,
     );
     final safeFilename = (filename ?? '').trim();
     if (safeFilename.isNotEmpty) {
       unawaited(
         const RustAttachmentMetadataStore().upsert(
           sessionKey,
-          attachmentSha256: attachment.sha256,
+          attachmentSha256: attachmentSha256,
           filenames: [safeFilename],
         ).catchError((_) {}),
       );
     }
-    unawaited(
-      _maybeEnqueueAttachmentAnnotationEnrichment(
-        backend,
-        sessionKey,
-        attachment.sha256,
-        lang: lang,
-      ),
-    );
-
     syncEngine?.notifyLocalMutation();
     if (!mounted) {
-      return (sha256: attachment.sha256, capturedAtMs: capturedAtMs);
+      return (sha256: attachmentSha256, capturedAtMs: capturedAtMs);
     }
     _refresh();
 
@@ -951,6 +921,6 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       });
     }
 
-    return (sha256: attachment.sha256, capturedAtMs: capturedAtMs);
+    return (sha256: attachmentSha256, capturedAtMs: capturedAtMs);
   }
 }
