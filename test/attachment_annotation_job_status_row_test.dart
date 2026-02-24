@@ -211,4 +211,116 @@ void main() {
 
     expect(openDownloadCalls, 1);
   });
+
+  testWidgets(
+      'AttachmentAnnotationJobStatusRow shows payload too large hint for audio transcribe failures',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'oversized',
+      status: 'failed',
+      lang: 'en',
+      modelName: 'base',
+      attempts: 1,
+      nextRetryAtMs: null,
+      lastError: 'audio_transcribe_http_413:{"error":"payload_too_large"}',
+      createdAtMs: now,
+      updatedAtMs: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('Audio file is too large. Compress or split it and try again.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'AttachmentAnnotationJobStatusRow shows model not allowed hint for audio transcribe failures',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'model-not-allowed',
+      status: 'failed',
+      lang: 'en',
+      modelName: 'base',
+      attempts: 1,
+      nextRetryAtMs: null,
+      lastError: 'audio_transcribe_http_400:{"error":"model_not_allowed"}',
+      createdAtMs: now,
+      updatedAtMs: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text(
+        'This model is not allowed for audio transcription. Change model or engine in settings.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'AttachmentAnnotationJobStatusRow shows invalid multipart hint for audio transcribe failures',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'invalid-multipart',
+      status: 'failed',
+      lang: 'en',
+      modelName: 'base',
+      attempts: 1,
+      nextRetryAtMs: null,
+      lastError: 'audio_transcribe_http_400:{"error":"invalid_multipart"}',
+      createdAtMs: now,
+      updatedAtMs: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text(
+        'Audio request format is invalid. Retry or update the app.',
+      ),
+      findsOneWidget,
+    );
+  });
 }

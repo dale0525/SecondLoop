@@ -1,0 +1,119 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/attachments_backend.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/chat/message_viewer_page.dart';
+import 'package:secondloop/src/rust/db.dart';
+
+import 'test_backend.dart';
+import 'test_i18n.dart';
+
+void main() {
+  testWidgets(
+      'message viewer citation secondloop attachment link opens attachment viewer',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-for-viewer',
+      mimeType: 'text/plain',
+      path: 'attachments/sha-for-viewer.bin',
+      byteLen: 8,
+      createdAtMs: 2,
+    );
+
+    final backend = _Backend(attachment: attachment);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: const MessageViewerPage(
+                content:
+                    '[Open Evidence](secondloop://attachment/sha-for-viewer?kind=readable_text_full&chunk=1)',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Evidence', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const ValueKey('attachment_viewer_open_with_system')),
+        findsOneWidget);
+  });
+}
+
+final class _Backend extends TestAppBackend implements AttachmentsBackend {
+  _Backend({required this.attachment});
+
+  final Attachment attachment;
+
+  @override
+  Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async {
+    if (attachmentSha256 == attachment.sha256) {
+      return attachment;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<Attachment>> listMessageAttachments(
+    Uint8List key,
+    String messageId,
+  ) async =>
+      const <Attachment>[];
+
+  @override
+  Future<void> linkAttachmentToMessage(
+    Uint8List key,
+    String messageId, {
+    required String attachmentSha256,
+  }) async {}
+
+  @override
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  }) async =>
+      <Attachment>[attachment];
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      Uint8List.fromList(<int>[5, 6, 7]);
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+}

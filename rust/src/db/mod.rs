@@ -22,6 +22,7 @@ include!("parts/16_tags.rs");
 include!("parts/18_tag_merge_feedback.rs");
 include!("parts/19_suggested_tags.rs");
 include!("parts/20_message_tag_autofill.rs");
+include!("parts/21_attachment_chunk_index.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;

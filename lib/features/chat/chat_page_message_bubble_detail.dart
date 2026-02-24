@@ -32,4 +32,21 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
       ),
     );
   }
+
+  Future<void> _openAttachmentBySha(String attachmentSha256) async {
+    await AttachmentViewerPage.openBySha(
+      context,
+      attachmentSha256: attachmentSha256,
+    );
+  }
+
+  Future<bool> _handleMarkdownInAppLink(String href) async {
+    final parsed = parseAttachmentDeepLink(href);
+    if (parsed == null) {
+      return false;
+    }
+
+    await _openAttachmentBySha(parsed.attachmentSha256);
+    return true;
+  }
 }

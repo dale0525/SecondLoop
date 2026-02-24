@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -5,12 +6,15 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'audio_transcribe_error_classification.dart';
+import '../../core/ai/audio_transcribe_gateway_limit_prefs.dart';
 import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
 
 part 'audio_transcribe_runner_clients.dart';
+part 'audio_transcribe_runner_gateway_limits.dart';
 part 'audio_transcribe_runner_protocol.dart';
 part 'audio_transcribe_runner_windows_stt.dart';
 
@@ -86,6 +90,7 @@ final class AudioTranscribeResponse {
 abstract class AudioTranscribeClient {
   String get engineName;
   String get modelName;
+  int? get maxInputBytes => null;
 
   Future<AudioTranscribeResponse> transcribe({
     required String lang,
@@ -368,6 +373,16 @@ final class AudioTranscribeRunner {
         );
         if (mimeType == null) continue;
 
+        final maxInputBytes = client.maxInputBytes;
+        if (maxInputBytes != null &&
+            maxInputBytes > 0 &&
+            bytes.lengthInBytes > maxInputBytes) {
+          throw StateError(
+            'audio_transcribe_payload_too_large_local_check:'
+            '${bytes.lengthInBytes}:$maxInputBytes',
+          );
+        }
+
         final response = await client.transcribe(
           lang: job.lang,
           mimeType: mimeType,
@@ -424,18 +439,14 @@ final class AudioTranscribeRunner {
     required int attempts,
     required Object error,
   }) {
-    if (_isLongBackoffError(error)) {
-      return nowMs + const Duration(hours: 12).inMilliseconds;
+    switch (classifyAudioTranscribeFailure(error)) {
+      case AudioTranscribeFailureClass.terminal:
+        return nowMs + const Duration(days: 30).inMilliseconds;
+      case AudioTranscribeFailureClass.longBackoff:
+        return nowMs + const Duration(hours: 12).inMilliseconds;
+      case AudioTranscribeFailureClass.retryable:
+        return nowMs + _backoffMs(attempts);
     }
-    return nowMs + _backoffMs(attempts);
-  }
-
-  static bool _isLongBackoffError(Object error) {
-    final detail = error.toString().trim().toLowerCase();
-    if (detail.isEmpty) return false;
-    return detail.contains('audio_transcribe_native_stt_missing_speech_pack') ||
-        detail.contains('speech_recognizer_unavailable') ||
-        detail.contains('audio_transcribe_local_runtime_model_missing');
   }
 
   static Map<String, Object?> _buildPayload({

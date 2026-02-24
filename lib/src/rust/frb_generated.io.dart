@@ -11,6 +11,7 @@ import 'api/content_extract.dart';
 import 'api/core.dart';
 import 'api/desktop_media.dart';
 import 'api/media_annotation.dart';
+import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
@@ -60,6 +61,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  Attachment dco_decode_box_autoadd_attachment(dynamic raw);
 
   @protected
   AttachmentExifMetadata dco_decode_box_autoadd_attachment_exif_metadata(
@@ -195,7 +199,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrPayload dco_decode_ocr_payload(dynamic raw);
 
   @protected
+  OplogMaintenanceBackend dco_decode_oplog_maintenance_backend(dynamic raw);
+
+  @protected
+  OplogMaintenanceStats dco_decode_oplog_maintenance_stats(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  Attachment? dco_decode_opt_box_autoadd_attachment(dynamic raw);
 
   @protected
   AttachmentExifMetadata? dco_decode_opt_box_autoadd_attachment_exif_metadata(
@@ -287,6 +300,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  Attachment sse_decode_box_autoadd_attachment(SseDeserializer deserializer);
 
   @protected
   AttachmentExifMetadata sse_decode_box_autoadd_attachment_exif_metadata(
@@ -438,7 +454,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrPayload sse_decode_ocr_payload(SseDeserializer deserializer);
 
   @protected
+  OplogMaintenanceBackend sse_decode_oplog_maintenance_backend(
+      SseDeserializer deserializer);
+
+  @protected
+  OplogMaintenanceStats sse_decode_oplog_maintenance_stats(
+      SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  Attachment? sse_decode_opt_box_autoadd_attachment(
+      SseDeserializer deserializer);
 
   @protected
   AttachmentExifMetadata? sse_decode_opt_box_autoadd_attachment_exif_metadata(
@@ -535,6 +563,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_attachment(
+      Attachment self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_attachment_exif_metadata(
@@ -693,7 +725,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ocr_payload(OcrPayload self, SseSerializer serializer);
 
   @protected
+  void sse_encode_oplog_maintenance_backend(
+      OplogMaintenanceBackend self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_oplog_maintenance_stats(
+      OplogMaintenanceStats self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_attachment(
+      Attachment? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_attachment_exif_metadata(

@@ -448,6 +448,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final effectiveAudioEngine = normalizeAudioTranscribeEngine(
         contentConfig?.audioTranscribeEngine ?? 'whisper',
       );
+      await ensureGatewayMaxAudioBytesLoaded();
       final audioTranscribeSelection = _buildAudioTranscribeClientSelection(
         cloudEnabled: audioTranscribeCloudEnabled,
         byokProfile: audioTranscribeByokProfile,

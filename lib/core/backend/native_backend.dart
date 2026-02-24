@@ -12,6 +12,7 @@ import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/api/core.dart' as rust_core;
+import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
@@ -712,6 +713,15 @@ class NativeAppBackend
     await rust_core.dbClearLocalAttachmentCache(
       appDir: appDir,
       key: key,
+    );
+  }
+
+  @override
+  Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async {
+    final appDir = await _getAppDir();
+    return rust_attachments.dbReadAttachmentBySha256(
+      appDir: appDir,
+      attachmentSha256: attachmentSha256,
     );
   }
 

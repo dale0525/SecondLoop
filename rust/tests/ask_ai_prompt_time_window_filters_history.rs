@@ -39,6 +39,8 @@ fn ask_ai_time_window_prompt_filters_conversation_history_by_range() {
     let conn = db::open(&app_dir).expect("open db");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let attachment = db::insert_attachment(&conn, &key, &app_dir, b"window resource", "text/plain")
+        .expect("attachment");
 
     // Set up a time window (like "today").
     let time_start_ms: i64 = 1_000_000;
@@ -116,5 +118,13 @@ fn ask_ai_time_window_prompt_filters_conversation_history_by_range() {
     assert!(
         !prompt.contains("HISTORY_OLD_ASSISTANT"),
         "expected old history to be filtered out: {prompt}"
+    );
+    assert!(
+        prompt.contains("Resources catalog (attachments):"),
+        "expected resources catalog section in prompt: {prompt}"
+    );
+    assert!(
+        prompt.contains(&format!("secondloop://attachment/{}", attachment.sha256)),
+        "expected attachment deep link in prompt: {prompt}"
     );
 }
