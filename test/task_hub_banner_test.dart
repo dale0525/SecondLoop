@@ -107,6 +107,41 @@ void main() {
     expect(find.text('1 items need confirmation'), findsOneWidget);
   });
 
+  testWidgets('collapsed headline shows today summary when due exists',
+      (tester) async {
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        todo(
+          id: 'today',
+          title: 'Today',
+          updatedAtMs: 1,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'unscheduled',
+          title: 'Unscheduled',
+          updatedAtMs: 2,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(summary: summary),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Today 1 • Overdue 0'), findsOneWidget);
+    expect(find.text('Upcoming 0 · 1 unscheduled'), findsNothing);
+  });
+
   testWidgets('expanded list exposes quick actions', (tester) async {
     final now = DateTime(2026, 2, 24, 12);
     final summary = TaskHubSummary.fromTodos(
