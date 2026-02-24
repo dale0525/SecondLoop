@@ -1,10 +1,5 @@
 part of 'chat_page.dart';
 
-enum _AudioRecordingRecoveryAction {
-  recover,
-  discard,
-}
-
 extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
   Future<void> _checkPendingRecordedAudioRecoveryIfNeeded() async {
     if (_audioRecordingRecoveryChecked) return;
@@ -37,10 +32,10 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
     if (!mounted || action == null) return;
 
     switch (action) {
-      case _AudioRecordingRecoveryAction.recover:
+      case AudioRecordingRecoveryDialogAction.recover:
         await _recoverAndSendRecordedAudioSegments(snapshot, existingPaths);
         break;
-      case _AudioRecordingRecoveryAction.discard:
+      case AudioRecordingRecoveryDialogAction.discard:
         await _discardRecoveredAudioSegments(snapshot, existingPaths);
         break;
     }
@@ -68,59 +63,16 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
     return existing;
   }
 
-  Future<_AudioRecordingRecoveryAction?> _showRecordedAudioRecoveryDialog({
+  Future<AudioRecordingRecoveryDialogAction?> _showRecordedAudioRecoveryDialog({
     required int recoverableSegmentCount,
   }) {
     if (!mounted) {
-      return Future<_AudioRecordingRecoveryAction?>.value(null);
+      return Future<AudioRecordingRecoveryDialogAction?>.value(null);
     }
 
-    final details = _audioRecoveryLocalized(
-      zh: '检测到上次录音中断，找到 $recoverableSegmentCount 段可恢复音频。你可以恢复并发送，或直接丢弃。',
-      en: 'An interrupted recording was found ($recoverableSegmentCount segments). You can recover and send it, or discard it.',
-    );
-
-    return showDialog<_AudioRecordingRecoveryAction>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(
-            _audioRecoveryLocalized(
-              zh: '检测到未完成录音',
-              en: 'Interrupted recording detected',
-            ),
-          ),
-          content: Text(details),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(
-                  _AudioRecordingRecoveryAction.discard,
-                );
-              },
-              child: Text(
-                _audioRecoveryLocalized(
-                  zh: '丢弃',
-                  en: 'Discard',
-                ),
-              ),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(
-                  _AudioRecordingRecoveryAction.recover,
-                );
-              },
-              child: Text(
-                _audioRecoveryLocalized(
-                  zh: '恢复并发送',
-                  en: 'Recover & Send',
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    return ChatAudioRecordingRecoveryDialog.show(
+      context,
+      recoverableSegmentCount: recoverableSegmentCount,
     );
   }
 

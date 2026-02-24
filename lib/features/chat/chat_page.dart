@@ -86,6 +86,7 @@ import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_editor_launcher.dart';
 import 'chat_markdown_preview.dart';
 import 'chat_markdown_link_handler.dart';
+import 'chat_audio_recording_recovery_dialog.dart';
 import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';
 import 'ask_scope_empty.dart';
