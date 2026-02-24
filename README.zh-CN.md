@@ -76,6 +76,13 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 当 Ask AI 使用远程模型（BYOK 或 SecondLoop Cloud）时，客户端只会上传 **你的问题 + 这次回答所需的相关上下文**。不会上传你的密钥、主密码、或整个 Vault/完整历史。
 
+## 🔄 桌面端更新策略（当前）
+
+- **Windows（Velopack 安装）**：后台准备更新，下次启动自动生效。
+- **Windows（历史 MSI 安装）**：回退为手动下载更新。
+- **macOS**：保持 DMG 手动更新（暂不使用付费签名/公证）。
+- 发版与验收手册：`docs/runbooks/windows-velopack-release.md`。
+
 ## 🧩 版本：Community vs Cloud
 
 - **Community Edition（本仓库）**：BYOK（自带 Key）、本地优先、加密 Vault、以及 BYOS（自带存储）的同步后端。

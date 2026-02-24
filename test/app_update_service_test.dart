@@ -1,6 +1,28 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
+import 'package:secondloop/core/update/windows/velopack_update_client.dart';
+
+class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
+  _FakeWindowsStagedUpdateClient({required this.available});
+
+  final bool available;
+  final List<Uri> stagedAssets = <Uri>[];
+  int applyPendingCalls = 0;
+
+  @override
+  bool isAvailable() => available;
+
+  @override
+  Future<void> stageAsset(Uri assetDownloadUri) async {
+    stagedAssets.add(assetDownloadUri);
+  }
+
+  @override
+  Future<void> applyPendingOnStartup() async {
+    applyPendingCalls += 1;
+  }
+}
 
 void main() {
   group('compareReleaseTagWithCurrentVersion', () {
@@ -85,6 +107,8 @@ void main() {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
         releaseModeOverride: true,
+        releaseApiOriginOverride: 'https://secondloop.app',
+        releaseRepoOverride: 'dale0525/SecondLoop',
         currentVersionLoader: () async =>
             const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
         releaseJsonFetcher: (uri) async {
@@ -108,6 +132,94 @@ void main() {
       expect(attempted.length, 2);
       expect(attempted.first.toString(), contains('/api/releases/latest'));
       expect(attempted.last.toString(), contains('api.github.com/repos/'));
+    });
+
+    test('skips custom release origin when configured as empty', () async {
+      final attempted = <Uri>[];
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseApiOriginOverride: '',
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '10'),
+        releaseJsonFetcher: (uri) async {
+          attempted.add(uri);
+          return {
+            'tag_name': 'v1.0.0',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.0',
+            'assets': const [],
+          };
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, isNull);
+      expect(attempted.length, 1);
+      expect(
+        attempted.single.toString(),
+        contains('api.github.com/repos/dale0525/SecondLoop/releases/latest'),
+      );
+    });
+
+    test('returns staged Windows update when Velopack runtime is available',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '11'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
+              'browser_download_url': 'https://cdn.example.com/win.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(
+        result.update!.installMode,
+        AppUpdateInstallMode.stagedNextLaunch,
+      );
+    });
+  });
+
+  group('AppUpdateService.applyPendingUpdateOnStartup', () {
+    test('calls Windows staged client when runtime is available', () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+      );
+
+      await service.applyPendingUpdateOnStartup();
+
+      expect(stagedClient.applyPendingCalls, 1);
+    });
+
+    test('skips apply when staged runtime is unavailable', () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+      );
+
+      await service.applyPendingUpdateOnStartup();
+
+      expect(stagedClient.applyPendingCalls, 0);
     });
   });
 }

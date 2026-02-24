@@ -72,6 +72,14 @@ function Build-DartDefines {
     $defines += "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$($env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD)"
   }
 
+  if ($env:SECONDLOOP_RELEASE_REPO) {
+    $defines += "--dart-define=SECONDLOOP_RELEASE_REPO=$($env:SECONDLOOP_RELEASE_REPO)"
+  }
+
+  if (Test-Path Env:SECONDLOOP_RELEASE_API_ORIGIN) {
+    $defines += "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN=$($env:SECONDLOOP_RELEASE_API_ORIGIN)"
+  }
+
   return $defines
 }
 

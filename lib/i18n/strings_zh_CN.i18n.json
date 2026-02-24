@@ -691,11 +691,87 @@
         "loadFailed": "加载失败：$error"
       }
     },
+    "about": {
+      "title": "关于",
+      "productName": "SecondLoop",
+      "updatesTitle": "应用更新",
+      "openHomepage": "项目主页",
+      "unknownVersion": "未知",
+      "currentVersion": "当前版本：$version",
+      "latestVersion": "最新版本：$version",
+      "status": {
+        "idle": "点击检查更新；Linux 可自动更新重启，Windows 请下载 MSI 安装。",
+        "checking": "正在检查更新…",
+        "upToDate": "当前已是最新版本。",
+        "availableSeamless": "发现新版本（$version）。可一键自动更新并重启。",
+        "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
+        "availableExternal": "发现新版本（$version）。请手动下载安装。",
+        "failed": "检查更新失败：$error"
+      },
+      "actions": {
+        "check": "检查更新",
+        "checking": "检查中…",
+        "autoUpdate": "自动更新并重启",
+        "stageUpdate": "后台准备更新",
+        "manualUpdate": "手动更新",
+        "updating": "更新中…"
+      },
+      "messages": {
+        "upToDate": "当前已是最新版本",
+        "updateAvailable": "发现新版本：$version",
+        "checkFailed": "检查更新失败：$error",
+        "installStarting": "正在准备自动更新，应用即将重启。",
+        "stageStarting": "正在后台准备更新，下次启动将自动生效。",
+        "stageReady": "更新已准备就绪，下次启动将自动更新。",
+        "installFailed": "自动更新失败：$error",
+        "stageFailed": "后台准备更新失败：$error",
+        "openHomepageFailed": "无法打开项目主页",
+        "openUpdateFailed": "无法打开更新页面"
+      }
+    },
+    "updateNotice": {
+      "stagedReady": "新版本 $version 已准备好，将在下次启动自动更新。",
+      "manualDownload": "发现新版本 $version，可手动下载安装。"
+    },
     "diagnostics": {
       "title": "诊断信息",
       "subtitle": "导出诊断信息以便支持排查",
       "privacyNote": "该报告不会包含你的记录正文或 API Key。",
       "loading": "正在加载诊断信息…",
+      "updates": {
+        "title": "应用更新",
+        "unknownVersion": "未知",
+        "currentVersion": "当前版本：$version",
+        "latestVersion": "最新版本：$version",
+        "status": {
+          "idle": "点击检查更新；Linux 可自动更新重启，Windows 请下载 MSI 安装。",
+          "checking": "正在检查更新…",
+          "upToDate": "当前已是最新版本。",
+          "availableSeamless": "发现新版本（$version）。点击更新后将自动重启并完成安装。",
+          "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
+          "availableExternal": "发现新版本（$version）。请打开下载页完成安装（Windows 为 MSI）。",
+          "failed": "检查更新失败：$error"
+        },
+        "actions": {
+          "check": "检查更新",
+          "checking": "检查中…",
+          "updateAndRestart": "更新并重启",
+          "stageForNextLaunch": "后台准备更新",
+          "openDownload": "打开下载页面",
+          "updating": "更新中…"
+        },
+        "messages": {
+          "upToDate": "当前已是最新版本",
+          "updateAvailable": "发现新版本：$version",
+          "checkFailed": "检查更新失败：$error",
+          "installStarting": "正在准备更新，应用即将重启。",
+          "stageStarting": "正在后台准备更新，下次启动将自动生效。",
+          "stageReady": "更新已准备就绪，下次启动将自动更新。",
+          "installFailed": "更新失败：$error",
+          "stageFailed": "后台准备更新失败：$error",
+          "openFailed": "无法打开下载页面"
+        }
+      },
       "messages": {
         "copied": "诊断信息已复制",
         "copyFailed": "复制诊断信息失败：$error",

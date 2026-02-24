@@ -7,9 +7,11 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'windows/velopack_update_client.dart';
+
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
-  defaultValue: 'https://secondloop.app',
+  defaultValue: '',
 );
 const _defaultReleaseRepo = String.fromEnvironment(
   'SECONDLOOP_RELEASE_REPO',
@@ -27,6 +29,7 @@ enum AppUpdatePlatform {
 
 enum AppUpdateInstallMode {
   seamlessRestart,
+  stagedNextLaunch,
   externalDownload,
 }
 
@@ -74,6 +77,8 @@ class AppUpdateAvailability {
   Uri get downloadUri => asset?.downloadUri ?? releasePageUri;
   bool get canSeamlessInstall =>
       installMode == AppUpdateInstallMode.seamlessRestart;
+  bool get canStageForNextLaunch =>
+      installMode == AppUpdateInstallMode.stagedNextLaunch;
 }
 
 class AppUpdateCheckResult {
@@ -124,21 +129,33 @@ class AppUpdateService {
     AppRuntimeVersionLoader? currentVersionLoader,
     AppUpdatePlatform? platformOverride,
     bool? releaseModeOverride,
+    String? releaseApiOriginOverride,
+    String? releaseRepoOverride,
+    WindowsStagedUpdateClient? windowsStagedUpdateClient,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
         _platformOverride = platformOverride,
-        _releaseModeOverride = releaseModeOverride;
+        _releaseModeOverride = releaseModeOverride,
+        _releaseApiOriginOverride = releaseApiOriginOverride,
+        _releaseRepoOverride = releaseRepoOverride,
+        _windowsStagedUpdateClient = windowsStagedUpdateClient;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
   final AppRuntimeVersionLoader? _currentVersionLoader;
   final AppUpdatePlatform? _platformOverride;
   final bool? _releaseModeOverride;
+  final String? _releaseApiOriginOverride;
+  final String? _releaseRepoOverride;
+  final WindowsStagedUpdateClient? _windowsStagedUpdateClient;
 
   AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
 
   bool get _isReleaseMode => _releaseModeOverride ?? kReleaseMode;
+  String get _releaseApiOrigin =>
+      _releaseApiOriginOverride ?? _defaultReleaseApiOrigin;
+  String get _releaseRepo => _releaseRepoOverride ?? _defaultReleaseRepo;
 
   Future<AppUpdateCheckResult> checkForUpdates() async {
     final runtimeVersion = await _loadCurrentVersion();
@@ -251,6 +268,41 @@ class AppUpdateService {
     exit(0);
   }
 
+  Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
+    if (update.installMode != AppUpdateInstallMode.stagedNextLaunch) {
+      throw StateError('staged_update_not_supported');
+    }
+
+    final asset = update.asset;
+    if (asset == null) {
+      throw StateError('missing_update_asset');
+    }
+
+    if (_platform != AppUpdatePlatform.windows) {
+      throw StateError('staged_update_not_supported_for_${_platform.name}');
+    }
+
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    if (!client.isAvailable()) {
+      throw StateError('windows_velopack_unavailable');
+    }
+
+    await client.stageAsset(asset.downloadUri);
+  }
+
+  Future<void> applyPendingUpdateOnStartup() async {
+    if (_platform != AppUpdatePlatform.windows) {
+      return;
+    }
+
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    if (!client.isAvailable()) {
+      return;
+    }
+
+    await client.applyPendingOnStartup();
+  }
+
   void dispose() {
     _httpClient.close(force: true);
   }
@@ -318,8 +370,8 @@ class AppUpdateService {
   }
 
   List<Uri> _buildReleaseEndpoints() {
-    final configuredOrigin = _defaultReleaseApiOrigin.trim();
-    final repo = _defaultReleaseRepo.trim();
+    final configuredOrigin = _releaseApiOrigin.trim();
+    final repo = _releaseRepo.trim();
 
     final endpoints = <Uri>[];
     final apiOrigin = _parseUri(configuredOrigin);
@@ -336,9 +388,9 @@ class AppUpdateService {
   }
 
   Uri _buildFallbackReleasePageUri() {
-    final repo = _defaultReleaseRepo.trim();
+    final repo = _releaseRepo.trim();
     if (repo.isEmpty) {
-      final origin = _parseUri(_defaultReleaseApiOrigin.trim());
+      final origin = _parseUri(_releaseApiOrigin.trim());
       if (origin != null) return origin;
       return Uri.parse('https://github.com');
     }
@@ -394,8 +446,15 @@ class AppUpdateService {
     return switch (_platform) {
       AppUpdatePlatform.linux when asset.name.endsWith('.tar.gz') =>
         AppUpdateInstallMode.seamlessRestart,
+      AppUpdatePlatform.windows when _isWindowsStagedUpdateAvailable() =>
+        AppUpdateInstallMode.stagedNextLaunch,
       _ => AppUpdateInstallMode.externalDownload,
     };
+  }
+
+  bool _isWindowsStagedUpdateAvailable() {
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    return client.isAvailable();
   }
 
   Directory _resolveExtractedSourceDir(

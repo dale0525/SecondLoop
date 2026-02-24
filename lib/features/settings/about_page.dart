@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/update/app_update_service.dart';
+import '../../i18n/strings.g.dart';
 
 typedef AboutRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
 typedef AboutExternalUriLauncher = Future<bool> Function(Uri uri);
@@ -39,7 +40,7 @@ class _AboutPageState extends State<AboutPage> {
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
 
-  _AboutText get _text => _AboutText.of(Localizations.localeOf(context));
+  _AboutText get _text => _AboutText.of(context);
 
   @override
   void initState() {
@@ -141,17 +142,27 @@ class _AboutPageState extends State<AboutPage> {
     }
   }
 
-  Future<void> _autoUpdateAndRestart() async {
+  Future<void> _applyManagedUpdate() async {
     if (_checkingUpdate || _updating) return;
     final update = _updateResult?.update;
-    if (update == null || !update.canSeamlessInstall) return;
+    if (update == null) return;
 
     setState(() => _updating = true);
     try {
-      _showMessage(_text.messages.installStarting);
-      await _updateService.installAndRestart(update);
+      if (update.canSeamlessInstall) {
+        _showMessage(_text.messages.installStarting);
+        await _updateService.installAndRestart(update);
+      } else if (update.canStageForNextLaunch) {
+        _showMessage(_text.messages.stageStarting);
+        await _updateService.stageUpdateForNextLaunch(update);
+        _showMessage(_text.messages.stageReady);
+      }
     } catch (error) {
-      _showMessage(_text.messages.installFailed(error: '$error'));
+      if (update.canStageForNextLaunch) {
+        _showMessage(_text.messages.stageFailed(error: '$error'));
+      } else {
+        _showMessage(_text.messages.installFailed(error: '$error'));
+      }
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -189,6 +200,9 @@ class _AboutPageState extends State<AboutPage> {
     }
     if (update.canSeamlessInstall) {
       return _text.status.availableSeamless(version: update.latestTag);
+    }
+    if (update.canStageForNextLaunch) {
+      return _text.status.availableStaged(version: update.latestTag);
     }
     return _text.status.availableExternal(version: update.latestTag);
   }
@@ -287,12 +301,14 @@ class _AboutPageState extends State<AboutPage> {
                               : text.actions.check,
                         ),
                       ),
-                      if (update != null && update.canSeamlessInstall)
+                      if (update != null &&
+                          (update.canSeamlessInstall ||
+                              update.canStageForNextLaunch))
                         FilledButton.icon(
                           key: const ValueKey('about_auto_update'),
                           onPressed: (_checkingUpdate || _updating)
                               ? null
-                              : _autoUpdateAndRestart,
+                              : _applyManagedUpdate,
                           icon: _updating
                               ? const SizedBox(
                                   width: 16,
@@ -300,11 +316,17 @@ class _AboutPageState extends State<AboutPage> {
                                   child:
                                       CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Icon(Icons.restart_alt_rounded),
+                              : Icon(
+                                  update.canSeamlessInstall
+                                      ? Icons.restart_alt_rounded
+                                      : Icons.download_done_rounded,
+                                ),
                           label: Text(
                             _updating
                                 ? text.actions.updating
-                                : text.actions.autoUpdate,
+                                : update.canSeamlessInstall
+                                    ? text.actions.autoUpdate
+                                    : text.actions.stageUpdate,
                           ),
                         ),
                       TextButton.icon(
@@ -328,93 +350,90 @@ class _AboutPageState extends State<AboutPage> {
 }
 
 class _AboutText {
-  const _AboutText._(this._isZh);
+  const _AboutText._(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  static _AboutText of(Locale locale) {
-    final languageCode = locale.languageCode.toLowerCase();
-    return _AboutText._(languageCode.startsWith('zh'));
+  static _AboutText of(BuildContext context) {
+    return _AboutText._(context.t);
   }
 
-  String get title => _isZh ? '关于' : 'About';
-  String get productName => _isZh ? 'SecondLoop' : 'SecondLoop';
-  String get updatesTitle => _isZh ? '应用更新' : 'App updates';
-  String get openHomepage => _isZh ? '项目主页' : 'Project homepage';
-  String get unknownVersion => _isZh ? '未知' : 'unknown';
+  String get title => _t.settings.about.title;
+  String get productName => _t.settings.about.productName;
+  String get updatesTitle => _t.settings.about.updatesTitle;
+  String get openHomepage => _t.settings.about.openHomepage;
+  String get unknownVersion => _t.settings.about.unknownVersion;
 
   String currentVersion({required String version}) =>
-      _isZh ? '当前版本：$version' : 'Current version: $version';
+      _t.settings.about.currentVersion(version: version);
 
   String latestVersion({required String version}) =>
-      _isZh ? '最新版本：$version' : 'Latest version: $version';
+      _t.settings.about.latestVersion(version: version);
 
-  _AboutStatusText get status => _AboutStatusText(_isZh);
-  _AboutActionText get actions => _AboutActionText(_isZh);
-  _AboutMessageText get messages => _AboutMessageText(_isZh);
+  _AboutStatusText get status => _AboutStatusText(_t);
+  _AboutActionText get actions => _AboutActionText(_t);
+  _AboutMessageText get messages => _AboutMessageText(_t);
 }
 
 class _AboutStatusText {
-  const _AboutStatusText(this._isZh);
+  const _AboutStatusText(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  String get idle => _isZh
-      ? '点击检查更新；Linux 可自动更新重启，Windows 请下载 MSI 安装。'
-      : 'Check for updates. Linux can auto-update and restart; Windows uses MSI download/install.';
+  String get idle => _t.settings.about.status.idle;
+  String get checking => _t.settings.about.status.checking;
+  String get upToDate => _t.settings.about.status.upToDate;
 
-  String get checking => _isZh ? '正在检查更新…' : 'Checking for updates…';
+  String availableSeamless({required String version}) =>
+      _t.settings.about.status.availableSeamless(version: version);
 
-  String get upToDate => _isZh ? '当前已是最新版本。' : 'You\'re on the latest version.';
+  String availableStaged({required String version}) =>
+      _t.settings.about.status.availableStaged(version: version);
 
-  String availableSeamless({required String version}) => _isZh
-      ? '发现新版本（$version）。可一键自动更新并重启。'
-      : 'Update available ($version). You can auto-update and restart.';
-
-  String availableExternal({required String version}) => _isZh
-      ? '发现新版本（$version）。请手动下载安装。'
-      : 'Update available ($version). Please download and install manually.';
+  String availableExternal({required String version}) =>
+      _t.settings.about.status.availableExternal(version: version);
 
   String failed({required String error}) =>
-      _isZh ? '检查更新失败：$error' : 'Update check failed: $error';
+      _t.settings.about.status.failed(error: error);
 }
 
 class _AboutActionText {
-  const _AboutActionText(this._isZh);
+  const _AboutActionText(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  String get check => _isZh ? '检查更新' : 'Check updates';
-  String get checking => _isZh ? '检查中…' : 'Checking…';
-  String get autoUpdate => _isZh ? '自动更新并重启' : 'Auto-update and restart';
-  String get manualUpdate => _isZh ? '手动更新' : 'Manual update';
-  String get updating => _isZh ? '更新中…' : 'Updating…';
+  String get check => _t.settings.about.actions.check;
+  String get checking => _t.settings.about.actions.checking;
+  String get autoUpdate => _t.settings.about.actions.autoUpdate;
+  String get stageUpdate => _t.settings.about.actions.stageUpdate;
+  String get manualUpdate => _t.settings.about.actions.manualUpdate;
+  String get updating => _t.settings.about.actions.updating;
 }
 
 class _AboutMessageText {
-  const _AboutMessageText(this._isZh);
+  const _AboutMessageText(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  String get upToDate =>
-      _isZh ? '当前已是最新版本' : 'You\'re already on the latest version';
+  String get upToDate => _t.settings.about.messages.upToDate;
 
   String updateAvailable({required String version}) =>
-      _isZh ? '发现新版本：$version' : 'Update available: $version';
+      _t.settings.about.messages.updateAvailable(version: version);
 
   String checkFailed({required String error}) =>
-      _isZh ? '检查更新失败：$error' : 'Failed to check updates: $error';
+      _t.settings.about.messages.checkFailed(error: error);
 
-  String get installStarting => _isZh
-      ? '正在准备自动更新，应用即将重启。'
-      : 'Preparing update. The app will restart shortly.';
+  String get installStarting => _t.settings.about.messages.installStarting;
+  String get stageStarting => _t.settings.about.messages.stageStarting;
+  String get stageReady => _t.settings.about.messages.stageReady;
 
   String installFailed({required String error}) =>
-      _isZh ? '自动更新失败：$error' : 'Auto update failed: $error';
+      _t.settings.about.messages.installFailed(error: error);
+
+  String stageFailed({required String error}) =>
+      _t.settings.about.messages.stageFailed(error: error);
 
   String get openHomepageFailed =>
-      _isZh ? '无法打开项目主页' : 'Could not open project homepage';
-
-  String get openUpdateFailed =>
-      _isZh ? '无法打开更新页面' : 'Could not open update page';
+      _t.settings.about.messages.openHomepageFailed;
+  String get openUpdateFailed => _t.settings.about.messages.openUpdateFailed;
 }
