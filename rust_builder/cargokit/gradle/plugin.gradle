@@ -2,6 +2,7 @@
 /// Details: https://fzyzcjy.github.io/flutter_rust_bridge/manual/integrate/builtin
 
 import java.nio.file.Paths
+import java.util.Locale
 import org.apache.tools.ant.taskdefs.condition.Os
 
 CargoKitPlugin.file = buildscript.sourceFile
@@ -129,7 +130,7 @@ class CargoKitPlugin implements Plugin<Project> {
 
     private static List<String> resolveTargetPlatforms(Project project) {
         if (!project.hasProperty("target-platform")) {
-            return ["android-arm", "android-arm64", "android-x64"]
+            return ["android-arm", "android-arm64"]
         }
         return project
             .property("target-platform")
@@ -171,6 +172,8 @@ class CargoKitPlugin implements Plugin<Project> {
             }
 
             def cargoBuildDir = "${project.buildDir}/build"
+            def hostArch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT)
+            def hostIsX86 = hostArch.contains("x86_64") || hostArch.contains("amd64")
 
             def variants = project.plugins.hasPlugin('com.android.application') ?
                 project.android.applicationVariants :
@@ -184,8 +187,7 @@ class CargoKitPlugin implements Plugin<Project> {
                 jniLibs.srcDir(new File(cargoOutputDir))
 
                 def platforms = resolveTargetPlatforms(project)
-                if (buildType == "debug") {
-                    platforms.add("android-x86")
+                if (buildType == "debug" && hostIsX86) {
                     platforms.add("android-x64")
                 }
                 platforms = platforms.unique()
