@@ -76,6 +76,9 @@ final class _MemClient implements AudioTranscribeClient {
   @override
   final String modelName;
 
+  @override
+  int? get maxInputBytes => null;
+
   bool shouldFail = false;
   Object failError = StateError('transcribe_failed');
   int calls = 0;
