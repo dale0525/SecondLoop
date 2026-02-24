@@ -111,59 +111,16 @@ Widget _buildComposerInlineButton(
   bool iconOnly = false,
   double minButtonWidth = 44,
 }) {
-  final textTheme = Theme.of(context).textTheme;
-  final isEnabled = onPressed != null;
-
-  final effectiveBackground =
-      isEnabled ? backgroundColor : backgroundColor.withOpacity(0.52);
-  final effectiveForeground =
-      isEnabled ? foregroundColor : foregroundColor.withOpacity(0.62);
-
-  final borderRadius = BorderRadius.circular(999);
-  final borderSide =
-      borderColor == null ? BorderSide.none : BorderSide(color: borderColor);
-
-  return Semantics(
-    key: key,
-    button: true,
+  return ChatComposerInlineButton(
+    buttonKey: key,
     label: label,
-    child: Material(
-      color: effectiveBackground,
-      shape: RoundedRectangleBorder(
-        borderRadius: borderRadius,
-        side: borderSide,
-      ),
-      child: InkWell(
-        onTap: onPressed,
-        canRequestFocus: false,
-        borderRadius: borderRadius,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: 44,
-            minWidth: minButtonWidth,
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: iconOnly ? 10 : 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 18, color: effectiveForeground),
-                if (!iconOnly) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: textTheme.labelLarge?.copyWith(
-                      color: effectiveForeground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
+    icon: icon,
+    onPressed: onPressed,
+    backgroundColor: backgroundColor,
+    foregroundColor: foregroundColor,
+    borderColor: borderColor,
+    iconOnly: iconOnly,
+    minButtonWidth: minButtonWidth,
   );
 }
 

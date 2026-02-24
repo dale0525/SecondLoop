@@ -18,7 +18,6 @@ import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
-import '../../../ui/sl_button.dart';
 import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_focus_ring.dart';
 import '../../../ui/sl_icon_button.dart';
@@ -26,6 +25,7 @@ import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
 import '../../attachments/attachment_viewer_page.dart';
+import '../../chat/chat_composer_inline_button.dart';
 import '../../chat/chat_markdown_editor_launcher.dart';
 import '../../chat/chat_markdown_preview.dart';
 import '../assistant_message_actions.dart';
@@ -742,6 +742,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final dueText = _formatDue(context);
     final recurrenceRule = TodoRecurrenceRule.tryParseJson(_recurrenceRuleJson);
     final recurrenceText = recurrenceRule == null
@@ -880,7 +881,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                     color: tokens.surface2,
                     borderColor: tokens.borderSubtle,
                     borderRadius: BorderRadius.circular(tokens.radiusLg),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -924,15 +925,18 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                             ),
                           ),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Expanded(
                               child: TextField(
+                                key: const ValueKey('todo_detail_input'),
                                 controller: _noteController,
                                 decoration: InputDecoration(
                                   hintText:
                                       context.t.actions.todoDetail.noteHint,
                                   border: InputBorder.none,
                                   filled: false,
+                                  isDense: true,
                                 ),
                                 keyboardType: TextInputType.multiline,
                                 textInputAction: TextInputAction.newline,
@@ -940,16 +944,38 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                                 maxLines: 6,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            IconButton(
+                            const SizedBox(width: 8),
+                            SlIconButton(
+                              key: const ValueKey('todo_detail_attach'),
+                              icon: Icons.add_rounded,
+                              size: 44,
+                              iconSize: 22,
                               tooltip: context.t.actions.todoDetail.attach,
-                              icon: const Icon(Icons.attach_file_rounded),
                               onPressed: () => unawaited(_pickAttachment()),
                             ),
-                            const SizedBox(width: 6),
-                            SlButton(
-                              onPressed: () => unawaited(_appendNote()),
-                              child: Text(context.t.actions.todoDetail.addNote),
+                            ValueListenableBuilder<TextEditingValue>(
+                              valueListenable: _noteController,
+                              builder: (context, value, child) {
+                                final hasText = value.text.trim().isNotEmpty;
+                                final canSend =
+                                    hasText || _pendingAttachments.isNotEmpty;
+                                if (!canSend) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: ChatComposerInlineButton(
+                                    buttonKey:
+                                        const ValueKey('todo_detail_send'),
+                                    label: context.t.common.actions.send,
+                                    icon: Icons.send_rounded,
+                                    onPressed: () => unawaited(_appendNote()),
+                                    backgroundColor: colorScheme.primary,
+                                    foregroundColor: colorScheme.onPrimary,
+                                    iconOnly: true,
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
