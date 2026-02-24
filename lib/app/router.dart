@@ -12,6 +12,8 @@ import '../ui/sl_glass.dart';
 import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
 
+const _kDesktopShellMaxWidth = 1240.0;
+
 enum AppTab {
   chat(Icons.chat_bubble_outline, Icons.chat_bubble),
   settings(Icons.settings_outlined, Icons.settings);
@@ -93,44 +95,53 @@ class _AppShellState extends State<AppShell> {
           body: useCollapsedShell
               ? const SizedBox.shrink()
               : useRail
-                  ? Row(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 92,
-                            child: SlGlass(
-                              borderRadius:
-                                  BorderRadius.circular(tokens.radiusLg),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: NavigationRail(
-                                selectedIndex: _selectedIndex,
-                                onDestinationSelected: (index) =>
-                                    setState(() => _selectedIndex = index),
-                                labelType: NavigationRailLabelType.all,
-                                destinations: [
-                                  for (final t in AppTab.values)
-                                    NavigationRailDestination(
-                                      icon: Icon(t.icon),
-                                      selectedIcon: Icon(t.selectedIcon),
-                                      label: Text(t.label(context)),
-                                    ),
-                                ],
+                  ? Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: _kDesktopShellMaxWidth,
+                        ),
+                        child: Row(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 92,
+                                child: SlGlass(
+                                  borderRadius:
+                                      BorderRadius.circular(tokens.radiusLg),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: NavigationRail(
+                                    selectedIndex: _selectedIndex,
+                                    onDestinationSelected: (index) =>
+                                        setState(() => _selectedIndex = index),
+                                    labelType: NavigationRailLabelType.all,
+                                    destinations: [
+                                      for (final t in AppTab.values)
+                                        NavigationRailDestination(
+                                          icon: Icon(t.icon),
+                                          selectedIcon: Icon(t.selectedIcon),
+                                          label: Text(t.label(context)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        Expanded(
-                          child: SlPageSurface(
-                            margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-                            child: ClipRRect(
-                              borderRadius:
-                                  BorderRadius.circular(tokens.radiusLg),
-                              child: content,
+                            Expanded(
+                              child: SlPageSurface(
+                                margin:
+                                    const EdgeInsets.fromLTRB(0, 12, 12, 12),
+                                child: ClipRRect(
+                                  borderRadius:
+                                      BorderRadius.circular(tokens.radiusLg),
+                                  child: content,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     )
                   : SlPageSurface(
                       margin: EdgeInsets.fromLTRB(
