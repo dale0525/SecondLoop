@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_recording_foreground_channel_name">Audio recording</string>
+    <string name="audio_recording_foreground_channel_description">Foreground service while chat audio recording is active</string>
+    <string name="audio_recording_foreground_title">Recording audio</string>
+    <string name="audio_recording_foreground_text">Tap to return to SecondLoop</string>
+</resources>
