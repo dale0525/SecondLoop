@@ -225,6 +225,11 @@ fn build_scoped_prompt(question: &str, contexts: &[String]) -> String {
     out.push_str("You are SecondLoop, a helpful personal assistant.\n");
     out.push_str("IMPORTANT: Reply in the same language as the user's question.\n");
     out.push_str("IMPORTANT: Use only the scoped memories below as evidence.\n");
+    out.push_str("IMPORTANT: If you cite attachment evidence, use only secondloop links.\n");
+    out.push_str("- Resource citation: [label](secondloop://attachment/<sha>)\n");
+    out.push_str(
+        "- Chunk citation: [label](secondloop://attachment/<sha>?kind=<kind>&chunk=<i>)\n",
+    );
     out.push_str(
         "If the scoped memories are insufficient, explicitly say no matching records.\n\n",
     );

@@ -64,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  Attachment dco_decode_box_autoadd_attachment(dynamic raw);
+
+  @protected
   AttachmentExifMetadata dco_decode_box_autoadd_attachment_exif_metadata(
       dynamic raw);
 
@@ -200,6 +203,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  Attachment? dco_decode_opt_box_autoadd_attachment(dynamic raw);
+
+  @protected
   AttachmentExifMetadata? dco_decode_opt_box_autoadd_attachment_exif_metadata(
       dynamic raw);
 
@@ -289,6 +295,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  Attachment sse_decode_box_autoadd_attachment(SseDeserializer deserializer);
 
   @protected
   AttachmentExifMetadata sse_decode_box_autoadd_attachment_exif_metadata(
@@ -443,6 +452,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  Attachment? sse_decode_opt_box_autoadd_attachment(
+      SseDeserializer deserializer);
+
+  @protected
   AttachmentExifMetadata? sse_decode_opt_box_autoadd_attachment_exif_metadata(
       SseDeserializer deserializer);
 
@@ -537,6 +550,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_attachment(
+      Attachment self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_attachment_exif_metadata(
@@ -696,6 +713,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_attachment(
+      Attachment? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_attachment_exif_metadata(

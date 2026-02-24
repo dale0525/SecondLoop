@@ -30,3 +30,8 @@ Future<void> dbUpsertAttachmentMetadata(
         title: title,
         filenames: filenames,
         sourceUrls: sourceUrls);
+
+Future<Attachment?> dbReadAttachmentBySha256(
+        {required String appDir, required String attachmentSha256}) =>
+    RustLib.instance.api.crateApiAttachmentsDbReadAttachmentBySha256(
+        appDir: appDir, attachmentSha256: attachmentSha256);

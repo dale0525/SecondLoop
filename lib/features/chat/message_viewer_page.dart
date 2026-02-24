@@ -1,17 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_markdown_style.dart';
+import '../attachments/attachment_deeplink.dart';
+import '../attachments/attachment_viewer_page.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
+import 'chat_markdown_link_handler.dart';
 
 class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({required this.content, super.key});
 
   final String content;
+
+  Future<bool> _openInAppAttachment(BuildContext context, String href) async {
+    final parsed = parseAttachmentDeepLink(href);
+    if (parsed == null) return false;
+
+    await AttachmentViewerPage.openBySha(
+      context,
+      attachmentSha256: parsed.attachmentSha256,
+    );
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +73,14 @@ class MessageViewerPage extends StatelessWidget {
           previewTheme: previewTheme,
           exportRenderMode: false,
         ),
+        onTapLink: (text, href, title) {
+          unawaited(
+            handleChatMarkdownTapLink(
+              href,
+              handleInApp: (target) => _openInAppAttachment(context, target),
+            ),
+          );
+        },
       ),
     );
   }
