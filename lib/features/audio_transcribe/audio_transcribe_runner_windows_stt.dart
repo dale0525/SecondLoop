@@ -278,6 +278,9 @@ final class WindowsNativeSttAudioTranscribeClient
   String get engineName => 'native_stt';
 
   @override
+  int? get maxInputBytes => null;
+
+  @override
   Future<AudioTranscribeResponse> transcribe({
     required String lang,
     required String mimeType,

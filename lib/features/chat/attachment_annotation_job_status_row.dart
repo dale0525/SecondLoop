@@ -8,6 +8,12 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 
+enum _AudioTranscribeFailureHintKind {
+  payloadTooLarge,
+  modelNotAllowed,
+  invalidMultipart,
+}
+
 class AttachmentAnnotationJobStatusRow extends StatefulWidget {
   const AttachmentAnnotationJobStatusRow({
     required this.job,
@@ -144,6 +150,55 @@ class _AttachmentAnnotationJobStatusRowState
         error.contains('runtime_missing');
   }
 
+  _AudioTranscribeFailureHintKind? _resolveAudioTranscribeFailureHint(
+    AttachmentAnnotationJob job,
+  ) {
+    if (job.status != 'failed') return null;
+    final error = (job.lastError ?? '').trim().toLowerCase();
+    if (error.isEmpty) return null;
+
+    if (_containsAny(error, const <String>[
+      'audio_transcribe_http_413',
+      'payload_too_large',
+      'audio_transcribe_payload_too_large_local_check',
+    ])) {
+      return _AudioTranscribeFailureHintKind.payloadTooLarge;
+    }
+
+    if (error.contains('model_not_allowed')) {
+      return _AudioTranscribeFailureHintKind.modelNotAllowed;
+    }
+
+    if (error.contains('invalid_multipart')) {
+      return _AudioTranscribeFailureHintKind.invalidMultipart;
+    }
+
+    return null;
+  }
+
+  String _audioTranscribeFailureHintText({
+    required Translations t,
+    required _AudioTranscribeFailureHintKind kind,
+  }) {
+    switch (kind) {
+      case _AudioTranscribeFailureHintKind.payloadTooLarge:
+        return t.chat.audioTranscribeFailurePayloadTooLarge;
+      case _AudioTranscribeFailureHintKind.modelNotAllowed:
+        return t.chat.audioTranscribeFailureModelNotAllowed;
+      case _AudioTranscribeFailureHintKind.invalidMultipart:
+        return t.chat.audioTranscribeFailureInvalidMultipart;
+    }
+  }
+
+  bool _containsAny(String haystack, List<String> needles) {
+    for (final needle in needles) {
+      if (haystack.contains(needle)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool _shouldCheckWindowsSpeechRecognizer() {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) return false;
     if (!widget.annotateEnabled) return false;
@@ -256,6 +311,8 @@ class _AttachmentAnnotationJobStatusRowState
 
     final showMissingLocalRuntimeHint =
         isFailed && _isAudioLocalRuntimeMissing(job);
+    final audioTranscribeFailureHint =
+        isFailed ? _resolveAudioTranscribeFailureHint(job) : null;
 
     if (!widget.canAnnotateNow) {
       final actions = <Widget>[];
@@ -326,7 +383,12 @@ class _AttachmentAnnotationJobStatusRowState
                 ? (zh
                     ? '缺少语音识别语言包，请先安装后再重试。'
                     : 'Speech recognition language pack is missing.')
-                : t.chat.semanticParseStatusFailed);
+                : (audioTranscribeFailureHint == null
+                    ? t.chat.semanticParseStatusFailed
+                    : _audioTranscribeFailureHintText(
+                        t: t,
+                        kind: audioTranscribeFailureHint,
+                      )));
 
     final leading = showMissingLocalRuntimeHint
         ? Icon(
