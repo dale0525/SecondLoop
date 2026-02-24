@@ -83,6 +83,27 @@ pub struct SimilarTodoThread {
 }
 
 #[derive(Clone, Debug)]
+pub struct AttachmentTextChunk {
+    pub attachment_sha256: String,
+    pub kind: String,
+    pub chunk_index: i64,
+    pub start_offset: i64,
+    pub end_offset: i64,
+    pub text_len: i64,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimilarAttachmentChunk {
+    pub attachment_sha256: String,
+    pub kind: String,
+    pub chunk_index: i64,
+    pub distance: f64,
+    pub snippet: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct LlmUsageAggregate {
     pub purpose: String,
     pub requests: i64,
@@ -559,6 +580,48 @@ fn todo_activity_embeddings_table(space_id: &str) -> Result<String> {
     Ok(format!("todo_activity_embeddings__{space_id}"))
 }
 
+fn attachment_chunk_embeddings_table(space_id: &str) -> Result<String> {
+    if !is_safe_sqlite_ident(space_id) {
+        return Err(anyhow!("unsafe embedding space_id: {space_id}"));
+    }
+    Ok(format!("attachment_chunk_embeddings__{space_id}"))
+}
+
+fn ensure_attachment_chunk_vec_table_for_space(
+    conn: &Connection,
+    space_id: &str,
+    dim: usize,
+) -> Result<()> {
+    if dim == 0 || dim > 8192 {
+        return Err(anyhow!("invalid embedding dim: {dim}"));
+    }
+
+    let table = attachment_chunk_embeddings_table(space_id)?;
+    if !sqlite_table_exists(conn, &table)? {
+        conn.execute_batch(&format!(
+            r#"
+CREATE VIRTUAL TABLE "{table}" USING vec0(
+  embedding float[{dim}],
+  chunk_rowid INTEGER,
+  attachment_sha256 TEXT,
+  kind TEXT,
+  chunk_index INTEGER,
+  model_name TEXT
+);
+"#
+        ))?;
+    }
+
+    let actual_dim = vec0_dim_from_sqlite_master(conn, &table)?.unwrap_or(0);
+    if actual_dim != dim {
+        return Err(anyhow!(
+            "attachment-chunk vec0 dim mismatch: expected {dim}, got {actual_dim} (table={table})"
+        ));
+    }
+
+    Ok(())
+}
+
 fn ensure_vec_tables_for_space(conn: &Connection, space_id: &str, dim: usize) -> Result<()> {
     if dim == 0 || dim > 8192 {
         return Err(anyhow!("invalid embedding dim: {dim}"));
@@ -602,6 +665,8 @@ CREATE VIRTUAL TABLE "{activity_table}" USING vec0(
 "#
         ))?;
     }
+
+    ensure_attachment_chunk_vec_table_for_space(conn, space_id, dim)?;
 
     let msg_dim = vec0_dim_from_sqlite_master(conn, &message_table)?.unwrap_or(0);
     if msg_dim != dim {
