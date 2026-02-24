@@ -203,7 +203,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
   }
 
   String _collapsedHeadline(BuildContext context, TaskHubSummary summary) {
-    if (summary.overdueCount > 0) {
+    if (summary.dueCount > 0) {
       return context.t.actions.agenda
           .summary(due: summary.dueCount, overdue: summary.overdueCount);
     }
@@ -245,11 +245,11 @@ class _TaskHubSection extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 4),
-          for (final todo in todos)
+          for (var i = 0; i < todos.length; i++)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
               child: _TaskHubTodoRow(
-                todo: todo,
+                todo: todos[i],
                 onQuickAction: onQuickAction,
               ),
             ),
@@ -269,67 +269,127 @@ class _TaskHubTodoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dueAtMs = todo.dueAtMs;
+    final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final dueAtLocal = dueAtMs == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+    final dueAtText = dueAtLocal == null
+        ? null
+        : MaterialLocalizations.of(context).formatShortDate(dueAtLocal);
+    final overdue = dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
+    final dotColor = overdue ? colorScheme.error : colorScheme.primary;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          todo.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface2.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(tokens.radiusSm),
+        border: Border.all(
+          color: tokens.borderSubtle.withOpacity(0.9),
         ),
-        if (dueAtLocal != null)
-          Text(
-            MaterialLocalizations.of(context).formatShortDate(dueAtLocal),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 4,
-          runSpacing: 4,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _QuickActionButton(
-              key: ValueKey('task_hub_quick_${todo.id}_today'),
-              label: context.t.actions.taskHub.actions.today,
-              onPressed: onQuickAction == null
-                  ? null
-                  : () => onQuickAction!(todo, TaskHubQuickAction.today),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(top: 6),
+                  decoration: BoxDecoration(
+                    color: dotColor,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        todo.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      if (dueAtText != null) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 14,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              dueAtText,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-            _QuickActionButton(
-              key: ValueKey('task_hub_quick_${todo.id}_tomorrow'),
-              label: context.t.actions.taskHub.actions.tomorrow,
-              onPressed: onQuickAction == null
-                  ? null
-                  : () => onQuickAction!(todo, TaskHubQuickAction.tomorrow),
-            ),
-            _QuickActionButton(
-              key: ValueKey('task_hub_quick_${todo.id}_this_week'),
-              label: context.t.actions.taskHub.actions.thisWeek,
-              onPressed: onQuickAction == null
-                  ? null
-                  : () => onQuickAction!(todo, TaskHubQuickAction.thisWeek),
-            ),
-            _QuickActionButton(
-              key: ValueKey('task_hub_quick_${todo.id}_later'),
-              label: context.t.actions.taskHub.actions.later,
-              onPressed: onQuickAction == null
-                  ? null
-                  : () => onQuickAction!(todo, TaskHubQuickAction.later),
-            ),
-            _QuickActionButton(
-              key: ValueKey('task_hub_quick_${todo.id}_done'),
-              label: context.t.actions.taskHub.actions.done,
-              onPressed: onQuickAction == null
-                  ? null
-                  : () => onQuickAction!(todo, TaskHubQuickAction.done),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                _QuickActionButton(
+                  key: ValueKey('task_hub_quick_${todo.id}_today'),
+                  icon: Icons.today_rounded,
+                  label: context.t.actions.taskHub.actions.today,
+                  onPressed: onQuickAction == null
+                      ? null
+                      : () => onQuickAction!(todo, TaskHubQuickAction.today),
+                ),
+                _QuickActionButton(
+                  key: ValueKey('task_hub_quick_${todo.id}_tomorrow'),
+                  icon: Icons.event_rounded,
+                  label: context.t.actions.taskHub.actions.tomorrow,
+                  onPressed: onQuickAction == null
+                      ? null
+                      : () => onQuickAction!(todo, TaskHubQuickAction.tomorrow),
+                ),
+                _QuickActionButton(
+                  key: ValueKey('task_hub_quick_${todo.id}_this_week'),
+                  icon: Icons.date_range_rounded,
+                  label: context.t.actions.taskHub.actions.thisWeek,
+                  onPressed: onQuickAction == null
+                      ? null
+                      : () => onQuickAction!(todo, TaskHubQuickAction.thisWeek),
+                ),
+                _QuickActionButton(
+                  key: ValueKey('task_hub_quick_${todo.id}_later'),
+                  icon: Icons.schedule_send_rounded,
+                  label: context.t.actions.taskHub.actions.later,
+                  onPressed: onQuickAction == null
+                      ? null
+                      : () => onQuickAction!(todo, TaskHubQuickAction.later),
+                ),
+                _QuickActionButton(
+                  key: ValueKey('task_hub_quick_${todo.id}_done'),
+                  icon: Icons.check_rounded,
+                  label: context.t.actions.taskHub.actions.done,
+                  onPressed: onQuickAction == null
+                      ? null
+                      : () => onQuickAction!(todo, TaskHubQuickAction.done),
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -338,23 +398,43 @@ class _QuickActionButton extends StatelessWidget {
   const _QuickActionButton({
     required this.label,
     required this.onPressed,
+    required this.icon,
     super.key,
   });
 
   final String label;
   final VoidCallback? onPressed;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 28),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    final tokens = SlTokens.of(context);
+    final baseStyle = ButtonStyle(
+      minimumSize: const MaterialStatePropertyAll(Size(0, 28)),
+      padding: const MaterialStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       ),
-      child: Text(label),
+      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: MaterialStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+      ),
+      textStyle: MaterialStatePropertyAll(
+        Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: baseStyle.copyWith(
+        side: MaterialStatePropertyAll(
+          BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
+        ),
+      ),
+      icon: Icon(icon, size: 14),
+      label: Text(label),
     );
   }
 }

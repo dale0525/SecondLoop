@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
+import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -133,6 +134,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.current('todo-1').status, 'done');
+  });
+
+  testWidgets('task hub page task row opens todo detail page', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'todo-open',
+          title: 'Open detail',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(home: TaskHubPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_item_todo-open')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TodoDetailPage), findsOneWidget);
   });
 }
 

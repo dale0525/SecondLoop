@@ -37,6 +37,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/platform/platform_location.dart';
+import '../../core/platform/audio_recording_foreground_service.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/db.dart';
@@ -80,16 +81,20 @@ import '../tags/tag_repository.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
+import 'chat_composer_inline_button.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_editor_launcher.dart';
 import 'chat_markdown_preview.dart';
 import 'chat_markdown_link_handler.dart';
+import 'chat_audio_recording_recovery_dialog.dart';
 import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';
 import 'ask_scope_empty.dart';
 import 'semantic_parse_job_status_row.dart';
 import 'attachment_annotation_job_status_row.dart';
+import 'audio_recording_recovery_snapshot.dart';
+import 'audio_recording_recovery_store.dart';
 
 part 'chat_page_methods_a.dart';
 part 'chat_page_methods_b.dart';
@@ -101,6 +106,7 @@ part 'chat_page_methods_i_detached_jobs.dart';
 part 'chat_page_methods_j_message_edit.dart';
 part 'chat_page_methods_f_audio_recording.dart';
 part 'chat_page_methods_f_audio_recording_stitching.dart';
+part 'chat_page_methods_f_audio_recording_recovery.dart';
 part 'chat_page_methods_g_ask_ai_entry.dart';
 part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_methods_k_tags.dart';
@@ -408,6 +414,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _stopRequested = false;
   bool _desktopDropActive = false;
   bool _recordingAudio = false;
+  bool _audioRecordingRecoveryChecked = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
   bool _cloudEmbeddingsConsented = false;
@@ -493,6 +500,7 @@ class _ChatPageState extends State<ChatPage> {
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
     unawaited(_audioRecorderInstance?.dispose());
+    unawaited(AudioRecordingForegroundService.stopIfSupported());
     _controller.dispose();
     _inputFocusNode.dispose();
     _scrollController.dispose();
@@ -507,6 +515,7 @@ class _ChatPageState extends State<ChatPage> {
     _attachSyncEngine();
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());
+    unawaited(_checkPendingRecordedAudioRecoveryIfNeeded());
   }
 
   @override

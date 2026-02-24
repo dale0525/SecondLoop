@@ -195,11 +195,40 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
     final tempDir = await getTemporaryDirectory();
     final startedAt = DateTime.now();
+    final recordingSessionId =
+        '${startedAt.microsecondsSinceEpoch}_${widget.conversation.id}';
     final segmentTracker = _RecordedAudioSegmentFileTracker();
     var recorderStarted = false;
     String? activeSegmentPath;
     var segmentIndex = 0;
     var stitchedAfterInterruption = false;
+
+    Future<void> addCompletedSegmentPath(String? path) async {
+      final trimmed = path?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      segmentTracker.addPath(trimmed);
+      try {
+        await AudioRecordingRecoveryStore.markSegmentCompleted(
+          sessionId: recordingSessionId,
+          path: trimmed,
+        );
+      } catch (_) {
+        // Keep recording flow available when snapshot updates fail.
+      }
+    }
+
+    Future<void> markActiveSegmentPath(String? path) async {
+      final trimmed = path?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      try {
+        await AudioRecordingRecoveryStore.markActiveSegment(
+          sessionId: recordingSessionId,
+          path: trimmed,
+        );
+      } catch (_) {
+        // Keep recording flow available when snapshot updates fail.
+      }
+    }
 
     Future<void> startRecordingSegment() async {
       segmentIndex += 1;
@@ -212,6 +241,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       await _audioRecorder.start(_audioRecordingConfig, path: path);
       activeSegmentPath = path;
       recorderStarted = true;
+      await markActiveSegmentPath(path);
     }
 
     Future<_AudioInterruptionRecoveryOutcome>
@@ -225,7 +255,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
           return _AudioInterruptionRecoveryOutcome.pending;
         }
 
-        segmentTracker.addPath(activeSegmentPath);
+        await addCompletedSegmentPath(activeSegmentPath);
         try {
           await startRecordingSegment();
           stitchedAfterInterruption = true;
@@ -237,11 +267,21 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
 
     try {
+      try {
+        await AudioRecordingRecoveryStore.beginSession(
+          sessionId: recordingSessionId,
+          startedAtMs: startedAt.millisecondsSinceEpoch,
+          conversationId: widget.conversation.id,
+        );
+      } catch (_) {
+        // Keep recording flow available when snapshot init fails.
+      }
       await startRecordingSegment();
 
       if (!mounted) return;
       _setState(() => _recordingAudio = true);
       await _setRecordingWakeLock(true);
+      await AudioRecordingForegroundService.startIfSupported();
 
       final action = await _showAudioRecordingSheet(
         startedAt: startedAt,
@@ -258,7 +298,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         }
         recorderStarted = false;
       }
-      segmentTracker.addPath(recordedPath ?? activeSegmentPath);
+      await addCompletedSegmentPath(recordedPath ?? activeSegmentPath);
       activeSegmentPath = null;
 
       if (!shouldSend) return;
@@ -302,12 +342,12 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       if (recorderStarted) {
         try {
           final cleanupPath = await _audioRecorder.stop();
-          segmentTracker.addPath(cleanupPath ?? activeSegmentPath);
+          await addCompletedSegmentPath(cleanupPath ?? activeSegmentPath);
         } catch (_) {
           // Ignore stop failures during cleanup.
         }
       }
-      segmentTracker.addPath(activeSegmentPath);
+      await addCompletedSegmentPath(activeSegmentPath);
 
       for (final pathToDelete in segmentTracker.orderedPaths) {
         try {
@@ -318,6 +358,14 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       }
 
       await _setRecordingWakeLock(false);
+      await AudioRecordingForegroundService.stopIfSupported();
+      try {
+        await AudioRecordingRecoveryStore.clearSession(
+          expectedSessionId: recordingSessionId,
+        );
+      } catch (_) {
+        // Ignore cleanup failures for recovery snapshot.
+      }
 
       if (mounted) {
         _setState(() => _recordingAudio = false);
