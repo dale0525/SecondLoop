@@ -14,6 +14,7 @@ ANDROID_BUILD_GRADLE = REPO_ROOT / "android/app/build.gradle"
 ANDROID_MANIFEST = REPO_ROOT / "android/app/src/main/AndroidManifest.xml"
 FLUTTER_WITH_DEFINES_SCRIPT = REPO_ROOT / "scripts/flutter_with_defines.sh"
 BUILD_ANDROID_RELEASE_APK_SCRIPT = REPO_ROOT / "scripts/build_android_release_apk.sh"
+CARGOKIT_PLUGIN_GRADLE = REPO_ROOT / "rust_builder/cargokit/gradle/plugin.gradle"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -135,6 +136,13 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn('target.contains("apple-darwin")', script)
         self.assertIn('cfg!(feature = "openblas")', script)
 
+    def test_setup_rustup_patches_irondash_cargokit_plugin_for_new_flutter_gradle_plugin(self) -> None:
+        script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('irondash_engine_context-0.5*/cargokit/gradle/plugin.gradle', script)
+        self.assertIn('candidate.plugins.hasPlugin("dev.flutter.flutter-gradle-plugin")', script)
+        self.assertIn('hostArch.contains("x86_64")', script)
+
     def test_android_gradle_application_id_supports_environment_override(self) -> None:
         gradle_file = ANDROID_BUILD_GRADLE.read_text(encoding="utf-8")
 
@@ -172,6 +180,19 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn('SECONDLOOP_ANDROID_TARGET_PLATFORMS', script)
         self.assertIn('android-arm,android-arm64', script)
         self.assertIn('--target-platform "${target_platforms}"', script)
+
+    def test_cargokit_debug_build_does_not_force_android_x86_target(self) -> None:
+        plugin_text = CARGOKIT_PLUGIN_GRADLE.read_text(encoding="utf-8")
+
+        self.assertNotIn('platforms.add("android-x86")', plugin_text)
+
+    def test_cargokit_debug_build_only_adds_android_x64_for_x86_hosts(self) -> None:
+        plugin_text = CARGOKIT_PLUGIN_GRADLE.read_text(encoding="utf-8")
+
+        self.assertIn('System.getProperty("os.arch", "")', plugin_text)
+        self.assertIn('hostArch.contains("x86_64")', plugin_text)
+        self.assertIn('hostArch.contains("amd64")', plugin_text)
+
 
 
 if __name__ == "__main__":

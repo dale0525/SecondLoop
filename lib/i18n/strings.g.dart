@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1590 (795 per locale)
+/// Strings: 1596 (798 per locale)
 ///
-/// Built on 2026-02-23 at 15:21 UTC
+/// Built on 2026-02-24 at 02:23 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -420,6 +420,12 @@ class _StringsChatEn {
       'AI is taking longer. Continuing in background…';
   String get attachmentAnnotationNeedsSetup => 'Image annotations need setup';
   String get semanticParseStatusFailed => 'AI analysis failed';
+  String get audioTranscribeFailurePayloadTooLarge =>
+      'Audio file is too large. Compress or split it and try again.';
+  String get audioTranscribeFailureModelNotAllowed =>
+      'This model is not allowed for audio transcription. Change model or engine in settings.';
+  String get audioTranscribeFailureInvalidMultipart =>
+      'Audio request format is invalid. Retry or update the app.';
   String get semanticParseStatusCanceled => 'AI analysis canceled';
   String semanticParseStatusCreated({required Object title}) =>
       'Created task: ${title}';
@@ -3991,6 +3997,13 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get attachmentAnnotationNeedsSetup => '图片注释需要先配置';
   @override
   String get semanticParseStatusFailed => 'AI 分析失败';
+  @override
+  String get audioTranscribeFailurePayloadTooLarge => '音频文件过大。请压缩或分段后重试。';
+  @override
+  String get audioTranscribeFailureModelNotAllowed =>
+      '当前模型不允许用于音频转录。请在设置中更换模型或引擎。';
+  @override
+  String get audioTranscribeFailureInvalidMultipart => '音频请求格式无效。请重试或更新应用。';
   @override
   String get semanticParseStatusCanceled => '已取消 AI 分析';
   @override
@@ -9926,6 +9939,12 @@ extension on Translations {
         return 'Image annotations need setup';
       case 'chat.semanticParseStatusFailed':
         return 'AI analysis failed';
+      case 'chat.audioTranscribeFailurePayloadTooLarge':
+        return 'Audio file is too large. Compress or split it and try again.';
+      case 'chat.audioTranscribeFailureModelNotAllowed':
+        return 'This model is not allowed for audio transcription. Change model or engine in settings.';
+      case 'chat.audioTranscribeFailureInvalidMultipart':
+        return 'Audio request format is invalid. Retry or update the app.';
       case 'chat.semanticParseStatusCanceled':
         return 'AI analysis canceled';
       case 'chat.semanticParseStatusCreated':
@@ -11548,6 +11567,12 @@ extension on _StringsZhCn {
         return '图片注释需要先配置';
       case 'chat.semanticParseStatusFailed':
         return 'AI 分析失败';
+      case 'chat.audioTranscribeFailurePayloadTooLarge':
+        return '音频文件过大。请压缩或分段后重试。';
+      case 'chat.audioTranscribeFailureModelNotAllowed':
+        return '当前模型不允许用于音频转录。请在设置中更换模型或引擎。';
+      case 'chat.audioTranscribeFailureInvalidMultipart':
+        return '音频请求格式无效。请重试或更新应用。';
       case 'chat.semanticParseStatusCanceled':
         return '已取消 AI 分析';
       case 'chat.semanticParseStatusCreated':

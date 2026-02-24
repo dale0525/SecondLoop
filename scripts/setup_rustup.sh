@@ -84,6 +84,56 @@ PY_PATCH_WHISPER_RS_SYS
   fi
 }
 
+patch_irondash_cargokit_gradle_plugin() {
+  local template_path="$ROOT_DIR/rust_builder/cargokit/gradle/plugin.gradle"
+  if [[ ! -f "$template_path" ]]; then
+    echo "setup-rustup: warning: template cargokit plugin not found (${template_path})" >&2
+    return 0
+  fi
+
+  if ! grep -q 'candidate.plugins.hasPlugin("dev.flutter.flutter-gradle-plugin")' "$template_path"; then
+    echo "setup-rustup: warning: template cargokit plugin is missing flutter plugin detection update" >&2
+    return 0
+  fi
+  if ! grep -q 'hostArch.contains("x86_64")' "$template_path"; then
+    echo "setup-rustup: warning: template cargokit plugin is missing host arch x64 guard" >&2
+    return 0
+  fi
+
+  local search_root="$ROOT_DIR/.tool/pub-cache/hosted/pub.dev"
+  if [[ ! -d "$search_root" ]]; then
+    return 0
+  fi
+
+  local plugin_gradle_files=()
+  while IFS= read -r -d '' file; do
+    plugin_gradle_files+=("$file")
+  done < <(find "$search_root" -type f -path '*/irondash_engine_context-0.5*/cargokit/gradle/plugin.gradle' -print0 2>/dev/null)
+
+  if [[ ${#plugin_gradle_files[@]} -eq 0 ]]; then
+    echo "setup-rustup: irondash_engine_context-0.5*/cargokit/gradle/plugin.gradle not found in pub cache" >&2
+    return 0
+  fi
+
+  local plugin_file
+  local patched_count=0
+  local already_count=0
+  for plugin_file in "${plugin_gradle_files[@]}"; do
+    if cmp -s "$template_path" "$plugin_file"; then
+      already_count=$((already_count + 1))
+      continue
+    fi
+
+    cp "$template_path" "$plugin_file"
+    patched_count=$((patched_count + 1))
+    echo "setup-rustup: patched irondash cargokit gradle plugin (${plugin_file})"
+  done
+
+  if [[ "$patched_count" -eq 0 && "$already_count" -gt 0 ]]; then
+    echo "setup-rustup: irondash cargokit gradle plugin patch already applied"
+  fi
+}
+
 purge_stale_whisper_rs_sys_build_cache() {
   local build_root="$ROOT_DIR/build/secondloop_rust/build"
   if [[ ! -d "$build_root" ]]; then
@@ -186,5 +236,6 @@ patch_whisper_rs_sys_build_script
 if [[ "$WHISPER_PATCH_APPLIED" -eq 1 ]]; then
   purge_stale_whisper_rs_sys_build_cache
 fi
+patch_irondash_cargokit_gradle_plugin
 
 echo "rustup ready: $(command -v rustup)"

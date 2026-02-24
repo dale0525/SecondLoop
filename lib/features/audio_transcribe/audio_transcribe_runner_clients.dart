@@ -3,6 +3,7 @@ part of 'audio_transcribe_runner.dart';
 const MethodChannel _nativeAudioTranscodeChannel = MethodChannel(
   'secondloop/audio_transcode',
 );
+const int _kAudioTranscribeDefaultMaxInputBytes = 15360000;
 
 final class FallbackAudioTranscribeClient implements AudioTranscribeClient {
   FallbackAudioTranscribeClient({
@@ -23,6 +24,24 @@ final class FallbackAudioTranscribeClient implements AudioTranscribeClient {
 
   @override
   String get modelName => (_lastSuccessfulClient ?? _chain.first).modelName;
+
+  @override
+  int? get maxInputBytes {
+    int? maxBytes;
+    for (final candidate in _chain) {
+      final candidateMaxBytes = candidate.maxInputBytes;
+      if (candidateMaxBytes == null) {
+        return null;
+      }
+      if (candidateMaxBytes <= 0) {
+        continue;
+      }
+      if (maxBytes == null || candidateMaxBytes > maxBytes) {
+        maxBytes = candidateMaxBytes;
+      }
+    }
+    return maxBytes;
+  }
 
   @override
   Future<AudioTranscribeResponse> transcribe({
@@ -66,6 +85,9 @@ final class CloudGatewayWhisperAudioTranscribeClient
 
   @override
   String get engineName => 'cloud_gateway';
+
+  @override
+  int get maxInputBytes => _resolveGatewayMaxAudioBytes();
 
   @override
   Future<AudioTranscribeResponse> transcribe({
@@ -122,6 +144,7 @@ final class CloudGatewayWhisperAudioTranscribeClient
       req.add(body);
 
       final resp = await req.close();
+      _observeGatewayMaxAudioBytesFromHeaders(resp.headers);
       final raw = await utf8.decodeStream(resp);
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         throw StateError(
@@ -235,6 +258,9 @@ final class ByokWhisperAudioTranscribeClient implements AudioTranscribeClient {
   String get engineName => 'whisper';
 
   @override
+  int? get maxInputBytes => null;
+
+  @override
   Future<AudioTranscribeResponse> transcribe({
     required String lang,
     required String mimeType,
@@ -290,6 +316,9 @@ final class CloudGatewayMultimodalAudioTranscribeClient
 
   @override
   String get engineName => 'multimodal_llm';
+
+  @override
+  int get maxInputBytes => _resolveGatewayMaxAudioBytes();
 
   @override
   Future<AudioTranscribeResponse> transcribe({
@@ -378,6 +407,7 @@ final class CloudGatewayMultimodalAudioTranscribeClient
       req.add(body);
 
       final resp = await req.close();
+      _observeGatewayMaxAudioBytesFromHeaders(resp.headers);
       final raw = await utf8.decodeStream(resp);
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         throw StateError(
@@ -412,6 +442,9 @@ final class ByokMultimodalAudioTranscribeClient
 
   @override
   String get engineName => 'multimodal_llm';
+
+  @override
+  int? get maxInputBytes => null;
 
   @override
   Future<AudioTranscribeResponse> transcribe({
@@ -479,6 +512,9 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
 
   @override
   String get engineName => 'local_runtime';
+
+  @override
+  int? get maxInputBytes => null;
 
   @override
   Future<AudioTranscribeResponse> transcribe({

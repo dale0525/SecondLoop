@@ -56,6 +56,23 @@ class AttachmentViewerPage extends StatefulWidget {
   final Attachment attachment;
   final CloudMediaDownload? cloudMediaDownload;
 
+  static Future<void> openBySha(
+    BuildContext context, {
+    required String attachmentSha256,
+  }) async {
+    final backend = AppBackendScope.of(context);
+    final attachment = await backend.readAttachmentBySha256(attachmentSha256);
+    if (!context.mounted || attachment == null) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AttachmentViewerPage(attachment: attachment),
+      ),
+    );
+  }
+
   @override
   State<AttachmentViewerPage> createState() => _AttachmentViewerPageState();
 }
@@ -691,7 +708,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   }
 
   bool get _canEditAttachmentText =>
-      AppBackendScope.of(context) is AttachmentAnnotationMutationsBackend;
+      AppBackendScope.maybeOf(context) is AttachmentAnnotationMutationsBackend;
 
   AttachmentDetailTextContent _currentAttachmentTextContent() {
     return resolveAttachmentDetailTextContent(

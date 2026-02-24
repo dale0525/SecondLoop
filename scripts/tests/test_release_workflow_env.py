@@ -209,6 +209,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn('flutter build windows --release -v @buildArgs @defines', workflow_text)
 
+    def test_windows_release_uses_repo_setup_ffmpeg_script(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_ffmpeg_windows.ps1', workflow_text)
+        self.assertIn('dart run tools/prepare_bundled_ffmpeg.dart --platform=windows', workflow_text)
+        self.assertNotIn('choco install ffmpeg --yes --no-progress', workflow_text)
+        self.assertNotIn('--source-bin "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe"', workflow_text)
+
 
 
 if __name__ == "__main__":

@@ -6,11 +6,19 @@ use crate::db;
 use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
 
-const DEFAULT_MAX_CONTEXT_CHARS: usize = 6000;
+mod attachment_resources;
+mod citations_prompt;
+mod context_selection;
+
+use attachment_resources::{
+    collect_attachment_resources_active, collect_attachment_resources_by_embedding,
+    collect_attachment_resources_default, collect_attachment_resources_recent,
+};
+use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_actions_and_history};
+use context_selection::{build_contexts_v2, ContextItem, ContextSource};
+
 const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
 const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
-const DEFAULT_COMPRESS_SENTENCES: usize = 3;
-const DEFAULT_MMR_LAMBDA: f64 = 0.55;
 
 #[derive(Debug)]
 pub struct StreamCancelled;
@@ -41,23 +49,6 @@ pub trait AnswerProvider {
         prompt: &str,
         on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
     ) -> Result<()>;
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ContextSource {
-    Message,
-    TodoThread,
-    Event,
-    TodoActivity,
-}
-
-#[derive(Clone, Debug)]
-struct ContextItem {
-    source: ContextSource,
-    id: String,
-    created_at_ms: i64,
-    distance: Option<f64>,
-    text: String,
 }
 
 fn now_ms() -> i64 {
@@ -175,57 +166,6 @@ fn build_actions_context(
         out.push('\n');
     }
     Ok(Some(out))
-}
-
-fn build_prompt_with_actions(question: &str, contexts: &[String], actions: Option<&str>) -> String {
-    build_prompt_with_actions_and_history(question, contexts, actions, None)
-}
-
-fn build_prompt_with_actions_and_history(
-    question: &str,
-    contexts: &[String],
-    actions: Option<&str>,
-    history: Option<&str>,
-) -> String {
-    let mut out = String::new();
-    out.push_str("You are SecondLoop, a helpful personal assistant.\n");
-    out.push_str("IMPORTANT: Reply in the same language as the user's question. Ignore any configured UI language. Only switch languages if the user explicitly asks.\n");
-
-    if let Some(history) = history {
-        if !history.trim().is_empty() {
-            out.push_str("\nRecent conversation (most recent last):\n");
-            out.push_str(history);
-        }
-    }
-
-    if !contexts.is_empty() {
-        out.push_str("\nRelevant memories (quoted):\n");
-        for (i, ctx) in contexts.iter().enumerate() {
-            out.push_str(&format!("{}. \"{}\"\n", i + 1, ctx));
-        }
-    }
-
-    if let Some(actions) = actions {
-        out.push('\n');
-        out.push_str(actions);
-    }
-
-    out.push_str(
-        "\nAnswer the user's question. If the memories are irrelevant, answer normally.\n",
-    );
-    out.push_str(
-        "\nIf you suggest actionable todos or calendar events, append ONE machine-readable block like:\n",
-    );
-    out.push_str("```secondloop_actions\n");
-    out.push_str("{\"version\":1,\"suggestions\":[{\"type\":\"todo\",\"title\":\"...\",\"when\":\"...\"}]}\n");
-    out.push_str("```\n");
-    out.push_str(
-        "- `suggestions[].type` must be `todo` or `event`\n- `title` is required\n- `when` is optional natural language (do NOT compute absolute dates)\n- Omit the block entirely if you have no suggestions\n",
-    );
-    out.push_str("\nQuestion: ");
-    out.push_str(question);
-    out.push('\n');
-    out
 }
 
 fn build_recent_conversation_history(
@@ -369,422 +309,18 @@ fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -
     Ok(out)
 }
 
-fn lite_normalize_text(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        if ch.is_alphanumeric() {
-            out.extend(ch.to_lowercase());
-        } else {
-            out.push(' ');
-        }
-    }
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn lite_compact_text(text: &str) -> String {
-    text.chars().filter(|c| !c.is_whitespace()).collect()
-}
-
-fn lite_collect_bigrams(chars: &[char]) -> std::collections::HashSet<u64> {
-    let mut set = std::collections::HashSet::new();
-    if chars.len() < 2 {
-        return set;
-    }
-    for i in 0..(chars.len() - 1) {
-        let a = chars[i] as u64;
-        let b = chars[i + 1] as u64;
-        set.insert((a << 32) | b);
-    }
-    set
-}
-
-fn lite_score(query: &str, candidate: &str) -> u64 {
-    let query_norm = lite_normalize_text(query);
-    let query_compact = lite_compact_text(&query_norm);
-    if query_compact.is_empty() {
-        return 0;
-    }
-
-    let cand_norm = lite_normalize_text(candidate);
-    if cand_norm.is_empty() {
-        return 0;
-    }
-
-    let cand_compact = lite_compact_text(&cand_norm);
-    if cand_compact.is_empty() {
-        return 0;
-    }
-
-    let query_chars: Vec<char> = query_compact.chars().collect();
-    let query_bigrams = lite_collect_bigrams(&query_chars);
-
-    let mut score = 0u64;
-
-    if cand_norm == query_norm {
-        score = score.saturating_add(10_000);
-    }
-
-    if !query_norm.is_empty() && cand_norm.contains(&query_norm) {
-        score = score.saturating_add(500);
-        score = score.saturating_add((query_compact.chars().count() as u64).saturating_mul(50));
-    }
-
-    for token in query_norm.split_whitespace() {
-        if token.len() < 2 {
-            continue;
-        }
-        if cand_norm.contains(token) {
-            score = score.saturating_add((token.chars().count() as u64).saturating_mul(200));
-        }
-    }
-
-    if !query_bigrams.is_empty() {
-        let cand_chars: Vec<char> = cand_compact.chars().collect();
-        let cand_bigrams = lite_collect_bigrams(&cand_chars);
-        let overlap = query_bigrams.intersection(&cand_bigrams).count() as u64;
-        score = score.saturating_add(overlap.saturating_mul(50));
-    }
-
-    score
-}
-
-fn lite_score_strict(query: &str, candidate: &str) -> u64 {
-    let query_norm = lite_normalize_text(query);
-    let query_compact = lite_compact_text(&query_norm);
-    if query_compact.is_empty() {
-        return 0;
-    }
-
-    let cand_norm = lite_normalize_text(candidate);
-    if cand_norm.is_empty() {
-        return 0;
-    }
-
-    let cand_compact = lite_compact_text(&cand_norm);
-    if cand_compact.is_empty() {
-        return 0;
-    }
-
-    let mut score = 0u64;
-
-    if cand_norm == query_norm {
-        score = score.saturating_add(10_000);
-    }
-
-    if !query_norm.is_empty() && cand_norm.contains(&query_norm) {
-        score = score.saturating_add(500);
-        score = score.saturating_add((query_compact.chars().count() as u64).saturating_mul(50));
-    }
-
-    for token in query_norm.split_whitespace() {
-        if token.len() < 3 {
-            continue;
-        }
-        if cand_norm.contains(token) {
-            score = score.saturating_add((token.chars().count() as u64).saturating_mul(300));
-        }
-    }
-
-    score
-}
-
-fn lite_similarity(a: &str, b: &str) -> f64 {
-    let a_norm = lite_normalize_text(a);
-    let a_compact = lite_compact_text(&a_norm);
-    let b_norm = lite_normalize_text(b);
-    let b_compact = lite_compact_text(&b_norm);
-    if a_compact.is_empty() || b_compact.is_empty() {
-        return 0.0;
-    }
-    let a_chars: Vec<char> = a_compact.chars().collect();
-    let b_chars: Vec<char> = b_compact.chars().collect();
-    let a_bigrams = lite_collect_bigrams(&a_chars);
-    let b_bigrams = lite_collect_bigrams(&b_chars);
-    if a_bigrams.is_empty() || b_bigrams.is_empty() {
-        return 0.0;
-    }
-    let inter = a_bigrams.intersection(&b_bigrams).count() as f64;
-    let union = a_bigrams.union(&b_bigrams).count() as f64;
-    if union <= 0.0 {
-        0.0
-    } else {
-        (inter / union).clamp(0.0, 1.0)
-    }
-}
-
-fn split_sentences(text: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut buf = String::new();
-    for ch in text.chars() {
-        let is_boundary = ch == '\n'
-            || ch == '.'
-            || ch == '!'
-            || ch == '?'
-            || ch == '。'
-            || ch == '！'
-            || ch == '？';
-
-        if is_boundary {
-            let trimmed = buf.trim();
-            if !trimmed.is_empty() {
-                out.push(trimmed.to_string());
-            }
-            buf.clear();
-            continue;
-        }
-
-        buf.push(ch);
-    }
-    let trimmed = buf.trim();
-    if !trimmed.is_empty() {
-        out.push(trimmed.to_string());
-    }
-    out
-}
-
-fn compress_context_text(query: &str, text: &str) -> String {
-    let sentences = split_sentences(text);
-    if sentences.is_empty() {
-        return String::new();
-    }
-
-    let mut scored: Vec<(usize, u64)> = Vec::new();
-    for (i, s) in sentences.iter().enumerate() {
-        let score = lite_score_strict(query, s);
-        if score == 0 {
-            continue;
-        }
-        scored.push((i, score));
-    }
-
-    if scored.is_empty() {
-        let take_n = DEFAULT_COMPRESS_SENTENCES.min(sentences.len());
-        return sentences
-            .into_iter()
-            .take(take_n)
-            .collect::<Vec<_>>()
-            .join("\n");
-    }
-
-    scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    if scored.len() > DEFAULT_COMPRESS_SENTENCES {
-        scored.truncate(DEFAULT_COMPRESS_SENTENCES);
-    }
-    scored.sort_by(|a, b| a.0.cmp(&b.0));
-
-    let mut selected: Vec<String> = Vec::new();
-    for (idx, _) in scored {
-        if let Some(s) = sentences.get(idx) {
-            selected.push(s.to_string());
-        }
-    }
-    selected.join("\n")
-}
-
-fn rank_context_items(question: &str, candidates: &[ContextItem]) -> Vec<(f64, usize)> {
-    let now = now_ms();
-    let mut scored: Vec<(f64, usize)> = Vec::new();
-
-    for (i, item) in candidates.iter().enumerate() {
-        let semantic = item
-            .distance
-            .map(|d| 1.0 / (1.0 + d.max(0.0)))
-            .unwrap_or(0.0);
-
-        let lex_score = lite_score(question, &item.text);
-        let lexical = if lex_score == 0 {
-            0.0
-        } else {
-            let s = lex_score as f64;
-            (s / (s + 4000.0)).clamp(0.0, 1.0)
-        };
-
-        let age_ms = now.saturating_sub(item.created_at_ms).max(0) as f64;
-        let age_days = age_ms / (24.0 * 60.0 * 60.0 * 1000.0);
-        let recency = (-age_days / 14.0).exp().clamp(0.0, 1.0);
-
-        // When distance is missing (e.g. time-window retrieval), lexical should dominate.
-        let semantic_w = if item.distance.is_some() { 0.6 } else { 0.0 };
-        let lexical_w = if item.distance.is_some() { 0.3 } else { 0.9 };
-        let recency_w = 0.1;
-
-        let relevance = (semantic_w * semantic) + (lexical_w * lexical) + (recency_w * recency);
-        scored.push((relevance, i));
-    }
-
-    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored
-}
-
-fn mmr_select_indices(question: &str, candidates: &[ContextItem], max_items: usize) -> Vec<usize> {
-    let ranked = rank_context_items(question, candidates);
-    let max_items = max_items.min(ranked.len());
-    if max_items == 0 {
-        return Vec::new();
-    }
-
-    let mut selected: Vec<usize> = Vec::new();
-    let mut remaining: Vec<usize> = ranked.iter().map(|(_, idx)| *idx).collect();
-
-    // Start with highest relevance.
-    if let Some(first) = remaining.first().copied() {
-        selected.push(first);
-        remaining.retain(|i| *i != first);
-    }
-
-    let relevance_by_idx: std::collections::HashMap<usize, f64> = ranked
-        .into_iter()
-        .map(|(relevance, idx)| (idx, relevance))
-        .collect();
-
-    while selected.len() < max_items && !remaining.is_empty() {
-        let mut best_idx: Option<usize> = None;
-        let mut best_score: f64 = f64::NEG_INFINITY;
-
-        for &idx in &remaining {
-            let relevance = *relevance_by_idx.get(&idx).unwrap_or(&0.0);
-            let mut max_sim = 0.0f64;
-            for &sidx in &selected {
-                let sim = lite_similarity(&candidates[idx].text, &candidates[sidx].text);
-                if sim > max_sim {
-                    max_sim = sim;
-                }
-            }
-            let mmr_score =
-                (DEFAULT_MMR_LAMBDA * relevance) - ((1.0 - DEFAULT_MMR_LAMBDA) * max_sim);
-            if mmr_score > best_score {
-                best_score = mmr_score;
-                best_idx = Some(idx);
-            }
-        }
-
-        let Some(chosen) = best_idx else { break };
-        selected.push(chosen);
-        remaining.retain(|i| *i != chosen);
-    }
-
-    selected
-}
-
-fn build_contexts_v2(question: &str, candidates: Vec<ContextItem>, top_k: usize) -> Vec<String> {
-    let max_items = top_k.max(1);
-    let selected_indices = mmr_select_indices(question, &candidates, max_items);
-
-    let mut out: Vec<String> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut used_chars: usize = 0;
-
-    for idx in selected_indices {
-        let item = &candidates[idx];
-        let mut text = compress_context_text(question, &item.text);
-        if text.is_empty() {
-            continue;
-        }
-
-        // Add lightweight source tags for debugability without bloating too much.
-        let prefix = match item.source {
-            ContextSource::Message => None,
-            ContextSource::TodoThread => Some(format!("TODO_THREAD id={}\n", item.id)),
-            ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
-            ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
-        };
-        if let Some(p) = prefix {
-            let mut combined = String::with_capacity(p.len() + text.len());
-            combined.push_str(&p);
-            combined.push_str(&text);
-            text = combined;
-        }
-
-        if !seen.insert(text.clone()) {
-            continue;
-        }
-
-        let len = text.len();
-        if used_chars > 0 && used_chars.saturating_add(len) > DEFAULT_MAX_CONTEXT_CHARS {
-            break;
-        }
-        if used_chars == 0 && len > DEFAULT_MAX_CONTEXT_CHARS {
-            // Still include one context rather than returning empty.
-            out.push(text);
-            break;
-        }
-
-        used_chars = used_chars.saturating_add(len);
-        out.push(text);
-    }
-
-    out
-}
-
-pub fn build_prompt(question: &str, contexts: &[String]) -> String {
-    build_prompt_with_actions(question, contexts, None)
-}
-
-pub fn ask_ai_with_provider(
+fn ask_ai_stream_and_persist(
     conn: &Connection,
     key: &[u8; 32],
     conversation_id: &str,
     question: &str,
-    top_k: usize,
-    focus: Focus,
+    prompt: &str,
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
-    // Ensure existing messages are embedded before searching.
-    db::process_pending_message_embeddings_default(conn, key, 1024)?;
-    db::process_pending_todo_embeddings_default(conn, key, 1024)?;
-    db::process_pending_todo_activity_embeddings_default(conn, key, 1024)?;
-
-    let top_k = top_k.max(1);
-
-    let similar_messages = match focus {
-        Focus::AllMemories => db::search_similar_messages_default(conn, key, question, top_k)?,
-        Focus::ThisThread => db::search_similar_messages_in_conversation_default(
-            conn,
-            key,
-            conversation_id,
-            question,
-            top_k,
-        )?,
-    };
-    let similar_todos = db::search_similar_todo_threads_default(conn, key, question, top_k)?;
-
-    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
-    for sm in similar_messages {
-        let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
-            .unwrap_or_else(|_| sm.message.content.clone());
-        contexts_with_distance.push((sm.distance, context));
-    }
-    let mut seen_todos = std::collections::HashSet::new();
-    for st in similar_todos {
-        if !seen_todos.insert(st.todo_id.clone()) {
-            continue;
-        }
-        let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        contexts_with_distance.push((st.distance, ctx));
-    }
-    contexts_with_distance
-        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    contexts_with_distance.truncate(top_k);
-    let contexts: Vec<String> = contexts_with_distance
-        .into_iter()
-        .map(|(_, ctx)| ctx)
-        .collect();
-    let actions = build_actions_context(conn, key, question)?;
-    let history = build_recent_conversation_history(conn, key, conversation_id)?;
-    let prompt = build_prompt_with_actions_and_history(
-        question,
-        &contexts,
-        actions.as_deref(),
-        history.as_deref(),
-    );
-
     let mut has_text = false;
     let mut assistant_text = String::new();
-    let result = provider.stream_answer(&prompt, &mut |ev| {
+    let result = provider.stream_answer(prompt, &mut |ev| {
         let done = ev.done;
         let text_delta = ev.text_delta.clone();
         on_event(ev)?;
@@ -822,6 +358,97 @@ pub fn ask_ai_with_provider(
     }
 }
 
+pub fn build_prompt(question: &str, contexts: &[String]) -> String {
+    build_prompt_base(question, contexts)
+}
+
+pub fn ask_ai_with_provider(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    question: &str,
+    top_k: usize,
+    focus: Focus,
+    provider: &(impl AnswerProvider + ?Sized),
+    on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
+) -> Result<AskAiResult> {
+    // Ensure existing messages are embedded before searching.
+    db::process_pending_message_embeddings_default(conn, key, 1024)?;
+    db::process_pending_todo_embeddings_default(conn, key, 1024)?;
+    db::process_pending_todo_activity_embeddings_default(conn, key, 1024)?;
+
+    let top_k = top_k.max(1);
+
+    let similar_messages = match focus {
+        Focus::AllMemories => db::search_similar_messages_default(conn, key, question, top_k)?,
+        Focus::ThisThread => db::search_similar_messages_in_conversation_default(
+            conn,
+            key,
+            conversation_id,
+            question,
+            top_k,
+        )?,
+    };
+    let similar_todos = db::search_similar_todo_threads_default(conn, key, question, top_k)?;
+    let attachment_resources =
+        collect_attachment_resources_default(conn, key, question, top_k).unwrap_or_default();
+
+    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+    for sm in similar_messages {
+        let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
+            .unwrap_or_else(|_| sm.message.content.clone());
+        contexts_with_distance.push((sm.distance, context));
+    }
+    let mut seen_todos = std::collections::HashSet::new();
+    for st in similar_todos {
+        if !seen_todos.insert(st.todo_id.clone()) {
+            continue;
+        }
+        let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        contexts_with_distance.push((st.distance, ctx));
+    }
+    for chunk in attachment_resources.chunks {
+        let citation = format!(
+            "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+            chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+        );
+        let context = format!(
+            "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
+            chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
+        );
+        contexts_with_distance.push((chunk.distance, context));
+    }
+    contexts_with_distance
+        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    contexts_with_distance.truncate(top_k);
+    let contexts: Vec<String> = contexts_with_distance
+        .into_iter()
+        .map(|(_, ctx)| ctx)
+        .collect();
+    let actions = build_actions_context(conn, key, question)?;
+    let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let prompt = build_prompt_with_actions_and_history(
+        question,
+        &contexts,
+        actions.as_deref(),
+        history.as_deref(),
+        attachment_resources.catalog_markdown.as_deref(),
+    );
+
+    ask_ai_stream_and_persist(
+        conn,
+        key,
+        conversation_id,
+        question,
+        &prompt,
+        provider,
+        on_event,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     conn: &Connection,
@@ -835,6 +462,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<String> = Vec::new();
+    let mut resources_catalog: Option<String> = None;
     if top_k > 0 {
         // Avoid wiping the current index if the embedder is misconfigured/unreachable.
         let mut probe = embedder.embed(&[format!("query: {question}")])?;
@@ -881,6 +509,14 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             &query_vector,
             top_k,
         )?;
+        let attachment_resources = collect_attachment_resources_by_embedding(
+            conn,
+            key,
+            embedder.model_name(),
+            &query_vector,
+            top_k,
+        )
+        .unwrap_or_default();
 
         let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
         for sm in similar_messages {
@@ -900,6 +536,17 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             };
             contexts_with_distance.push((st.distance, ctx));
         }
+        for chunk in attachment_resources.chunks {
+            let citation = format!(
+                "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+                chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+            );
+            let context = format!(
+                "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
+                chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
+            );
+            contexts_with_distance.push((chunk.distance, context));
+        }
         contexts_with_distance
             .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         contexts_with_distance.truncate(top_k);
@@ -907,6 +554,8 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             .into_iter()
             .map(|(_, ctx)| ctx)
             .collect();
+
+        resources_catalog = attachment_resources.catalog_markdown;
     }
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
@@ -915,46 +564,18 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
         &contexts,
         actions.as_deref(),
         history.as_deref(),
+        resources_catalog.as_deref(),
     );
 
-    let mut has_text = false;
-    let mut assistant_text = String::new();
-    let result = provider.stream_answer(&prompt, &mut |ev| {
-        let done = ev.done;
-        let text_delta = ev.text_delta.clone();
-        on_event(ev)?;
-
-        if !done && !text_delta.is_empty() {
-            has_text = true;
-            assistant_text.push_str(&text_delta);
-        }
-
-        Ok(())
-    });
-
-    match result {
-        Ok(()) => {
-            if !has_text {
-                return Err(anyhow!("empty response from LLM"));
-            }
-
-            let user_message =
-                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-            let assistant_message = db::insert_message_non_memory(
-                conn,
-                key,
-                conversation_id,
-                "assistant",
-                &assistant_text,
-            )?;
-
-            Ok(AskAiResult {
-                user_message_id: user_message.id,
-                assistant_message_id: assistant_message.id,
-            })
-        }
-        Err(e) => Err(e),
-    }
+    ask_ai_stream_and_persist(
+        conn,
+        key,
+        conversation_id,
+        question,
+        &prompt,
+        provider,
+        on_event,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -970,6 +591,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<String> = Vec::new();
+    let mut resources_catalog: Option<String> = None;
     if top_k > 0 {
         db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
         db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
@@ -1005,6 +627,9 @@ pub fn ask_ai_with_provider_using_active_embeddings(
             question,
             top_k_candidate_todos,
         )?;
+        let attachment_resources =
+            collect_attachment_resources_active(conn, key, app_dir, question, top_k)
+                .unwrap_or_default();
 
         let mut candidates: Vec<ContextItem> = Vec::new();
         for sm in similar_messages {
@@ -1042,7 +667,26 @@ pub fn ask_ai_with_provider_using_active_embeddings(
             });
         }
 
+        for chunk in attachment_resources.chunks {
+            let citation = format!(
+                "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+                chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+            );
+            let context = format!("{}\n{}", chunk.text, citation,);
+            candidates.push(ContextItem {
+                source: ContextSource::AttachmentChunk,
+                id: format!(
+                    "{}:{}:{}",
+                    chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+                ),
+                created_at_ms: chunk.created_at_ms,
+                distance: Some(chunk.distance),
+                text: context,
+            });
+        }
+
         contexts = build_contexts_v2(question, candidates, top_k);
+        resources_catalog = attachment_resources.catalog_markdown;
     }
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
@@ -1051,46 +695,18 @@ pub fn ask_ai_with_provider_using_active_embeddings(
         &contexts,
         actions.as_deref(),
         history.as_deref(),
+        resources_catalog.as_deref(),
     );
 
-    let mut has_text = false;
-    let mut assistant_text = String::new();
-    let result = provider.stream_answer(&prompt, &mut |ev| {
-        let done = ev.done;
-        let text_delta = ev.text_delta.clone();
-        on_event(ev)?;
-
-        if !done && !text_delta.is_empty() {
-            has_text = true;
-            assistant_text.push_str(&text_delta);
-        }
-
-        Ok(())
-    });
-
-    match result {
-        Ok(()) => {
-            if !has_text {
-                return Err(anyhow!("empty response from LLM"));
-            }
-
-            let user_message =
-                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-            let assistant_message = db::insert_message_non_memory(
-                conn,
-                key,
-                conversation_id,
-                "assistant",
-                &assistant_text,
-            )?;
-
-            Ok(AskAiResult {
-                user_message_id: user_message.id,
-                assistant_message_id: assistant_message.id,
-            })
-        }
-        Err(e) => Err(e),
-    }
+    ask_ai_stream_and_persist(
+        conn,
+        key,
+        conversation_id,
+        question,
+        &prompt,
+        provider,
+        on_event,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1206,6 +822,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         contexts = build_contexts_v2(question, candidates, top_k.max(1));
     }
 
+    let attachment_resources = collect_attachment_resources_recent(conn, key).unwrap_or_default();
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history_in_range(
         conn,
@@ -1219,44 +836,16 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         &contexts,
         actions.as_deref(),
         history.as_deref(),
+        attachment_resources.catalog_markdown.as_deref(),
     );
 
-    let mut has_text = false;
-    let mut assistant_text = String::new();
-    let result = provider.stream_answer(&prompt, &mut |ev| {
-        let done = ev.done;
-        let text_delta = ev.text_delta.clone();
-        on_event(ev)?;
-
-        if !done && !text_delta.is_empty() {
-            has_text = true;
-            assistant_text.push_str(&text_delta);
-        }
-
-        Ok(())
-    });
-
-    match result {
-        Ok(()) => {
-            if !has_text {
-                return Err(anyhow!("empty response from LLM"));
-            }
-
-            let user_message =
-                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-            let assistant_message = db::insert_message_non_memory(
-                conn,
-                key,
-                conversation_id,
-                "assistant",
-                &assistant_text,
-            )?;
-
-            Ok(AskAiResult {
-                user_message_id: user_message.id,
-                assistant_message_id: assistant_message.id,
-            })
-        }
-        Err(e) => Err(e),
-    }
+    ask_ai_stream_and_persist(
+        conn,
+        key,
+        conversation_id,
+        question,
+        &prompt,
+        provider,
+        on_event,
+    )
 }

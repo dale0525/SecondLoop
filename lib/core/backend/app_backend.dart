@@ -91,6 +91,10 @@ abstract class AppBackend {
 
   Future<void> clearLocalAttachmentCache(Uint8List key) async {}
 
+  Future<Attachment?> readAttachmentBySha256(String attachmentSha256) {
+    throw UnimplementedError('readAttachmentBySha256');
+  }
+
   Future<String> getOrCreateDeviceId() {
     throw UnimplementedError('getOrCreateDeviceId');
   }

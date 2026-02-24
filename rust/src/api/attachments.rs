@@ -44,3 +44,12 @@ pub fn db_upsert_attachment_metadata(
         &source_urls,
     )
 }
+
+#[flutter_rust_bridge::frb]
+pub fn db_read_attachment_by_sha256(
+    app_dir: String,
+    attachment_sha256: String,
+) -> Result<Option<db::Attachment>> {
+    let conn = db::open(Path::new(&app_dir))?;
+    db::read_attachment_by_sha256(&conn, &attachment_sha256)
+}

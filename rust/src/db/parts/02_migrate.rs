@@ -745,6 +745,51 @@ CREATE INDEX IF NOT EXISTS idx_message_tag_autofill_events_message
 PRAGMA user_version = 25;
 "#,
         )?;
+        user_version = 25;
+    }
+
+    if user_version < 26 {
+        // v26: attachment text chunk offsets + per-space vec0 embeddings.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS attachment_text_chunks (
+  attachment_sha256 TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  text_len INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (attachment_sha256, kind, chunk_index),
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_chunks_sha
+  ON attachment_text_chunks(attachment_sha256);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_chunks_updated_at_ms
+  ON attachment_text_chunks(updated_at_ms);
+
+CREATE TABLE IF NOT EXISTS attachment_chunk_embedding_jobs (
+  attachment_sha256 TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (attachment_sha256, kind, chunk_index),
+  FOREIGN KEY(attachment_sha256, kind, chunk_index)
+    REFERENCES attachment_text_chunks(attachment_sha256, kind, chunk_index)
+    ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_chunk_embedding_jobs_status_due
+  ON attachment_chunk_embedding_jobs(status, next_retry_at_ms, updated_at_ms);
+
+PRAGMA user_version = 26;
+"#,
+        )?;
     }
 
     Ok(())
@@ -805,6 +850,8 @@ DELETE FROM attachment_exif;
 DELETE FROM attachment_metadata;
 DELETE FROM attachment_places;
 DELETE FROM attachment_annotations;
+DELETE FROM attachment_chunk_embedding_jobs;
+DELETE FROM attachment_text_chunks;
 DELETE FROM attachment_deletions;
 DELETE FROM attachments;
 DELETE FROM messages;
