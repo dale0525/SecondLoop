@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
@@ -11,12 +14,57 @@ import 'i18n/locale_prefs.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   installMacOsKeyEventChannelNormalizer();
-  await BackgroundSync.init();
-  await BackgroundSync.refreshSchedule();
-  await AppLocaleBootstrap.ensureInitialized();
+  unawaited(runStartupBootstrap());
 
   final launchArgs = DesktopLaunchArgs.fromMainArgs(args);
   runApp(MyApp(launchArgs: launchArgs));
+}
+
+const _kStartupTaskTimeout = Duration(seconds: 5);
+
+Future<void> runStartupBootstrap({
+  Future<void> Function()? initializeBackgroundSync,
+  Future<void> Function()? refreshBackgroundSyncSchedule,
+  Future<void> Function()? initializeLocalePrefs,
+  Duration taskTimeout = _kStartupTaskTimeout,
+}) async {
+  await _runStartupTask(
+    name: 'background-sync-init',
+    task: initializeBackgroundSync ?? BackgroundSync.init,
+    timeout: taskTimeout,
+  );
+  await _runStartupTask(
+    name: 'background-sync-refresh-schedule',
+    task: refreshBackgroundSyncSchedule ?? BackgroundSync.refreshSchedule,
+    timeout: taskTimeout,
+  );
+  await _runStartupTask(
+    name: 'app-locale-bootstrap',
+    task: initializeLocalePrefs ?? AppLocaleBootstrap.ensureInitialized,
+    timeout: taskTimeout,
+  );
+}
+
+Future<void> _runStartupTask({
+  required String name,
+  required Future<void> Function() task,
+  required Duration timeout,
+}) async {
+  try {
+    await task().timeout(timeout);
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'secondloop.startup',
+        context: ErrorDescription('while running startup task "$name"'),
+        informationCollector: () sync* {
+          yield DiagnosticsProperty<String>('task', name);
+        },
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
