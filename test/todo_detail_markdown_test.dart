@@ -12,6 +12,75 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets('TodoDetailPage composer uses chat-style input without Ask AI',
+      (tester) async {
+    final backend = _Backend(activities: const []);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_detail_input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('todo_detail_attach')), findsOneWidget);
+    expect(find.byKey(const ValueKey('todo_detail_send')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_configure_ai')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('todo_detail_input')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_detail_open_markdown_editor')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('todo_detail_attach')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_detail_attach_pick_media')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_detail_attach_record_audio')),
+      findsOneWidget,
+    );
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('todo_detail_input')),
+      'follow-up',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('todo_detail_send')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('todo_detail_send')),
+        matching: find.byIcon(Icons.send_rounded),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('TodoDetailPage renders note as Markdown', (tester) async {
     final backend = _Backend(
       activities: const [

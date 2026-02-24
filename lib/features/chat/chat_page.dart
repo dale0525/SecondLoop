@@ -80,6 +80,7 @@ import '../tags/tag_repository.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
+import 'chat_composer_inline_button.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_editor_launcher.dart';
