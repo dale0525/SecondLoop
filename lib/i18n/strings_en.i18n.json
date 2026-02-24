@@ -166,6 +166,20 @@
       "viewAll": "View all",
       "empty": "No scheduled tasks"
     },
+    "taskHub": {
+      "title": "Task hub",
+      "scheduledSection": "Scheduled",
+      "reviewSection": "Needs confirmation",
+      "unscheduledSection": "Unscheduled",
+      "snackActionApplied": "$action \"$title\"",
+      "actions": {
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "thisWeek": "This week",
+        "later": "Later",
+        "done": "Done"
+      }
+    },
     "calendar": {
       "title": "Add to calendar?",
       "pickTime": "Pick a start time",

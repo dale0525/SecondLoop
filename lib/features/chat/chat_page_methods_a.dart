@@ -27,8 +27,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       if (!_isAtBottom) {
         _setState(() {
           _hasUnseenNewMessages = true;
-          _reviewCountFuture = _loadReviewQueueCount();
-          _agendaFuture = _loadTodoAgendaSummary();
+          _taskHubSummaryFuture = _loadTaskHubSummary();
         });
         return;
       }

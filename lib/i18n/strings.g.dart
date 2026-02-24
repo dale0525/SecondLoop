@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1596 (798 per locale)
+/// Strings: 1616 (808 per locale)
 ///
-/// Built on 2026-02-24 at 02:23 UTC
+/// Built on 2026-02-24 at 06:39 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -274,6 +274,8 @@ class _StringsActionsEn {
   late final _StringsActionsHistoryEn history =
       _StringsActionsHistoryEn._(_root);
   late final _StringsActionsAgendaEn agenda = _StringsActionsAgendaEn._(_root);
+  late final _StringsActionsTaskHubEn taskHub =
+      _StringsActionsTaskHubEn._(_root);
   late final _StringsActionsCalendarEn calendar =
       _StringsActionsCalendarEn._(_root);
 }
@@ -844,6 +846,23 @@ class _StringsActionsAgendaEn {
   String undeterminedSummary({required Object count}) => '${count} unscheduled';
   String get viewAll => 'View all';
   String get empty => 'No scheduled tasks';
+}
+
+// Path: actions.taskHub
+class _StringsActionsTaskHubEn {
+  _StringsActionsTaskHubEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Task hub';
+  String get scheduledSection => 'Scheduled';
+  String get reviewSection => 'Needs confirmation';
+  String get unscheduledSection => 'Unscheduled';
+  String snackActionApplied({required Object action, required Object title}) =>
+      '${action} "${title}"';
+  late final _StringsActionsTaskHubActionsEn actions =
+      _StringsActionsTaskHubActionsEn._(_root);
 }
 
 // Path: actions.calendar
@@ -1933,6 +1952,20 @@ class _StringsActionsHistorySectionsEn {
   String get started => 'Started';
   String get done => 'Done';
   String get dismissed => 'Dismissed';
+}
+
+// Path: actions.taskHub.actions
+class _StringsActionsTaskHubActionsEn {
+  _StringsActionsTaskHubActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get today => 'Today';
+  String get tomorrow => 'Tomorrow';
+  String get thisWeek => 'This week';
+  String get later => 'Later';
+  String get done => 'Done';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -3771,6 +3804,9 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   late final _StringsActionsAgendaZhCn agenda =
       _StringsActionsAgendaZhCn._(_root);
   @override
+  late final _StringsActionsTaskHubZhCn taskHub =
+      _StringsActionsTaskHubZhCn._(_root);
+  @override
   late final _StringsActionsCalendarZhCn calendar =
       _StringsActionsCalendarZhCn._(_root);
 }
@@ -4660,6 +4696,32 @@ class _StringsActionsAgendaZhCn extends _StringsActionsAgendaEn {
   String get viewAll => '查看全部';
   @override
   String get empty => '暂无待办';
+}
+
+// Path: actions.taskHub
+class _StringsActionsTaskHubZhCn extends _StringsActionsTaskHubEn {
+  _StringsActionsTaskHubZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '任务中心';
+  @override
+  String get scheduledSection => '已排期';
+  @override
+  String get reviewSection => '待确认';
+  @override
+  String get unscheduledSection => '未排期';
+  @override
+  String snackActionApplied({required Object action, required Object title}) =>
+      '${action}「${title}」';
+  @override
+  late final _StringsActionsTaskHubActionsZhCn actions =
+      _StringsActionsTaskHubActionsZhCn._(_root);
 }
 
 // Path: actions.calendar
@@ -6285,6 +6347,29 @@ class _StringsActionsHistorySectionsZhCn
   String get done => '完成';
   @override
   String get dismissed => '不再提醒';
+}
+
+// Path: actions.taskHub.actions
+class _StringsActionsTaskHubActionsZhCn
+    extends _StringsActionsTaskHubActionsEn {
+  _StringsActionsTaskHubActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get today => '今天';
+  @override
+  String get tomorrow => '明天';
+  @override
+  String get thisWeek => '本周';
+  @override
+  String get later => '稍后';
+  @override
+  String get done => '完成';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -9021,6 +9106,27 @@ extension on Translations {
         return 'View all';
       case 'actions.agenda.empty':
         return 'No scheduled tasks';
+      case 'actions.taskHub.title':
+        return 'Task hub';
+      case 'actions.taskHub.scheduledSection':
+        return 'Scheduled';
+      case 'actions.taskHub.reviewSection':
+        return 'Needs confirmation';
+      case 'actions.taskHub.unscheduledSection':
+        return 'Unscheduled';
+      case 'actions.taskHub.snackActionApplied':
+        return ({required Object action, required Object title}) =>
+            '${action} "${title}"';
+      case 'actions.taskHub.actions.today':
+        return 'Today';
+      case 'actions.taskHub.actions.tomorrow':
+        return 'Tomorrow';
+      case 'actions.taskHub.actions.thisWeek':
+        return 'This week';
+      case 'actions.taskHub.actions.later':
+        return 'Later';
+      case 'actions.taskHub.actions.done':
+        return 'Done';
       case 'actions.calendar.title':
         return 'Add to calendar?';
       case 'actions.calendar.pickTime':
@@ -10654,6 +10760,27 @@ extension on _StringsZhCn {
         return '查看全部';
       case 'actions.agenda.empty':
         return '暂无待办';
+      case 'actions.taskHub.title':
+        return '任务中心';
+      case 'actions.taskHub.scheduledSection':
+        return '已排期';
+      case 'actions.taskHub.reviewSection':
+        return '待确认';
+      case 'actions.taskHub.unscheduledSection':
+        return '未排期';
+      case 'actions.taskHub.snackActionApplied':
+        return ({required Object action, required Object title}) =>
+            '${action}「${title}」';
+      case 'actions.taskHub.actions.today':
+        return '今天';
+      case 'actions.taskHub.actions.tomorrow':
+        return '明天';
+      case 'actions.taskHub.actions.thisWeek':
+        return '本周';
+      case 'actions.taskHub.actions.later':
+        return '稍后';
+      case 'actions.taskHub.actions.done':
+        return '完成';
       case 'actions.calendar.title':
         return '添加到日历？';
       case 'actions.calendar.pickTime':

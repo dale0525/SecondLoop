@@ -8,7 +8,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
-import 'package:secondloop/features/actions/review/review_queue_page.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -21,14 +21,15 @@ int _dueReviewAtMsForToday() {
 }
 
 void main() {
-  testWidgets('marking review todo done notifies sync engine', (tester) async {
+  testWidgets('task hub done quick action notifies sync engine',
+      (tester) async {
     SharedPreferences.setMockInitialValues({
       'actions.review.day_end_minutes_v1': (23 * 60) + 59,
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final dueReviewAtMs = _dueReviewAtMsForToday();
-    final backend = _ReviewQueueBackend(
+    final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
           id: 'todo:1',
@@ -59,7 +60,7 @@ void main() {
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
             child: wrapWithI18n(
-              const MaterialApp(home: ReviewQueuePage()),
+              const MaterialApp(home: TaskHubPage()),
             ),
           ),
         ),
@@ -67,21 +68,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.check_rounded));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_done')));
     await tester.pumpAndSettle();
 
     expect(backend.setTodoStatusCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
   });
 
-  testWidgets('snoozing review todo notifies sync engine', (tester) async {
+  testWidgets('task hub later quick action notifies sync engine',
+      (tester) async {
     SharedPreferences.setMockInitialValues({
       'actions.review.day_end_minutes_v1': (23 * 60) + 59,
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final dueReviewAtMs = _dueReviewAtMsForToday();
-    final backend = _ReviewQueueBackend(
+    final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
           id: 'todo:1',
@@ -112,7 +115,7 @@ void main() {
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
             child: wrapWithI18n(
-              const MaterialApp(home: ReviewQueuePage()),
+              const MaterialApp(home: TaskHubPage()),
             ),
           ),
         ),
@@ -120,7 +123,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.snooze_rounded));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_later')));
     await tester.pump();
 
     expect(find.byType(SnackBar), findsOneWidget);
@@ -129,7 +133,7 @@ void main() {
 
     expect(backend.upsertTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
-    expect(find.text('review this'), findsNothing);
+    expect(find.text('review this'), findsWidgets);
   });
 }
 
@@ -141,8 +145,8 @@ final class _NoopSyncRunner implements SyncRunner {
   Future<int> push(SyncConfig config) async => 0;
 }
 
-final class _ReviewQueueBackend implements AppBackend {
-  _ReviewQueueBackend({required List<Todo> todos})
+final class _TaskHubBackend implements AppBackend {
+  _TaskHubBackend({required List<Todo> todos})
       : _todosById = <String, Todo>{
           for (final todo in todos) todo.id: todo,
         };
