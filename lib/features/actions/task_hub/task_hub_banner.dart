@@ -203,7 +203,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
   }
 
   String _collapsedHeadline(BuildContext context, TaskHubSummary summary) {
-    if (summary.overdueCount > 0) {
+    if (summary.dueCount > 0) {
       return context.t.actions.agenda
           .summary(due: summary.dueCount, overdue: summary.overdueCount);
     }
