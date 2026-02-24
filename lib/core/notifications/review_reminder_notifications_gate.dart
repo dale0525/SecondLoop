@@ -366,7 +366,7 @@ final class _ReviewReminderNotificationsGateState
   }
 
   String _inAppFallbackSourceKeyForItem(ReviewReminderItem item) {
-    return '${item.kind.name}:${item.todoId}:${item.scheduleAtUtcMs}';
+    return '${item.kind.name}:${item.todoId}:${item.sourceAtUtcMs}';
   }
 
   void _showInAppFallbackBanner({
