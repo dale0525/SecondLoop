@@ -230,6 +230,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? dco_decode_opt_box_autoadd_message(dynamic raw);
 
   @protected
+  List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
   SemanticParseJob dco_decode_semantic_parse_job(dynamic raw);
 
   @protected
@@ -486,6 +489,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message? sse_decode_opt_box_autoadd_message(SseDeserializer deserializer);
+
+  @protected
+  List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
   SemanticParseJob sse_decode_semantic_parse_job(SseDeserializer deserializer);
@@ -759,6 +765,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_message(
       Message? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_semantic_parse_job(

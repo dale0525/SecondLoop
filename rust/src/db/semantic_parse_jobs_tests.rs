@@ -235,3 +235,49 @@ fn attachment_annotation_running_payload_does_not_requeue_semantic_parse() {
     let due = list_due_semantic_parse_jobs(&conn, now_ms, 10).expect("list due");
     assert!(due.is_empty());
 }
+
+#[test]
+fn semantic_parse_jobs_store_and_clear_tag_suggestion_metadata() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let now_ms = 7_000i64;
+    enqueue_semantic_parse_job(&conn, "msg:meta", now_ms).expect("enqueue");
+
+    let key = [8u8; 32];
+    let suggested_tags = vec!["finance".to_string(), "work".to_string()];
+    let applied_tag_ids = vec!["tag:finance".to_string()];
+    mark_semantic_parse_job_succeeded_with_tag_metadata(
+        &conn,
+        &key,
+        "msg:meta",
+        "none",
+        None,
+        None,
+        None,
+        Some(&suggested_tags),
+        Some(0.72),
+        Some("pending"),
+        Some(&applied_tag_ids),
+        now_ms + 1,
+    )
+    .expect("succeeded");
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:meta".to_string()])
+        .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].suggested_tags.as_ref(), Some(&suggested_tags));
+    assert_eq!(jobs[0].suggested_tag_confidence, Some(0.72));
+    assert_eq!(jobs[0].tag_suggestion_state.as_deref(), Some("pending"));
+    assert_eq!(jobs[0].applied_tag_ids.as_ref(), Some(&applied_tag_ids));
+
+    mark_semantic_parse_job_retry(&conn, "msg:meta", now_ms + 2).expect("retry");
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:meta".to_string()])
+        .expect("list jobs after retry");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].suggested_tags, None);
+    assert_eq!(jobs[0].suggested_tag_confidence, None);
+    assert_eq!(jobs[0].tag_suggestion_state.as_deref(), Some("none"));
+    assert_eq!(jobs[0].applied_tag_ids, None);
+}

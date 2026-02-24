@@ -7803,6 +7803,17 @@ impl SseDecode for Option<crate::db::Message> {
     }
 }
 
+impl SseDecode for Option<Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<String>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for crate::db::SemanticParseJob {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7815,6 +7826,10 @@ impl SseDecode for crate::db::SemanticParseJob {
         let mut var_appliedTodoId = <Option<String>>::sse_decode(deserializer);
         let mut var_appliedTodoTitle = <Option<String>>::sse_decode(deserializer);
         let mut var_appliedPrevTodoStatus = <Option<String>>::sse_decode(deserializer);
+        let mut var_suggestedTags = <Option<Vec<String>>>::sse_decode(deserializer);
+        let mut var_suggestedTagConfidence = <Option<f64>>::sse_decode(deserializer);
+        let mut var_tagSuggestionState = <Option<String>>::sse_decode(deserializer);
+        let mut var_appliedTagIds = <Option<Vec<String>>>::sse_decode(deserializer);
         let mut var_undoneAtMs = <Option<i64>>::sse_decode(deserializer);
         let mut var_createdAtMs = <i64>::sse_decode(deserializer);
         let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
@@ -7828,6 +7843,10 @@ impl SseDecode for crate::db::SemanticParseJob {
             applied_todo_id: var_appliedTodoId,
             applied_todo_title: var_appliedTodoTitle,
             applied_prev_todo_status: var_appliedPrevTodoStatus,
+            suggested_tags: var_suggestedTags,
+            suggested_tag_confidence: var_suggestedTagConfidence,
+            tag_suggestion_state: var_tagSuggestionState,
+            applied_tag_ids: var_appliedTagIds,
             undone_at_ms: var_undoneAtMs,
             created_at_ms: var_createdAtMs,
             updated_at_ms: var_updatedAtMs,
@@ -9343,6 +9362,10 @@ impl flutter_rust_bridge::IntoDart for crate::db::SemanticParseJob {
             self.applied_todo_id.into_into_dart().into_dart(),
             self.applied_todo_title.into_into_dart().into_dart(),
             self.applied_prev_todo_status.into_into_dart().into_dart(),
+            self.suggested_tags.into_into_dart().into_dart(),
+            self.suggested_tag_confidence.into_into_dart().into_dart(),
+            self.tag_suggestion_state.into_into_dart().into_dart(),
+            self.applied_tag_ids.into_into_dart().into_dart(),
             self.undone_at_ms.into_into_dart().into_dart(),
             self.created_at_ms.into_into_dart().into_dart(),
             self.updated_at_ms.into_into_dart().into_dart(),
@@ -10101,6 +10124,16 @@ impl SseEncode for Option<crate::db::Message> {
     }
 }
 
+impl SseEncode for Option<Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<String>>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::db::SemanticParseJob {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -10113,6 +10146,10 @@ impl SseEncode for crate::db::SemanticParseJob {
         <Option<String>>::sse_encode(self.applied_todo_id, serializer);
         <Option<String>>::sse_encode(self.applied_todo_title, serializer);
         <Option<String>>::sse_encode(self.applied_prev_todo_status, serializer);
+        <Option<Vec<String>>>::sse_encode(self.suggested_tags, serializer);
+        <Option<f64>>::sse_encode(self.suggested_tag_confidence, serializer);
+        <Option<String>>::sse_encode(self.tag_suggestion_state, serializer);
+        <Option<Vec<String>>>::sse_encode(self.applied_tag_ids, serializer);
         <Option<i64>>::sse_encode(self.undone_at_ms, serializer);
         <i64>::sse_encode(self.created_at_ms, serializer);
         <i64>::sse_encode(self.updated_at_ms, serializer);
