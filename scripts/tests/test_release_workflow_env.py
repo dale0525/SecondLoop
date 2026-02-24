@@ -217,6 +217,21 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotIn('choco install ffmpeg --yes --no-progress', workflow_text)
         self.assertNotIn('--source-bin "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe"', workflow_text)
 
+    def test_windows_release_packages_and_uploads_velopack_artifacts(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("name: Package Velopack", workflow_text)
+        self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertIn("-SkipBuild", workflow_text)
+        self.assertIn("-OutputPath dist", workflow_text)
+        self.assertIn("Velopack setup not found", workflow_text)
+        self.assertIn("Velopack RELEASES not found", workflow_text)
+        self.assertIn("Velopack nupkg not found", workflow_text)
+        self.assertIn("dist/*Setup*.exe", workflow_text)
+        self.assertIn("dist/*RELEASES*", workflow_text)
+        self.assertIn("dist/*.nupkg", workflow_text)
+        self.assertIn("dist/*.msi", workflow_text)
+
 
 
 if __name__ == "__main__":

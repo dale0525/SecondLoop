@@ -21,7 +21,9 @@ class _FakeAppUpdateService extends AppUpdateService {
 
   int checkCalls = 0;
   int installCalls = 0;
+  int stageCalls = 0;
   AppUpdateAvailability? installedUpdate;
+  AppUpdateAvailability? stagedUpdate;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -33,6 +35,12 @@ class _FakeAppUpdateService extends AppUpdateService {
   Future<void> installAndRestart(AppUpdateAvailability update) async {
     installCalls += 1;
     installedUpdate = update;
+  }
+
+  @override
+  Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
+    stageCalls += 1;
+    stagedUpdate = update;
   }
 }
 
@@ -136,5 +144,36 @@ void main() {
 
     expect(service.installCalls, 0);
     expect(opened, [update.downloadUri]);
+  });
+
+  testWidgets('staged update uses background stage flow', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.0+1',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-windows-x64-v1.1.0.msi',
+        downloadUri: Uri.parse('https://cdn.example.com/win.msi'),
+      ),
+    );
+    final service = _FakeAppUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.0+1', update: update),
+    );
+
+    await pumpPage(tester, service: service);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('diagnostics_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('diagnostics_apply_update')));
+    await tester.pumpAndSettle();
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(service.stagedUpdate?.latestTag, 'v1.1.0');
   });
 }

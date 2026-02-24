@@ -183,6 +183,8 @@ maybe_define() {
 
 maybe_define SECONDLOOP_FIREBASE_WEB_API_KEY
 maybe_define SECONDLOOP_APP_ID
+maybe_define SECONDLOOP_RELEASE_REPO
+maybe_define SECONDLOOP_RELEASE_API_ORIGIN
 maybe_define_value SECONDLOOP_CLOUD_GATEWAY_BASE_URL "${cloud_gateway_base_url}"
 maybe_define_value SECONDLOOP_MANAGED_VAULT_BASE_URL "${managed_vault_base_url}"
 

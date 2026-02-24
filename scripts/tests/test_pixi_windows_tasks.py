@@ -49,6 +49,15 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("bootstrap-shared-worktree-env", dependencies)
 
+    def test_package_windows_velopack_task_exists_and_matches_dependencies(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        msi_task = win_tasks["package-windows-msi"]
+        velopack_task = win_tasks["package-windows-velopack"]
+
+        self.assertEqual(velopack_task.get("depends-on", []), msi_task.get("depends-on", []))
+        self.assertIn("scripts/package_windows_velopack.ps1", velopack_task.get("cmd", ""))
+
     def test_windows_bootstrap_script_links_shared_tool_and_pixi_envs(self) -> None:
         script = WINDOWS_BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")
 

@@ -20,7 +20,9 @@ class _FakeAboutUpdateService extends AppUpdateService {
 
   int checkCalls = 0;
   int installCalls = 0;
+  int stageCalls = 0;
   AppUpdateAvailability? installed;
+  AppUpdateAvailability? staged;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -32,6 +34,12 @@ class _FakeAboutUpdateService extends AppUpdateService {
   Future<void> installAndRestart(AppUpdateAvailability update) async {
     installCalls += 1;
     installed = update;
+  }
+
+  @override
+  Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
+    stageCalls += 1;
+    staged = update;
   }
 }
 
@@ -132,5 +140,47 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_open_homepage')));
     await tester.pumpAndSettle();
     expect(opened.last.toString(), 'https://secondloop.app');
+  });
+
+  testWidgets('About page stages update for next launch', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-windows-x64-v1.1.0.msi',
+        downloadUri: Uri.parse('https://cdn.example.com/win.msi'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pumpAndSettle();
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(service.staged?.latestTag, 'v1.1.0');
   });
 }

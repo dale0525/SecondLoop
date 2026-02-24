@@ -176,6 +176,8 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_RELEASE_REPO=${GITHUB_REPOSITORY}"
+            "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
           )
 
           : "${SECONDLOOP_ANDROID_NDK_ROOT:?Missing Android NDK root from install step}"
@@ -300,7 +302,9 @@ jobs:
             $defines = @(
               "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
               "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
-              "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
+              "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD",
+              "--dart-define=SECONDLOOP_RELEASE_REPO=$Env:GITHUB_REPOSITORY",
+              "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
             )
             $Env:CMAKE_GENERATOR = "Ninja"
             flutter build windows --release -v @buildArgs @defines
@@ -349,11 +353,36 @@ jobs:
           if (-not (Test-Path $msiPath)) {
             throw "MSI package not found: $msiPath"
           }
+      - name: Package Velopack
+        shell: pwsh
+        run: |
+          & scripts/package_windows_velopack.ps1 -SkipBuild -OutputPath dist
+          if ($LASTEXITCODE -ne 0) {
+            throw "Velopack packaging failed with exit code $LASTEXITCODE"
+          }
+
+          $setupPath = Get-ChildItem -Path dist -Filter '*Setup*.exe' -File | Select-Object -First 1
+          if ($null -eq $setupPath) {
+            throw "Velopack setup not found in dist"
+          }
+
+          $releasesPath = Get-ChildItem -Path dist -Filter '*RELEASES*' -File | Select-Object -First 1
+          if ($null -eq $releasesPath) {
+            throw "Velopack RELEASES not found in dist"
+          }
+
+          $nupkgPath = Get-ChildItem -Path dist -Filter '*.nupkg' -File | Select-Object -First 1
+          if ($null -eq $nupkgPath) {
+            throw "Velopack nupkg not found in dist"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             dist/*.msi
+            dist/*Setup*.exe
+            dist/*RELEASES*
+            dist/*.nupkg
 
   macos:
     needs: preflight
@@ -450,6 +479,8 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_RELEASE_REPO=${GITHUB_REPOSITORY}"
+            "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
           )
           # whisper-rs currently enables i8mm code paths under certain Apple/Clang combinations
           # that are not always safe on hosted runners. Undefine the macro so ggml falls back.
@@ -608,6 +639,8 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_RELEASE_REPO=${GITHUB_REPOSITORY}"
+            "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
           )
           flutter build linux --release "${build_args[@]}" "${defines[@]}"
       - name: Package
@@ -723,6 +756,9 @@ jobs:
             dist/*.dmg
             dist/*.dmg.sha256
             dist/*.msi
+            dist/*Setup*.exe
+            dist/*RELEASES*
+            dist/*.nupkg
             dist/*.tar.gz
             dist/release-notes/*.json
             dist/release-notes.md
