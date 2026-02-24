@@ -344,6 +344,16 @@ extension _SettingsPageBuild on _SettingsPageState {
                   : () => _resetLocalData(clearAllRemoteData: true),
             ),
             ListTile(
+              key: const ValueKey('settings_debug_run_oplog_maintenance'),
+              title: Text(isZh ? '执行 Oplog 维护' : 'Run oplog maintenance'),
+              subtitle: Text(
+                isZh
+                    ? '按当前同步配置手动触发一次本地 Oplog 裁剪'
+                    : 'Manually run local oplog retention for current sync config',
+              ),
+              onTap: _busy ? null : _runOplogMaintenanceDebug,
+            ),
+            ListTile(
               title: Text(context.t.settings.debugSemanticSearch.title),
               subtitle: Text(context.t.settings.debugSemanticSearch.subtitle),
               onTap: () {
