@@ -385,7 +385,34 @@ fn push_internal(
     // Best-effort: this is only metadata for progress reporting.
     let _ = write_cursor_json(remote, &remote_root_dir, &device_id, final_max_seq);
 
+    if pushed_out > 0 {
+        maybe_run_oplog_retention_after_push(conn, &scope_id, remote)?;
+    }
+
     Ok(pushed_out)
+}
+
+fn backend_from_target_id(target_id: &str) -> Option<crate::db::OplogRetentionBackend> {
+    if target_id.starts_with("webdav:") {
+        return Some(crate::db::OplogRetentionBackend::WebDav);
+    }
+    if target_id.starts_with("localdir:") {
+        return Some(crate::db::OplogRetentionBackend::LocalDir);
+    }
+    None
+}
+
+fn maybe_run_oplog_retention_after_push(
+    conn: &Connection,
+    scope_id: &str,
+    remote: &impl RemoteStore,
+) -> Result<()> {
+    let Some(backend) = backend_from_target_id(remote.target_id()) else {
+        return Ok(());
+    };
+
+    let _ = crate::db::run_oplog_retention_maintenance(conn, backend, scope_id)?;
+    Ok(())
 }
 
 fn upload_ops_files_batch(

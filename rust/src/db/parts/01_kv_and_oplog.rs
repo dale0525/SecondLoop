@@ -30,6 +30,229 @@ fn kv_set_i64(conn: &Connection, key: &str, value: i64) -> Result<()> {
     kv_set_string(conn, key, &value.to_string())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OplogRetentionBackend {
+    WebDav,
+    LocalDir,
+    ManagedVault,
+}
+
+impl OplogRetentionBackend {
+    fn enabled_key(self) -> &'static str {
+        match self {
+            OplogRetentionBackend::WebDav => "oplog.retention.backend.webdav",
+            OplogRetentionBackend::LocalDir => "oplog.retention.backend.localdir",
+            OplogRetentionBackend::ManagedVault => "oplog.retention.backend.managed_vault",
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct OplogRetentionMaintenanceStats {
+    pub before_count: u64,
+    pub after_count: u64,
+    pub pruned_count: u64,
+}
+
+const KV_OPLOG_RETENTION_ENABLED: &str = "oplog.retention.enabled";
+const KV_OPLOG_RETENTION_KEEP_RECENT_OPS: &str = "oplog.retention.keep_recent_ops";
+const KV_OPLOG_RETENTION_KEEP_RECENT_DAYS: &str = "oplog.retention.keep_recent_days";
+const OPLOG_RETENTION_DEFAULT_KEEP_RECENT_OPS: i64 = 5_000;
+const OPLOG_RETENTION_DEFAULT_KEEP_RECENT_DAYS: i64 = 7;
+const OPLOG_RETENTION_MS_PER_DAY: i64 = 86_400_000;
+
+fn kv_get_i64(conn: &Connection, key: &str) -> Result<Option<i64>> {
+    let Some(value) = kv_get_string(conn, key)? else {
+        return Ok(None);
+    };
+    let parsed = value.trim().parse::<i64>().ok();
+    Ok(parsed)
+}
+
+fn kv_get_bool_or_default(conn: &Connection, key: &str, default: bool) -> Result<bool> {
+    let Some(value) = kv_get_string(conn, key)? else {
+        return Ok(default);
+    };
+
+    let normalized = value.trim().to_ascii_lowercase();
+    let parsed = match normalized.as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    };
+
+    Ok(parsed.unwrap_or(default))
+}
+
+fn count_oplog_rows_for_device(conn: &Connection, device_id: &str) -> Result<u64> {
+    let count = conn.query_row(
+        r#"SELECT COUNT(*) FROM oplog WHERE device_id = ?1"#,
+        params![device_id],
+        |row| row.get::<_, i64>(0),
+    )?;
+    Ok(count.max(0) as u64)
+}
+
+fn keep_recent_ops(conn: &Connection) -> Result<i64> {
+    let value = kv_get_i64(conn, KV_OPLOG_RETENTION_KEEP_RECENT_OPS)?
+        .unwrap_or(OPLOG_RETENTION_DEFAULT_KEEP_RECENT_OPS);
+    Ok(value.max(0))
+}
+
+fn keep_recent_days(conn: &Connection) -> Result<i64> {
+    let value = kv_get_i64(conn, KV_OPLOG_RETENTION_KEEP_RECENT_DAYS)?
+        .unwrap_or(OPLOG_RETENTION_DEFAULT_KEEP_RECENT_DAYS);
+    Ok(value.max(0))
+}
+
+fn backend_ack_seq(
+    conn: &Connection,
+    backend: OplogRetentionBackend,
+    scope_id: &str,
+    device_id: &str,
+) -> Result<i64> {
+    let seq = match backend {
+        OplogRetentionBackend::WebDav | OplogRetentionBackend::LocalDir => kv_get_i64(
+            conn,
+            format!("sync.last_pushed_seq:{scope_id}").as_str(),
+        )?
+        .unwrap_or(0),
+        OplogRetentionBackend::ManagedVault => {
+            let device_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
+            if let Some(value) = kv_get_i64(conn, &device_key)? {
+                value
+            } else {
+                kv_get_i64(
+                    conn,
+                    format!("managed_vault.last_pushed_seq:{scope_id}").as_str(),
+                )?
+                .unwrap_or(0)
+            }
+        }
+    };
+    Ok(seq.max(0))
+}
+
+fn ack_seq_floor_across_scopes(conn: &Connection, device_id: &str, current: i64) -> Result<i64> {
+    if current <= 0 {
+        return Ok(0);
+    }
+
+    let mut floor = current;
+    let mut stmt = conn.prepare(
+        r#"SELECT key, value
+           FROM kv
+           WHERE key LIKE 'sync.last_pushed_seq:%'
+              OR key LIKE 'managed_vault.last_pushed_seq:%'"#,
+    )?;
+    let mut rows = stmt.query([])?;
+
+    while let Some(row) = rows.next()? {
+        let key: String = row.get(0)?;
+        let value: String = row.get(1)?;
+        let Ok(seq) = value.trim().parse::<i64>() else {
+            continue;
+        };
+        if seq <= 0 {
+            continue;
+        }
+
+        if key.starts_with("sync.last_pushed_seq:") {
+            floor = floor.min(seq);
+            continue;
+        }
+
+        if let Some(suffix) = key.strip_prefix("managed_vault.last_pushed_seq:") {
+            let is_legacy = !suffix.contains(':');
+            let is_device_scoped = suffix.ends_with(format!(":{device_id}").as_str());
+            if is_legacy || is_device_scoped {
+                floor = floor.min(seq);
+            }
+        }
+    }
+
+    Ok(floor.max(0))
+}
+
+pub fn run_oplog_retention_maintenance(
+    conn: &Connection,
+    backend: OplogRetentionBackend,
+    scope_id: &str,
+) -> Result<OplogRetentionMaintenanceStats> {
+    let device_id = get_or_create_device_id(conn)?;
+    let before_count = count_oplog_rows_for_device(conn, &device_id)?;
+    let mut stats = OplogRetentionMaintenanceStats {
+        before_count,
+        after_count: before_count,
+        pruned_count: 0,
+    };
+
+    if before_count == 0 {
+        return Ok(stats);
+    }
+
+    if !kv_get_bool_or_default(conn, KV_OPLOG_RETENTION_ENABLED, true)? {
+        return Ok(stats);
+    }
+
+    if !kv_get_bool_or_default(conn, backend.enabled_key(), true)? {
+        return Ok(stats);
+    }
+
+    let Some(max_seq) = conn.query_row(
+        r#"SELECT MAX(seq) FROM oplog WHERE device_id = ?1"#,
+        params![device_id.as_str()],
+        |row| row.get::<_, Option<i64>>(0),
+    )? else {
+        return Ok(stats);
+    };
+
+    let acknowledged = backend_ack_seq(conn, backend, scope_id, &device_id)?;
+    if acknowledged <= 0 {
+        return Ok(stats);
+    }
+
+    let acknowledged_floor = ack_seq_floor_across_scopes(conn, &device_id, acknowledged)?;
+    if acknowledged_floor <= 0 {
+        return Ok(stats);
+    }
+
+    let keep_ops = keep_recent_ops(conn)?;
+    let seq_cutoff = if keep_ops == 0 {
+        max_seq
+    } else {
+        max_seq.saturating_sub(keep_ops)
+    };
+    if seq_cutoff <= 0 {
+        return Ok(stats);
+    }
+
+    let prune_up_to_seq = acknowledged_floor.min(seq_cutoff).max(0);
+    if prune_up_to_seq <= 0 {
+        return Ok(stats);
+    }
+
+    let keep_days = keep_recent_days(conn)?;
+    let age_cutoff_ms = if keep_days == 0 {
+        now_ms()
+    } else {
+        now_ms().saturating_sub(keep_days.saturating_mul(OPLOG_RETENTION_MS_PER_DAY))
+    };
+
+    let _ = conn.execute(
+        r#"DELETE FROM oplog
+           WHERE device_id = ?1
+             AND seq <= ?2
+             AND created_at <= ?3"#,
+        params![device_id.as_str(), prune_up_to_seq, age_cutoff_ms],
+    )?;
+
+    let after_count = count_oplog_rows_for_device(conn, &device_id)?;
+    stats.after_count = after_count;
+    stats.pruned_count = before_count.saturating_sub(after_count);
+    Ok(stats)
+}
+
 fn insert_oplog(conn: &Connection, key: &[u8; 32], op_json: &serde_json::Value) -> Result<()> {
     let op_id = op_json["op_id"]
         .as_str()

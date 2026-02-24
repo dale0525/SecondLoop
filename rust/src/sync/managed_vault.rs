@@ -535,6 +535,9 @@ fn push_internal(
         }
 
         if ops.is_empty() {
+            if pushed_total > 0 {
+                maybe_run_managed_vault_retention(conn, &scope_id)?;
+            }
             return Ok(pushed_total);
         }
 
@@ -684,6 +687,15 @@ fn push_internal(
 
         return Err(anyhow!("managed-vault push failed: HTTP {status} {text}"));
     }
+}
+
+fn maybe_run_managed_vault_retention(conn: &Connection, scope_id: &str) -> Result<()> {
+    let _ = crate::db::run_oplog_retention_maintenance(
+        conn,
+        crate::db::OplogRetentionBackend::ManagedVault,
+        scope_id,
+    )?;
+    Ok(())
 }
 
 fn rebase_local_device_seqs(

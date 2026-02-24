@@ -46,6 +46,8 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
       if (markdownResult == null) return;
 
       final trimmed = markdownResult.text.trim();
+      if (trimmed == message.content) return;
+
       await backend.editMessage(sessionKey, message.id, trimmed);
 
       var shouldRequeueSemanticParse = false;

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/theme_mode_prefs.dart';
@@ -23,6 +24,7 @@ import '../../core/desktop/desktop_boot_prefs.dart';
 import '../../core/desktop/desktop_quick_capture_hotkey_prefs.dart';
 import '../../core/desktop/system_hotkey_conflicts.dart';
 import '../../core/desktop/system_hotkey_recorder.dart';
+import '../../src/rust/api/oplog_maintenance.dart' as rust_oplog_maintenance;
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
@@ -33,6 +35,7 @@ import 'sync_settings_page.dart';
 import 'semantic_search_debug_page.dart';
 import 'diagnostics_page.dart';
 import 'about_page.dart';
+import 'oplog_maintenance_scope.dart';
 
 part 'settings_page_build.dart';
 
@@ -183,6 +186,80 @@ class _SettingsPageState extends State<SettingsPage> {
     return message.contains('operation timeout') ||
         message.contains('timed out') ||
         message.contains('timeout');
+  }
+
+  rust_oplog_maintenance.OplogMaintenanceBackend _maintenanceBackendFor(
+    SyncBackendType backendType,
+  ) {
+    return switch (backendType) {
+      SyncBackendType.webdav =>
+        rust_oplog_maintenance.OplogMaintenanceBackend.webDav,
+      SyncBackendType.localDir =>
+        rust_oplog_maintenance.OplogMaintenanceBackend.localDir,
+      SyncBackendType.managedVault =>
+        rust_oplog_maintenance.OplogMaintenanceBackend.managedVault,
+    };
+  }
+
+  Future<void> _runOplogMaintenanceDebug() async {
+    if (_busy) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    setState(() => _busy = true);
+    try {
+      final sync = await SyncConfigStore().loadConfiguredSync();
+      if (sync == null) {
+        throw StateError('sync_not_configured');
+      }
+
+      final scopeId = computeOplogMaintenanceScopeId(
+        OplogMaintenanceScopeInput.fromSyncConfig(sync),
+      );
+      final appDir = (await getApplicationSupportDirectory()).path;
+      final stats = await rust_oplog_maintenance.dbRunOplogMaintenance(
+        appDir: appDir,
+        key: sessionKey,
+        backend: _maintenanceBackendFor(sync.backendType),
+        scopeId: scopeId,
+      );
+
+      if (!mounted) return;
+      final isZh = Localizations.localeOf(context)
+          .languageCode
+          .toLowerCase()
+          .startsWith('zh');
+      final before = stats.beforeCount.toString();
+      final after = stats.afterCount.toString();
+      final pruned = stats.prunedCount.toString();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isZh
+                ? 'Oplog 维护完成：清理 $pruned 条（$before -> $after）'
+                : 'Oplog maintenance finished: pruned $pruned rows ($before -> $after).',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final isZh = Localizations.localeOf(context)
+          .languageCode
+          .toLowerCase()
+          .startsWith('zh');
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isZh ? 'Oplog 维护失败：$e' : 'Oplog maintenance failed: $e',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _resetLocalData({required bool clearAllRemoteData}) async {

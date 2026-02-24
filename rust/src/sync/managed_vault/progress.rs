@@ -381,6 +381,10 @@ pub fn push_ops_only_with_progress(
         return Err(anyhow!("managed-vault push failed: HTTP {status} {text}"));
     }
 
+    if pushed_total > 0 {
+        super::maybe_run_managed_vault_retention(conn, &scope_id)?;
+    }
+
     progress(done_ops, total_ops);
     Ok(pushed_total)
 }

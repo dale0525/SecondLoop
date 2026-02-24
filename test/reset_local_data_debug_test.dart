@@ -16,6 +16,34 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets('Debug section exposes oplog maintenance action', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _FakeBackend(deviceId: 'deviceA');
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: Scaffold(body: SettingsPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const tileKey = ValueKey('settings_debug_run_oplog_maintenance');
+    await tester.scrollUntilVisible(find.byKey(tileKey), 200);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(tileKey), findsOneWidget);
+  });
+
   testWidgets(
       'Debug reset (all devices) clears local+remote synced data but preserves master password and local config',
       (tester) async {
