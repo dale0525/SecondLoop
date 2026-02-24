@@ -10,6 +10,8 @@ import 'package:secondloop/core/notifications/review_reminder_in_app_fallback_pr
 import 'package:secondloop/core/notifications/review_reminder_notification_scheduler.dart';
 import 'package:secondloop/core/notifications/review_reminder_notifications_gate.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/agenda/todo_agenda_page.dart';
 import 'package:secondloop/features/actions/review/review_queue_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -141,6 +143,74 @@ void main() {
     expect(played, 1);
   });
 
+  testWidgets('dismissing in-app reminder keeps the same source hidden',
+      (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+
+    await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _reviewTodo(
+            nextReviewAtMs:
+                nowUtcMs + const Duration(seconds: 6).inMilliseconds),
+      ],
+    );
+
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+    expect(bannerFinder, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(bannerFinder, findsNothing);
+
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pumpAndSettle();
+
+    expect(bannerFinder, findsNothing);
+  });
+
+  testWidgets('dismissed reminder stays hidden across refresh', (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final harness = await _pumpGateHarness(
+      tester,
+      syncEngine: _buildManualSyncEngine(),
+      todos: <Todo>[
+        _dueTodo(
+          dueAtMs: nowUtcMs + const Duration(seconds: 2).inMilliseconds,
+        ),
+      ],
+    );
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+    expect(bannerFinder, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss')),
+    );
+    await tester.pumpAndSettle();
+    expect(bannerFinder, findsNothing);
+
+    harness.syncEngine!.notifyExternalChange();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    expect(bannerFinder, findsNothing);
+  });
+
   testWidgets('shows in-app reminder while app is inactive', (tester) async {
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
 
@@ -235,6 +305,7 @@ Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
   List<Todo>? todos,
+  SyncEngine? syncEngine,
   InAppFallbackAlertSoundCallback? inAppFallbackAlertSound,
 }) async {
   final scheduler = _FakeScheduler(
@@ -242,6 +313,19 @@ Future<_GateHarness> _pumpGateHarness(
   );
   final effectiveTodos = todos ?? _defaultTodos;
   final navigatorKey = GlobalKey<NavigatorState>();
+
+  final gate = ReviewReminderNotificationsGate(
+    navigatorKey: navigatorKey,
+    schedulerFactory: (onTap) {
+      scheduler.onTap = onTap;
+      return scheduler;
+    },
+    inAppFallbackAlertSound: inAppFallbackAlertSound,
+    child: const Scaffold(body: Text('home')),
+  );
+  final content = syncEngine == null
+      ? gate
+      : SyncEngineScope(engine: syncEngine, child: gate);
 
   await tester.pumpWidget(
     wrapWithI18n(
@@ -252,15 +336,7 @@ Future<_GateHarness> _pumpGateHarness(
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: ReviewReminderNotificationsGate(
-              navigatorKey: navigatorKey,
-              schedulerFactory: (onTap) {
-                scheduler.onTap = onTap;
-                return scheduler;
-              },
-              inAppFallbackAlertSound: inAppFallbackAlertSound,
-              child: const Scaffold(body: Text('home')),
-            ),
+            child: content,
           ),
         ),
       ),
@@ -272,7 +348,10 @@ Future<_GateHarness> _pumpGateHarness(
 
   expect(scheduler.ensureInitializedCalls, greaterThan(0));
 
-  return _GateHarness(scheduler: scheduler);
+  return _GateHarness(
+    scheduler: scheduler,
+    syncEngine: syncEngine,
+  );
 }
 
 Todo _reviewTodo({required int nextReviewAtMs}) {
@@ -301,9 +380,20 @@ Todo _dueTodo({required int dueAtMs}) {
 }
 
 final class _GateHarness {
-  const _GateHarness({required this.scheduler});
+  const _GateHarness({
+    required this.scheduler,
+    required this.syncEngine,
+  });
 
   final _FakeScheduler scheduler;
+  final SyncEngine? syncEngine;
+}
+
+SyncEngine _buildManualSyncEngine() {
+  return SyncEngine(
+    syncRunner: _NoopSyncRunner(),
+    loadConfig: () async => null,
+  );
 }
 
 final class _FakeScheduler implements ReviewReminderNotificationScheduler {
@@ -330,6 +420,18 @@ final class _FakeScheduler implements ReviewReminderNotificationScheduler {
   @override
   Future<void> schedule(ReviewReminderPlan plan) async {
     scheduleCalls += 1;
+  }
+}
+
+final class _NoopSyncRunner implements SyncRunner {
+  @override
+  Future<int> pull(SyncConfig config) async {
+    return 0;
+  }
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    return 0;
   }
 }
 
