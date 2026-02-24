@@ -555,6 +555,10 @@ abstract class RustLibApi extends BaseApi {
       String? appliedTodoId,
       String? appliedTodoTitle,
       String? appliedPrevTodoStatus,
+      List<String>? suggestedTags,
+      double? suggestedTagConfidence,
+      String? tagSuggestionState,
+      List<String>? appliedTagIds,
       required PlatformInt64 nowMs});
 
   Future<void> crateApiCoreDbMarkSemanticParseJobUndone(
@@ -4044,6 +4048,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       String? appliedTodoId,
       String? appliedTodoTitle,
       String? appliedPrevTodoStatus,
+      List<String>? suggestedTags,
+      double? suggestedTagConfidence,
+      String? tagSuggestionState,
+      List<String>? appliedTagIds,
       required PlatformInt64 nowMs}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -4055,6 +4063,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(appliedTodoId, serializer);
         sse_encode_opt_String(appliedTodoTitle, serializer);
         sse_encode_opt_String(appliedPrevTodoStatus, serializer);
+        sse_encode_opt_list_String(suggestedTags, serializer);
+        sse_encode_opt_box_autoadd_f_64(suggestedTagConfidence, serializer);
+        sse_encode_opt_String(tagSuggestionState, serializer);
+        sse_encode_opt_list_String(appliedTagIds, serializer);
         sse_encode_i_64(nowMs, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 79, port: port_);
@@ -4072,6 +4084,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         appliedTodoId,
         appliedTodoTitle,
         appliedPrevTodoStatus,
+        suggestedTags,
+        suggestedTagConfidence,
+        tagSuggestionState,
+        appliedTagIds,
         nowMs
       ],
       apiImpl: this,
@@ -4089,6 +4105,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "appliedTodoId",
           "appliedTodoTitle",
           "appliedPrevTodoStatus",
+          "suggestedTags",
+          "suggestedTagConfidence",
+          "tagSuggestionState",
+          "appliedTagIds",
           "nowMs"
         ],
       );

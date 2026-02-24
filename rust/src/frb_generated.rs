@@ -3174,6 +3174,10 @@ fn wire__crate__api__core__db_mark_semantic_parse_job_succeeded_impl(
             let api_applied_todo_id = <Option<String>>::sse_decode(&mut deserializer);
             let api_applied_todo_title = <Option<String>>::sse_decode(&mut deserializer);
             let api_applied_prev_todo_status = <Option<String>>::sse_decode(&mut deserializer);
+            let api_suggested_tags = <Option<Vec<String>>>::sse_decode(&mut deserializer);
+            let api_suggested_tag_confidence = <Option<f64>>::sse_decode(&mut deserializer);
+            let api_tag_suggestion_state = <Option<String>>::sse_decode(&mut deserializer);
+            let api_applied_tag_ids = <Option<Vec<String>>>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -3186,6 +3190,10 @@ fn wire__crate__api__core__db_mark_semantic_parse_job_succeeded_impl(
                         api_applied_todo_id,
                         api_applied_todo_title,
                         api_applied_prev_todo_status,
+                        api_suggested_tags,
+                        api_suggested_tag_confidence,
+                        api_tag_suggestion_state,
+                        api_applied_tag_ids,
                         api_now_ms,
                     )
                 })())

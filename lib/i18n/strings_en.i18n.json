@@ -11,6 +11,8 @@
       "cancel": "Cancel",
       "notNow": "Not now",
       "allow": "Allow",
+      "apply": "Apply",
+      "view": "View",
       "save": "Save",
       "copy": "Copy",
       "reset": "Reset",
@@ -933,6 +935,8 @@
     "semanticParseStatusUpdated": "Updated task: $title",
     "semanticParseStatusUpdatedGeneric": "Updated task",
     "semanticParseStatusUndone": "Undid auto action",
+    "semanticParseStatusTagSuggested": "Suggested tags: $tags",
+    "semanticParseStatusTagApplied": "Added tags: $tags",
     "askAiRecoveredDetached": "Recovered the completed cloud answer.",
     "tagFilter": {
       "tooltip": "Tag filter",

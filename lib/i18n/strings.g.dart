@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1616 (808 per locale)
+/// Strings: 1624 (812 per locale)
 ///
-/// Built on 2026-02-24 at 06:39 UTC
+/// Built on 2026-02-24 at 07:28 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -435,6 +435,10 @@ class _StringsChatEn {
       'Updated task: ${title}';
   String get semanticParseStatusUpdatedGeneric => 'Updated task';
   String get semanticParseStatusUndone => 'Undid auto action';
+  String semanticParseStatusTagSuggested({required Object tags}) =>
+      'Suggested tags: ${tags}';
+  String semanticParseStatusTagApplied({required Object tags}) =>
+      'Added tags: ${tags}';
   String get askAiRecoveredDetached => 'Recovered the completed cloud answer.';
   late final _StringsChatTagFilterEn tagFilter =
       _StringsChatTagFilterEn._(_root);
@@ -622,6 +626,8 @@ class _StringsCommonActionsEn {
   String get cancel => 'Cancel';
   String get notNow => 'Not now';
   String get allow => 'Allow';
+  String get apply => 'Apply';
+  String get view => 'View';
   String get save => 'Save';
   String get copy => 'Copy';
   String get reset => 'Reset';
@@ -4053,6 +4059,12 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   String get semanticParseStatusUndone => '已撤销自动动作';
   @override
+  String semanticParseStatusTagSuggested({required Object tags}) =>
+      '建议标签：${tags}';
+  @override
+  String semanticParseStatusTagApplied({required Object tags}) =>
+      '已添加标签：${tags}';
+  @override
   String get askAiRecoveredDetached => '已恢复已完成的云端回答。';
   @override
   late final _StringsChatTagFilterZhCn tagFilter =
@@ -4338,6 +4350,10 @@ class _StringsCommonActionsZhCn extends _StringsCommonActionsEn {
   String get notNow => '暂不';
   @override
   String get allow => '允许';
+  @override
+  String get apply => '应用';
+  @override
+  String get view => '查看';
   @override
   String get save => '保存';
   @override
@@ -8883,6 +8899,10 @@ extension on Translations {
         return 'Not now';
       case 'common.actions.allow':
         return 'Allow';
+      case 'common.actions.apply':
+        return 'Apply';
+      case 'common.actions.view':
+        return 'View';
       case 'common.actions.save':
         return 'Save';
       case 'common.actions.copy':
@@ -10061,6 +10081,10 @@ extension on Translations {
         return 'Updated task';
       case 'chat.semanticParseStatusUndone':
         return 'Undid auto action';
+      case 'chat.semanticParseStatusTagSuggested':
+        return ({required Object tags}) => 'Suggested tags: ${tags}';
+      case 'chat.semanticParseStatusTagApplied':
+        return ({required Object tags}) => 'Added tags: ${tags}';
       case 'chat.askAiRecoveredDetached':
         return 'Recovered the completed cloud answer.';
       case 'chat.tagFilter.tooltip':
@@ -10538,6 +10562,10 @@ extension on _StringsZhCn {
         return '暂不';
       case 'common.actions.allow':
         return '允许';
+      case 'common.actions.apply':
+        return '应用';
+      case 'common.actions.view':
+        return '查看';
       case 'common.actions.save':
         return '保存';
       case 'common.actions.copy':
@@ -11710,6 +11738,10 @@ extension on _StringsZhCn {
         return '已更新待办';
       case 'chat.semanticParseStatusUndone':
         return '已撤销自动动作';
+      case 'chat.semanticParseStatusTagSuggested':
+        return ({required Object tags}) => '建议标签：${tags}';
+      case 'chat.semanticParseStatusTagApplied':
+        return ({required Object tags}) => '已添加标签：${tags}';
       case 'chat.askAiRecoveredDetached':
         return '已恢复已完成的云端回答。';
       case 'chat.tagFilter.tooltip':
