@@ -135,8 +135,14 @@ function Ensure-VpkTool([string]$RequiredVersion) {
     '--version', $RequiredVersion
   )
 
-  & dotnet @args
-  if ($LASTEXITCODE -ne 0) {
+  $dotnetOutput = & dotnet @args 2>&1
+  $dotnetExitCode = $LASTEXITCODE
+
+  foreach ($line in $dotnetOutput) {
+    Write-Host $line
+  }
+
+  if ($dotnetExitCode -ne 0) {
     throw "Failed to install vpk $RequiredVersion"
   }
 
