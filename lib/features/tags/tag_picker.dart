@@ -321,6 +321,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
 
     final title = context.t.chat.tagPicker.title;
     final suggestedTitle = context.t.chat.tagPicker.suggested;
+    final suggestedHint = context.t.chat.tagPicker.lowConfidenceHint;
     final mergeSuggestionsTitle = context.t.chat.tagPicker.mergeSuggestions;
     final mergeActionLabel = context.t.chat.tagPicker.mergeAction;
     final mergeDismissLabel = context.t.chat.tagPicker.mergeDismissAction;
@@ -358,6 +359,16 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                         Text(
                           suggestedTitle,
                           style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          suggestedHint,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                         ),
                         const SizedBox(height: 8),
                         Wrap(

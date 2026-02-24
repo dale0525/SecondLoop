@@ -953,6 +953,7 @@
     "tagPicker": {
       "title": "Manage tags",
       "suggested": "Suggested tags",
+      "lowConfidenceHint": "AI confidence is low. Please confirm before applying.",
   "mergeSuggestions": "Merge suggestions",
   "mergeAction": "Merge",
   "mergeDismissAction": "Dismiss",

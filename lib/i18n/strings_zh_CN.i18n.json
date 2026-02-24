@@ -953,6 +953,7 @@
     "tagPicker": {
       "title": "管理标签",
       "suggested": "建议标签",
+      "lowConfidenceHint": "AI 置信度不足，建议确认后应用。",
   "mergeSuggestions": "合并建议",
   "mergeAction": "合并",
   "mergeDismissAction": "忽略",

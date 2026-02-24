@@ -523,6 +523,10 @@ void main() {
 
     expect(find.text('Manage tags'), findsOneWidget);
     expect(find.text('Suggested tags'), findsOneWidget);
+    expect(
+      find.text('AI confidence is low. Please confirm before applying.'),
+      findsOneWidget,
+    );
     expect(find.text('All tags'), findsOneWidget);
     expect(find.text('Type a tag name'), findsOneWidget);
     expect(find.text('Add'), findsOneWidget);

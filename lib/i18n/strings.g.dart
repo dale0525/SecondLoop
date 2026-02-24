@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1624 (812 per locale)
+/// Strings: 1626 (813 per locale)
 ///
-/// Built on 2026-02-24 at 07:28 UTC
+/// Built on 2026-02-24 at 07:29 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1520,6 +1520,8 @@ class _StringsChatTagPickerEn {
   // Translations
   String get title => 'Manage tags';
   String get suggested => 'Suggested tags';
+  String get lowConfidenceHint =>
+      'AI confidence is low. Please confirm before applying.';
   String get mergeSuggestions => 'Merge suggestions';
   String get mergeAction => 'Merge';
   String get mergeDismissAction => 'Dismiss';
@@ -5703,6 +5705,8 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   String get title => '管理标签';
   @override
   String get suggested => '建议标签';
+  @override
+  String get lowConfidenceHint => 'AI 置信度不足，建议确认后应用。';
   @override
   String get mergeSuggestions => '合并建议';
   @override
@@ -10107,6 +10111,8 @@ extension on Translations {
         return 'Manage tags';
       case 'chat.tagPicker.suggested':
         return 'Suggested tags';
+      case 'chat.tagPicker.lowConfidenceHint':
+        return 'AI confidence is low. Please confirm before applying.';
       case 'chat.tagPicker.mergeSuggestions':
         return 'Merge suggestions';
       case 'chat.tagPicker.mergeAction':
@@ -11764,6 +11770,8 @@ extension on _StringsZhCn {
         return '管理标签';
       case 'chat.tagPicker.suggested':
         return '建议标签';
+      case 'chat.tagPicker.lowConfidenceHint':
+        return 'AI 置信度不足，建议确认后应用。';
       case 'chat.tagPicker.mergeSuggestions':
         return '合并建议';
       case 'chat.tagPicker.mergeAction':
