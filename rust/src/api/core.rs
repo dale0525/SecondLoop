@@ -856,11 +856,15 @@ pub fn db_mark_semantic_parse_job_succeeded(
     applied_todo_id: Option<String>,
     applied_todo_title: Option<String>,
     applied_prev_todo_status: Option<String>,
+    suggested_tags: Option<Vec<String>>,
+    suggested_tag_confidence: Option<f64>,
+    tag_suggestion_state: Option<String>,
+    applied_tag_ids: Option<Vec<String>>,
     now_ms: i64,
 ) -> Result<()> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::mark_semantic_parse_job_succeeded(
+    db::mark_semantic_parse_job_succeeded_with_tag_metadata(
         &conn,
         &key,
         &message_id,
@@ -868,6 +872,10 @@ pub fn db_mark_semantic_parse_job_succeeded(
         applied_todo_id.as_deref(),
         applied_todo_title.as_deref(),
         applied_prev_todo_status.as_deref(),
+        suggested_tags.as_deref(),
+        suggested_tag_confidence,
+        tag_suggestion_state.as_deref(),
+        applied_tag_ids.as_deref(),
         now_ms,
     )
 }

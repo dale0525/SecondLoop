@@ -11,6 +11,8 @@
       "cancel": "取消",
       "notNow": "暂不",
       "allow": "允许",
+      "apply": "应用",
+      "view": "查看",
       "save": "保存",
       "copy": "复制",
       "reset": "重置",
@@ -933,6 +935,8 @@
     "semanticParseStatusUpdated": "已更新待办：$title",
     "semanticParseStatusUpdatedGeneric": "已更新待办",
     "semanticParseStatusUndone": "已撤销自动动作",
+    "semanticParseStatusTagSuggested": "建议标签：$tags",
+    "semanticParseStatusTagApplied": "已添加标签：$tags",
     "askAiRecoveredDetached": "已恢复已完成的云端回答。",
     "tagFilter": {
       "tooltip": "标签筛选",
@@ -949,6 +953,7 @@
     "tagPicker": {
       "title": "管理标签",
       "suggested": "建议标签",
+      "lowConfidenceHint": "AI 置信度不足，建议确认后应用。",
   "mergeSuggestions": "合并建议",
   "mergeAction": "合并",
   "mergeDismissAction": "忽略",

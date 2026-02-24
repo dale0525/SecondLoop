@@ -792,6 +792,24 @@ PRAGMA user_version = 26;
         )?;
     }
 
+    if user_version < 27 {
+        // v27: semantic parse tag suggestion metadata for manual-assist flow.
+        conn.execute_batch(
+            r#"
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN suggested_tags_json BLOB;
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN suggested_tag_confidence REAL;
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN tag_suggestion_state TEXT NOT NULL DEFAULT 'none';
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN applied_tag_ids_json BLOB;
+
+PRAGMA user_version = 27;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 

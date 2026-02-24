@@ -564,6 +564,10 @@ Future<void> dbMarkSemanticParseJobSucceeded(
         String? appliedTodoId,
         String? appliedTodoTitle,
         String? appliedPrevTodoStatus,
+        List<String>? suggestedTags,
+        double? suggestedTagConfidence,
+        String? tagSuggestionState,
+        List<String>? appliedTagIds,
         required PlatformInt64 nowMs}) =>
     RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobSucceeded(
         appDir: appDir,
@@ -573,6 +577,10 @@ Future<void> dbMarkSemanticParseJobSucceeded(
         appliedTodoId: appliedTodoId,
         appliedTodoTitle: appliedTodoTitle,
         appliedPrevTodoStatus: appliedPrevTodoStatus,
+        suggestedTags: suggestedTags,
+        suggestedTagConfidence: suggestedTagConfidence,
+        tagSuggestionState: tagSuggestionState,
+        appliedTagIds: appliedTagIds,
         nowMs: nowMs);
 
 Future<void> dbMarkSemanticParseJobCanceled(

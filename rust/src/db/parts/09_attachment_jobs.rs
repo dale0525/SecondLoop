@@ -1,3 +1,66 @@
+fn encode_semantic_parse_job_string_list_blob(
+    key: &[u8; 32],
+    _message_id: &str,
+    values: Option<&[String]>,
+    aad: Vec<u8>,
+) -> Result<Option<Vec<u8>>> {
+    let Some(values) = values else {
+        return Ok(None);
+    };
+
+    let normalized = values
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+
+    let json = serde_json::to_vec(&normalized)
+        .map_err(|e| anyhow!("failed to serialize semantic parse job tags json: {e}"))?;
+    let encrypted = encrypt_bytes(key, &json, &aad)?;
+    Ok(Some(encrypted))
+}
+
+fn decode_semantic_parse_job_string_list_blob(
+    key: &[u8; 32],
+    message_id: &str,
+    blob: Option<Vec<u8>>,
+    aad: Vec<u8>,
+) -> Result<Option<Vec<String>>> {
+    let Some(blob) = blob else {
+        return Ok(None);
+    };
+
+    let bytes = decrypt_bytes(key, &blob, &aad)?;
+    let parsed: Vec<String> = serde_json::from_slice(&bytes).map_err(|e| {
+        anyhow!(
+            "failed to decode semantic parse job tag list for message_id={message_id}: {e}"
+        )
+    })?;
+
+    let normalized = parsed
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(normalized))
+}
+
+fn normalize_tag_suggestion_state(raw: Option<&str>) -> Result<String> {
+    let value = raw.unwrap_or("none").trim().to_ascii_lowercase();
+    match value.as_str() {
+        "none" | "pending" | "applied" | "dismissed" => Ok(value),
+        _ => Err(anyhow!("invalid tag_suggestion_state")),
+    }
+}
+
 pub fn enqueue_semantic_parse_job(conn: &Connection, message_id: &str, now_ms: i64) -> Result<()> {
     let message_id = message_id.trim();
     if message_id.is_empty() {
@@ -16,11 +79,32 @@ INSERT INTO semantic_parse_jobs(
   applied_todo_id,
   applied_todo_title,
   applied_prev_todo_status,
+  suggested_tags_json,
+  suggested_tag_confidence,
+  tag_suggestion_state,
+  applied_tag_ids_json,
   undone_at_ms,
   created_at_ms,
   updated_at_ms
 )
-VALUES (?1, 'pending', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?2, ?2)
+VALUES (
+  ?1,
+  'pending',
+  0,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  'none',
+  NULL,
+  NULL,
+  ?2,
+  ?2
+)
 ON CONFLICT(message_id) DO UPDATE SET
   status = 'pending',
   attempts = 0,
@@ -30,6 +114,10 @@ ON CONFLICT(message_id) DO UPDATE SET
   applied_todo_id = NULL,
   applied_todo_title = NULL,
   applied_prev_todo_status = NULL,
+  suggested_tags_json = NULL,
+  suggested_tag_confidence = NULL,
+  tag_suggestion_state = 'none',
+  applied_tag_ids_json = NULL,
   undone_at_ms = NULL,
   updated_at_ms = excluded.updated_at_ms
 "#,
@@ -78,6 +166,10 @@ LIMIT ?2
             applied_todo_id: row.get(6)?,
             applied_todo_title: None,
             applied_prev_todo_status: row.get(7)?,
+            suggested_tags: None,
+            suggested_tag_confidence: None,
+            tag_suggestion_state: None,
+            applied_tag_ids: None,
             undone_at_ms: row.get(8)?,
             created_at_ms: row.get(9)?,
             updated_at_ms: row.get(10)?,
@@ -115,6 +207,10 @@ SELECT message_id,
        applied_todo_id,
        applied_todo_title,
        applied_prev_todo_status,
+       suggested_tags_json,
+       suggested_tag_confidence,
+       tag_suggestion_state,
+       applied_tag_ids_json,
        undone_at_ms,
        created_at_ms,
        updated_at_ms
@@ -144,6 +240,19 @@ ORDER BY updated_at_ms ASC, message_id ASC
             None => None,
         };
 
+        let suggested_tags = decode_semantic_parse_job_string_list_blob(
+            key,
+            &message_id,
+            row.get(9)?,
+            semantic_parse_job_suggested_tags_aad(&message_id),
+        )?;
+        let applied_tag_ids = decode_semantic_parse_job_string_list_blob(
+            key,
+            &message_id,
+            row.get(12)?,
+            semantic_parse_job_applied_tag_ids_aad(&message_id),
+        )?;
+
         result.push(SemanticParseJob {
             message_id,
             status: row.get(1)?,
@@ -154,9 +263,13 @@ ORDER BY updated_at_ms ASC, message_id ASC
             applied_todo_id: row.get(6)?,
             applied_todo_title,
             applied_prev_todo_status: row.get(8)?,
-            undone_at_ms: row.get(9)?,
-            created_at_ms: row.get(10)?,
-            updated_at_ms: row.get(11)?,
+            suggested_tags,
+            suggested_tag_confidence: row.get(10)?,
+            tag_suggestion_state: row.get(11)?,
+            applied_tag_ids,
+            undone_at_ms: row.get(13)?,
+            created_at_ms: row.get(14)?,
+            updated_at_ms: row.get(15)?,
         });
     }
     Ok(result)
@@ -218,6 +331,10 @@ SET status = 'pending',
     applied_todo_id = NULL,
     applied_todo_title = NULL,
     applied_prev_todo_status = NULL,
+    suggested_tags_json = NULL,
+    suggested_tag_confidence = NULL,
+    tag_suggestion_state = 'none',
+    applied_tag_ids_json = NULL,
     undone_at_ms = NULL,
     updated_at_ms = ?2
 WHERE message_id = ?1
@@ -237,6 +354,37 @@ pub fn mark_semantic_parse_job_succeeded(
     applied_prev_todo_status: Option<&str>,
     now_ms: i64,
 ) -> Result<()> {
+    mark_semantic_parse_job_succeeded_with_tag_metadata(
+        conn,
+        key,
+        message_id,
+        applied_action_kind,
+        applied_todo_id,
+        applied_todo_title,
+        applied_prev_todo_status,
+        None,
+        None,
+        None,
+        None,
+        now_ms,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn mark_semantic_parse_job_succeeded_with_tag_metadata(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    applied_action_kind: &str,
+    applied_todo_id: Option<&str>,
+    applied_todo_title: Option<&str>,
+    applied_prev_todo_status: Option<&str>,
+    suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    tag_suggestion_state: Option<&str>,
+    applied_tag_ids: Option<&[String]>,
+    now_ms: i64,
+) -> Result<()> {
     let message_id = message_id.trim();
     if message_id.is_empty() {
         return Err(anyhow!("message_id is required"));
@@ -254,6 +402,23 @@ pub fn mark_semantic_parse_job_succeeded(
         _ => None,
     };
 
+    let suggested_tags_blob = encode_semantic_parse_job_string_list_blob(
+        key,
+        message_id,
+        suggested_tags,
+        semantic_parse_job_suggested_tags_aad(message_id),
+    )?;
+    let applied_tag_ids_blob = encode_semantic_parse_job_string_list_blob(
+        key,
+        message_id,
+        applied_tag_ids,
+        semantic_parse_job_applied_tag_ids_aad(message_id),
+    )?;
+    let normalized_tag_suggestion_state = normalize_tag_suggestion_state(tag_suggestion_state)?;
+    let normalized_tag_confidence = suggested_tag_confidence
+        .filter(|value| value.is_finite())
+        .map(|value| value.clamp(0.0, 1.0));
+
     conn.execute(
         r#"
 UPDATE semantic_parse_jobs
@@ -264,7 +429,11 @@ SET status = 'succeeded',
     applied_todo_id = ?3,
     applied_todo_title = ?4,
     applied_prev_todo_status = ?5,
-    updated_at_ms = ?6
+    suggested_tags_json = ?6,
+    suggested_tag_confidence = ?7,
+    tag_suggestion_state = ?8,
+    applied_tag_ids_json = ?9,
+    updated_at_ms = ?10
 WHERE message_id = ?1
 "#,
         params![
@@ -273,6 +442,10 @@ WHERE message_id = ?1
             applied_todo_id,
             title_blob,
             applied_prev_todo_status,
+            suggested_tags_blob,
+            normalized_tag_confidence,
+            normalized_tag_suggestion_state,
+            applied_tag_ids_blob,
             now_ms
         ],
     )?;

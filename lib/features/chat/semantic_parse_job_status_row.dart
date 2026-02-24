@@ -10,16 +10,20 @@ import '../actions/settings/actions_settings_store.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../actions/todo/todo_detail_page.dart';
+import '../tags/tag_picker.dart';
+import '../tags/tag_repository.dart';
 
 class SemanticParseJobStatusRow extends StatefulWidget {
   const SemanticParseJobStatusRow({
     required this.message,
     required this.job,
+    this.tagRepository = const TagRepository(),
     super.key,
   });
 
   final Message message;
   final SemanticParseJob job;
+  final TagRepository tagRepository;
 
   @override
   State<SemanticParseJobStatusRow> createState() =>
@@ -57,7 +61,10 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
         oldWidget.job.createdAtMs != widget.job.createdAtMs ||
         oldWidget.job.updatedAtMs != widget.job.updatedAtMs ||
         oldWidget.job.undoneAtMs != widget.job.undoneAtMs ||
-        oldWidget.job.appliedActionKind != widget.job.appliedActionKind) {
+        oldWidget.job.appliedActionKind != widget.job.appliedActionKind ||
+        oldWidget.job.tagSuggestionState != widget.job.tagSuggestionState ||
+        oldWidget.job.suggestedTags != widget.job.suggestedTags ||
+        oldWidget.job.appliedTagIds != widget.job.appliedTagIds) {
       if (mounted) _autoHidden = false;
       _maybeEnsureCreateTodoInReviewQueue();
       _scheduleAutoHide();
@@ -73,6 +80,211 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
     super.dispose();
   }
 
+  String _tagSuggestionState(SemanticParseJob job) {
+    final normalized = job.tagSuggestionState?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) return 'none';
+    switch (normalized) {
+      case 'pending':
+      case 'applied':
+      case 'dismissed':
+      case 'none':
+        return normalized;
+      default:
+        return 'none';
+    }
+  }
+
+  List<String> _suggestedTagsForDisplay(SemanticParseJob job) {
+    final source = job.suggestedTags ?? const <String>[];
+    if (source.isEmpty) return const <String>[];
+
+    final out = <String>[];
+    final seen = <String>{};
+    for (final raw in source) {
+      final normalized = raw.trim().toLowerCase();
+      if (normalized.isEmpty || !seen.add(normalized)) continue;
+      out.add(normalized);
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+
+  bool _isTagSuggestionPending(SemanticParseJob job) {
+    if (job.status != 'succeeded') return false;
+    if (job.appliedActionKind != null && job.appliedActionKind != 'none') {
+      return false;
+    }
+    if (_tagSuggestionState(job) != 'pending') return false;
+    return _suggestedTagsForDisplay(job).isNotEmpty;
+  }
+
+  bool _isTagSuggestionApplied(SemanticParseJob job) {
+    if (job.status != 'succeeded') return false;
+    if (job.appliedActionKind != null && job.appliedActionKind != 'none') {
+      return false;
+    }
+    if (_tagSuggestionState(job) != 'applied') return false;
+    return _suggestedTagsForDisplay(job).isNotEmpty;
+  }
+
+  String _formatSuggestedTags(List<String> tags) {
+    if (tags.isEmpty) return '';
+    return tags.join(' · ');
+  }
+
+  void _notifyJobStatusChanged({required bool didMutateTags}) {
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    if (didMutateTags) {
+      syncEngine?.notifyLocalMutation();
+    } else {
+      syncEngine?.notifyExternalChange();
+    }
+  }
+
+  Future<void> _persistTagSuggestionState({
+    required String state,
+    List<String>? appliedTagIds,
+  }) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final job = widget.job;
+    final suggestedTags = _suggestedTagsForDisplay(job);
+
+    await backend.markSemanticParseJobSucceeded(
+      sessionKey,
+      messageId: widget.message.id,
+      appliedActionKind: (job.appliedActionKind ?? 'none').trim().isEmpty
+          ? 'none'
+          : job.appliedActionKind!.trim(),
+      appliedTodoId: job.appliedTodoId,
+      appliedTodoTitle: job.appliedTodoTitle,
+      appliedPrevTodoStatus: job.appliedPrevTodoStatus,
+      suggestedTags: suggestedTags.isEmpty ? null : suggestedTags,
+      suggestedTagConfidence: job.suggestedTagConfidence,
+      tagSuggestionState: state,
+      appliedTagIds: appliedTagIds,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> _dismissTagSuggestion() async {
+    try {
+      await _persistTagSuggestionState(state: 'dismissed');
+      _notifyJobStatusChanged(didMutateTags: false);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> _viewTagSuggestion() async {
+    final sessionKey = SessionScope.of(context).sessionKey;
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final changed = await showMessageTagPicker(
+      context: context,
+      sessionKey: sessionKey,
+      messageId: widget.message.id,
+      repository: widget.tagRepository,
+    );
+    if (!mounted || !changed) return;
+
+    final suggested = _suggestedTagsForDisplay(widget.job);
+    if (suggested.isEmpty) {
+      _notifyJobStatusChanged(didMutateTags: true);
+      return;
+    }
+
+    try {
+      final currentTags = await widget.tagRepository
+          .listMessageTags(sessionKey, widget.message.id);
+      final normalizedCurrent = <String>{};
+      for (final tag in currentTags) {
+        final name = tag.name.trim().toLowerCase();
+        if (name.isNotEmpty) normalizedCurrent.add(name);
+        final systemKey = tag.systemKey?.trim().toLowerCase();
+        if (systemKey != null && systemKey.isNotEmpty) {
+          normalizedCurrent.add(systemKey);
+        }
+      }
+
+      final allCovered = suggested.every(normalizedCurrent.contains);
+      await _persistTagSuggestionState(
+        state: allCovered ? 'applied' : 'pending',
+        appliedTagIds: null,
+      );
+      _notifyJobStatusChanged(didMutateTags: true);
+    } catch (_) {
+      _notifyJobStatusChanged(didMutateTags: true);
+    }
+  }
+
+  Future<void> _applyTagSuggestion() async {
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final suggested = _suggestedTagsForDisplay(widget.job);
+    if (suggested.isEmpty) return;
+
+    try {
+      final existing = await widget.tagRepository
+          .listMessageTags(sessionKey, widget.message.id);
+      final nextTagIds = existing.map((tag) => tag.id).toSet();
+      final appliedTagIds = <String>[];
+
+      for (final suggestedName in suggested) {
+        final tag =
+            await widget.tagRepository.upsertTag(sessionKey, suggestedName);
+        if (nextTagIds.add(tag.id)) {
+          appliedTagIds.add(tag.id);
+        }
+      }
+
+      if (appliedTagIds.isNotEmpty) {
+        final sortedTagIds = nextTagIds.toList(growable: false)..sort();
+        await widget.tagRepository
+            .setMessageTags(sessionKey, widget.message.id, sortedTagIds);
+      }
+
+      await _persistTagSuggestionState(
+        state: 'applied',
+        appliedTagIds: appliedTagIds.isEmpty ? null : appliedTagIds,
+      );
+      _notifyJobStatusChanged(didMutateTags: true);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> _undoTagSuggestion() async {
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final removable = widget.job.appliedTagIds ?? const <String>[];
+    var didMutateTags = false;
+
+    try {
+      if (removable.isNotEmpty) {
+        final current = await widget.tagRepository
+            .listMessageTags(sessionKey, widget.message.id);
+        final removableSet = removable.toSet();
+        final nextIds = <String>[];
+        for (final tag in current) {
+          if (removableSet.contains(tag.id)) continue;
+          nextIds.add(tag.id);
+        }
+        nextIds.sort();
+        await widget.tagRepository
+            .setMessageTags(sessionKey, widget.message.id, nextIds);
+        didMutateTags = true;
+      }
+
+      final hasSuggested = _suggestedTagsForDisplay(widget.job).isNotEmpty;
+      await _persistTagSuggestionState(
+        state: hasSuggested ? 'pending' : 'none',
+        appliedTagIds: null,
+      );
+      _notifyJobStatusChanged(didMutateTags: didMutateTags);
+    } catch (_) {
+      // ignore
+    }
+  }
+
   void _scheduleAutoHide() {
     _autoHideTimer?.cancel();
     _autoHideTimer = null;
@@ -83,7 +295,8 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
 
     if (undoneAtMs == null && status != 'succeeded') return;
     if (status == 'succeeded' &&
-        (job.appliedActionKind == null || job.appliedActionKind == 'none')) {
+        (job.appliedActionKind == null || job.appliedActionKind == 'none') &&
+        !_isTagSuggestionApplied(job)) {
       return;
     }
 
@@ -310,9 +523,14 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
       return const SizedBox.shrink();
     }
 
+    final isTagSuggestionPending = _isTagSuggestionPending(widget.job);
+    final isTagSuggestionApplied = _isTagSuggestionApplied(widget.job);
+
     if (status == 'succeeded' &&
         (widget.job.appliedActionKind == null ||
-            widget.job.appliedActionKind == 'none')) {
+            widget.job.appliedActionKind == 'none') &&
+        !isTagSuggestionPending &&
+        !isTagSuggestionApplied) {
       return const SizedBox.shrink();
     }
 
@@ -383,6 +601,57 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
           break;
         case 'succeeded':
           final kind = widget.job.appliedActionKind;
+          if (kind == null || kind == 'none') {
+            final suggested = _suggestedTagsForDisplay(widget.job);
+            final suggestedLabel = _formatSuggestedTags(suggested);
+
+            if (isTagSuggestionPending) {
+              label =
+                  t.chat.semanticParseStatusTagSuggested(tags: suggestedLabel);
+              leading = Icon(
+                Icons.auto_awesome_rounded,
+                size: 14,
+                color: colorScheme.outline,
+              );
+              actions = [
+                TextButton(
+                  onPressed: _applyTagSuggestion,
+                  child: Text(t.common.actions.apply),
+                ),
+                TextButton(
+                  onPressed: _viewTagSuggestion,
+                  child: Text(t.common.actions.view),
+                ),
+                TextButton(
+                  onPressed: _dismissTagSuggestion,
+                  child: Text(t.common.actions.ignore),
+                ),
+              ];
+            } else if (isTagSuggestionApplied) {
+              label =
+                  t.chat.semanticParseStatusTagApplied(tags: suggestedLabel);
+              leading = Icon(
+                Icons.local_offer_outlined,
+                size: 14,
+                color: colorScheme.outline,
+              );
+              actions = [
+                if ((widget.job.appliedTagIds?.isNotEmpty ?? false))
+                  TextButton(
+                    onPressed: _undoTagSuggestion,
+                    child: Text(t.common.actions.undo),
+                  ),
+                TextButton(
+                  onPressed: _viewTagSuggestion,
+                  child: Text(t.common.actions.view),
+                ),
+              ];
+            } else {
+              return const SizedBox.shrink();
+            }
+            break;
+          }
+
           if (kind == 'create') {
             final title = widget.job.appliedTodoTitle?.trim().isNotEmpty == true
                 ? widget.job.appliedTodoTitle!.trim()

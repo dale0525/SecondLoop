@@ -1745,6 +1745,10 @@ class NativeAppBackend
     String? appliedTodoId,
     String? appliedTodoTitle,
     String? appliedPrevTodoStatus,
+    List<String>? suggestedTags,
+    double? suggestedTagConfidence,
+    String? tagSuggestionState,
+    List<String>? appliedTagIds,
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
@@ -1756,6 +1760,10 @@ class NativeAppBackend
       appliedTodoId: appliedTodoId,
       appliedTodoTitle: appliedTodoTitle,
       appliedPrevTodoStatus: appliedPrevTodoStatus,
+      suggestedTags: suggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      tagSuggestionState: tagSuggestionState,
+      appliedTagIds: appliedTagIds,
       nowMs: PlatformInt64Util.from(nowMs),
     );
   }

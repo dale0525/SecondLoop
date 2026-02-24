@@ -20,6 +20,9 @@ import '../backend/attachments_backend.dart';
 import '../backend/native_backend.dart';
 import 'semantic_parse.dart';
 
+part 'semantic_parse_auto_actions_runner_store.dart';
+part 'semantic_parse_auto_actions_runner_client.dart';
+
 final class SemanticParseAutoActionJob {
   const SemanticParseAutoActionJob({
     required this.messageId,
@@ -69,6 +72,10 @@ final class SemanticParseJobSucceededArgs {
     this.appliedTodoId,
     this.appliedTodoTitle,
     this.appliedPrevTodoStatus,
+    this.suggestedTags,
+    this.suggestedTagConfidence,
+    this.tagSuggestionState,
+    this.appliedTagIds,
     required this.nowMs,
   });
 
@@ -77,7 +84,21 @@ final class SemanticParseJobSucceededArgs {
   final String? appliedTodoId;
   final String? appliedTodoTitle;
   final String? appliedPrevTodoStatus;
+  final List<String>? suggestedTags;
+  final double? suggestedTagConfidence;
+  final String? tagSuggestionState; // pending | applied | dismissed | none
+  final List<String>? appliedTagIds;
   final int nowMs;
+}
+
+final class SemanticParseTagApplyResult {
+  const SemanticParseTagApplyResult({
+    required this.appliedCount,
+    required this.appliedTagIds,
+  });
+
+  final int appliedCount;
+  final List<String> appliedTagIds;
 }
 
 final class SemanticParseJobFailedArgs {
@@ -125,7 +146,7 @@ abstract class SemanticParseAutoActionsStore {
     required int nowMs,
   });
 
-  Future<int> applySemanticTags({
+  Future<SemanticParseTagApplyResult> applySemanticTags({
     required String messageId,
     required List<String> suggestedTags,
   });
@@ -166,11 +187,15 @@ final class SemanticParseAutoActionsRunnerSettings {
   const SemanticParseAutoActionsRunnerSettings({
     required this.hardTimeout,
     required this.minAutoConfidence,
+    this.minAutoTagConfidence = 0.8,
+    this.minPendingTagConfidence = 0.6,
     this.batchLimit = 5,
   });
 
   final Duration hardTimeout;
   final double minAutoConfidence;
+  final double minAutoTagConfidence;
+  final double minPendingTagConfidence;
   final int batchLimit;
 }
 
@@ -188,6 +213,31 @@ final class SemanticParseAutoActionsRunResult {
 
 typedef SemanticParseNowMs = int Function();
 typedef SemanticParseNowLocal = DateTime Function();
+
+const int kMaxSemanticTagsPerMessage = 3;
+
+String? normalizeSemanticTagName(String raw) {
+  final normalized = raw.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+  return normalized;
+}
+
+List<String> normalizeSemanticTagNames(
+  List<String> rawTags, {
+  int maxCount = kMaxSemanticTagsPerMessage,
+}) {
+  final out = <String>[];
+  final seen = <String>{};
+
+  for (final rawTag in rawTags) {
+    final normalized = normalizeSemanticTagName(rawTag);
+    if (normalized == null || !seen.add(normalized)) continue;
+    out.add(normalized);
+    if (out.length >= maxCount) break;
+  }
+
+  return out;
+}
 
 final class SemanticParseAutoActionsRunner {
   SemanticParseAutoActionsRunner({
@@ -301,14 +351,33 @@ final class SemanticParseAutoActionsRunner {
           parsed = AiSemanticDecision(decision: localDecision, confidence: 1.0);
         }
 
-        if (parsed.suggestedTags.isNotEmpty &&
-            parsed.tagConfidence >= settings.minAutoConfidence) {
-          final appliedSemanticTagCount = await store.applySemanticTags(
-            messageId: job.messageId,
-            suggestedTags: parsed.suggestedTags,
-          );
-          if (appliedSemanticTagCount > 0) {
-            didMutateAny = true;
+        final normalizedSuggestedTags = normalizeSemanticTagNames(
+          parsed.suggestedTags,
+        );
+        List<String>? suggestedTags;
+        double? suggestedTagConfidence;
+        String tagSuggestionState = 'none';
+        List<String>? appliedTagIds;
+
+        if (normalizedSuggestedTags.isNotEmpty) {
+          if (parsed.tagConfidence >= settings.minAutoTagConfidence) {
+            final result = await store.applySemanticTags(
+              messageId: job.messageId,
+              suggestedTags: normalizedSuggestedTags,
+            );
+            if (result.appliedCount > 0) {
+              didMutateAny = true;
+              suggestedTags = normalizedSuggestedTags;
+              suggestedTagConfidence = parsed.tagConfidence;
+              tagSuggestionState = 'applied';
+              if (result.appliedTagIds.isNotEmpty) {
+                appliedTagIds = result.appliedTagIds;
+              }
+            }
+          } else if (parsed.tagConfidence >= settings.minPendingTagConfidence) {
+            suggestedTags = normalizedSuggestedTags;
+            suggestedTagConfidence = parsed.tagConfidence;
+            tagSuggestionState = 'pending';
           }
         }
 
@@ -320,6 +389,10 @@ final class SemanticParseAutoActionsRunner {
               appliedTodoId: null,
               appliedTodoTitle: null,
               appliedPrevTodoStatus: null,
+              suggestedTags: suggestedTags,
+              suggestedTagConfidence: suggestedTagConfidence,
+              tagSuggestionState: tagSuggestionState,
+              appliedTagIds: appliedTagIds,
               nowMs: nowMs,
             ),
           );
@@ -342,6 +415,10 @@ final class SemanticParseAutoActionsRunner {
                   appliedTodoId: null,
                   appliedTodoTitle: null,
                   appliedPrevTodoStatus: null,
+                  suggestedTags: suggestedTags,
+                  suggestedTagConfidence: suggestedTagConfidence,
+                  tagSuggestionState: tagSuggestionState,
+                  appliedTagIds: appliedTagIds,
                   nowMs: nowMs,
                 ),
               );
@@ -362,6 +439,10 @@ final class SemanticParseAutoActionsRunner {
                 appliedTodoId: appliedTodoId,
                 appliedTodoTitle: title,
                 appliedPrevTodoStatus: null,
+                suggestedTags: suggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                tagSuggestionState: tagSuggestionState,
+                appliedTagIds: appliedTagIds,
                 nowMs: nowMs,
               ),
             );
@@ -392,6 +473,10 @@ final class SemanticParseAutoActionsRunner {
                 appliedTodoId: todoId,
                 appliedTodoTitle: candidateTitle,
                 appliedPrevTodoStatus: previousStatus,
+                suggestedTags: suggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                tagSuggestionState: tagSuggestionState,
+                appliedTagIds: appliedTagIds,
                 nowMs: nowMs,
               ),
             );
@@ -407,6 +492,10 @@ final class SemanticParseAutoActionsRunner {
                 appliedTodoId: null,
                 appliedTodoTitle: null,
                 appliedPrevTodoStatus: null,
+                suggestedTags: suggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                tagSuggestionState: tagSuggestionState,
+                appliedTagIds: appliedTagIds,
                 nowMs: nowMs,
               ),
             );
@@ -493,665 +582,5 @@ final class SemanticParseAutoActionsRunner {
       default:
         return const Duration(hours: 8).inMilliseconds;
     }
-  }
-}
-
-final class BackendSemanticParseAutoActionsStore
-    implements SemanticParseAutoActionsStore {
-  BackendSemanticParseAutoActionsStore({
-    required AppBackend backend,
-    required Uint8List sessionKey,
-    TagRepository tagRepository = const TagRepository(),
-  })  : _backend = backend,
-        _sessionKey = Uint8List.fromList(sessionKey),
-        _tagRepository = tagRepository;
-
-  final AppBackend _backend;
-  final Uint8List _sessionKey;
-  final TagRepository _tagRepository;
-
-  static const int _kMaxAttachmentSemanticSnippets = 10;
-  static const int _kMaxAttachmentSnippetRunes = 320;
-  static const int _kMaxSemanticAnalysisRunes = 2400;
-  static const int _kMaxSemanticTagsPerMessage = 3;
-  static const List<String> _kAttachmentSemanticPayloadKeys = <String>[
-    'caption_long',
-    'summary',
-    'video_summary',
-    'extracted_text_excerpt',
-    'extracted_text_full',
-    'readable_text_excerpt',
-    'readable_text_full',
-    'ocr_text_excerpt',
-    'ocr_text_full',
-    'ocr_text',
-    'transcript_excerpt',
-    'transcript_full',
-  ];
-
-  @override
-  Future<List<SemanticParseAutoActionJob>> listDueJobs({
-    required int nowMs,
-    int limit = 5,
-  }) async {
-    final rows = await _backend.listDueSemanticParseJobs(
-      _sessionKey,
-      nowMs: nowMs,
-      limit: limit,
-    );
-    return rows
-        .map(
-          (r) => SemanticParseAutoActionJob(
-            messageId: r.messageId,
-            status: r.status,
-            attempts: r.attempts.toInt(),
-            nextRetryAtMs: r.nextRetryAtMs?.toInt(),
-            createdAtMs: r.createdAtMs.toInt(),
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  @override
-  Future<SemanticParseMessageInput?> getMessageInput(String messageId) async {
-    final msg = await _backend.getMessageById(_sessionKey, messageId);
-    final sourceText = (msg?.content ?? '').trim();
-
-    final attachmentSnippets = await _loadAttachmentSemanticSnippets(messageId);
-    final hasAttachmentSemanticContext = attachmentSnippets.isNotEmpty;
-
-    final chunks = <String>[];
-    if (sourceText.isNotEmpty) chunks.add(sourceText);
-    chunks.addAll(attachmentSnippets);
-
-    final analysisText = _truncateToRunes(
-      chunks.join('\n'),
-      _kMaxSemanticAnalysisRunes,
-    ).trim();
-    if (analysisText.isEmpty) return null;
-
-    final allowCreate = sourceText.isNotEmpty &&
-        !isLongTextForTodoAutomation(sourceText) &&
-        !hasAttachmentSemanticContext;
-
-    return SemanticParseMessageInput(
-      sourceText: sourceText,
-      analysisText: analysisText,
-      allowCreate: allowCreate,
-    );
-  }
-
-  Future<List<String>> _loadAttachmentSemanticSnippets(String messageId) async {
-    if (_backend is! AttachmentsBackend) return const <String>[];
-
-    final attachmentsBackend = _backend as AttachmentsBackend;
-    List<Attachment> attachments = const <Attachment>[];
-    try {
-      attachments = await attachmentsBackend.listMessageAttachments(
-        _sessionKey,
-        messageId,
-      );
-    } catch (_) {
-      return const <String>[];
-    }
-    if (attachments.isEmpty) return const <String>[];
-
-    final snippets = <String>[];
-    final seen = <String>{};
-
-    void addSnippet(String? raw) {
-      final normalized = _normalizeSemanticSnippet(raw);
-      if (normalized == null) return;
-      if (!seen.add(normalized)) return;
-      snippets.add(normalized);
-    }
-
-    final backend = _backend;
-
-    for (final attachment in attachments) {
-      if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
-
-      try {
-        final caption =
-            await attachmentsBackend.readAttachmentAnnotationCaptionLong(
-          _sessionKey,
-          sha256: attachment.sha256,
-        );
-        addSnippet(caption);
-      } catch (_) {
-        // Ignore and continue with other signals.
-      }
-
-      if (backend is NativeAppBackend) {
-        try {
-          final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
-            _sessionKey,
-            sha256: attachment.sha256,
-          );
-          if (payloadJson != null && payloadJson.trim().isNotEmpty) {
-            for (final snippet in _extractSemanticSnippetsFromPayload(
-              payloadJson,
-            )) {
-              addSnippet(snippet);
-              if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
-            }
-          }
-        } catch (_) {
-          // Ignore and continue with other attachments.
-        }
-      }
-    }
-
-    return snippets;
-  }
-
-  static List<String> _extractSemanticSnippetsFromPayload(String payloadJson) {
-    Object? decoded;
-    try {
-      decoded = jsonDecode(payloadJson);
-    } catch (_) {
-      return const <String>[];
-    }
-    if (decoded is! Map) return const <String>[];
-
-    final payload = Map<String, Object?>.from(decoded);
-    final out = <String>[];
-    for (final key in _kAttachmentSemanticPayloadKeys) {
-      final value = payload[key];
-      if (value is! String) continue;
-      final normalized = _normalizeSemanticSnippet(value);
-      if (normalized == null) continue;
-      out.add(normalized);
-    }
-    return out;
-  }
-
-  static String? _normalizeSemanticSnippet(String? raw) {
-    if (raw == null) return null;
-    final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (collapsed.isEmpty) return null;
-    return _truncateToRunes(collapsed, _kMaxAttachmentSnippetRunes);
-  }
-
-  static String _truncateToRunes(String value, int maxRunes) {
-    if (maxRunes <= 0) return '';
-    final runes = value.runes;
-    if (runes.length <= maxRunes) return value;
-    return String.fromCharCodes(runes.take(maxRunes));
-  }
-
-  static String? _normalizeSemanticTagName(String raw) {
-    final normalized = raw.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
-    if (normalized.isEmpty) return null;
-    return normalized;
-  }
-
-  @override
-  Future<List<SemanticParseTodoCandidate>> listOpenTodoCandidates({
-    required String query,
-    required DateTime nowLocal,
-    required int limit,
-    List<String> preferredTodoIds = const <String>[],
-  }) async {
-    final todos = await _backend.listTodos(_sessionKey);
-    final targets = <TodoLinkTarget>[];
-    final targetsById = <String, TodoLinkTarget>{};
-    for (final todo in todos) {
-      if (todo.status == 'done' || todo.status == 'dismissed') continue;
-      final dueMs = todo.dueAtMs;
-      final target = TodoLinkTarget(
-        id: todo.id,
-        title: todo.title,
-        status: todo.status,
-        dueLocal: dueMs == null
-            ? null
-            : DateTime.fromMillisecondsSinceEpoch(
-                dueMs,
-                isUtc: true,
-              ).toLocal(),
-      );
-      targets.add(target);
-      targetsById[target.id] = target;
-    }
-
-    final out = <SemanticParseTodoCandidate>[];
-    final seen = <String>{};
-
-    void appendTarget(TodoLinkTarget target) {
-      if (!seen.add(target.id)) return;
-      out.add(
-        SemanticParseTodoCandidate(
-          id: target.id,
-          title: target.title,
-          status: target.status,
-          dueLocalIso: target.dueLocal?.toIso8601String(),
-        ),
-      );
-    }
-
-    for (final rawId in preferredTodoIds) {
-      if (out.length >= limit) break;
-      final id = rawId.trim();
-      if (id.isEmpty) continue;
-      final target = targetsById[id];
-      if (target == null) continue;
-      appendTarget(target);
-    }
-
-    if (out.length >= limit) {
-      return out;
-    }
-
-    final rankingLimit = (limit + preferredTodoIds.length).clamp(limit, 64);
-
-    final ranked = rankTodoCandidates(
-      query,
-      targets,
-      nowLocal: nowLocal,
-      limit: rankingLimit,
-    );
-    for (final c in ranked) {
-      if (out.length >= limit) break;
-      appendTarget(c.target);
-    }
-
-    return out;
-  }
-
-  @override
-  Future<void> markJobRunning({
-    required String messageId,
-    required int nowMs,
-  }) async {
-    await _backend.markSemanticParseJobRunning(
-      _sessionKey,
-      messageId: messageId,
-      nowMs: nowMs,
-    );
-  }
-
-  @override
-  Future<void> markJobSucceeded(SemanticParseJobSucceededArgs args) async {
-    await _backend.markSemanticParseJobSucceeded(
-      _sessionKey,
-      messageId: args.messageId,
-      appliedActionKind: args.appliedActionKind,
-      appliedTodoId: args.appliedTodoId,
-      appliedTodoTitle: args.appliedTodoTitle,
-      appliedPrevTodoStatus: args.appliedPrevTodoStatus,
-      nowMs: args.nowMs,
-    );
-  }
-
-  @override
-  Future<void> markJobFailed(SemanticParseJobFailedArgs args) async {
-    await _backend.markSemanticParseJobFailed(
-      _sessionKey,
-      messageId: args.messageId,
-      attempts: args.attempts,
-      nextRetryAtMs: args.nextRetryAtMs,
-      lastError: args.error,
-      nowMs: args.nowMs,
-    );
-  }
-
-  @override
-  Future<void> markJobCanceled({
-    required String messageId,
-    required int nowMs,
-  }) async {
-    await _backend.markSemanticParseJobCanceled(
-      _sessionKey,
-      messageId: messageId,
-      nowMs: nowMs,
-    );
-  }
-
-  @override
-  Future<int> applySemanticTags({
-    required String messageId,
-    required List<String> suggestedTags,
-  }) async {
-    final dedupedTagNames = <String>[];
-    final seenTagNames = <String>{};
-
-    for (final rawTag in suggestedTags) {
-      final normalized = _normalizeSemanticTagName(rawTag);
-      if (normalized == null || !seenTagNames.add(normalized)) continue;
-      dedupedTagNames.add(normalized);
-      if (dedupedTagNames.length >= _kMaxSemanticTagsPerMessage) break;
-    }
-
-    if (dedupedTagNames.isEmpty) {
-      return 0;
-    }
-
-    final existingMessageTags =
-        await _tagRepository.listMessageTags(_sessionKey, messageId);
-    final nextTagIds = existingMessageTags.map((tag) => tag.id).toSet();
-
-    var appliedCount = 0;
-    for (final tagName in dedupedTagNames) {
-      final tag = await _tagRepository.upsertTag(_sessionKey, tagName);
-      if (nextTagIds.add(tag.id)) {
-        appliedCount += 1;
-      }
-    }
-
-    if (appliedCount == 0) {
-      return 0;
-    }
-
-    final sortedTagIds = nextTagIds.toList(growable: false)..sort();
-    await _tagRepository.setMessageTags(_sessionKey, messageId, sortedTagIds);
-    return appliedCount;
-  }
-
-  @override
-  Future<String> upsertTodoFromMessage({
-    required String messageId,
-    required String title,
-    required String status,
-    int? dueAtMs,
-    String? recurrenceRuleJson,
-  }) async {
-    var normalizedStatus = status.trim();
-    if (normalizedStatus.isEmpty) {
-      normalizedStatus = dueAtMs == null ? 'inbox' : 'open';
-    }
-
-    // Align with capture-todo flow: scheduled todos are open; unscheduled todos
-    // enter the review queue.
-    if (dueAtMs != null && normalizedStatus == 'inbox') {
-      normalizedStatus = 'open';
-    }
-
-    int? reviewStage;
-    int? nextReviewAtMs;
-    if (dueAtMs == null &&
-        normalizedStatus != 'done' &&
-        normalizedStatus != 'dismissed') {
-      final settings = await ActionsSettingsStore.load();
-      final nextLocal = ReviewBackoff.initialNextReviewAt(
-        DateTime.now(),
-        settings,
-      );
-      reviewStage = 0;
-      nextReviewAtMs = nextLocal.toUtc().millisecondsSinceEpoch;
-    }
-
-    final todoId = await _resolveCreateTodoId(messageId);
-    await _backend.upsertTodo(
-      _sessionKey,
-      id: todoId,
-      title: title,
-      dueAtMs: dueAtMs,
-      status: normalizedStatus,
-      sourceEntryId: messageId,
-      reviewStage: reviewStage,
-      nextReviewAtMs: nextReviewAtMs,
-      lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-    );
-
-    final normalizedRule = recurrenceRuleJson?.trim();
-    if (normalizedRule != null && normalizedRule.isNotEmpty) {
-      await _backend.upsertTodoRecurrence(
-        _sessionKey,
-        todoId: todoId,
-        seriesId: 'series:$messageId',
-        ruleJson: normalizedRule,
-      );
-    }
-
-    return todoId;
-  }
-
-  Future<String> _resolveCreateTodoId(String messageId) async {
-    final normalizedMessageId = messageId.trim();
-    if (normalizedMessageId.isEmpty) {
-      return 'todo:$messageId';
-    }
-
-    try {
-      final todos = await _backend.listTodos(_sessionKey);
-      for (final todo in todos) {
-        final sourceMessageId = todo.sourceEntryId?.trim();
-        if (sourceMessageId != normalizedMessageId) continue;
-        if (todo.status != 'done' && todo.status != 'dismissed') {
-          return todo.id;
-        }
-      }
-
-      for (final todo in todos) {
-        final sourceMessageId = todo.sourceEntryId?.trim();
-        if (sourceMessageId == normalizedMessageId) {
-          return todo.id;
-        }
-      }
-    } catch (_) {
-      // ignore and fall back to deterministic todo id
-    }
-
-    return 'todo:$messageId';
-  }
-
-  @override
-  Future<String?> setTodoStatusFromMessage({
-    required String messageId,
-    required String todoId,
-    required String newStatus,
-  }) async {
-    final todos = await _backend.listTodos(_sessionKey);
-    final existing =
-        todos.where((t) => t.id == todoId).cast<Todo?>().firstWhere(
-              (_) => true,
-              orElse: () => null,
-            );
-    final prev = existing?.status;
-    await _backend.setTodoStatus(
-      _sessionKey,
-      todoId: todoId,
-      newStatus: newStatus,
-      sourceMessageId: messageId,
-    );
-    return prev;
-  }
-}
-
-final class BackendSemanticParseAutoActionsClient
-    implements SemanticParseAutoActionsClient {
-  BackendSemanticParseAutoActionsClient({
-    required AppBackend backend,
-    required Uint8List sessionKey,
-    required this.askAiRoute,
-    required this.embeddingsRoute,
-    required this.gatewayBaseUrl,
-    required this.idToken,
-    required this.modelName,
-    this.embeddingsModelName = 'baai/bge-m3',
-    this.forceCandidatesLimit = 8,
-  })  : _backend = backend,
-        _sessionKey = Uint8List.fromList(sessionKey);
-
-  final AppBackend _backend;
-  final Uint8List _sessionKey;
-
-  final AskAiRouteKind askAiRoute;
-  final EmbeddingsSourceRouteKind embeddingsRoute;
-  final String gatewayBaseUrl;
-  final String idToken;
-  final String modelName;
-  final String embeddingsModelName;
-  final int forceCandidatesLimit;
-
-  static const int _kTodoSyncLimit = 16;
-  static const int _kActivitySyncLimit = 32;
-
-  @override
-  Future<List<String>> retrieveTodoCandidateIds({
-    required String query,
-    required int topK,
-  }) async {
-    final trimmedQuery = query.trim();
-    if (trimmedQuery.isEmpty || topK <= 0) {
-      return const <String>[];
-    }
-
-    for (final route in _embeddingsRouteFallbackOrder()) {
-      try {
-        await _refreshTodoThreadEmbeddings(route);
-        final matches = await _searchSimilarTodoThreads(
-          trimmedQuery,
-          topK,
-          route,
-        );
-        return _extractTodoIds(matches, topK);
-      } catch (_) {
-        continue;
-      }
-    }
-
-    return const <String>[];
-  }
-
-  List<EmbeddingsSourceRouteKind> _embeddingsRouteFallbackOrder() {
-    return switch (embeddingsRoute) {
-      EmbeddingsSourceRouteKind.cloudGateway =>
-        const <EmbeddingsSourceRouteKind>[
-          EmbeddingsSourceRouteKind.cloudGateway,
-          EmbeddingsSourceRouteKind.byok,
-          EmbeddingsSourceRouteKind.local,
-        ],
-      EmbeddingsSourceRouteKind.byok => const <EmbeddingsSourceRouteKind>[
-          EmbeddingsSourceRouteKind.byok,
-          EmbeddingsSourceRouteKind.local,
-        ],
-      EmbeddingsSourceRouteKind.local => const <EmbeddingsSourceRouteKind>[
-          EmbeddingsSourceRouteKind.local,
-        ],
-    };
-  }
-
-  List<String> _extractTodoIds(List<TodoThreadMatch> matches, int topK) {
-    if (matches.isEmpty) {
-      return const <String>[];
-    }
-
-    final out = <String>[];
-    final seen = <String>{};
-    for (final match in matches) {
-      final todoId = match.todoId.trim();
-      if (todoId.isEmpty || !seen.add(todoId)) continue;
-      out.add(todoId);
-      if (out.length >= topK) break;
-    }
-    return out;
-  }
-
-  Future<void> _refreshTodoThreadEmbeddings(
-    EmbeddingsSourceRouteKind route,
-  ) async {
-    switch (route) {
-      case EmbeddingsSourceRouteKind.cloudGateway:
-        await _backend.processPendingTodoThreadEmbeddingsCloudGateway(
-          _sessionKey,
-          todoLimit: _kTodoSyncLimit,
-          activityLimit: _kActivitySyncLimit,
-          gatewayBaseUrl: gatewayBaseUrl,
-          idToken: idToken,
-          modelName: embeddingsModelName,
-        );
-        break;
-      case EmbeddingsSourceRouteKind.byok:
-        await _backend.processPendingTodoThreadEmbeddingsBrok(
-          _sessionKey,
-          todoLimit: _kTodoSyncLimit,
-          activityLimit: _kActivitySyncLimit,
-        );
-        break;
-      case EmbeddingsSourceRouteKind.local:
-        await _backend.processPendingTodoThreadEmbeddings(
-          _sessionKey,
-          todoLimit: _kTodoSyncLimit,
-          activityLimit: _kActivitySyncLimit,
-        );
-        break;
-    }
-  }
-
-  Future<List<TodoThreadMatch>> _searchSimilarTodoThreads(
-    String query,
-    int topK,
-    EmbeddingsSourceRouteKind route,
-  ) {
-    switch (route) {
-      case EmbeddingsSourceRouteKind.cloudGateway:
-        return _backend.searchSimilarTodoThreadsCloudGateway(
-          _sessionKey,
-          query,
-          topK: topK,
-          gatewayBaseUrl: gatewayBaseUrl,
-          idToken: idToken,
-          modelName: embeddingsModelName,
-        );
-      case EmbeddingsSourceRouteKind.byok:
-        return _backend.searchSimilarTodoThreadsBrok(
-          _sessionKey,
-          query,
-          topK: topK,
-        );
-      case EmbeddingsSourceRouteKind.local:
-        return _backend.searchSimilarTodoThreads(
-          _sessionKey,
-          query,
-          topK: topK,
-        );
-    }
-  }
-
-  @override
-  Future<String> parseMessageActionJson({
-    required String text,
-    required String nowLocalIso,
-    required String localeTag,
-    required int dayEndMinutes,
-    required List<SemanticParseTodoCandidate> candidates,
-    required Duration timeout,
-  }) async {
-    final locale = SemanticParseAutoActionsRunner._localeFromTag(localeTag);
-    final rustCandidates = candidates
-        .take(forceCandidatesLimit)
-        .map(
-          (c) => rust_semantic.TodoCandidate(
-            id: c.id,
-            title: c.title,
-            status: c.status,
-            dueLocalIso: c.dueLocalIso,
-          ),
-        )
-        .toList(growable: false);
-
-    final future = askAiRoute == AskAiRouteKind.cloudGateway
-        ? _backend.semanticParseMessageActionCloudGateway(
-            _sessionKey,
-            text: text,
-            nowLocalIso: nowLocalIso,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            candidates: rustCandidates,
-            gatewayBaseUrl: gatewayBaseUrl,
-            idToken: idToken,
-            modelName: modelName,
-          )
-        : _backend.semanticParseMessageAction(
-            _sessionKey,
-            text: text,
-            nowLocalIso: nowLocalIso,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            candidates: rustCandidates,
-          );
-
-    return future.timeout(timeout);
   }
 }

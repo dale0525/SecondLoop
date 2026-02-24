@@ -555,6 +555,10 @@ abstract class RustLibApi extends BaseApi {
       String? appliedTodoId,
       String? appliedTodoTitle,
       String? appliedPrevTodoStatus,
+      List<String>? suggestedTags,
+      double? suggestedTagConfidence,
+      String? tagSuggestionState,
+      List<String>? appliedTagIds,
       required PlatformInt64 nowMs});
 
   Future<void> crateApiCoreDbMarkSemanticParseJobUndone(
@@ -4044,6 +4048,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       String? appliedTodoId,
       String? appliedTodoTitle,
       String? appliedPrevTodoStatus,
+      List<String>? suggestedTags,
+      double? suggestedTagConfidence,
+      String? tagSuggestionState,
+      List<String>? appliedTagIds,
       required PlatformInt64 nowMs}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -4055,6 +4063,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(appliedTodoId, serializer);
         sse_encode_opt_String(appliedTodoTitle, serializer);
         sse_encode_opt_String(appliedPrevTodoStatus, serializer);
+        sse_encode_opt_list_String(suggestedTags, serializer);
+        sse_encode_opt_box_autoadd_f_64(suggestedTagConfidence, serializer);
+        sse_encode_opt_String(tagSuggestionState, serializer);
+        sse_encode_opt_list_String(appliedTagIds, serializer);
         sse_encode_i_64(nowMs, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 79, port: port_);
@@ -4072,6 +4084,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         appliedTodoId,
         appliedTodoTitle,
         appliedPrevTodoStatus,
+        suggestedTags,
+        suggestedTagConfidence,
+        tagSuggestionState,
+        appliedTagIds,
         nowMs
       ],
       apiImpl: this,
@@ -4089,6 +4105,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "appliedTodoId",
           "appliedTodoTitle",
           "appliedPrevTodoStatus",
+          "suggestedTags",
+          "suggestedTagConfidence",
+          "tagSuggestionState",
+          "appliedTagIds",
           "nowMs"
         ],
       );
@@ -8349,11 +8369,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<String>? dco_decode_opt_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_String(raw);
+  }
+
+  @protected
   SemanticParseJob dco_decode_semantic_parse_job(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return SemanticParseJob(
       messageId: dco_decode_String(arr[0]),
       status: dco_decode_String(arr[1]),
@@ -8364,9 +8390,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       appliedTodoId: dco_decode_opt_String(arr[6]),
       appliedTodoTitle: dco_decode_opt_String(arr[7]),
       appliedPrevTodoStatus: dco_decode_opt_String(arr[8]),
-      undoneAtMs: dco_decode_opt_box_autoadd_i_64(arr[9]),
-      createdAtMs: dco_decode_i_64(arr[10]),
-      updatedAtMs: dco_decode_i_64(arr[11]),
+      suggestedTags: dco_decode_opt_list_String(arr[9]),
+      suggestedTagConfidence: dco_decode_opt_box_autoadd_f_64(arr[10]),
+      tagSuggestionState: dco_decode_opt_String(arr[11]),
+      appliedTagIds: dco_decode_opt_list_String(arr[12]),
+      undoneAtMs: dco_decode_opt_box_autoadd_i_64(arr[13]),
+      createdAtMs: dco_decode_i_64(arr[14]),
+      updatedAtMs: dco_decode_i_64(arr[15]),
     );
   }
 
@@ -9331,6 +9361,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<String>? sse_decode_opt_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   SemanticParseJob sse_decode_semantic_parse_job(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_messageId = sse_decode_String(deserializer);
@@ -9342,6 +9383,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_appliedTodoId = sse_decode_opt_String(deserializer);
     var var_appliedTodoTitle = sse_decode_opt_String(deserializer);
     var var_appliedPrevTodoStatus = sse_decode_opt_String(deserializer);
+    var var_suggestedTags = sse_decode_opt_list_String(deserializer);
+    var var_suggestedTagConfidence =
+        sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_tagSuggestionState = sse_decode_opt_String(deserializer);
+    var var_appliedTagIds = sse_decode_opt_list_String(deserializer);
     var var_undoneAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_createdAtMs = sse_decode_i_64(deserializer);
     var var_updatedAtMs = sse_decode_i_64(deserializer);
@@ -9355,6 +9401,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         appliedTodoId: var_appliedTodoId,
         appliedTodoTitle: var_appliedTodoTitle,
         appliedPrevTodoStatus: var_appliedPrevTodoStatus,
+        suggestedTags: var_suggestedTags,
+        suggestedTagConfidence: var_suggestedTagConfidence,
+        tagSuggestionState: var_tagSuggestionState,
+        appliedTagIds: var_appliedTagIds,
         undoneAtMs: var_undoneAtMs,
         createdAtMs: var_createdAtMs,
         updatedAtMs: var_updatedAtMs);
@@ -10138,6 +10188,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_list_String(
+      List<String>? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_String(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_semantic_parse_job(
       SemanticParseJob self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10150,6 +10211,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.appliedTodoId, serializer);
     sse_encode_opt_String(self.appliedTodoTitle, serializer);
     sse_encode_opt_String(self.appliedPrevTodoStatus, serializer);
+    sse_encode_opt_list_String(self.suggestedTags, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.suggestedTagConfidence, serializer);
+    sse_encode_opt_String(self.tagSuggestionState, serializer);
+    sse_encode_opt_list_String(self.appliedTagIds, serializer);
     sse_encode_opt_box_autoadd_i_64(self.undoneAtMs, serializer);
     sse_encode_i_64(self.createdAtMs, serializer);
     sse_encode_i_64(self.updatedAtMs, serializer);

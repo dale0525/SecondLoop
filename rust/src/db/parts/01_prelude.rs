@@ -215,6 +215,10 @@ pub struct SemanticParseJob {
     pub applied_todo_id: Option<String>,
     pub applied_todo_title: Option<String>,
     pub applied_prev_todo_status: Option<String>,
+    pub suggested_tags: Option<Vec<String>>,
+    pub suggested_tag_confidence: Option<f64>,
+    pub tag_suggestion_state: Option<String>,
+    pub applied_tag_ids: Option<Vec<String>>,
     pub undone_at_ms: Option<i64>,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
@@ -297,6 +301,14 @@ fn now_ms() -> i64 {
 
 fn semantic_parse_job_title_aad(message_id: &str) -> Vec<u8> {
     format!("semantic_parse_job.title:{message_id}").into_bytes()
+}
+
+fn semantic_parse_job_suggested_tags_aad(message_id: &str) -> Vec<u8> {
+    format!("semantic_parse_job.suggested_tags:{message_id}").into_bytes()
+}
+
+fn semantic_parse_job_applied_tag_ids_aad(message_id: &str) -> Vec<u8> {
+    format!("semantic_parse_job.applied_tag_ids:{message_id}").into_bytes()
 }
 
 pub fn get_or_create_device_id(conn: &Connection) -> Result<String> {

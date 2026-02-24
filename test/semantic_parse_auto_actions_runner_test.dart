@@ -344,6 +344,161 @@ void main() {
     expect(store.appliedSemanticTagsByMessage['msg:tag_only'],
         equals(const <String>['work', 'finance']));
     expect(store.lastSucceeded?.appliedActionKind, 'none');
+    expect(
+      store.lastSucceeded?.suggestedTags,
+      equals(const <String>['work', 'finance']),
+    );
+    expect(store.lastSucceeded?.suggestedTagConfidence, 0.96);
+    expect(store.lastSucceeded?.tagSuggestionState, 'applied');
+    expect(
+      store.lastSucceeded?.appliedTagIds,
+      equals(const <String>['tag:work', 'tag:finance']),
+    );
+  });
+
+  test('runner auto-applies semantic tags at 0.8 confidence by default',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:tag_08',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:tag_08': '整理这周的报销和预算'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"none","confidence":0.8,"suggested_tags":["Finance","work"]}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isTrue);
+    expect(store.appliedSemanticTagsByMessage['msg:tag_08'],
+        equals(const <String>['finance', 'work']));
+    expect(store.lastSucceeded?.appliedActionKind, 'none');
+    expect(
+      store.lastSucceeded?.suggestedTags,
+      equals(const <String>['finance', 'work']),
+    );
+    expect(store.lastSucceeded?.suggestedTagConfidence, 0.8);
+    expect(store.lastSucceeded?.tagSuggestionState, 'applied');
+    expect(
+      store.lastSucceeded?.appliedTagIds,
+      equals(const <String>['tag:finance', 'tag:work']),
+    );
+  });
+
+  test('runner stores pending semantic tag suggestions for medium confidence',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:tag_pending',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:tag_pending': '整理会议纪要并归档'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"none","confidence":0.2,"suggested_tags":["Work","finance","work"],"tag_confidence":0.72}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isFalse);
+    expect(store.appliedSemanticTagsByMessage, isEmpty);
+    expect(store.lastSucceeded?.appliedActionKind, 'none');
+    expect(
+      store.lastSucceeded?.suggestedTags,
+      equals(const <String>['work', 'finance']),
+    );
+    expect(store.lastSucceeded?.suggestedTagConfidence, 0.72);
+    expect(store.lastSucceeded?.tagSuggestionState, 'pending');
+    expect(store.lastSucceeded?.appliedTagIds, isNull);
+  });
+
+  test('runner hides semantic tag suggestion when confidence is too low',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:tag_low',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:tag_low': '聊一下周末安排'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"none","confidence":0.2,"suggested_tags":["life","travel"],"tag_confidence":0.42}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isFalse);
+    expect(store.appliedSemanticTagsByMessage, isEmpty);
+    expect(store.lastSucceeded?.appliedActionKind, 'none');
+    expect(store.lastSucceeded?.suggestedTags, isNull);
+    expect(store.lastSucceeded?.suggestedTagConfidence, isNull);
+    expect(store.lastSucceeded?.tagSuggestionState, 'none');
+    expect(store.lastSucceeded?.appliedTagIds, isNull);
   });
 }
 
@@ -437,7 +592,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }) async {}
 
   @override
-  Future<int> applySemanticTags({
+  Future<SemanticParseTagApplyResult> applySemanticTags({
     required String messageId,
     required List<String> suggestedTags,
   }) async {
@@ -448,10 +603,20 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       if (normalized.isEmpty || !seen.add(normalized)) continue;
       deduped.add(normalized);
     }
-    if (deduped.isEmpty) return 0;
+    if (deduped.isEmpty) {
+      return const SemanticParseTagApplyResult(
+        appliedCount: 0,
+        appliedTagIds: <String>[],
+      );
+    }
 
     appliedSemanticTagsByMessage[messageId] = deduped;
-    return deduped.length;
+    final tagIds =
+        deduped.map((tagName) => 'tag:$tagName').toList(growable: false);
+    return SemanticParseTagApplyResult(
+      appliedCount: deduped.length,
+      appliedTagIds: tagIds,
+    );
   }
 
   @override

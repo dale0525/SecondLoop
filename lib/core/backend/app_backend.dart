@@ -628,6 +628,10 @@ abstract class AppBackend {
     String? appliedTodoId,
     String? appliedTodoTitle,
     String? appliedPrevTodoStatus,
+    List<String>? suggestedTags,
+    double? suggestedTagConfidence,
+    String? tagSuggestionState,
+    List<String>? appliedTagIds,
     required int nowMs,
   }) {
     throw UnimplementedError('markSemanticParseJobSucceeded');
