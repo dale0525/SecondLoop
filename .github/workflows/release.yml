@@ -253,12 +253,12 @@ jobs:
             --runtime-tag=$Env:SECONDLOOP_DESKTOP_RUNTIME_TAG `
             --require-runtime-tag `
             --repo=$Env:GITHUB_REPOSITORY
-      - name: Install FFmpeg
+      - name: Setup FFmpeg
         shell: pwsh
-        run: choco install ffmpeg --yes --no-progress
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_ffmpeg_windows.ps1
       - name: Prepare bundled FFmpeg
         shell: pwsh
-        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows --source-bin "C:\ProgramData\chocolatey\bin\ffmpeg.exe"
+        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows
       - name: Ensure Ninja is available
         shell: pwsh
         run: |
