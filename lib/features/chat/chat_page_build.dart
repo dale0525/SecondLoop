@@ -79,54 +79,24 @@ extension _ChatPageStateBuild on _ChatPageState {
         children: [
           _buildSelectedTagFilterBar(),
           if (!isMobileKeyboardVisible) ...[
-            FutureBuilder<_TodoAgendaSummary>(
-              future: _agendaFuture,
+            FutureBuilder<TaskHubSummary>(
+              future: _taskHubSummaryFuture,
               builder: (context, snapshot) {
-                final summary =
-                    snapshot.data ?? const _TodoAgendaSummary.empty();
-                return TodoAgendaBanner(
-                  dueCount: summary.dueCount,
-                  overdueCount: summary.overdueCount,
-                  upcomingCount: summary.upcomingCount,
-                  previewTodos: summary.previewTodos,
+                final summary = snapshot.data ?? const TaskHubSummary.empty();
+                return TaskHubBanner(
+                  summary: summary,
                   collapseSignal: _todoAgendaBannerCollapseSignal,
+                  onQuickAction: (todo, action) async {
+                    await _applyTaskHubQuickAction(todo, action);
+                  },
                   onViewAll: () async {
                     await _pushRouteFromChat(
                       MaterialPageRoute(
-                        builder: (context) => const TodoAgendaPage(),
+                        builder: (context) => const TaskHubPage(),
                       ),
                     );
                     if (!mounted) return;
                     _collapseTodoAgendaBanner();
-                    _refresh();
-                  },
-                );
-              },
-            ),
-            FutureBuilder<_TodoAgendaSummary>(
-              future: _agendaFuture,
-              builder: (context, snapshot) {
-                final summary =
-                    snapshot.data ?? const _TodoAgendaSummary.empty();
-                return TodoUndeterminedBanner(
-                  count: summary.undeterminedCount,
-                  previewTodos: summary.undeterminedPreviewTodos,
-                );
-              },
-            ),
-            FutureBuilder<int>(
-              future: _reviewCountFuture,
-              builder: (context, snapshot) {
-                final count = snapshot.data ?? 0;
-                return ReviewQueueBanner(
-                  count: count,
-                  onTap: () async {
-                    await _pushRouteFromChat(
-                      MaterialPageRoute(
-                        builder: (context) => const ReviewQueuePage(),
-                      ),
-                    );
-                    if (!mounted) return;
                     _refresh();
                   },
                 );

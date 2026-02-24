@@ -12,8 +12,7 @@ import 'package:secondloop/core/notifications/review_reminder_notifications_gate
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
-import 'package:secondloop/features/actions/agenda/todo_agenda_page.dart';
-import 'package:secondloop/features/actions/review/review_queue_page.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -26,8 +25,7 @@ void main() {
         ReviewReminderInAppFallbackPrefs.defaultValue;
   });
 
-  testWidgets('tap notification payload opens review queue page',
-      (tester) async {
+  testWidgets('tap notification payload opens task hub page', (tester) async {
     final harness = await _pumpGateHarness(tester);
 
     harness.scheduler.onTap?.call(
@@ -36,7 +34,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.byType(ReviewQueuePage), findsOneWidget);
+    expect(find.byType(TaskHubPage), findsOneWidget);
   });
 
   testWidgets('ignores unrelated notification payload', (tester) async {
@@ -46,10 +44,10 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.byType(ReviewQueuePage), findsNothing);
+    expect(find.byType(TaskHubPage), findsNothing);
   });
 
-  testWidgets('ignores duplicate taps while review queue is open',
+  testWidgets('ignores duplicate taps while task hub page is open',
       (tester) async {
     final harness = await _pumpGateHarness(tester);
 
@@ -63,7 +61,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byType(ReviewQueuePage, skipOffstage: false),
+      find.byType(TaskHubPage, skipOffstage: false),
       findsOneWidget,
     );
   });
@@ -114,7 +112,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(TodoAgendaPage), findsOneWidget);
+    expect(find.byType(TaskHubPage), findsOneWidget);
   });
 
   testWidgets('plays alert sound when in-app reminder appears', (tester) async {

@@ -48,15 +48,15 @@ import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import '../../ui/sl_typing_indicator.dart';
 import '../actions/assistant_message_actions.dart';
-import '../actions/agenda/todo_agenda_banner.dart';
-import '../actions/agenda/todo_agenda_page.dart';
 import '../actions/calendar/calendar_action.dart';
 import '../actions/review/review_backoff.dart';
-import '../actions/review/review_queue_banner.dart';
-import '../actions/review/review_queue_page.dart';
 import '../actions/settings/actions_settings_store.dart';
 import '../actions/suggestions_card.dart';
 import '../actions/suggestions_parser.dart';
+import '../actions/task_hub/task_hub_banner.dart';
+import '../actions/task_hub/task_hub_page.dart';
+import '../actions/task_hub/task_hub_quick_actions.dart';
+import '../actions/task_hub/task_hub_summary.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
 import '../actions/todo/message_action_resolver.dart';
@@ -152,9 +152,6 @@ bool _looksLikeBareTodoStatusUpdate(String text) {
 
 bool _looksLikeTodoRelevantForAi(String text) =>
     looksLikeTodoRelevantForSemanticParse(text);
-
-bool _isSameLocalDate(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
 
 int _dueBoost(DateTime? dueLocal, DateTime nowLocal) {
   if (dueLocal == null) return 0;
@@ -381,8 +378,7 @@ class _ChatPageState extends State<ChatPage> {
   final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
   Future<List<Message>>? _messagesFuture;
-  Future<int>? _reviewCountFuture;
-  Future<_TodoAgendaSummary>? _agendaFuture;
+  Future<TaskHubSummary>? _taskHubSummaryFuture;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
@@ -437,6 +433,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _activeCloudRequestId;
   String? _activeCloudGatewayBaseUrl;
   String? _activeCloudIdToken;
+  TaskHubUndoTicket? _taskHubUndoTicket;
 
   AudioRecorder? _audioRecorderInstance;
   _PendingAudioUploadRetry? _pendingAudioUploadRetry;
@@ -504,8 +501,7 @@ class _ChatPageState extends State<ChatPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
-    _reviewCountFuture ??= _loadReviewQueueCount();
-    _agendaFuture ??= _loadTodoAgendaSummary();
+    _taskHubSummaryFuture ??= _loadTaskHubSummary();
     _attachSyncEngine();
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());
@@ -674,32 +670,6 @@ final class _AttachmentEnrichment {
 
   final String? placeDisplayName;
   final String? captionLong;
-}
-
-final class _TodoAgendaSummary {
-  const _TodoAgendaSummary({
-    required this.dueCount,
-    required this.overdueCount,
-    required this.upcomingCount,
-    required this.previewTodos,
-    required this.undeterminedCount,
-    required this.undeterminedPreviewTodos,
-  });
-
-  const _TodoAgendaSummary.empty()
-      : dueCount = 0,
-        overdueCount = 0,
-        upcomingCount = 0,
-        previewTodos = const <Todo>[],
-        undeterminedCount = 0,
-        undeterminedPreviewTodos = const <Todo>[];
-
-  final int dueCount;
-  final int overdueCount;
-  final int upcomingCount;
-  final List<Todo> previewTodos;
-  final int undeterminedCount;
-  final List<Todo> undeterminedPreviewTodos;
 }
 
 enum _MessageAction {

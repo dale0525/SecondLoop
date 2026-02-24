@@ -166,6 +166,20 @@
       "viewAll": "查看全部",
       "empty": "暂无待办"
     },
+    "taskHub": {
+      "title": "任务中心",
+      "scheduledSection": "已排期",
+      "reviewSection": "待确认",
+      "unscheduledSection": "未排期",
+      "snackActionApplied": "$action「$title」",
+      "actions": {
+        "today": "今天",
+        "tomorrow": "明天",
+        "thisWeek": "本周",
+        "later": "稍后",
+        "done": "完成"
+      }
+    },
     "calendar": {
       "title": "添加到日历？",
       "pickTime": "选择开始时间",

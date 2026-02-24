@@ -4,8 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../features/actions/agenda/todo_agenda_page.dart';
-import '../../features/actions/review/review_queue_page.dart';
+import '../../features/actions/task_hub/task_hub_page.dart';
 import '../../i18n/strings.g.dart';
 import '../backend/app_backend.dart';
 import '../session/session_scope.dart';
@@ -259,7 +258,7 @@ final class _ReviewReminderNotificationsGateState
       return;
     }
 
-    unawaited(_openReminderTarget(ReviewReminderItemKind.reviewQueue));
+    unawaited(_openReminderTarget());
   }
 
   void _handleInAppFallbackPrefChanged() {
@@ -409,7 +408,7 @@ final class _ReviewReminderNotificationsGateState
           dismissLabel: inAppFallbackT.dismiss,
           onOpen: () {
             _hideInAppFallbackBanner();
-            unawaited(_openReminderTarget(item.kind));
+            unawaited(_openReminderTarget());
           },
           onDismiss: () {
             _dismissedInAppFallbackSourceKey = sourceKey;
@@ -597,7 +596,7 @@ final class _ReviewReminderNotificationsGateState
     _activeInAppFallbackSourceKey = null;
   }
 
-  Future<void> _openReminderTarget(ReviewReminderItemKind kind) async {
+  Future<void> _openReminderTarget() async {
     if (!mounted || _openingPageFromReminder) return;
 
     final navigator = widget.navigatorKey.currentState;
@@ -605,9 +604,7 @@ final class _ReviewReminderNotificationsGateState
 
     _openingPageFromReminder = true;
     try {
-      final page = kind == ReviewReminderItemKind.reviewQueue
-          ? const ReviewQueuePage()
-          : const TodoAgendaPage();
+      const page = TaskHubPage();
       await navigator.push(
         MaterialPageRoute(builder: (_) => page),
       );

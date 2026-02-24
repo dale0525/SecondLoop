@@ -217,28 +217,39 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     });
   }
 
-  Future<int> _loadReviewQueueCount() async {
+  Future<TaskHubSummary> _loadTaskHubSummary() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
-    final settings = await ActionsSettingsStore.load();
+    late final ActionsSettings settings;
+    try {
+      settings = await ActionsSettingsStore.load();
+    } catch (_) {
+      settings = const ActionsSettings(
+        morningTime: TimeOfDay(hour: 8, minute: 0),
+        dayEndTime: TimeOfDay(hour: 21, minute: 0),
+        weeklyReviewTime: TimeOfDay(hour: 21, minute: 0),
+      );
+    }
 
     final nowLocal = DateTime.now();
-    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
     late final List<Todo> todos;
     try {
       todos = await backend.listTodos(sessionKey);
     } catch (_) {
-      return 0;
+      return const TaskHubSummary.empty();
     }
 
-    var pendingCount = 0;
+    final normalizedTodos = <Todo>[];
     var didMutate = false;
+
     for (final todo in todos) {
       final nextMs = todo.nextReviewAtMs;
       final stage = todo.reviewStage;
-      if (nextMs == null || stage == null) continue;
-      var effectiveNextReviewAtMs = nextMs;
+      if (nextMs == null || stage == null) {
+        normalizedTodos.add(todo);
+        continue;
+      }
 
       final scheduledLocal =
           DateTime.fromMillisecondsSinceEpoch(nextMs, isUtc: true).toLocal();
@@ -250,7 +261,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       );
       if (rolled.stage != stage || rolled.nextReviewAtLocal != scheduledLocal) {
         try {
-          await backend.upsertTodo(
+          final updated = await backend.upsertTodo(
             sessionKey,
             id: todo.id,
             title: todo.title,
@@ -262,99 +273,27 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                 rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch,
             lastReviewAtMs: todo.lastReviewAtMs,
           );
-          effectiveNextReviewAtMs =
-              rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch;
+          normalizedTodos.add(updated);
           didMutate = true;
+          continue;
         } catch (_) {
-          return 0;
+          normalizedTodos.add(todo);
+          continue;
         }
       }
 
-      if (todo.dueAtMs != null) continue;
-      if (todo.status == 'done' || todo.status == 'dismissed') continue;
-      if (effectiveNextReviewAtMs > nowUtcMs) continue;
-      pendingCount += 1;
+      normalizedTodos.add(todo);
     }
 
     if (didMutate) {
       syncEngine?.notifyLocalMutation();
     }
 
-    return pendingCount;
-  }
-
-  Future<_TodoAgendaSummary> _loadTodoAgendaSummary() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-
-    late final List<Todo> todos;
-    try {
-      todos = await backend.listTodos(sessionKey);
-    } catch (_) {
-      return const _TodoAgendaSummary.empty();
-    }
-
-    final nowLocal = DateTime.now();
-    final due = <({Todo todo, DateTime dueLocal})>[];
-    final upcoming = <({Todo todo, DateTime dueLocal})>[];
-    final undetermined = <Todo>[];
-
-    for (final todo in todos) {
-      if (todo.status == 'done' || todo.status == 'dismissed') continue;
-
-      final dueMs = todo.dueAtMs;
-      if (dueMs == null) {
-        undetermined.add(todo);
-        continue;
-      }
-
-      final dueLocal =
-          DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true).toLocal();
-      final isOverdue = dueLocal.isBefore(nowLocal);
-      final isToday = _isSameLocalDate(dueLocal, nowLocal);
-      if (isOverdue || isToday) {
-        due.add((todo: todo, dueLocal: dueLocal));
-        continue;
-      }
-
-      // Upcoming preview: only show future todos that haven't started yet.
-      if (todo.status == 'open') {
-        upcoming.add((todo: todo, dueLocal: dueLocal));
-      }
-    }
-
-    due.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
-    upcoming.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
-    undetermined.sort((a, b) {
-      final aNextReviewAtMs = a.nextReviewAtMs ?? 9223372036854775807;
-      final bNextReviewAtMs = b.nextReviewAtMs ?? 9223372036854775807;
-      if (aNextReviewAtMs != bNextReviewAtMs) {
-        return aNextReviewAtMs.compareTo(bNextReviewAtMs);
-      }
-      return b.updatedAtMs.compareTo(a.updatedAtMs);
-    });
-
-    if (due.isEmpty && upcoming.isEmpty && undetermined.isEmpty) {
-      return const _TodoAgendaSummary.empty();
-    }
-
-    final overdueCount = due.where((e) => e.dueLocal.isBefore(nowLocal)).length;
-    const duePreviewLimit = 2;
-    const upcomingPreviewLimit = 2;
-    const undeterminedPreviewLimit = 2;
-    final previewTodos = <Todo>[
-      ...due.take(duePreviewLimit).map((e) => e.todo),
-      ...upcoming.take(upcomingPreviewLimit).map((e) => e.todo),
-    ];
-
-    return _TodoAgendaSummary(
-      dueCount: due.length,
-      overdueCount: overdueCount,
-      upcomingCount: upcoming.length,
-      previewTodos: previewTodos.toList(growable: false),
-      undeterminedCount: undetermined.length,
-      undeterminedPreviewTodos:
-          undetermined.take(undeterminedPreviewLimit).toList(growable: false),
+    return TaskHubSummary.fromTodos(
+      normalizedTodos,
+      nowLocal: nowLocal,
+      scheduledPreviewLimit: 4,
+      unscheduledPreviewLimit: 4,
     );
   }
 
@@ -459,6 +398,105 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
+  String _taskHubActionLabel(TaskHubQuickAction action) => switch (action) {
+        TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
+        TaskHubQuickAction.tomorrow =>
+          context.t.actions.taskHub.actions.tomorrow,
+        TaskHubQuickAction.thisWeek =>
+          context.t.actions.taskHub.actions.thisWeek,
+        TaskHubQuickAction.later => context.t.actions.taskHub.actions.later,
+        TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
+      };
+
+  Future<void> _applyTaskHubQuickAction(
+    Todo todo,
+    TaskHubQuickAction action,
+  ) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: sessionKey,
+    );
+
+    late final TaskHubUndoTicket ticket;
+    try {
+      final maybeTicket = await controller.apply(todo, action);
+      if (maybeTicket == null) return;
+      ticket = maybeTicket;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(context.t.errors.saveFailed(error: '$e')),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      return;
+    }
+
+    if (!mounted) return;
+
+    _taskHubUndoTicket = ticket;
+    syncEngine?.notifyLocalMutation();
+    _refresh();
+
+    final actionLabel = _taskHubActionLabel(action);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    final closedFuture = messenger
+        ?.showSnackBar(
+          SnackBar(
+            content: Text(
+              context.t.actions.taskHub.snackActionApplied(
+                action: actionLabel,
+                title: ticket.updatedTodo.title,
+              ),
+            ),
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: context.t.common.actions.undo,
+              onPressed: () async {
+                if (_taskHubUndoTicket != ticket) return;
+                try {
+                  await controller.undo(ticket);
+                  if (!mounted) return;
+                  if (_taskHubUndoTicket == ticket) {
+                    _taskHubUndoTicket = null;
+                  }
+                  syncEngine?.notifyLocalMutation();
+                  _refresh();
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.maybeOf(context)
+                    ?..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text(context.t.errors.saveFailed(error: '$e')),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                }
+              },
+            ),
+          ),
+        )
+        .closed;
+    if (closedFuture == null) return;
+
+    unawaited(
+      closedFuture.then((_) {
+        if (!mounted) return;
+        if (_taskHubUndoTicket == ticket) {
+          _taskHubUndoTicket = null;
+        }
+      }),
+    );
+  }
+
   void _refresh() {
     _setState(() {
       if (_usePagination) {
@@ -466,8 +504,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         _hasMoreMessages = true;
       }
       _messagesFuture = _loadMessages();
-      _reviewCountFuture = _loadReviewQueueCount();
-      _agendaFuture = _loadTodoAgendaSummary();
+      _taskHubSummaryFuture = _loadTaskHubSummary();
       _attachmentsFuturesByMessageId.clear();
       _attachmentEnrichmentFuturesBySha256.clear();
     });
