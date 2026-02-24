@@ -818,6 +818,15 @@
     "photoFailed": "拍照失败：$error",
     "audioRecordPermissionDenied": "需要麦克风权限才能录音。",
     "audioRecordFailed": "录音失败：$error",
+    "recordingRecoveryDialog": {
+      "title": "检测到未完成录音",
+      "description": "检测到上次录音中断，找到 $segmentCount 段可恢复音频。你可以恢复并发送，或直接丢弃。",
+      "actions": {
+        "discard": "丢弃",
+        "recoverAndSend": "恢复并发送"
+      }
+    },
+    "recordingRecoveryRecoveredAndSent": "已恢复并发送上次中断的录音。",
     "editFailed": "编辑失败：$error",
     "deleteFailed": "删除失败：$error",
     "noMessagesYet": "暂无消息",

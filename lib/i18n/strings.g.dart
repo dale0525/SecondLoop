@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1626 (813 per locale)
+/// Strings: 1636 (818 per locale)
 ///
-/// Built on 2026-02-24 at 07:29 UTC
+/// Built on 2026-02-24 at 11:23 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -397,6 +397,10 @@ class _StringsChatEn {
       'Microphone permission is required to record audio.';
   String audioRecordFailed({required Object error}) =>
       'Audio record failed: ${error}';
+  late final _StringsChatRecordingRecoveryDialogEn recordingRecoveryDialog =
+      _StringsChatRecordingRecoveryDialogEn._(_root);
+  String get recordingRecoveryRecoveredAndSent =>
+      'Recovered and sent interrupted recording.';
   String editFailed({required Object error}) => 'Edit failed: ${error}';
   String deleteFailed({required Object error}) => 'Delete failed: ${error}';
   String get noMessagesYet => 'No messages yet';
@@ -1351,6 +1355,20 @@ class _StringsChatDeleteMessageDialogEn {
   String get title => 'Delete message?';
   String get message =>
       'This will permanently delete this message and its attachments.';
+}
+
+// Path: chat.recordingRecoveryDialog
+class _StringsChatRecordingRecoveryDialogEn {
+  _StringsChatRecordingRecoveryDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Interrupted recording detected';
+  String description({required Object segmentCount}) =>
+      'An interrupted recording was found (${segmentCount} segments). You can recover and send it, or discard it.';
+  late final _StringsChatRecordingRecoveryDialogActionsEn actions =
+      _StringsChatRecordingRecoveryDialogActionsEn._(_root);
 }
 
 // Path: chat.messageActions
@@ -2662,6 +2680,17 @@ class _StringsSettingsSubscriptionLabelsEn {
   String get status => 'Status:';
   String get purchaseUnavailable => 'Purchases are not available yet.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
+}
+
+// Path: chat.recordingRecoveryDialog.actions
+class _StringsChatRecordingRecoveryDialogActionsEn {
+  _StringsChatRecordingRecoveryDialogActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get discard => 'Discard';
+  String get recoverAndSend => 'Recover & Send';
 }
 
 // Path: chat.markdownEditor.actions
@@ -4000,6 +4029,11 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get audioRecordPermissionDenied => '需要麦克风权限才能录音。';
   @override
   String audioRecordFailed({required Object error}) => '录音失败：${error}';
+  @override
+  late final _StringsChatRecordingRecoveryDialogZhCn recordingRecoveryDialog =
+      _StringsChatRecordingRecoveryDialogZhCn._(_root);
+  @override
+  String get recordingRecoveryRecoveredAndSent => '已恢复并发送上次中断的录音。';
   @override
   String editFailed({required Object error}) => '编辑失败：${error}';
   @override
@@ -5454,6 +5488,27 @@ class _StringsChatDeleteMessageDialogZhCn
   String get title => '删除信息？';
   @override
   String get message => '这将永久删除该信息及其附件。';
+}
+
+// Path: chat.recordingRecoveryDialog
+class _StringsChatRecordingRecoveryDialogZhCn
+    extends _StringsChatRecordingRecoveryDialogEn {
+  _StringsChatRecordingRecoveryDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '检测到未完成录音';
+  @override
+  String description({required Object segmentCount}) =>
+      '检测到上次录音中断，找到 ${segmentCount} 段可恢复音频。你可以恢复并发送，或直接丢弃。';
+  @override
+  late final _StringsChatRecordingRecoveryDialogActionsZhCn actions =
+      _StringsChatRecordingRecoveryDialogActionsZhCn._(_root);
 }
 
 // Path: chat.messageActions
@@ -7430,6 +7485,23 @@ class _StringsSettingsSubscriptionLabelsZhCn
   String get purchaseUnavailable => '订阅购买暂未开放。';
   @override
   String loadFailed({required Object error}) => '加载失败：${error}';
+}
+
+// Path: chat.recordingRecoveryDialog.actions
+class _StringsChatRecordingRecoveryDialogActionsZhCn
+    extends _StringsChatRecordingRecoveryDialogActionsEn {
+  _StringsChatRecordingRecoveryDialogActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get discard => '丢弃';
+  @override
+  String get recoverAndSend => '恢复并发送';
 }
 
 // Path: chat.markdownEditor.actions
@@ -9902,6 +9974,17 @@ extension on Translations {
         return 'Microphone permission is required to record audio.';
       case 'chat.audioRecordFailed':
         return ({required Object error}) => 'Audio record failed: ${error}';
+      case 'chat.recordingRecoveryDialog.title':
+        return 'Interrupted recording detected';
+      case 'chat.recordingRecoveryDialog.description':
+        return ({required Object segmentCount}) =>
+            'An interrupted recording was found (${segmentCount} segments). You can recover and send it, or discard it.';
+      case 'chat.recordingRecoveryDialog.actions.discard':
+        return 'Discard';
+      case 'chat.recordingRecoveryDialog.actions.recoverAndSend':
+        return 'Recover & Send';
+      case 'chat.recordingRecoveryRecoveredAndSent':
+        return 'Recovered and sent interrupted recording.';
       case 'chat.editFailed':
         return ({required Object error}) => 'Edit failed: ${error}';
       case 'chat.deleteFailed':
@@ -11561,6 +11644,17 @@ extension on _StringsZhCn {
         return '需要麦克风权限才能录音。';
       case 'chat.audioRecordFailed':
         return ({required Object error}) => '录音失败：${error}';
+      case 'chat.recordingRecoveryDialog.title':
+        return '检测到未完成录音';
+      case 'chat.recordingRecoveryDialog.description':
+        return ({required Object segmentCount}) =>
+            '检测到上次录音中断，找到 ${segmentCount} 段可恢复音频。你可以恢复并发送，或直接丢弃。';
+      case 'chat.recordingRecoveryDialog.actions.discard':
+        return '丢弃';
+      case 'chat.recordingRecoveryDialog.actions.recoverAndSend':
+        return '恢复并发送';
+      case 'chat.recordingRecoveryRecoveredAndSent':
+        return '已恢复并发送上次中断的录音。';
       case 'chat.editFailed':
         return ({required Object error}) => '编辑失败：${error}';
       case 'chat.deleteFailed':

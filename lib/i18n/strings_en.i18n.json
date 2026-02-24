@@ -818,6 +818,15 @@
     "photoFailed": "Photo failed: $error",
     "audioRecordPermissionDenied": "Microphone permission is required to record audio.",
     "audioRecordFailed": "Audio record failed: $error",
+    "recordingRecoveryDialog": {
+      "title": "Interrupted recording detected",
+      "description": "An interrupted recording was found ($segmentCount segments). You can recover and send it, or discard it.",
+      "actions": {
+        "discard": "Discard",
+        "recoverAndSend": "Recover & Send"
+      }
+    },
+    "recordingRecoveryRecoveredAndSent": "Recovered and sent interrupted recording.",
     "editFailed": "Edit failed: $error",
     "deleteFailed": "Delete failed: $error",
     "noMessagesYet": "No messages yet",

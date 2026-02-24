@@ -29,6 +29,19 @@ void main() {
                     ),
                     Text(context.t.chat.askScopeEmpty.title),
                     Text(context.t.chat.askScopeEmpty.actions.expandTimeWindow),
+                    Text(context.t.chat.recordingRecoveryDialog.title),
+                    Text(
+                      context.t.chat.recordingRecoveryDialog
+                          .description(segmentCount: 3),
+                    ),
+                    Text(
+                      context.t.chat.recordingRecoveryDialog.actions.discard,
+                    ),
+                    Text(
+                      context.t.chat.recordingRecoveryDialog.actions
+                          .recoverAndSend,
+                    ),
+                    Text(context.t.chat.recordingRecoveryRecoveredAndSent),
                   ],
                 ),
               );
@@ -48,5 +61,16 @@ void main() {
     expect(find.text('Affects 3 tagged messages'), findsOneWidget);
     expect(find.text('No results in current scope'), findsOneWidget);
     expect(find.text('Expand time window'), findsOneWidget);
+    expect(find.text('Interrupted recording detected'), findsOneWidget);
+    expect(
+      find.text(
+        'An interrupted recording was found (3 segments). You can recover and send it, or discard it.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Discard'), findsOneWidget);
+    expect(find.text('Recover & Send'), findsOneWidget);
+    expect(
+        find.text('Recovered and sent interrupted recording.'), findsOneWidget);
   });
 }
