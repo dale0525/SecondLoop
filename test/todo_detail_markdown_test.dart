@@ -46,6 +46,25 @@ void main() {
     expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
     expect(find.byKey(const ValueKey('chat_configure_ai')), findsNothing);
 
+    await tester.tap(find.byKey(const ValueKey('todo_detail_input')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_detail_open_markdown_editor')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('todo_detail_attach')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('todo_detail_attach_pick_media')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('todo_detail_attach_record_audio')),
+      findsOneWidget,
+    );
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const ValueKey('todo_detail_input')),
       'follow-up',

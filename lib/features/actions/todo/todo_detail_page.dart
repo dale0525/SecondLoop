@@ -1,16 +1,23 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/ai/ai_routing.dart';
+import '../../../core/attachments/attachment_metadata_store.dart';
 import '../../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../../core/ai/semantic_parse_edit_policy.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
+import '../../../core/backend/native_backend.dart';
 import '../../../core/cloud/cloud_auth_scope.dart';
 import '../../../core/session/session_scope.dart';
 import '../../../core/subscription/subscription_scope.dart';
@@ -18,16 +25,19 @@ import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
+import '../../../ui/sl_button.dart';
 import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_focus_ring.dart';
 import '../../../ui/sl_icon_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
+import '../../attachments/attachment_ingest_pipeline.dart';
 import '../../attachments/attachment_viewer_page.dart';
 import '../../chat/chat_composer_inline_button.dart';
 import '../../chat/chat_markdown_editor_launcher.dart';
 import '../../chat/chat_markdown_preview.dart';
+import '../../media_backup/audio_transcode_policy.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';
@@ -41,6 +51,7 @@ part 'todo_detail_page_status_widgets.dart';
 part 'todo_detail_page_due_chip.dart';
 part 'todo_detail_page_recurring_series.dart';
 part 'todo_detail_page_attachment_picker.dart';
+part 'todo_detail_page_composer.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -64,6 +75,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   late Todo _todo = widget.initialTodo;
   Future<List<TodoActivity>>? _activitiesFuture;
   final _noteController = TextEditingController();
+  final _noteInputFocusNode = FocusNode();
   final Map<String, Future<Message?>> _messageFuturesById =
       <String, Future<Message?>>{};
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
@@ -71,16 +83,38 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByActivityId =
       <String, Future<List<Attachment>>>{};
   final List<Attachment> _pendingAttachments = <Attachment>[];
+  AudioRecorder? _audioRecorder;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
   String? _recurrenceRuleJson;
   var _recurrenceLoaded = false;
+  var _recordingAudio = false;
+  var _desktopDropActive = false;
+  var _sendingNote = false;
+  var _attachingMedia = false;
 
   bool get _isDesktopPlatform =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux);
+  bool get _supportsCamera =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  bool get _supportsAudioRecording =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows);
+  bool get _supportsDesktopRecordAudioAction =>
+      _isDesktopPlatform && _supportsAudioRecording;
+  bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
+  bool get _isComposerBusy =>
+      _sendingNote || _recordingAudio || _attachingMedia;
+
+  void _setState(VoidCallback fn) => setState(fn);
 
   @override
   void dispose() {
@@ -89,7 +123,9 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     if (oldEngine != null && oldListener != null) {
       oldEngine.changes.removeListener(oldListener);
     }
+    unawaited(_audioRecorder?.dispose());
     _noteController.dispose();
+    _noteInputFocusNode.dispose();
     super.dispose();
   }
 
@@ -410,26 +446,56 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   }
 
   Future<void> _appendNote() async {
+    if (_sendingNote) return;
     final text = _noteController.text.trim();
     final pending = List<Attachment>.from(_pendingAttachments);
     if (text.isEmpty && pending.isEmpty) return;
+    setState(() => _sendingNote = true);
     _noteController.clear();
 
-    final backend = AppBackendScope.of(context);
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    final attachmentsBackend =
-        backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final content = text.isNotEmpty
-        ? text
-        : context.t.actions.todoDetail.attachmentNoteDefault;
-    late final TodoActivity activity;
     try {
-      activity = await backend.appendTodoNote(
+      final backend = AppBackendScope.of(context);
+      final syncEngine = SyncEngineScope.maybeOf(context);
+      final attachmentsBackend =
+          backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final content = text.isNotEmpty
+          ? text
+          : context.t.actions.todoDetail.attachmentNoteDefault;
+
+      final activity = await backend.appendTodoNote(
         sessionKey,
         todoId: _todo.id,
         content: content,
       );
+
+      syncEngine?.notifyLocalMutation();
+
+      final activityMessageId = activity.sourceMessageId;
+      for (final attachment in pending) {
+        try {
+          if (attachmentsBackend != null && activityMessageId != null) {
+            await attachmentsBackend.linkAttachmentToMessage(
+              sessionKey,
+              activityMessageId,
+              attachmentSha256: attachment.sha256,
+            );
+          } else {
+            await backend.linkAttachmentToTodoActivity(
+              sessionKey,
+              activityId: activity.id,
+              attachmentSha256: attachment.sha256,
+            );
+          }
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      if (!mounted) return;
+      setState(_pendingAttachments.clear);
+      _refreshActivities();
+      syncEngine?.notifyLocalMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -438,35 +504,13 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
           duration: const Duration(seconds: 3),
         ),
       );
-      return;
-    }
-
-    syncEngine?.notifyLocalMutation();
-
-    final activityMessageId = activity.sourceMessageId;
-    for (final attachment in pending) {
-      try {
-        if (attachmentsBackend != null && activityMessageId != null) {
-          await attachmentsBackend.linkAttachmentToMessage(
-            sessionKey,
-            activityMessageId,
-            attachmentSha256: attachment.sha256,
-          );
-        } else {
-          await backend.linkAttachmentToTodoActivity(
-            sessionKey,
-            activityId: activity.id,
-            attachmentSha256: attachment.sha256,
-          );
-        }
-      } catch (_) {
-        // ignore
+    } finally {
+      if (mounted) {
+        setState(() => _sendingNote = false);
+      } else {
+        _sendingNote = false;
       }
     }
-    if (!mounted) return;
-    setState(_pendingAttachments.clear);
-    _refreshActivities();
-    syncEngine?.notifyLocalMutation();
   }
 
   Future<Message?> _loadMessage(String messageId) async {
@@ -742,7 +786,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
     final dueText = _formatDue(context);
     final recurrenceRule = TodoRecurrenceRule.tryParseJson(_recurrenceRuleJson);
     final recurrenceText = recurrenceRule == null
@@ -872,118 +915,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                   },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: SlFocusRing(
-                  key: const ValueKey('todo_detail_composer'),
-                  borderRadius: BorderRadius.circular(tokens.radiusLg),
-                  child: SlSurface(
-                    color: tokens.surface2,
-                    borderColor: tokens.borderSubtle,
-                    borderRadius: BorderRadius.circular(tokens.radiusLg),
-                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_pendingAttachments.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  for (final attachment in _pendingAttachments)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: GestureDetector(
-                                        onLongPress: () {
-                                          setState(
-                                            () =>
-                                                _pendingAttachments.removeWhere(
-                                              (a) =>
-                                                  a.sha256 == attachment.sha256,
-                                            ),
-                                          );
-                                        },
-                                        child: AttachmentCard(
-                                          attachment: attachment,
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    AttachmentViewerPage(
-                                                  attachment: attachment,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('todo_detail_input'),
-                                controller: _noteController,
-                                decoration: InputDecoration(
-                                  hintText:
-                                      context.t.actions.todoDetail.noteHint,
-                                  border: InputBorder.none,
-                                  filled: false,
-                                  isDense: true,
-                                ),
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                minLines: 1,
-                                maxLines: 6,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SlIconButton(
-                              key: const ValueKey('todo_detail_attach'),
-                              icon: Icons.add_rounded,
-                              size: 44,
-                              iconSize: 22,
-                              tooltip: context.t.actions.todoDetail.attach,
-                              onPressed: () => unawaited(_pickAttachment()),
-                            ),
-                            ValueListenableBuilder<TextEditingValue>(
-                              valueListenable: _noteController,
-                              builder: (context, value, child) {
-                                final hasText = value.text.trim().isNotEmpty;
-                                final canSend =
-                                    hasText || _pendingAttachments.isNotEmpty;
-                                if (!canSend) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: ChatComposerInlineButton(
-                                    buttonKey:
-                                        const ValueKey('todo_detail_send'),
-                                    label: context.t.common.actions.send,
-                                    icon: Icons.send_rounded,
-                                    onPressed: () => unawaited(_appendNote()),
-                                    backgroundColor: colorScheme.primary,
-                                    foregroundColor: colorScheme.onPrimary,
-                                    iconOnly: true,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              _buildTodoComposer(context, tokens: tokens),
             ],
           ),
         ),
