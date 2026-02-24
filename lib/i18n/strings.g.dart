@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1626 (813 per locale)
+/// Strings: 1666 (833 per locale)
 ///
-/// Built on 2026-02-24 at 07:29 UTC
+/// Built on 2026-02-24 at 14:22 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -192,6 +192,8 @@ class Translations implements BaseTranslations<AppLocale, Translations> {
   late final _StringsCommonEn common = _StringsCommonEn._(_root);
   late final _StringsErrorsEn errors = _StringsErrorsEn._(_root);
   late final _StringsActionsEn actions = _StringsActionsEn._(_root);
+  late final _StringsWelcomeGuideEn welcomeGuide =
+      _StringsWelcomeGuideEn._(_root);
   late final _StringsSettingsEn settings = _StringsSettingsEn._(_root);
   late final _StringsLockEn lock = _StringsLockEn._(_root);
   late final _StringsChatEn chat = _StringsChatEn._(_root);
@@ -278,6 +280,29 @@ class _StringsActionsEn {
       _StringsActionsTaskHubEn._(_root);
   late final _StringsActionsCalendarEn calendar =
       _StringsActionsCalendarEn._(_root);
+}
+
+// Path: welcomeGuide
+class _StringsWelcomeGuideEn {
+  _StringsWelcomeGuideEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Welcome to SecondLoop';
+  String get subtitle => 'Set up the essentials now, or skip and do it later.';
+  late final _StringsWelcomeGuideCardsEn cards =
+      _StringsWelcomeGuideCardsEn._(_root);
+  late final _StringsWelcomeGuideStatusEn status =
+      _StringsWelcomeGuideStatusEn._(_root);
+  late final _StringsWelcomeGuidePermissionItemsEn permissionItems =
+      _StringsWelcomeGuidePermissionItemsEn._(_root);
+  late final _StringsWelcomeGuideActionsEn actions =
+      _StringsWelcomeGuideActionsEn._(_root);
+  late final _StringsWelcomeGuideMessagesEn messages =
+      _StringsWelcomeGuideMessagesEn._(_root);
+  late final _StringsWelcomeGuideSettingsEntryEn settingsEntry =
+      _StringsWelcomeGuideSettingsEntryEn._(_root);
 }
 
 // Path: settings
@@ -882,6 +907,79 @@ class _StringsActionsCalendarEn {
   String get pickTime => 'Pick a start time';
   String get noAutoTime => 'No suggested time found';
   String get pickCustom => 'Pick date & time';
+}
+
+// Path: welcomeGuide.cards
+class _StringsWelcomeGuideCardsEn {
+  _StringsWelcomeGuideCardsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsWelcomeGuideCardsAiEn ai =
+      _StringsWelcomeGuideCardsAiEn._(_root);
+  late final _StringsWelcomeGuideCardsSyncEn sync =
+      _StringsWelcomeGuideCardsSyncEn._(_root);
+  late final _StringsWelcomeGuideCardsPermissionsEn permissions =
+      _StringsWelcomeGuideCardsPermissionsEn._(_root);
+}
+
+// Path: welcomeGuide.status
+class _StringsWelcomeGuideStatusEn {
+  _StringsWelcomeGuideStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get notSet => 'Not set';
+  String get ready => 'Ready';
+  String get needsReview => 'Needs review';
+}
+
+// Path: welcomeGuide.permissionItems
+class _StringsWelcomeGuidePermissionItemsEn {
+  _StringsWelcomeGuidePermissionItemsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get microphone => 'Microphone';
+  String get speech => 'Speech';
+  String get notifications => 'Notifications';
+}
+
+// Path: welcomeGuide.actions
+class _StringsWelcomeGuideActionsEn {
+  _StringsWelcomeGuideActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get skip => 'Skip for now';
+  String get finish => 'Finish setup';
+  String get open => 'Open';
+}
+
+// Path: welcomeGuide.messages
+class _StringsWelcomeGuideMessagesEn {
+  _StringsWelcomeGuideMessagesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get openSettingsFailed =>
+      'Unable to open system settings automatically. Please review permissions manually.';
+}
+
+// Path: welcomeGuide.settingsEntry
+class _StringsWelcomeGuideSettingsEntryEn {
+  _StringsWelcomeGuideSettingsEntryEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Welcome guide';
+  String get subtitle => 'Reopen first-launch guide';
 }
 
 // Path: settings.sections
@@ -1974,6 +2072,41 @@ class _StringsActionsTaskHubActionsEn {
   String get thisWeek => 'This week';
   String get later => 'Later';
   String get done => 'Done';
+}
+
+// Path: welcomeGuide.cards.ai
+class _StringsWelcomeGuideCardsAiEn {
+  _StringsWelcomeGuideCardsAiEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'AI setup';
+  String get subtitle =>
+      'Configure Ask AI, embeddings, and media understanding.';
+}
+
+// Path: welcomeGuide.cards.sync
+class _StringsWelcomeGuideCardsSyncEn {
+  _StringsWelcomeGuideCardsSyncEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Sync setup';
+  String get subtitle => 'Configure WebDAV, LocalDir, or Managed Vault.';
+}
+
+// Path: welcomeGuide.cards.permissions
+class _StringsWelcomeGuideCardsPermissionsEn {
+  _StringsWelcomeGuideCardsPermissionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Permissions';
+  String get subtitle =>
+      'Review microphone, speech, and notification permissions.';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -3679,6 +3812,9 @@ class _StringsZhCn extends Translations {
   @override
   late final _StringsActionsZhCn actions = _StringsActionsZhCn._(_root);
   @override
+  late final _StringsWelcomeGuideZhCn welcomeGuide =
+      _StringsWelcomeGuideZhCn._(_root);
+  @override
   late final _StringsSettingsZhCn settings = _StringsSettingsZhCn._(_root);
   @override
   late final _StringsLockZhCn lock = _StringsLockZhCn._(_root);
@@ -3817,6 +3953,40 @@ class _StringsActionsZhCn extends _StringsActionsEn {
   @override
   late final _StringsActionsCalendarZhCn calendar =
       _StringsActionsCalendarZhCn._(_root);
+}
+
+// Path: welcomeGuide
+class _StringsWelcomeGuideZhCn extends _StringsWelcomeGuideEn {
+  _StringsWelcomeGuideZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '欢迎使用 SecondLoop';
+  @override
+  String get subtitle => '建议先完成这几项基础配置，你也可以随时跳过。';
+  @override
+  late final _StringsWelcomeGuideCardsZhCn cards =
+      _StringsWelcomeGuideCardsZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideStatusZhCn status =
+      _StringsWelcomeGuideStatusZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuidePermissionItemsZhCn permissionItems =
+      _StringsWelcomeGuidePermissionItemsZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideActionsZhCn actions =
+      _StringsWelcomeGuideActionsZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideMessagesZhCn messages =
+      _StringsWelcomeGuideMessagesZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideSettingsEntryZhCn settingsEntry =
+      _StringsWelcomeGuideSettingsEntryZhCn._(_root);
 }
 
 // Path: settings
@@ -4760,6 +4930,113 @@ class _StringsActionsCalendarZhCn extends _StringsActionsCalendarEn {
   String get noAutoTime => '未找到可自动解析的时间';
   @override
   String get pickCustom => '选择日期时间';
+}
+
+// Path: welcomeGuide.cards
+class _StringsWelcomeGuideCardsZhCn extends _StringsWelcomeGuideCardsEn {
+  _StringsWelcomeGuideCardsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsWelcomeGuideCardsAiZhCn ai =
+      _StringsWelcomeGuideCardsAiZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideCardsSyncZhCn sync =
+      _StringsWelcomeGuideCardsSyncZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideCardsPermissionsZhCn permissions =
+      _StringsWelcomeGuideCardsPermissionsZhCn._(_root);
+}
+
+// Path: welcomeGuide.status
+class _StringsWelcomeGuideStatusZhCn extends _StringsWelcomeGuideStatusEn {
+  _StringsWelcomeGuideStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get notSet => '未配置';
+  @override
+  String get ready => '已就绪';
+  @override
+  String get needsReview => '待检查';
+}
+
+// Path: welcomeGuide.permissionItems
+class _StringsWelcomeGuidePermissionItemsZhCn
+    extends _StringsWelcomeGuidePermissionItemsEn {
+  _StringsWelcomeGuidePermissionItemsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get microphone => '麦克风';
+  @override
+  String get speech => '语音识别';
+  @override
+  String get notifications => '通知';
+}
+
+// Path: welcomeGuide.actions
+class _StringsWelcomeGuideActionsZhCn extends _StringsWelcomeGuideActionsEn {
+  _StringsWelcomeGuideActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get skip => '稍后再说';
+  @override
+  String get finish => '完成引导';
+  @override
+  String get open => '去配置';
+}
+
+// Path: welcomeGuide.messages
+class _StringsWelcomeGuideMessagesZhCn extends _StringsWelcomeGuideMessagesEn {
+  _StringsWelcomeGuideMessagesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get openSettingsFailed => '无法自动打开系统设置，请手动前往系统设置检查权限。';
+}
+
+// Path: welcomeGuide.settingsEntry
+class _StringsWelcomeGuideSettingsEntryZhCn
+    extends _StringsWelcomeGuideSettingsEntryEn {
+  _StringsWelcomeGuideSettingsEntryZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '欢迎引导';
+  @override
+  String get subtitle => '重新查看首次启动引导';
 }
 
 // Path: settings.sections
@@ -6390,6 +6667,56 @@ class _StringsActionsTaskHubActionsZhCn
   String get later => '稍后';
   @override
   String get done => '完成';
+}
+
+// Path: welcomeGuide.cards.ai
+class _StringsWelcomeGuideCardsAiZhCn extends _StringsWelcomeGuideCardsAiEn {
+  _StringsWelcomeGuideCardsAiZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'AI 配置';
+  @override
+  String get subtitle => '配置 Ask AI、向量检索与媒体理解来源。';
+}
+
+// Path: welcomeGuide.cards.sync
+class _StringsWelcomeGuideCardsSyncZhCn
+    extends _StringsWelcomeGuideCardsSyncEn {
+  _StringsWelcomeGuideCardsSyncZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '同步配置';
+  @override
+  String get subtitle => '选择并配置 WebDAV、LocalDir 或 Managed Vault。';
+}
+
+// Path: welcomeGuide.cards.permissions
+class _StringsWelcomeGuideCardsPermissionsZhCn
+    extends _StringsWelcomeGuideCardsPermissionsEn {
+  _StringsWelcomeGuideCardsPermissionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '权限检查';
+  @override
+  String get subtitle => '按需打开系统设置检查麦克风、语音和通知权限。';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -9159,6 +9486,46 @@ extension on Translations {
         return 'No suggested time found';
       case 'actions.calendar.pickCustom':
         return 'Pick date & time';
+      case 'welcomeGuide.title':
+        return 'Welcome to SecondLoop';
+      case 'welcomeGuide.subtitle':
+        return 'Set up the essentials now, or skip and do it later.';
+      case 'welcomeGuide.cards.ai.title':
+        return 'AI setup';
+      case 'welcomeGuide.cards.ai.subtitle':
+        return 'Configure Ask AI, embeddings, and media understanding.';
+      case 'welcomeGuide.cards.sync.title':
+        return 'Sync setup';
+      case 'welcomeGuide.cards.sync.subtitle':
+        return 'Configure WebDAV, LocalDir, or Managed Vault.';
+      case 'welcomeGuide.cards.permissions.title':
+        return 'Permissions';
+      case 'welcomeGuide.cards.permissions.subtitle':
+        return 'Review microphone, speech, and notification permissions.';
+      case 'welcomeGuide.status.notSet':
+        return 'Not set';
+      case 'welcomeGuide.status.ready':
+        return 'Ready';
+      case 'welcomeGuide.status.needsReview':
+        return 'Needs review';
+      case 'welcomeGuide.permissionItems.microphone':
+        return 'Microphone';
+      case 'welcomeGuide.permissionItems.speech':
+        return 'Speech';
+      case 'welcomeGuide.permissionItems.notifications':
+        return 'Notifications';
+      case 'welcomeGuide.actions.skip':
+        return 'Skip for now';
+      case 'welcomeGuide.actions.finish':
+        return 'Finish setup';
+      case 'welcomeGuide.actions.open':
+        return 'Open';
+      case 'welcomeGuide.messages.openSettingsFailed':
+        return 'Unable to open system settings automatically. Please review permissions manually.';
+      case 'welcomeGuide.settingsEntry.title':
+        return 'Welcome guide';
+      case 'welcomeGuide.settingsEntry.subtitle':
+        return 'Reopen first-launch guide';
       case 'settings.title':
         return 'Settings';
       case 'settings.sections.appearance':
@@ -10823,6 +11190,46 @@ extension on _StringsZhCn {
         return '未找到可自动解析的时间';
       case 'actions.calendar.pickCustom':
         return '选择日期时间';
+      case 'welcomeGuide.title':
+        return '欢迎使用 SecondLoop';
+      case 'welcomeGuide.subtitle':
+        return '建议先完成这几项基础配置，你也可以随时跳过。';
+      case 'welcomeGuide.cards.ai.title':
+        return 'AI 配置';
+      case 'welcomeGuide.cards.ai.subtitle':
+        return '配置 Ask AI、向量检索与媒体理解来源。';
+      case 'welcomeGuide.cards.sync.title':
+        return '同步配置';
+      case 'welcomeGuide.cards.sync.subtitle':
+        return '选择并配置 WebDAV、LocalDir 或 Managed Vault。';
+      case 'welcomeGuide.cards.permissions.title':
+        return '权限检查';
+      case 'welcomeGuide.cards.permissions.subtitle':
+        return '按需打开系统设置检查麦克风、语音和通知权限。';
+      case 'welcomeGuide.status.notSet':
+        return '未配置';
+      case 'welcomeGuide.status.ready':
+        return '已就绪';
+      case 'welcomeGuide.status.needsReview':
+        return '待检查';
+      case 'welcomeGuide.permissionItems.microphone':
+        return '麦克风';
+      case 'welcomeGuide.permissionItems.speech':
+        return '语音识别';
+      case 'welcomeGuide.permissionItems.notifications':
+        return '通知';
+      case 'welcomeGuide.actions.skip':
+        return '稍后再说';
+      case 'welcomeGuide.actions.finish':
+        return '完成引导';
+      case 'welcomeGuide.actions.open':
+        return '去配置';
+      case 'welcomeGuide.messages.openSettingsFailed':
+        return '无法自动打开系统设置，请手动前往系统设置检查权限。';
+      case 'welcomeGuide.settingsEntry.title':
+        return '欢迎引导';
+      case 'welcomeGuide.settingsEntry.subtitle':
+        return '重新查看首次启动引导';
       case 'settings.title':
         return '设置';
       case 'settings.sections.appearance':

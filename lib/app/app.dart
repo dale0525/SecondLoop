@@ -37,6 +37,7 @@ import '../features/share/share_intent_listener.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
 import '../core/notifications/review_reminder_notifications_gate.dart';
+import '../features/welcome/first_launch_welcome_gate.dart';
 
 class SecondLoopApp extends StatefulWidget {
   SecondLoopApp({
@@ -44,12 +45,14 @@ class SecondLoopApp extends StatefulWidget {
     AppBackend? backend,
     QuickCaptureController? quickCaptureController,
     this.launchArgs = const DesktopLaunchArgs(),
+    this.showFirstLaunchWelcomeGuide = true,
   })  : _backend = backend ?? NativeAppBackend(),
         _quickCaptureController = quickCaptureController;
 
   final AppBackend _backend;
   final QuickCaptureController? _quickCaptureController;
   final DesktopLaunchArgs launchArgs;
+  final bool showFirstLaunchWelcomeGuide;
 
   @override
   State<SecondLoopApp> createState() => _SecondLoopAppState();
@@ -125,9 +128,13 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                         darkTheme: AppTheme.dark(locale: locale),
                         themeMode: themeMode,
                         navigatorKey: _navigatorKey,
-                        home: const AutoUpgradeGate(
+                        home: AutoUpgradeGate(
                           child: ReleaseNotesFirstLaunchGate(
-                            child: AppShell(),
+                            child: widget.showFirstLaunchWelcomeGuide
+                                ? const FirstLaunchWelcomeGate(
+                                    child: AppShell(),
+                                  )
+                                : const AppShell(),
                           ),
                         ),
                         builder: (context, child) {

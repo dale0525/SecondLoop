@@ -14,8 +14,11 @@ void main() {
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
-    await tester.pumpWidget(
-        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpWidget(MyApp(
+      backend: backend,
+      quickCaptureController: controller,
+      showFirstLaunchWelcomeGuide: false,
+    ));
     await tester.pumpAndSettle();
 
     final backdropCountBeforeShow =
@@ -58,8 +61,11 @@ void main() {
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
-    await tester.pumpWidget(
-        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpWidget(MyApp(
+      backend: backend,
+      quickCaptureController: controller,
+      showFirstLaunchWelcomeGuide: false,
+    ));
     await tester.pumpAndSettle();
 
     controller.show();
@@ -88,8 +94,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(900, 700);
 
-    await tester.pumpWidget(
-        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpWidget(MyApp(
+      backend: backend,
+      quickCaptureController: controller,
+      showFirstLaunchWelcomeGuide: false,
+    ));
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -124,8 +133,11 @@ void main() {
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
-    await tester.pumpWidget(
-        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpWidget(MyApp(
+      backend: backend,
+      quickCaptureController: controller,
+      showFirstLaunchWelcomeGuide: false,
+    ));
     await tester.pumpAndSettle();
 
     controller.show();

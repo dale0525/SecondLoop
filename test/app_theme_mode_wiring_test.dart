@@ -16,7 +16,12 @@ void main() {
     AppThemeModePrefs.resetForTests();
     await AppThemeModePrefs.ensureInitialized();
 
-    await tester.pumpWidget(SecondLoopApp(backend: TestAppBackend()));
+    await tester.pumpWidget(
+      SecondLoopApp(
+        backend: TestAppBackend(),
+        showFirstLaunchWelcomeGuide: false,
+      ),
+    );
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);

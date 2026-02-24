@@ -209,6 +209,23 @@ extension _SettingsPageBuild on _SettingsPageState {
         const SizedBox(height: 8),
         sectionCard([
           ListTile(
+            key: const ValueKey('settings_reopen_welcome_guide'),
+            title: Text(context.t.welcomeGuide.settingsEntry.title),
+            subtitle: Text(context.t.welcomeGuide.settingsEntry.subtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (pageContext) => WelcomePage(
+                          onSkip: () => Navigator.of(pageContext).pop(),
+                          onFinish: () => Navigator.of(pageContext).pop(),
+                        ),
+                      ),
+                    );
+                  },
+          ),
+          ListTile(
             key: const ValueKey('settings_about'),
             title: Text(isZh ? '关于' : 'About'),
             subtitle:

@@ -189,6 +189,46 @@
       "pickCustom": "Pick date & time"
     }
   },
+  "welcomeGuide": {
+    "title": "Welcome to SecondLoop",
+    "subtitle": "Set up the essentials now, or skip and do it later.",
+    "cards": {
+      "ai": {
+        "title": "AI setup",
+        "subtitle": "Configure Ask AI, embeddings, and media understanding."
+      },
+      "sync": {
+        "title": "Sync setup",
+        "subtitle": "Configure WebDAV, LocalDir, or Managed Vault."
+      },
+      "permissions": {
+        "title": "Permissions",
+        "subtitle": "Review microphone, speech, and notification permissions."
+      }
+    },
+    "status": {
+      "notSet": "Not set",
+      "ready": "Ready",
+      "needsReview": "Needs review"
+    },
+    "permissionItems": {
+      "microphone": "Microphone",
+      "speech": "Speech",
+      "notifications": "Notifications"
+    },
+    "actions": {
+      "skip": "Skip for now",
+      "finish": "Finish setup",
+      "open": "Open"
+    },
+    "messages": {
+      "openSettingsFailed": "Unable to open system settings automatically. Please review permissions manually."
+    },
+    "settingsEntry": {
+      "title": "Welcome guide",
+      "subtitle": "Reopen first-launch guide"
+    }
+  },
   "settings": {
     "title": "Settings",
     "sections": {

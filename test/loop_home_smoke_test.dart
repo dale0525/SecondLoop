@@ -11,10 +11,14 @@ import 'package:secondloop/src/rust/db.dart';
 void main() {
   testWidgets('Boots directly into Loop with saved session key',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
     final backend = _AutoUnlockedBackend();
 
-    await tester.pumpWidget(MyApp(backend: backend));
+    await tester.pumpWidget(
+      MyApp(backend: backend, showFirstLaunchWelcomeGuide: false),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Set master password'), findsNothing);

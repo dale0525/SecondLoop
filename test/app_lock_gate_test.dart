@@ -18,11 +18,14 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'app_lock_enabled_v1': true,
+      'welcome_guide_seen_v1': true,
     });
 
     final backend = _SavedKeyBackend();
 
-    await tester.pumpWidget(MyApp(backend: backend));
+    await tester.pumpWidget(
+      MyApp(backend: backend, showFirstLaunchWelcomeGuide: false),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('unlock_password')), findsOneWidget);
@@ -33,11 +36,14 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'app_lock_enabled_v1': false,
       'master_password_setup_required_v1': true,
+      'welcome_guide_seen_v1': true,
     });
 
     final backend = _SavedKeyBackend(masterPasswordSet: false);
 
-    await tester.pumpWidget(MyApp(backend: backend));
+    await tester.pumpWidget(
+      MyApp(backend: backend, showFirstLaunchWelcomeGuide: false),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('setup_password')), findsOneWidget);

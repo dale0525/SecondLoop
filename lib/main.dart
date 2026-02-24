@@ -73,16 +73,19 @@ class MyApp extends StatelessWidget {
     this.backend,
     this.quickCaptureController,
     this.launchArgs = const DesktopLaunchArgs(),
+    this.showFirstLaunchWelcomeGuide = true,
   });
 
   final AppBackend? backend;
   final QuickCaptureController? quickCaptureController;
   final DesktopLaunchArgs launchArgs;
+  final bool showFirstLaunchWelcomeGuide;
 
   @override
   Widget build(BuildContext context) => SecondLoopApp(
         backend: backend,
         quickCaptureController: quickCaptureController,
         launchArgs: launchArgs,
+        showFirstLaunchWelcomeGuide: showFirstLaunchWelcomeGuide,
       );
 }

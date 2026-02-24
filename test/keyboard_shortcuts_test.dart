@@ -9,7 +9,9 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('Cmd+V pastes into chat input', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
 
     String? clipboardText = 'pasted';
     final messenger =
@@ -28,7 +30,12 @@ void main() {
       () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
     );
 
-    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpWidget(
+      MyApp(
+        backend: _AutoUnlockedBackend(),
+        showFirstLaunchWelcomeGuide: false,
+      ),
+    );
     await tester.pumpAndSettle();
 
     final input = find.byKey(const ValueKey('chat_input'));

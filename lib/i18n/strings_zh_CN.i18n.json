@@ -189,6 +189,46 @@
       "pickCustom": "选择日期时间"
     }
   },
+  "welcomeGuide": {
+    "title": "欢迎使用 SecondLoop",
+    "subtitle": "建议先完成这几项基础配置，你也可以随时跳过。",
+    "cards": {
+      "ai": {
+        "title": "AI 配置",
+        "subtitle": "配置 Ask AI、向量检索与媒体理解来源。"
+      },
+      "sync": {
+        "title": "同步配置",
+        "subtitle": "选择并配置 WebDAV、LocalDir 或 Managed Vault。"
+      },
+      "permissions": {
+        "title": "权限检查",
+        "subtitle": "按需打开系统设置检查麦克风、语音和通知权限。"
+      }
+    },
+    "status": {
+      "notSet": "未配置",
+      "ready": "已就绪",
+      "needsReview": "待检查"
+    },
+    "permissionItems": {
+      "microphone": "麦克风",
+      "speech": "语音识别",
+      "notifications": "通知"
+    },
+    "actions": {
+      "skip": "稍后再说",
+      "finish": "完成引导",
+      "open": "去配置"
+    },
+    "messages": {
+      "openSettingsFailed": "无法自动打开系统设置，请手动前往系统设置检查权限。"
+    },
+    "settingsEntry": {
+      "title": "欢迎引导",
+      "subtitle": "重新查看首次启动引导"
+    }
+  },
   "settings": {
     "title": "设置",
     "sections": {
