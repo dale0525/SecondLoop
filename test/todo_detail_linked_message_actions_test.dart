@@ -12,6 +12,50 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets('TodoDetailPage edit same content skips backend update',
+      (tester) async {
+    final backend = _Backend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: ThemeData(
+            useMaterial3: true,
+            splashFactory: InkRipple.splashFactory,
+          ),
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('before', findRichText: true));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_edit')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('edit_message_save')));
+    await tester.pumpAndSettle();
+
+    expect(backend.editedMessageIds, isEmpty);
+  });
+
   testWidgets('TodoDetailPage long press linked message shows actions + edit',
       (tester) async {
     final backend = _Backend();

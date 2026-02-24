@@ -222,6 +222,10 @@ pub fn edit_message(
     content: &str,
 ) -> Result<()> {
     let (existing, is_memory) = get_message_by_id_with_is_memory(conn, key, message_id)?;
+    if existing.content == content {
+        return Ok(());
+    }
+
     let conversation_id = existing.conversation_id.clone();
     let role = existing.role.clone();
     let created_at_ms = existing.created_at_ms;
@@ -368,4 +372,3 @@ pub fn append_message_content(
 
     Ok(())
 }
-
