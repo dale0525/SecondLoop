@@ -166,11 +166,13 @@ final class SemanticParseAutoActionsRunnerSettings {
   const SemanticParseAutoActionsRunnerSettings({
     required this.hardTimeout,
     required this.minAutoConfidence,
+    this.minAutoTagConfidence = 0.8,
     this.batchLimit = 5,
   });
 
   final Duration hardTimeout;
   final double minAutoConfidence;
+  final double minAutoTagConfidence;
   final int batchLimit;
 }
 
@@ -302,7 +304,7 @@ final class SemanticParseAutoActionsRunner {
         }
 
         if (parsed.suggestedTags.isNotEmpty &&
-            parsed.tagConfidence >= settings.minAutoConfidence) {
+            parsed.tagConfidence >= settings.minAutoTagConfidence) {
           final appliedSemanticTagCount = await store.applySemanticTags(
             messageId: job.messageId,
             suggestedTags: parsed.suggestedTags,

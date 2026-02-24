@@ -38,6 +38,7 @@ class _SemanticParseAutoActionsGateState
   static const _kHardTimeout = Duration(seconds: 60);
   static const _kCloudEmbeddingsModelName = 'baai/bge-m3';
   static const _kMinAutoConfidence = 0.86;
+  static const _kMinAutoTagConfidence = 0.8;
   static const _kBatchLimit = 5;
 
   Timer? _timer;
@@ -241,6 +242,7 @@ class _SemanticParseAutoActionsGateState
         settings: const SemanticParseAutoActionsRunnerSettings(
           hardTimeout: _kHardTimeout,
           minAutoConfidence: _kMinAutoConfidence,
+          minAutoTagConfidence: _kMinAutoTagConfidence,
           batchLimit: _kBatchLimit,
         ),
       );
