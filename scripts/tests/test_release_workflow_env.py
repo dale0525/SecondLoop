@@ -232,6 +232,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("dist/*.nupkg", workflow_text)
         self.assertIn("dist/*.msi", workflow_text)
 
+    def test_windows_velopack_script_keeps_dotnet_output_out_of_vpk_path(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("$dotnetOutput = & dotnet @args 2>&1", script_text)
+        self.assertIn("$dotnetExitCode = $LASTEXITCODE", script_text)
+        self.assertIn("foreach ($line in $dotnetOutput)", script_text)
+        self.assertIn("if ($dotnetExitCode -ne 0)", script_text)
+
 
 
 if __name__ == "__main__":
