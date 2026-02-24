@@ -109,12 +109,7 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              _audioRecoveryLocalized(
-                zh: '已恢复并发送上次中断的录音。',
-                en: 'Recovered and sent interrupted recording.',
-              ),
-            ),
+            content: Text(context.t.chat.recordingRecoveryRecoveredAndSent),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -141,13 +136,5 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
     await AudioRecordingRecoveryStore.clearSession(
       expectedSessionId: snapshot.sessionId,
     );
-  }
-
-  String _audioRecoveryLocalized({
-    required String zh,
-    required String en,
-  }) {
-    final code = Localizations.localeOf(context).languageCode.toLowerCase();
-    return code.startsWith('zh') ? zh : en;
   }
 }

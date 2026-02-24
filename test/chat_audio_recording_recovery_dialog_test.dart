@@ -1,18 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/chat/chat_audio_recording_recovery_dialog.dart';
+import 'package:secondloop/i18n/strings.g.dart';
+
+import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    LocaleSettings.setLocale(AppLocale.en);
+  });
+
   group('ChatAudioRecordingRecoveryDialog', () {
     testWidgets('renders zh content and actions', (tester) async {
+      LocaleSettings.setLocale(AppLocale.zhCn);
+
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: ChatAudioRecordingRecoveryDialog(
-              recoverableSegmentCount: 3,
-              isZhLanguage: true,
+        wrapWithI18n(
+          const MaterialApp(
+            locale: Locale('zh', 'CN'),
+            home: Scaffold(
+              body: ChatAudioRecordingRecoveryDialog(
+                recoverableSegmentCount: 3,
+              ),
             ),
           ),
         ),
@@ -26,11 +36,13 @@ void main() {
 
     testWidgets('renders en content and actions', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: ChatAudioRecordingRecoveryDialog(
-              recoverableSegmentCount: 2,
-              isZhLanguage: false,
+        wrapWithI18n(
+          const MaterialApp(
+            locale: Locale('en'),
+            home: Scaffold(
+              body: ChatAudioRecordingRecoveryDialog(
+                recoverableSegmentCount: 2,
+              ),
             ),
           ),
         ),
@@ -46,30 +58,29 @@ void main() {
     });
 
     testWidgets('show resolves locale and returns action', (tester) async {
+      LocaleSettings.setLocale(AppLocale.zhCn);
+
       Future<AudioRecordingRecoveryDialogAction?>? dialogResult;
 
       await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('zh', 'CN'),
-          supportedLocales: const <Locale>[
-            Locale('en'),
-            Locale('zh', 'CN'),
-          ],
-          localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          home: Builder(
-            builder: (context) {
-              return Scaffold(
-                body: TextButton(
-                  onPressed: () {
-                    dialogResult = ChatAudioRecordingRecoveryDialog.show(
-                      context,
-                      recoverableSegmentCount: 1,
-                    );
-                  },
-                  child: const Text('Open'),
-                ),
-              );
-            },
+        wrapWithI18n(
+          MaterialApp(
+            locale: const Locale('zh', 'CN'),
+            home: Builder(
+              builder: (context) {
+                return Scaffold(
+                  body: TextButton(
+                    onPressed: () {
+                      dialogResult = ChatAudioRecordingRecoveryDialog.show(
+                        context,
+                        recoverableSegmentCount: 1,
+                      );
+                    },
+                    child: const Text('Open'),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       );
