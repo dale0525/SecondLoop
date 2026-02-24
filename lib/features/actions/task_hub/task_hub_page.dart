@@ -349,7 +349,7 @@ class _TaskHubPageSection extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     child: Text(
-                      '${todos.length}',
+                      todos.length.toString(),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
