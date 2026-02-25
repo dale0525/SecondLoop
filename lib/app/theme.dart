@@ -419,6 +419,7 @@ class AppTheme {
     final border = spec.border(brightness);
     final onBackground = _onColorForSurface(background, isDark: isDark);
     final onSurface = _onColorForSurface(surface, isDark: isDark);
+    final isMonochrome = palette == AppThemePalette.monochrome;
     final onSurfaceVariant = _onColorForSurface(
       surface2,
       isDark: isDark,
@@ -427,8 +428,59 @@ class AppTheme {
       seeded.primary.withOpacity(isDark ? 0.28 : 0.18),
       border,
     );
+    final primary = isMonochrome
+        ? (isDark ? const Color(0xFFE2E2E2) : const Color(0xFF2A2A2A))
+        : seeded.primary;
+    final onPrimary = isMonochrome
+        ? (isDark ? const Color(0xFF121212) : const Color(0xFFF8F8F8))
+        : seeded.onPrimary;
+    final primaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFF252525) : const Color(0xFFE4E4E4))
+        : seeded.primaryContainer;
+    final onPrimaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1B1B1B))
+        : seeded.onPrimaryContainer;
+    final secondary = isMonochrome
+        ? (isDark ? const Color(0xFFBFBFBF) : const Color(0xFF444444))
+        : seeded.secondary;
+    final onSecondary = isMonochrome
+        ? (isDark ? const Color(0xFF181818) : const Color(0xFFFFFFFF))
+        : seeded.onSecondary;
+    final secondaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFF2B2B2B) : const Color(0xFFE9E9E9))
+        : seeded.secondaryContainer;
+    final onSecondaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFFECECEC) : const Color(0xFF222222))
+        : seeded.onSecondaryContainer;
+    final tertiary = isMonochrome
+        ? (isDark ? const Color(0xFFA5A5A5) : const Color(0xFF5A5A5A))
+        : seeded.tertiary;
+    final onTertiary = isMonochrome
+        ? (isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF))
+        : seeded.onTertiary;
+    final tertiaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFF313131) : const Color(0xFFDFDFDF))
+        : seeded.tertiaryContainer;
+    final onTertiaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFFE8E8E8) : const Color(0xFF262626))
+        : seeded.onTertiaryContainer;
+    final inversePrimary = isMonochrome
+        ? (isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCFCFCF))
+        : seeded.inversePrimary;
 
     return seeded.copyWith(
+      primary: primary,
+      onPrimary: onPrimary,
+      primaryContainer: primaryContainer,
+      onPrimaryContainer: onPrimaryContainer,
+      secondary: secondary,
+      onSecondary: onSecondary,
+      secondaryContainer: secondaryContainer,
+      onSecondaryContainer: onSecondaryContainer,
+      tertiary: tertiary,
+      onTertiary: onTertiary,
+      tertiaryContainer: tertiaryContainer,
+      onTertiaryContainer: onTertiaryContainer,
       background: background,
       onBackground: onBackground,
       surface: surface,
@@ -437,7 +489,7 @@ class AppTheme {
       onSurfaceVariant: onSurfaceVariant,
       outline: outline,
       outlineVariant: border,
-      inversePrimary: seeded.inversePrimary,
+      inversePrimary: inversePrimary,
     );
   }
 

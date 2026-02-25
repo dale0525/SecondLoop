@@ -46,5 +46,10 @@ void main() {
     prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('app_theme_palette_v1'), 'sunset');
     expect(AppThemePalettePrefs.value.value, AppThemePalette.sunset);
+
+    await AppThemePalettePrefs.setPalette(AppThemePalette.monochrome);
+    prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('app_theme_palette_v1'), 'monochrome');
+    expect(AppThemePalettePrefs.value.value, AppThemePalette.monochrome);
   });
 }

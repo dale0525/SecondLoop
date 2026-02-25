@@ -38,6 +38,7 @@ extension _SettingsPageTheme on _SettingsPageState {
       AppThemePalette.forest => zh ? '森林绿' : 'Forest',
       AppThemePalette.ocean => zh ? '海洋蓝' : 'Ocean',
       AppThemePalette.sunset => zh ? '落日橙' : 'Sunset',
+      AppThemePalette.monochrome => zh ? '黑白调' : 'Monochrome',
     };
   }
 

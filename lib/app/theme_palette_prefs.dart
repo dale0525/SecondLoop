@@ -5,7 +5,8 @@ enum AppThemePalette {
   studio('studio'),
   forest('forest'),
   ocean('ocean'),
-  sunset('sunset');
+  sunset('sunset'),
+  monochrome('monochrome');
 
   const AppThemePalette(this.storageValue);
 

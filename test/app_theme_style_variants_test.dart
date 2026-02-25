@@ -35,4 +35,21 @@ void main() {
     expect(forestTokens.surface2, isNot(studioTokens.surface2));
     expect(forestTokens.radiusMd, isNot(studioTokens.radiusMd));
   });
+
+  test('Monochrome style keeps grayscale visual intent', () {
+    final monochromeLight = AppTheme.light(palette: AppThemePalette.monochrome);
+    final monochromeDark = AppTheme.dark(palette: AppThemePalette.monochrome);
+
+    final lightTokens = monochromeLight.extension<SlTokens>()!;
+    final darkTokens = monochromeDark.extension<SlTokens>()!;
+
+    expect(monochromeLight.colorScheme.primary.red,
+        monochromeLight.colorScheme.primary.green);
+    expect(monochromeLight.colorScheme.primary.green,
+        monochromeLight.colorScheme.primary.blue);
+    expect(monochromeDark.colorScheme.primary.red,
+        monochromeDark.colorScheme.primary.green);
+    expect(lightTokens.background.red, lightTokens.background.green);
+    expect(darkTokens.background.red, darkTokens.background.blue);
+  });
 }

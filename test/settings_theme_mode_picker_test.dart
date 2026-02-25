@@ -79,6 +79,7 @@ void main() {
     expect(find.text('Forest'), findsOneWidget);
     expect(find.text('Ocean'), findsOneWidget);
     expect(find.text('Sunset'), findsOneWidget);
+    expect(find.text('Monochrome'), findsOneWidget);
 
     await tester.tap(find.text('Ocean'));
     await tester.pumpAndSettle();
