@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -179,6 +180,22 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   Future<Uint8List?> _loadSyncKey() async {
     return _store.readSyncKey();
+  }
+
+  Uint8List _createSyncKey() {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    );
+  }
+
+  Future<Uint8List> _loadOrCreateSyncKey() async {
+    final existing = await _loadSyncKey();
+    if (existing != null && existing.length == 32) return existing;
+
+    final generated = _createSyncKey();
+    await _store.writeSyncKey(generated);
+    return generated;
   }
 
   void _setState(VoidCallback fn) => setState(fn);

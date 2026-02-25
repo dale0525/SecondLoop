@@ -329,7 +329,8 @@ void main() {
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
   });
 
-  testWidgets('Save requires sync passphrase (WebDAV)', (tester) async {
+  testWidgets('Save auto-generates sync key when missing (WebDAV)',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     final backend = _SyncSettingsBackend();
@@ -360,12 +361,15 @@ void main() {
 
     expect(
       find.text('Enter your sync passphrase and tap Save first.'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(await store.readWebdavBaseUrl(), isNull);
+    expect(await store.readWebdavBaseUrl(), 'https://example.com/dav');
+    final syncKey = await store.readSyncKey();
+    expect(syncKey, isNotNull);
+    expect(syncKey!.length, 32);
   });
 
-  testWidgets('Save requires sync passphrase (SecondLoop Cloud)',
+  testWidgets('Save auto-generates sync key when missing (SecondLoop Cloud)',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore(
@@ -404,8 +408,11 @@ void main() {
 
     expect(
       find.text('Enter your sync passphrase and tap Save first.'),
-      findsOneWidget,
+      findsNothing,
     );
+    final syncKey = await store.readSyncKey();
+    expect(syncKey, isNotNull);
+    expect(syncKey!.length, 32);
   });
 
   testWidgets('Manual Pull notifies sync listeners when ops were applied',

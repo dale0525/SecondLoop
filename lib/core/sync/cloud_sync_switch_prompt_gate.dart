@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -631,13 +632,11 @@ final class _CloudSyncSwitchPromptGateState
     if (!mounted) return;
 
     if (existing == null || existing.length != 32) {
-      final passphrase = await _promptForPassphrase();
-      if (!mounted) return;
-      if (passphrase == null || passphrase.trim().isEmpty) return;
-
-      final derived = await backend.deriveSyncKey(passphrase.trim());
-      if (!mounted) return;
-      await _store.writeSyncKey(derived);
+      final random = Random.secure();
+      final generated = Uint8List.fromList(
+        List<int>.generate(32, (_) => random.nextInt(256)),
+      );
+      await _store.writeSyncKey(generated);
     }
 
     await _store.writeBackendType(SyncBackendType.managedVault);
@@ -699,52 +698,6 @@ final class _CloudSyncSwitchPromptGateState
       engine?.triggerPullNow();
       engine?.triggerPushNow();
     }
-  }
-
-  Future<String?> _promptForPassphrase() async {
-    final dialogContext = widget.navigatorKey?.currentContext;
-    final effectiveContext = dialogContext ?? context;
-
-    final t = effectiveContext.t;
-    final controller = TextEditingController();
-    final passphrase = await showDialog<String?>(
-      context: effectiveContext,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            final canSubmit = controller.text.trim().isNotEmpty;
-            return AlertDialog(
-              title: Text(t.sync.cloudManagedVault.setPassphraseDialog.title),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: t.sync.fields.passphrase.label,
-                  helperText: t.sync.fields.passphrase.helper,
-                  helperMaxLines: 3,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(null),
-                  child: Text(t.common.actions.cancel),
-                ),
-                FilledButton(
-                  onPressed: canSubmit
-                      ? () => Navigator.of(context).pop(controller.text.trim())
-                      : null,
-                  child: Text(
-                      t.sync.cloudManagedVault.setPassphraseDialog.confirm),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    return passphrase;
   }
 
   @override

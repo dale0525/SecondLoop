@@ -272,17 +272,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _backendType == SyncBackendType.localDir;
       final passphrase = _optionalTrimmed(_syncPassphraseController);
       final hasNewPassphrase = passphrase != null && !_passphraseIsPlaceholder;
-      if (requiresSyncKey && !hasNewPassphrase) {
-        final existing = await _loadSyncKey();
-        if (existing == null || existing.length != 32) {
-          _showSnack(t.sync.missingSyncKey);
-          return;
-        }
-      }
 
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
+      Uint8List? syncKey = await _loadSyncKey();
       if (hasNewPassphrase) {
         final passphrase = _optionalTrimmed(_syncPassphraseController);
         if (passphrase == null) {
@@ -291,6 +285,12 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
         final derived = await backend.deriveSyncKey(passphrase);
         await _store.writeSyncKey(derived);
+        syncKey = derived;
+        _syncPassphraseController.text =
+            _SyncSettingsPageState._kPassphrasePlaceholder;
+        _passphraseIsPlaceholder = true;
+      } else if (requiresSyncKey && (syncKey == null || syncKey.length != 32)) {
+        syncKey = await _loadOrCreateSyncKey();
         _syncPassphraseController.text =
             _SyncSettingsPageState._kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
@@ -325,11 +325,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           final sessionScope =
               context.getInheritedWidgetOfExactType<SessionScope>();
           final sessionKey = sessionScope?.sessionKey;
-          final syncKey = await _loadSyncKey();
           if (sessionKey != null &&
               syncKey != null &&
               syncKey.length == 32 &&
               mounted) {
+            final activeSyncKey = syncKey;
             switch (newBackendType) {
               case SyncBackendType.webdav:
                 await _runSaveSyncWithProgress(
@@ -339,7 +339,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncWebdavPullProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         baseUrl: newWebdavBaseUrl,
                         username: _optionalTrimmed(_usernameController),
                         password: _optionalTrimmed(_passwordController),
@@ -356,7 +356,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncWebdavPushOpsOnlyProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         baseUrl: newWebdavBaseUrl,
                         username: _optionalTrimmed(_usernameController),
                         password: _optionalTrimmed(_passwordController),
@@ -380,7 +380,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         client: WebDavCloudMediaBackupClient(
                           backend: backend,
                           sessionKey: sessionKey,
-                          syncKey: syncKey,
+                          syncKey: activeSyncKey,
                           baseUrl: newWebdavBaseUrl,
                           username: _optionalTrimmed(_usernameController),
                           password: _optionalTrimmed(_passwordController),
@@ -420,7 +420,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncLocaldirPullProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
@@ -435,7 +435,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncLocaldirPushProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
@@ -486,7 +486,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                       await _consumeRustProgressStream(
                         backend.syncManagedVaultPullProgress(
                           sessionKey,
-                          syncKey,
+                          activeSyncKey,
                           baseUrl: baseUrlTrimmed,
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
@@ -502,7 +502,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                       await _consumeRustProgressStream(
                         backend.syncManagedVaultPushOpsOnlyProgress(
                           sessionKey,
-                          syncKey,
+                          activeSyncKey,
                           baseUrl: baseUrlTrimmed,
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
@@ -525,7 +525,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           client: ManagedVaultCloudMediaBackupClient(
                             backend: backend,
                             sessionKey: sessionKey,
-                            syncKey: syncKey,
+                            syncKey: activeSyncKey,
                             baseUrl: baseUrlTrimmed,
                             vaultId: vaultId,
                             idToken: idTokenTrimmed,
@@ -615,11 +615,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = await _loadSyncKey();
-      if (syncKey == null || syncKey.length != 32) {
-        _showSnack(t.sync.missingSyncKey);
-        return;
-      }
+      final syncKey = await _loadOrCreateSyncKey();
 
       final pushed = await (switch (_backendType) {
         SyncBackendType.webdav => _consumeRustProgressStream(
@@ -725,11 +721,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = await _loadSyncKey();
-      if (syncKey == null || syncKey.length != 32) {
-        _showSnack(t.sync.missingSyncKey);
-        return;
-      }
+      final syncKey = await _loadOrCreateSyncKey();
 
       final pulled = await (switch (_backendType) {
         SyncBackendType.webdav => _consumeRustProgressStream(
