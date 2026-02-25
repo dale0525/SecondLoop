@@ -191,13 +191,6 @@ class _WelcomePageState extends State<WelcomePage> {
     };
   }
 
-  String _permissionFooterNote() {
-    return _localized(
-      zh: '说明：当前原生 OCR（iOS/macOS Vision、Windows OCR、Linux Tesseract）不需要额外权限；语音转写已统一使用 Whisper，不再需要语音识别权限。',
-      en: 'Note: native OCR (iOS/macOS Vision, Windows OCR, Linux Tesseract) needs no extra permissions. Speech transcription now uses Whisper, so speech-recognition permission is no longer required.',
-    );
-  }
-
   String _permissionUnavailableHint() {
     return _localized(
       zh: '当前平台暂不提供系统权限快捷跳转，请手动在系统设置中检查。',
@@ -470,11 +463,6 @@ class _WelcomePageState extends State<WelcomePage> {
                               if (i != permissionTiles.length - 1)
                                 const SizedBox(height: 8),
                             ],
-                            const SizedBox(height: 12),
-                            Text(
-                              _permissionFooterNote(),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
                           ],
                         ),
                       ),
