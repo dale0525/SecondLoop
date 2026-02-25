@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../features/settings/ai_settings_page.dart';
@@ -33,6 +34,7 @@ class WelcomePage extends StatefulWidget {
 class _WelcomePageState extends State<WelcomePage> {
   static const _kPermissionLaunchFailedKey =
       ValueKey('welcome_guide_permission_launch_failed');
+  static const _kPermissionChannel = MethodChannel('secondloop/permissions');
 
   bool _statusLoaded = false;
   WelcomeGuideStatus _status = const WelcomeGuideStatus(
@@ -80,7 +82,139 @@ class _WelcomePageState extends State<WelcomePage> {
     await _reloadStatus();
   }
 
+  String _localized({
+    required String zh,
+    required String en,
+  }) {
+    final languageCode = Localizations.localeOf(context).languageCode;
+    return languageCode.toLowerCase().startsWith('zh') ? zh : en;
+  }
+
+  List<_PermissionTileData> _permissionTiles() {
+    if (kIsWeb) {
+      return const <_PermissionTileData>[];
+    }
+
+    final items = switch (defaultTargetPlatform) {
+      TargetPlatform.android => <_PermissionItem>[
+          _PermissionItem.microphone,
+          _PermissionItem.notifications,
+          _PermissionItem.exactAlarm,
+          _PermissionItem.location,
+          _PermissionItem.autoStart,
+          _PermissionItem.batteryUnrestricted,
+        ],
+      TargetPlatform.iOS => <_PermissionItem>[
+          _PermissionItem.microphone,
+          _PermissionItem.notifications,
+          _PermissionItem.location,
+        ],
+      TargetPlatform.macOS => <_PermissionItem>[
+          _PermissionItem.microphone,
+          _PermissionItem.notifications,
+          _PermissionItem.autoStart,
+        ],
+      TargetPlatform.windows => <_PermissionItem>[
+          _PermissionItem.microphone,
+          _PermissionItem.notifications,
+          _PermissionItem.autoStart,
+          _PermissionItem.batteryUnrestricted,
+        ],
+      TargetPlatform.linux => const <_PermissionItem>[],
+      TargetPlatform.fuchsia => const <_PermissionItem>[],
+    };
+
+    return items
+        .map(
+          (item) => _PermissionTileData(
+            item: item,
+            key: ValueKey('welcome_guide_permission_${item.keySuffix}'),
+            icon: _permissionIcon(item),
+            label: _permissionLabel(item),
+            reason: _permissionReason(item),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  IconData _permissionIcon(_PermissionItem item) {
+    return switch (item) {
+      _PermissionItem.microphone => Icons.mic_none_rounded,
+      _PermissionItem.notifications => Icons.notifications_none_rounded,
+      _PermissionItem.exactAlarm => Icons.alarm_rounded,
+      _PermissionItem.location => Icons.location_on_outlined,
+      _PermissionItem.autoStart => Icons.restart_alt_rounded,
+      _PermissionItem.batteryUnrestricted =>
+        Icons.battery_charging_full_rounded,
+    };
+  }
+
+  String _permissionLabel(_PermissionItem item) {
+    return switch (item) {
+      _PermissionItem.microphone => _localized(zh: '麦克风', en: 'Microphone'),
+      _PermissionItem.notifications =>
+        _localized(zh: '通知', en: 'Notifications'),
+      _PermissionItem.exactAlarm =>
+        _localized(zh: '闹铃（精准提醒）', en: 'Exact alarm'),
+      _PermissionItem.location => _localized(zh: '定位', en: 'Location'),
+      _PermissionItem.autoStart => _localized(zh: '自启动', en: 'Auto-start'),
+      _PermissionItem.batteryUnrestricted =>
+        _localized(zh: '省电无限制', en: 'Battery unrestricted'),
+    };
+  }
+
+  String _permissionReason(_PermissionItem item) {
+    return switch (item) {
+      _PermissionItem.microphone => _localized(
+          zh: '用于录音并发送语音消息。',
+          en: 'Needed to record and send voice messages.',
+        ),
+      _PermissionItem.notifications => _localized(
+          zh: '用于接收待办复习与同步提醒。',
+          en: 'Needed for reminder and sync notifications.',
+        ),
+      _PermissionItem.exactAlarm => _localized(
+          zh: '用于按时触发提醒，避免被系统延迟。',
+          en: 'Keeps reminder delivery on time.',
+        ),
+      _PermissionItem.location => _localized(
+          zh: '用于拍照时写入地理位置信息。',
+          en: 'Adds location metadata when taking photos.',
+        ),
+      _PermissionItem.autoStart => _localized(
+          zh: '用于重启后自动恢复提醒与后台任务。',
+          en: 'Restarts reminders/background tasks after reboot.',
+        ),
+      _PermissionItem.batteryUnrestricted => _localized(
+          zh: '用于减少省电策略导致的后台中断。',
+          en: 'Reduces background interruptions by battery saver.',
+        ),
+    };
+  }
+
+  String _permissionFooterNote() {
+    return _localized(
+      zh: '说明：当前原生 OCR（iOS/macOS Vision、Windows OCR、Linux Tesseract）不需要额外权限；语音转写已统一使用 Whisper，不再需要语音识别权限。',
+      en: 'Note: native OCR (iOS/macOS Vision, Windows OCR, Linux Tesseract) needs no extra permissions. Speech transcription now uses Whisper, so speech-recognition permission is no longer required.',
+    );
+  }
+
+  String _permissionUnavailableHint() {
+    return _localized(
+      zh: '当前平台暂不提供系统权限快捷跳转，请手动在系统设置中检查。',
+      en: 'This platform has no direct permission shortcut. Please review settings manually.',
+    );
+  }
+
   Future<void> _openPermissionSettings(_PermissionItem item) async {
+    if (widget.uriLauncher == null) {
+      final openedByNative =
+          await _openPermissionSettingsViaPlatformChannel(item);
+      if (openedByNative) {
+        return;
+      }
+    }
+
     for (final uri in _permissionSettingsUris(item)) {
       try {
         final launched = await _launch(uri);
@@ -100,6 +234,28 @@ class _WelcomePageState extends State<WelcomePage> {
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  Future<bool> _openPermissionSettingsViaPlatformChannel(
+    _PermissionItem item,
+  ) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return false;
+    }
+
+    try {
+      final opened = await _kPermissionChannel.invokeMethod<bool>(
+        'openPermissionSettings',
+        <String, Object?>{'item': item.channelValue},
+      );
+      return opened == true;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> _launch(Uri uri) async {
@@ -139,18 +295,32 @@ class _WelcomePageState extends State<WelcomePage> {
           ),
           Uri.parse('x-apple.systempreferences:'),
         ],
-      _PermissionItem.speech => <Uri>[
+      _PermissionItem.notifications => <Uri>[
           Uri.parse(
-            'x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition',
-          ),
-          Uri.parse(
-            'x-apple.systempreferences:com.apple.preference.speech?Dictation',
+            'x-apple.systempreferences:com.apple.preference.notifications',
           ),
           Uri.parse('x-apple.systempreferences:'),
         ],
-      _PermissionItem.notifications => <Uri>[
+      _PermissionItem.location => <Uri>[
           Uri.parse(
-              'x-apple.systempreferences:com.apple.preference.notifications'),
+            'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
+          ),
+          Uri.parse('x-apple.systempreferences:'),
+        ],
+      _PermissionItem.autoStart => <Uri>[
+          Uri.parse(
+            'x-apple.systempreferences:com.apple.LoginItems-Settings.extension',
+          ),
+          Uri.parse('x-apple.systempreferences:'),
+        ],
+      _PermissionItem.exactAlarm => <Uri>[
+          Uri.parse(
+            'x-apple.systempreferences:com.apple.preference.notifications',
+          ),
+          Uri.parse('x-apple.systempreferences:'),
+        ],
+      _PermissionItem.batteryUnrestricted => <Uri>[
+          Uri.parse('x-apple.systempreferences:com.apple.preference.battery'),
           Uri.parse('x-apple.systempreferences:'),
         ],
     };
@@ -162,13 +332,24 @@ class _WelcomePageState extends State<WelcomePage> {
           Uri.parse('ms-settings:privacy-microphone'),
           Uri.parse('ms-settings:sound'),
         ],
-      _PermissionItem.speech => <Uri>[
-          Uri.parse('ms-settings:privacy-speech'),
-          Uri.parse('ms-settings:speech'),
-        ],
       _PermissionItem.notifications => <Uri>[
           Uri.parse('ms-settings:notifications'),
           Uri.parse('ms-settings:quiethours'),
+        ],
+      _PermissionItem.exactAlarm => <Uri>[
+          Uri.parse('ms-settings:notifications'),
+          Uri.parse('ms-settings:quiethours'),
+        ],
+      _PermissionItem.location => <Uri>[
+          Uri.parse('ms-settings:privacy-location'),
+        ],
+      _PermissionItem.autoStart => <Uri>[
+          Uri.parse('ms-settings:startupapps'),
+          Uri.parse('ms-settings:appsfeatures'),
+        ],
+      _PermissionItem.batteryUnrestricted => <Uri>[
+          Uri.parse('ms-settings:batterysaver'),
+          Uri.parse('ms-settings:batterysaver-settings'),
         ],
     };
   }
@@ -176,6 +357,7 @@ class _WelcomePageState extends State<WelcomePage> {
   @override
   Widget build(BuildContext context) {
     final t = context.t.welcomeGuide;
+    final permissionTiles = _permissionTiles();
     return Scaffold(
       key: const ValueKey('welcome_guide_page'),
       body: SafeArea(
@@ -268,36 +450,31 @@ class _WelcomePageState extends State<WelcomePage> {
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             const SizedBox(height: 12),
-                            _PermissionTile(
-                              tileKey: const ValueKey(
-                                  'welcome_guide_permission_microphone'),
-                              icon: Icons.mic_none_rounded,
-                              label: t.permissions.microphone,
-                              onTap: () => unawaited(
-                                _openPermissionSettings(
-                                    _PermissionItem.microphone),
+                            if (permissionTiles.isEmpty)
+                              Text(
+                                _permissionUnavailableHint(),
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            _PermissionTile(
-                              tileKey: const ValueKey(
-                                  'welcome_guide_permission_speech'),
-                              icon: Icons.record_voice_over_outlined,
-                              label: t.permissions.speech,
-                              onTap: () => unawaited(
-                                _openPermissionSettings(_PermissionItem.speech),
+                            for (var i = 0;
+                                i < permissionTiles.length;
+                                i++) ...[
+                              _PermissionTile(
+                                tileKey: permissionTiles[i].key,
+                                icon: permissionTiles[i].icon,
+                                label: permissionTiles[i].label,
+                                reason: permissionTiles[i].reason,
+                                onTap: () => unawaited(
+                                  _openPermissionSettings(
+                                      permissionTiles[i].item),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            _PermissionTile(
-                              tileKey: const ValueKey(
-                                  'welcome_guide_permission_notifications'),
-                              icon: Icons.notifications_none_rounded,
-                              label: t.permissions.notifications,
-                              onTap: () => unawaited(
-                                _openPermissionSettings(
-                                    _PermissionItem.notifications),
-                              ),
+                              if (i != permissionTiles.length - 1)
+                                const SizedBox(height: 8),
+                            ],
+                            const SizedBox(height: 12),
+                            Text(
+                              _permissionFooterNote(),
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
                         ),
@@ -434,12 +611,14 @@ class _PermissionTile extends StatelessWidget {
     required this.tileKey,
     required this.icon,
     required this.label,
+    required this.reason,
     required this.onTap,
   });
 
   final Key tileKey;
   final IconData icon;
   final String label;
+  final String reason;
   final VoidCallback onTap;
 
   @override
@@ -455,7 +634,17 @@ class _PermissionTile extends StatelessWidget {
             Icon(icon, size: 18),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(label),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label),
+                  const SizedBox(height: 2),
+                  Text(
+                    reason,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
             const Icon(Icons.open_in_new_rounded, size: 16),
           ],
@@ -467,6 +656,49 @@ class _PermissionTile extends StatelessWidget {
 
 enum _PermissionItem {
   microphone,
-  speech,
   notifications,
+  exactAlarm,
+  location,
+  autoStart,
+  batteryUnrestricted,
+}
+
+extension on _PermissionItem {
+  String get channelValue {
+    return switch (this) {
+      _PermissionItem.microphone => 'microphone',
+      _PermissionItem.notifications => 'notifications',
+      _PermissionItem.exactAlarm => 'exact_alarm',
+      _PermissionItem.location => 'location',
+      _PermissionItem.autoStart => 'auto_start',
+      _PermissionItem.batteryUnrestricted => 'battery_unrestricted',
+    };
+  }
+
+  String get keySuffix {
+    return switch (this) {
+      _PermissionItem.microphone => 'microphone',
+      _PermissionItem.notifications => 'notifications',
+      _PermissionItem.exactAlarm => 'exact_alarm',
+      _PermissionItem.location => 'location',
+      _PermissionItem.autoStart => 'auto_start',
+      _PermissionItem.batteryUnrestricted => 'battery',
+    };
+  }
+}
+
+class _PermissionTileData {
+  const _PermissionTileData({
+    required this.item,
+    required this.key,
+    required this.icon,
+    required this.label,
+    required this.reason,
+  });
+
+  final _PermissionItem item;
+  final Key key;
+  final IconData icon;
+  final String label;
+  final String reason;
 }

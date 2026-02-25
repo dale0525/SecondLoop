@@ -220,10 +220,20 @@ void main() {
 
     expect(find.byKey(const ValueKey('welcome_guide_permission_microphone')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('welcome_guide_permission_speech')),
-        findsOneWidget);
     expect(find.byKey(const ValueKey('welcome_guide_permission_notifications')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_permission_exact_alarm')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_permission_location')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_permission_auto_start')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_permission_battery')),
+        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('welcome_guide_permission_speech')),
+      findsNothing,
+    );
 
     await bringIntoView(
       tester,
@@ -253,10 +263,10 @@ void main() {
 
     await bringIntoView(
       tester,
-      find.byKey(const ValueKey('welcome_guide_permission_speech')),
+      find.byKey(const ValueKey('welcome_guide_permission_exact_alarm')),
     );
-    await tester
-        .tap(find.byKey(const ValueKey('welcome_guide_permission_speech')));
+    await tester.tap(
+        find.byKey(const ValueKey('welcome_guide_permission_exact_alarm')));
     await tester.pumpAndSettle();
 
     expect(
