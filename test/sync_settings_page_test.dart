@@ -37,7 +37,8 @@ void main() {
     expect(find.text('Test connection'), findsNothing);
   });
 
-  testWidgets('configured passphrase shows masked placeholder', (tester) async {
+  testWidgets('configured recovery passphrase shows masked placeholder',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
@@ -57,7 +58,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final passphraseField = find.byWidgetPredicate(
-      (w) => w is TextField && w.decoration?.labelText == 'Sync passphrase',
+      (w) =>
+          w is TextField &&
+          w.decoration?.labelText == 'Recovery passphrase (Advanced)',
     );
     final field = tester.widget<TextField>(passphraseField);
     expect(field.controller?.text, isNotEmpty);
@@ -105,7 +108,9 @@ void main() {
 
     await tester.enterText(
       find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Sync passphrase',
+        (w) =>
+            w is TextField &&
+            w.decoration?.labelText == 'Recovery passphrase (Advanced)',
       ),
       'passphrase',
     );

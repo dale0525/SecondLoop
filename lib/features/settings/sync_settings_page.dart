@@ -210,6 +210,15 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isZh = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+    final recoveryPassphraseLabel =
+        isZh ? '恢复口令（高级）' : 'Recovery passphrase (Advanced)';
+    final recoveryPassphraseHelper =
+        isZh ? '仅用于恢复/换机，日常同步无需输入。' : 'Used for recovery/migration only.';
+
     final engine = SyncEngineScope.maybeOf(context);
     final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
     if (_backendType == SyncBackendType.managedVault &&
@@ -660,8 +669,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 TextField(
                   controller: _syncPassphraseController,
                   decoration: InputDecoration(
-                    labelText: context.t.sync.fields.passphrase.label,
-                    helperText: context.t.sync.fields.passphrase.helper,
+                    labelText: recoveryPassphraseLabel,
+                    helperText: recoveryPassphraseHelper,
                     helperMaxLines: 3,
                   ),
                   enabled: !_busy,
