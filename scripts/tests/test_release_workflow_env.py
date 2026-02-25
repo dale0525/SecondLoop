@@ -153,6 +153,16 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotEqual(-1, build_idx)
         self.assertLess(setup_idx, build_idx)
 
+    def test_release_workflow_runs_flutter_pub_get_before_android_rustup_patch_step(self) -> None:
+        workflow_text = self._workflow_text()
+
+        pub_get_idx = workflow_text.find("      - run: flutter pub get")
+        setup_idx = workflow_text.find("      - name: Setup Rustup for Android build")
+
+        self.assertNotEqual(-1, pub_get_idx)
+        self.assertNotEqual(-1, setup_idx)
+        self.assertLess(pub_get_idx, setup_idx)
+
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()
 

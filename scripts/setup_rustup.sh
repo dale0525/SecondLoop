@@ -84,6 +84,31 @@ PY_PATCH_WHISPER_RS_SYS
   fi
 }
 
+collect_pub_hosted_cache_roots() {
+  local configured_pub_cache="${PUB_CACHE:-"$ROOT_DIR/.tool/pub-cache"}"
+  local candidate_roots=(
+    "${configured_pub_cache}/hosted"
+    "$ROOT_DIR/.tool/pub-cache/hosted"
+  )
+  if [[ -n "${HOME:-}" ]]; then
+    candidate_roots+=("${HOME}/.pub-cache/hosted")
+  fi
+
+  local emitted_roots=$'\n'
+  local candidate_root
+  for candidate_root in "${candidate_roots[@]}"; do
+    if [[ -z "$candidate_root" || ! -d "$candidate_root" ]]; then
+      continue
+    fi
+    if [[ "$emitted_roots" == *$'\n'"${candidate_root}"$'\n'* ]]; then
+      continue
+    fi
+
+    emitted_roots+="${candidate_root}"$'\n'
+    echo "$candidate_root"
+  done
+}
+
 patch_cargokit_gradle_plugins() {
   local template_path="$ROOT_DIR/rust_builder/cargokit/gradle/plugin.gradle"
   if [[ ! -f "$template_path" ]]; then
@@ -100,25 +125,33 @@ patch_cargokit_gradle_plugins() {
     return 0
   fi
 
-  local hosted_root="$ROOT_DIR/.tool/pub-cache/hosted"
-  if [[ ! -d "$hosted_root" ]]; then
+  local hosted_roots=()
+  local hosted_root
+  while IFS= read -r hosted_root; do
+    hosted_roots+=("$hosted_root")
+  done < <(collect_pub_hosted_cache_roots)
+
+  if [[ ${#hosted_roots[@]} -eq 0 ]]; then
+    echo "setup-rustup: no pub hosted cache roots found (checked PUB_CACHE, .tool/pub-cache, ~/.pub-cache)" >&2
     return 0
   fi
 
   local plugin_gradle_files=()
-  while IFS= read -r -d '' file; do
-    plugin_gradle_files+=("$file")
-  done < <(
-    find "$hosted_root" -type f \
-      \( \
-        -path '*/irondash_engine_context-*/cargokit/gradle/plugin.gradle' \
-        -o -path '*/super_native_extensions-*/cargokit/gradle/plugin.gradle' \
-      \) \
-      -print0 2>/dev/null
-  )
+  for hosted_root in "${hosted_roots[@]}"; do
+    while IFS= read -r -d '' file; do
+      plugin_gradle_files+=("$file")
+    done < <(
+      find "$hosted_root" -type f \
+        \( \
+          -path '*/irondash_engine_context-*/cargokit/gradle/plugin.gradle' \
+          -o -path '*/super_native_extensions-*/cargokit/gradle/plugin.gradle' \
+        \) \
+        -print0 2>/dev/null
+    )
+  done
 
   if [[ ${#plugin_gradle_files[@]} -eq 0 ]]; then
-    echo "setup-rustup: no cargokit gradle plugin found for irondash_engine_context/super_native_extensions in pub cache" >&2
+    echo "setup-rustup: no cargokit gradle plugin found for irondash_engine_context/super_native_extensions in pub cache roots: ${hosted_roots[*]}" >&2
     return 0
   fi
 

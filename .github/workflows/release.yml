@@ -151,10 +151,10 @@ jobs:
             echo "keyAlias=${ANDROID_KEY_ALIAS}"
             echo "storeFile=app/upload-keystore.jks"
           } > android/key.properties
+      - run: flutter pub get
       - name: Setup Rustup for Android build
         shell: bash
         run: bash scripts/setup_rustup.sh
-      - run: flutter pub get
       - name: Build (prod)
         shell: bash
         run: |
