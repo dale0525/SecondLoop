@@ -124,8 +124,30 @@ function Ensure-VpkTool([string]$RequiredVersion) {
   $toolRoot = Join-Path (Join-Path $repoRootPath '.tool') 'velopack'
   New-Item -ItemType Directory -Force -Path $toolRoot | Out-Null
 
-  if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    throw 'dotnet SDK is required to install and run vpk.'
+  $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+  if (-not $dotnetCommand) {
+    throw 'dotnet CLI is required to install and run vpk. Install dotnet-sdk in pixi and run `pixi install`.'
+  }
+
+  $dotnetSdks = @(& dotnet --list-sdks 2>$null | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_)
+  })
+  if ($dotnetSdks.Count -eq 0) {
+    throw 'dotnet SDK is required to install and run vpk, but no SDK is installed. Install dotnet-sdk in pixi and run `pixi install`.'
+  }
+
+  $dotnetRuntimes = @(& dotnet --list-runtimes 2>$null | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_)
+  })
+  $hasAspNetRuntime = $false
+  foreach ($runtimeLine in $dotnetRuntimes) {
+    if ($runtimeLine -like 'Microsoft.AspNetCore.App *') {
+      $hasAspNetRuntime = $true
+      break
+    }
+  }
+  if (-not $hasAspNetRuntime) {
+    throw 'Microsoft.AspNetCore.App runtime is required to run vpk. Install dotnet-aspnetcore in pixi and run `pixi install`.'
   }
 
   $args = @(
@@ -155,6 +177,7 @@ function Ensure-VpkTool([string]$RequiredVersion) {
 }
 
 Import-DotEnvLocal
+& (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
 
 if (-not $SkipBuild) {
   Write-Host 'Running: flutter pub get'

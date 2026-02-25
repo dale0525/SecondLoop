@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tomllib
 import unittest
 
 
@@ -203,11 +204,17 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('if ($LASTEXITCODE -ne 0)', workflow_text)
         self.assertIn('throw "flutter build windows failed with exit code $LASTEXITCODE"', workflow_text)
 
-    def test_windows_whisper_dependency_enables_vulkan_backend(self) -> None:
-        cargo_text = (Path(__file__).resolve().parents[2] / 'rust/Cargo.toml').read_text(encoding='utf-8')
+    def test_windows_and_linux_whisper_dependency_enable_vulkan_backend(self) -> None:
+        cargo_path = Path(__file__).resolve().parents[2] / "rust/Cargo.toml"
+        with cargo_path.open("rb") as fh:
+            cargo_config = tomllib.load(fh)
 
-        self.assertIn('[target.\'cfg(any(target_os = "windows", target_os = "linux"))\'.dependencies]', cargo_text)
-        self.assertIn('whisper-rs = { version = "0.15.1", default-features = false, features = ["vulkan"] }', cargo_text)
+        target_config = cargo_config["target"]
+        windows_dep = target_config['cfg(target_os = "windows")']["dependencies"]["whisper-rs"]
+        linux_dep = target_config['cfg(target_os = "linux")']["dependencies"]["whisper-rs"]
+
+        self.assertEqual(windows_dep.get("features"), ["vulkan"])
+        self.assertEqual(linux_dep.get("features"), ["vulkan"])
 
     def test_windows_build_sets_ninja_generator_for_rust_cmake(self) -> None:
         workflow_text = self._workflow_text()

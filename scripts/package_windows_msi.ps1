@@ -102,6 +102,7 @@ function Resolve-DefaultMsiVersion {
 }
 
 Import-DotEnvLocal
+& (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
 & (Join-Path $PSScriptRoot 'setup_nuget.ps1')
 
 $nugetDir = Join-Path (Join-Path $repoRootPath '.tool') 'nuget'

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' as io;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -13,7 +14,7 @@ import 'i18n/locale_prefs.dart';
 
 Future<void> main(List<String> args) async {
   final launchArgs = DesktopLaunchArgs.fromMainArgs(args);
-  if (launchArgs.shouldExitBeforeLaunchingApp) {
+  if (handleDesktopHookInvocationAndExit(launchArgs)) {
     return;
   }
 
@@ -22,6 +23,20 @@ Future<void> main(List<String> args) async {
   unawaited(runStartupBootstrap());
 
   runApp(MyApp(launchArgs: launchArgs));
+}
+
+@visibleForTesting
+bool handleDesktopHookInvocationAndExit(
+  DesktopLaunchArgs launchArgs, {
+  void Function(int code)? exitProcess,
+}) {
+  if (!launchArgs.shouldExitBeforeLaunchingApp) {
+    return false;
+  }
+
+  final resolvedExitProcess = exitProcess ?? io.exit;
+  resolvedExitProcess(0);
+  return true;
 }
 
 const _kStartupTaskTimeout = Duration(seconds: 5);

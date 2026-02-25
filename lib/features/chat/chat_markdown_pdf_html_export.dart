@@ -432,6 +432,10 @@ Future<String?> _resolveImageSourceAsDataUrl(String source) async {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  if (_looksLikeWindowsAbsolutePath(trimmed)) {
+    return _readLocalImageAsDataUrl(trimmed);
+  }
+
   final uri = Uri.tryParse(trimmed);
   if (uri == null) {
     return _readLocalImageAsDataUrl(trimmed);
@@ -448,6 +452,21 @@ Future<String?> _resolveImageSourceAsDataUrl(String source) async {
   }
 
   return _readLocalImageAsDataUrl(trimmed);
+}
+
+bool _looksLikeWindowsAbsolutePath(String value) {
+  if (value.length >= 3) {
+    final first = value.codeUnitAt(0);
+    final isLetter =
+        (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
+    if (isLetter && value.codeUnitAt(1) == 58) {
+      final separator = value.codeUnitAt(2);
+      if (separator == 92 || separator == 47) {
+        return true;
+      }
+    }
+  }
+  return value.startsWith(r'\\');
 }
 
 Future<String?> _downloadImageAsDataUrl(Uri uri) async {

@@ -55,6 +55,7 @@ function Get-DevMsiVersion {
 }
 
 Import-DotEnvLocal
+& (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
 
 $appId = $env:SECONDLOOP_APP_ID
 if ([string]::IsNullOrWhiteSpace($appId)) {

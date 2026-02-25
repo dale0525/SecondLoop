@@ -2,10 +2,33 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/core/desktop/desktop_launch_args.dart';
 import 'package:secondloop/main.dart' as app;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('desktop hook invocation exits process with code 0', () {
+    var exitCode = -1;
+    final handled = app.handleDesktopHookInvocationAndExit(
+      DesktopLaunchArgs.fromMainArgs(['--veloapp-install', '1.2.3']),
+      exitProcess: (code) => exitCode = code,
+    );
+
+    expect(handled, true);
+    expect(exitCode, 0);
+  });
+
+  test('non-hook launch does not trigger process exit', () {
+    var exitCalled = false;
+    final handled = app.handleDesktopHookInvocationAndExit(
+      DesktopLaunchArgs.fromMainArgs(['--foo']),
+      exitProcess: (_) => exitCalled = true,
+    );
+
+    expect(handled, false);
+    expect(exitCalled, false);
+  });
 
   test('runs startup tasks in order', () async {
     final calls = <String>[];
