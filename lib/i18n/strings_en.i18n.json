@@ -293,10 +293,20 @@
       "title": "Theme",
       "subtitle": "Follow system, or choose light/dark",
       "dialogTitle": "Theme",
+      "styleTitle": "Theme style",
+      "styleSubtitle": "Switch full visual style (colors, surfaces, shapes)",
+      "styleDialogTitle": "Theme style",
       "options": {
         "system": "System",
         "light": "Light",
         "dark": "Dark"
+      },
+      "styleOptions": {
+        "studio": "Studio",
+        "forest": "Forest",
+        "ocean": "Ocean",
+        "sunset": "Sunset",
+        "monochrome": "Monochrome"
       }
     },
     "autoLock": {

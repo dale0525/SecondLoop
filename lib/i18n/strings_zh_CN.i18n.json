@@ -293,10 +293,20 @@
       "title": "主题",
       "subtitle": "跟随系统，或选择明亮/深色",
       "dialogTitle": "主题",
+      "styleTitle": "主题方案",
+      "styleSubtitle": "切换完整主题风格（颜色、背景、圆角）",
+      "styleDialogTitle": "主题方案",
       "options": {
         "system": "系统",
         "light": "明亮",
         "dark": "深色"
+      },
+      "styleOptions": {
+        "studio": "经典紫",
+        "forest": "森林绿",
+        "ocean": "海洋蓝",
+        "sunset": "落日橙",
+        "monochrome": "黑白调"
       }
     },
     "autoLock": {

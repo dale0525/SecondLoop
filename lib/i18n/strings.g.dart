@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1798 (899 per locale)
+/// Strings: 1814 (907 per locale)
 ///
-/// Built on 2026-02-25 at 06:27 UTC
+/// Built on 2026-02-25 at 17:34 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1020,8 +1020,14 @@ class _StringsSettingsThemeEn {
   String get title => 'Theme';
   String get subtitle => 'Follow system, or choose light/dark';
   String get dialogTitle => 'Theme';
+  String get styleTitle => 'Theme style';
+  String get styleSubtitle =>
+      'Switch full visual style (colors, surfaces, shapes)';
+  String get styleDialogTitle => 'Theme style';
   late final _StringsSettingsThemeOptionsEn options =
       _StringsSettingsThemeOptionsEn._(_root);
+  late final _StringsSettingsThemeStyleOptionsEn styleOptions =
+      _StringsSettingsThemeStyleOptionsEn._(_root);
 }
 
 // Path: settings.autoLock
@@ -2300,6 +2306,20 @@ class _StringsSettingsThemeOptionsEn {
   String get system => 'System';
   String get light => 'Light';
   String get dark => 'Dark';
+}
+
+// Path: settings.theme.styleOptions
+class _StringsSettingsThemeStyleOptionsEn {
+  _StringsSettingsThemeStyleOptionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get studio => 'Studio';
+  String get forest => 'Forest';
+  String get ocean => 'Ocean';
+  String get sunset => 'Sunset';
+  String get monochrome => 'Monochrome';
 }
 
 // Path: settings.aiSelection.askAi
@@ -5269,8 +5289,17 @@ class _StringsSettingsThemeZhCn extends _StringsSettingsThemeEn {
   @override
   String get dialogTitle => '主题';
   @override
+  String get styleTitle => '主题方案';
+  @override
+  String get styleSubtitle => '切换完整主题风格（颜色、背景、圆角）';
+  @override
+  String get styleDialogTitle => '主题方案';
+  @override
   late final _StringsSettingsThemeOptionsZhCn options =
       _StringsSettingsThemeOptionsZhCn._(_root);
+  @override
+  late final _StringsSettingsThemeStyleOptionsZhCn styleOptions =
+      _StringsSettingsThemeStyleOptionsZhCn._(_root);
 }
 
 // Path: settings.autoLock
@@ -7189,6 +7218,29 @@ class _StringsSettingsThemeOptionsZhCn extends _StringsSettingsThemeOptionsEn {
   String get light => '明亮';
   @override
   String get dark => '深色';
+}
+
+// Path: settings.theme.styleOptions
+class _StringsSettingsThemeStyleOptionsZhCn
+    extends _StringsSettingsThemeStyleOptionsEn {
+  _StringsSettingsThemeStyleOptionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get studio => '经典紫';
+  @override
+  String get forest => '森林绿';
+  @override
+  String get ocean => '海洋蓝';
+  @override
+  String get sunset => '落日橙';
+  @override
+  String get monochrome => '黑白调';
 }
 
 // Path: settings.aiSelection.askAi
@@ -10031,12 +10083,28 @@ extension on Translations {
         return 'Follow system, or choose light/dark';
       case 'settings.theme.dialogTitle':
         return 'Theme';
+      case 'settings.theme.styleTitle':
+        return 'Theme style';
+      case 'settings.theme.styleSubtitle':
+        return 'Switch full visual style (colors, surfaces, shapes)';
+      case 'settings.theme.styleDialogTitle':
+        return 'Theme style';
       case 'settings.theme.options.system':
         return 'System';
       case 'settings.theme.options.light':
         return 'Light';
       case 'settings.theme.options.dark':
         return 'Dark';
+      case 'settings.theme.styleOptions.studio':
+        return 'Studio';
+      case 'settings.theme.styleOptions.forest':
+        return 'Forest';
+      case 'settings.theme.styleOptions.ocean':
+        return 'Ocean';
+      case 'settings.theme.styleOptions.sunset':
+        return 'Sunset';
+      case 'settings.theme.styleOptions.monochrome':
+        return 'Monochrome';
       case 'settings.autoLock.title':
         return 'Auto lock';
       case 'settings.autoLock.subtitle':
@@ -11877,12 +11945,28 @@ extension on _StringsZhCn {
         return '跟随系统，或选择明亮/深色';
       case 'settings.theme.dialogTitle':
         return '主题';
+      case 'settings.theme.styleTitle':
+        return '主题方案';
+      case 'settings.theme.styleSubtitle':
+        return '切换完整主题风格（颜色、背景、圆角）';
+      case 'settings.theme.styleDialogTitle':
+        return '主题方案';
       case 'settings.theme.options.system':
         return '系统';
       case 'settings.theme.options.light':
         return '明亮';
       case 'settings.theme.options.dark':
         return '深色';
+      case 'settings.theme.styleOptions.studio':
+        return '经典紫';
+      case 'settings.theme.styleOptions.forest':
+        return '森林绿';
+      case 'settings.theme.styleOptions.ocean':
+        return '海洋蓝';
+      case 'settings.theme.styleOptions.sunset':
+        return '落日橙';
+      case 'settings.theme.styleOptions.monochrome':
+        return '黑白调';
       case 'settings.autoLock.title':
         return '自动锁定';
       case 'settings.autoLock.subtitle':

@@ -10,35 +10,26 @@ extension _SettingsPageTheme on _SettingsPageState {
     };
   }
 
-  bool _isZh(BuildContext context) {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
   String _themePaletteTitle(BuildContext context) {
-    return _isZh(context) ? '主题方案' : 'Theme style';
+    return context.t.settings.theme.styleTitle;
   }
 
   String _themePaletteSubtitle(BuildContext context) {
-    return _isZh(context)
-        ? '切换完整主题风格（颜色、背景、圆角）'
-        : 'Switch full visual style (colors, surfaces, shapes)';
+    return context.t.settings.theme.styleSubtitle;
   }
 
   String _themePaletteDialogTitle(BuildContext context) {
-    return _isZh(context) ? '主题方案' : 'Theme style';
+    return context.t.settings.theme.styleDialogTitle;
   }
 
   String _themePaletteLabel(BuildContext context, AppThemePalette palette) {
-    final zh = _isZh(context);
+    final options = context.t.settings.theme.styleOptions;
     return switch (palette) {
-      AppThemePalette.studio => zh ? '经典紫' : 'Studio',
-      AppThemePalette.forest => zh ? '森林绿' : 'Forest',
-      AppThemePalette.ocean => zh ? '海洋蓝' : 'Ocean',
-      AppThemePalette.sunset => zh ? '落日橙' : 'Sunset',
-      AppThemePalette.monochrome => zh ? '黑白调' : 'Monochrome',
+      AppThemePalette.studio => options.studio,
+      AppThemePalette.forest => options.forest,
+      AppThemePalette.ocean => options.ocean,
+      AppThemePalette.sunset => options.sunset,
+      AppThemePalette.monochrome => options.monochrome,
     };
   }
 
