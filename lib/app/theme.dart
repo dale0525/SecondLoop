@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'theme_palette_prefs.dart';
 import '../ui/sl_tokens.dart';
 
 class AppTheme {
@@ -9,6 +10,9 @@ class AppTheme {
 
   static const _primary = Color(0xFF6366F1); // Indigo
   static const _accent = Color(0xFFA78BFA); // Violet
+  static const _forestSeed = Color(0xFF16A34A);
+  static const _oceanSeed = Color(0xFF0284C7);
+  static const _sunsetSeed = Color(0xFFEA580C);
 
   static const _lightBackground = Color(0xFFF6F7FB); // Paper
   static const _lightSurface = Color(0xFFFFFFFF);
@@ -79,20 +83,37 @@ class AppTheme {
     }
   }
 
-  static ThemeData light({Locale? locale, TargetPlatform? platform}) {
+  static ThemeData light({
+    Locale? locale,
+    TargetPlatform? platform,
+    AppThemePalette palette = AppThemePalette.studio,
+  }) {
     return _build(
-        brightness: Brightness.light, locale: locale, platform: platform);
+      brightness: Brightness.light,
+      locale: locale,
+      platform: platform,
+      palette: palette,
+    );
   }
 
-  static ThemeData dark({Locale? locale, TargetPlatform? platform}) {
+  static ThemeData dark({
+    Locale? locale,
+    TargetPlatform? platform,
+    AppThemePalette palette = AppThemePalette.studio,
+  }) {
     return _build(
-        brightness: Brightness.dark, locale: locale, platform: platform);
+      brightness: Brightness.dark,
+      locale: locale,
+      platform: platform,
+      palette: palette,
+    );
   }
 
   static ThemeData _build({
     required Brightness brightness,
     required Locale? locale,
     required TargetPlatform? platform,
+    required AppThemePalette palette,
   }) {
     final isDark = brightness == Brightness.dark;
     final effectivePlatform = platform ?? defaultTargetPlatform;
@@ -100,8 +121,11 @@ class AppTheme {
     final fontFamilyFallback =
         _fontFamilyFallbackFor(locale, effectivePlatform);
 
-    final scheme = isDark ? _darkScheme() : _lightScheme();
-    final tokens = isDark ? _darkTokens() : _lightTokens();
+    final scheme = isDark ? _darkScheme(palette) : _lightScheme(palette);
+    final ring = _ringColorForPalette(palette);
+    final tokens = isDark
+        ? _darkTokens(primary: scheme.primary, ring: ring)
+        : _lightTokens(primary: scheme.primary, ring: ring);
 
     final base = ThemeData(
       useMaterial3: true,
@@ -260,110 +284,177 @@ class AppTheme {
     );
   }
 
-  static ColorScheme _darkScheme() {
-    return const ColorScheme(
+  static const ColorScheme _studioDarkScheme = ColorScheme(
+    brightness: Brightness.dark,
+    primary: _primary,
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFF1B1B2E),
+    onPrimaryContainer: Color(0xFFE7E7F0),
+    secondary: _accent,
+    onSecondary: _darkBackground,
+    secondaryContainer: Color(0xFF25213A),
+    onSecondaryContainer: Color(0xFFEDE9FE),
+    tertiary: Color(0xFF22D3EE),
+    onTertiary: Color(0xFF001216),
+    tertiaryContainer: Color(0xFF0B2A33),
+    onTertiaryContainer: Color(0xFFCFFAFE),
+    error: Color(0xFFF87171),
+    onError: Color(0xFF2B0000),
+    errorContainer: Color(0xFF3A0B0B),
+    onErrorContainer: Color(0xFFFEE2E2),
+    background: _darkBackground,
+    onBackground: Color(0xFFE7E7F0),
+    surface: _darkSurface,
+    onSurface: Color(0xFFE7E7F0),
+    surfaceVariant: _darkSurface2,
+    onSurfaceVariant: Color(0xFFB9B9CE),
+    outline: Color(0xFF2F2F4A),
+    outlineVariant: _darkBorder,
+    shadow: Colors.black,
+    scrim: Colors.black,
+    inverseSurface: Color(0xFFE7E7F0),
+    onInverseSurface: Color(0xFF101018),
+    inversePrimary: Color(0xFF4F46E5),
+  );
+
+  static const ColorScheme _studioLightScheme = ColorScheme(
+    brightness: Brightness.light,
+    primary: _primary,
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFFE0E7FF),
+    onPrimaryContainer: Color(0xFF1E1B4B),
+    secondary: Color(0xFF7C3AED),
+    onSecondary: Colors.white,
+    secondaryContainer: Color(0xFFF3E8FF),
+    onSecondaryContainer: Color(0xFF3B0764),
+    tertiary: Color(0xFF0891B2),
+    onTertiary: Colors.white,
+    tertiaryContainer: Color(0xFFCFFAFE),
+    onTertiaryContainer: Color(0xFF083344),
+    error: Color(0xFFDC2626),
+    onError: Colors.white,
+    errorContainer: Color(0xFFFEE2E2),
+    onErrorContainer: Color(0xFF450A0A),
+    background: _lightBackground,
+    onBackground: Color(0xFF0F172A),
+    surface: _lightSurface,
+    onSurface: Color(0xFF0F172A),
+    surfaceVariant: _lightSurface2,
+    onSurfaceVariant: Color(0xFF475569),
+    outline: Color(0xFFD0D4E0),
+    outlineVariant: _lightBorder,
+    shadow: Colors.black,
+    scrim: Colors.black,
+    inverseSurface: Color(0xFF0F172A),
+    onInverseSurface: Color(0xFFF8FAFC),
+    inversePrimary: Color(0xFF4F46E5),
+  );
+
+  static Color _seedColorForPalette(AppThemePalette palette) {
+    return switch (palette) {
+      AppThemePalette.studio => _primary,
+      AppThemePalette.forest => _forestSeed,
+      AppThemePalette.ocean => _oceanSeed,
+      AppThemePalette.sunset => _sunsetSeed,
+    };
+  }
+
+  static Color _ringColorForPalette(AppThemePalette palette) {
+    return switch (palette) {
+      AppThemePalette.studio => _accent,
+      AppThemePalette.forest => const Color(0xFF4ADE80),
+      AppThemePalette.ocean => const Color(0xFF67E8F9),
+      AppThemePalette.sunset => const Color(0xFFFDA4AF),
+    };
+  }
+
+  static ColorScheme _darkScheme(AppThemePalette palette) {
+    return _schemeForPalette(
+      palette: palette,
       brightness: Brightness.dark,
-      primary: _primary,
-      onPrimary: Colors.white,
-      primaryContainer: Color(0xFF1B1B2E),
-      onPrimaryContainer: Color(0xFFE7E7F0),
-      secondary: _accent,
-      onSecondary: _darkBackground,
-      secondaryContainer: Color(0xFF25213A),
-      onSecondaryContainer: Color(0xFFEDE9FE),
-      tertiary: Color(0xFF22D3EE),
-      onTertiary: Color(0xFF001216),
-      tertiaryContainer: Color(0xFF0B2A33),
-      onTertiaryContainer: Color(0xFFCFFAFE),
-      error: Color(0xFFF87171),
-      onError: Color(0xFF2B0000),
-      errorContainer: Color(0xFF3A0B0B),
-      onErrorContainer: Color(0xFFFEE2E2),
-      background: _darkBackground,
-      onBackground: Color(0xFFE7E7F0),
-      surface: _darkSurface,
-      onSurface: Color(0xFFE7E7F0),
-      surfaceVariant: _darkSurface2,
-      onSurfaceVariant: Color(0xFFB9B9CE),
-      outline: Color(0xFF2F2F4A),
-      outlineVariant: _darkBorder,
-      shadow: Colors.black,
-      scrim: Colors.black,
-      inverseSurface: Color(0xFFE7E7F0),
-      onInverseSurface: Color(0xFF101018),
-      inversePrimary: Color(0xFF4F46E5),
+      base: _studioDarkScheme,
     );
   }
 
-  static ColorScheme _lightScheme() {
-    return const ColorScheme(
+  static ColorScheme _lightScheme(AppThemePalette palette) {
+    return _schemeForPalette(
+      palette: palette,
       brightness: Brightness.light,
-      primary: _primary,
-      onPrimary: Colors.white,
-      primaryContainer: Color(0xFFE0E7FF),
-      onPrimaryContainer: Color(0xFF1E1B4B),
-      secondary: Color(0xFF7C3AED),
-      onSecondary: Colors.white,
-      secondaryContainer: Color(0xFFF3E8FF),
-      onSecondaryContainer: Color(0xFF3B0764),
-      tertiary: Color(0xFF0891B2),
-      onTertiary: Colors.white,
-      tertiaryContainer: Color(0xFFCFFAFE),
-      onTertiaryContainer: Color(0xFF083344),
-      error: Color(0xFFDC2626),
-      onError: Colors.white,
-      errorContainer: Color(0xFFFEE2E2),
-      onErrorContainer: Color(0xFF450A0A),
-      background: _lightBackground,
-      onBackground: Color(0xFF0F172A),
-      surface: _lightSurface,
-      onSurface: Color(0xFF0F172A),
-      surfaceVariant: _lightSurface2,
-      onSurfaceVariant: Color(0xFF475569),
-      outline: Color(0xFFD0D4E0),
-      outlineVariant: _lightBorder,
-      shadow: Colors.black,
-      scrim: Colors.black,
-      inverseSurface: Color(0xFF0F172A),
-      onInverseSurface: Color(0xFFF8FAFC),
-      inversePrimary: Color(0xFF4F46E5),
+      base: _studioLightScheme,
     );
   }
 
-  static SlTokens _darkTokens() {
-    return const SlTokens(
+  static ColorScheme _schemeForPalette({
+    required AppThemePalette palette,
+    required Brightness brightness,
+    required ColorScheme base,
+  }) {
+    if (palette == AppThemePalette.studio) {
+      return base;
+    }
+
+    final seeded = ColorScheme.fromSeed(
+      seedColor: _seedColorForPalette(palette),
+      brightness: brightness,
+    );
+
+    return base.copyWith(
+      primary: seeded.primary,
+      onPrimary: seeded.onPrimary,
+      primaryContainer: seeded.primaryContainer,
+      onPrimaryContainer: seeded.onPrimaryContainer,
+      secondary: seeded.secondary,
+      onSecondary: seeded.onSecondary,
+      secondaryContainer: seeded.secondaryContainer,
+      onSecondaryContainer: seeded.onSecondaryContainer,
+      tertiary: seeded.tertiary,
+      onTertiary: seeded.onTertiary,
+      tertiaryContainer: seeded.tertiaryContainer,
+      onTertiaryContainer: seeded.onTertiaryContainer,
+      inversePrimary: seeded.inversePrimary,
+    );
+  }
+
+  static SlTokens _darkTokens({
+    required Color primary,
+    required Color ring,
+  }) {
+    return SlTokens(
       background: _darkBackground,
       surface: _darkSurface,
       surface2: _darkSurface2,
       border: _darkBorder,
-      borderSubtle: Color(0xFF1F1F33),
-      ring: _accent,
-      sidebarBackground: Color(0xCC12121A),
-      sidebarBorder: Color(0x3324243A),
-      sidebarItemHover: Color(0x1A6366F1),
-      sidebarItemActive: Color(0x266366F1),
-      sidebarItemForeground: Color(0xFFB9B9CE),
-      sidebarItemActiveForeground: Color(0xFFE7E7F0),
+      borderSubtle: const Color(0xFF1F1F33),
+      ring: ring,
+      sidebarBackground: const Color(0xCC12121A),
+      sidebarBorder: const Color(0x3324243A),
+      sidebarItemHover: primary.withOpacity(0.1),
+      sidebarItemActive: primary.withOpacity(0.15),
+      sidebarItemForeground: const Color(0xFFB9B9CE),
+      sidebarItemActiveForeground: const Color(0xFFE7E7F0),
       radiusSm: _radiusSm,
       radiusMd: _radiusMd,
       radiusLg: _radiusLg,
     );
   }
 
-  static SlTokens _lightTokens() {
-    return const SlTokens(
+  static SlTokens _lightTokens({
+    required Color primary,
+    required Color ring,
+  }) {
+    return SlTokens(
       background: _lightBackground,
       surface: _lightSurface,
       surface2: _lightSurface2,
       border: _lightBorder,
-      borderSubtle: Color(0xFFDDE1EC),
-      ring: _accent,
-      sidebarBackground: Color(0xCCFFFFFF),
-      sidebarBorder: Color(0x66E6E8F0),
-      sidebarItemHover: Color(0x146366F1),
-      sidebarItemActive: Color(0x1F6366F1),
-      sidebarItemForeground: Color(0xFF475569),
-      sidebarItemActiveForeground: Color(0xFF0F172A),
+      borderSubtle: const Color(0xFFDDE1EC),
+      ring: ring,
+      sidebarBackground: const Color(0xCCFFFFFF),
+      sidebarBorder: const Color(0x66E6E8F0),
+      sidebarItemHover: primary.withOpacity(0.08),
+      sidebarItemActive: primary.withOpacity(0.12),
+      sidebarItemForeground: const Color(0xFF475569),
+      sidebarItemActiveForeground: const Color(0xFF0F172A),
       radiusSm: _radiusSm,
       radiusMd: _radiusMd,
       radiusLg: _radiusLg,
