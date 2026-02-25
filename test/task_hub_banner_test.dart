@@ -184,4 +184,58 @@ void main() {
     expect(calls.first.$1, 'u1');
     expect(calls.first.$2, TaskHubQuickAction.today);
   });
+
+  testWidgets('expanded list keeps view-all visible on small screens',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 540));
+
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        for (var i = 0; i < 4; i++)
+          todo(
+            id: 'due_$i',
+            title: 'Due item $i',
+            updatedAtMs: i + 1,
+            dueAtMs:
+                now.add(Duration(hours: i + 1)).toUtc().millisecondsSinceEpoch,
+          ),
+        for (var i = 0; i < 4; i++)
+          todo(
+            id: 'review_$i',
+            title: 'Review item $i',
+            updatedAtMs: i + 100,
+            reviewStage: 0,
+            nextReviewAtMs: now
+                .subtract(Duration(minutes: i + 1))
+                .toUtc()
+                .millisecondsSinceEpoch,
+          ),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              summary: summary,
+              onViewAll: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    final viewAllButton = find.byKey(const ValueKey('task_hub_view_all'));
+    expect(viewAllButton, findsOneWidget);
+
+    final viewAllBottom = tester.getRect(viewAllButton).bottom;
+    expect(viewAllBottom <= 540, isTrue);
+  });
 }

@@ -30,6 +30,7 @@ class TaskHubBanner extends StatefulWidget {
 
 class _TaskHubBannerState extends State<TaskHubBanner> {
   static const _kAutoCollapseDelay = Duration(seconds: 10);
+  static const _kExpandedPreviewMaxHeightFactor = 0.5;
 
   var _expanded = false;
   Timer? _autoCollapseTimer;
@@ -79,6 +80,8 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final tokens = SlTokens.of(context);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final expandedPreviewMaxHeight =
+        MediaQuery.sizeOf(context).height * _kExpandedPreviewMaxHeightFactor;
 
     final headline = _collapsedHeadline(context, summary);
     final nextTitle = summary.scheduledPreviewTodos.isNotEmpty
@@ -154,34 +157,40 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
             ),
             if (_expanded) ...[
               const SizedBox(height: 10),
-              SlSurface(
-                key: const ValueKey('task_hub_preview_list'),
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(tokens.radiusMd),
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (summary.scheduledPreviewTodos.isNotEmpty)
-                      _TaskHubSection(
-                        title: context.t.actions.taskHub.scheduledSection,
-                        todos: summary.scheduledPreviewTodos,
-                        onQuickAction: widget.onQuickAction,
-                      ),
-                    if (summary.scheduledPreviewTodos.isNotEmpty &&
-                        summary.unscheduledPreviewTodos.isNotEmpty)
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: tokens.borderSubtle.withOpacity(0.9),
-                      ),
-                    if (summary.unscheduledPreviewTodos.isNotEmpty)
-                      _TaskHubSection(
-                        title: context.t.actions.taskHub.reviewSection,
-                        todos: summary.unscheduledPreviewTodos,
-                        onQuickAction: widget.onQuickAction,
-                      ),
-                  ],
+              ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxHeight: expandedPreviewMaxHeight),
+                child: SlSurface(
+                  key: const ValueKey('task_hub_preview_list'),
+                  color: tokens.surface,
+                  borderRadius: BorderRadius.circular(tokens.radiusMd),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (summary.scheduledPreviewTodos.isNotEmpty)
+                          _TaskHubSection(
+                            title: context.t.actions.taskHub.scheduledSection,
+                            todos: summary.scheduledPreviewTodos,
+                            onQuickAction: widget.onQuickAction,
+                          ),
+                        if (summary.scheduledPreviewTodos.isNotEmpty &&
+                            summary.unscheduledPreviewTodos.isNotEmpty)
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: tokens.borderSubtle.withOpacity(0.9),
+                          ),
+                        if (summary.unscheduledPreviewTodos.isNotEmpty)
+                          _TaskHubSection(
+                            title: context.t.actions.taskHub.reviewSection,
+                            todos: summary.unscheduledPreviewTodos,
+                            onQuickAction: widget.onQuickAction,
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               if (widget.onViewAll != null) ...[
