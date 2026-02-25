@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -244,6 +243,53 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(launched, isNotEmpty);
+  });
+
+  testWidgets('hides unsupported permission entries on Windows',
+      (tester) async {
+    final originalPlatformOverride = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    SharedPreferences.setMockInitialValues({});
+
+    try {
+      await pumpWelcomePage(
+        tester,
+        onSkip: () {},
+        onFinish: () {},
+        statusLoader: (_) async => const WelcomeGuideStatus(
+          aiReady: false,
+          syncReady: false,
+        ),
+        uriLauncher: (_) async => true,
+      );
+
+      expect(
+        find.byKey(const ValueKey('welcome_guide_permission_microphone')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome_guide_permission_notifications')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome_guide_permission_auto_start')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome_guide_permission_exact_alarm')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome_guide_permission_location')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('welcome_guide_permission_battery')),
+        findsNothing,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = originalPlatformOverride;
+    }
   });
 
   testWidgets('shows snackbar when permission settings launch fails',

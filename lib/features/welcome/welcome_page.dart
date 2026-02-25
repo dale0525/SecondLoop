@@ -118,7 +118,6 @@ class _WelcomePageState extends State<WelcomePage> {
           _PermissionItem.microphone,
           _PermissionItem.notifications,
           _PermissionItem.autoStart,
-          _PermissionItem.batteryUnrestricted,
         ],
       TargetPlatform.linux => const <_PermissionItem>[],
       TargetPlatform.fuchsia => const <_PermissionItem>[],
