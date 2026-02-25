@@ -17,4 +17,21 @@ void main() {
 
     expect(args.silentStartupRequested, false);
   });
+
+  test('detects Velopack install hook invocation', () {
+    final args = DesktopLaunchArgs.fromMainArgs([
+      '--veloapp-install',
+      '1.2.3',
+    ]);
+
+    expect(args.velopackHookInvocationRequested, true);
+    expect(args.shouldExitBeforeLaunchingApp, true);
+  });
+
+  test('Velopack hook detection is case-insensitive', () {
+    final args = DesktopLaunchArgs.fromMainArgs(['--VELOAPP-UPDATED', '1.2.3']);
+
+    expect(args.velopackHookInvocationRequested, true);
+    expect(args.shouldExitBeforeLaunchingApp, true);
+  });
 }

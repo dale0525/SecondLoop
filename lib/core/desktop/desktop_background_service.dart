@@ -182,14 +182,14 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
     final appName = packageInfo.appName.trim().isNotEmpty
         ? packageInfo.appName.trim()
         : 'SecondLoop';
-    final packageName = packageInfo.packageName.trim().isEmpty
-        ? null
-        : packageInfo.packageName.trim();
+    final packageName = packageInfo.packageName.trim();
+    final launchPackageName =
+        Platform.isWindows || packageName.isEmpty ? null : packageName;
 
     _launchSetup = _LaunchSetup(
       appName: appName,
       appPath: Platform.resolvedExecutable,
-      packageName: packageName,
+      packageName: launchPackageName,
     );
   }
 

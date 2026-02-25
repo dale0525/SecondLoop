@@ -241,6 +241,11 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("foreach ($line in $dotnetOutput)", script_text)
         self.assertIn("if ($dotnetExitCode -ne 0)", script_text)
 
+    def test_windows_velopack_script_sets_pack_title(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("'--packTitle', 'SecondLoop'", script_text)
+
 
 
 if __name__ == "__main__":

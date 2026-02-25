@@ -1,12 +1,43 @@
 const kDesktopSilentStartupArg = '--silent-startup';
+const _kVelopackInstallHookArg = '--veloapp-install';
+const _kVelopackUpdatedHookArg = '--veloapp-updated';
+const _kVelopackObsoleteHookArg = '--veloapp-obsolete';
+const _kVelopackUninstallHookArg = '--veloapp-uninstall';
+
+const _kVelopackHookArgs = <String>{
+  _kVelopackInstallHookArg,
+  _kVelopackUpdatedHookArg,
+  _kVelopackObsoleteHookArg,
+  _kVelopackUninstallHookArg,
+};
 
 final class DesktopLaunchArgs {
-  const DesktopLaunchArgs({this.silentStartupRequested = false});
+  const DesktopLaunchArgs({
+    this.silentStartupRequested = false,
+    this.velopackHookInvocationRequested = false,
+  });
 
   final bool silentStartupRequested;
+  final bool velopackHookInvocationRequested;
+
+  bool get shouldExitBeforeLaunchingApp => velopackHookInvocationRequested;
 
   factory DesktopLaunchArgs.fromMainArgs(List<String> args) {
-    final requested = args.any((arg) => arg.trim() == kDesktopSilentStartupArg);
-    return DesktopLaunchArgs(silentStartupRequested: requested);
+    var silentStartupRequested = false;
+    var velopackHookInvocationRequested = false;
+    for (final rawArg in args) {
+      final normalizedArg = rawArg.trim().toLowerCase();
+      if (normalizedArg == kDesktopSilentStartupArg) {
+        silentStartupRequested = true;
+      }
+      if (_kVelopackHookArgs.contains(normalizedArg)) {
+        velopackHookInvocationRequested = true;
+      }
+    }
+
+    return DesktopLaunchArgs(
+      silentStartupRequested: silentStartupRequested,
+      velopackHookInvocationRequested: velopackHookInvocationRequested,
+    );
   }
 }

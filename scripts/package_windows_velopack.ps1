@@ -198,6 +198,7 @@ $vpkPath = Ensure-VpkTool -RequiredVersion $VpkVersion
 $packArgs = @(
   'pack',
   '--packId', $PackId,
+  '--packTitle', 'SecondLoop',
   '--packVersion', $resolvedVersion,
   '--packDir', $releaseDir,
   '--mainExe', $mainExe,
