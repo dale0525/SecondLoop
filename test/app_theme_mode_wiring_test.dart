@@ -12,6 +12,7 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'app_theme_mode_v1': 'dark',
+      'welcome_guide_seen_v1': true,
     });
     AppThemeModePrefs.resetForTests();
     await AppThemeModePrefs.ensureInitialized();

@@ -860,6 +860,41 @@
       "subtitle": "Search similar messages + rebuild embeddings index"
     }
   },
+  "welcomeGuide": {
+    "title": "Welcome to SecondLoop",
+    "subtitle": "Set up essentials in minutes.",
+    "ai": {
+      "title": "AI setup",
+      "description": "Connect your preferred AI source for Ask AI.",
+      "open": "Open AI settings",
+      "statusReady": "Ready",
+      "statusNotSet": "Not set"
+    },
+    "sync": {
+      "title": "Sync setup",
+      "description": "Configure sync so your data stays consistent.",
+      "open": "Open sync settings",
+      "statusReady": "Ready",
+      "statusNotSet": "Not set"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "description": "Review system permissions shortcuts.",
+      "statusNeedsReview": "Needs review",
+      "microphone": "Microphone",
+      "speech": "Speech",
+      "notifications": "Notifications",
+      "openFailed": "Unable to open system settings automatically. Please review permissions manually."
+    },
+    "actions": {
+      "skip": "Skip for now",
+      "finish": "Finish setup"
+    },
+    "reopen": {
+      "title": "Reopen welcome guide",
+      "subtitle": "Review AI, sync, and permissions setup links again"
+    }
+  },
   "lock": {
     "masterPasswordRequired": "Master password required",
     "passwordsDoNotMatch": "Passwords do not match",

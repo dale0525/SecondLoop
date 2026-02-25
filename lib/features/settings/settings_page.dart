@@ -36,6 +36,7 @@ import 'semantic_search_debug_page.dart';
 import 'diagnostics_page.dart';
 import 'about_page.dart';
 import 'oplog_maintenance_scope.dart';
+import '../welcome/welcome_page.dart';
 
 part 'settings_page_build.dart';
 

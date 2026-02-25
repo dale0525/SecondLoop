@@ -224,6 +224,23 @@ extension _SettingsPageBuild on _SettingsPageState {
                   },
           ),
           ListTile(
+            key: const ValueKey('settings_reopen_welcome_guide'),
+            title: Text(context.t.welcomeGuide.reopen.title),
+            subtitle: Text(context.t.welcomeGuide.reopen.subtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => WelcomePage(
+                          onSkipForNow: () => Navigator.of(context).pop(),
+                          onFinishSetup: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                    );
+                  },
+          ),
+          ListTile(
             key: const ValueKey('settings_diagnostics'),
             title: Text(context.t.settings.diagnostics.title),
             subtitle: Text(context.t.settings.diagnostics.subtitle),

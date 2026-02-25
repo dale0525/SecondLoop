@@ -15,7 +15,9 @@ import 'test_i18n.dart';
 void main() {
   testWidgets('First launch goes directly to loop home',
       (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
 
     final backend = FakeBackend();
     await tester.pumpWidget(MyApp(backend: backend));

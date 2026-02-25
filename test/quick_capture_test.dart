@@ -10,7 +10,9 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('Quick capture inserts into Chat and hides', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
@@ -54,7 +56,9 @@ void main() {
 
   testWidgets('Quick capture Esc closes without reopen behavior',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
@@ -76,7 +80,9 @@ void main() {
 
   testWidgets('Quick capture opens Chat after window leaves compact size',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 
@@ -120,7 +126,9 @@ void main() {
 
   testWidgets('Quick capture shows capture sheet for time phrases',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
 

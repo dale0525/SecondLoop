@@ -18,6 +18,7 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'app_lock_enabled_v1': true,
+      'welcome_guide_seen_v1': true,
     });
 
     final backend = _SavedKeyBackend();
@@ -33,6 +34,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'app_lock_enabled_v1': false,
       'master_password_setup_required_v1': true,
+      'welcome_guide_seen_v1': true,
     });
 
     final backend = _SavedKeyBackend(masterPasswordSet: false);
