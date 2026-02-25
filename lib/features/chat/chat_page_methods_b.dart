@@ -447,48 +447,58 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     final actionLabel = _taskHubActionLabel(action);
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.hideCurrentSnackBar();
-    final closedFuture = messenger
-        ?.showSnackBar(
-          SnackBar(
-            content: Text(
-              context.t.actions.taskHub.snackActionApplied(
-                action: actionLabel,
-                title: ticket.updatedTodo.title,
-              ),
-            ),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: context.t.common.actions.undo,
-              onPressed: () async {
-                if (_taskHubUndoTicket != ticket) return;
-                try {
-                  await controller.undo(ticket);
-                  if (!mounted) return;
-                  if (_taskHubUndoTicket == ticket) {
-                    _taskHubUndoTicket = null;
-                  }
-                  syncEngine?.notifyLocalMutation();
-                  _refresh();
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.maybeOf(context)
-                    ?..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      SnackBar(
-                        content: Text(context.t.errors.saveFailed(error: '$e')),
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
-                }
-              },
-            ),
+    _taskHubQuickActionSnackAutoDismissTimer?.cancel();
+    _taskHubQuickActionSnackAutoDismissTimer = null;
+    final snackController = messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          context.t.actions.taskHub.snackActionApplied(
+            action: actionLabel,
+            title: ticket.updatedTodo.title,
           ),
-        )
-        .closed;
-    if (closedFuture == null) return;
+        ),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: context.t.common.actions.undo,
+          onPressed: () async {
+            if (_taskHubUndoTicket != ticket) return;
+            try {
+              await controller.undo(ticket);
+              if (!mounted) return;
+              if (_taskHubUndoTicket == ticket) {
+                _taskHubUndoTicket = null;
+              }
+              syncEngine?.notifyLocalMutation();
+              _refresh();
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.maybeOf(context)
+                ?..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(context.t.errors.saveFailed(error: '$e')),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+            }
+          },
+        ),
+      ),
+    );
+    if (snackController == null) return;
+    final autoDismissTimer = Timer(
+      const Duration(seconds: 3),
+      snackController.close,
+    );
+    _taskHubQuickActionSnackAutoDismissTimer = autoDismissTimer;
 
     unawaited(
-      closedFuture.then((_) {
+      snackController.closed.then((_) {
+        autoDismissTimer.cancel();
+        if (identical(
+            _taskHubQuickActionSnackAutoDismissTimer, autoDismissTimer)) {
+          _taskHubQuickActionSnackAutoDismissTimer = null;
+        }
         if (!mounted) return;
         if (_taskHubUndoTicket == ticket) {
           _taskHubUndoTicket = null;

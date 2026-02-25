@@ -25,6 +25,13 @@ class TaskHubPage extends StatefulWidget {
 class _TaskHubPageState extends State<TaskHubPage> {
   Future<TaskHubSummary>? _summaryFuture;
   TaskHubUndoTicket? _undoTicket;
+  Timer? _quickActionSnackAutoDismissTimer;
+
+  @override
+  void dispose() {
+    _quickActionSnackAutoDismissTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -179,43 +186,52 @@ class _TaskHubPageState extends State<TaskHubPage> {
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.hideCurrentSnackBar();
-    final closedFuture = messenger
-        ?.showSnackBar(
-          SnackBar(
-            content: Text(snackMessage),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: undoLabel,
-              onPressed: () async {
-                if (_undoTicket != ticket) return;
-                try {
-                  await controller.undo(ticket);
-                  if (!mounted) return;
-                  if (_undoTicket == ticket) {
-                    _undoTicket = null;
-                  }
-                  syncEngine?.notifyLocalMutation();
-                  await _refresh();
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.maybeOf(context)
-                    ?..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      SnackBar(
-                        content: Text(context.t.errors.saveFailed(error: '$e')),
-                        duration: const Duration(seconds: 3),
-                      ),
-                    );
-                }
-              },
-            ),
-          ),
-        )
-        .closed;
-    if (closedFuture == null) return;
+    _quickActionSnackAutoDismissTimer?.cancel();
+    _quickActionSnackAutoDismissTimer = null;
+    final snackController = messenger?.showSnackBar(
+      SnackBar(
+        content: Text(snackMessage),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: undoLabel,
+          onPressed: () async {
+            if (_undoTicket != ticket) return;
+            try {
+              await controller.undo(ticket);
+              if (!mounted) return;
+              if (_undoTicket == ticket) {
+                _undoTicket = null;
+              }
+              syncEngine?.notifyLocalMutation();
+              await _refresh();
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.maybeOf(context)
+                ?..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(context.t.errors.saveFailed(error: '$e')),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+            }
+          },
+        ),
+      ),
+    );
+    if (snackController == null) return;
+    final autoDismissTimer = Timer(
+      const Duration(seconds: 3),
+      snackController.close,
+    );
+    _quickActionSnackAutoDismissTimer = autoDismissTimer;
 
     unawaited(
-      closedFuture.then((_) {
+      snackController.closed.then((_) {
+        autoDismissTimer.cancel();
+        if (identical(_quickActionSnackAutoDismissTimer, autoDismissTimer)) {
+          _quickActionSnackAutoDismissTimer = null;
+        }
         if (!mounted) return;
         if (_undoTicket == ticket) {
           _undoTicket = null;

@@ -443,6 +443,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _activeCloudGatewayBaseUrl;
   String? _activeCloudIdToken;
   TaskHubUndoTicket? _taskHubUndoTicket;
+  Timer? _taskHubQuickActionSnackAutoDismissTimer;
 
   AudioRecorder? _audioRecorderInstance;
   _PendingAudioUploadRetry? _pendingAudioUploadRetry;
@@ -499,6 +500,7 @@ class _ChatPageState extends State<ChatPage> {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
+    _taskHubQuickActionSnackAutoDismissTimer?.cancel();
     unawaited(_audioRecorderInstance?.dispose());
     unawaited(AudioRecordingForegroundService.stopIfSupported());
     _controller.dispose();
