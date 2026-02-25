@@ -10,12 +10,14 @@ class TaskHubSummary {
     required this.upcomingCount,
     required this.unscheduledCount,
     required this.dueReviewCount,
+    required this.doneCount,
     required this.scheduledPreviewTodos,
     required this.unscheduledPreviewTodos,
     required this.dueTodos,
     required this.upcomingTodos,
     required this.dueReviewTodos,
     required this.unscheduledTodos,
+    required this.doneTodos,
   });
 
   const TaskHubSummary.empty()
@@ -24,18 +26,21 @@ class TaskHubSummary {
         upcomingCount = 0,
         unscheduledCount = 0,
         dueReviewCount = 0,
+        doneCount = 0,
         scheduledPreviewTodos = const <Todo>[],
         unscheduledPreviewTodos = const <Todo>[],
         dueTodos = const <Todo>[],
         upcomingTodos = const <Todo>[],
         dueReviewTodos = const <Todo>[],
-        unscheduledTodos = const <Todo>[];
+        unscheduledTodos = const <Todo>[],
+        doneTodos = const <Todo>[];
 
   final int dueCount;
   final int overdueCount;
   final int upcomingCount;
   final int unscheduledCount;
   final int dueReviewCount;
+  final int doneCount;
 
   final List<Todo> scheduledPreviewTodos;
   final List<Todo> unscheduledPreviewTodos;
@@ -44,6 +49,7 @@ class TaskHubSummary {
   final List<Todo> upcomingTodos;
   final List<Todo> dueReviewTodos;
   final List<Todo> unscheduledTodos;
+  final List<Todo> doneTodos;
 
   bool get hasOverdue => overdueCount > 0;
   bool get hasDueReview => dueReviewCount > 0;
@@ -64,11 +70,16 @@ class TaskHubSummary {
     final upcoming = <({Todo todo, DateTime dueLocal})>[];
     final dueReview = <Todo>[];
     final unscheduled = <Todo>[];
+    final done = <Todo>[];
 
     final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
 
     for (final todo in todos) {
-      if (todo.status == 'done' || todo.status == 'dismissed') continue;
+      if (todo.status == 'dismissed') continue;
+      if (todo.status == 'done') {
+        done.add(todo);
+        continue;
+      }
 
       final dueMs = todo.dueAtMs;
       if (dueMs != null) {
@@ -103,6 +114,7 @@ class TaskHubSummary {
       return b.updatedAtMs.compareTo(a.updatedAtMs);
     });
     unscheduled.sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
+    done.sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
 
     final scheduledPreview = <Todo>[];
     for (final item in due) {
@@ -132,12 +144,14 @@ class TaskHubSummary {
       upcomingCount: upcoming.length,
       unscheduledCount: dueReview.length + unscheduled.length,
       dueReviewCount: dueReview.length,
+      doneCount: done.length,
       scheduledPreviewTodos: scheduledPreview,
       unscheduledPreviewTodos: unscheduledPreview,
       dueTodos: due.map((e) => e.todo).toList(growable: false),
       upcomingTodos: upcoming.map((e) => e.todo).toList(growable: false),
       dueReviewTodos: dueReview.toList(growable: false),
       unscheduledTodos: unscheduled.toList(growable: false),
+      doneTodos: done.toList(growable: false),
     );
   }
 }
