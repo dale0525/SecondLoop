@@ -330,9 +330,14 @@ jobs:
             throw "Velopack setup not found in dist"
           }
 
-          $releasesPath = Get-ChildItem -Path dist -Filter '*RELEASES*' -File | Select-Object -First 1
-          if ($null -eq $releasesPath) {
-            throw "Velopack RELEASES not found in dist"
+          $releasesMetadataPath = Get-ChildItem -Path dist -Filter 'releases.*.json' -File | Select-Object -First 1
+          if ($null -eq $releasesMetadataPath) {
+            throw "Velopack releases metadata not found in dist"
+          }
+
+          $assetsMetadataPath = Get-ChildItem -Path dist -Filter 'assets.*.json' -File | Select-Object -First 1
+          if ($null -eq $assetsMetadataPath) {
+            throw "Velopack assets metadata not found in dist"
           }
 
           $nupkgPath = Get-ChildItem -Path dist -Filter '*.nupkg' -File | Select-Object -First 1
@@ -344,6 +349,8 @@ jobs:
           name: windows
           path: |
             dist/*Setup*.exe
+            dist/releases.*.json
+            dist/assets.*.json
             dist/*RELEASES*
             dist/*.nupkg
 
@@ -719,6 +726,8 @@ jobs:
             dist/*.dmg
             dist/*.dmg.sha256
             dist/*Setup*.exe
+            dist/releases.*.json
+            dist/assets.*.json
             dist/*RELEASES*
             dist/*.nupkg
             dist/*.tar.gz
