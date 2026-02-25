@@ -3,6 +3,31 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('flutter_with_defines prefers project flutter sdk before dart+fvm', () {
+    final content = File('scripts/flutter_with_defines.sh').readAsStringSync();
+
+    expect(content, contains('.fvm/flutter_sdk/bin/flutter'));
+    expect(content, contains(r'if [[ -x "${project_flutter}" ]]'));
+    expect(content, contains(r'exec "${project_flutter}" "${args[@]}"'));
+
+    final projectFlutterIndex = content.indexOf('.fvm/flutter_sdk/bin/flutter');
+    final dartProbeIndex = content.indexOf('if command -v dart');
+
+    expect(projectFlutterIndex, greaterThanOrEqualTo(0));
+    expect(dartProbeIndex, greaterThan(projectFlutterIndex));
+  });
+
+  test('flutter_with_defines disables implicit pub get for run/build', () {
+    final content = File('scripts/flutter_with_defines.sh').readAsStringSync();
+
+    expect(content, contains('has_pub_resolution_flag()'));
+    expect(content, contains('maybe_disable_implicit_pub_get()'));
+    expect(content, contains(r'case "${all_args[0]}" in'));
+    expect(content, contains('run|build'));
+    expect(content, contains(r'all_args+=("--no-pub")'));
+    expect(content, contains('\nmaybe_disable_implicit_pub_get\n'));
+  });
+
   test('flutter_with_defines cleans macOS module cache conflicts', () {
     final content = File('scripts/flutter_with_defines.sh').readAsStringSync();
 
