@@ -139,7 +139,9 @@ class PixiAndroidTasksTests(unittest.TestCase):
     def test_setup_rustup_patches_cargokit_plugins_for_new_flutter_gradle_plugin(self) -> None:
         script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
 
+        self.assertIn('${PUB_CACHE:-"$ROOT_DIR/.tool/pub-cache"}', script)
         self.assertIn(".tool/pub-cache/hosted", script)
+        self.assertIn('${HOME}/.pub-cache/hosted', script)
         self.assertIn('irondash_engine_context-*/cargokit/gradle/plugin.gradle', script)
         self.assertIn('super_native_extensions-*/cargokit/gradle/plugin.gradle', script)
         self.assertIn('candidate.plugins.hasPlugin("dev.flutter.flutter-gradle-plugin")', script)
