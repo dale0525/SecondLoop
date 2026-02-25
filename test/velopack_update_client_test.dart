@@ -33,7 +33,7 @@ void main() {
     );
 
     expect(
-      () => client.stageAsset(Uri.parse('https://cdn.example.com/win.msi')),
+      () => client.stageAsset(Uri.parse('https://cdn.example.com/win.nupkg')),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,

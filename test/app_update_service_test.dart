@@ -133,7 +133,7 @@ void main() {
             },
             {
               'name': 'SecondLoop-windows-x64-v1.1.0.msi',
-              'browser_download_url': 'https://cdn.example.com/win.msi',
+              'browser_download_url': 'https://cdn.example.com/legacy.msi',
             },
             {
               'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
@@ -172,7 +172,7 @@ void main() {
           'assets': [
             {
               'name': 'SecondLoop-windows-x64-v1.1.0.msi',
-              'browser_download_url': 'https://cdn.example.com/win.msi',
+              'browser_download_url': 'https://cdn.example.com/legacy.msi',
             },
           ],
         },
@@ -204,8 +204,8 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
-              'browser_download_url': 'https://cdn.example.com/win.msi',
+              'name': 'SecondLoop-win-Setup.exe',
+              'browser_download_url': 'https://cdn.example.com/setup.exe',
             },
           ],
         },

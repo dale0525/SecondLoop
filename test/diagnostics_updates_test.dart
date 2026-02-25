@@ -156,8 +156,8 @@ void main() {
           'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
       installMode: AppUpdateInstallMode.stagedNextLaunch,
       asset: AppUpdateAsset(
-        name: 'SecondLoop-windows-x64-v1.1.0.msi',
-        downloadUri: Uri.parse('https://cdn.example.com/win.msi'),
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
     final service = _FakeAppUpdateService(
