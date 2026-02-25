@@ -34,6 +34,7 @@ import '../features/quick_capture/quick_capture_overlay.dart';
 import '../features/share/share_ingest_gate.dart';
 import '../features/settings/settings_page.dart';
 import '../features/share/share_intent_listener.dart';
+import '../features/welcome/first_launch_welcome_gate.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
 import '../core/notifications/review_reminder_notifications_gate.dart';
@@ -371,9 +372,12 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                                               QuickCaptureOverlay(
                                                             navigatorKey:
                                                                 _navigatorKey,
-                                                            child: child ??
-                                                                const SizedBox
-                                                                    .shrink(),
+                                                            child:
+                                                                FirstLaunchWelcomeGate(
+                                                              child: child ??
+                                                                  const SizedBox
+                                                                      .shrink(),
+                                                            ),
                                                           ),
                                                         ),
                                                       ),

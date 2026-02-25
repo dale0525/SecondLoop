@@ -860,6 +860,41 @@
       "subtitle": "搜索相似消息 + 重建向量索引"
     }
   },
+  "welcomeGuide": {
+    "title": "欢迎使用 SecondLoop",
+    "subtitle": "几分钟内完成关键设置。",
+    "ai": {
+      "title": "AI 设置",
+      "description": "连接你偏好的 AI 来源，启用 AI 对话。",
+      "open": "打开 AI 设置",
+      "statusReady": "已就绪",
+      "statusNotSet": "未设置"
+    },
+    "sync": {
+      "title": "同步设置",
+      "description": "配置同步，保持多设备数据一致。",
+      "open": "打开同步设置",
+      "statusReady": "已就绪",
+      "statusNotSet": "未设置"
+    },
+    "permissions": {
+      "title": "权限",
+      "description": "检查系统权限快捷入口。",
+      "statusNeedsReview": "需要检查",
+      "microphone": "麦克风",
+      "speech": "语音识别",
+      "notifications": "通知",
+      "openFailed": "无法自动打开系统设置，请手动检查相关权限。"
+    },
+    "actions": {
+      "skip": "稍后设置",
+      "finish": "完成设置"
+    },
+    "reopen": {
+      "title": "重新打开欢迎引导",
+      "subtitle": "再次查看 AI、同步与权限设置入口"
+    }
+  },
   "lock": {
     "masterPasswordRequired": "需要主密码",
     "passwordsDoNotMatch": "两次输入的密码不一致",

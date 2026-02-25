@@ -15,7 +15,10 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets('First launch -> loop home -> send message', (tester) async {
-    SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
+    SharedPreferences.setMockInitialValues({
+      'ask_ai_data_consent_v1': true,
+      'welcome_guide_seen_v1': true,
+    });
     final backend = MemoryBackend();
 
     await tester.pumpWidget(MyApp(backend: backend));

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1752 (876 per locale)
+/// Strings: 1798 (899 per locale)
 ///
-/// Built on 2026-02-25 at 03:53 UTC
+/// Built on 2026-02-25 at 06:27 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -193,6 +193,8 @@ class Translations implements BaseTranslations<AppLocale, Translations> {
   late final _StringsErrorsEn errors = _StringsErrorsEn._(_root);
   late final _StringsActionsEn actions = _StringsActionsEn._(_root);
   late final _StringsSettingsEn settings = _StringsSettingsEn._(_root);
+  late final _StringsWelcomeGuideEn welcomeGuide =
+      _StringsWelcomeGuideEn._(_root);
   late final _StringsLockEn lock = _StringsLockEn._(_root);
   late final _StringsChatEn chat = _StringsChatEn._(_root);
   late final _StringsAttachmentsEn attachments = _StringsAttachmentsEn._(_root);
@@ -350,6 +352,26 @@ class _StringsSettingsEn {
       _StringsSettingsDebugResetLocalDataAllDevicesEn._(_root);
   late final _StringsSettingsDebugSemanticSearchEn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchEn._(_root);
+}
+
+// Path: welcomeGuide
+class _StringsWelcomeGuideEn {
+  _StringsWelcomeGuideEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Welcome to SecondLoop';
+  String get subtitle => 'Set up essentials in minutes.';
+  late final _StringsWelcomeGuideAiEn ai = _StringsWelcomeGuideAiEn._(_root);
+  late final _StringsWelcomeGuideSyncEn sync =
+      _StringsWelcomeGuideSyncEn._(_root);
+  late final _StringsWelcomeGuidePermissionsEn permissions =
+      _StringsWelcomeGuidePermissionsEn._(_root);
+  late final _StringsWelcomeGuideActionsEn actions =
+      _StringsWelcomeGuideActionsEn._(_root);
+  late final _StringsWelcomeGuideReopenEn reopen =
+      _StringsWelcomeGuideReopenEn._(_root);
 }
 
 // Path: lock
@@ -1385,6 +1407,73 @@ class _StringsSettingsDebugSemanticSearchEn {
   // Translations
   String get title => 'Debug: Semantic search';
   String get subtitle => 'Search similar messages + rebuild embeddings index';
+}
+
+// Path: welcomeGuide.ai
+class _StringsWelcomeGuideAiEn {
+  _StringsWelcomeGuideAiEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'AI setup';
+  String get description => 'Connect your preferred AI source for Ask AI.';
+  String get open => 'Open AI settings';
+  String get statusReady => 'Ready';
+  String get statusNotSet => 'Not set';
+}
+
+// Path: welcomeGuide.sync
+class _StringsWelcomeGuideSyncEn {
+  _StringsWelcomeGuideSyncEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Sync setup';
+  String get description => 'Configure sync so your data stays consistent.';
+  String get open => 'Open sync settings';
+  String get statusReady => 'Ready';
+  String get statusNotSet => 'Not set';
+}
+
+// Path: welcomeGuide.permissions
+class _StringsWelcomeGuidePermissionsEn {
+  _StringsWelcomeGuidePermissionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Permissions';
+  String get description => 'Review system permissions shortcuts.';
+  String get statusNeedsReview => 'Needs review';
+  String get microphone => 'Microphone';
+  String get speech => 'Speech';
+  String get notifications => 'Notifications';
+  String get openFailed =>
+      'Unable to open system settings automatically. Please review permissions manually.';
+}
+
+// Path: welcomeGuide.actions
+class _StringsWelcomeGuideActionsEn {
+  _StringsWelcomeGuideActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get skip => 'Skip for now';
+  String get finish => 'Finish setup';
+}
+
+// Path: welcomeGuide.reopen
+class _StringsWelcomeGuideReopenEn {
+  _StringsWelcomeGuideReopenEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Reopen welcome guide';
+  String get subtitle => 'Review AI, sync, and permissions setup links again';
 }
 
 // Path: chat.deleteMessageDialog
@@ -3891,6 +3980,9 @@ class _StringsZhCn extends Translations {
   @override
   late final _StringsSettingsZhCn settings = _StringsSettingsZhCn._(_root);
   @override
+  late final _StringsWelcomeGuideZhCn welcomeGuide =
+      _StringsWelcomeGuideZhCn._(_root);
+  @override
   late final _StringsLockZhCn lock = _StringsLockZhCn._(_root);
   @override
   late final _StringsChatZhCn chat = _StringsChatZhCn._(_root);
@@ -4135,6 +4227,37 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsDebugSemanticSearchZhCn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchZhCn._(_root);
+}
+
+// Path: welcomeGuide
+class _StringsWelcomeGuideZhCn extends _StringsWelcomeGuideEn {
+  _StringsWelcomeGuideZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '欢迎使用 SecondLoop';
+  @override
+  String get subtitle => '几分钟内完成关键设置。';
+  @override
+  late final _StringsWelcomeGuideAiZhCn ai =
+      _StringsWelcomeGuideAiZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideSyncZhCn sync =
+      _StringsWelcomeGuideSyncZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuidePermissionsZhCn permissions =
+      _StringsWelcomeGuidePermissionsZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideActionsZhCn actions =
+      _StringsWelcomeGuideActionsZhCn._(_root);
+  @override
+  late final _StringsWelcomeGuideReopenZhCn reopen =
+      _StringsWelcomeGuideReopenZhCn._(_root);
 }
 
 // Path: lock
@@ -5714,6 +5837,109 @@ class _StringsSettingsDebugSemanticSearchZhCn
   String get title => '调试：语义检索';
   @override
   String get subtitle => '搜索相似消息 + 重建向量索引';
+}
+
+// Path: welcomeGuide.ai
+class _StringsWelcomeGuideAiZhCn extends _StringsWelcomeGuideAiEn {
+  _StringsWelcomeGuideAiZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'AI 设置';
+  @override
+  String get description => '连接你偏好的 AI 来源，启用 AI 对话。';
+  @override
+  String get open => '打开 AI 设置';
+  @override
+  String get statusReady => '已就绪';
+  @override
+  String get statusNotSet => '未设置';
+}
+
+// Path: welcomeGuide.sync
+class _StringsWelcomeGuideSyncZhCn extends _StringsWelcomeGuideSyncEn {
+  _StringsWelcomeGuideSyncZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '同步设置';
+  @override
+  String get description => '配置同步，保持多设备数据一致。';
+  @override
+  String get open => '打开同步设置';
+  @override
+  String get statusReady => '已就绪';
+  @override
+  String get statusNotSet => '未设置';
+}
+
+// Path: welcomeGuide.permissions
+class _StringsWelcomeGuidePermissionsZhCn
+    extends _StringsWelcomeGuidePermissionsEn {
+  _StringsWelcomeGuidePermissionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '权限';
+  @override
+  String get description => '检查系统权限快捷入口。';
+  @override
+  String get statusNeedsReview => '需要检查';
+  @override
+  String get microphone => '麦克风';
+  @override
+  String get speech => '语音识别';
+  @override
+  String get notifications => '通知';
+  @override
+  String get openFailed => '无法自动打开系统设置，请手动检查相关权限。';
+}
+
+// Path: welcomeGuide.actions
+class _StringsWelcomeGuideActionsZhCn extends _StringsWelcomeGuideActionsEn {
+  _StringsWelcomeGuideActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get skip => '稍后设置';
+  @override
+  String get finish => '完成设置';
+}
+
+// Path: welcomeGuide.reopen
+class _StringsWelcomeGuideReopenZhCn extends _StringsWelcomeGuideReopenEn {
+  _StringsWelcomeGuideReopenZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '重新打开欢迎引导';
+  @override
+  String get subtitle => '再次查看 AI、同步与权限设置入口';
 }
 
 // Path: chat.deleteMessageDialog
@@ -10487,6 +10713,52 @@ extension on Translations {
         return 'Debug: Semantic search';
       case 'settings.debugSemanticSearch.subtitle':
         return 'Search similar messages + rebuild embeddings index';
+      case 'welcomeGuide.title':
+        return 'Welcome to SecondLoop';
+      case 'welcomeGuide.subtitle':
+        return 'Set up essentials in minutes.';
+      case 'welcomeGuide.ai.title':
+        return 'AI setup';
+      case 'welcomeGuide.ai.description':
+        return 'Connect your preferred AI source for Ask AI.';
+      case 'welcomeGuide.ai.open':
+        return 'Open AI settings';
+      case 'welcomeGuide.ai.statusReady':
+        return 'Ready';
+      case 'welcomeGuide.ai.statusNotSet':
+        return 'Not set';
+      case 'welcomeGuide.sync.title':
+        return 'Sync setup';
+      case 'welcomeGuide.sync.description':
+        return 'Configure sync so your data stays consistent.';
+      case 'welcomeGuide.sync.open':
+        return 'Open sync settings';
+      case 'welcomeGuide.sync.statusReady':
+        return 'Ready';
+      case 'welcomeGuide.sync.statusNotSet':
+        return 'Not set';
+      case 'welcomeGuide.permissions.title':
+        return 'Permissions';
+      case 'welcomeGuide.permissions.description':
+        return 'Review system permissions shortcuts.';
+      case 'welcomeGuide.permissions.statusNeedsReview':
+        return 'Needs review';
+      case 'welcomeGuide.permissions.microphone':
+        return 'Microphone';
+      case 'welcomeGuide.permissions.speech':
+        return 'Speech';
+      case 'welcomeGuide.permissions.notifications':
+        return 'Notifications';
+      case 'welcomeGuide.permissions.openFailed':
+        return 'Unable to open system settings automatically. Please review permissions manually.';
+      case 'welcomeGuide.actions.skip':
+        return 'Skip for now';
+      case 'welcomeGuide.actions.finish':
+        return 'Finish setup';
+      case 'welcomeGuide.reopen.title':
+        return 'Reopen welcome guide';
+      case 'welcomeGuide.reopen.subtitle':
+        return 'Review AI, sync, and permissions setup links again';
       case 'lock.masterPasswordRequired':
         return 'Master password required';
       case 'lock.passwordsDoNotMatch':
@@ -12277,6 +12549,52 @@ extension on _StringsZhCn {
         return '调试：语义检索';
       case 'settings.debugSemanticSearch.subtitle':
         return '搜索相似消息 + 重建向量索引';
+      case 'welcomeGuide.title':
+        return '欢迎使用 SecondLoop';
+      case 'welcomeGuide.subtitle':
+        return '几分钟内完成关键设置。';
+      case 'welcomeGuide.ai.title':
+        return 'AI 设置';
+      case 'welcomeGuide.ai.description':
+        return '连接你偏好的 AI 来源，启用 AI 对话。';
+      case 'welcomeGuide.ai.open':
+        return '打开 AI 设置';
+      case 'welcomeGuide.ai.statusReady':
+        return '已就绪';
+      case 'welcomeGuide.ai.statusNotSet':
+        return '未设置';
+      case 'welcomeGuide.sync.title':
+        return '同步设置';
+      case 'welcomeGuide.sync.description':
+        return '配置同步，保持多设备数据一致。';
+      case 'welcomeGuide.sync.open':
+        return '打开同步设置';
+      case 'welcomeGuide.sync.statusReady':
+        return '已就绪';
+      case 'welcomeGuide.sync.statusNotSet':
+        return '未设置';
+      case 'welcomeGuide.permissions.title':
+        return '权限';
+      case 'welcomeGuide.permissions.description':
+        return '检查系统权限快捷入口。';
+      case 'welcomeGuide.permissions.statusNeedsReview':
+        return '需要检查';
+      case 'welcomeGuide.permissions.microphone':
+        return '麦克风';
+      case 'welcomeGuide.permissions.speech':
+        return '语音识别';
+      case 'welcomeGuide.permissions.notifications':
+        return '通知';
+      case 'welcomeGuide.permissions.openFailed':
+        return '无法自动打开系统设置，请手动检查相关权限。';
+      case 'welcomeGuide.actions.skip':
+        return '稍后设置';
+      case 'welcomeGuide.actions.finish':
+        return '完成设置';
+      case 'welcomeGuide.reopen.title':
+        return '重新打开欢迎引导';
+      case 'welcomeGuide.reopen.subtitle':
+        return '再次查看 AI、同步与权限设置入口';
       case 'lock.masterPasswordRequired':
         return '需要主密码';
       case 'lock.passwordsDoNotMatch':

@@ -9,7 +9,9 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('Cmd+V pastes into chat input', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
 
     String? clipboardText = 'pasted';
     final messenger =

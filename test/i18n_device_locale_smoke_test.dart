@@ -10,7 +10,9 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets('Uses device locale for navigation labels', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
     tester.binding.platformDispatcher.localeTestValue =
         const Locale('zh', 'CN');
     addTearDown(tester.binding.platformDispatcher.clearLocaleTestValue);
