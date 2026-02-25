@@ -41,7 +41,7 @@ void main() {
   });
 
   group('AppUpdateService.checkForUpdates', () {
-    test('returns external Windows MSI update when matching asset exists',
+    test('returns external Windows setup update when matching asset exists',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -54,8 +54,8 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
-              'browser_download_url': 'https://cdn.example.com/win.msi',
+              'name': 'SecondLoop-win-Setup.exe',
+              'browser_download_url': 'https://cdn.example.com/setup.exe',
             },
           ],
         },
@@ -68,7 +68,127 @@ void main() {
       expect(update, isNotNull);
       expect(update!.latestTag, 'v1.1.0');
       expect(update.installMode, AppUpdateInstallMode.externalDownload);
-      expect(update.downloadUri.toString(), 'https://cdn.example.com/win.msi');
+      expect(
+          update.downloadUri.toString(), 'https://cdn.example.com/setup.exe');
+    });
+
+    test(
+        'returns staged Windows update from Velopack nupkg when runtime is available',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win-Setup.exe',
+              'browser_download_url': 'https://cdn.example.com/setup.exe',
+            },
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win.nupkg',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(
+        result.update!.installMode,
+        AppUpdateInstallMode.stagedNextLaunch,
+      );
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/win.nupkg',
+      );
+    });
+
+    test(
+        'returns external Windows setup installer when staged runtime is unavailable',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '89'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win-Setup.exe',
+              'browser_download_url': 'https://cdn.example.com/setup.exe',
+            },
+            {
+              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
+              'browser_download_url': 'https://cdn.example.com/legacy.msi',
+            },
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win.nupkg',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(
+        result.update!.installMode,
+        AppUpdateInstallMode.externalDownload,
+      );
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/setup.exe',
+      );
+    });
+
+    test('falls back to release page when only MSI asset exists on Windows',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '90'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
+              'browser_download_url': 'https://cdn.example.com/legacy.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(
+        result.update!.installMode,
+        AppUpdateInstallMode.externalDownload,
+      );
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      );
     });
 
     test('falls back to external release page when no platform asset exists',
@@ -84,8 +204,8 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
-              'browser_download_url': 'https://cdn.example.com/win.msi',
+              'name': 'SecondLoop-win-Setup.exe',
+              'browser_download_url': 'https://cdn.example.com/setup.exe',
             },
           ],
         },
@@ -180,8 +300,8 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-windows-x64-v1.1.0.msi',
-              'browser_download_url': 'https://cdn.example.com/win.msi',
+              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win.nupkg',
             },
           ],
         },

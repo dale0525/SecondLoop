@@ -79,7 +79,6 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 ## 🔄 桌面端更新策略（当前）
 
 - **Windows（Velopack 安装）**：后台准备更新，下次启动自动生效。
-- **Windows（历史 MSI 安装）**：回退为手动下载更新。
 - **macOS**：保持 DMG 手动更新（暂不使用付费签名/公证）。
 - 发版与验收手册：`docs/runbooks/windows-velopack-release.md`。
 

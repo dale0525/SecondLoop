@@ -700,7 +700,7 @@
       "currentVersion": "Current version: $version",
       "latestVersion": "Latest version: $version",
       "status": {
-        "idle": "Check for updates. Linux can auto-update and restart; Windows uses MSI download/install.",
+        "idle": "Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.",
         "checking": "Checking for updates…",
         "upToDate": "You're on the latest version.",
         "availableSeamless": "Update available ($version). You can auto-update and restart.",
@@ -744,12 +744,12 @@
         "currentVersion": "Current version: $version",
         "latestVersion": "Latest version: $version",
         "status": {
-          "idle": "Check for updates. Linux can auto-update and restart; Windows uses MSI download/install.",
+          "idle": "Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.",
           "checking": "Checking for updates…",
           "upToDate": "You're on the latest version.",
           "availableSeamless": "Update available ($version). Click update to restart and apply automatically.",
           "availableStaged": "Update available ($version). Prepare in background and apply next launch.",
-          "availableExternal": "Update available ($version). Open the download page to install (MSI on Windows).",
+          "availableExternal": "Update available ($version). Open the download page to install (Setup.exe on Windows).",
           "failed": "Update check failed: $error"
         },
         "actions": {

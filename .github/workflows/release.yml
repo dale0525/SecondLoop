@@ -317,42 +317,6 @@ jobs:
             }
             cmd /c subst W: /d > $null 2>&1
           }
-      - name: Setup portable WiX Toolset v3
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_wix.ps1
-      - name: Package MSI
-        shell: pwsh
-        run: |
-          $safeRefName = $Env:GITHUB_REF_NAME -replace '[^0-9A-Za-z._-]', '-'
-          $safeRefName = $safeRefName.Trim('-')
-          if ([string]::IsNullOrWhiteSpace($safeRefName)) {
-            $safeRefName = "run-$Env:GITHUB_RUN_ID"
-          }
-
-          $outputName = "SecondLoop-windows-x64-$safeRefName"
-          $runNumber = [int]$Env:GITHUB_RUN_NUMBER
-          if ($runNumber -lt 0) { $runNumber = 0 }
-          if ($runNumber -gt 65535) { $runNumber = 65535 }
-          $msiVersion = "1.0.$runNumber"
-          if ($Env:GITHUB_REF -like "refs/tags/v*") {
-            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
-            if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
-              $msiVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
-            }
-          }
-
-          & scripts/create_windows_msi.ps1 `
-            -SourceDir build/windows/x64/runner/Release `
-            -OutputPath dist `
-            -OutputName $outputName `
-            -Version $msiVersion `
-            -ProductName 'SecondLoop' `
-            -Manufacturer 'SecondLoop Contributors'
-
-          $msiPath = Join-Path 'dist' "$outputName.msi"
-          if (-not (Test-Path $msiPath)) {
-            throw "MSI package not found: $msiPath"
-          }
       - name: Package Velopack
         shell: pwsh
         run: |
@@ -379,7 +343,6 @@ jobs:
         with:
           name: windows
           path: |
-            dist/*.msi
             dist/*Setup*.exe
             dist/*RELEASES*
             dist/*.nupkg
@@ -755,7 +718,6 @@ jobs:
             dist/*.apk
             dist/*.dmg
             dist/*.dmg.sha256
-            dist/*.msi
             dist/*Setup*.exe
             dist/*RELEASES*
             dist/*.nupkg
