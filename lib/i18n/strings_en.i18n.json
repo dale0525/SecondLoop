@@ -738,40 +738,6 @@
       "subtitle": "Share a diagnostics report with support",
       "privacyNote": "This report does not include your notes or API keys.",
       "loading": "Loading diagnostics…",
-      "updates": {
-        "title": "App updates",
-        "unknownVersion": "unknown",
-        "currentVersion": "Current version: $version",
-        "latestVersion": "Latest version: $version",
-        "status": {
-          "idle": "Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.",
-          "checking": "Checking for updates…",
-          "upToDate": "You're on the latest version.",
-          "availableSeamless": "Update available ($version). Click update to restart and apply automatically.",
-          "availableStaged": "Update available ($version). Prepare in background and apply next launch.",
-          "availableExternal": "Update available ($version). Open the download page to install (Setup.exe on Windows).",
-          "failed": "Update check failed: $error"
-        },
-        "actions": {
-          "check": "Check updates",
-          "checking": "Checking…",
-          "updateAndRestart": "Update and restart",
-          "stageForNextLaunch": "Prepare update",
-          "openDownload": "Open download page",
-          "updating": "Updating…"
-        },
-        "messages": {
-          "upToDate": "You're already on the latest version",
-          "updateAvailable": "Update available: $version",
-          "checkFailed": "Failed to check updates: $error",
-          "installStarting": "Preparing update. The app will restart shortly.",
-          "stageStarting": "Preparing update in background. It will apply on next launch.",
-          "stageReady": "Update is ready and will apply on next launch.",
-          "installFailed": "Update failed: $error",
-          "stageFailed": "Failed to prepare update: $error",
-          "openFailed": "Could not open the download page"
-        }
-      },
       "messages": {
         "copied": "Diagnostics copied to clipboard",
         "copyFailed": "Failed to copy diagnostics: $error",
