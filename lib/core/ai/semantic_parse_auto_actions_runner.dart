@@ -296,10 +296,12 @@ final class SemanticParseAutoActionsRunner {
 
         List<String> preferredTodoIds = const <String>[];
         try {
-          preferredTodoIds = await client.retrieveTodoCandidateIds(
-            query: analysisText,
-            topK: 8,
-          );
+          preferredTodoIds = await client
+              .retrieveTodoCandidateIds(
+                query: analysisText,
+                topK: 8,
+              )
+              .timeout(settings.hardTimeout);
         } catch (_) {
           preferredTodoIds = const <String>[];
         }
@@ -338,7 +340,10 @@ final class SemanticParseAutoActionsRunner {
           if (parsed == null) {
             throw StateError('invalid_json');
           }
-        } catch (_) {
+        } catch (error) {
+          if (_shouldRetryRemoteParseError(error)) {
+            rethrow;
+          }
           final localDecision = _resolveLocallyWhenRemoteFails(
             analysisText,
             locale: locale,
@@ -565,6 +570,40 @@ final class SemanticParseAutoActionsRunner {
       firstDayOfWeekIndex: firstDayOfWeekIndex,
       openTodoTargets: targets,
     );
+  }
+
+  static bool _shouldRetryRemoteParseError(Object error) {
+    if (error is TimeoutException) return true;
+
+    final statusCode = parseHttpStatusFromError(error);
+    if (statusCode == 408 || statusCode == 429 || statusCode == 499) {
+      return true;
+    }
+    if (statusCode != null && statusCode >= 500) return true;
+
+    final message = error.toString().toLowerCase();
+    const retryableKeywords = <String>[
+      'cancelled',
+      'canceled',
+      'operation canceled',
+      'operation cancelled',
+      'request canceled',
+      'request cancelled',
+      'aborted',
+      'background',
+      'connection reset',
+      'connection closed',
+      'broken pipe',
+      'socket',
+      'network is unreachable',
+      'timed out',
+      'timeout',
+    ];
+    for (final keyword in retryableKeywords) {
+      if (message.contains(keyword)) return true;
+    }
+
+    return false;
   }
 
   static int _retryBackoffMs(int attempts) {

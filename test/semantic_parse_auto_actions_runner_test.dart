@@ -199,6 +199,50 @@ void main() {
     expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 
+  test('runner retries instead of local fallback when parse is interrupted',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:interrupted',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:interrupted': '明天提醒我提交材料'},
+    );
+    final client = _FakeClient(
+      error: StateError('operation canceled because app entered background'),
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 9 * 60,
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(result.processed, 0);
+    expect(store.lastSucceeded, isNull);
+    expect(store.lastFailed, isNotNull);
+    expect(store.lastFailed?.attempts, 1);
+    expect(store.lastFailed?.nextRetryAtMs, 31000);
+    expect(store.createdTodoIds, isEmpty);
+  });
+
   test('runner marks none when create is disallowed for the message input',
       () async {
     final store = _FakeStore(

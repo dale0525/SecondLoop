@@ -66,6 +66,9 @@ class _SemanticParseAutoActionsGateState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
+        _timer?.cancel();
+        _timer = null;
+        _nextRunAt = null;
         _schedule(const Duration(milliseconds: 800));
         break;
       case AppLifecycleState.inactive:
@@ -124,7 +127,8 @@ class _SemanticParseAutoActionsGateState
     final now = DateTime.now();
     final desired = now.add(delay);
     final nextRunAt = _nextRunAt;
-    if (nextRunAt != null && nextRunAt.isBefore(desired)) {
+    final hasActiveTimer = _timer?.isActive ?? false;
+    if (nextRunAt != null && hasActiveTimer && nextRunAt.isBefore(desired)) {
       return;
     }
 
