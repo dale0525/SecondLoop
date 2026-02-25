@@ -41,6 +41,7 @@ final class ReviewReminderNotificationsGate extends StatefulWidget {
 final class _ReviewReminderNotificationsGateState
     extends State<ReviewReminderNotificationsGate> with WidgetsBindingObserver {
   static const _kRefreshDebounce = Duration(milliseconds: 500);
+  static const _kDismissedSourceDriftToleranceMs = 5 * 1000;
 
   late final ReviewReminderNotificationScheduler _scheduler =
       (widget.schedulerFactory ??
@@ -63,7 +64,8 @@ final class _ReviewReminderNotificationsGateState
   bool _inAppFallbackEnabled = ReviewReminderInAppFallbackPrefs.defaultValue;
   bool _inAppFallbackVisible = false;
   String? _activeInAppFallbackSourceKey;
-  String? _dismissedInAppFallbackSourceKey;
+  String? _dismissedInAppFallbackTodoKey;
+  int? _dismissedInAppFallbackSourceAtUtcMs;
 
   bool _isAppInForeground = true;
   int _foregroundSessionStartedAtUtcMs = 0;
@@ -166,7 +168,7 @@ final class _ReviewReminderNotificationsGateState
         scheduler: _scheduler,
         readTodos: () => backend.listTodos(sessionKey),
       );
-      _dismissedInAppFallbackSourceKey = null;
+      _clearDismissedInAppFallback();
     }
 
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
@@ -215,6 +217,16 @@ final class _ReviewReminderNotificationsGateState
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  void _clearDismissedInAppFallback() {
+    _dismissedInAppFallbackTodoKey = null;
+    _dismissedInAppFallbackSourceAtUtcMs = null;
+  }
+
+  void _markInAppFallbackDismissed(ReviewReminderItem item) {
+    _dismissedInAppFallbackTodoKey = _inAppFallbackTodoKeyForItem(item);
+    _dismissedInAppFallbackSourceAtUtcMs = item.sourceAtUtcMs;
   }
 
   void _scheduleRefresh() {
@@ -266,7 +278,7 @@ final class _ReviewReminderNotificationsGateState
     if (_inAppFallbackEnabled == nextEnabled) return;
 
     _inAppFallbackEnabled = nextEnabled;
-    _dismissedInAppFallbackSourceKey = null;
+    _clearDismissedInAppFallback();
     _syncInAppFallbackFromCurrentPlan();
     if (nextEnabled) _scheduleRefresh();
   }
@@ -282,18 +294,18 @@ final class _ReviewReminderNotificationsGateState
 
     final plan = _coordinator?.currentPlan;
     if (plan == null || plan.items.isEmpty || plan.pendingCount <= 0) {
-      _dismissedInAppFallbackSourceKey = null;
+      _clearDismissedInAppFallback();
       _hideInAppFallbackBanner();
       return;
     }
 
-    final activeSourceKeys = plan.items
+    final activeTodoKeys = plan.items
         .where((item) => _isItemEligibleForInAppFallback(item))
-        .map(_inAppFallbackSourceKeyForItem)
+        .map(_inAppFallbackTodoKeyForItem)
         .toSet();
-    if (_dismissedInAppFallbackSourceKey != null &&
-        !activeSourceKeys.contains(_dismissedInAppFallbackSourceKey)) {
-      _dismissedInAppFallbackSourceKey = null;
+    if (_dismissedInAppFallbackTodoKey != null &&
+        !activeTodoKeys.contains(_dismissedInAppFallbackTodoKey)) {
+      _clearDismissedInAppFallback();
     }
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -305,18 +317,14 @@ final class _ReviewReminderNotificationsGateState
         continue;
       }
 
-      final sourceKey = _inAppFallbackSourceKeyForItem(item);
+      if (_isDismissedInAppFallbackItem(item)) {
+        continue;
+      }
       if (item.scheduleAtUtcMs <= nowUtcMs) {
-        if (_dismissedInAppFallbackSourceKey == sourceKey) {
-          continue;
-        }
         dueItem = item;
         break;
       }
 
-      if (_dismissedInAppFallbackSourceKey == sourceKey) {
-        continue;
-      }
       nextItem ??= item;
     }
 
@@ -337,10 +345,7 @@ final class _ReviewReminderNotificationsGateState
       _inAppFallbackTimer = null;
       if (!mounted) return;
       final latestPlan = _coordinator?.currentPlan;
-      if (latestPlan == null ||
-          !_inAppFallbackEnabled ||
-          !_isAppInForeground ||
-          _dismissedInAppFallbackSourceKey == targetSourceKey) {
+      if (latestPlan == null || !_inAppFallbackEnabled || !_isAppInForeground) {
         _syncInAppFallbackFromCurrentPlan();
         return;
       }
@@ -356,6 +361,10 @@ final class _ReviewReminderNotificationsGateState
         _syncInAppFallbackFromCurrentPlan();
         return;
       }
+      if (_isDismissedInAppFallbackItem(matchedItem)) {
+        _syncInAppFallbackFromCurrentPlan();
+        return;
+      }
 
       _showInAppFallbackBanner(
         item: matchedItem,
@@ -366,6 +375,36 @@ final class _ReviewReminderNotificationsGateState
 
   String _inAppFallbackSourceKeyForItem(ReviewReminderItem item) {
     return '${item.kind.name}:${item.todoId}:${item.sourceAtUtcMs}';
+  }
+
+  String _inAppFallbackTodoKeyForItem(ReviewReminderItem item) {
+    return '${item.kind.name}:${item.todoId}';
+  }
+
+  bool _isDismissedInAppFallbackItem(
+    ReviewReminderItem item,
+  ) {
+    final dismissedTodoKey = _dismissedInAppFallbackTodoKey;
+    final dismissedSourceAtUtcMs = _dismissedInAppFallbackSourceAtUtcMs;
+    if (dismissedTodoKey == null || dismissedSourceAtUtcMs == null) {
+      return false;
+    }
+
+    if (_inAppFallbackTodoKeyForItem(item) != dismissedTodoKey) {
+      return false;
+    }
+
+    if (item.sourceAtUtcMs == dismissedSourceAtUtcMs) {
+      return true;
+    }
+
+    final sourceDriftMs = item.sourceAtUtcMs - dismissedSourceAtUtcMs;
+    if (sourceDriftMs > _kDismissedSourceDriftToleranceMs) {
+      _clearDismissedInAppFallback();
+      return false;
+    }
+
+    return true;
   }
 
   void _showInAppFallbackBanner({
@@ -411,7 +450,7 @@ final class _ReviewReminderNotificationsGateState
             unawaited(_openReminderTarget());
           },
           onDismiss: () {
-            _dismissedInAppFallbackSourceKey = sourceKey;
+            _markInAppFallbackDismissed(item);
             _hideInAppFallbackBanner();
             _syncInAppFallbackFromCurrentPlan();
           },

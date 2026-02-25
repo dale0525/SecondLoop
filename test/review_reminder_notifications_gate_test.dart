@@ -209,6 +209,44 @@ void main() {
     expect(bannerFinder, findsNothing);
   });
 
+  testWidgets(
+      'dismissed due reminder stays hidden when source timestamp drifts',
+      (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final initialDueAtMs = nowUtcMs + const Duration(seconds: 6).inMilliseconds;
+    final harness = await _pumpGateHarness(
+      tester,
+      syncEngine: _buildManualSyncEngine(),
+      todos: <Todo>[_dueTodo(dueAtMs: initialDueAtMs)],
+    );
+
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+    expect(bannerFinder, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss')),
+    );
+    await tester.pumpAndSettle();
+    expect(bannerFinder, findsNothing);
+
+    harness.backend.todos
+      ..clear()
+      ..add(_dueTodo(dueAtMs: initialDueAtMs + 1));
+
+    harness.syncEngine!.notifyExternalChange();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    expect(bannerFinder, findsNothing);
+  });
+
   testWidgets('shows in-app reminder while app is inactive', (tester) async {
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
 
@@ -324,13 +362,14 @@ Future<_GateHarness> _pumpGateHarness(
   final content = syncEngine == null
       ? gate
       : SyncEngineScope(engine: syncEngine, child: gate);
+  final backend = _Backend(todos: effectiveTodos);
 
   await tester.pumpWidget(
     wrapWithI18n(
       MaterialApp(
         navigatorKey: navigatorKey,
         home: AppBackendScope(
-          backend: _Backend(todos: effectiveTodos),
+          backend: backend,
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
@@ -349,6 +388,7 @@ Future<_GateHarness> _pumpGateHarness(
   return _GateHarness(
     scheduler: scheduler,
     syncEngine: syncEngine,
+    backend: backend,
   );
 }
 
@@ -381,10 +421,12 @@ final class _GateHarness {
   const _GateHarness({
     required this.scheduler,
     required this.syncEngine,
+    required this.backend,
   });
 
   final _FakeScheduler scheduler;
   final SyncEngine? syncEngine;
+  final _Backend backend;
 }
 
 SyncEngine _buildManualSyncEngine() {

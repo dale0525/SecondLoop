@@ -75,6 +75,12 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 
 When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads **your question + only the relevant context needed for that answer**. It does **not** upload your keys, master password, or your entire vault/history.
 
+## 🔄 Desktop update strategy (current)
+
+- **Windows (Velopack install)**: background staged update, applied on next launch.
+- **macOS**: manual DMG download/update (no paid signing/notarization yet).
+- Release operations and verification steps: `docs/runbooks/windows-velopack-release.md`.
+
 ## 🧩 Editions (Community vs Cloud)
 
 - **Community Edition (this repo)**: BYOK (bring your own key), local‑first, encrypted vault, and BYOS (bring your own storage) sync backends.

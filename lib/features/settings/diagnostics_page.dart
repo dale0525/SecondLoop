@@ -42,8 +42,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
 
-  _DiagnosticsUpdateText get _updateText =>
-      _DiagnosticsUpdateText.of(Localizations.localeOf(context));
+  _DiagnosticsUpdateText get _updateText => _DiagnosticsUpdateText.of(context);
 
   Future<String> _buildDiagnosticsJson() async {
     final backend = AppBackendScope.of(context);
@@ -244,18 +243,28 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     final update = _updateResult?.update;
     if (update == null) return;
 
-    if (!update.canSeamlessInstall) {
+    final updatesT = _updateText;
+    if (!update.canSeamlessInstall && !update.canStageForNextLaunch) {
       await _openUpdateExternally(update.downloadUri);
       return;
     }
 
-    final updatesT = _updateText;
     setState(() => _updating = true);
     try {
-      _showMessage(updatesT.messages.installStarting);
-      await _updateService.installAndRestart(update);
+      if (update.canSeamlessInstall) {
+        _showMessage(updatesT.messages.installStarting);
+        await _updateService.installAndRestart(update);
+      } else {
+        _showMessage(updatesT.messages.stageStarting);
+        await _updateService.stageUpdateForNextLaunch(update);
+        _showMessage(updatesT.messages.stageReady);
+      }
     } catch (e) {
-      _showMessage(updatesT.messages.installFailed(error: '$e'));
+      if (update.canStageForNextLaunch) {
+        _showMessage(updatesT.messages.stageFailed(error: '$e'));
+      } else {
+        _showMessage(updatesT.messages.installFailed(error: '$e'));
+      }
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -273,6 +282,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     if (update == null) return updatesT.status.upToDate;
     if (update.canSeamlessInstall) {
       return updatesT.status.availableSeamless(version: update.latestTag);
+    }
+    if (update.canStageForNextLaunch) {
+      return updatesT.status.availableStaged(version: update.latestTag);
     }
     return updatesT.status.availableExternal(version: update.latestTag);
   }
@@ -350,14 +362,18 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                         : Icon(
                             update.canSeamlessInstall
                                 ? Icons.restart_alt_rounded
-                                : Icons.open_in_new_rounded,
+                                : update.canStageForNextLaunch
+                                    ? Icons.download_done_rounded
+                                    : Icons.open_in_new_rounded,
                           ),
                     label: Text(
                       _updating
                           ? updatesT.actions.updating
                           : update.canSeamlessInstall
                               ? updatesT.actions.updateAndRestart
-                              : updatesT.actions.openDownload,
+                              : update.canStageForNextLaunch
+                                  ? updatesT.actions.stageForNextLaunch
+                                  : updatesT.actions.openDownload,
                     ),
                   ),
               ],
@@ -459,90 +475,99 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
 }
 
 class _DiagnosticsUpdateText {
-  const _DiagnosticsUpdateText._(this._isZh);
+  const _DiagnosticsUpdateText._(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  static _DiagnosticsUpdateText of(Locale locale) {
-    final languageCode = locale.languageCode.toLowerCase();
-    return _DiagnosticsUpdateText._(languageCode.startsWith('zh'));
+  static _DiagnosticsUpdateText of(BuildContext context) {
+    return _DiagnosticsUpdateText._(context.t);
   }
 
-  String get title => _isZh ? '应用更新' : 'App updates';
-  String get unknownVersion => _isZh ? '未知' : 'unknown';
+  String get title => _t.settings.diagnostics.updates.title;
+  String get unknownVersion => _t.settings.diagnostics.updates.unknownVersion;
 
   String currentVersion({required String version}) =>
-      _isZh ? '当前版本：$version' : 'Current version: $version';
+      _t.settings.diagnostics.updates.currentVersion(version: version);
 
   String latestVersion({required String version}) =>
-      _isZh ? '最新版本：$version' : 'Latest version: $version';
+      _t.settings.diagnostics.updates.latestVersion(version: version);
 
-  _DiagnosticsUpdateStatusText get status =>
-      _DiagnosticsUpdateStatusText(_isZh);
-  _DiagnosticsUpdateActionText get actions =>
-      _DiagnosticsUpdateActionText(_isZh);
+  _DiagnosticsUpdateStatusText get status => _DiagnosticsUpdateStatusText(_t);
+  _DiagnosticsUpdateActionText get actions => _DiagnosticsUpdateActionText(_t);
   _DiagnosticsUpdateMessageText get messages =>
-      _DiagnosticsUpdateMessageText(_isZh);
+      _DiagnosticsUpdateMessageText(_t);
 }
 
 class _DiagnosticsUpdateStatusText {
-  const _DiagnosticsUpdateStatusText(this._isZh);
+  const _DiagnosticsUpdateStatusText(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  String get idle => _isZh
-      ? '点击检查更新；Linux 可自动更新重启，Windows 请下载 MSI 安装。'
-      : 'Check for updates. Linux can auto-update and restart; Windows uses MSI download/install.';
+  String get idle => _t.settings.diagnostics.updates.status.idle;
+  String get checking => _t.settings.diagnostics.updates.status.checking;
+  String get upToDate => _t.settings.diagnostics.updates.status.upToDate;
 
-  String get checking => _isZh ? '正在检查更新…' : 'Checking for updates…';
+  String availableSeamless({required String version}) =>
+      _t.settings.diagnostics.updates.status.availableSeamless(
+        version: version,
+      );
 
-  String get upToDate => _isZh ? '当前已是最新版本。' : 'You\'re on the latest version.';
+  String availableStaged({required String version}) =>
+      _t.settings.diagnostics.updates.status.availableStaged(
+        version: version,
+      );
 
-  String availableSeamless({required String version}) => _isZh
-      ? '发现新版本（$version）。点击更新后将自动重启并完成安装。'
-      : 'Update available ($version). Click update to restart and apply automatically.';
-
-  String availableExternal({required String version}) => _isZh
-      ? '发现新版本（$version）。请打开下载页完成安装（Windows 为 MSI）。'
-      : 'Update available ($version). Open the download page to install (MSI on Windows).';
+  String availableExternal({required String version}) =>
+      _t.settings.diagnostics.updates.status.availableExternal(
+        version: version,
+      );
 
   String failed({required String error}) =>
-      _isZh ? '检查更新失败：$error' : 'Update check failed: $error';
+      _t.settings.diagnostics.updates.status.failed(error: error);
 }
 
 class _DiagnosticsUpdateActionText {
-  const _DiagnosticsUpdateActionText(this._isZh);
+  const _DiagnosticsUpdateActionText(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  String get check => _isZh ? '检查更新' : 'Check updates';
-  String get checking => _isZh ? '检查中…' : 'Checking…';
-  String get updateAndRestart => _isZh ? '更新并重启' : 'Update and restart';
-  String get openDownload => _isZh ? '打开下载页面' : 'Open download page';
-  String get updating => _isZh ? '更新中…' : 'Updating…';
+  String get check => _t.settings.diagnostics.updates.actions.check;
+  String get checking => _t.settings.diagnostics.updates.actions.checking;
+  String get updateAndRestart =>
+      _t.settings.diagnostics.updates.actions.updateAndRestart;
+  String get stageForNextLaunch =>
+      _t.settings.diagnostics.updates.actions.stageForNextLaunch;
+  String get openDownload =>
+      _t.settings.diagnostics.updates.actions.openDownload;
+  String get updating => _t.settings.diagnostics.updates.actions.updating;
 }
 
 class _DiagnosticsUpdateMessageText {
-  const _DiagnosticsUpdateMessageText(this._isZh);
+  const _DiagnosticsUpdateMessageText(this._t);
 
-  final bool _isZh;
+  final Translations _t;
 
-  String get upToDate =>
-      _isZh ? '当前已是最新版本' : 'You\'re already on the latest version';
+  String get upToDate => _t.settings.diagnostics.updates.messages.upToDate;
 
   String updateAvailable({required String version}) =>
-      _isZh ? '发现新版本：$version' : 'Update available: $version';
+      _t.settings.diagnostics.updates.messages.updateAvailable(
+        version: version,
+      );
 
   String checkFailed({required String error}) =>
-      _isZh ? '检查更新失败：$error' : 'Failed to check updates: $error';
+      _t.settings.diagnostics.updates.messages.checkFailed(error: error);
 
-  String get installStarting => _isZh
-      ? '正在准备更新，应用即将重启。'
-      : 'Preparing update. The app will restart shortly.';
+  String get installStarting =>
+      _t.settings.diagnostics.updates.messages.installStarting;
+  String get stageStarting =>
+      _t.settings.diagnostics.updates.messages.stageStarting;
+  String get stageReady => _t.settings.diagnostics.updates.messages.stageReady;
 
   String installFailed({required String error}) =>
-      _isZh ? '更新失败：$error' : 'Update failed: $error';
+      _t.settings.diagnostics.updates.messages.installFailed(error: error);
 
-  String get openFailed =>
-      _isZh ? '无法打开下载页面' : 'Could not open the download page';
+  String stageFailed({required String error}) =>
+      _t.settings.diagnostics.updates.messages.stageFailed(error: error);
+
+  String get openFailed => _t.settings.diagnostics.updates.messages.openFailed;
 }

@@ -24,6 +24,33 @@ has_dart_define() {
   return 1
 }
 
+has_pub_resolution_flag() {
+  local arg
+  for arg in "${all_args[@]}"; do
+    case "${arg}" in
+      --pub|--no-pub) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+maybe_disable_implicit_pub_get() {
+  if [[ "${#all_args[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  case "${all_args[0]}" in
+    run|build) ;;
+    *) return 0 ;;
+  esac
+
+  if has_pub_resolution_flag; then
+    return 0
+  fi
+
+  all_args+=("--no-pub")
+}
+
 should_sanitize_macos_module_cache() {
   local arg
   local expects_device_id=0
@@ -183,8 +210,11 @@ maybe_define() {
 
 maybe_define SECONDLOOP_FIREBASE_WEB_API_KEY
 maybe_define SECONDLOOP_APP_ID
+maybe_define SECONDLOOP_RELEASE_REPO
+maybe_define SECONDLOOP_RELEASE_API_ORIGIN
 maybe_define_value SECONDLOOP_CLOUD_GATEWAY_BASE_URL "${cloud_gateway_base_url}"
 maybe_define_value SECONDLOOP_MANAGED_VAULT_BASE_URL "${managed_vault_base_url}"
+maybe_disable_implicit_pub_get
 
 if [[ -z "${SECONDLOOP_FIREBASE_WEB_API_KEY-}" && ! -f "${dotenv_file}" ]]; then
   cat >&2 <<'EOF'
@@ -199,6 +229,11 @@ maybe_clear_macos_stale_app_bundle_for_speech_privacy
 
 run_flutter_command() {
   local -a args=("$@")
+  local project_flutter="${repo_root}/.fvm/flutter_sdk/bin/flutter"
+
+  if [[ -x "${project_flutter}" ]]; then
+    exec "${project_flutter}" "${args[@]}"
+  fi
 
   if command -v dart >/dev/null 2>&1; then
     if dart pub global list 2>/dev/null | awk '{print $1}' | grep -qx 'fvm'; then
@@ -229,7 +264,7 @@ EOF
 }
 
 if (( ${#defines[@]} > 0 )); then
-  run_flutter_command "$@" "${defines[@]}"
+  run_flutter_command "${all_args[@]}" "${defines[@]}"
 fi
 
-run_flutter_command "$@"
+run_flutter_command "${all_args[@]}"

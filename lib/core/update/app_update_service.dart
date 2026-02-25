@@ -7,9 +7,11 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'windows/velopack_update_client.dart';
+
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
-  defaultValue: 'https://secondloop.app',
+  defaultValue: '',
 );
 const _defaultReleaseRepo = String.fromEnvironment(
   'SECONDLOOP_RELEASE_REPO',
@@ -27,6 +29,7 @@ enum AppUpdatePlatform {
 
 enum AppUpdateInstallMode {
   seamlessRestart,
+  stagedNextLaunch,
   externalDownload,
 }
 
@@ -74,6 +77,8 @@ class AppUpdateAvailability {
   Uri get downloadUri => asset?.downloadUri ?? releasePageUri;
   bool get canSeamlessInstall =>
       installMode == AppUpdateInstallMode.seamlessRestart;
+  bool get canStageForNextLaunch =>
+      installMode == AppUpdateInstallMode.stagedNextLaunch;
 }
 
 class AppUpdateCheckResult {
@@ -124,21 +129,33 @@ class AppUpdateService {
     AppRuntimeVersionLoader? currentVersionLoader,
     AppUpdatePlatform? platformOverride,
     bool? releaseModeOverride,
+    String? releaseApiOriginOverride,
+    String? releaseRepoOverride,
+    WindowsStagedUpdateClient? windowsStagedUpdateClient,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
         _platformOverride = platformOverride,
-        _releaseModeOverride = releaseModeOverride;
+        _releaseModeOverride = releaseModeOverride,
+        _releaseApiOriginOverride = releaseApiOriginOverride,
+        _releaseRepoOverride = releaseRepoOverride,
+        _windowsStagedUpdateClient = windowsStagedUpdateClient;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
   final AppRuntimeVersionLoader? _currentVersionLoader;
   final AppUpdatePlatform? _platformOverride;
   final bool? _releaseModeOverride;
+  final String? _releaseApiOriginOverride;
+  final String? _releaseRepoOverride;
+  final WindowsStagedUpdateClient? _windowsStagedUpdateClient;
 
   AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
 
   bool get _isReleaseMode => _releaseModeOverride ?? kReleaseMode;
+  String get _releaseApiOrigin =>
+      _releaseApiOriginOverride ?? _defaultReleaseApiOrigin;
+  String get _releaseRepo => _releaseRepoOverride ?? _defaultReleaseRepo;
 
   Future<AppUpdateCheckResult> checkForUpdates() async {
     final runtimeVersion = await _loadCurrentVersion();
@@ -184,8 +201,17 @@ class AppUpdateService {
     }
 
     final assets = _parseAssets(release['assets']);
-    final matchedAsset = _matchAssetForCurrentPlatform(assets);
-    final installMode = _resolveInstallMode(matchedAsset);
+    final windowsStagedRuntimeAvailable =
+        _platform == AppUpdatePlatform.windows &&
+            _isWindowsStagedUpdateAvailable();
+    final matchedAsset = _matchAssetForCurrentPlatform(
+      assets,
+      windowsStagedRuntimeAvailable: windowsStagedRuntimeAvailable,
+    );
+    final installMode = _resolveInstallMode(
+      matchedAsset,
+      windowsStagedRuntimeAvailable: windowsStagedRuntimeAvailable,
+    );
 
     return AppUpdateCheckResult(
       currentVersion: runtimeVersion.display,
@@ -249,6 +275,41 @@ class AppUpdateService {
       mode: ProcessStartMode.detached,
     );
     exit(0);
+  }
+
+  Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
+    if (update.installMode != AppUpdateInstallMode.stagedNextLaunch) {
+      throw StateError('staged_update_not_supported');
+    }
+
+    final asset = update.asset;
+    if (asset == null) {
+      throw StateError('missing_update_asset');
+    }
+
+    if (_platform != AppUpdatePlatform.windows) {
+      throw StateError('staged_update_not_supported_for_${_platform.name}');
+    }
+
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    if (!client.isAvailable()) {
+      throw StateError('windows_velopack_unavailable');
+    }
+
+    await client.stageAsset(asset.downloadUri);
+  }
+
+  Future<void> applyPendingUpdateOnStartup() async {
+    if (_platform != AppUpdatePlatform.windows) {
+      return;
+    }
+
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    if (!client.isAvailable()) {
+      return;
+    }
+
+    await client.applyPendingOnStartup();
   }
 
   void dispose() {
@@ -318,8 +379,8 @@ class AppUpdateService {
   }
 
   List<Uri> _buildReleaseEndpoints() {
-    final configuredOrigin = _defaultReleaseApiOrigin.trim();
-    final repo = _defaultReleaseRepo.trim();
+    final configuredOrigin = _releaseApiOrigin.trim();
+    final repo = _releaseRepo.trim();
 
     final endpoints = <Uri>[];
     final apiOrigin = _parseUri(configuredOrigin);
@@ -336,9 +397,9 @@ class AppUpdateService {
   }
 
   Uri _buildFallbackReleasePageUri() {
-    final repo = _defaultReleaseRepo.trim();
+    final repo = _releaseRepo.trim();
     if (repo.isEmpty) {
-      final origin = _parseUri(_defaultReleaseApiOrigin.trim());
+      final origin = _parseUri(_releaseApiOrigin.trim());
       if (origin != null) return origin;
       return Uri.parse('https://github.com');
     }
@@ -362,21 +423,23 @@ class AppUpdateService {
     return parsed;
   }
 
-  AppUpdateAsset? _matchAssetForCurrentPlatform(List<AppUpdateAsset> assets) {
-    RegExp? matcher;
-    switch (_platform) {
-      case AppUpdatePlatform.windows:
-        matcher = RegExp(r'^SecondLoop-windows-x64-.*\.msi$');
-      case AppUpdatePlatform.macos:
-        matcher = RegExp(r'^SecondLoop-macos-.*\.(dmg|zip)$');
-      case AppUpdatePlatform.linux:
-        matcher = RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$');
-      case AppUpdatePlatform.android:
-        matcher = RegExp(r'^SecondLoop-android-.*\.apk$');
-      case AppUpdatePlatform.ios:
-      case AppUpdatePlatform.unsupported:
-        matcher = null;
+  AppUpdateAsset? _matchAssetForCurrentPlatform(
+    List<AppUpdateAsset> assets, {
+    bool windowsStagedRuntimeAvailable = false,
+  }) {
+    if (_platform == AppUpdatePlatform.windows) {
+      return _matchWindowsAssetForCurrentRuntime(
+        assets,
+        windowsStagedRuntimeAvailable: windowsStagedRuntimeAvailable,
+      );
     }
+
+    final matcher = switch (_platform) {
+      AppUpdatePlatform.macos => RegExp(r'^SecondLoop-macos-.*\.(dmg|zip)$'),
+      AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
+      AppUpdatePlatform.android => RegExp(r'^SecondLoop-android-.*\.apk$'),
+      _ => null,
+    };
 
     if (matcher == null) return null;
 
@@ -386,16 +449,65 @@ class AppUpdateService {
     return null;
   }
 
-  AppUpdateInstallMode _resolveInstallMode(AppUpdateAsset? asset) {
+  AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
+    List<AppUpdateAsset> assets, {
+    required bool windowsStagedRuntimeAvailable,
+  }) {
+    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
+      for (final asset in assets) {
+        if (matcher(asset.name)) return asset;
+      }
+      return null;
+    }
+
+    if (windowsStagedRuntimeAvailable) {
+      final stagedCandidate = findFirst(_isWindowsVelopackNupkgName);
+      if (stagedCandidate != null) return stagedCandidate;
+    }
+
+    final setupCandidate = findFirst(_isWindowsSetupInstallerName);
+    if (setupCandidate != null) return setupCandidate;
+
+    return null;
+  }
+
+  static bool _isWindowsVelopackNupkgName(String name) {
+    final normalized = name.trim().toLowerCase();
+    if (!normalized.endsWith('.nupkg') || normalized.endsWith('.snupkg')) {
+      return false;
+    }
+    return normalized.contains('secondloop');
+  }
+
+  static bool _isWindowsSetupInstallerName(String name) {
+    final normalized = name.trim().toLowerCase();
+    return normalized.endsWith('.exe') &&
+        normalized.contains('setup') &&
+        normalized.contains('secondloop');
+  }
+
+  AppUpdateInstallMode _resolveInstallMode(
+    AppUpdateAsset? asset, {
+    bool windowsStagedRuntimeAvailable = false,
+  }) {
     if (!_isReleaseMode || asset == null) {
       return AppUpdateInstallMode.externalDownload;
     }
 
+    final isWindowsStagedPackage = _isWindowsVelopackNupkgName(asset.name);
     return switch (_platform) {
       AppUpdatePlatform.linux when asset.name.endsWith('.tar.gz') =>
         AppUpdateInstallMode.seamlessRestart,
+      AppUpdatePlatform.windows
+          when windowsStagedRuntimeAvailable && isWindowsStagedPackage =>
+        AppUpdateInstallMode.stagedNextLaunch,
       _ => AppUpdateInstallMode.externalDownload,
     };
+  }
+
+  bool _isWindowsStagedUpdateAvailable() {
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    return client.isAvailable();
   }
 
   Directory _resolveExtractedSourceDir(

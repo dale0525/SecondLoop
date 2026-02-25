@@ -153,6 +153,16 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotEqual(-1, build_idx)
         self.assertLess(setup_idx, build_idx)
 
+    def test_release_workflow_runs_flutter_pub_get_before_android_rustup_patch_step(self) -> None:
+        workflow_text = self._workflow_text()
+
+        pub_get_idx = workflow_text.find("      - run: flutter pub get")
+        setup_idx = workflow_text.find("      - name: Setup Rustup for Android build")
+
+        self.assertNotEqual(-1, pub_get_idx)
+        self.assertNotEqual(-1, setup_idx)
+        self.assertLess(pub_get_idx, setup_idx)
+
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()
 
@@ -216,6 +226,44 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('dart run tools/prepare_bundled_ffmpeg.dart --platform=windows', workflow_text)
         self.assertNotIn('choco install ffmpeg --yes --no-progress', workflow_text)
         self.assertNotIn('--source-bin "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe"', workflow_text)
+
+    def test_windows_release_packages_and_uploads_velopack_artifacts(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertNotIn("name: Package MSI", workflow_text)
+        self.assertIn("name: Package Velopack", workflow_text)
+        self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertIn("-SkipBuild", workflow_text)
+        self.assertIn("-OutputPath dist", workflow_text)
+        self.assertIn("Velopack setup not found", workflow_text)
+        self.assertIn("Velopack releases metadata not found", workflow_text)
+        self.assertIn("Velopack assets metadata not found", workflow_text)
+        self.assertIn("Velopack nupkg not found", workflow_text)
+        self.assertIn("dist/*Setup*.exe", workflow_text)
+        self.assertIn("dist/releases.*.json", workflow_text)
+        self.assertIn("dist/assets.*.json", workflow_text)
+        self.assertIn("dist/*.nupkg", workflow_text)
+        self.assertNotIn("dist/*.msi", workflow_text)
+
+    def test_windows_velopack_script_keeps_dotnet_output_out_of_vpk_path(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("$dotnetOutput = & dotnet @args 2>&1", script_text)
+        self.assertIn("$dotnetExitCode = $LASTEXITCODE", script_text)
+        self.assertIn("foreach ($line in $dotnetOutput)", script_text)
+        self.assertIn("if ($dotnetExitCode -ne 0)", script_text)
+
+    def test_windows_velopack_script_sets_pack_title(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("'--packTitle', 'SecondLoop'", script_text)
+
+    def test_windows_velopack_script_sets_pack_icon_and_checks_metadata_outputs(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("'--icon', $packIconPath", script_text)
+        self.assertIn('"releases.$Channel.json"', script_text)
+        self.assertIn('"assets.$Channel.json"', script_text)
 
 
 

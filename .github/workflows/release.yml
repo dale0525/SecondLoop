@@ -151,10 +151,10 @@ jobs:
             echo "keyAlias=${ANDROID_KEY_ALIAS}"
             echo "storeFile=app/upload-keystore.jks"
           } > android/key.properties
+      - run: flutter pub get
       - name: Setup Rustup for Android build
         shell: bash
         run: bash scripts/setup_rustup.sh
-      - run: flutter pub get
       - name: Build (prod)
         shell: bash
         run: |
@@ -176,6 +176,8 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_RELEASE_REPO=${GITHUB_REPOSITORY}"
+            "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
           )
 
           : "${SECONDLOOP_ANDROID_NDK_ROOT:?Missing Android NDK root from install step}"
@@ -300,7 +302,9 @@ jobs:
             $defines = @(
               "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=$Env:SECONDLOOP_FIREBASE_WEB_API_KEY",
               "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=$Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD",
-              "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD"
+              "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=$Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD",
+              "--dart-define=SECONDLOOP_RELEASE_REPO=$Env:GITHUB_REPOSITORY",
+              "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
             )
             $Env:CMAKE_GENERATOR = "Ninja"
             flutter build windows --release -v @buildArgs @defines
@@ -313,47 +317,42 @@ jobs:
             }
             cmd /c subst W: /d > $null 2>&1
           }
-      - name: Setup portable WiX Toolset v3
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_wix.ps1
-      - name: Package MSI
+      - name: Package Velopack
         shell: pwsh
         run: |
-          $safeRefName = $Env:GITHUB_REF_NAME -replace '[^0-9A-Za-z._-]', '-'
-          $safeRefName = $safeRefName.Trim('-')
-          if ([string]::IsNullOrWhiteSpace($safeRefName)) {
-            $safeRefName = "run-$Env:GITHUB_RUN_ID"
+          & scripts/package_windows_velopack.ps1 -SkipBuild -OutputPath dist
+          if ($LASTEXITCODE -ne 0) {
+            throw "Velopack packaging failed with exit code $LASTEXITCODE"
           }
 
-          $outputName = "SecondLoop-windows-x64-$safeRefName"
-          $runNumber = [int]$Env:GITHUB_RUN_NUMBER
-          if ($runNumber -lt 0) { $runNumber = 0 }
-          if ($runNumber -gt 65535) { $runNumber = 65535 }
-          $msiVersion = "1.0.$runNumber"
-          if ($Env:GITHUB_REF -like "refs/tags/v*") {
-            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
-            if ($candidate -match '^(\d+)\.(\d+)\.(\d+)$') {
-              $msiVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
-            }
+          $setupPath = Get-ChildItem -Path dist -Filter '*Setup*.exe' -File | Select-Object -First 1
+          if ($null -eq $setupPath) {
+            throw "Velopack setup not found in dist"
           }
 
-          & scripts/create_windows_msi.ps1 `
-            -SourceDir build/windows/x64/runner/Release `
-            -OutputPath dist `
-            -OutputName $outputName `
-            -Version $msiVersion `
-            -ProductName 'SecondLoop' `
-            -Manufacturer 'SecondLoop Contributors'
+          $releasesMetadataPath = Get-ChildItem -Path dist -Filter 'releases.*.json' -File | Select-Object -First 1
+          if ($null -eq $releasesMetadataPath) {
+            throw "Velopack releases metadata not found in dist"
+          }
 
-          $msiPath = Join-Path 'dist' "$outputName.msi"
-          if (-not (Test-Path $msiPath)) {
-            throw "MSI package not found: $msiPath"
+          $assetsMetadataPath = Get-ChildItem -Path dist -Filter 'assets.*.json' -File | Select-Object -First 1
+          if ($null -eq $assetsMetadataPath) {
+            throw "Velopack assets metadata not found in dist"
+          }
+
+          $nupkgPath = Get-ChildItem -Path dist -Filter '*.nupkg' -File | Select-Object -First 1
+          if ($null -eq $nupkgPath) {
+            throw "Velopack nupkg not found in dist"
           }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            dist/*.msi
+            dist/*Setup*.exe
+            dist/releases.*.json
+            dist/assets.*.json
+            dist/*RELEASES*
+            dist/*.nupkg
 
   macos:
     needs: preflight
@@ -450,6 +449,8 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_RELEASE_REPO=${GITHUB_REPOSITORY}"
+            "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
           )
           # whisper-rs currently enables i8mm code paths under certain Apple/Clang combinations
           # that are not always safe on hosted runners. Undefine the macro so ggml falls back.
@@ -608,6 +609,8 @@ jobs:
             "--dart-define=SECONDLOOP_FIREBASE_WEB_API_KEY=${SECONDLOOP_FIREBASE_WEB_API_KEY}"
             "--dart-define=SECONDLOOP_CLOUD_GATEWAY_BASE_URL=${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
             "--dart-define=SECONDLOOP_MANAGED_VAULT_BASE_URL=${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
+            "--dart-define=SECONDLOOP_RELEASE_REPO=${GITHUB_REPOSITORY}"
+            "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
           )
           flutter build linux --release "${build_args[@]}" "${defines[@]}"
       - name: Package
@@ -722,7 +725,11 @@ jobs:
             dist/*.apk
             dist/*.dmg
             dist/*.dmg.sha256
-            dist/*.msi
+            dist/*Setup*.exe
+            dist/releases.*.json
+            dist/assets.*.json
+            dist/*RELEASES*
+            dist/*.nupkg
             dist/*.tar.gz
             dist/release-notes/*.json
             dist/release-notes.md

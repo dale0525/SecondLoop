@@ -135,6 +135,67 @@ void main() {
     expect(changes, greaterThanOrEqualTo(1));
     expect(find.text('review this'), findsWidgets);
   });
+
+  testWidgets(
+      'task hub quick action snackbar auto dismisses with accessible navigation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': (23 * 60) + 59,
+    });
+
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final dueReviewAtMs = _dueReviewAtMsForToday();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: 'review this',
+          status: 'inbox',
+          createdAtMs: nowUtcMs - 1000,
+          updatedAtMs: nowUtcMs - 1000,
+          reviewStage: 0,
+          nextReviewAtMs: dueReviewAtMs,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      SyncEngineScope(
+        engine: SyncEngine(
+          syncRunner: _NoopSyncRunner(),
+          loadConfig: () async => null,
+          pullOnStart: false,
+        ),
+        child: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              MaterialApp(
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(accessibleNavigation: true),
+                  child: child!,
+                ),
+                home: const TaskHubPage(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_later')));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsNothing);
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {

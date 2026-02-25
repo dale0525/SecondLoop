@@ -12,11 +12,15 @@ import 'core/sync/background_sync.dart';
 import 'i18n/locale_prefs.dart';
 
 Future<void> main(List<String> args) async {
+  final launchArgs = DesktopLaunchArgs.fromMainArgs(args);
+  if (launchArgs.shouldExitBeforeLaunchingApp) {
+    return;
+  }
+
   WidgetsFlutterBinding.ensureInitialized();
   installMacOsKeyEventChannelNormalizer();
   unawaited(runStartupBootstrap());
 
-  final launchArgs = DesktopLaunchArgs.fromMainArgs(args);
   runApp(MyApp(launchArgs: launchArgs));
 }
 

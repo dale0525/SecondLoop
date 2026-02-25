@@ -41,13 +41,23 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("scripts/run_windows.ps1", command)
         self.assertIn("-UseFlutterRun", command)
 
-    def test_package_windows_msi_depends_on_bootstrap_shared_worktree_env(self) -> None:
+    def test_package_windows_msi_task_removed(self) -> None:
         win_tasks = self._load_win_tasks()
 
-        package_windows_task = win_tasks["package-windows-msi"]
-        dependencies = package_windows_task.get("depends-on", [])
+        self.assertNotIn("package-windows-msi", win_tasks)
+        self.assertNotIn("run-windows-msi", win_tasks)
 
-        self.assertIn("bootstrap-shared-worktree-env", dependencies)
+    def test_package_windows_velopack_task_exists_and_matches_dependencies(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        velopack_task = win_tasks["package-windows-velopack"]
+        run_windows_task = win_tasks["run-windows"]
+
+        self.assertEqual(
+            velopack_task.get("depends-on", []),
+            run_windows_task.get("depends-on", []),
+        )
+        self.assertIn("scripts/package_windows_velopack.ps1", velopack_task.get("cmd", ""))
 
     def test_windows_bootstrap_script_links_shared_tool_and_pixi_envs(self) -> None:
         script = WINDOWS_BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")

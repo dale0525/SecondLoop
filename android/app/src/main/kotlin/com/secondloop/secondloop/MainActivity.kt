@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugins.GeneratedPluginRegistrant
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodCall
 import java.text.SimpleDateFormat
@@ -39,6 +40,7 @@ class MainActivity : FlutterFragmentActivity() {
   private var exifChannel: MethodChannel? = null
   private var locationChannel: MethodChannel? = null
   private var permissionsChannel: MethodChannel? = null
+  private var audioRecordingLifecycleChannel: MethodChannel? = null
   private var audioTranscodeChannel: MethodChannel? = null
   private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
@@ -81,7 +83,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-    super.configureFlutterEngine(flutterEngine)
+    GeneratedPluginRegistrant.registerWith(flutterEngine)
     shareChannel =
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/share_intent").apply {
         setMethodCallHandler { call, result ->
@@ -201,6 +203,24 @@ class MainActivity : FlutterFragmentActivity() {
         }
       }
 
+    audioRecordingLifecycleChannel =
+      MethodChannel(
+        flutterEngine.dartExecutor.binaryMessenger,
+        "secondloop/audio_recording_lifecycle",
+      ).apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "startForegroundRecording" -> {
+              result.success(startAudioRecordingForegroundService())
+            }
+            "stopForegroundRecording" -> {
+              result.success(stopAudioRecordingForegroundService())
+            }
+            else -> result.notImplemented()
+          }
+        }
+      }
+
     videoTranscodeChannel =
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/video_transcode").apply {
         setMethodCallHandler { call, result ->
@@ -267,6 +287,29 @@ class MainActivity : FlutterFragmentActivity() {
       shareChannel?.invokeMethod(kPendingSharesChangedMethod, null)
     } catch (_: Throwable) {
       // ignore
+    }
+  }
+
+  private fun startAudioRecordingForegroundService(): Boolean {
+    return try {
+      val intent = AudioRecordingForegroundService.startIntent(this)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        ContextCompat.startForegroundService(this, intent)
+      } else {
+        startService(intent)
+      }
+      true
+    } catch (_: Throwable) {
+      false
+    }
+  }
+
+  private fun stopAudioRecordingForegroundService(): Boolean {
+    return try {
+      stopService(AudioRecordingForegroundService.stopIntent(this))
+      true
+    } catch (_: Throwable) {
+      false
     }
   }
 

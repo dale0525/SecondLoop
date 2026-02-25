@@ -177,13 +177,137 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
   });
+
+  testWidgets(
+      'Task hub banner quick action snackbar auto dismisses with accessible navigation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: [
+        const Todo(
+          id: 'todo:snack',
+          title: 'Review metrics',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(accessibleNavigation: true),
+            child: child!,
+          ),
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_done')));
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsNothing);
+  });
 }
 
 final class _AgendaBackend extends TestAppBackend {
-  _AgendaBackend({required List<Todo> todos}) : _todos = List<Todo>.from(todos);
+  _AgendaBackend({required List<Todo> todos})
+      : _todosById = <String, Todo>{
+          for (final todo in todos) todo.id: todo,
+        };
 
-  final List<Todo> _todos;
+  final Map<String, Todo> _todosById;
 
   @override
-  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+  Future<List<Todo>> listTodos(Uint8List key) async =>
+      _todosById.values.toList(growable: false);
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+  }) async {
+    final existing = _todosById[id];
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final updated = Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: existing?.createdAtMs ?? nowMs,
+      updatedAtMs: nowMs,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+    _todosById[id] = updated;
+    return updated;
+  }
+
+  @override
+  Future<Todo> setTodoStatus(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+  }) async {
+    final existing = _todosById[todoId];
+    if (existing == null) {
+      throw StateError('todo missing: $todoId');
+    }
+    final updated = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: existing.dueAtMs,
+      status: newStatus,
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage: existing.reviewStage,
+      nextReviewAtMs: existing.nextReviewAtMs,
+      lastReviewAtMs: existing.lastReviewAtMs,
+    );
+    _todosById[todoId] = updated;
+    return updated;
+  }
 }

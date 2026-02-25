@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1666 (833 per locale)
+/// Strings: 1792 (896 per locale)
 ///
-/// Built on 2026-02-24 at 14:22 UTC
+/// Built on 2026-02-25 at 05:54 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -351,6 +351,9 @@ class _StringsSettingsEn {
       _StringsSettingsCloudUsageEn._(_root);
   late final _StringsSettingsVaultUsageEn vaultUsage =
       _StringsSettingsVaultUsageEn._(_root);
+  late final _StringsSettingsAboutEn about = _StringsSettingsAboutEn._(_root);
+  late final _StringsSettingsUpdateNoticeEn updateNotice =
+      _StringsSettingsUpdateNoticeEn._(_root);
   late final _StringsSettingsDiagnosticsEn diagnostics =
       _StringsSettingsDiagnosticsEn._(_root);
   late final _StringsSettingsByokUsageEn byokUsage =
@@ -422,6 +425,10 @@ class _StringsChatEn {
       'Microphone permission is required to record audio.';
   String audioRecordFailed({required Object error}) =>
       'Audio record failed: ${error}';
+  late final _StringsChatRecordingRecoveryDialogEn recordingRecoveryDialog =
+      _StringsChatRecordingRecoveryDialogEn._(_root);
+  String get recordingRecoveryRecoveredAndSent =>
+      'Recovered and sent interrupted recording.';
   String editFailed({required Object error}) => 'Edit failed: ${error}';
   String deleteFailed({required Object error}) => 'Delete failed: ${error}';
   String get noMessagesYet => 'No messages yet';
@@ -1311,6 +1318,43 @@ class _StringsSettingsVaultUsageEn {
       _StringsSettingsVaultUsageLabelsEn._(_root);
 }
 
+// Path: settings.about
+class _StringsSettingsAboutEn {
+  _StringsSettingsAboutEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'About';
+  String get productName => 'SecondLoop';
+  String get updatesTitle => 'App updates';
+  String get openHomepage => 'Project homepage';
+  String get unknownVersion => 'unknown';
+  String currentVersion({required Object version}) =>
+      'Current version: ${version}';
+  String latestVersion({required Object version}) =>
+      'Latest version: ${version}';
+  late final _StringsSettingsAboutStatusEn status =
+      _StringsSettingsAboutStatusEn._(_root);
+  late final _StringsSettingsAboutActionsEn actions =
+      _StringsSettingsAboutActionsEn._(_root);
+  late final _StringsSettingsAboutMessagesEn messages =
+      _StringsSettingsAboutMessagesEn._(_root);
+}
+
+// Path: settings.updateNotice
+class _StringsSettingsUpdateNoticeEn {
+  _StringsSettingsUpdateNoticeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String stagedReady({required Object version}) =>
+      'New version ${version} is ready and will apply on next launch.';
+  String manualDownload({required Object version}) =>
+      'New version ${version} is available for manual download.';
+}
+
 // Path: settings.diagnostics
 class _StringsSettingsDiagnosticsEn {
   _StringsSettingsDiagnosticsEn._(this._root);
@@ -1323,6 +1367,8 @@ class _StringsSettingsDiagnosticsEn {
   String get privacyNote =>
       'This report does not include your notes or API keys.';
   String get loading => 'Loading diagnostics…';
+  late final _StringsSettingsDiagnosticsUpdatesEn updates =
+      _StringsSettingsDiagnosticsUpdatesEn._(_root);
   late final _StringsSettingsDiagnosticsMessagesEn messages =
       _StringsSettingsDiagnosticsMessagesEn._(_root);
 }
@@ -1449,6 +1495,20 @@ class _StringsChatDeleteMessageDialogEn {
   String get title => 'Delete message?';
   String get message =>
       'This will permanently delete this message and its attachments.';
+}
+
+// Path: chat.recordingRecoveryDialog
+class _StringsChatRecordingRecoveryDialogEn {
+  _StringsChatRecordingRecoveryDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Interrupted recording detected';
+  String description({required Object segmentCount}) =>
+      'An interrupted recording was found (${segmentCount} segments). You can recover and send it, or discard it.';
+  late final _StringsChatRecordingRecoveryDialogActionsEn actions =
+      _StringsChatRecordingRecoveryDialogActionsEn._(_root);
 }
 
 // Path: chat.messageActions
@@ -2692,6 +2752,87 @@ class _StringsSettingsVaultUsageLabelsEn {
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
 }
 
+// Path: settings.about.status
+class _StringsSettingsAboutStatusEn {
+  _StringsSettingsAboutStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get idle =>
+      'Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.';
+  String get checking => 'Checking for updates…';
+  String get upToDate => 'You\'re on the latest version.';
+  String availableSeamless({required Object version}) =>
+      'Update available (${version}). You can auto-update and restart.';
+  String availableStaged({required Object version}) =>
+      'Update available (${version}). Prepare in background and apply next launch.';
+  String availableExternal({required Object version}) =>
+      'Update available (${version}). Please download and install manually.';
+  String failed({required Object error}) => 'Update check failed: ${error}';
+}
+
+// Path: settings.about.actions
+class _StringsSettingsAboutActionsEn {
+  _StringsSettingsAboutActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get check => 'Check updates';
+  String get checking => 'Checking…';
+  String get autoUpdate => 'Auto-update and restart';
+  String get stageUpdate => 'Prepare update';
+  String get manualUpdate => 'Manual update';
+  String get updating => 'Updating…';
+}
+
+// Path: settings.about.messages
+class _StringsSettingsAboutMessagesEn {
+  _StringsSettingsAboutMessagesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get upToDate => 'You\'re already on the latest version';
+  String updateAvailable({required Object version}) =>
+      'Update available: ${version}';
+  String checkFailed({required Object error}) =>
+      'Failed to check updates: ${error}';
+  String get installStarting =>
+      'Preparing update. The app will restart shortly.';
+  String get stageStarting =>
+      'Preparing update in background. It will apply on next launch.';
+  String get stageReady => 'Update is ready and will apply on next launch.';
+  String installFailed({required Object error}) =>
+      'Auto update failed: ${error}';
+  String stageFailed({required Object error}) =>
+      'Failed to prepare update: ${error}';
+  String get openHomepageFailed => 'Could not open project homepage';
+  String get openUpdateFailed => 'Could not open update page';
+}
+
+// Path: settings.diagnostics.updates
+class _StringsSettingsDiagnosticsUpdatesEn {
+  _StringsSettingsDiagnosticsUpdatesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'App updates';
+  String get unknownVersion => 'unknown';
+  String currentVersion({required Object version}) =>
+      'Current version: ${version}';
+  String latestVersion({required Object version}) =>
+      'Latest version: ${version}';
+  late final _StringsSettingsDiagnosticsUpdatesStatusEn status =
+      _StringsSettingsDiagnosticsUpdatesStatusEn._(_root);
+  late final _StringsSettingsDiagnosticsUpdatesActionsEn actions =
+      _StringsSettingsDiagnosticsUpdatesActionsEn._(_root);
+  late final _StringsSettingsDiagnosticsUpdatesMessagesEn messages =
+      _StringsSettingsDiagnosticsUpdatesMessagesEn._(_root);
+}
+
 // Path: settings.diagnostics.messages
 class _StringsSettingsDiagnosticsMessagesEn {
   _StringsSettingsDiagnosticsMessagesEn._(this._root);
@@ -2795,6 +2936,17 @@ class _StringsSettingsSubscriptionLabelsEn {
   String get status => 'Status:';
   String get purchaseUnavailable => 'Purchases are not available yet.';
   String loadFailed({required Object error}) => 'Failed to load: ${error}';
+}
+
+// Path: chat.recordingRecoveryDialog.actions
+class _StringsChatRecordingRecoveryDialogActionsEn {
+  _StringsChatRecordingRecoveryDialogActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get discard => 'Discard';
+  String get recoverAndSend => 'Recover & Send';
 }
 
 // Path: chat.markdownEditor.actions
@@ -3457,6 +3609,64 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesEn {
       'Failed to send verification email: ${error}';
 }
 
+// Path: settings.diagnostics.updates.status
+class _StringsSettingsDiagnosticsUpdatesStatusEn {
+  _StringsSettingsDiagnosticsUpdatesStatusEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get idle =>
+      'Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.';
+  String get checking => 'Checking for updates…';
+  String get upToDate => 'You\'re on the latest version.';
+  String availableSeamless({required Object version}) =>
+      'Update available (${version}). Click update to restart and apply automatically.';
+  String availableStaged({required Object version}) =>
+      'Update available (${version}). Prepare in background and apply next launch.';
+  String availableExternal({required Object version}) =>
+      'Update available (${version}). Open the download page to install (Setup.exe on Windows).';
+  String failed({required Object error}) => 'Update check failed: ${error}';
+}
+
+// Path: settings.diagnostics.updates.actions
+class _StringsSettingsDiagnosticsUpdatesActionsEn {
+  _StringsSettingsDiagnosticsUpdatesActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get check => 'Check updates';
+  String get checking => 'Checking…';
+  String get updateAndRestart => 'Update and restart';
+  String get stageForNextLaunch => 'Prepare update';
+  String get openDownload => 'Open download page';
+  String get updating => 'Updating…';
+}
+
+// Path: settings.diagnostics.updates.messages
+class _StringsSettingsDiagnosticsUpdatesMessagesEn {
+  _StringsSettingsDiagnosticsUpdatesMessagesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get upToDate => 'You\'re already on the latest version';
+  String updateAvailable({required Object version}) =>
+      'Update available: ${version}';
+  String checkFailed({required Object error}) =>
+      'Failed to check updates: ${error}';
+  String get installStarting =>
+      'Preparing update. The app will restart shortly.';
+  String get stageStarting =>
+      'Preparing update in background. It will apply on next launch.';
+  String get stageReady => 'Update is ready and will apply on next launch.';
+  String installFailed({required Object error}) => 'Update failed: ${error}';
+  String stageFailed({required Object error}) =>
+      'Failed to prepare update: ${error}';
+  String get openFailed => 'Could not open the download page';
+}
+
 // Path: settings.subscription.benefits.items
 class _StringsSettingsSubscriptionBenefitsItemsEn {
   _StringsSettingsSubscriptionBenefitsItemsEn._(this._root);
@@ -4060,6 +4270,12 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsVaultUsageZhCn vaultUsage =
       _StringsSettingsVaultUsageZhCn._(_root);
   @override
+  late final _StringsSettingsAboutZhCn about =
+      _StringsSettingsAboutZhCn._(_root);
+  @override
+  late final _StringsSettingsUpdateNoticeZhCn updateNotice =
+      _StringsSettingsUpdateNoticeZhCn._(_root);
+  @override
   late final _StringsSettingsDiagnosticsZhCn diagnostics =
       _StringsSettingsDiagnosticsZhCn._(_root);
   @override
@@ -4170,6 +4386,11 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get audioRecordPermissionDenied => '需要麦克风权限才能录音。';
   @override
   String audioRecordFailed({required Object error}) => '录音失败：${error}';
+  @override
+  late final _StringsChatRecordingRecoveryDialogZhCn recordingRecoveryDialog =
+      _StringsChatRecordingRecoveryDialogZhCn._(_root);
+  @override
+  String get recordingRecoveryRecoveredAndSent => '已恢复并发送上次中断的录音。';
   @override
   String editFailed({required Object error}) => '编辑失败：${error}';
   @override
@@ -5526,6 +5747,59 @@ class _StringsSettingsVaultUsageZhCn extends _StringsSettingsVaultUsageEn {
       _StringsSettingsVaultUsageLabelsZhCn._(_root);
 }
 
+// Path: settings.about
+class _StringsSettingsAboutZhCn extends _StringsSettingsAboutEn {
+  _StringsSettingsAboutZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '关于';
+  @override
+  String get productName => 'SecondLoop';
+  @override
+  String get updatesTitle => '应用更新';
+  @override
+  String get openHomepage => '项目主页';
+  @override
+  String get unknownVersion => '未知';
+  @override
+  String currentVersion({required Object version}) => '当前版本：${version}';
+  @override
+  String latestVersion({required Object version}) => '最新版本：${version}';
+  @override
+  late final _StringsSettingsAboutStatusZhCn status =
+      _StringsSettingsAboutStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsAboutActionsZhCn actions =
+      _StringsSettingsAboutActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsAboutMessagesZhCn messages =
+      _StringsSettingsAboutMessagesZhCn._(_root);
+}
+
+// Path: settings.updateNotice
+class _StringsSettingsUpdateNoticeZhCn extends _StringsSettingsUpdateNoticeEn {
+  _StringsSettingsUpdateNoticeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String stagedReady({required Object version}) =>
+      '新版本 ${version} 已准备好，将在下次启动自动更新。';
+  @override
+  String manualDownload({required Object version}) =>
+      '发现新版本 ${version}，可手动下载安装。';
+}
+
 // Path: settings.diagnostics
 class _StringsSettingsDiagnosticsZhCn extends _StringsSettingsDiagnosticsEn {
   _StringsSettingsDiagnosticsZhCn._(_StringsZhCn root)
@@ -5544,6 +5818,9 @@ class _StringsSettingsDiagnosticsZhCn extends _StringsSettingsDiagnosticsEn {
   String get privacyNote => '该报告不会包含你的记录正文或 API Key。';
   @override
   String get loading => '正在加载诊断信息…';
+  @override
+  late final _StringsSettingsDiagnosticsUpdatesZhCn updates =
+      _StringsSettingsDiagnosticsUpdatesZhCn._(_root);
   @override
   late final _StringsSettingsDiagnosticsMessagesZhCn messages =
       _StringsSettingsDiagnosticsMessagesZhCn._(_root);
@@ -5731,6 +6008,27 @@ class _StringsChatDeleteMessageDialogZhCn
   String get title => '删除信息？';
   @override
   String get message => '这将永久删除该信息及其附件。';
+}
+
+// Path: chat.recordingRecoveryDialog
+class _StringsChatRecordingRecoveryDialogZhCn
+    extends _StringsChatRecordingRecoveryDialogEn {
+  _StringsChatRecordingRecoveryDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '检测到未完成录音';
+  @override
+  String description({required Object segmentCount}) =>
+      '检测到上次录音中断，找到 ${segmentCount} 段可恢复音频。你可以恢复并发送，或直接丢弃。';
+  @override
+  late final _StringsChatRecordingRecoveryDialogActionsZhCn actions =
+      _StringsChatRecordingRecoveryDialogActionsZhCn._(_root);
 }
 
 // Path: chat.messageActions
@@ -7602,6 +7900,122 @@ class _StringsSettingsVaultUsageLabelsZhCn
   String loadFailed({required Object error}) => '加载失败：${error}';
 }
 
+// Path: settings.about.status
+class _StringsSettingsAboutStatusZhCn extends _StringsSettingsAboutStatusEn {
+  _StringsSettingsAboutStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get idle => '点击检查更新；Linux 可自动更新重启，Windows 请下载 Setup 安装包安装。';
+  @override
+  String get checking => '正在检查更新…';
+  @override
+  String get upToDate => '当前已是最新版本。';
+  @override
+  String availableSeamless({required Object version}) =>
+      '发现新版本（${version}）。可一键自动更新并重启。';
+  @override
+  String availableStaged({required Object version}) =>
+      '发现新版本（${version}）。可后台准备更新，下次启动自动生效。';
+  @override
+  String availableExternal({required Object version}) =>
+      '发现新版本（${version}）。请手动下载安装。';
+  @override
+  String failed({required Object error}) => '检查更新失败：${error}';
+}
+
+// Path: settings.about.actions
+class _StringsSettingsAboutActionsZhCn extends _StringsSettingsAboutActionsEn {
+  _StringsSettingsAboutActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get check => '检查更新';
+  @override
+  String get checking => '检查中…';
+  @override
+  String get autoUpdate => '自动更新并重启';
+  @override
+  String get stageUpdate => '后台准备更新';
+  @override
+  String get manualUpdate => '手动更新';
+  @override
+  String get updating => '更新中…';
+}
+
+// Path: settings.about.messages
+class _StringsSettingsAboutMessagesZhCn
+    extends _StringsSettingsAboutMessagesEn {
+  _StringsSettingsAboutMessagesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get upToDate => '当前已是最新版本';
+  @override
+  String updateAvailable({required Object version}) => '发现新版本：${version}';
+  @override
+  String checkFailed({required Object error}) => '检查更新失败：${error}';
+  @override
+  String get installStarting => '正在准备自动更新，应用即将重启。';
+  @override
+  String get stageStarting => '正在后台准备更新，下次启动将自动生效。';
+  @override
+  String get stageReady => '更新已准备就绪，下次启动将自动更新。';
+  @override
+  String installFailed({required Object error}) => '自动更新失败：${error}';
+  @override
+  String stageFailed({required Object error}) => '后台准备更新失败：${error}';
+  @override
+  String get openHomepageFailed => '无法打开项目主页';
+  @override
+  String get openUpdateFailed => '无法打开更新页面';
+}
+
+// Path: settings.diagnostics.updates
+class _StringsSettingsDiagnosticsUpdatesZhCn
+    extends _StringsSettingsDiagnosticsUpdatesEn {
+  _StringsSettingsDiagnosticsUpdatesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '应用更新';
+  @override
+  String get unknownVersion => '未知';
+  @override
+  String currentVersion({required Object version}) => '当前版本：${version}';
+  @override
+  String latestVersion({required Object version}) => '最新版本：${version}';
+  @override
+  late final _StringsSettingsDiagnosticsUpdatesStatusZhCn status =
+      _StringsSettingsDiagnosticsUpdatesStatusZhCn._(_root);
+  @override
+  late final _StringsSettingsDiagnosticsUpdatesActionsZhCn actions =
+      _StringsSettingsDiagnosticsUpdatesActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsDiagnosticsUpdatesMessagesZhCn messages =
+      _StringsSettingsDiagnosticsUpdatesMessagesZhCn._(_root);
+}
+
 // Path: settings.diagnostics.messages
 class _StringsSettingsDiagnosticsMessagesZhCn
     extends _StringsSettingsDiagnosticsMessagesEn {
@@ -7757,6 +8171,23 @@ class _StringsSettingsSubscriptionLabelsZhCn
   String get purchaseUnavailable => '订阅购买暂未开放。';
   @override
   String loadFailed({required Object error}) => '加载失败：${error}';
+}
+
+// Path: chat.recordingRecoveryDialog.actions
+class _StringsChatRecordingRecoveryDialogActionsZhCn
+    extends _StringsChatRecordingRecoveryDialogActionsEn {
+  _StringsChatRecordingRecoveryDialogActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get discard => '丢弃';
+  @override
+  String get recoverAndSend => '恢复并发送';
 }
 
 // Path: chat.markdownEditor.actions
@@ -8738,6 +9169,92 @@ class _StringsSettingsCloudAccountEmailVerificationMessagesZhCn
   @override
   String verificationEmailSendFailed({required Object error}) =>
       '发送验证邮件失败：${error}';
+}
+
+// Path: settings.diagnostics.updates.status
+class _StringsSettingsDiagnosticsUpdatesStatusZhCn
+    extends _StringsSettingsDiagnosticsUpdatesStatusEn {
+  _StringsSettingsDiagnosticsUpdatesStatusZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get idle => '点击检查更新；Linux 可自动更新重启，Windows 请下载 Setup 安装包安装。';
+  @override
+  String get checking => '正在检查更新…';
+  @override
+  String get upToDate => '当前已是最新版本。';
+  @override
+  String availableSeamless({required Object version}) =>
+      '发现新版本（${version}）。点击更新后将自动重启并完成安装。';
+  @override
+  String availableStaged({required Object version}) =>
+      '发现新版本（${version}）。可后台准备更新，下次启动自动生效。';
+  @override
+  String availableExternal({required Object version}) =>
+      '发现新版本（${version}）。请打开下载页完成安装（Windows 为 Setup 安装包）。';
+  @override
+  String failed({required Object error}) => '检查更新失败：${error}';
+}
+
+// Path: settings.diagnostics.updates.actions
+class _StringsSettingsDiagnosticsUpdatesActionsZhCn
+    extends _StringsSettingsDiagnosticsUpdatesActionsEn {
+  _StringsSettingsDiagnosticsUpdatesActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get check => '检查更新';
+  @override
+  String get checking => '检查中…';
+  @override
+  String get updateAndRestart => '更新并重启';
+  @override
+  String get stageForNextLaunch => '后台准备更新';
+  @override
+  String get openDownload => '打开下载页面';
+  @override
+  String get updating => '更新中…';
+}
+
+// Path: settings.diagnostics.updates.messages
+class _StringsSettingsDiagnosticsUpdatesMessagesZhCn
+    extends _StringsSettingsDiagnosticsUpdatesMessagesEn {
+  _StringsSettingsDiagnosticsUpdatesMessagesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get upToDate => '当前已是最新版本';
+  @override
+  String updateAvailable({required Object version}) => '发现新版本：${version}';
+  @override
+  String checkFailed({required Object error}) => '检查更新失败：${error}';
+  @override
+  String get installStarting => '正在准备更新，应用即将重启。';
+  @override
+  String get stageStarting => '正在后台准备更新，下次启动将自动生效。';
+  @override
+  String get stageReady => '更新已准备就绪，下次启动将自动更新。';
+  @override
+  String installFailed({required Object error}) => '更新失败：${error}';
+  @override
+  String stageFailed({required Object error}) => '后台准备更新失败：${error}';
+  @override
+  String get openFailed => '无法打开下载页面';
 }
 
 // Path: settings.subscription.benefits.items
@@ -10111,6 +10628,76 @@ extension on Translations {
         return 'Sync history:';
       case 'settings.vaultUsage.labels.loadFailed':
         return ({required Object error}) => 'Failed to load: ${error}';
+      case 'settings.about.title':
+        return 'About';
+      case 'settings.about.productName':
+        return 'SecondLoop';
+      case 'settings.about.updatesTitle':
+        return 'App updates';
+      case 'settings.about.openHomepage':
+        return 'Project homepage';
+      case 'settings.about.unknownVersion':
+        return 'unknown';
+      case 'settings.about.currentVersion':
+        return ({required Object version}) => 'Current version: ${version}';
+      case 'settings.about.latestVersion':
+        return ({required Object version}) => 'Latest version: ${version}';
+      case 'settings.about.status.idle':
+        return 'Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.';
+      case 'settings.about.status.checking':
+        return 'Checking for updates…';
+      case 'settings.about.status.upToDate':
+        return 'You\'re on the latest version.';
+      case 'settings.about.status.availableSeamless':
+        return ({required Object version}) =>
+            'Update available (${version}). You can auto-update and restart.';
+      case 'settings.about.status.availableStaged':
+        return ({required Object version}) =>
+            'Update available (${version}). Prepare in background and apply next launch.';
+      case 'settings.about.status.availableExternal':
+        return ({required Object version}) =>
+            'Update available (${version}). Please download and install manually.';
+      case 'settings.about.status.failed':
+        return ({required Object error}) => 'Update check failed: ${error}';
+      case 'settings.about.actions.check':
+        return 'Check updates';
+      case 'settings.about.actions.checking':
+        return 'Checking…';
+      case 'settings.about.actions.autoUpdate':
+        return 'Auto-update and restart';
+      case 'settings.about.actions.stageUpdate':
+        return 'Prepare update';
+      case 'settings.about.actions.manualUpdate':
+        return 'Manual update';
+      case 'settings.about.actions.updating':
+        return 'Updating…';
+      case 'settings.about.messages.upToDate':
+        return 'You\'re already on the latest version';
+      case 'settings.about.messages.updateAvailable':
+        return ({required Object version}) => 'Update available: ${version}';
+      case 'settings.about.messages.checkFailed':
+        return ({required Object error}) => 'Failed to check updates: ${error}';
+      case 'settings.about.messages.installStarting':
+        return 'Preparing update. The app will restart shortly.';
+      case 'settings.about.messages.stageStarting':
+        return 'Preparing update in background. It will apply on next launch.';
+      case 'settings.about.messages.stageReady':
+        return 'Update is ready and will apply on next launch.';
+      case 'settings.about.messages.installFailed':
+        return ({required Object error}) => 'Auto update failed: ${error}';
+      case 'settings.about.messages.stageFailed':
+        return ({required Object error}) =>
+            'Failed to prepare update: ${error}';
+      case 'settings.about.messages.openHomepageFailed':
+        return 'Could not open project homepage';
+      case 'settings.about.messages.openUpdateFailed':
+        return 'Could not open update page';
+      case 'settings.updateNotice.stagedReady':
+        return ({required Object version}) =>
+            'New version ${version} is ready and will apply on next launch.';
+      case 'settings.updateNotice.manualDownload':
+        return ({required Object version}) =>
+            'New version ${version} is available for manual download.';
       case 'settings.diagnostics.title':
         return 'Diagnostics';
       case 'settings.diagnostics.subtitle':
@@ -10119,6 +10706,62 @@ extension on Translations {
         return 'This report does not include your notes or API keys.';
       case 'settings.diagnostics.loading':
         return 'Loading diagnostics…';
+      case 'settings.diagnostics.updates.title':
+        return 'App updates';
+      case 'settings.diagnostics.updates.unknownVersion':
+        return 'unknown';
+      case 'settings.diagnostics.updates.currentVersion':
+        return ({required Object version}) => 'Current version: ${version}';
+      case 'settings.diagnostics.updates.latestVersion':
+        return ({required Object version}) => 'Latest version: ${version}';
+      case 'settings.diagnostics.updates.status.idle':
+        return 'Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.';
+      case 'settings.diagnostics.updates.status.checking':
+        return 'Checking for updates…';
+      case 'settings.diagnostics.updates.status.upToDate':
+        return 'You\'re on the latest version.';
+      case 'settings.diagnostics.updates.status.availableSeamless':
+        return ({required Object version}) =>
+            'Update available (${version}). Click update to restart and apply automatically.';
+      case 'settings.diagnostics.updates.status.availableStaged':
+        return ({required Object version}) =>
+            'Update available (${version}). Prepare in background and apply next launch.';
+      case 'settings.diagnostics.updates.status.availableExternal':
+        return ({required Object version}) =>
+            'Update available (${version}). Open the download page to install (Setup.exe on Windows).';
+      case 'settings.diagnostics.updates.status.failed':
+        return ({required Object error}) => 'Update check failed: ${error}';
+      case 'settings.diagnostics.updates.actions.check':
+        return 'Check updates';
+      case 'settings.diagnostics.updates.actions.checking':
+        return 'Checking…';
+      case 'settings.diagnostics.updates.actions.updateAndRestart':
+        return 'Update and restart';
+      case 'settings.diagnostics.updates.actions.stageForNextLaunch':
+        return 'Prepare update';
+      case 'settings.diagnostics.updates.actions.openDownload':
+        return 'Open download page';
+      case 'settings.diagnostics.updates.actions.updating':
+        return 'Updating…';
+      case 'settings.diagnostics.updates.messages.upToDate':
+        return 'You\'re already on the latest version';
+      case 'settings.diagnostics.updates.messages.updateAvailable':
+        return ({required Object version}) => 'Update available: ${version}';
+      case 'settings.diagnostics.updates.messages.checkFailed':
+        return ({required Object error}) => 'Failed to check updates: ${error}';
+      case 'settings.diagnostics.updates.messages.installStarting':
+        return 'Preparing update. The app will restart shortly.';
+      case 'settings.diagnostics.updates.messages.stageStarting':
+        return 'Preparing update in background. It will apply on next launch.';
+      case 'settings.diagnostics.updates.messages.stageReady':
+        return 'Update is ready and will apply on next launch.';
+      case 'settings.diagnostics.updates.messages.installFailed':
+        return ({required Object error}) => 'Update failed: ${error}';
+      case 'settings.diagnostics.updates.messages.stageFailed':
+        return ({required Object error}) =>
+            'Failed to prepare update: ${error}';
+      case 'settings.diagnostics.updates.messages.openFailed':
+        return 'Could not open the download page';
       case 'settings.diagnostics.messages.copied':
         return 'Diagnostics copied to clipboard';
       case 'settings.diagnostics.messages.copyFailed':
@@ -10269,6 +10912,17 @@ extension on Translations {
         return 'Microphone permission is required to record audio.';
       case 'chat.audioRecordFailed':
         return ({required Object error}) => 'Audio record failed: ${error}';
+      case 'chat.recordingRecoveryDialog.title':
+        return 'Interrupted recording detected';
+      case 'chat.recordingRecoveryDialog.description':
+        return ({required Object segmentCount}) =>
+            'An interrupted recording was found (${segmentCount} segments). You can recover and send it, or discard it.';
+      case 'chat.recordingRecoveryDialog.actions.discard':
+        return 'Discard';
+      case 'chat.recordingRecoveryDialog.actions.recoverAndSend':
+        return 'Recover & Send';
+      case 'chat.recordingRecoveryRecoveredAndSent':
+        return 'Recovered and sent interrupted recording.';
       case 'chat.editFailed':
         return ({required Object error}) => 'Edit failed: ${error}';
       case 'chat.deleteFailed':
@@ -11813,6 +12467,71 @@ extension on _StringsZhCn {
         return '同步记录：';
       case 'settings.vaultUsage.labels.loadFailed':
         return ({required Object error}) => '加载失败：${error}';
+      case 'settings.about.title':
+        return '关于';
+      case 'settings.about.productName':
+        return 'SecondLoop';
+      case 'settings.about.updatesTitle':
+        return '应用更新';
+      case 'settings.about.openHomepage':
+        return '项目主页';
+      case 'settings.about.unknownVersion':
+        return '未知';
+      case 'settings.about.currentVersion':
+        return ({required Object version}) => '当前版本：${version}';
+      case 'settings.about.latestVersion':
+        return ({required Object version}) => '最新版本：${version}';
+      case 'settings.about.status.idle':
+        return '点击检查更新；Linux 可自动更新重启，Windows 请下载 Setup 安装包安装。';
+      case 'settings.about.status.checking':
+        return '正在检查更新…';
+      case 'settings.about.status.upToDate':
+        return '当前已是最新版本。';
+      case 'settings.about.status.availableSeamless':
+        return ({required Object version}) => '发现新版本（${version}）。可一键自动更新并重启。';
+      case 'settings.about.status.availableStaged':
+        return ({required Object version}) =>
+            '发现新版本（${version}）。可后台准备更新，下次启动自动生效。';
+      case 'settings.about.status.availableExternal':
+        return ({required Object version}) => '发现新版本（${version}）。请手动下载安装。';
+      case 'settings.about.status.failed':
+        return ({required Object error}) => '检查更新失败：${error}';
+      case 'settings.about.actions.check':
+        return '检查更新';
+      case 'settings.about.actions.checking':
+        return '检查中…';
+      case 'settings.about.actions.autoUpdate':
+        return '自动更新并重启';
+      case 'settings.about.actions.stageUpdate':
+        return '后台准备更新';
+      case 'settings.about.actions.manualUpdate':
+        return '手动更新';
+      case 'settings.about.actions.updating':
+        return '更新中…';
+      case 'settings.about.messages.upToDate':
+        return '当前已是最新版本';
+      case 'settings.about.messages.updateAvailable':
+        return ({required Object version}) => '发现新版本：${version}';
+      case 'settings.about.messages.checkFailed':
+        return ({required Object error}) => '检查更新失败：${error}';
+      case 'settings.about.messages.installStarting':
+        return '正在准备自动更新，应用即将重启。';
+      case 'settings.about.messages.stageStarting':
+        return '正在后台准备更新，下次启动将自动生效。';
+      case 'settings.about.messages.stageReady':
+        return '更新已准备就绪，下次启动将自动更新。';
+      case 'settings.about.messages.installFailed':
+        return ({required Object error}) => '自动更新失败：${error}';
+      case 'settings.about.messages.stageFailed':
+        return ({required Object error}) => '后台准备更新失败：${error}';
+      case 'settings.about.messages.openHomepageFailed':
+        return '无法打开项目主页';
+      case 'settings.about.messages.openUpdateFailed':
+        return '无法打开更新页面';
+      case 'settings.updateNotice.stagedReady':
+        return ({required Object version}) => '新版本 ${version} 已准备好，将在下次启动自动更新。';
+      case 'settings.updateNotice.manualDownload':
+        return ({required Object version}) => '发现新版本 ${version}，可手动下载安装。';
       case 'settings.diagnostics.title':
         return '诊断信息';
       case 'settings.diagnostics.subtitle':
@@ -11821,6 +12540,61 @@ extension on _StringsZhCn {
         return '该报告不会包含你的记录正文或 API Key。';
       case 'settings.diagnostics.loading':
         return '正在加载诊断信息…';
+      case 'settings.diagnostics.updates.title':
+        return '应用更新';
+      case 'settings.diagnostics.updates.unknownVersion':
+        return '未知';
+      case 'settings.diagnostics.updates.currentVersion':
+        return ({required Object version}) => '当前版本：${version}';
+      case 'settings.diagnostics.updates.latestVersion':
+        return ({required Object version}) => '最新版本：${version}';
+      case 'settings.diagnostics.updates.status.idle':
+        return '点击检查更新；Linux 可自动更新重启，Windows 请下载 Setup 安装包安装。';
+      case 'settings.diagnostics.updates.status.checking':
+        return '正在检查更新…';
+      case 'settings.diagnostics.updates.status.upToDate':
+        return '当前已是最新版本。';
+      case 'settings.diagnostics.updates.status.availableSeamless':
+        return ({required Object version}) =>
+            '发现新版本（${version}）。点击更新后将自动重启并完成安装。';
+      case 'settings.diagnostics.updates.status.availableStaged':
+        return ({required Object version}) =>
+            '发现新版本（${version}）。可后台准备更新，下次启动自动生效。';
+      case 'settings.diagnostics.updates.status.availableExternal':
+        return ({required Object version}) =>
+            '发现新版本（${version}）。请打开下载页完成安装（Windows 为 Setup 安装包）。';
+      case 'settings.diagnostics.updates.status.failed':
+        return ({required Object error}) => '检查更新失败：${error}';
+      case 'settings.diagnostics.updates.actions.check':
+        return '检查更新';
+      case 'settings.diagnostics.updates.actions.checking':
+        return '检查中…';
+      case 'settings.diagnostics.updates.actions.updateAndRestart':
+        return '更新并重启';
+      case 'settings.diagnostics.updates.actions.stageForNextLaunch':
+        return '后台准备更新';
+      case 'settings.diagnostics.updates.actions.openDownload':
+        return '打开下载页面';
+      case 'settings.diagnostics.updates.actions.updating':
+        return '更新中…';
+      case 'settings.diagnostics.updates.messages.upToDate':
+        return '当前已是最新版本';
+      case 'settings.diagnostics.updates.messages.updateAvailable':
+        return ({required Object version}) => '发现新版本：${version}';
+      case 'settings.diagnostics.updates.messages.checkFailed':
+        return ({required Object error}) => '检查更新失败：${error}';
+      case 'settings.diagnostics.updates.messages.installStarting':
+        return '正在准备更新，应用即将重启。';
+      case 'settings.diagnostics.updates.messages.stageStarting':
+        return '正在后台准备更新，下次启动将自动生效。';
+      case 'settings.diagnostics.updates.messages.stageReady':
+        return '更新已准备就绪，下次启动将自动更新。';
+      case 'settings.diagnostics.updates.messages.installFailed':
+        return ({required Object error}) => '更新失败：${error}';
+      case 'settings.diagnostics.updates.messages.stageFailed':
+        return ({required Object error}) => '后台准备更新失败：${error}';
+      case 'settings.diagnostics.updates.messages.openFailed':
+        return '无法打开下载页面';
       case 'settings.diagnostics.messages.copied':
         return '诊断信息已复制';
       case 'settings.diagnostics.messages.copyFailed':
@@ -11968,6 +12742,17 @@ extension on _StringsZhCn {
         return '需要麦克风权限才能录音。';
       case 'chat.audioRecordFailed':
         return ({required Object error}) => '录音失败：${error}';
+      case 'chat.recordingRecoveryDialog.title':
+        return '检测到未完成录音';
+      case 'chat.recordingRecoveryDialog.description':
+        return ({required Object segmentCount}) =>
+            '检测到上次录音中断，找到 ${segmentCount} 段可恢复音频。你可以恢复并发送，或直接丢弃。';
+      case 'chat.recordingRecoveryDialog.actions.discard':
+        return '丢弃';
+      case 'chat.recordingRecoveryDialog.actions.recoverAndSend':
+        return '恢复并发送';
+      case 'chat.recordingRecoveryRecoveredAndSent':
+        return '已恢复并发送上次中断的录音。';
       case 'chat.editFailed':
         return ({required Object error}) => '编辑失败：${error}';
       case 'chat.deleteFailed':
