@@ -236,10 +236,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("-SkipBuild", workflow_text)
         self.assertIn("-OutputPath dist", workflow_text)
         self.assertIn("Velopack setup not found", workflow_text)
-        self.assertIn("Velopack RELEASES not found", workflow_text)
+        self.assertIn("Velopack releases metadata not found", workflow_text)
+        self.assertIn("Velopack assets metadata not found", workflow_text)
         self.assertIn("Velopack nupkg not found", workflow_text)
         self.assertIn("dist/*Setup*.exe", workflow_text)
-        self.assertIn("dist/*RELEASES*", workflow_text)
+        self.assertIn("dist/releases.*.json", workflow_text)
+        self.assertIn("dist/assets.*.json", workflow_text)
         self.assertIn("dist/*.nupkg", workflow_text)
         self.assertNotIn("dist/*.msi", workflow_text)
 
@@ -250,6 +252,18 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("$dotnetExitCode = $LASTEXITCODE", script_text)
         self.assertIn("foreach ($line in $dotnetOutput)", script_text)
         self.assertIn("if ($dotnetExitCode -ne 0)", script_text)
+
+    def test_windows_velopack_script_sets_pack_title(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("'--packTitle', 'SecondLoop'", script_text)
+
+    def test_windows_velopack_script_sets_pack_icon_and_checks_metadata_outputs(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("'--icon', $packIconPath", script_text)
+        self.assertIn('"releases.$Channel.json"', script_text)
+        self.assertIn('"assets.$Channel.json"', script_text)
 
 
 

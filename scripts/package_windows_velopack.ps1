@@ -189,6 +189,16 @@ if (-not (Test-Path $releaseDir)) {
   throw "Windows release output not found: $releaseDir"
 }
 
+$Channel = $Channel.Trim()
+if ([string]::IsNullOrWhiteSpace($Channel)) {
+  throw 'Velopack channel must not be empty.'
+}
+
+$packIconPath = Join-Path $repoRootPath 'windows/runner/resources/app_icon.ico'
+if (-not (Test-Path $packIconPath)) {
+  throw "Windows app icon not found: $packIconPath"
+}
+
 $resolvedVersion = Resolve-PackageVersion
 $mainExe = Resolve-MainExeName -SourceDir $releaseDir
 New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
@@ -198,6 +208,8 @@ $vpkPath = Ensure-VpkTool -RequiredVersion $VpkVersion
 $packArgs = @(
   'pack',
   '--packId', $PackId,
+  '--packTitle', 'SecondLoop',
+  '--icon', $packIconPath,
   '--packVersion', $resolvedVersion,
   '--packDir', $releaseDir,
   '--mainExe', $mainExe,
@@ -212,10 +224,21 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $setupExists = Get-ChildItem -Path $OutputPath -Filter '*Setup*.exe' -File | Select-Object -First 1
-$releasesExists = Get-ChildItem -Path $OutputPath -Filter '*RELEASES*' -File | Select-Object -First 1
 $packageExists = Get-ChildItem -Path $OutputPath -Filter '*.nupkg' -File | Select-Object -First 1
-if ($null -eq $setupExists -or $null -eq $releasesExists -or $null -eq $packageExists) {
-  throw "Velopack output missing setup exe, RELEASES, or nupkg in $OutputPath"
+$releasesMetadataPath = Join-Path $OutputPath "releases.$Channel.json"
+$assetsMetadataPath = Join-Path $OutputPath "assets.$Channel.json"
+
+if ($null -eq $setupExists) {
+  throw "Velopack output missing setup exe in $OutputPath"
+}
+if (-not (Test-Path $releasesMetadataPath)) {
+  throw "Velopack output missing releases metadata: $releasesMetadataPath"
+}
+if (-not (Test-Path $assetsMetadataPath)) {
+  throw "Velopack output missing assets metadata: $assetsMetadataPath"
+}
+if ($null -eq $packageExists) {
+  throw "Velopack output missing nupkg in $OutputPath"
 }
 
 Write-Host "Velopack package ready in: $OutputPath"
