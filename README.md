@@ -78,7 +78,6 @@ When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads *
 ## 🔄 Desktop update strategy (current)
 
 - **Windows (Velopack install)**: background staged update, applied on next launch.
-- **Windows (legacy MSI install)**: manual download/update fallback.
 - **macOS**: manual DMG download/update (no paid signing/notarization yet).
 - Release operations and verification steps: `docs/runbooks/windows-velopack-release.md`.
 

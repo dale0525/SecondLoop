@@ -468,9 +468,6 @@ class AppUpdateService {
     final setupCandidate = findFirst(_isWindowsSetupInstallerName);
     if (setupCandidate != null) return setupCandidate;
 
-    final msiCandidate = findFirst(_isWindowsMsiInstallerName);
-    if (msiCandidate != null) return msiCandidate;
-
     return null;
   }
 
@@ -487,11 +484,6 @@ class AppUpdateService {
     return normalized.endsWith('.exe') &&
         normalized.contains('setup') &&
         normalized.contains('secondloop');
-  }
-
-  static bool _isWindowsMsiInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.msi') && normalized.contains('secondloop');
   }
 
   AppUpdateInstallMode _resolveInstallMode(

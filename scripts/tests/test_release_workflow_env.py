@@ -220,6 +220,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def test_windows_release_packages_and_uploads_velopack_artifacts(self) -> None:
         workflow_text = self._workflow_text()
 
+        self.assertNotIn("name: Package MSI", workflow_text)
         self.assertIn("name: Package Velopack", workflow_text)
         self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
         self.assertIn("-SkipBuild", workflow_text)
@@ -230,7 +231,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("dist/*Setup*.exe", workflow_text)
         self.assertIn("dist/*RELEASES*", workflow_text)
         self.assertIn("dist/*.nupkg", workflow_text)
-        self.assertIn("dist/*.msi", workflow_text)
+        self.assertNotIn("dist/*.msi", workflow_text)
 
     def test_windows_velopack_script_keeps_dotnet_output_out_of_vpk_path(self) -> None:
         script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
