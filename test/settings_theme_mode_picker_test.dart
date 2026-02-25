@@ -70,9 +70,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Color palette'), findsOneWidget);
+    expect(find.text('Theme style'), findsOneWidget);
 
-    await tester.tap(find.text('Color palette'));
+    await tester.tap(find.text('Theme style'));
     await tester.pumpAndSettle();
 
     expect(find.text('Studio'), findsWidgets);

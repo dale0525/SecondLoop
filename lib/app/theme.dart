@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'theme_palette_prefs.dart';
+import 'theme_specs.dart';
 import '../ui/sl_tokens.dart';
 
 class AppTheme {
@@ -10,9 +11,6 @@ class AppTheme {
 
   static const _primary = Color(0xFF6366F1); // Indigo
   static const _accent = Color(0xFFA78BFA); // Violet
-  static const _forestSeed = Color(0xFF16A34A);
-  static const _oceanSeed = Color(0xFF0284C7);
-  static const _sunsetSeed = Color(0xFFEA580C);
 
   static const _lightBackground = Color(0xFFF6F7FB); // Paper
   static const _lightSurface = Color(0xFFFFFFFF);
@@ -24,14 +22,11 @@ class AppTheme {
   static const _darkSurface2 = Color(0xFF171724);
   static const _darkBorder = Color(0xFF24243A);
 
-  static const _radiusSm = 10.0;
-  static const _radiusMd = 14.0;
-  static const _radiusLg = 18.0;
-
   static dynamic _cardThemeForThemeData({
-    required bool isDark,
     required Color surface,
     required Color outline,
+    required double radiusLg,
+    required double borderOpacity,
   }) {
     final dynamic cardTheme = CardTheme(
       color: surface,
@@ -39,10 +34,8 @@ class AppTheme {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_radiusLg),
-        side: BorderSide(
-          color: isDark ? outline.withOpacity(0.65) : outline.withOpacity(0.9),
-        ),
+        borderRadius: BorderRadius.circular(radiusLg),
+        side: BorderSide(color: outline.withOpacity(borderOpacity)),
       ),
     );
 
@@ -60,12 +53,15 @@ class AppTheme {
     }
   }
 
-  static dynamic _dialogThemeForThemeData({required Color surface}) {
+  static dynamic _dialogThemeForThemeData({
+    required Color surface,
+    required double radiusLg,
+  }) {
     final dynamic dialogTheme = DialogTheme(
       backgroundColor: surface,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_radiusLg),
+        borderRadius: BorderRadius.circular(radiusLg),
       ),
     );
 
@@ -120,12 +116,17 @@ class AppTheme {
     final fontFamily = _primaryFontFamily(effectivePlatform);
     final fontFamilyFallback =
         _fontFamilyFallbackFor(locale, effectivePlatform);
+    final spec = _specForPalette(palette);
+    final radii = spec.corners;
 
-    final scheme = isDark ? _darkScheme(palette) : _lightScheme(palette);
-    final ring = _ringColorForPalette(palette);
-    final tokens = isDark
-        ? _darkTokens(primary: scheme.primary, ring: ring)
-        : _lightTokens(primary: scheme.primary, ring: ring);
+    final scheme = isDark
+        ? _darkScheme(palette: palette, spec: spec)
+        : _lightScheme(palette: palette, spec: spec);
+    final tokens = _tokens(
+      brightness: brightness,
+      scheme: scheme,
+      spec: spec,
+    );
 
     final base = ThemeData(
       useMaterial3: true,
@@ -160,23 +161,30 @@ class AppTheme {
         thickness: 1,
       ),
       cardTheme: _cardThemeForThemeData(
-        isDark: isDark,
         surface: surface,
         outline: outline,
+        radiusLg: radii.lg,
+        borderOpacity:
+            isDark ? spec.darkCardBorderOpacity : spec.lightCardBorderOpacity,
       ),
-      dialogTheme: _dialogThemeForThemeData(surface: surface),
+      dialogTheme: _dialogThemeForThemeData(
+        surface: surface,
+        radiusLg: radii.lg,
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusLg),
+          borderRadius: BorderRadius.circular(radii.lg),
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(radii.lg + 2),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
@@ -184,12 +192,12 @@ class AppTheme {
         backgroundColor: scheme.inverseSurface,
         contentTextStyle: TextStyle(color: scheme.onInverseSurface),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
       ),
       listTileTheme: ListTileThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
         iconColor: scheme.onSurfaceVariant,
         textColor: scheme.onSurface,
@@ -199,14 +207,16 @@ class AppTheme {
         elevation: 0,
         height: 72,
         indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
-        indicatorColor: scheme.primary.withOpacity(isDark ? 0.18 : 0.12),
+        indicatorColor: scheme.primary.withOpacity(
+          isDark ? spec.darkIndicatorOpacity : spec.lightIndicatorOpacity,
+        ),
         indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
         selectedIconTheme: IconThemeData(color: scheme.primary),
         unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
@@ -220,26 +230,26 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? tokens.surface2 : _lightSurface,
+        fillColor: tokens.surface2,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide: BorderSide(color: outline.withOpacity(0.9)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide:
               BorderSide(color: outline.withOpacity(isDark ? 0.7 : 0.85)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide: BorderSide(color: scheme.error),
         ),
       ),
@@ -250,7 +260,7 @@ class AppTheme {
           ),
           shape: MaterialStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radiusMd),
+              borderRadius: BorderRadius.circular(radii.md),
             ),
           ),
         ),
@@ -262,7 +272,7 @@ class AppTheme {
           ),
           shape: MaterialStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radiusMd),
+              borderRadius: BorderRadius.circular(radii.md),
             ),
           ),
         ),
@@ -271,7 +281,7 @@ class AppTheme {
         style: ButtonStyle(
           shape: MaterialStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radiusMd),
+              borderRadius: BorderRadius.circular(radii.md),
             ),
           ),
         ),
@@ -350,42 +360,47 @@ class AppTheme {
     inversePrimary: Color(0xFF4F46E5),
   );
 
-  static Color _seedColorForPalette(AppThemePalette palette) {
-    return switch (palette) {
-      AppThemePalette.studio => _primary,
-      AppThemePalette.forest => _forestSeed,
-      AppThemePalette.ocean => _oceanSeed,
-      AppThemePalette.sunset => _sunsetSeed,
-    };
+  static AppThemeStyleSpec _specForPalette(AppThemePalette palette) {
+    return kAppThemeStyleSpecs[palette] ??
+        kAppThemeStyleSpecs[AppThemePalette.studio]!;
   }
 
-  static Color _ringColorForPalette(AppThemePalette palette) {
-    return switch (palette) {
-      AppThemePalette.studio => _accent,
-      AppThemePalette.forest => const Color(0xFF4ADE80),
-      AppThemePalette.ocean => const Color(0xFF67E8F9),
-      AppThemePalette.sunset => const Color(0xFFFDA4AF),
-    };
-  }
-
-  static ColorScheme _darkScheme(AppThemePalette palette) {
+  static ColorScheme _darkScheme({
+    required AppThemePalette palette,
+    required AppThemeStyleSpec spec,
+  }) {
     return _schemeForPalette(
       palette: palette,
+      spec: spec,
       brightness: Brightness.dark,
       base: _studioDarkScheme,
     );
   }
 
-  static ColorScheme _lightScheme(AppThemePalette palette) {
+  static ColorScheme _lightScheme({
+    required AppThemePalette palette,
+    required AppThemeStyleSpec spec,
+  }) {
     return _schemeForPalette(
       palette: palette,
+      spec: spec,
       brightness: Brightness.light,
       base: _studioLightScheme,
     );
   }
 
+  static Color _onColorForSurface(Color color, {required bool isDark}) {
+    final contrast = ThemeData.estimateBrightnessForColor(color);
+    final prefersLightForeground = contrast == Brightness.dark;
+    if (prefersLightForeground) {
+      return isDark ? const Color(0xFFE7E7F0) : const Color(0xFFF8FAFC);
+    }
+    return isDark ? const Color(0xFFDDE7F2) : const Color(0xFF0F172A);
+  }
+
   static ColorScheme _schemeForPalette({
     required AppThemePalette palette,
+    required AppThemeStyleSpec spec,
     required Brightness brightness,
     required ColorScheme base,
   }) {
@@ -394,70 +409,77 @@ class AppTheme {
     }
 
     final seeded = ColorScheme.fromSeed(
-      seedColor: _seedColorForPalette(palette),
+      seedColor: spec.seed,
       brightness: brightness,
     );
+    final isDark = brightness == Brightness.dark;
+    final background = spec.background(brightness);
+    final surface = spec.surface(brightness);
+    final surface2 = spec.surface2(brightness);
+    final border = spec.border(brightness);
+    final onBackground = _onColorForSurface(background, isDark: isDark);
+    final onSurface = _onColorForSurface(surface, isDark: isDark);
+    final onSurfaceVariant = _onColorForSurface(
+      surface2,
+      isDark: isDark,
+    ).withOpacity(isDark ? 0.78 : 0.72);
+    final outline = Color.alphaBlend(
+      seeded.primary.withOpacity(isDark ? 0.28 : 0.18),
+      border,
+    );
 
-    return base.copyWith(
-      primary: seeded.primary,
-      onPrimary: seeded.onPrimary,
-      primaryContainer: seeded.primaryContainer,
-      onPrimaryContainer: seeded.onPrimaryContainer,
-      secondary: seeded.secondary,
-      onSecondary: seeded.onSecondary,
-      secondaryContainer: seeded.secondaryContainer,
-      onSecondaryContainer: seeded.onSecondaryContainer,
-      tertiary: seeded.tertiary,
-      onTertiary: seeded.onTertiary,
-      tertiaryContainer: seeded.tertiaryContainer,
-      onTertiaryContainer: seeded.onTertiaryContainer,
+    return seeded.copyWith(
+      background: background,
+      onBackground: onBackground,
+      surface: surface,
+      onSurface: onSurface,
+      surfaceVariant: surface2,
+      onSurfaceVariant: onSurfaceVariant,
+      outline: outline,
+      outlineVariant: border,
       inversePrimary: seeded.inversePrimary,
     );
   }
 
-  static SlTokens _darkTokens({
-    required Color primary,
-    required Color ring,
+  static SlTokens _tokens({
+    required Brightness brightness,
+    required ColorScheme scheme,
+    required AppThemeStyleSpec spec,
   }) {
-    return SlTokens(
-      background: _darkBackground,
-      surface: _darkSurface,
-      surface2: _darkSurface2,
-      border: _darkBorder,
-      borderSubtle: const Color(0xFF1F1F33),
-      ring: ring,
-      sidebarBackground: const Color(0xCC12121A),
-      sidebarBorder: const Color(0x3324243A),
-      sidebarItemHover: primary.withOpacity(0.1),
-      sidebarItemActive: primary.withOpacity(0.15),
-      sidebarItemForeground: const Color(0xFFB9B9CE),
-      sidebarItemActiveForeground: const Color(0xFFE7E7F0),
-      radiusSm: _radiusSm,
-      radiusMd: _radiusMd,
-      radiusLg: _radiusLg,
-    );
-  }
+    final isDark = brightness == Brightness.dark;
+    final background = spec.background(brightness);
+    final surface = spec.surface(brightness);
+    final surface2 = spec.surface2(brightness);
+    final border = spec.border(brightness);
+    final borderSubtle = isDark
+        ? Color.alphaBlend(Colors.black.withOpacity(0.25), border)
+        : Color.alphaBlend(Colors.white.withOpacity(0.22), border);
+    final sidebarBackground = isDark
+        ? Color.alphaBlend(Colors.black.withOpacity(0.25), surface)
+        : Color.alphaBlend(Colors.white.withOpacity(0.82), surface);
+    final sidebarBorder =
+        isDark ? border.withOpacity(0.58) : border.withOpacity(0.74);
+    final sidebarItemHover = scheme.primary.withOpacity(isDark ? 0.14 : 0.1);
+    final sidebarItemActive = scheme.primary.withOpacity(isDark ? 0.22 : 0.16);
+    final sidebarItemForeground =
+        scheme.onSurfaceVariant.withOpacity(isDark ? 0.95 : 0.92);
 
-  static SlTokens _lightTokens({
-    required Color primary,
-    required Color ring,
-  }) {
     return SlTokens(
-      background: _lightBackground,
-      surface: _lightSurface,
-      surface2: _lightSurface2,
-      border: _lightBorder,
-      borderSubtle: const Color(0xFFDDE1EC),
-      ring: ring,
-      sidebarBackground: const Color(0xCCFFFFFF),
-      sidebarBorder: const Color(0x66E6E8F0),
-      sidebarItemHover: primary.withOpacity(0.08),
-      sidebarItemActive: primary.withOpacity(0.12),
-      sidebarItemForeground: const Color(0xFF475569),
-      sidebarItemActiveForeground: const Color(0xFF0F172A),
-      radiusSm: _radiusSm,
-      radiusMd: _radiusMd,
-      radiusLg: _radiusLg,
+      background: background,
+      surface: surface,
+      surface2: surface2,
+      border: border,
+      borderSubtle: borderSubtle,
+      ring: spec.ring,
+      sidebarBackground: sidebarBackground,
+      sidebarBorder: sidebarBorder,
+      sidebarItemHover: sidebarItemHover,
+      sidebarItemActive: sidebarItemActive,
+      sidebarItemForeground: sidebarItemForeground,
+      sidebarItemActiveForeground: scheme.onSurface,
+      radiusSm: spec.corners.sm,
+      radiusMd: spec.corners.md,
+      radiusLg: spec.corners.lg,
     );
   }
 
