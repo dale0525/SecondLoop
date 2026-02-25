@@ -201,8 +201,17 @@ class AppUpdateService {
     }
 
     final assets = _parseAssets(release['assets']);
-    final matchedAsset = _matchAssetForCurrentPlatform(assets);
-    final installMode = _resolveInstallMode(matchedAsset);
+    final windowsStagedRuntimeAvailable =
+        _platform == AppUpdatePlatform.windows &&
+            _isWindowsStagedUpdateAvailable();
+    final matchedAsset = _matchAssetForCurrentPlatform(
+      assets,
+      windowsStagedRuntimeAvailable: windowsStagedRuntimeAvailable,
+    );
+    final installMode = _resolveInstallMode(
+      matchedAsset,
+      windowsStagedRuntimeAvailable: windowsStagedRuntimeAvailable,
+    );
 
     return AppUpdateCheckResult(
       currentVersion: runtimeVersion.display,
@@ -414,21 +423,23 @@ class AppUpdateService {
     return parsed;
   }
 
-  AppUpdateAsset? _matchAssetForCurrentPlatform(List<AppUpdateAsset> assets) {
-    RegExp? matcher;
-    switch (_platform) {
-      case AppUpdatePlatform.windows:
-        matcher = RegExp(r'^SecondLoop-windows-x64-.*\.msi$');
-      case AppUpdatePlatform.macos:
-        matcher = RegExp(r'^SecondLoop-macos-.*\.(dmg|zip)$');
-      case AppUpdatePlatform.linux:
-        matcher = RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$');
-      case AppUpdatePlatform.android:
-        matcher = RegExp(r'^SecondLoop-android-.*\.apk$');
-      case AppUpdatePlatform.ios:
-      case AppUpdatePlatform.unsupported:
-        matcher = null;
+  AppUpdateAsset? _matchAssetForCurrentPlatform(
+    List<AppUpdateAsset> assets, {
+    bool windowsStagedRuntimeAvailable = false,
+  }) {
+    if (_platform == AppUpdatePlatform.windows) {
+      return _matchWindowsAssetForCurrentRuntime(
+        assets,
+        windowsStagedRuntimeAvailable: windowsStagedRuntimeAvailable,
+      );
     }
+
+    final matcher = switch (_platform) {
+      AppUpdatePlatform.macos => RegExp(r'^SecondLoop-macos-.*\.(dmg|zip)$'),
+      AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
+      AppUpdatePlatform.android => RegExp(r'^SecondLoop-android-.*\.apk$'),
+      _ => null,
+    };
 
     if (matcher == null) return null;
 
@@ -438,15 +449,65 @@ class AppUpdateService {
     return null;
   }
 
-  AppUpdateInstallMode _resolveInstallMode(AppUpdateAsset? asset) {
+  AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
+    List<AppUpdateAsset> assets, {
+    required bool windowsStagedRuntimeAvailable,
+  }) {
+    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
+      for (final asset in assets) {
+        if (matcher(asset.name)) return asset;
+      }
+      return null;
+    }
+
+    if (windowsStagedRuntimeAvailable) {
+      final stagedCandidate = findFirst(_isWindowsVelopackNupkgName);
+      if (stagedCandidate != null) return stagedCandidate;
+    }
+
+    final setupCandidate = findFirst(_isWindowsSetupInstallerName);
+    if (setupCandidate != null) return setupCandidate;
+
+    final msiCandidate = findFirst(_isWindowsMsiInstallerName);
+    if (msiCandidate != null) return msiCandidate;
+
+    return null;
+  }
+
+  static bool _isWindowsVelopackNupkgName(String name) {
+    final normalized = name.trim().toLowerCase();
+    if (!normalized.endsWith('.nupkg') || normalized.endsWith('.snupkg')) {
+      return false;
+    }
+    return normalized.contains('secondloop');
+  }
+
+  static bool _isWindowsSetupInstallerName(String name) {
+    final normalized = name.trim().toLowerCase();
+    return normalized.endsWith('.exe') &&
+        normalized.contains('setup') &&
+        normalized.contains('secondloop');
+  }
+
+  static bool _isWindowsMsiInstallerName(String name) {
+    final normalized = name.trim().toLowerCase();
+    return normalized.endsWith('.msi') && normalized.contains('secondloop');
+  }
+
+  AppUpdateInstallMode _resolveInstallMode(
+    AppUpdateAsset? asset, {
+    bool windowsStagedRuntimeAvailable = false,
+  }) {
     if (!_isReleaseMode || asset == null) {
       return AppUpdateInstallMode.externalDownload;
     }
 
+    final isWindowsStagedPackage = _isWindowsVelopackNupkgName(asset.name);
     return switch (_platform) {
       AppUpdatePlatform.linux when asset.name.endsWith('.tar.gz') =>
         AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.windows when _isWindowsStagedUpdateAvailable() =>
+      AppUpdatePlatform.windows
+          when windowsStagedRuntimeAvailable && isWindowsStagedPackage =>
         AppUpdateInstallMode.stagedNextLaunch,
       _ => AppUpdateInstallMode.externalDownload,
     };
