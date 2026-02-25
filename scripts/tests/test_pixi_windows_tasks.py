@@ -97,6 +97,16 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("setup_windows_libclang.ps1", script)
 
+    def test_windows_velopack_skip_build_does_not_require_libclang_setup(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        skip_build_guard = script.find("if (-not $SkipBuild)")
+        setup_idx = script.find("setup_windows_libclang.ps1")
+
+        self.assertNotEqual(-1, skip_build_guard)
+        self.assertNotEqual(-1, setup_idx)
+        self.assertGreater(setup_idx, skip_build_guard)
+
     def test_windows_msi_script_prepares_libclang_for_bindgen(self) -> None:
         script = WINDOWS_MSI_SCRIPT.read_text(encoding="utf-8")
 

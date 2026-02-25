@@ -177,9 +177,10 @@ function Ensure-VpkTool([string]$RequiredVersion) {
 }
 
 Import-DotEnvLocal
-& (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
 
 if (-not $SkipBuild) {
+  & (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
+
   Write-Host 'Running: flutter pub get'
   & dart pub global run fvm:main flutter pub get
   if ($LASTEXITCODE -ne 0) {
