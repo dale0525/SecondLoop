@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, Result};
 
@@ -18,9 +18,22 @@ fn normalize_file(path: &str) -> String {
     format!("/{trimmed}")
 }
 
-fn virtual_to_local(root: &Path, virtual_path: &str) -> PathBuf {
-    let relative = virtual_path.trim_start_matches('/');
-    root.join(relative)
+fn parse_relative_virtual_path(virtual_path: &str) -> Result<PathBuf> {
+    let trimmed = virtual_path.trim_start_matches('/');
+    let mut relative = PathBuf::new();
+    for component in Path::new(trimmed).components() {
+        match component {
+            Component::Normal(part) => relative.push(part),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                return Err(anyhow!("path traversal is not allowed: {virtual_path}"));
+            }
+            _ => {
+                return Err(anyhow!("absolute path is not allowed: {virtual_path}"));
+            }
+        }
+    }
+    Ok(relative)
 }
 
 #[derive(Clone, Debug)]
@@ -32,9 +45,35 @@ pub struct LocalDirRemoteStore {
 impl LocalDirRemoteStore {
     pub fn new(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root)?;
-        let canonical = root.canonicalize().unwrap_or_else(|_| root.clone());
+        let canonical = root.canonicalize().unwrap_or(root);
         let target_id = format!("localdir:{}", canonical.to_string_lossy());
-        Ok(Self { root, target_id })
+        Ok(Self {
+            root: canonical,
+            target_id,
+        })
+    }
+
+    fn resolve_virtual_path(&self, virtual_path: &str) -> Result<PathBuf> {
+        let relative = parse_relative_virtual_path(virtual_path)?;
+        let local = self.root.join(relative);
+        self.ensure_within_root(&local)?;
+        Ok(local)
+    }
+
+    fn ensure_within_root(&self, local: &Path) -> Result<()> {
+        let mut existing = local;
+        loop {
+            if existing.exists() {
+                let canonical = existing.canonicalize()?;
+                if canonical.starts_with(&self.root) {
+                    return Ok(());
+                }
+                return Err(anyhow!("path escapes localdir root: {}", local.display()));
+            }
+            existing = existing
+                .parent()
+                .ok_or_else(|| anyhow!("invalid path: {}", local.display()))?;
+        }
     }
 }
 
@@ -48,14 +87,14 @@ impl super::RemoteStore for LocalDirRemoteStore {
         if dir == "/" {
             return Ok(());
         }
-        let local = virtual_to_local(&self.root, dir.trim_end_matches('/'));
+        let local = self.resolve_virtual_path(dir.trim_end_matches('/'))?;
         fs::create_dir_all(local)?;
         Ok(())
     }
 
     fn list(&self, dir: &str) -> Result<Vec<String>> {
         let dir = normalize_dir(dir);
-        let local = virtual_to_local(&self.root, dir.trim_end_matches('/'));
+        let local = self.resolve_virtual_path(dir.trim_end_matches('/'))?;
         if !local.exists() {
             return Ok(vec![]);
         }
@@ -87,7 +126,7 @@ impl super::RemoteStore for LocalDirRemoteStore {
             return Err(anyhow!("GET expects file path, got dir: {path}"));
         }
 
-        let local = virtual_to_local(&self.root, path.trim_start_matches('/'));
+        let local = self.resolve_virtual_path(path.trim_start_matches('/'))?;
         match fs::read(local) {
             Ok(bytes) => Ok(bytes),
             Err(e) if e.kind() == ErrorKind::NotFound => Err(super::NotFound { path }.into()),
@@ -101,7 +140,7 @@ impl super::RemoteStore for LocalDirRemoteStore {
             return Err(anyhow!("PUT expects file path, got dir: {path}"));
         }
 
-        let local = virtual_to_local(&self.root, path.trim_start_matches('/'));
+        let local = self.resolve_virtual_path(path.trim_start_matches('/'))?;
         if let Some(parent) = local.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -116,7 +155,7 @@ impl super::RemoteStore for LocalDirRemoteStore {
                 return Err(anyhow!("refusing to delete root dir"));
             }
 
-            let local = virtual_to_local(&self.root, dir.trim_end_matches('/'));
+            let local = self.resolve_virtual_path(dir.trim_end_matches('/'))?;
             match fs::remove_dir_all(local) {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -130,7 +169,7 @@ impl super::RemoteStore for LocalDirRemoteStore {
                 return Err(anyhow!("DELETE expects file path, got dir: {file}"));
             }
 
-            let local = virtual_to_local(&self.root, file.trim_start_matches('/'));
+            let local = self.resolve_virtual_path(file.trim_start_matches('/'))?;
             match fs::remove_file(local) {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == ErrorKind::NotFound => {

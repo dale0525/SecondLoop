@@ -365,7 +365,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Enter your sync passphrase and tap Save first.'),
+      find.text('Enter your recovery passphrase and tap Save first.'),
       findsNothing,
     );
     expect(await store.readWebdavBaseUrl(), 'https://example.com/dav');
@@ -412,7 +412,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Enter your sync passphrase and tap Save first.'),
+      find.text('Enter your recovery passphrase and tap Save first.'),
       findsNothing,
     );
     final syncKey = await store.readSyncKey();

@@ -39,7 +39,7 @@
       "lockNow": "Lock now"
     },
     "fields": {
-      "masterPassword": "Master password",
+      "masterPassword": "App lock password",
       "confirm": "Confirm",
       "message": "Message",
       "quickCapture": "Quick capture",
@@ -306,8 +306,8 @@
     "systemUnlock": {
       "titleMobile": "Use biometrics",
       "titleDesktop": "Use system unlock",
-      "subtitleMobile": "Unlock with biometrics instead of master password",
-      "subtitleDesktop": "Unlock with Touch ID / Windows Hello instead of master password"
+      "subtitleMobile": "Unlock with biometrics instead of app lock password",
+      "subtitleDesktop": "Unlock with Touch ID / Windows Hello instead of app lock password"
     },
     "lockNow": {
       "title": "Lock now",
@@ -839,12 +839,12 @@
     },
     "resetLocalDataThisDeviceOnly": {
       "dialogTitle": "Reset local data?",
-      "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.",
+      "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.",
       "failed": "Reset failed: $error"
     },
     "resetLocalDataAllDevices": {
       "dialogTitle": "Reset local data?",
-      "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.",
+      "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.",
       "failed": "Reset failed: $error"
     },
     "debugResetLocalDataThisDeviceOnly": {
@@ -896,12 +896,12 @@
     }
   },
   "lock": {
-    "masterPasswordRequired": "Master password required",
+    "masterPasswordRequired": "App lock password required",
     "passwordsDoNotMatch": "Passwords do not match",
-    "setupTitle": "Set master password",
+    "setupTitle": "Set app lock password",
     "unlockTitle": "Unlock",
     "unlockReason": "Unlock SecondLoop",
-    "missingSavedSessionKey": "Missing saved session key. Unlock with master password once.",
+    "missingSavedSessionKey": "Missing saved session key. Unlock with app lock password once.",
     "creating": "Creating…",
     "unlocking": "Unlocking…"
   },
@@ -1031,7 +1031,7 @@
     "askAiFailedTemporary": "Ask AI failed. Please try again.",
     "askAiConsent": {
       "title": "Before we use AI",
-      "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your master password or your full history.",
+      "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your app lock password or your full history.",
       "dontShowAgain": "Don't show again"
     },
     "embeddingsConsent": {
@@ -1259,8 +1259,8 @@
         "confirm": "Switch"
       },
       "setPassphraseDialog": {
-        "title": "Set sync passphrase",
-        "confirm": "Save passphrase"
+        "title": "Set recovery passphrase (Advanced)",
+        "confirm": "Save recovery passphrase"
       }
     },
     "remoteRootRequired": "Folder name is required",
@@ -1269,7 +1269,7 @@
     "connectionOk": "Connection OK",
     "connectionFailed": "Connection failed: $error",
     "saveFailed": "Save failed: $error",
-    "missingSyncKey": "Enter your sync passphrase and tap Save first.",
+    "missingSyncKey": "Enter your recovery passphrase and tap Save first.",
     "pushedOps": "Uploaded $count changes",
     "pulledOps": "Downloaded $count changes",
     "noNewChanges": "No new changes",
@@ -1304,8 +1304,8 @@
         "hint": "SecondLoop"
       },
       "passphrase": {
-        "label": "Sync passphrase",
-        "helper": "Use the same passphrase on all devices. It’s never uploaded."
+        "label": "Recovery passphrase (Advanced)",
+        "helper": "Use the same recovery passphrase on all devices. It’s never uploaded."
       }
     }
   },
