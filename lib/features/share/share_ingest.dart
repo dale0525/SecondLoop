@@ -130,6 +130,7 @@ final class ShareIngest {
     Future<String> Function(String path, String mimeType, String? filename)?
         onFile,
     Future<String> Function(String url)? onUrlManifest,
+    Future<void> Function(String attachmentSha256)? onAttachmentLinked,
     Future<void> Function(
       String attachmentSha256,
       ShareIngestAttachmentMetadata metadata,
@@ -139,10 +140,14 @@ final class ShareIngest {
     final current = prefs.getStringList(_queueKey) ?? const <String>[];
     if (current.isEmpty) return 0;
 
-    var processed = 0;
+    var processedImmediate = 0;
+    var pendingBatchCount = 0;
+    final pendingTextParts = <String>[];
+    final pendingAttachmentMetadataBySha =
+        <String, ShareIngestAttachmentMetadata>{};
+    final pendingDedup = <String, int>{};
 
-    final remaining = <String>[];
-    String? conversationId;
+    List<String>? remainingAfterFailure;
     final now = DateTime.now().millisecondsSinceEpoch;
     final dedup = _loadDedup(prefs, now);
 
@@ -163,35 +168,25 @@ final class ShareIngest {
         case 'text':
           final content = payload['content'];
           if (content is! String || content.trim().isEmpty) continue;
-          final dedupKey = '$type:${content.trim()}';
-          if (dedup.containsKey(dedupKey)) {
-            processed += 1;
+          final normalized = content.trim();
+          final dedupKey = '$type:$normalized';
+          if (dedup.containsKey(dedupKey) ||
+              pendingDedup.containsKey(dedupKey)) {
+            processedImmediate += 1;
             continue;
           }
-          try {
-            conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
-            await backend.insertMessage(
-              sessionKey,
-              conversationId,
-              role: 'user',
-              content: content,
-            );
-            dedup[dedupKey] = now;
-            processed += 1;
-            onMutation?.call();
-          } catch (_) {
-            remaining.addAll(current.skip(i));
-            break outer;
-          }
+          pendingTextParts.add(normalized);
+          pendingDedup[dedupKey] = now;
+          pendingBatchCount += 1;
           break;
         case 'url':
           final content = payload['content'];
           if (content is! String || content.trim().isEmpty) continue;
           final trimmedUrl = content.trim();
           final dedupKey = 'url:$trimmedUrl';
-          if (dedup.containsKey(dedupKey)) {
-            processed += 1;
+          if (dedup.containsKey(dedupKey) ||
+              pendingDedup.containsKey(dedupKey)) {
+            processedImmediate += 1;
             continue;
           }
           try {
@@ -200,39 +195,28 @@ final class ShareIngest {
               attachmentSha256 = await onUrlManifest(trimmedUrl);
             }
 
-            conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
-            final message = await backend.insertMessage(
-              sessionKey,
-              conversationId,
-              role: 'user',
-              content: trimmedUrl,
-            );
-            final attachmentsBackend = backend is AttachmentsBackend
-                ? backend as AttachmentsBackend
-                : null;
-            if (attachmentsBackend != null && attachmentSha256 != null) {
-              await attachmentsBackend.linkAttachmentToMessage(
-                sessionKey,
-                message.id,
-                attachmentSha256: attachmentSha256,
-              );
-              if (onUpsertAttachmentMetadata != null) {
-                await onUpsertAttachmentMetadata(
-                  attachmentSha256,
+            pendingTextParts.add(trimmedUrl);
+            if (attachmentSha256 != null &&
+                attachmentSha256.trim().isNotEmpty) {
+              pendingAttachmentMetadataBySha.update(
+                attachmentSha256,
+                (existing) => _mergeAttachmentMetadata(
+                  existing,
                   ShareIngestAttachmentMetadata(
                     title: trimmedUrl,
                     sourceUrls: [trimmedUrl],
                   ),
-                );
-              }
+                ),
+                ifAbsent: () => ShareIngestAttachmentMetadata(
+                  title: trimmedUrl,
+                  sourceUrls: [trimmedUrl],
+                ),
+              );
             }
-
-            dedup[dedupKey] = now;
-            processed += 1;
-            onMutation?.call();
+            pendingDedup[dedupKey] = now;
+            pendingBatchCount += 1;
           } catch (_) {
-            remaining.addAll(current.skip(i));
+            remainingAfterFailure = <String>[...current.skip(i)];
             break outer;
           }
           break;
@@ -247,46 +231,39 @@ final class ShareIngest {
                   ? filename.trim()
                   : null;
           if (onImage == null) {
-            remaining.addAll(current.skip(i));
+            remainingAfterFailure = <String>[...current.skip(i)];
             break outer;
           }
           try {
             final sha256 =
                 await onImage(path.trim(), mimeType.trim(), safeFilename);
             final dedupKey = 'image:$sha256';
-            if (dedup.containsKey(dedupKey)) {
-              processed += 1;
+            if (dedup.containsKey(dedupKey) ||
+                pendingDedup.containsKey(dedupKey)) {
+              processedImmediate += 1;
               continue;
             }
-            conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
-            final message = await backend.insertMessage(
-              sessionKey,
-              conversationId,
-              role: 'user',
-              content: '',
-            );
-            final attachmentsBackend = backend is AttachmentsBackend
-                ? backend as AttachmentsBackend
-                : null;
-            if (attachmentsBackend != null) {
-              await attachmentsBackend.linkAttachmentToMessage(
-                sessionKey,
-                message.id,
-                attachmentSha256: sha256,
-              );
-              if (onUpsertAttachmentMetadata != null && safeFilename != null) {
-                await onUpsertAttachmentMetadata(
-                  sha256,
+
+            if (safeFilename != null) {
+              pendingAttachmentMetadataBySha.update(
+                sha256,
+                (existing) => _mergeAttachmentMetadata(
+                  existing,
                   ShareIngestAttachmentMetadata(filenames: [safeFilename]),
-                );
-              }
+                ),
+                ifAbsent: () =>
+                    ShareIngestAttachmentMetadata(filenames: [safeFilename]),
+              );
+            } else {
+              pendingAttachmentMetadataBySha.putIfAbsent(
+                sha256,
+                () => const ShareIngestAttachmentMetadata(),
+              );
             }
-            dedup[dedupKey] = now;
-            processed += 1;
-            onMutation?.call();
+            pendingDedup[dedupKey] = now;
+            pendingBatchCount += 1;
           } catch (_) {
-            remaining.addAll(current.skip(i));
+            remainingAfterFailure = <String>[...current.skip(i)];
             break outer;
           }
           break;
@@ -301,7 +278,7 @@ final class ShareIngest {
                   ? filename.trim()
                   : null;
           if (onFile == null) {
-            remaining.addAll(current.skip(i));
+            remainingAfterFailure = <String>[...current.skip(i)];
             break outer;
           }
 
@@ -309,42 +286,32 @@ final class ShareIngest {
             final sha256 =
                 await onFile(path.trim(), mimeType.trim(), safeFilename);
             final dedupKey = 'file:$sha256';
-            if (dedup.containsKey(dedupKey)) {
-              processed += 1;
+            if (dedup.containsKey(dedupKey) ||
+                pendingDedup.containsKey(dedupKey)) {
+              processedImmediate += 1;
               continue;
             }
 
-            conversationId ??=
-                (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
-            final message = await backend.insertMessage(
-              sessionKey,
-              conversationId,
-              role: 'user',
-              content: '',
-            );
-
-            final attachmentsBackend = backend is AttachmentsBackend
-                ? backend as AttachmentsBackend
-                : null;
-            if (attachmentsBackend != null) {
-              await attachmentsBackend.linkAttachmentToMessage(
-                sessionKey,
-                message.id,
-                attachmentSha256: sha256,
-              );
-              if (onUpsertAttachmentMetadata != null && safeFilename != null) {
-                await onUpsertAttachmentMetadata(
-                  sha256,
+            if (safeFilename != null) {
+              pendingAttachmentMetadataBySha.update(
+                sha256,
+                (existing) => _mergeAttachmentMetadata(
+                  existing,
                   ShareIngestAttachmentMetadata(filenames: [safeFilename]),
-                );
-              }
+                ),
+                ifAbsent: () =>
+                    ShareIngestAttachmentMetadata(filenames: [safeFilename]),
+              );
+            } else {
+              pendingAttachmentMetadataBySha.putIfAbsent(
+                sha256,
+                () => const ShareIngestAttachmentMetadata(),
+              );
             }
-
-            dedup[dedupKey] = now;
-            processed += 1;
-            onMutation?.call();
+            pendingDedup[dedupKey] = now;
+            pendingBatchCount += 1;
           } catch (_) {
-            remaining.addAll(current.skip(i));
+            remainingAfterFailure = <String>[...current.skip(i)];
             break outer;
           }
           break;
@@ -353,6 +320,60 @@ final class ShareIngest {
       }
     }
 
+    final hasPendingBatch = pendingTextParts.isNotEmpty ||
+        pendingAttachmentMetadataBySha.isNotEmpty;
+    var commitSucceeded = true;
+    if (hasPendingBatch) {
+      try {
+        final conversationId =
+            (await backend.getOrCreateLoopHomeConversation(sessionKey)).id;
+        final message = await backend.insertMessage(
+          sessionKey,
+          conversationId,
+          role: 'user',
+          content: pendingTextParts.join('\n'),
+        );
+        final attachmentsBackend = backend is AttachmentsBackend
+            ? backend as AttachmentsBackend
+            : null;
+        if (attachmentsBackend != null &&
+            pendingAttachmentMetadataBySha.isNotEmpty) {
+          for (final entry in pendingAttachmentMetadataBySha.entries) {
+            final attachmentSha256 = entry.key;
+            await attachmentsBackend.linkAttachmentToMessage(
+              sessionKey,
+              message.id,
+              attachmentSha256: attachmentSha256,
+            );
+            if (onAttachmentLinked != null) {
+              await onAttachmentLinked(attachmentSha256);
+            }
+            if (onUpsertAttachmentMetadata != null &&
+                _hasAttachmentMetadata(entry.value)) {
+              await onUpsertAttachmentMetadata(
+                attachmentSha256,
+                entry.value,
+              );
+            }
+          }
+        }
+        onMutation?.call();
+      } catch (_) {
+        commitSucceeded = false;
+      }
+    }
+
+    var processed = 0;
+    final remaining = remainingAfterFailure ?? const <String>[];
+    if (!commitSucceeded) {
+      processed = 0;
+      await _storeDedup(prefs, dedup);
+      await prefs.setStringList(_queueKey, current);
+      return processed;
+    }
+
+    processed = processedImmediate + pendingBatchCount;
+    dedup.addAll(pendingDedup);
     await _storeDedup(prefs, dedup);
     if (remaining.isEmpty) {
       await prefs.remove(_queueKey);
@@ -361,6 +382,47 @@ final class ShareIngest {
     }
 
     return processed;
+  }
+
+  static bool _hasAttachmentMetadata(ShareIngestAttachmentMetadata metadata) {
+    final title = metadata.title?.trim() ?? '';
+    return title.isNotEmpty ||
+        metadata.filenames.isNotEmpty ||
+        metadata.sourceUrls.isNotEmpty;
+  }
+
+  static ShareIngestAttachmentMetadata _mergeAttachmentMetadata(
+    ShareIngestAttachmentMetadata existing,
+    ShareIngestAttachmentMetadata incoming,
+  ) {
+    final existingTitle = existing.title?.trim() ?? '';
+    final incomingTitle = incoming.title?.trim() ?? '';
+
+    final mergedFilenames = <String>[];
+    final seenFilename = <String>{};
+    for (final item in [...existing.filenames, ...incoming.filenames]) {
+      final normalized = item.trim();
+      if (normalized.isEmpty) continue;
+      if (!seenFilename.add(normalized)) continue;
+      mergedFilenames.add(normalized);
+    }
+
+    final mergedSourceUrls = <String>[];
+    final seenSourceUrl = <String>{};
+    for (final item in [...existing.sourceUrls, ...incoming.sourceUrls]) {
+      final normalized = item.trim();
+      if (normalized.isEmpty) continue;
+      if (!seenSourceUrl.add(normalized)) continue;
+      mergedSourceUrls.add(normalized);
+    }
+
+    return ShareIngestAttachmentMetadata(
+      title: existingTitle.isNotEmpty
+          ? existingTitle
+          : (incomingTitle.isNotEmpty ? incomingTitle : null),
+      filenames: mergedFilenames,
+      sourceUrls: mergedSourceUrls,
+    );
   }
 
   static Map<String, int> _loadDedup(SharedPreferences prefs, int now) {

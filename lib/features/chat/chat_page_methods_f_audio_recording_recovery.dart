@@ -33,7 +33,7 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
 
     switch (action) {
       case AudioRecordingRecoveryDialogAction.recover:
-        await _recoverAndSendRecordedAudioSegments(snapshot, existingPaths);
+        await _recoverAndAttachRecordedAudioSegments(snapshot, existingPaths);
         break;
       case AudioRecordingRecoveryDialogAction.discard:
         await _discardRecoveredAudioSegments(snapshot, existingPaths);
@@ -76,7 +76,7 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
     );
   }
 
-  Future<void> _recoverAndSendRecordedAudioSegments(
+  Future<void> _recoverAndAttachRecordedAudioSegments(
     RecordedAudioRecoverySnapshot snapshot,
     List<String> segmentPaths,
   ) async {
@@ -100,22 +100,32 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
       return;
     }
 
-    await _uploadRecordedAudioWithRecovery(
-      bytes,
-      filename: 'recording_recovered_${snapshot.startedAtMs}.m4a',
+    _appendComposerAttachmentDrafts(
+      <AttachmentDraftPayload>[
+        AttachmentDraftPayload(
+          localId: _nextComposerAttachmentDraftLocalId(),
+          filename: 'recording_recovered_${snapshot.startedAtMs}.m4a',
+          mimeType: _kRecordedAudioMimeType,
+          bytes: bytes,
+        ),
+      ],
     );
 
-    if (_pendingAudioUploadRetry == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.t.chat.recordingRecoveryRecoveredAndSent),
-            duration: const Duration(seconds: 3),
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _localizedByLanguage(
+              zh: '检测到未完成录音，已恢复到草稿区，发送后会提交。',
+              en: 'Recovered recording was added to draft. Tap Send to submit.',
+            ),
           ),
-        );
-      }
-      await _discardRecoveredAudioSegments(snapshot, segmentPaths);
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
+
+    await _discardRecoveredAudioSegments(snapshot, segmentPaths);
   }
 
   Future<void> _discardRecoveredAudioSegments(

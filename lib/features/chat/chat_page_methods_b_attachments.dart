@@ -118,39 +118,64 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     }
   }
 
-  Future<void> _sendDesktopFilePayloads(
+  String _nextComposerAttachmentDraftLocalId() {
+    _composerAttachmentDraftSeq += 1;
+    return 'chat_draft_$_composerAttachmentDraftSeq';
+  }
+
+  void _removeComposerAttachmentDraft(String localId) {
+    if (_composerDraftAttachments.isEmpty) return;
+    _setState(() {
+      _composerDraftAttachments = _composerDraftAttachments
+          .where((draft) => draft.localId != localId)
+          .toList(growable: false);
+      _failedComposerDraftLocalIds.remove(localId);
+    });
+  }
+
+  void _appendComposerAttachmentDrafts(List<AttachmentDraftPayload> drafts) {
+    if (drafts.isEmpty) return;
+    final merged = dedupeAttachmentDraftPayloads(
+      <AttachmentDraftPayload>[..._composerDraftAttachments, ...drafts],
+    );
+    final incomingIds = drafts.map((draft) => draft.localId).toSet();
+    _setState(() {
+      _composerDraftAttachments = merged;
+      _failedComposerDraftLocalIds
+          .removeWhere((localId) => incomingIds.contains(localId));
+    });
+  }
+
+  Future<void> _addDesktopFilePayloadsToComposerDraft(
     List<({String filename, Uint8List bytes})> payloads,
   ) async {
+    final drafts = <AttachmentDraftPayload>[];
     for (final payload in payloads) {
       final safeName = payload.filename.trim().isEmpty
           ? 'attachment.bin'
           : payload.filename.trim();
       final inferredMimeType = _inferMimeTypeFromFilename(safeName);
-      if (inferredMimeType.startsWith('image/')) {
-        await _sendImageAttachment(
-          payload.bytes,
-          inferredMimeType,
+      drafts.add(
+        AttachmentDraftPayload(
+          localId: _nextComposerAttachmentDraftLocalId(),
           filename: safeName,
-        );
-      } else {
-        await _sendFileAttachment(
-          payload.bytes,
-          inferredMimeType,
-          filename: safeName,
-        );
-      }
+          mimeType: inferredMimeType,
+          bytes: payload.bytes,
+        ),
+      );
     }
+    _appendComposerAttachmentDrafts(drafts);
   }
 
-  Future<void> _sendDroppedDesktopFiles(List<XFile> droppedFiles) async {
-    if (_sending) return;
-    if (_asking) return;
+  Future<void> _addDroppedDesktopFilesToComposerDraft(
+    List<XFile> droppedFiles,
+  ) async {
+    if (_isComposerBusy) return;
     if (!_isDesktopPlatform) return;
     if (droppedFiles.isEmpty) return;
 
     _setState(() {
-      _sending = true;
-      _showAttachmentSendFeedback = true;
+      _attachingMedia = true;
       _desktopDropActive = false;
     });
     try {
@@ -166,7 +191,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       if (payloads.isEmpty) {
         throw Exception('drop payload contains no readable files');
       }
-      await _sendDesktopFilePayloads(payloads);
+      await _addDesktopFilePayloadsToComposerDraft(payloads);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -178,11 +203,135 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     } finally {
       if (mounted) {
         _setState(() {
-          _sending = false;
-          _showAttachmentSendFeedback = false;
+          _attachingMedia = false;
         });
       }
     }
+  }
+
+  Future<String> _ingestComposerDraftAttachment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    AttachmentDraftPayload draft,
+  ) async {
+    final normalizedMimeType = draft.normalizedMimeType;
+    if (normalizedMimeType.toLowerCase().startsWith('image/')) {
+      final lang = Localizations.localeOf(context).toLanguageTag();
+      final ingested = await ingestImageAttachmentBytes(
+        backend: backend,
+        sessionKey: sessionKey,
+        rawBytes: draft.bytes,
+        inferredMimeType: normalizedMimeType,
+        lang: lang,
+        onBackupCandidate: (attachmentSha256) async {
+          try {
+            await _maybeEnqueueCloudMediaBackup(
+              backend,
+              sessionKey,
+              attachmentSha256,
+            );
+          } catch (_) {}
+        },
+      );
+      return ingested.attachmentSha256;
+    }
+
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
+      subscriptionStatus: subscriptionStatus,
+    );
+
+    var videoProxyEnabled = true;
+    var configuredVideoProxyMaxDurationMs = kAttachmentVideoProxyMaxDurationMs;
+    var configuredVideoProxyMaxBytes = kAttachmentVideoProxyMaxBytes;
+    if (normalizedMimeType.toLowerCase().startsWith('video/')) {
+      ContentEnrichmentConfig? contentConfig;
+      try {
+        contentConfig = await const RustContentEnrichmentConfigStore()
+            .readContentEnrichment(sessionKey);
+      } catch (_) {
+        contentConfig = null;
+      }
+
+      videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
+      configuredVideoProxyMaxDurationMs = sanitizeAttachmentIngestLimit(
+        (contentConfig?.videoProxyMaxDurationMs ??
+                kAttachmentVideoProxyMaxDurationMs)
+            .toInt(),
+        kAttachmentVideoProxyMaxDurationMs,
+      );
+      configuredVideoProxyMaxBytes = sanitizeAttachmentIngestLimit(
+        (contentConfig?.videoProxyMaxBytes ?? kAttachmentVideoProxyMaxBytes)
+            .toInt(),
+        kAttachmentVideoProxyMaxBytes,
+      );
+    }
+
+    return ingestFileAttachmentBytes(
+      backend: backend,
+      sessionKey: sessionKey,
+      rawBytes: draft.bytes,
+      mimeType: normalizedMimeType,
+      options: FileAttachmentIngestOptions(
+        useLocalAudioTranscode: useLocalAudioTranscode,
+        videoProxyEnabled: videoProxyEnabled,
+        videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
+        videoProxyMaxBytes: configuredVideoProxyMaxBytes,
+      ),
+      onBackupCandidate: (backupSha) async {
+        try {
+          await _maybeEnqueueCloudMediaBackup(backend, sessionKey, backupSha);
+        } catch (_) {}
+      },
+    );
+  }
+
+  Future<void> _enqueueDraftAttachmentPostLinkEnrichment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256,
+    AttachmentDraftPayload draft,
+  ) async {
+    final normalizedMimeType = draft.normalizedMimeType.trim().toLowerCase();
+    if (normalizedMimeType.isEmpty) return;
+
+    if (normalizedMimeType.startsWith('image/')) {
+      final lang = Localizations.localeOf(context).toLanguageTag();
+      try {
+        await _maybeEnqueueAttachmentAnnotationEnrichment(
+          backend,
+          sessionKey,
+          attachmentSha256,
+          lang: lang,
+        );
+      } catch (_) {}
+
+      try {
+        final exif = await backend.readAttachmentExifMetadata(
+          sessionKey,
+          sha256: attachmentSha256,
+        );
+        final lat = exif?.latitude;
+        final lon = exif?.longitude;
+        final hasValidLocation = lat != null &&
+            lon != null &&
+            !(lat == 0.0 && lon == 0.0) &&
+            !lat.isNaN &&
+            !lon.isNaN;
+        if (!hasValidLocation) return;
+
+        await _maybeEnqueueAttachmentPlaceEnrichment(
+          backend,
+          sessionKey,
+          attachmentSha256,
+          lang: lang,
+        );
+      } catch (_) {}
+      return;
+    }
+
+    return;
   }
 
   void _refreshAfterAttachmentMutation() {
@@ -199,188 +348,5 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
         ),
       );
     });
-  }
-
-  Future<void> _maybeEnqueueAudioTranscribeEnrichment(
-    NativeAppBackend backend,
-    Uint8List sessionKey,
-    String attachmentSha256, {
-    required String mimeType,
-  }) async {
-    final normalizedMimeType = mimeType.trim().toLowerCase();
-    final canTranscribe = normalizedMimeType.startsWith('audio/') ||
-        normalizedMimeType.startsWith('video/');
-    if (!canTranscribe) {
-      return;
-    }
-
-    ContentEnrichmentConfig? contentConfig;
-    try {
-      contentConfig = await const RustContentEnrichmentConfigStore()
-          .readContentEnrichment(sessionKey);
-    } catch (_) {
-      contentConfig = null;
-    }
-
-    if (!(contentConfig?.audioTranscribeEnabled ?? true)) {
-      return;
-    }
-
-    try {
-      await backend.enqueueAttachmentAnnotation(
-        sessionKey,
-        attachmentSha256: attachmentSha256,
-        lang: 'und',
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-      );
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<String?> _sendFileAttachment(
-    Uint8List rawBytes,
-    String mimeType, {
-    required String filename,
-  }) async {
-    final backendAny = AppBackendScope.of(context);
-    if (backendAny is! NativeAppBackend) return null;
-    final backend = backendAny;
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
-      subscriptionStatus: subscriptionStatus,
-    );
-
-    final normalizedMimeType = mimeType.trim();
-    Message? message;
-    try {
-      message = await backend.insertMessage(
-        sessionKey,
-        widget.conversation.id,
-        role: 'user',
-        content: '',
-      );
-      final messageId = message.id;
-
-      if (mounted) {
-        final pendingAttachment = Attachment(
-          sha256: 'pending_$messageId',
-          mimeType: normalizedMimeType,
-          path: '',
-          byteLen: rawBytes.length,
-          createdAtMs: DateTime.now().millisecondsSinceEpoch,
-        );
-        _setState(() {
-          _attachmentLinkingMessageIds.add(messageId);
-          _attachmentsCacheByMessageId[messageId] = [pendingAttachment];
-        });
-      }
-      syncEngine?.notifyLocalMutation();
-      if (mounted) {
-        _refreshAfterAttachmentMutation();
-      }
-
-      var videoProxyEnabled = true;
-      var configuredVideoProxyMaxDurationMs =
-          kAttachmentVideoProxyMaxDurationMs;
-      var configuredVideoProxyMaxBytes = kAttachmentVideoProxyMaxBytes;
-      if (normalizedMimeType.toLowerCase().startsWith('video/')) {
-        ContentEnrichmentConfig? contentConfig;
-        try {
-          contentConfig = await const RustContentEnrichmentConfigStore()
-              .readContentEnrichment(sessionKey);
-        } catch (_) {
-          contentConfig = null;
-        }
-
-        videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
-        configuredVideoProxyMaxDurationMs = sanitizeAttachmentIngestLimit(
-          (contentConfig?.videoProxyMaxDurationMs ??
-                  kAttachmentVideoProxyMaxDurationMs)
-              .toInt(),
-          kAttachmentVideoProxyMaxDurationMs,
-        );
-        configuredVideoProxyMaxBytes = sanitizeAttachmentIngestLimit(
-          (contentConfig?.videoProxyMaxBytes ?? kAttachmentVideoProxyMaxBytes)
-              .toInt(),
-          kAttachmentVideoProxyMaxBytes,
-        );
-      }
-
-      final shaToLink = await ingestFileAttachmentBytes(
-        backend: backend,
-        sessionKey: sessionKey,
-        rawBytes: rawBytes,
-        mimeType: normalizedMimeType,
-        options: FileAttachmentIngestOptions(
-          useLocalAudioTranscode: useLocalAudioTranscode,
-          videoProxyEnabled: videoProxyEnabled,
-          videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
-          videoProxyMaxBytes: configuredVideoProxyMaxBytes,
-        ),
-        onBackupCandidate: (backupSha) => _maybeEnqueueCloudMediaBackup(
-          backend,
-          sessionKey,
-          backupSha,
-        ),
-        onMaybeEnqueueAudioTranscribe: (attachmentSha, candidateMimeType) =>
-            _maybeEnqueueAudioTranscribeEnrichment(
-          backend,
-          sessionKey,
-          attachmentSha,
-          mimeType: candidateMimeType,
-        ),
-      );
-
-      await backend.linkAttachmentToMessage(
-        sessionKey,
-        message.id,
-        attachmentSha256: shaToLink,
-      );
-      unawaited(
-        const RustAttachmentMetadataStore().upsert(
-          sessionKey,
-          attachmentSha256: shaToLink,
-          filenames: [filename],
-        ).catchError((_) {}),
-      );
-
-      syncEngine?.notifyLocalMutation();
-      if (!mounted) return shaToLink;
-      _setState(() {
-        _attachmentLinkingMessageIds.remove(messageId);
-      });
-      _refreshAfterAttachmentMutation();
-
-      return shaToLink;
-    } catch (_) {
-      if (message != null) {
-        try {
-          await backend.purgeMessageAttachments(sessionKey, message.id);
-          syncEngine?.notifyLocalMutation();
-          if (mounted) {
-            _refreshAfterAttachmentMutation();
-          }
-        } catch (_) {
-          // ignore cleanup failures
-        }
-      }
-      rethrow;
-    } finally {
-      if (message != null && mounted) {
-        final messageId = message.id;
-        _setState(() {
-          _attachmentLinkingMessageIds.remove(messageId);
-          if (_attachmentsCacheByMessageId[messageId]
-                  ?.any((item) => item.sha256.startsWith('pending_')) ==
-              true) {
-            _attachmentsCacheByMessageId.remove(messageId);
-          }
-        });
-      }
-    }
   }
 }

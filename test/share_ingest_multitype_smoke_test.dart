@@ -65,13 +65,10 @@ void main() {
     expect(drainedFileName, 'report.pdf');
     expect(await file.exists(), false);
 
-    expect(backend.insertedContents, [
-      'https://example.com',
-      '',
-    ]);
+    expect(backend.insertedContents, ['https://example.com']);
     expect(backend.linkCalls, [
       'm1:sha_url_manifest',
-      'm2:sha_file',
+      'm1:sha_file',
     ]);
 
     expect(upsertCalls.length, 2);

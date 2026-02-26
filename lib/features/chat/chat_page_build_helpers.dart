@@ -132,6 +132,105 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     );
   }
 
+  IconData _composerDraftAttachmentIcon(String mimeType) {
+    final normalized = mimeType.trim().toLowerCase();
+    if (normalized.startsWith('image/')) {
+      return Icons.image_rounded;
+    }
+    if (normalized.startsWith('audio/')) {
+      return Icons.audiotrack_rounded;
+    }
+    if (normalized.startsWith('video/')) {
+      return Icons.movie_rounded;
+    }
+    if (normalized == 'application/pdf') {
+      return Icons.picture_as_pdf_rounded;
+    }
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Widget _buildComposerDraftAttachmentStrip(
+    BuildContext context, {
+    required SlTokens tokens,
+  }) {
+    if (_composerDraftAttachments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final failedCount = _composerDraftAttachments
+        .where((draft) => _failedComposerDraftLocalIds.contains(draft.localId))
+        .length;
+    return Container(
+      key: const ValueKey('chat_draft_attachment_list'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(tokens.radiusMd),
+        border: Border.all(color: tokens.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (failedCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ChatAttachmentSendFailureChip(
+                key: const ValueKey('chat_attachment_failed_retry_banner'),
+                failedCount: failedCount,
+                onRetry: _isComposerBusy ? null : () => unawaited(_send()),
+              ),
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _composerDraftAttachments
+                .map(
+                  (draft) => InputChip(
+                    key: ValueKey('chat_draft_attachment_${draft.localId}'),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    avatar: Icon(
+                      _failedComposerDraftLocalIds.contains(draft.localId)
+                          ? Icons.error_outline_rounded
+                          : _composerDraftAttachmentIcon(
+                              draft.normalizedMimeType),
+                      size: 16,
+                      color:
+                          _failedComposerDraftLocalIds.contains(draft.localId)
+                              ? colorScheme.error
+                              : null,
+                    ),
+                    backgroundColor:
+                        _failedComposerDraftLocalIds.contains(draft.localId)
+                            ? colorScheme.errorContainer.withOpacity(0.28)
+                            : null,
+                    label: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Text(
+                        draft.normalizedFilename,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    onDeleted: _isComposerBusy
+                        ? null
+                        : () => _removeComposerAttachmentDraft(draft.localId),
+                    deleteIcon: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCompactAttachButton(
     BuildContext context, {
     bool includeLeadingPadding = true,
@@ -152,7 +251,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
             tooltip: context.t.chat.attachRecordAudio,
             onPressed: _isComposerBusy
                 ? null
-                : () => unawaited(_recordAndSendAudioFromSheet()),
+                : () => unawaited(_recordAndAttachAudioFromSheet()),
           ),
           const SizedBox(width: 8),
         ],
@@ -210,6 +309,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
           valueListenable: _controller,
           builder: (context, value, child) {
             final hasText = value.text.trim().isNotEmpty;
+            final hasDraftAttachments = _composerDraftAttachments.isNotEmpty;
             final hasAttachActions =
                 _supportsImageUpload || _supportsAudioRecording;
 
@@ -232,7 +332,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
               );
             }
 
-            if (!hasText) {
+            if (!hasText && !hasDraftAttachments) {
               if (!hasAttachActions) {
                 if (!showMarkdownButton) {
                   return const SizedBox.shrink();
@@ -267,7 +367,14 @@ extension _ChatPageStateComposerUi on _ChatPageState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_showConfigureAiEntry) ...[
+                  if (!hasText && hasAttachActions) ...[
+                    _buildCompactAttachButton(
+                      context,
+                      includeLeadingPadding: false,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (hasText && _showConfigureAiEntry) ...[
                     _buildComposerInlineButton(
                       context,
                       key: const ValueKey('chat_configure_ai'),
@@ -281,7 +388,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                       iconOnly: true,
                     ),
                     const SizedBox(width: 8),
-                  ] else if (_canAskAiNow) ...[
+                  ] else if (hasText && _canAskAiNow) ...[
                     _buildComposerInlineButton(
                       context,
                       key: const ValueKey('chat_ask_ai'),

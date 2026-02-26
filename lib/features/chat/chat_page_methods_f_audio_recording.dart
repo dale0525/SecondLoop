@@ -2,6 +2,12 @@ part of 'chat_page.dart';
 
 const String _kRecordedAudioMimeType = 'audio/mp4';
 const Duration _kAudioRecordingUiTick = Duration(milliseconds: 250);
+@visibleForTesting
+bool? chatDebugForceAudioRecordingShouldSend;
+@visibleForTesting
+bool chatDebugSkipAudioRecoveryStore = false;
+@visibleForTesting
+bool chatDebugSkipAudioRecordingRuntimeGuards = false;
 
 enum AudioRecordingFailureKind {
   permissionDenied,
@@ -20,17 +26,6 @@ enum _AudioRecordingSheetAction {
 
 enum _AudioSnackBarRetryAction {
   retryRecording,
-  retryUpload,
-}
-
-final class _PendingAudioUploadRetry {
-  _PendingAudioUploadRetry({
-    required this.audioBytes,
-    required this.filename,
-  });
-
-  final Uint8List audioBytes;
-  final String filename;
 }
 
 String formatAudioRecordingElapsed(Duration duration) {
@@ -170,7 +165,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     return '$tempDirPath/secondloop_record_${sessionStartedAt.millisecondsSinceEpoch}_segment_$segmentIndex.m4a';
   }
 
-  Future<void> _recordAndSendAudioFromSheet() async {
+  Future<void> _recordAndAttachAudioFromSheet() async {
     if (_isComposerBusy) return;
     if (!_supportsAudioRecording) return;
 
@@ -207,6 +202,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       final trimmed = path?.trim();
       if (trimmed == null || trimmed.isEmpty) return;
       segmentTracker.addPath(trimmed);
+      if (chatDebugSkipAudioRecoveryStore) return;
       try {
         await AudioRecordingRecoveryStore.markSegmentCompleted(
           sessionId: recordingSessionId,
@@ -220,6 +216,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     Future<void> markActiveSegmentPath(String? path) async {
       final trimmed = path?.trim();
       if (trimmed == null || trimmed.isEmpty) return;
+      if (chatDebugSkipAudioRecoveryStore) return;
       try {
         await AudioRecordingRecoveryStore.markActiveSegment(
           sessionId: recordingSessionId,
@@ -267,26 +264,38 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
 
     try {
-      try {
-        await AudioRecordingRecoveryStore.beginSession(
-          sessionId: recordingSessionId,
-          startedAtMs: startedAt.millisecondsSinceEpoch,
-          conversationId: widget.conversation.id,
-        );
-      } catch (_) {
-        // Keep recording flow available when snapshot init fails.
+      if (!chatDebugSkipAudioRecoveryStore) {
+        try {
+          await AudioRecordingRecoveryStore.beginSession(
+            sessionId: recordingSessionId,
+            startedAtMs: startedAt.millisecondsSinceEpoch,
+            conversationId: widget.conversation.id,
+          );
+        } catch (_) {
+          // Keep recording flow available when snapshot init fails.
+        }
       }
       await startRecordingSegment();
 
       if (!mounted) return;
       _setState(() => _recordingAudio = true);
-      await _setRecordingWakeLock(true);
-      await AudioRecordingForegroundService.startIfSupported();
+      if (!chatDebugSkipAudioRecordingRuntimeGuards) {
+        await _setRecordingWakeLock(true);
+        await AudioRecordingForegroundService.startIfSupported();
+      }
 
-      final action = await _showAudioRecordingSheet(
-        startedAt: startedAt,
-        recoverFromSystemInterruption: recoverFromSystemInterruption,
-      );
+      final forcedShouldSend = chatDebugForceAudioRecordingShouldSend;
+      if (forcedShouldSend != null) {
+        chatDebugForceAudioRecordingShouldSend = null;
+      }
+      final action = forcedShouldSend == null
+          ? await _showAudioRecordingSheet(
+              startedAt: startedAt,
+              recoverFromSystemInterruption: recoverFromSystemInterruption,
+            )
+          : (forcedShouldSend
+              ? _AudioRecordingSheetAction.stop
+              : _AudioRecordingSheetAction.cancel);
       final shouldSend = action == _AudioRecordingSheetAction.stop;
 
       String? recordedPath;
@@ -315,9 +324,15 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         throw Exception('recording_segments_stitch_empty');
       }
 
-      await _uploadRecordedAudioWithRecovery(
-        bytes,
-        filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
+      _appendComposerAttachmentDrafts(
+        <AttachmentDraftPayload>[
+          AttachmentDraftPayload(
+            localId: _nextComposerAttachmentDraftLocalId(),
+            filename: 'recording_${startedAt.millisecondsSinceEpoch}.m4a',
+            mimeType: _kRecordedAudioMimeType,
+            bytes: bytes,
+          ),
+        ],
       );
 
       if (stitchedAfterInterruption && mounted) {
@@ -357,71 +372,23 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         }
       }
 
-      await _setRecordingWakeLock(false);
-      await AudioRecordingForegroundService.stopIfSupported();
-      try {
-        await AudioRecordingRecoveryStore.clearSession(
-          expectedSessionId: recordingSessionId,
-        );
-      } catch (_) {
-        // Ignore cleanup failures for recovery snapshot.
+      if (!chatDebugSkipAudioRecordingRuntimeGuards) {
+        await _setRecordingWakeLock(false);
+        await AudioRecordingForegroundService.stopIfSupported();
+      }
+      if (!chatDebugSkipAudioRecoveryStore) {
+        try {
+          await AudioRecordingRecoveryStore.clearSession(
+            expectedSessionId: recordingSessionId,
+          );
+        } catch (_) {
+          // Ignore cleanup failures for recovery snapshot.
+        }
       }
 
       if (mounted) {
         _setState(() => _recordingAudio = false);
       }
-    }
-  }
-
-  Future<void> _uploadRecordedAudioWithRecovery(
-    Uint8List audioBytes, {
-    required String filename,
-  }) async {
-    try {
-      await _sendRecordedAudioAttachment(
-        audioBytes,
-        filename: filename,
-      );
-      _pendingAudioUploadRetry = null;
-    } catch (error) {
-      _pendingAudioUploadRetry = _PendingAudioUploadRetry(
-        audioBytes: Uint8List.fromList(audioBytes),
-        filename: filename,
-      );
-      _showAudioErrorSnackBar(
-        error,
-        retryAction: _AudioSnackBarRetryAction.retryUpload,
-      );
-    }
-  }
-
-  Future<void> _retryPendingRecordedAudioUpload() async {
-    final pending = _pendingAudioUploadRetry;
-    if (pending == null) return;
-
-    await _uploadRecordedAudioWithRecovery(
-      pending.audioBytes,
-      filename: pending.filename,
-    );
-  }
-
-  Future<void> _sendRecordedAudioAttachment(
-    Uint8List audioBytes, {
-    required String filename,
-  }) async {
-    if (_sending || _asking) {
-      return;
-    }
-
-    _setState(() => _sending = true);
-    try {
-      await _sendFileAttachment(
-        audioBytes,
-        _kRecordedAudioMimeType,
-        filename: filename,
-      );
-    } finally {
-      if (mounted) _setState(() => _sending = false);
     }
   }
 
@@ -811,19 +778,11 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       );
     }
 
-    if (retryAction == _AudioSnackBarRetryAction.retryUpload &&
-        canRetryAudioFailure(kind)) {
-      return SnackBarAction(
-        label: context.t.common.actions.retry,
-        onPressed: () => unawaited(_retryPendingRecordedAudioUpload()),
-      );
-    }
-
     if (retryAction == _AudioSnackBarRetryAction.retryRecording &&
         canRetryAudioFailure(kind)) {
       return SnackBarAction(
         label: context.t.common.actions.retry,
-        onPressed: () => unawaited(_recordAndSendAudioFromSheet()),
+        onPressed: () => unawaited(_recordAndAttachAudioFromSheet()),
       );
     }
 
@@ -928,8 +887,8 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         return context.t.chat.audioRecordPermissionDenied;
       case AudioRecordingFailureKind.network:
         return _localizedByLanguage(
-          zh: '录音上传网络异常，请检查网络后重试。',
-          en: 'Audio upload network issue. Please check your connection.',
+          zh: '录音处理网络异常，请检查网络后重试。',
+          en: 'Recording processing network issue. Please check your connection.',
         );
       case AudioRecordingFailureKind.microphoneBusy:
         return _localizedByLanguage(

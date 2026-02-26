@@ -36,7 +36,6 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
-import '../../core/platform/platform_location.dart';
 import '../../core/platform/audio_recording_foreground_service.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
@@ -67,10 +66,11 @@ import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_deeplink.dart';
+import '../attachments/attachment_draft_send_contract.dart';
+import '../attachments/attachment_draft_send_coordinator.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
 import '../attachments/attachment_send_feedback_banner.dart';
 import '../attachments/attachment_viewer_page.dart';
-import '../attachments/platform_exif_metadata.dart';
 import '../media_backup/audio_transcode_policy.dart';
 // ignore: unused_import
 import '../media_backup/audio_transcode_worker.dart';
@@ -82,8 +82,8 @@ import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
 import 'chat_composer_inline_button.dart';
+import 'chat_attachment_send_failure_chip.dart';
 import 'chat_image_attachment_thumbnail.dart';
-import 'deferred_attachment_location_upsert.dart';
 import 'chat_markdown_editor_launcher.dart';
 import 'chat_markdown_preview.dart';
 import 'chat_markdown_link_handler.dart';
@@ -410,6 +410,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _isAtBottom = true;
   bool _hasUnseenNewMessages = false;
   bool _sending = false;
+  bool _attachingMedia = false;
   bool _showAttachmentSendFeedback = false;
   bool _asking = false;
   bool _stopRequested = false;
@@ -447,9 +448,12 @@ class _ChatPageState extends State<ChatPage> {
   Timer? _taskHubQuickActionSnackAutoDismissTimer;
   ScaffoldMessengerState? _taskHubQuickActionSnackMessenger;
   Object? _taskHubQuickActionSnackToken;
+  List<AttachmentDraftPayload> _composerDraftAttachments =
+      <AttachmentDraftPayload>[];
+  Set<String> _failedComposerDraftLocalIds = <String>{};
+  int _composerAttachmentDraftSeq = 0;
 
   AudioRecorder? _audioRecorderInstance;
-  _PendingAudioUploadRetry? _pendingAudioUploadRetry;
 
   void _setState(VoidCallback fn) => setState(fn);
 
@@ -484,7 +488,8 @@ class _ChatPageState extends State<ChatPage> {
   bool get _supportsDesktopRecordAudioAction =>
       _isDesktopPlatform && _supportsAudioRecording;
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;
-  bool get _isComposerBusy => _sending || _asking || _recordingAudio;
+  bool get _isComposerBusy =>
+      _sending || _attachingMedia || _asking || _recordingAudio;
 
   @override
   void initState() {

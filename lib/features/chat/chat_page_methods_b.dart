@@ -412,28 +412,110 @@ extension _ChatPageStateMethodsB on _ChatPageState {
   }
 
   Future<void> _send() async {
-    if (_sending) return;
-    if (_asking) return;
-    if (_recordingAudio) return;
+    if (_isComposerBusy) return;
 
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    final draftsSnapshot =
+        List<AttachmentDraftPayload>.from(_composerDraftAttachments);
+    if (text.isEmpty && draftsSnapshot.isEmpty) return;
 
-    _setState(() => _sending = true);
+    _setState(() {
+      _sending = true;
+      _showAttachmentSendFeedback = draftsSnapshot.isNotEmpty;
+    });
     try {
-      final backend = AppBackendScope.of(context);
+      final backendAny = AppBackendScope.of(context);
+      final backend = backendAny;
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
-      final sentAsUrlAttachment = await _trySendTextAsUrlAttachment(text);
       Message? sentMessage;
+      SendDraftResult? draftResult;
+      var sentAsUrlAttachment = false;
 
-      if (!sentAsUrlAttachment) {
+      if (draftsSnapshot.isEmpty && text.isNotEmpty) {
+        sentAsUrlAttachment = await _trySendTextAsUrlAttachment(text);
+      }
+
+      if (!sentAsUrlAttachment && draftsSnapshot.isNotEmpty) {
+        if (backendAny is! NativeAppBackend) {
+          throw StateError('native_backend_required_for_attachment_drafts');
+        }
+        final nativeBackend = backendAny;
+        const coordinator = AttachmentDraftSendCoordinator();
+        draftResult = await coordinator.send(
+          text: text,
+          drafts: draftsSnapshot,
+          createUserMessage: (content) async {
+            final created = await backend.insertMessage(
+              sessionKey,
+              widget.conversation.id,
+              role: 'user',
+              content: content,
+            );
+            sentMessage ??= created;
+            return created;
+          },
+          ingestAttachment: (draft) =>
+              _ingestComposerDraftAttachment(nativeBackend, sessionKey, draft),
+          linkAttachmentToMessage: (messageId, attachmentSha256) =>
+              nativeBackend.linkAttachmentToMessage(
+            sessionKey,
+            messageId,
+            attachmentSha256: attachmentSha256,
+          ),
+          onAttachmentLinked: (attachmentSha256, draft) async {
+            try {
+              unawaited(
+                _enqueueDraftAttachmentPostLinkEnrichment(
+                  nativeBackend,
+                  sessionKey,
+                  attachmentSha256,
+                  draft,
+                ).catchError((_) {}),
+              );
+              unawaited(
+                const RustAttachmentMetadataStore().upsert(
+                  sessionKey,
+                  attachmentSha256: attachmentSha256,
+                  filenames: [draft.normalizedFilename],
+                ).catchError((_) {}),
+              );
+            } catch (_) {}
+          },
+        );
+      } else if (!sentAsUrlAttachment) {
         sentMessage = await backend.insertMessage(
           sessionKey,
           widget.conversation.id,
           role: 'user',
           content: text,
         );
+      }
+
+      if (draftResult != null && mounted) {
+        final failedDrafts = dedupeAttachmentDraftPayloads(
+          draftResult.failedItems
+              .map((failed) => failed.payload)
+              .toList(growable: false),
+        );
+        _setState(() {
+          _composerDraftAttachments = failedDrafts;
+          _failedComposerDraftLocalIds =
+              failedDrafts.map((draft) => draft.localId).toSet();
+        });
+      } else if (draftsSnapshot.isNotEmpty && mounted) {
+        _setState(() {
+          _composerDraftAttachments = <AttachmentDraftPayload>[];
+          _failedComposerDraftLocalIds = <String>{};
+        });
+      }
+
+      final didMutate = !sentAsUrlAttachment &&
+          (sentMessage != null ||
+              (draftResult != null &&
+                  (draftResult.messageId != null ||
+                      draftResult.linkedAttachmentShas.isNotEmpty)));
+      if (didMutate) {
         syncEngine?.notifyLocalMutation();
         if (mounted) {
           _refresh();
@@ -454,25 +536,44 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
 
       if (!mounted) return;
-      _controller.clear();
-      if (_isDesktopPlatform) {
-        _inputFocusNode.requestFocus();
+      final shouldClearComposer = sentAsUrlAttachment ||
+          sentMessage != null ||
+          (draftResult?.messageId != null);
+      if (shouldClearComposer) {
+        _controller.clear();
+        if (_isDesktopPlatform) {
+          _inputFocusNode.requestFocus();
+        }
       }
 
-      if (sentMessage != null) {
+      if (sentMessage != null && text.isNotEmpty) {
+        final committedMessage = sentMessage!;
         _messageAutoActionsQueue ??= MessageAutoActionsQueue(
           backend: backend,
           sessionKey: sessionKey,
           handler: _handleMessageAutoActions,
         );
         _messageAutoActionsQueue!.enqueue(
-          message: sentMessage,
+          message: committedMessage,
           rawText: text,
-          createdAtMs: sentMessage.createdAtMs,
+          createdAtMs: committedMessage.createdAtMs,
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.photoFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } finally {
-      if (mounted) _setState(() => _sending = false);
+      if (mounted) {
+        _setState(() {
+          _sending = false;
+          _showAttachmentSendFeedback = false;
+        });
+      }
     }
   }
 
@@ -615,7 +716,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                   title: Text(context.t.chat.attachTakePhoto),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(_captureAndSendPhoto());
+                    unawaited(_captureAndAttachPhoto());
                   },
                 ),
               if (_supportsAudioRecording)
@@ -625,7 +726,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                   title: Text(context.t.chat.attachRecordAudio),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(_recordAndSendAudioFromSheet());
+                    unawaited(_recordAndAttachAudioFromSheet());
                   },
                 ),
             ],
@@ -635,15 +736,12 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     );
   }
 
-  Future<void> _captureAndSendPhoto() async {
-    if (_sending) return;
-    if (_asking) return;
-    if (_recordingAudio) return;
+  Future<void> _captureAndAttachPhoto() async {
+    if (_isComposerBusy) return;
     if (!_supportsCamera) return;
 
     _setState(() {
-      _sending = true;
-      _showAttachmentSendFeedback = true;
+      _attachingMedia = true;
     });
     try {
       final picked = await ImagePicker().pickImage(
@@ -651,32 +749,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         requestFullMetadata: true,
       );
       if (picked == null) return;
-      if (!mounted) return;
-
-      final lang = Localizations.localeOf(context).toLanguageTag();
-      final backendAny = AppBackendScope.of(context);
-      final backend = backendAny is NativeAppBackend ? backendAny : null;
-      final sessionKey = SessionScope.of(context).sessionKey;
-      final syncEngine = SyncEngineScope.maybeOf(context);
-
-      final platformExif =
-          await PlatformExifReader.tryReadImageMetadataFromPath(picked.path);
-      final hasValidExifLocation = platformExif != null &&
-          platformExif.hasLocation &&
-          !(platformExif.latitude == 0.0 && platformExif.longitude == 0.0) &&
-          !(platformExif.latitude?.isNaN ?? false) &&
-          !(platformExif.longitude?.isNaN ?? false);
-
-      final Future<PlatformLocation?>? locationFuture = hasValidExifLocation
-          ? null
-          : PlatformLocationReader.tryGetCurrentLocation();
-      PlatformExifMetadata? platformExifToSend = platformExif;
-      if (!hasValidExifLocation) {
-        // Many camera implementations don't embed GPS EXIF when saving to an
-        // app-scoped file. We request location now (may prompt permission),
-        // but we don't block sending. Location will be backfilled later.
-      }
       final rawBytes = await picked.readAsBytes();
+      if (rawBytes.isEmpty) {
+        throw Exception('camera_photo_bytes_empty');
+      }
       final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
       final pickedFilename = (() {
         final byName = picked.name.trim();
@@ -685,51 +761,19 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         if (normalizedPath.isEmpty) return '';
         return normalizedPath.split('/').last.trim();
       })();
-      int? fallbackCapturedAtMs;
-      try {
-        fallbackCapturedAtMs =
-            (await picked.lastModified()).toUtc().millisecondsSinceEpoch;
-      } catch (_) {}
-      final sent = await _sendImageAttachment(
-        rawBytes,
-        inferredMimeType,
-        filename: pickedFilename,
-        fallbackCapturedAtMs: fallbackCapturedAtMs,
-        platformExif: platformExifToSend,
-      );
+      final resolvedFilename =
+          pickedFilename.trim().isEmpty ? 'photo.jpg' : pickedFilename.trim();
 
-      if (locationFuture != null && sent != null && backend != null) {
-        unawaited(
-          deferAttachmentLocationUpsert(
-            locationFuture: locationFuture,
-            capturedAtMs: sent.capturedAtMs,
-            upsert: ({
-              required int? capturedAtMs,
-              required double latitude,
-              required double longitude,
-            }) async {
-              await backend.upsertAttachmentExifMetadata(
-                sessionKey,
-                sha256: sent.sha256,
-                capturedAtMs: capturedAtMs,
-                latitude: latitude,
-                longitude: longitude,
-              );
-              unawaited(
-                _maybeEnqueueAttachmentPlaceEnrichment(
-                  backend,
-                  sessionKey,
-                  sent.sha256,
-                  lang: lang,
-                ),
-              );
-              syncEngine?.notifyLocalMutation();
-              if (!mounted) return;
-              _refresh();
-            },
+      _appendComposerAttachmentDrafts(
+        <AttachmentDraftPayload>[
+          AttachmentDraftPayload(
+            localId: _nextComposerAttachmentDraftLocalId(),
+            filename: resolvedFilename,
+            mimeType: inferredMimeType,
+            bytes: rawBytes,
           ),
-        );
-      }
+        ],
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -741,21 +785,17 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     } finally {
       if (mounted) {
         _setState(() {
-          _sending = false;
-          _showAttachmentSendFeedback = false;
+          _attachingMedia = false;
         });
       }
     }
   }
 
   Future<void> _pickAndSendAttachmentFromFile() async {
-    if (_sending) return;
-    if (_asking) return;
-    if (_recordingAudio) return;
+    if (_isComposerBusy) return;
 
     _setState(() {
-      _sending = true;
-      _showAttachmentSendFeedback = true;
+      _attachingMedia = true;
     });
     try {
       final picked = await FilePicker.platform.pickFiles(
@@ -781,7 +821,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         throw Exception('file_picker returned no readable file data');
       }
 
-      await _sendDesktopFilePayloads(payloads);
+      await _addDesktopFilePayloadsToComposerDraft(payloads);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -793,100 +833,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     } finally {
       if (mounted) {
         _setState(() {
-          _sending = false;
-          _showAttachmentSendFeedback = false;
+          _attachingMedia = false;
         });
       }
     }
-  }
-
-  Future<({String sha256, int? capturedAtMs})?> _sendImageAttachment(
-    Uint8List rawBytes,
-    String inferredMimeType, {
-    String? filename,
-    int? fallbackCapturedAtMs,
-    PlatformExifMetadata? platformExif,
-  }) async {
-    final backendAny = AppBackendScope.of(context);
-    if (backendAny is! NativeAppBackend) return null;
-    final backend = backendAny;
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    final lang = Localizations.localeOf(context).toLanguageTag();
-
-    final ingested = await ingestImageAttachmentBytes(
-      backend: backend,
-      sessionKey: sessionKey,
-      rawBytes: rawBytes,
-      inferredMimeType: inferredMimeType,
-      lang: lang,
-      fallbackCapturedAtMs: fallbackCapturedAtMs,
-      platformExif: platformExif,
-      onBackupCandidate: (attachmentSha256) => _maybeEnqueueCloudMediaBackup(
-        backend,
-        sessionKey,
-        attachmentSha256,
-      ),
-      onMaybeEnqueuePlace: (attachmentSha256, lang) =>
-          _maybeEnqueueAttachmentPlaceEnrichment(
-        backend,
-        sessionKey,
-        attachmentSha256,
-        lang: lang,
-      ),
-      onMaybeEnqueueAnnotation: (attachmentSha256, lang) =>
-          _maybeEnqueueAttachmentAnnotationEnrichment(
-        backend,
-        sessionKey,
-        attachmentSha256,
-        lang: lang,
-      ),
-    );
-
-    final attachmentSha256 = ingested.attachmentSha256;
-    final capturedAtMs = ingested.capturedAtMs;
-
-    final message = await backend.insertMessage(
-      sessionKey,
-      widget.conversation.id,
-      role: 'user',
-      content: '',
-    );
-    await backend.linkAttachmentToMessage(
-      sessionKey,
-      message.id,
-      attachmentSha256: attachmentSha256,
-    );
-    final safeFilename = (filename ?? '').trim();
-    if (safeFilename.isNotEmpty) {
-      unawaited(
-        const RustAttachmentMetadataStore().upsert(
-          sessionKey,
-          attachmentSha256: attachmentSha256,
-          filenames: [safeFilename],
-        ).catchError((_) {}),
-      );
-    }
-    syncEngine?.notifyLocalMutation();
-    if (!mounted) {
-      return (sha256: attachmentSha256, capturedAtMs: capturedAtMs);
-    }
-    _refresh();
-
-    if (_usePagination) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (!_scrollController.hasClients) return;
-        unawaited(
-          _scrollController.animateTo(
-            0,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-          ),
-        );
-      });
-    }
-
-    return (sha256: attachmentSha256, capturedAtMs: capturedAtMs);
   }
 }

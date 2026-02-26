@@ -74,26 +74,9 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
     _setState(() => _attachingMedia = attaching);
   }
 
-  Future<Attachment> _readAttachmentOrFallback({
-    required AppBackend backend,
-    required String attachmentSha256,
-    required String mimeType,
-    required int byteLen,
-  }) async {
-    try {
-      final existing = await backend.readAttachmentBySha256(attachmentSha256);
-      if (existing != null) return existing;
-    } catch (_) {
-      // ignore
-    }
-
-    return Attachment(
-      sha256: attachmentSha256,
-      mimeType: mimeType,
-      path: '',
-      byteLen: byteLen,
-      createdAtMs: DateTime.now().millisecondsSinceEpoch,
-    );
+  String _nextPendingAttachmentDraftLocalId() {
+    _pendingAttachmentDraftSeq += 1;
+    return 'todo_draft_$_pendingAttachmentDraftSeq';
   }
 
   Future<void> _attachImageBytes(
@@ -102,42 +85,16 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
     String? filename,
     int? fallbackCapturedAtMs,
   }) async {
-    final backendAny = AppBackendScope.of(context);
-    if (backendAny is! NativeAppBackend) {
-      throw Exception('native_backend_required');
-    }
-
-    final backend = backendAny;
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final lang = Localizations.localeOf(context).toLanguageTag();
-
-    final ingested = await ingestImageAttachmentBytes(
-      backend: backend,
-      sessionKey: sessionKey,
-      rawBytes: rawBytes,
-      inferredMimeType: inferredMimeType,
-      lang: lang,
-      fallbackCapturedAtMs: fallbackCapturedAtMs,
-    );
-
-    final attachment = await _readAttachmentOrFallback(
-      backend: backend,
-      attachmentSha256: ingested.attachmentSha256,
-      mimeType: inferredMimeType,
-      byteLen: rawBytes.length,
-    );
-    _appendPendingAttachment(attachment);
-
     final safeFilename = (filename ?? '').trim();
-    if (safeFilename.isNotEmpty) {
-      unawaited(
-        const RustAttachmentMetadataStore().upsert(
-          sessionKey,
-          attachmentSha256: ingested.attachmentSha256,
-          filenames: [safeFilename],
-        ).catchError((_) {}),
-      );
-    }
+    final resolvedFilename = safeFilename.isEmpty ? 'photo.jpg' : safeFilename;
+    _appendPendingAttachment(
+      AttachmentDraftPayload(
+        localId: _nextPendingAttachmentDraftLocalId(),
+        filename: resolvedFilename,
+        mimeType: inferredMimeType,
+        bytes: rawBytes,
+      ),
+    );
   }
 
   Future<void> _attachFileBytes(
@@ -145,51 +102,17 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
     String mimeType, {
     required String filename,
   }) async {
-    final backendAny = AppBackendScope.of(context);
-    if (backendAny is! NativeAppBackend) {
-      throw Exception('native_backend_required');
-    }
-
-    final backend = backendAny;
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
-      subscriptionStatus: subscriptionStatus,
-    );
-    final normalizedMimeType = mimeType.trim();
-
-    final attachmentSha256 = await ingestFileAttachmentBytes(
-      backend: backend,
-      sessionKey: sessionKey,
-      rawBytes: rawBytes,
-      mimeType: normalizedMimeType,
-      options: FileAttachmentIngestOptions(
-        useLocalAudioTranscode: useLocalAudioTranscode,
-        videoProxyEnabled: true,
-        videoProxyMaxDurationMs: kAttachmentVideoProxyMaxDurationMs,
-        videoProxyMaxBytes: kAttachmentVideoProxyMaxBytes,
+    final safeFilename = filename.trim();
+    final resolvedFilename =
+        safeFilename.isEmpty ? 'attachment.bin' : safeFilename;
+    _appendPendingAttachment(
+      AttachmentDraftPayload(
+        localId: _nextPendingAttachmentDraftLocalId(),
+        filename: resolvedFilename,
+        mimeType: mimeType,
+        bytes: rawBytes,
       ),
     );
-
-    final attachment = await _readAttachmentOrFallback(
-      backend: backend,
-      attachmentSha256: attachmentSha256,
-      mimeType: normalizedMimeType,
-      byteLen: rawBytes.length,
-    );
-    _appendPendingAttachment(attachment);
-
-    final safeFilename = filename.trim();
-    if (safeFilename.isNotEmpty) {
-      unawaited(
-        const RustAttachmentMetadataStore().upsert(
-          sessionKey,
-          attachmentSha256: attachmentSha256,
-          filenames: [safeFilename],
-        ).catchError((_) {}),
-      );
-    }
   }
 
   Future<void> _attachDesktopFilePayloads(
@@ -214,6 +137,43 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
         );
       }
     }
+  }
+
+  Future<String> _ingestPendingAttachmentDraft(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    AttachmentDraftPayload draft,
+  ) async {
+    final normalizedMimeType = draft.normalizedMimeType;
+    if (normalizedMimeType.toLowerCase().startsWith('image/')) {
+      final ingested = await ingestImageAttachmentBytes(
+        backend: backend,
+        sessionKey: sessionKey,
+        rawBytes: draft.bytes,
+        inferredMimeType: normalizedMimeType,
+        lang: Localizations.localeOf(context).toLanguageTag(),
+      );
+      return ingested.attachmentSha256;
+    }
+
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
+      subscriptionStatus: subscriptionStatus,
+    );
+
+    return ingestFileAttachmentBytes(
+      backend: backend,
+      sessionKey: sessionKey,
+      rawBytes: draft.bytes,
+      mimeType: normalizedMimeType,
+      options: FileAttachmentIngestOptions(
+        useLocalAudioTranscode: useLocalAudioTranscode,
+        videoProxyEnabled: true,
+        videoProxyMaxDurationMs: kAttachmentVideoProxyMaxDurationMs,
+        videoProxyMaxBytes: kAttachmentVideoProxyMaxBytes,
+      ),
+    );
   }
 
   Future<void> _attachDroppedDesktopFiles(List<XFile> droppedFiles) async {
@@ -740,6 +700,25 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
   Widget _buildTodoPendingAttachmentsRow() {
     if (_pendingAttachments.isEmpty) return const SizedBox.shrink();
 
+    IconData iconForMimeType(String mimeType) {
+      final normalized = mimeType.trim().toLowerCase();
+      if (normalized.startsWith('image/')) {
+        return Icons.image_rounded;
+      }
+      if (normalized.startsWith('audio/')) {
+        return Icons.audiotrack_rounded;
+      }
+      if (normalized.startsWith('video/')) {
+        return Icons.movie_rounded;
+      }
+      if (normalized == 'application/pdf') {
+        return Icons.picture_as_pdf_rounded;
+      }
+      return Icons.insert_drive_file_rounded;
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: SingleChildScrollView(
@@ -749,25 +728,36 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
             for (final attachment in _pendingAttachments)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onLongPress: () {
-                    _setState(
-                      () => _pendingAttachments.removeWhere(
-                        (a) => a.sha256 == attachment.sha256,
-                      ),
-                    );
-                  },
-                  child: AttachmentCard(
-                    attachment: attachment,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AttachmentViewerPage(
-                            attachment: attachment,
-                          ),
-                        ),
-                      );
-                    },
+                child: InputChip(
+                  key: ValueKey(
+                    'todo_detail_pending_attachment_${attachment.localId}',
+                  ),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(
+                    iconForMimeType(attachment.normalizedMimeType),
+                    size: 16,
+                  ),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      attachment.normalizedFilename,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  onDeleted: _isComposerBusy
+                      ? null
+                      : () {
+                          _setState(
+                            () => _pendingAttachments.removeWhere(
+                              (draft) => draft.localId == attachment.localId,
+                            ),
+                          );
+                        },
+                  deleteIcon: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -784,18 +774,22 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
     required Widget child,
   }) {
     if (!_isDesktopPlatform) return child;
+    bool routeIsCurrent() => ModalRoute.of(context)?.isCurrent ?? true;
 
     return DropTarget(
       key: const ValueKey('todo_detail_desktop_drop_target'),
       onDragEntered: (_) {
+        if (!routeIsCurrent()) return;
         if (!mounted || _desktopDropActive) return;
         _setState(() => _desktopDropActive = true);
       },
       onDragExited: (_) {
+        if (!routeIsCurrent()) return;
         if (!mounted || !_desktopDropActive) return;
         _setState(() => _desktopDropActive = false);
       },
       onDragDone: (detail) {
+        if (!routeIsCurrent()) return;
         if (mounted && _desktopDropActive) {
           _setState(() => _desktopDropActive = false);
         }

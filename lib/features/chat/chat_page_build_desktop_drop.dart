@@ -8,22 +8,26 @@ extension _ChatPageStateDesktopDropComposer on _ChatPageState {
     required Widget child,
   }) {
     if (!_isDesktopPlatform) return child;
+    bool routeIsCurrent() => ModalRoute.of(context)?.isCurrent ?? true;
 
     return DropTarget(
       key: const ValueKey('chat_desktop_drop_target'),
       onDragEntered: (_) {
+        if (!routeIsCurrent()) return;
         if (!mounted || _desktopDropActive) return;
         _setState(() => _desktopDropActive = true);
       },
       onDragExited: (_) {
+        if (!routeIsCurrent()) return;
         if (!mounted || !_desktopDropActive) return;
         _setState(() => _desktopDropActive = false);
       },
       onDragDone: (detail) {
+        if (!routeIsCurrent()) return;
         if (mounted && _desktopDropActive) {
           _setState(() => _desktopDropActive = false);
         }
-        unawaited(_sendDroppedDesktopFiles(detail.files));
+        unawaited(_addDroppedDesktopFilesToComposerDraft(detail.files));
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
