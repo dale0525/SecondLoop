@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/vault_recovery_envelope_client.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
@@ -52,9 +53,11 @@ class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
     super.key,
     this.configStore,
+    this.vaultRecoveryEnvelopeClient,
   });
 
   final SyncConfigStore? configStore;
+  final VaultRecoveryEnvelopeClient? vaultRecoveryEnvelopeClient;
 
   @override
   State<SyncSettingsPage> createState() => _SyncSettingsPageState();
@@ -82,6 +85,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   bool _showManagedVaultEndpointOverride = false;
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+  late final VaultRecoveryEnvelopeClient _vaultRecoveryEnvelopeClient =
+      widget.vaultRecoveryEnvelopeClient ?? VaultRecoveryEnvelopeClient();
+  late final bool _ownsVaultRecoveryEnvelopeClient =
+      widget.vaultRecoveryEnvelopeClient == null;
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
@@ -106,6 +113,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     _localDirController.dispose();
     _remoteRootController.dispose();
     _syncPassphraseController.dispose();
+    if (_ownsVaultRecoveryEnvelopeClient) {
+      _vaultRecoveryEnvelopeClient.dispose();
+    }
     super.dispose();
   }
 

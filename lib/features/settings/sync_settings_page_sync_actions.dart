@@ -247,6 +247,35 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return false;
   }
 
+  Future<_ManagedVaultAuthContext?> _resolveManagedVaultAuthContext() async {
+    if (_backendType != SyncBackendType.managedVault) return null;
+    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
+    if (cloudAuth == null) return null;
+
+    String? idToken;
+    try {
+      idToken = await cloudAuth.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+    final vaultId = cloudAuth.uid?.trim();
+    final baseUrl = (await _store.resolveManagedVaultBaseUrl())?.trim();
+    if (idToken == null ||
+        idToken.trim().isEmpty ||
+        vaultId == null ||
+        vaultId.isEmpty ||
+        baseUrl == null ||
+        baseUrl.isEmpty) {
+      return null;
+    }
+
+    return _ManagedVaultAuthContext(
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken.trim(),
+    );
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     _setState(() => _busy = true);
@@ -284,7 +313,28 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           return;
         }
 
-        final existingEnvelopeJson = await _store.readRecoveryEnvelopeJson();
+        final managedVaultAuth = await _resolveManagedVaultAuthContext();
+        String? existingEnvelopeJson = await _store.readRecoveryEnvelopeJson();
+        if ((existingEnvelopeJson == null ||
+                existingEnvelopeJson.trim().isEmpty) &&
+            managedVaultAuth != null) {
+          try {
+            final fetchedEnvelopeJson =
+                await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
+              managedVaultBaseUrl: managedVaultAuth.baseUrl,
+              vaultId: managedVaultAuth.vaultId,
+              idToken: managedVaultAuth.idToken,
+            );
+            if (fetchedEnvelopeJson != null &&
+                fetchedEnvelopeJson.trim().isNotEmpty) {
+              existingEnvelopeJson = fetchedEnvelopeJson;
+              await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
+            }
+          } catch (_) {
+            // Best-effort: fallback to local flow.
+          }
+        }
+
         Uint8List resolvedSyncKey;
         if (existingEnvelopeJson != null &&
             existingEnvelopeJson.trim().isNotEmpty) {
@@ -311,8 +361,22 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         );
         try {
           final envelopeJson = await backend.createSyncRecoveryEnvelope(
-              resolvedSyncKey, passphrase);
+            resolvedSyncKey,
+            passphrase,
+          );
           await _store.writeRecoveryEnvelopeJson(envelopeJson);
+          if (managedVaultAuth != null) {
+            try {
+              await _vaultRecoveryEnvelopeClient.putRecoveryEnvelope(
+                managedVaultBaseUrl: managedVaultAuth.baseUrl,
+                vaultId: managedVaultAuth.vaultId,
+                idToken: managedVaultAuth.idToken,
+                envelopeJson: envelopeJson,
+              );
+            } catch (_) {
+              // Best-effort: do not block user flow on network transient errors.
+            }
+          }
         } catch (_) {
           // Best-effort: keep legacy deterministic flow working even if
           // recovery envelope generation is unavailable on current backend.
@@ -852,4 +916,16 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       }
     }
   }
+}
+
+final class _ManagedVaultAuthContext {
+  const _ManagedVaultAuthContext({
+    required this.baseUrl,
+    required this.vaultId,
+    required this.idToken,
+  });
+
+  final String baseUrl;
+  final String vaultId;
+  final String idToken;
 }
