@@ -30,16 +30,18 @@ class _TaskHubPageState extends State<TaskHubPage> {
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
   ScaffoldMessengerState? _quickActionSnackMessenger;
+  Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
 
   @override
   void dispose() {
-    if (_quickActionSnackAutoDismissTimer != null) {
+    if (_quickActionSnackToken != null) {
       _quickActionSnackMessenger?.hideCurrentSnackBar();
     }
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
     _quickActionSnackMessenger = null;
+    _quickActionSnackToken = null;
     _undoTicket = null;
     super.dispose();
   }
@@ -207,10 +209,12 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (!mounted) return;
 
     final messenger = ScaffoldMessenger.maybeOf(context);
-    _quickActionSnackMessenger = messenger;
     messenger?.hideCurrentSnackBar();
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
+    final snackToken = Object();
+    _quickActionSnackToken = snackToken;
+    _quickActionSnackMessenger = messenger;
     final snackController = messenger?.showSnackBar(
       SnackBar(
         content: Text(snackMessage),
@@ -242,18 +246,34 @@ class _TaskHubPageState extends State<TaskHubPage> {
         ),
       ),
     );
-    if (snackController == null) return;
-    final autoDismissTimer = Timer(
-      const Duration(seconds: 3),
-      snackController.close,
-    );
-    _quickActionSnackAutoDismissTimer = autoDismissTimer;
+    if (snackController == null) {
+      if (identical(_quickActionSnackToken, snackToken)) {
+        _quickActionSnackToken = null;
+        _quickActionSnackMessenger = null;
+      }
+      return;
+    }
+    final shouldForceAutoDismiss =
+        MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
+    Timer? autoDismissTimer;
+    if (shouldForceAutoDismiss) {
+      autoDismissTimer = Timer(
+        const Duration(seconds: 3),
+        snackController.close,
+      );
+      _quickActionSnackAutoDismissTimer = autoDismissTimer;
+      _quickActionSnackMessenger = messenger;
+    }
 
     unawaited(
       snackController.closed.then((_) {
-        autoDismissTimer.cancel();
-        if (identical(_quickActionSnackAutoDismissTimer, autoDismissTimer)) {
+        autoDismissTimer?.cancel();
+        if (autoDismissTimer != null &&
+            identical(_quickActionSnackAutoDismissTimer, autoDismissTimer)) {
           _quickActionSnackAutoDismissTimer = null;
+        }
+        if (identical(_quickActionSnackToken, snackToken)) {
+          _quickActionSnackToken = null;
           _quickActionSnackMessenger = null;
         }
         if (!mounted) return;

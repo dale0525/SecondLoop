@@ -234,11 +234,6 @@ void main() {
             lock: () {},
             child: wrapWithI18n(
               MaterialApp(
-                builder: (context, child) => MediaQuery(
-                  data: MediaQuery.of(context)
-                      .copyWith(accessibleNavigation: true),
-                  child: child!,
-                ),
                 home: Builder(
                   builder: (context) => Scaffold(
                     appBar: AppBar(title: const Text('Home')),
@@ -275,6 +270,8 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
+
+    expect(find.byType(SnackBar), findsNothing);
 
     await tester.pump(const Duration(seconds: 4));
     await tester.pump();
