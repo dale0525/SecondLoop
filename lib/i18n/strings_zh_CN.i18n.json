@@ -1270,6 +1270,14 @@
     "connectionFailed": "连接失败：$error",
     "saveFailed": "保存失败：$error",
     "missingSyncKey": "缺少恢复口令。请先输入口令并点击保存。",
+    "recoveryHint": {
+      "title": "检测到可恢复的同步密钥",
+      "message": "已检测到云端恢复包。输入恢复口令后，点击“立即恢复”即可恢复同步。",
+      "action": "立即恢复",
+      "enterPassphraseFirst": "请先输入恢复口令，再点击“立即恢复”。",
+      "recoverFailed": "恢复失败：$error",
+      "fetchFailed": "无法确认云端恢复包：$error"
+    },
     "pushedOps": "已上传 $count 个更改",
     "pulledOps": "已下载 $count 个更改",
     "noNewChanges": "已是最新",

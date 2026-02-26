@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1798 (899 per locale)
+/// Strings: 1810 (905 per locale)
 ///
-/// Built on 2026-02-26 at 01:23 UTC
+/// Built on 2026-02-26 at 05:13 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -562,6 +562,8 @@ class _StringsSyncEn {
   String saveFailed({required Object error}) => 'Save failed: ${error}';
   String get missingSyncKey =>
       'Enter your recovery passphrase and tap Save first.';
+  late final _StringsSyncRecoveryHintEn recoveryHint =
+      _StringsSyncRecoveryHintEn._(_root);
   String pushedOps({required Object count}) => 'Uploaded ${count} changes';
   String pulledOps({required Object count}) => 'Downloaded ${count} changes';
   String get noNewChanges => 'No new changes';
@@ -1896,6 +1898,23 @@ class _StringsSyncCloudManagedVaultEn {
   late final _StringsSyncCloudManagedVaultSetPassphraseDialogEn
       setPassphraseDialog =
       _StringsSyncCloudManagedVaultSetPassphraseDialogEn._(_root);
+}
+
+// Path: sync.recoveryHint
+class _StringsSyncRecoveryHintEn {
+  _StringsSyncRecoveryHintEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Recovery package detected';
+  String get message =>
+      'A cloud recovery package is available. Enter your recovery passphrase and tap Recover now.';
+  String get action => 'Recover now';
+  String get enterPassphraseFirst => 'Enter your recovery passphrase first.';
+  String recoverFailed({required Object error}) => 'Recovery failed: ${error}';
+  String fetchFailed({required Object error}) =>
+      'Unable to verify cloud recovery package: ${error}';
 }
 
 // Path: sync.fields
@@ -4553,6 +4572,9 @@ class _StringsSyncZhCn extends _StringsSyncEn {
   @override
   String get missingSyncKey => '缺少恢复口令。请先输入口令并点击保存。';
   @override
+  late final _StringsSyncRecoveryHintZhCn recoveryHint =
+      _StringsSyncRecoveryHintZhCn._(_root);
+  @override
   String pushedOps({required Object count}) => '已上传 ${count} 个更改';
   @override
   String pulledOps({required Object count}) => '已下载 ${count} 个更改';
@@ -6567,6 +6589,30 @@ class _StringsSyncCloudManagedVaultZhCn
   late final _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn
       setPassphraseDialog =
       _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn._(_root);
+}
+
+// Path: sync.recoveryHint
+class _StringsSyncRecoveryHintZhCn extends _StringsSyncRecoveryHintEn {
+  _StringsSyncRecoveryHintZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '检测到可恢复的同步密钥';
+  @override
+  String get message => '已检测到云端恢复包。输入恢复口令后，点击“立即恢复”即可恢复同步。';
+  @override
+  String get action => '立即恢复';
+  @override
+  String get enterPassphraseFirst => '请先输入恢复口令，再点击“立即恢复”。';
+  @override
+  String recoverFailed({required Object error}) => '恢复失败：${error}';
+  @override
+  String fetchFailed({required Object error}) => '无法确认云端恢复包：${error}';
 }
 
 // Path: sync.fields
@@ -11342,6 +11388,19 @@ extension on Translations {
         return ({required Object error}) => 'Save failed: ${error}';
       case 'sync.missingSyncKey':
         return 'Enter your recovery passphrase and tap Save first.';
+      case 'sync.recoveryHint.title':
+        return 'Recovery package detected';
+      case 'sync.recoveryHint.message':
+        return 'A cloud recovery package is available. Enter your recovery passphrase and tap Recover now.';
+      case 'sync.recoveryHint.action':
+        return 'Recover now';
+      case 'sync.recoveryHint.enterPassphraseFirst':
+        return 'Enter your recovery passphrase first.';
+      case 'sync.recoveryHint.recoverFailed':
+        return ({required Object error}) => 'Recovery failed: ${error}';
+      case 'sync.recoveryHint.fetchFailed':
+        return ({required Object error}) =>
+            'Unable to verify cloud recovery package: ${error}';
       case 'sync.pushedOps':
         return ({required Object count}) => 'Uploaded ${count} changes';
       case 'sync.pulledOps':
@@ -13173,6 +13232,18 @@ extension on _StringsZhCn {
         return ({required Object error}) => '保存失败：${error}';
       case 'sync.missingSyncKey':
         return '缺少恢复口令。请先输入口令并点击保存。';
+      case 'sync.recoveryHint.title':
+        return '检测到可恢复的同步密钥';
+      case 'sync.recoveryHint.message':
+        return '已检测到云端恢复包。输入恢复口令后，点击“立即恢复”即可恢复同步。';
+      case 'sync.recoveryHint.action':
+        return '立即恢复';
+      case 'sync.recoveryHint.enterPassphraseFirst':
+        return '请先输入恢复口令，再点击“立即恢复”。';
+      case 'sync.recoveryHint.recoverFailed':
+        return ({required Object error}) => '恢复失败：${error}';
+      case 'sync.recoveryHint.fetchFailed':
+        return ({required Object error}) => '无法确认云端恢复包：${error}';
       case 'sync.pushedOps':
         return ({required Object count}) => '已上传 ${count} 个更改';
       case 'sync.pulledOps':

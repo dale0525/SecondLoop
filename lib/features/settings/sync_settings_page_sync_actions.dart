@@ -281,6 +281,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     _setState(() => _busy = true);
 
     final t = context.t;
+    var shouldHideRecoveryHint = false;
     try {
       final before = await _store.readAll();
       if (!mounted) return;
@@ -313,46 +314,69 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           return;
         }
 
-        final managedVaultAuth = await _resolveManagedVaultAuthContext();
-        String? existingEnvelopeJson = await _store.readRecoveryEnvelopeJson();
-        if ((existingEnvelopeJson == null ||
-                existingEnvelopeJson.trim().isEmpty) &&
-            managedVaultAuth != null) {
-          try {
-            final fetchedEnvelopeJson =
-                await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
-              managedVaultBaseUrl: managedVaultAuth.baseUrl,
-              vaultId: managedVaultAuth.vaultId,
-              idToken: managedVaultAuth.idToken,
-            );
-            if (fetchedEnvelopeJson != null &&
-                fetchedEnvelopeJson.trim().isNotEmpty) {
-              existingEnvelopeJson = fetchedEnvelopeJson;
-              await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
-            }
-          } catch (_) {
-            // Best-effort: fallback to local flow.
-          }
-        }
-
         Uint8List resolvedSyncKey;
-        if (existingEnvelopeJson != null &&
-            existingEnvelopeJson.trim().isNotEmpty) {
-          try {
-            final recovered = await backend.recoverSyncKeyFromEnvelope(
-              existingEnvelopeJson,
-              passphrase,
-            );
-            if (recovered.length == 32) {
-              resolvedSyncKey = recovered;
-            } else {
-              resolvedSyncKey = await backend.deriveSyncKey(passphrase);
+        if (syncKey != null && syncKey.length == 32) {
+          resolvedSyncKey = syncKey;
+        } else {
+          final managedVaultAuth = await _resolveManagedVaultAuthContext();
+          String? existingEnvelopeJson =
+              await _store.readRecoveryEnvelopeJson();
+          Object? recoveryEnvelopeFetchError;
+          if ((existingEnvelopeJson == null ||
+                  existingEnvelopeJson.trim().isEmpty) &&
+              managedVaultAuth != null) {
+            try {
+              final fetchedEnvelopeJson =
+                  await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
+                managedVaultBaseUrl: managedVaultAuth.baseUrl,
+                vaultId: managedVaultAuth.vaultId,
+                idToken: managedVaultAuth.idToken,
+              );
+              if (fetchedEnvelopeJson != null &&
+                  fetchedEnvelopeJson.trim().isNotEmpty) {
+                existingEnvelopeJson = fetchedEnvelopeJson;
+                await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
+              }
+            } catch (e) {
+              recoveryEnvelopeFetchError = e;
             }
-          } catch (_) {
+          }
+
+          final hasEnvelope = existingEnvelopeJson != null &&
+              existingEnvelopeJson.trim().isNotEmpty;
+          if (!hasEnvelope &&
+              _backendType == SyncBackendType.managedVault &&
+              (managedVaultAuth == null ||
+                  recoveryEnvelopeFetchError != null)) {
+            _showSnack(
+              t.sync.recoveryHint.fetchFailed(
+                error:
+                    '${recoveryEnvelopeFetchError ?? 'missing_managed_vault_auth_context'}',
+              ),
+            );
+            return;
+          }
+
+          if (hasEnvelope) {
+            try {
+              final recovered = await backend.recoverSyncKeyFromEnvelope(
+                existingEnvelopeJson,
+                passphrase,
+              );
+              if (recovered.length != 32) {
+                _showSnack(
+                  t.sync.recoveryHint.recoverFailed(error: 'invalid_sync_key'),
+                );
+                return;
+              }
+              resolvedSyncKey = recovered;
+            } catch (e) {
+              _showSnack(t.sync.recoveryHint.recoverFailed(error: '$e'));
+              return;
+            }
+          } else {
             resolvedSyncKey = await backend.deriveSyncKey(passphrase);
           }
-        } else {
-          resolvedSyncKey = await backend.deriveSyncKey(passphrase);
         }
 
         await SyncKeyManager.save(
@@ -365,6 +389,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             passphrase,
           );
           await _store.writeRecoveryEnvelopeJson(envelopeJson);
+          final managedVaultAuth = await _resolveManagedVaultAuthContext();
           if (managedVaultAuth != null) {
             try {
               await _vaultRecoveryEnvelopeClient.putRecoveryEnvelope(
@@ -382,11 +407,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           // recovery envelope generation is unavailable on current backend.
         }
         syncKey = resolvedSyncKey;
+        shouldHideRecoveryHint = true;
         _syncPassphraseController.text =
             _SyncSettingsPageState._kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
       } else if (requiresSyncKey && (syncKey == null || syncKey.length != 32)) {
         syncKey = await _loadOrCreateSyncKey();
+        shouldHideRecoveryHint = true;
         _syncPassphraseController.text =
             _SyncSettingsPageState._kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
@@ -675,7 +702,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     } catch (e) {
       _showSnack(t.sync.saveFailed(error: '$e'));
     } finally {
-      if (mounted) _setState(() => _busy = false);
+      if (mounted) {
+        _setState(() {
+          _busy = false;
+          if (shouldHideRecoveryHint) {
+            _showRecoveryHintBanner = false;
+          }
+        });
+      }
     }
   }
 

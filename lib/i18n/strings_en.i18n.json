@@ -1270,6 +1270,14 @@
     "connectionFailed": "Connection failed: $error",
     "saveFailed": "Save failed: $error",
     "missingSyncKey": "Enter your recovery passphrase and tap Save first.",
+    "recoveryHint": {
+      "title": "Recovery package detected",
+      "message": "A cloud recovery package is available. Enter your recovery passphrase and tap Recover now.",
+      "action": "Recover now",
+      "enterPassphraseFirst": "Enter your recovery passphrase first.",
+      "recoverFailed": "Recovery failed: $error",
+      "fetchFailed": "Unable to verify cloud recovery package: $error"
+    },
     "pushedOps": "Uploaded $count changes",
     "pulledOps": "Downloaded $count changes",
     "noNewChanges": "No new changes",
